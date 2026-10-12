@@ -4188,28 +4188,48 @@ and `consolidatedAt`.
 
 #### `POST /api/v1/memories`
 
-Create a memory.
-
-**Query Parameters**:
-- `characterId` (required) - Character to create memory for
+Create a memory by hand. The row always goes through the memory gate, is always stored with
+`source: "MANUAL"` and `witnessedContext: "manual"`; a client-sent `source` or `skipGate` is ignored.
 
 **Request Body**:
 
 ```json
 {
+  "characterId": "char-uuid",
   "content": "Alice likes tea",
   "summary": "Preference for tea",
-  "importance": 0.8
+  "keywords": ["tea"],
+  "importance": 0.8,
+  "aboutCharacterId": "char-uuid",
+  "chatId": "chat-uuid",
+  "projectId": "project-uuid",
+  "kind": "episodic",
+  "occurredAt": "2026-10-01T18:00:00Z",
+  "entities": ["The Copper Kettle"]
 }
 ```
 
+`characterId`, `content` and `summary` are required. `projectId`, when omitted, is taken from
+`chatId`'s chat if it belongs to a project. An unknown `projectId` or `chatId` returns `404`.
+
+**Response**: `201 Created` with `{ memory, action }` when a row was inserted (`action` is
+`INSERT` or `INSERT_RELATED`); `200 OK` with `{ memory, action }` carrying the *existing* row
+when the gate folded the write into it (`REINFORCE` or `SKIP_NEAR_DUPLICATE`). `500` when the
+embedding could not be generated (no row is written).
+
 #### `GET /api/v1/memories/[id]`
 
-Get a specific memory.
+Get a specific memory. Reading a memory does not stamp `lastAccessedAt` — only delivery to a
+model counts as an access.
 
 #### `PUT /api/v1/memories/[id]`
 
-Update a memory.
+Update a memory. Goes through `editMemory` (`lib/memory/memory-edit.ts`): a change to `content` or
+`summary` re-embeds the row and updates its vector; an `importance` change recomputes
+`reinforcedImportance`; `relatedMemoryIds` must name existing memories of the same character
+(otherwise `400`) and is written on both sides of each link; the character's frozen archive is
+invalidated and `memories` is published; editing a hot consolidation digest rewrites its
+`Commonplace/` mirror file.
 
 **Request Body**:
 
@@ -4283,6 +4303,12 @@ Run housekeeping (deduplication, summarization) on memories.
 }
 ```
 
+**Response** (both verbs): `{ success, dryRun, result: { demoted, deleted, merged, kept, totalBefore,
+totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds, mergedIds,
+details? } }`. `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
+MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,
+the excess is demoted lowest protection score first.
+
 #### `POST /api/v1/memories?action=embeddings`
 
 Generate embeddings for memories missing them.
@@ -4301,7 +4327,8 @@ Embedding coverage for one character.
 
 #### `PUT /api/v1/memories?action=embeddings`
 
-Rebuild the vector index for one character. `PUT` without `?action=embeddings` is a `400`.
+Rebuild the vector index for one character from the stored embeddings. Each entry carries its
+row's tier, so cold rows stay out of hot-only recall. `PUT` without `?action=embeddings` is a `400`.
 
 **Request Body**: `{ "characterId": "char-uuid" }`
 
@@ -4320,10 +4347,13 @@ crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`
 
 #### `POST /api/v1/memories?action=housekeep-sweep`
 
-Enqueue a manual instance-wide housekeeping sweep (`MEMORY_HOUSEKEEPING`, `reason: 'manual'`)
-rather than running it inline. Takes no body.
+Enqueue a manual housekeeping sweep of every character this user owns (`reason: 'manual'`)
+rather than running it inline. Takes no body. The sweep fans out to one `MEMORY_HOUSEKEEPING` job
+per character, each deduped per character against any in-flight job (watermark, scheduled or
+manual), so two sweeps never work on one character at once.
 
-**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" }`
+**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" | null, "jobIds": ["job-uuid", …] }`
+(`jobId` is the first of `jobIds`, kept for older callers).
 
 #### `GET` / `POST /api/v1/memories?action=housekeeping-config`
 
@@ -4364,8 +4394,8 @@ Fold clusters of one character's hot memories into digest rows and send the orig
 `memoryConsolidation.enabled` master switch.
 
 **Request Body**: `{ characterId, dryRun?, maxClustersPerRun?, clusterThreshold? }`. `characterId`
-is a UUID; `clusterThreshold` is 0–1 and applies to dry runs only (a real run uses the stored
-settings).
+is a UUID; `clusterThreshold` is 0–1 and overrides the stored threshold for this run, dry or real
+(a real run carries it in the job payload).
 
 - `dryRun: true` runs **in-process** (dry-run jobs only log, so the report is returned directly),
   writes nothing, and is bounded: `maxClustersPerRun` defaults to 10 and is capped at 40, with a
@@ -4407,8 +4437,12 @@ sets the batch size.
 
 #### `GET /api/v1/memories?action=character-memory-counts`
 
-Every character owned by this user with its memory count, sorted count-descending so the busiest
-surface first. Returns `{ success, characters: [{ id, name, memoryCount }] }`.
+Every character owned by this user with its memory counts as the housekeeping cap sees them,
+sorted by `demotable` descending so the characters nearest their cap surface first. Returns
+`{ success, characters: [{ id, name, memoryCount, hotTotal, demotable, protected, cold }] }`.
+`demotable` is hot AUTO rows — the only number the cap is measured against; `protected` is hot
+MANUAL rows and consolidation digests, which never count against it; `memoryCount` is the total
+across both tiers.
 
 #### `POST /api/v1/memories?action=regenerate-all`
 

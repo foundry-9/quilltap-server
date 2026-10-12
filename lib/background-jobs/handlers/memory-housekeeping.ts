@@ -98,10 +98,12 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
       // single-digit number against a corpus many thousands over cap).
       // Dry-runs don't count — they don't actually reduce the corpus.
       if (!payload.dryRun) {
+        // The cap measures demotable rows only (bug 210), so effectiveness is
+        // judged against the demotable count, not the whole hot tier.
         recordHousekeepingOutcome(
           characterId,
           result.demoted + result.deleted,
-          result.totalBefore,
+          result.demotable,
           result.capUsed,
         );
       }
@@ -114,6 +116,9 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
         dryRun: payload.dryRun ?? false,
         totalBefore: result.totalBefore,
         totalAfter: result.totalAfter,
+        demotable: result.demotable,
+        protected: result.protected,
+        cap: result.capUsed,
         demoted: result.demoted,
         deleted: result.deleted,
         cold: result.coldCount,

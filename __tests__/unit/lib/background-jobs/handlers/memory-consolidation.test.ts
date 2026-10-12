@@ -79,6 +79,14 @@ describe('handleMemoryConsolidation', () => {
     expect(runMock).toHaveBeenCalledWith('c1', expect.objectContaining({ trigger, timeBudgetMs: CONSOLIDATION_JOB_TIME_BUDGET_MS }))
   })
 
+  it('bug 223: a payload clusterThreshold reaches the run as a settings override', async () => {
+    await handleMemoryConsolidation(job({ characterId: 'c1', trigger: 'manual', clusterThreshold: 0.65 }))
+    expect(runMock.mock.calls[0][1].settings).toEqual({ clusterThreshold: 0.65 })
+
+    await handleMemoryConsolidation(job({ characterId: 'c1', trigger: 'manual' }))
+    expect('settings' in runMock.mock.calls[1][1]).toBe(false)
+  })
+
   it('forwards maxClustersPerRun only when supplied (including 0) and dryRun only when strictly true', async () => {
     await handleMemoryConsolidation(job({ characterId: 'c1', maxClustersPerRun: 0, dryRun: 'yes' }))
     const opts = runMock.mock.calls[0][1]

@@ -15,6 +15,8 @@ import {
   type ContextTag,
 } from '@/lib/memory/recall-tags'
 import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
+import { getMemoryTimeZone, zonedDateStamp, zonedDayBoundsIso, zonedParts } from '@/lib/memory/memory-calendar'
+import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh'
 import { executeCheapLLMTask, type CheapLLMLatencyClass } from './core-execution'
 import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/llm/llm-json'
@@ -128,7 +130,7 @@ function renderClockBlock(clock: ExtractionClock | undefined): string {
   if (!clock) return ''
   const ms = Date.parse(clock.nowIso)
   const stamp = Number.isFinite(ms)
-    ? `${clock.nowIso.slice(0, 10)} (${WEEKDAYS[new Date(ms).getUTCDay()]}), ${clock.nowIso}`
+    ? `${zonedDateStamp(ms, getMemoryTimeZone())} (${WEEKDAYS[zonedParts(ms, getMemoryTimeZone()).weekday]}), ${clock.nowIso}`
     : clock.nowIso
   const lines = [
     'CLOCK',
@@ -1298,6 +1300,7 @@ export async function extractEpisodesFromFold(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions,
 ): Promise<CheapLLMTaskResult<FoldEpisode[]>> {
   if (windowMessages.length === 0) {
     return { success: true, result: [] }
@@ -1327,6 +1330,8 @@ export async function extractEpisodesFromFold(
     parseFoldEpisodes,
     'fold-episode-extraction',
     chatId,
+    undefined,
+    uncensoredFallback,
   )
 }
 
@@ -1368,11 +1373,6 @@ export interface MemorySearchExtraction {
  */
 const DAY_REFERENCE_SCAN_MESSAGES = 4
 
-/** Local `YYYY-MM-DD` stamp (never `toISOString().slice(0,10)`, which is UTC). */
-function localDateStamp(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 
 /**
  * Merge a deterministically-resolved day reference into the LLM's parsed
@@ -1469,11 +1469,15 @@ export async function extractMemorySearchKeywords(
   // talking at 21:44 CDT that it is already tomorrow, and every "today" the
   // model resolves then lands on a day containing none of the memories it
   // means (see lib/memory/day-references.ts, which does the same math).
+  //
+  // Bug 212: "local" is the instance's memory calendar (instance timezone →
+  // QUILLTAP_TIMEZONE → system), the same one the write side stamps with.
+  const memoryTimeZone = await refreshMemoryTimeZone()
   const nowIso = clock?.nowIso ?? new Date().toISOString()
   const nowMs = Date.parse(nowIso)
   const timelineMode = clock?.timelineMode ?? 'realtime'
   const todayLine = Number.isFinite(nowMs)
-    ? `TODAY: ${localDateStamp(new Date(nowMs))} (${WEEKDAYS[new Date(nowMs).getDay()]}); timeline mode: ${timelineMode}`
+    ? `TODAY: ${zonedDateStamp(nowMs, memoryTimeZone)} (${WEEKDAYS[zonedParts(nowMs, memoryTimeZone).weekday]}); timeline mode: ${timelineMode}`
     : `TODAY: ${nowIso}; timeline mode: ${timelineMode}`
 
   // Deterministic day-reference resolution (Fix 1). Scanned over the most
@@ -1489,6 +1493,7 @@ export async function extractMemorySearchKeywords(
             .map(m => m.content)
             .join('\n'),
           new Date(nowMs),
+          memoryTimeZone,
         )
       : null
 
@@ -1554,10 +1559,11 @@ export async function extractMemorySearchKeywords(
             Number.isFinite(Date.parse(from)) &&
             Number.isFinite(Date.parse(to))
           ) {
-            // Normalize date-only bounds to full-day coverage.
-            const fromIso = from.length === 10 ? `${from}T00:00:00.000Z` : from
-            const toIso = to.length === 10 ? `${to}T23:59:59.999Z` : to
-            if (Date.parse(fromIso) <= Date.parse(toIso)) {
+            // Normalize date-only bounds to full LOCAL-day coverage on the
+            // memory calendar (bug 212), not UTC days.
+            const fromIso = from.length === 10 ? zonedDayBoundsIso(from, memoryTimeZone)?.from ?? null : from
+            const toIso = to.length === 10 ? zonedDayBoundsIso(to, memoryTimeZone)?.to ?? null : to
+            if (fromIso && toIso && Date.parse(fromIso) <= Date.parse(toIso)) {
               timeRange = { from: fromIso, to: toIso }
             }
           }

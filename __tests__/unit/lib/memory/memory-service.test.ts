@@ -216,24 +216,27 @@ describe('Memory Service', () => {
     }
 
     it('should create memory with embedding', async () => {
-      const createdMemory = { id: 'new-memory', ...memoryData }
+      const createdMemory = { id: 'new-memory', ...memoryData, embedding: [0.1, 0.2, 0.3] }
       mockMemoriesRepo.create.mockResolvedValue(createdMemory)
       mockGenerateEmbedding.mockResolvedValue({
         embedding: [0.1, 0.2, 0.3],
         model: 'test-model',
       })
-      mockMemoriesRepo.updateForCharacter.mockResolvedValue({
-        ...createdMemory,
-        embedding: [0.1, 0.2, 0.3],
-      })
 
       const result = await createMemoryWithEmbedding(memoryData, { ...options, skipGate: true })
 
-      expect(mockMemoriesRepo.create).toHaveBeenCalled()
+      // Embedding first, then one insert that carries it (bug 220).
       expect(mockGenerateEmbedding).toHaveBeenCalled()
+      expect(mockMemoriesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ embedding: [0.1, 0.2, 0.3] }),
+        undefined
+      )
+      expect(mockGenerateEmbedding.mock.invocationCallOrder[0]).toBeLessThan(
+        mockMemoriesRepo.create.mock.invocationCallOrder[0]
+      )
       expect(mockVectorStore.addVector).toHaveBeenCalled()
       expect(mockVectorStore.save).toHaveBeenCalled()
-      expect(result.id).toBe('new-memory')
+      expect(result!.id).toBe('new-memory')
     })
 
     it('should skip embedding when skipEmbedding is true', async () => {
@@ -247,19 +250,69 @@ describe('Memory Service', () => {
 
       expect(mockMemoriesRepo.create).toHaveBeenCalled()
       expect(mockGenerateEmbedding).not.toHaveBeenCalled()
-      expect(result.id).toBe('new-memory')
+      expect(result!.id).toBe('new-memory')
     })
 
-    it('should return memory even if embedding fails', async () => {
-      const createdMemory = { id: 'new-memory', ...memoryData }
-      mockMemoriesRepo.create.mockResolvedValue(createdMemory)
+    it('writes no row when embedding fails after the retry (bug 220)', async () => {
       mockGenerateEmbedding.mockRejectedValue(new Error('Embedding failed'))
 
-      const result = await createMemoryWithEmbedding(memoryData, { ...options, skipGate: true })
+      const outcome = await createMemoryWithGate(memoryData, { ...options, skipGate: true })
 
-      expect(mockMemoriesRepo.create).toHaveBeenCalled()
-      expect(result.id).toBe('new-memory')
+      expect(mockGenerateEmbedding).toHaveBeenCalledTimes(2)
+      expect(mockMemoriesRepo.create).not.toHaveBeenCalled()
+      expect(mockVectorStore.addVector).not.toHaveBeenCalled()
+      expect(outcome.memory).toBeNull()
+      expect(outcome.action).toBe('SKIP_EMBEDDING_FAILED')
       expect(mockLogger.warn).toHaveBeenCalled()
+    })
+
+    it('writes the row once the retry succeeds (bug 220)', async () => {
+      mockGenerateEmbedding
+        .mockRejectedValueOnce(new Error('transient') as never)
+        .mockResolvedValueOnce({ embedding: [0.4, 0.5, 0.6], model: 'm' } as never)
+      mockMemoriesRepo.create.mockResolvedValue({ id: 'new-memory', ...memoryData })
+
+      const outcome = await createMemoryWithGate(memoryData, { ...options, skipGate: true })
+
+      expect(mockMemoriesRepo.create).toHaveBeenCalledTimes(1)
+      expect(outcome.action).toBe('SKIP_GATE')
+      expect(outcome.memory!.id).toBe('new-memory')
+    })
+  })
+
+  // ============================================================================
+  // rebuildVectorIndex — tier rides with the vector (bug 205)
+  // ============================================================================
+  describe('rebuildVectorIndex', () => {
+    it('stamps each rebuilt entry with its row tier so cold rows stay out of hot-only recall', async () => {
+      const manager = {
+        deleteStore: jest.fn(async () => true),
+        getStore: jest.fn(async () => mockVectorStore),
+      }
+      vectorStoreMock.getVectorStoreManager.mockReturnValue(manager)
+      mockMemoriesRepo.findByCharacterId.mockResolvedValue([
+        { id: 'hot-1', characterId: 'char-1', tier: 'hot', embedding: new Float32Array([1, 0]) },
+        { id: 'cold-1', characterId: 'char-1', tier: 'cold', embedding: new Float32Array([0, 1]) },
+        { id: 'legacy', characterId: 'char-1', embedding: new Float32Array([1, 1]) },
+        { id: 'bare', characterId: 'char-1', tier: 'cold', embedding: null },
+      ])
+
+      const { rebuildVectorIndex } = require('@/lib/memory/memory-service')
+      const result = await rebuildVectorIndex('char-1', { userId: 'user-123' })
+
+      expect(manager.deleteStore).toHaveBeenCalledWith('char-1')
+      expect(result).toEqual({ indexed: 3, failed: 0 })
+      const tiers = Object.fromEntries(
+        mockVectorStore.addVector.mock.calls.map((call: any[]) => [call[0], call[2].tier])
+      )
+      expect(tiers).toEqual({ 'hot-1': 'hot', 'cold-1': 'cold', legacy: 'hot' })
+
+      const { isHotVector } = jest.requireActual<typeof import('@/lib/embedding/vector-store')>(
+        '@/lib/embedding/vector-store'
+      )
+      const coldMeta = mockVectorStore.addVector.mock.calls.find((c: any[]) => c[0] === 'cold-1')![2]
+      expect(isHotVector(coldMeta as any)).toBe(false)
+      expect(mockVectorStore.save).toHaveBeenCalled()
     })
   })
 

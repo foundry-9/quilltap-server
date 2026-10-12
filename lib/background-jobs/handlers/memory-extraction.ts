@@ -25,6 +25,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { Character, MessageEvent } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
+import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
 import type { MemoryExtractionPayload } from '../queue-service';
 
 export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> {
@@ -131,20 +132,10 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   // project lookup is guarded — a broken project store must not sink the whole
   // extraction, so we degrade to no project description.
   const chatContextSummary = chat.contextSummary ?? null;
-  let projectDescription: string | null = null;
-  if (chat.projectId) {
-    try {
-      const project = await repos.projects.findById(chat.projectId);
-      projectDescription = project?.description ?? null;
-    } catch (error) {
-      logger.debug('[MemoryExtraction] Project description unavailable; continuing without it', {
-        jobId: job.id,
-        chatId: payload.chatId,
-        projectId: chat.projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  const projectDescription = await loadExtractionProjectDescription(chat.projectId, {
+    jobId: job.id,
+    chatId: payload.chatId,
+  });
   // Anchor derived memories to the historical chat timestamp rather than
   // letting createdAt default to "now". Without this, a regenerate sweep
   // re-extracts a chat from 2025-08 and the new memory rows look like

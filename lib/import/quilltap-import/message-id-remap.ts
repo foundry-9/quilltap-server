@@ -16,8 +16,9 @@
  *   bundle, the running summary is cleared with its anchors and fold cursor,
  *   exactly as `?action=rebuild-summary` does, so the ordinary cadence
  *   refolds rather than trusting a summary with a partial anchor set.
- * - `chat.otherExtractionWatermarkMessageId` — nulled when unresolvable, which
- *   simply lets the next fold-grain pass catch up.
+ * - `chat.otherExtractionWatermarkMessageId` /
+ *   `chat.episodeExtractionWatermarkMessageId` — nulled when unresolvable,
+ *   which simply lets the next fold-grain pass catch up.
  * - `chat.courierCheckpoints[*].lastResolvedMessageId` — a checkpoint whose
  *   message is gone (or that cannot be read) is dropped, so the next Courier
  *   turn sends full context.
@@ -37,6 +38,7 @@ const SWIPE_PREFIX = 'swipe-';
 type MessageRefFields =
   | 'summaryAnchorMessageIds'
   | 'otherExtractionWatermarkMessageId'
+  | 'episodeExtractionWatermarkMessageId'
   | 'courierCheckpoints'
   | 'contextSummary'
   | 'lastSummaryTurn';
@@ -123,10 +125,12 @@ export function remintChatMessageIds(
     }
   }
 
-  if (chat.otherExtractionWatermarkMessageId) {
-    const mapped = idMap.get(chat.otherExtractionWatermarkMessageId) ?? null;
+  for (const field of ['otherExtractionWatermarkMessageId', 'episodeExtractionWatermarkMessageId'] as const) {
+    const watermark = chat[field];
+    if (!watermark) continue;
+    const mapped = idMap.get(watermark) ?? null;
     if (!mapped) droppedRefs++;
-    chatPatch.otherExtractionWatermarkMessageId = mapped;
+    chatPatch[field] = mapped;
   }
 
   if (chat.courierCheckpoints != null) {

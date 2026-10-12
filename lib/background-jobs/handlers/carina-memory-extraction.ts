@@ -26,6 +26,7 @@ import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
+import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
 import type { Character, MessageEvent } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { CarinaMemoryExtractionPayload } from '../queue-service';
@@ -124,10 +125,32 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
   // "now" — mirrors handleMemoryExtraction's chronology handling.
   const sourceMessageTimestamp = carinaMessage.createdAt ?? chat.createdAt;
 
+  // The chat's project and running summary ride along exactly as they do for
+  // an ordinary turn (memory-extraction.ts): the project id is stamped on every
+  // memory so `scope: narrow` recall can scope it, and the description and
+  // summary are the extractor's background for judging scope (bug 222).
+  const projectId = chat.projectId ?? null;
+  const projectDescription = await loadExtractionProjectDescription(projectId, {
+    jobId: job.id,
+    chatId: payload.chatId,
+  });
+  const chatContextSummary = chat.contextSummary ?? null;
+  logger.debug('[CarinaMemoryExtraction] Extraction context resolved', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    answererId: answerer.id,
+    projectId,
+    hasProjectDescription: projectDescription !== null,
+    hasContextSummary: chatContextSummary !== null,
+  });
+
   const result = await processTurnForMemory({
     transcript,
     participantCharacters,
     chatId: payload.chatId,
+    projectId,
+    projectDescription,
+    chatContextSummary,
     userId: job.userId,
     connectionProfile,
     cheapLLMSettings: chatSettings.cheapLLMSettings,

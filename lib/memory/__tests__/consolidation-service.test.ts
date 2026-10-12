@@ -24,8 +24,8 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
   __esModule: true,
   trackActivity: (_kind: string, fn: () => unknown) => fn(),
 }))
-jest.mock('@/lib/file-storage/commonplace-digest-vault-bridge', () => ({
-  writeCommonplaceDigestsToVault: jest.fn(),
+jest.mock('../commonplace-mirror', () => ({
+  mirrorCommonplaceForSubjects: jest.fn(),
 }))
 jest.mock('@/lib/llm/cheap-llm-user-selection', () => ({ selectCheapLLMFromProfiles: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
@@ -43,7 +43,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
+import { mirrorCommonplaceForSubjects } from '../commonplace-mirror'
 import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection'
 import { consolidateMemoryCluster, validateConsolidationOutput } from '../cheap-llm-tasks/consolidation-tasks'
 import type { Memory } from '@/lib/schemas/types'
@@ -93,7 +93,7 @@ const corpus: Memory[] = [
   mem('l3', { embedding: at(4) }),
   mem('manual', { embedding: at(1), source: 'MANUAL' }), // never a candidate
   mem('young', { embedding: at(1), createdAt: '2026-10-07T00:00:00.000Z' }), // immature
-  mem('cold', { embedding: at(1), tier: 'cold' }), // not hot
+  mem('cold', { embedding: at(1), tier: 'cold', supersededById: 'old-digest' }), // superseded: belongs to its digest
   mem('self-1', { aboutCharacterId: HOLDER, embedding: at(90) }),
 ]
 
@@ -174,7 +174,12 @@ beforeEach(() => {
       ),
     }
   })
-  ;(writeCommonplaceDigestsToVault as jest.Mock).mockResolvedValue({ written: 1, unchanged: 0, skipped: 0 })
+  ;(mirrorCommonplaceForSubjects as jest.Mock).mockResolvedValue(1)
+  delete process.env.QUILLTAP_JOB_CHILD
+})
+
+afterAll(() => {
+  delete process.env.QUILLTAP_JOB_CHILD
 })
 
 describe('runConsolidation', () => {
@@ -203,7 +208,7 @@ describe('runConsolidation', () => {
     expect(repos.memories.updateTierBulk).not.toHaveBeenCalled()
     expect(repos.memories.markConsidered).not.toHaveBeenCalled()
     expect(generateEmbeddingForUser).not.toHaveBeenCalled()
-    expect(writeCommonplaceDigestsToVault).not.toHaveBeenCalled()
+    expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
   })
 
   it('real run: inserts the digest with its vector, sends members cold, marks the rest considered, mirrors', async () => {
@@ -232,15 +237,45 @@ describe('runConsolidation', () => {
     expect(considered).toContain('self-1')
     expect(store.save).toHaveBeenCalled()
 
-    expect(writeCommonplaceDigestsToVault).toHaveBeenCalledWith(
-      expect.objectContaining({
-        holderCharacterId: HOLDER,
-        files: [expect.objectContaining({ subjectCharacterId: LAURA, subjectName: 'Laura', isSelf: false })],
-      }),
-    )
+    // In-process: the writes have landed, so the mirror is written from them.
+    expect(mirrorCommonplaceForSubjects).toHaveBeenCalledWith(HOLDER, [LAURA], NOW.toISOString())
+    expect(report.stats.mirrorFilesWritten).toBe(1)
     expect(report.stats.digestsCreated).toBe(1)
     expect(report.stats.membersSuperseded).toBe(2)
     expect(report.clusters[0].status).toBe('written')
+  })
+
+  it('bug 208: in the job child the mirror waits for the parent commit hook', async () => {
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    const report = await runConsolidation(HOLDER, { now: NOW })
+    expect(repos.memories.create).toHaveBeenCalledTimes(1) // buffered in a real child
+    expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
+    expect(report.stats.mirrorFilesWritten).toBe(0)
+  })
+
+  it('bug 211: a cold row demoted with no successor re-enters as a candidate and is superseded', async () => {
+    // Oldest event in the cluster, so it is handle m1 and the mock folds it into the digest.
+    const demoted = mem('demoted', { embedding: at(3), tier: 'cold', supersededById: null, createdAt: '2026-07-01T00:00:00.000Z' })
+    repos.memories.findByCharacterIdInBatches.mockImplementation(async function* () {
+      yield [...corpus, demoted]
+    })
+    const report = await runConsolidation(HOLDER, { now: NOW })
+
+    expect(report.stats.candidates).toBe(5) // l1, l2, l3, demoted, self-1
+    expect(report.stats.demotedCandidates).toBe(1)
+    const cluster = report.clusters[0]
+    expect(cluster.memberIds).toContain('demoted')
+    expect(cluster.memberIds).not.toContain('cold') // superseded cold rows stay with their digest
+
+    // Folded into the digest and superseded by it — so retention can retire it later.
+    const [data, opts] = repos.memories.create.mock.calls[0]
+    expect(data.consolidatedFrom).toContain('demoted')
+    expect(repos.memories.updateTierBulk).toHaveBeenCalledWith(
+      HOLDER,
+      data.consolidatedFrom,
+      'cold',
+      { supersededById: opts.id, consolidatedAt: NOW.toISOString() },
+    )
   })
 
   it('skips a cluster whose answer fails validation, writing nothing for it', async () => {

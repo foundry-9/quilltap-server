@@ -544,6 +544,8 @@ export async function importMemories(
         relatedMemoryIds: (memory.relatedMemoryIds ?? []).map(remapMemoryRef),
         tier: memory.tier ?? 'hot',
         supersededById: memory.supersededById ? remapMemoryRef(memory.supersededById) : null,
+        // The cold-retention clock travels with the link (bug 225).
+        supersededAt: memory.supersededById ? (memory.supersededAt ?? null) : null,
         consolidatedFrom: (memory.consolidatedFrom ?? []).map(remapMemoryRef),
         consolidatedAt: memory.consolidatedAt ?? null,
         characterId: newCharacterId,

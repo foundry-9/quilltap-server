@@ -24,6 +24,10 @@ jest.mock('@/lib/database/manager', () => ({
   initializeDatabase: jest.fn(),
 }))
 
+jest.mock('@/lib/database/backends/sqlite/client', () => ({
+  getRawDatabase: jest.fn(),
+}))
+
 jest.mock('@/lib/embedding/vector-store', () => ({
   getCharacterVectorStore: jest.fn(),
 }))
@@ -99,9 +103,10 @@ beforeEach(() => {
   updateForCharacter = jest.fn(async (characterId: string, id: string, patch: Partial<Memory>) => ({ ...makeMemory({ id, characterId }), ...patch }))
   // Stands in for the atomic write: the count it returns is the committed row's,
   // here 7 → 8, deliberately not the snapshot's, so tests can tell them apart.
-  incrementReinforcement = jest.fn(async () => ({
+  incrementReinforcement = jest.fn(async (_c: string, _id: string, at: string) => ({
     reinforcementCount: 8,
     reinforcedImportance: gate.calculateReinforcedImportance(0.6, 8),
+    lastReinforcedAt: at,
   }))
   factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, incrementReinforcement } })
   vectorStore = makeVectorStore()
@@ -357,8 +362,11 @@ describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
     expect(plan.contentChanged).toBe(true)
     expect(plan.mergedDetails).toEqual(['Marguerite'])
     expect(plan.patch.content).toBe('Friday keeps the ledger.\n[+] Marguerite')
-    expect(plan.patch.reinforcementCount).toBe(5)
-    expect(plan.patch.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 5))
+    // Bug 226: the losers' counts ride as a delta, never an absolute total.
+    expect(plan.reinforcementDelta).toBe(3)
+    expect(plan.patch).not.toHaveProperty('reinforcementCount')
+    expect(plan.patch).not.toHaveProperty('reinforcedImportance')
+    expect(plan.patch).not.toHaveProperty('lastReinforcedAt')
     expect(new Set(plan.patch.relatedMemoryIds)).toEqual(new Set(['n1', 'n2']))
     expect(plan.patch.occurredAt).toBe('2026-03-08T00:00:00.000Z')
   })
@@ -373,7 +381,7 @@ describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
     expect(plan.contentChanged).toBe(false)
     expect(plan.mergedDetails).toEqual([])
     expect(plan.patch).not.toHaveProperty('content')
-    expect(plan.patch.reinforcementCount).toBe(2)
+    expect(plan.reinforcementDelta).toBe(1)
   })
 
   it('applies the patch and re-embeds when content changed', async () => {
@@ -384,7 +392,11 @@ describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
     const updated = await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
 
     expect(updated?.content).toContain('[+] Marguerite')
-    expect(updateForCharacter.mock.calls[0][2]).toMatchObject({ reinforcementCount: 2 })
+    expect(updateForCharacter.mock.calls[0][2]).not.toHaveProperty('reinforcementCount')
+    // The count lands through the atomic increment, by the loser's count.
+    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
+    expect(incrementReinforcement.mock.calls[0]).toEqual(['char-1', 'keep', loser.createdAt, 1])
+    expect(updated?.reinforcementCount).toBe(8)
     expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)
     expect(vectorStore.updateVector).toHaveBeenCalledWith('keep', EMBEDDING)
   })
@@ -396,7 +408,48 @@ describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
 
     await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
 
-    expect(updateForCharacter).toHaveBeenCalledTimes(1)
+    expect(updateForCharacter).not.toHaveBeenCalled()
+    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
     expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
+  })
+
+  it('bug 226: no merge path writes reinforcementCount through updateForCharacter', () => {
+    const fs = require('fs') as typeof import('fs')
+    const path = require('path') as typeof import('path')
+    const src = fs.readFileSync(path.join(process.cwd(), 'lib/memory/memory-merge.ts'), 'utf8')
+    expect(src).not.toMatch(/patch\.reinforcementCount\s*=/)
+    expect(src).not.toMatch(/patch\.reinforcedImportance\s*=/)
+  })
+
+  it('bug 226: the delta lands on the committed row, so a concurrent reinforcement survives', async () => {
+    const Database = require(require('path').join(process.cwd(), 'node_modules', 'better-sqlite3'))
+    const db = new Database(':memory:')
+    db.exec(`CREATE TABLE "memories" (
+      "id" TEXT PRIMARY KEY, "characterId" TEXT NOT NULL, "importance" REAL DEFAULT 0.5,
+      "reinforcementCount" INTEGER DEFAULT 1, "lastReinforcedAt" TEXT DEFAULT NULL,
+      "reinforcedImportance" REAL DEFAULT 0.5, "updatedAt" TEXT NOT NULL)`)
+    db.prepare(`INSERT INTO "memories" VALUES ('keep', 'char-1', 0.6, 3, '2026-05-01T00:00:00.000Z', 0.6, 'x')`).run()
+    const clientMock = jest.requireMock('@/lib/database/backends/sqlite/client') as { getRawDatabase: jest.Mock<any> }
+    clientMock.getRawDatabase.mockReturnValue(db)
+    const { MemoriesRepository } = require('@/lib/database/repositories/memories.repository')
+    const repo = new MemoriesRepository()
+    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, incrementReinforcement: repo.incrementReinforcement.bind(repo) } })
+
+    // The dedup run read the survivor at count 3 …
+    const survivor = makeMemory({ id: 'keep', content: 'Same words.', reinforcementCount: 3, importance: 0.6 })
+    const loser = makeMemory({ id: 'loser', content: 'Same words.', reinforcementCount: 2, createdAt: '2026-04-01T00:00:00.000Z' })
+    const plan = merge.planMemoryMerge(survivor, [loser])
+    // … an extraction job commits a reinforcement before the merge writes …
+    await repo.incrementReinforcement('char-1', 'keep', '2026-06-01T00:00:00.000Z')
+    // … and the merge's delta still counts it: 3 + 1 + 2 = 6.
+    const updated = await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
+
+    const row = db.prepare(`SELECT * FROM "memories" WHERE "id" = 'keep'`).get()
+    expect(row.reinforcementCount).toBe(6)
+    expect(row.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 6))
+    // The loser's older timestamp does not rewind the concurrent one.
+    expect(row.lastReinforcedAt).toBe('2026-06-01T00:00:00.000Z')
+    expect(updated?.reinforcementCount).toBe(6)
+    db.close()
   })
 })

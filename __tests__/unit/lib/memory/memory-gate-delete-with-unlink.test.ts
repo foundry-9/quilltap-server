@@ -13,14 +13,25 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/database/manager', () => ({
-  __esModule: true,
-  rawQuery: jest.fn(),
-  registerBlobColumns: jest.fn(),
-  getDatabase: jest.fn(),
-  getDatabaseAsync: jest.fn(),
-  initializeDatabase: jest.fn(),
-}))
+// `rawQuery` routes the digest-link scrub's two queries (bug 225 — covered in
+// memory-retention-clock.test.ts) to an empty answer, so the scripted
+// `scriptedRawQuery` below sees exactly the relatedMemoryIds scan and the
+// doomed-id resolves these tests pin.
+jest.mock('@/lib/database/manager', () => {
+  const scriptedRawQuery = jest.fn()
+  const isDigestScrub = (sql: string) =>
+    sql.includes('consolidatedFrom') || sql.includes('supersededById IN')
+  return {
+    __esModule: true,
+    scriptedRawQuery,
+    rawQuery: jest.fn((sql: string, params: unknown[]) =>
+      isDigestScrub(sql) ? Promise.resolve([]) : scriptedRawQuery(sql, params)),
+    registerBlobColumns: jest.fn(),
+    getDatabase: jest.fn(),
+    getDatabaseAsync: jest.fn(),
+    initializeDatabase: jest.fn(),
+  }
+})
 
 jest.mock('@/lib/embedding/vector-store', () => ({
   getCharacterVectorStore: jest.fn(),
@@ -50,7 +61,7 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
-const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock }
+const dbMock = { rawQuery: (jest.requireMock('@/lib/database/manager') as { scriptedRawQuery: jest.Mock }).scriptedRawQuery }
 
 let deleteMemoryWithUnlink: typeof import('@/lib/memory/memory-gate').deleteMemoryWithUnlink
 let deleteMemoriesWithUnlinkBatch: typeof import('@/lib/memory/memory-gate').deleteMemoriesWithUnlinkBatch

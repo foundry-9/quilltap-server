@@ -12,7 +12,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
+import { calculateProtectionScore } from './memory-weighting'
 import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
@@ -61,8 +61,17 @@ export interface HousekeepingResult {
   merged: number
   /** Number of memories kept */
   kept: number
-  /** Hot memories before the sweep (the number the cap is measured against) */
+  /** Hot memories before the sweep (demotable + protected) */
   totalBefore: number
+  /** Hot memories before the sweep — same as `totalBefore`, named for the report (bug 210) */
+  hotTotal: number
+  /**
+   * Demotable memories before the sweep — hot AUTO rows. The cap is measured
+   * against this number only (bug 210, locked decision 3).
+   */
+  demotable: number
+  /** Hot MANUAL rows and CONSOLIDATED digests: never demoted, never counted against the cap */
+  protected: number
   /** Hot memories after the sweep */
   totalAfter: number
   /** Cold (archived) memories the character holds, untouched by demotion */
@@ -123,11 +132,21 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
 function isProtectedMemory(memory: Memory, now: Date): boolean {
   // MANUAL is explicit user intent; CONSOLIDATED digests are the surviving
   // record of their archived members. Neither is ever demoted by policy.
-  if (memory.source === 'MANUAL' || memory.source === 'CONSOLIDATED') {
+  if (!isDemotableSource(memory)) {
     return true
   }
   const { score } = calculateProtectionScore(memory, undefined, now)
   return score >= PROTECTION_THRESHOLD
+}
+
+/**
+ * True for the rows the cap measures and may demote: AUTO rows. MANUAL rows
+ * and CONSOLIDATED digests are never demoted by policy, so counting them
+ * against the cap made it unreachable on a mature character (bug 210).
+ * Callers pass hot rows; tier is checked by the caller.
+ */
+function isDemotableSource(memory: Pick<Memory, 'source'>): boolean {
+  return memory.source === 'AUTO'
 }
 
 /**
@@ -186,9 +205,14 @@ function shouldDeleteMemory(
  * - Pass 1 demotes low-importance, old, inactive rows.
  * - Pass 2 (`mergeSimilar`) is retired in favour of consolidation; the option is
  *   still accepted for back-compat but does nothing.
- * - Pass 3 demotes the lowest-weighted unprotected rows until the hot tier
- *   fits the cap.
+ * - Pass 3 demotes demotable rows (hot AUTO), lowest protection score first,
+ *   until they fit the cap. MANUAL rows and digests never count against the
+ *   cap (bug 210).
  * - Retention deletes expired, superseded, cold AUTO rows.
+ *
+ * A demoted row goes cold with no `supersededById`. Consolidation takes such
+ * rows as candidates alongside the hot tier (bug 211), so a demoted row's gist
+ * reaches a digest, it becomes superseded, and retention can retire it.
  *
  * MANUAL rows and CONSOLIDATED digests are never demoted or deleted here.
  */
@@ -222,6 +246,10 @@ export async function runHousekeeping(
   const memories = allMemories.filter(m => m.tier !== 'cold')
   const coldCount = allMemories.length - memories.length
   const totalBefore = memories.length
+  // The cap counts demotable rows only (bug 210): hot AUTO rows. MANUAL rows
+  // and digests stay hot whatever the cap says, so they are reported apart.
+  const demotableBefore = memories.filter(isDemotableSource).length
+  const protectedCount = totalBefore - demotableBefore
 
   const result: HousekeepingResult = {
     deleted: 0,
@@ -230,6 +258,9 @@ export async function runHousekeeping(
     kept: 0,
     totalBefore,
     totalAfter: totalBefore,
+    hotTotal: totalBefore,
+    demotable: demotableBefore,
+    protected: protectedCount,
     coldCount,
     capUsed: opts.maxMemories,
     deletedIds: [],
@@ -241,6 +272,8 @@ export async function runHousekeeping(
   logger.debug('[Housekeeping] Starting sweep', {
     characterId,
     hot: totalBefore,
+    demotable: demotableBefore,
+    protected: protectedCount,
     cold: coldCount,
     cap: opts.maxMemories,
     dryRun: opts.dryRun,
@@ -264,9 +297,8 @@ export async function runHousekeeping(
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
 
-    // Protection is expensive to compute (blended multi-signal score).
-    // Cache pass-1 results so the cap-enforcement pass can reuse them.
-    const protectedMap = new Map<string, boolean>()
+    // Details by id, so the cap pass can re-label a pass-1 "kept" row.
+    const detailById = new Map<string, HousekeepingDetail>()
 
     // Yield to the event loop every YIELD_INTERVAL items in the two big loops so
     // a 19k-memory character doesn't block HTTP and other jobs.
@@ -277,82 +309,78 @@ export async function runHousekeeping(
     for (let i = 0; i < sortedMemories.length; i++) {
       const memory = sortedMemories[i]
       const isProtected = isProtectedMemory(memory, now)
-      protectedMap.set(memory.id, isProtected)
 
       const { shouldDelete: shouldDemote, reason } = shouldDeleteMemory(memory, now, opts, isProtected)
 
-      if (shouldDemote) {
-        demoteSet.add(memory.id)
-        result.details.push({
-          memoryId: memory.id,
-          action: 'demoted',
-          reason,
-          summary: memory.summary,
-        })
-      } else {
-        result.details.push({
-          memoryId: memory.id,
-          action: 'kept',
-          reason,
-          summary: memory.summary,
-        })
+      if (shouldDemote) demoteSet.add(memory.id)
+      const detail: HousekeepingDetail = {
+        memoryId: memory.id,
+        action: shouldDemote ? 'demoted' : 'kept',
+        reason,
+        summary: memory.summary,
       }
+      result.details.push(detail)
+      detailById.set(memory.id, detail)
 
       if ((i + 1) % YIELD_INTERVAL === 0) {
         await yieldTick()
       }
     }
 
-    // Third pass: enforce the hot-tier cap if still over limit.
+    // Third pass: enforce the cap over the demotable rows (bug 210).
     //
-    // If every remaining memory is protected, the demotion loop below would
-    // skip every candidate and score + sort 19k entries for nothing. Do a
-    // cheap pre-check first: when no unprotected-and-undemoted memory exists,
-    // skip the entire scoring pass.
-    const remainingAfterDemotion = memories.filter(m => !demoteSet.has(m.id))
-    const hasDemotionCandidate =
-      remainingAfterDemotion.length > opts.maxMemories &&
-      remainingAfterDemotion.some(m => !(protectedMap.get(m.id) ?? isProtectedMemory(m, now)))
-    if (hasDemotionCandidate) {
-      const scoredMemories = remainingAfterDemotion.map(m => {
-        const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
-        return { memory: m, score: effectiveWeight }
-      })
-
-      scoredMemories.sort((a, b) => b.score - a.score)
-
-      const excessCount = remainingAfterDemotion.length - opts.maxMemories
-      let demotedForLimit = 0
-      let iterations = 0
-
-      for (let i = scoredMemories.length - 1; i >= 0 && demotedForLimit < excessCount; i--) {
-        const { memory } = scoredMemories[i]
-
-        if (demoteSet.has(memory.id)) continue
-        // Reuse protection result from pass 1 instead of recomputing.
-        const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
-        if (isProtected) continue
-
-        demoteSet.add(memory.id)
-        const existing = result.details.find(d => d.memoryId === memory.id)
-        if (existing) {
-          existing.action = 'demoted'
-          existing.reason = `Exceeded hot-memory limit (${opts.maxMemories})`
-        } else {
-          result.details.push({
-            memoryId: memory.id,
-            action: 'demoted',
-            reason: `Exceeded hot-memory limit (${opts.maxMemories})`,
-            summary: memory.summary,
-          })
-        }
-        demotedForLimit++
-        iterations++
-
-        if (iterations % YIELD_INTERVAL === 0) {
+    // The cap measures hot AUTO rows only; MANUAL rows and digests are never
+    // demoted, so counting them made the cap unreachable once they alone
+    // passed it. When demotable rows still exceed the cap after pass 1, the
+    // excess goes cold lowest protection first — the same score that decides
+    // whether a row may go in pass 1 decides which goes first here, so a
+    // well-reinforced, well-linked row outlasts a stale one.
+    const remainingDemotable = memories.filter(m => isDemotableSource(m) && !demoteSet.has(m.id))
+    const excessCount = remainingDemotable.length - opts.maxMemories
+    if (excessCount > 0) {
+      const scored: Array<{ memory: Memory; score: number }> = []
+      for (let i = 0; i < remainingDemotable.length; i++) {
+        const memory = remainingDemotable[i]
+        const { score } = calculateProtectionScore(memory, undefined, now)
+        scored.push({ memory, score })
+        if ((i + 1) % YIELD_INTERVAL === 0) {
           await yieldTick()
         }
       }
+      scored.sort((a, b) =>
+        a.score !== b.score
+          ? a.score - b.score
+          : new Date(a.memory.createdAt).getTime() - new Date(b.memory.createdAt).getTime(),
+      )
+
+      const reason = `Exceeded demotable-memory limit (${opts.maxMemories})`
+      for (let i = 0; i < excessCount; i++) {
+        const { memory } = scored[i]
+        demoteSet.add(memory.id)
+        const existing = detailById.get(memory.id)
+        if (existing) {
+          existing.action = 'demoted'
+          existing.reason = reason
+        } else {
+          const detail: HousekeepingDetail = { memoryId: memory.id, action: 'demoted', reason, summary: memory.summary }
+          result.details.push(detail)
+          detailById.set(memory.id, detail)
+        }
+      }
+      logger.debug('[Housekeeping] Cap pass demoted the excess, lowest protection first', {
+        characterId,
+        cap: opts.maxMemories,
+        demotableRemaining: remainingDemotable.length,
+        demotedForCap: excessCount,
+        highestScoreDemoted: scored[excessCount - 1]?.score,
+      })
+    } else {
+      logger.debug('[Housekeeping] Demotable rows within the cap; no cap demotion', {
+        characterId,
+        cap: opts.maxMemories,
+        demotableRemaining: remainingDemotable.length,
+        protected: protectedCount,
+      })
     }
   }
 
@@ -421,6 +449,7 @@ export async function runHousekeeping(
     demoted: result.demoted,
     deleted: result.deleted,
     hotAfter: result.totalAfter,
+    demotableAfter: demotableBefore - demotedIds.length,
   })
 
   return result
@@ -440,7 +469,7 @@ export async function getHousekeepingPreview(
  * Check if housekeeping is needed for a character
  *
  * Returns true if:
- * - Hot memory count exceeds 80% of the limit
+ * - Demotable (hot AUTO) memory count exceeds 80% of the limit (bug 210)
  * - There are memories matching demotion or retention criteria
  */
 export async function needsHousekeeping(
@@ -450,14 +479,14 @@ export async function needsHousekeeping(
   const repos = getRepositories()
   const maxMemories = options.maxMemories ?? DEFAULT_OPTIONS.maxMemories
 
-  // Quick check: memory count
-  const count = await repos.memories.countHotByCharacterId(characterId)
-  if (count >= maxMemories * 0.8) {
+  // Quick check: the demotable count the cap is measured against
+  const { hotTotal, demotable } = await repos.memories.countCapBreakdown(characterId)
+  if (demotable >= maxMemories * 0.8) {
     return true
   }
 
   // More thorough check: preview housekeeping
-  if (count > 0) {
+  if (hotTotal > 0) {
     const preview = await getHousekeepingPreview(characterId, options)
     return preview.demoted + preview.deleted > 0
   }

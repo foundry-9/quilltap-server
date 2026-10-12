@@ -48,6 +48,7 @@ import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { MemoryGateOutcome } from './memory-gate'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 
 export type RateLimitDecision =
   | { mode: 'allow' }
@@ -129,6 +130,12 @@ export interface TurnMemoryExtractionContext {
   cheapLLMSettings: CheapLLMSettings
   availableProfiles?: ConnectionProfile[]
   conciergePolicy?: ResolvedConciergePolicy
+  /**
+   * Whether the chat is on the uncensored route — callers pass
+   * `shouldUseUncensoredRoute(chat)` (Unmoderated), never the classifier's
+   * `chats.isDangerousChat` telemetry. Selects the uncensored cheap LLM and
+   * rides on the uncensored fallback options.
+   */
   isDangerousChat?: boolean
   memoryExtractionLimits?: MemoryExtractionLimits
   /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
@@ -263,6 +270,8 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
   // (authoritative from the transcript — never asked of the model); a retold
   // EVENT's `when` phrase resolves against that same anchor and overrides it.
   // On fictional timelines the raw phrase is preserved as `narrativeTime`.
+  // The phrase resolves on the instance's memory calendar (bug 212).
+  await refreshMemoryTimeZone()
   const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
     when: opts.candidate.when,
     referenceIso: anchorIso,
@@ -413,9 +422,16 @@ export async function processTurnForMemory(
       ctx.availableProfiles ?? []
     )
 
+    // `isDangerousChat` here is the caller's `shouldUseUncensoredRoute(chat)`
+    // (Unmoderated): with it set, an empty answer from a cheap model already
+    // routed to the desk still retries on the desk's text profile (bug 213).
     const uncensoredFallback: UncensoredFallbackOptions | undefined =
       ctx.conciergePolicy && ctx.availableProfiles
-        ? { conciergePolicy: ctx.conciergePolicy, availableProfiles: ctx.availableProfiles }
+        ? {
+            conciergePolicy: ctx.conciergePolicy,
+            availableProfiles: ctx.availableProfiles,
+            isDangerousChat: ctx.isDangerousChat === true,
+          }
         : undefined
 
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)

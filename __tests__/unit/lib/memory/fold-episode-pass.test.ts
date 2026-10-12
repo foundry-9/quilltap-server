@@ -75,10 +75,14 @@ function episode(over: AnyRecord = {}) {
 
 let updateForCharacter: jest.Mock
 let findFragments: jest.Mock
+let chatUpdate: jest.Mock
+let chatMessages: unknown[]
 
 function primeRepos(over: { chat?: AnyRecord | null } = {}) {
   updateForCharacter = jest.fn(async () => undefined)
   findFragments = jest.fn(async () => [])
+  chatUpdate = jest.fn(async () => ({}))
+  chatMessages = WINDOW
 
   const chat =
     over.chat === undefined
@@ -92,7 +96,11 @@ function primeRepos(over: { chat?: AnyRecord | null } = {}) {
       : over.chat
 
   mockRepos.mockReturnValue({
-    chats: { findById: jest.fn(async () => chat) },
+    chats: {
+      findById: jest.fn(async () => chat),
+      getMessages: jest.fn(async () => chatMessages),
+      update: chatUpdate,
+    },
     characters: { findByIdRaw: jest.fn(async (id: string) => ({ id, name: `Name-${id}` })) },
     memories: {
       findByCharacterAndSourceMessageIds: findFragments,
@@ -129,14 +137,14 @@ describe('runFoldEpisodePass — bail-outs never throw', () => {
   it('returns an empty result for an empty window without calling anything', async () => {
     const result = await runFoldEpisodePass(input({ windowMessages: [] }))
 
-    expect(result).toEqual({ episodesExtracted: 0, memoriesWritten: 0, fragmentsLinked: 0 })
+    expect(result).toMatchObject({ episodesExtracted: 0, memoriesWritten: 0, fragmentsLinked: 0 })
     expect(mockExtract).not.toHaveBeenCalled()
   })
 
   it('returns an empty result when the chat is gone', async () => {
     primeRepos({ chat: null })
 
-    await expect(runFoldEpisodePass(input())).resolves.toEqual({
+    await expect(runFoldEpisodePass(input())).resolves.toMatchObject({
       episodesExtracted: 0,
       memoriesWritten: 0,
       fragmentsLinked: 0,
@@ -180,7 +188,7 @@ describe('runFoldEpisodePass — bail-outs never throw', () => {
       throw new Error('database on fire')
     })
 
-    await expect(runFoldEpisodePass(input())).resolves.toEqual({
+    await expect(runFoldEpisodePass(input())).resolves.toMatchObject({
       episodesExtracted: 0,
       memoriesWritten: 0,
       fragmentsLinked: 0,
@@ -410,5 +418,126 @@ describe('runFoldEpisodePass — fragment linking', () => {
 
     expect(updateForCharacter).not.toHaveBeenCalled()
     expect(result.fragmentsLinked).toBe(0)
+  })
+})
+
+describe('runFoldEpisodePass — watermark and slices (bug 207)', () => {
+  const seat = (i: number) => (i % 2 === 0 ? 'p-user' : 'p-ai')
+  const history = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      message(`h${i + 1}`, {
+        role: i % 2 === 0 ? 'USER' : 'ASSISTANT',
+        participantId: seat(i),
+        createdAt: new Date(Date.UTC(2026, 6, 20, 9, i)).toISOString(),
+      }),
+    )
+
+  it('advances the watermark to the end of the window it read', async () => {
+    const result = await runFoldEpisodePass(input())
+
+    expect(result.watermarkAdvancedTo).toBe('m2')
+    expect(chatUpdate).toHaveBeenCalledWith('chat-1', { episodeExtractionWatermarkMessageId: 'm2' })
+  })
+
+  it('reads only what lies past the watermark on a hard-rebuild window', async () => {
+    const all = history(10)
+    chatMessages = all
+    primeRepos({
+      chat: {
+        id: 'chat-1',
+        episodeExtractionWatermarkMessageId: 'h6',
+        participants: [
+          { id: 'p-user', type: 'USER', status: 'active', characterId: null },
+          { id: 'p-ai', type: 'CHARACTER', status: 'active', characterId: 'char-1' },
+        ],
+      },
+    })
+    chatMessages = all
+
+    await runFoldEpisodePass(input({ windowMessages: all }))
+
+    expect(mockExtract).toHaveBeenCalledTimes(1)
+    const [rendered] = mockExtract.mock.calls[0]
+    expect((rendered as Array<{ content: string }>).map((m) => m.content)).toEqual([
+      'content h7',
+      'content h8',
+      'content h9',
+      'content h10',
+    ])
+    expect(chatUpdate).toHaveBeenCalledWith('chat-1', { episodeExtractionWatermarkMessageId: 'h10' })
+  })
+
+  it('does nothing for a window wholly behind the watermark', async () => {
+    primeRepos({
+      chat: {
+        id: 'chat-1',
+        episodeExtractionWatermarkMessageId: 'm2',
+        participants: [{ id: 'p-ai', type: 'CHARACTER', status: 'active', characterId: 'char-1' }],
+      },
+    })
+
+    const result = await runFoldEpisodePass(input())
+
+    expect(result.skippedReason).toBe('behind-watermark')
+    expect(mockExtract).not.toHaveBeenCalled()
+    expect(chatUpdate).not.toHaveBeenCalled()
+  })
+
+  it('drops empty and seatless messages before rendering', async () => {
+    await runFoldEpisodePass(
+      input({
+        windowMessages: [
+          ...WINDOW,
+          message('m3', { content: '   ' }),
+          message('m4', { participantId: null }),
+        ],
+      }),
+    )
+
+    const [rendered] = mockExtract.mock.calls[0]
+    expect(rendered).toHaveLength(2)
+    // The ineligible tail is still covered by the watermark.
+    expect(chatUpdate).toHaveBeenCalledWith('chat-1', { episodeExtractionWatermarkMessageId: 'm4' })
+  })
+
+  it('reads a wide window in consecutive 60-message slices, advancing past each', async () => {
+    const all = history(150)
+    chatMessages = all
+
+    const result = await runFoldEpisodePass(input({ windowMessages: all }))
+
+    expect(result.slices).toBe(3)
+    expect(mockExtract).toHaveBeenCalledTimes(3)
+    expect(mockExtract.mock.calls.map((c) => (c[0] as unknown[]).length)).toEqual([60, 60, 30])
+    expect(chatUpdate.mock.calls.map((c) => c[1].episodeExtractionWatermarkMessageId)).toEqual([
+      'h60',
+      'h120',
+      'h150',
+    ])
+    expect(result.watermarkAdvancedTo).toBe('h150')
+  })
+
+  it('stops at a slice lost to a timeout and leaves the watermark before it', async () => {
+    const all = history(150)
+    chatMessages = all
+    mockExtract
+      .mockResolvedValueOnce({ success: true, result: [] })
+      .mockResolvedValueOnce({ success: false, timedOut: true, error: 'timeout' })
+
+    const result = await runFoldEpisodePass(input({ windowMessages: all }))
+
+    expect(result.timedOut).toBe(true)
+    expect(mockExtract).toHaveBeenCalledTimes(2)
+    expect(chatUpdate.mock.calls.map((c) => c[1].episodeExtractionWatermarkMessageId)).toEqual(['h60'])
+  })
+})
+
+describe('runFoldEpisodePass — uncensored fallback (bug 213)', () => {
+  it('hands the extractor the uncensored fallback it was given', async () => {
+    const fallback = { conciergePolicy: {}, availableProfiles: [], isDangerousChat: true }
+
+    await runFoldEpisodePass(input({ uncensoredFallback: fallback }))
+
+    expect(mockExtract.mock.calls[0][5]).toBe(fallback)
   })
 })

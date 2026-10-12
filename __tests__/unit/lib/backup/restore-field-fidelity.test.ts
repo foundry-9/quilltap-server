@@ -104,6 +104,7 @@ const NEW_CHAT_FIELDS = {
   timelineMode: 'narrative',
   turnSkippingEnabled: true,
   otherExtractionWatermarkMessageId: 'msg-1',
+  episodeExtractionWatermarkMessageId: 'msg-1',
 }
 
 const NEW_MESSAGE_FIELDS = {

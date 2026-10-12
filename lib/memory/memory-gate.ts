@@ -546,21 +546,26 @@ export async function reembedMemory(
  * The count is incremented atomically against the row at write time
  * (`MemoriesRepository.incrementReinforcement`), never written as an absolute
  * value from the gate's snapshot — two jobs reinforcing the same row would
- * otherwise both write N+1 (bug 182). Returns null when the row is missing. In
+ * otherwise both write N+1 (bug 182). `by` counts several observations at once
+ * (a dedup merge folding losers, bug 226); `at` defaults to now and never
+ * rewinds a later `lastReinforcedAt`. Returns null when the row is missing. In
  * the job child the write is buffered and replayed by the parent, so the
- * caller gets the snapshot's count plus one as its local view.
+ * caller gets the snapshot's count plus `by` as its local view.
  */
 export async function countReinforcement(
   memory: Memory,
+  opts: { by?: number; at?: string } = {},
 ): Promise<Pick<Memory, 'reinforcementCount' | 'lastReinforcedAt' | 'reinforcedImportance'> | null> {
   const repos = getRepositories()
-  const at = new Date().toISOString()
-  const counted = await repos.memories.incrementReinforcement(memory.characterId, memory.id, at)
+  const by = opts.by ?? 1
+  const at = opts.at ?? new Date().toISOString()
+  const counted = await repos.memories.incrementReinforcement(memory.characterId, memory.id, at, by)
   if (counted === null) return null
   if (counted === undefined) {
-    const reinforcementCount = (memory.reinforcementCount ?? 1) + 1
+    const reinforcementCount = (memory.reinforcementCount ?? 1) + by
     logger.debug('[MemoryGate] Reinforcement buffered (job child); using local view', {
       memoryId: memory.id,
+      by,
       reinforcementCount,
     })
     return {
@@ -569,7 +574,7 @@ export async function countReinforcement(
       reinforcedImportance: calculateReinforcedImportance(memory.importance, reinforcementCount),
     }
   }
-  return { ...counted, lastReinforcedAt: at }
+  return counted
 }
 
 /**
@@ -813,10 +818,70 @@ async function removeDeletedVectors(idsByCharacter: ReadonlyMap<string, readonly
 }
 
 /**
+ * Scrub the digest bookkeeping that points at deleted rows (bug 225):
+ *
+ * - a surviving digest's `consolidatedFrom` drops the deleted members, so its
+ *   size on the memory card and the model-facing "from N notes" provenance
+ *   count only members that still exist;
+ * - a surviving member of a deleted digest loses its `supersededById` and
+ *   becomes a cap-demoted cold row (still cold, no digest), which the next
+ *   consolidation can re-digest — rather than naming a digest that is gone.
+ *
+ * Runs before the rows are deleted, alongside the `relatedMemoryIds` scrub.
+ * Returns how many surviving rows it rewrote.
+ */
+async function scrubDigestLinks(doomed: ReadonlySet<string>): Promise<number> {
+  if (doomed.size === 0) return 0
+  const repos = getRepositories()
+  let touched = 0
+
+  const digests = await rawQuery<Array<{ id: string; characterId: string; consolidatedFrom: string | null }>>(
+    "SELECT id, characterId, consolidatedFrom FROM memories WHERE consolidatedFrom IS NOT NULL AND consolidatedFrom != '[]'",
+    []
+  )
+  for (const digest of digests) {
+    if (doomed.has(digest.id)) continue
+    const members = parseRelatedIds(digest.consolidatedFrom)
+    const kept = members.filter(id => !doomed.has(id))
+    if (kept.length === members.length) continue
+    await repos.memories.updateForCharacter(digest.characterId, digest.id, { consolidatedFrom: kept })
+    touched++
+  }
+
+  const orphanedByCharacter = new Map<string, string[]>()
+  for (const chunk of chunkArray(Array.from(doomed), SQLITE_VARIABLE_CHUNK_SIZE)) {
+    const members = await rawQuery<Array<{ id: string; characterId: string }>>(
+      `SELECT id, characterId FROM memories WHERE supersededById IN (${chunk.map(() => '?').join(',')})`,
+      chunk
+    )
+    for (const member of members) {
+      if (doomed.has(member.id)) continue
+      const list = orphanedByCharacter.get(member.characterId) ?? []
+      list.push(member.id)
+      orphanedByCharacter.set(member.characterId, list)
+    }
+  }
+  for (const [characterId, ids] of orphanedByCharacter) {
+    await repos.memories.updateTierBulk(characterId, ids, 'cold', { supersededById: null })
+    touched += ids.length
+  }
+
+  if (touched > 0) {
+    logger.debug('[MemoryGate] Scrubbed digest links to deleted memories', {
+      doomed: doomed.size,
+      touched,
+      orphanedMembers: Array.from(orphanedByCharacter.values()).reduce((n, ids) => n + ids.length, 0),
+    })
+  }
+  return touched
+}
+
+/**
  * Delete a single memory, scrub the deleted ID from every neighbour's
- * `relatedMemoryIds`, and remove its vector. The single chokepoint for memory
- * deletion — parallel
- * to `createMemoryWithGate` on the write side. Idempotent: if the row is
+ * `relatedMemoryIds` and from the digest bookkeeping (`consolidatedFrom`,
+ * `supersededById` — see {@link scrubDigestLinks}), and remove its vector.
+ * The single chokepoint for memory deletion — parallel to
+ * `createMemoryWithGate` on the write side. Idempotent: if the row is
  * already gone, returns false without touching neighbours.
  *
  * Callers that need to cascade many memories at once should use
@@ -850,6 +915,7 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
     })
     charactersAffected.add(neighbour.characterId)
   }
+  const digestLinksScrubbed = await scrubDigestLinks(new Set([memoryId]))
 
   const deleted = await repos.memories.delete(memoryId)
   const vectorsRemoved = deleted
@@ -859,6 +925,7 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   const logFields = {
     memoryId,
     vectorsRemoved,
+    digestLinksScrubbed,
     neighbourCount: neighbours.length,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,
@@ -952,6 +1019,7 @@ export async function deleteMemoriesWithUnlinkBatchReport(
     charactersAffected.add(candidate.characterId)
     neighboursTouched++
   }
+  const digestLinksScrubbed = await scrubDigestLinks(doomedSet)
 
   // Group by character so each deletion call carries its proper scope. The
   // by-character split also means we never touch unrelated rows — the
@@ -996,6 +1064,7 @@ export async function deleteMemoriesWithUnlinkBatchReport(
     vectorsRemoved,
     countSource,
     neighboursTouched,
+    digestLinksScrubbed,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,
   }

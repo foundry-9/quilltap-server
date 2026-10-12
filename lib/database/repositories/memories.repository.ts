@@ -421,7 +421,12 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Find recent memories for a character across importance tiers.
    * Returns three arrays: high (≥0.7), medium (0.3–0.7), low (<0.3),
    * each sorted by createdAt descending (newest first).
-   * Uses reinforcedImportance when available, otherwise importance.
+   *
+   * Every band is one predicate on `reinforcedImportance` — the importance
+   * ranking, protection and recall read — so each hot row falls in exactly one
+   * band, and SQL does the limit. Bug 215: the high and low bands used to
+   * filter raw `importance` while the medium ceiling read reinforced
+   * importance, so a 0.65 row reinforced past 0.7 landed in no band at all.
    *
    * @param characterId The character ID
    * @param limits Optional per-tier limits (defaults: highLimit=20, mediumLimit=10, lowLimit=5)
@@ -434,48 +439,38 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     const highLimit = limits.high ?? 20;
     const mediumLimit = limits.medium ?? 10;
     const lowLimit = limits.low ?? 5;
+    const HIGH_FLOOR = 0.7;
+    const MEDIUM_FLOOR = 0.3;
+
+    const band = (
+      name: 'high' | 'medium' | 'low',
+      predicate: Record<string, number>,
+      limit: number,
+    ): Promise<Memory[]> =>
+      this.safeQuery(
+        async () => {
+          if (limit <= 0) return [];
+          const memories = await this.findByFilter(
+            { characterId, tier: 'hot', reinforcedImportance: predicate } as TypedQueryFilter<Memory>,
+            { sort: { createdAt: -1 }, limit }
+          );
+          logger.debug('Fetched recap importance band', {
+            characterId,
+            band: name,
+            limit,
+            returned: memories.length,
+          });
+          return memories;
+        },
+        `Error finding ${name}-importance memories`,
+        { characterId, limit },
+        []
+      );
 
     const [high, medium, low] = await Promise.all([
-      this.safeQuery(
-        async () => {
-          const memories = await this.findByFilter(
-            { characterId, tier: 'hot', importance: { $gte: 0.7 } } as TypedQueryFilter<Memory>,
-            { sort: { createdAt: -1 }, limit: highLimit }
-          );
-          return memories;
-        },
-        'Error finding high-importance memories',
-        { characterId, limit: highLimit },
-        []
-      ),
-      this.safeQuery(
-        async () => {
-          // Medium tier: importance >= 0.3 AND < 0.7
-          const allAboveLow = await this.findByFilter(
-            { characterId, tier: 'hot', importance: { $gte: 0.3 } } as TypedQueryFilter<Memory>,
-            { sort: { createdAt: -1 } }
-          );
-          // Filter out high-importance memories and apply limit
-          return allAboveLow
-            .filter(m => (m.reinforcedImportance ?? m.importance) < 0.7)
-            .slice(0, mediumLimit);
-        },
-        'Error finding medium-importance memories',
-        { characterId, limit: mediumLimit },
-        []
-      ),
-      this.safeQuery(
-        async () => {
-          const memories = await this.findByFilter(
-            { characterId, tier: 'hot', importance: { $lt: 0.3 } } as TypedQueryFilter<Memory>,
-            { sort: { createdAt: -1 }, limit: lowLimit }
-          );
-          return memories;
-        },
-        'Error finding low-importance memories',
-        { characterId, limit: lowLimit },
-        []
-      ),
+      band('high', { $gte: HIGH_FLOOR }, highLimit),
+      band('medium', { $gte: MEDIUM_FLOOR, $lt: HIGH_FLOOR }, mediumLimit),
+      band('low', { $lt: MEDIUM_FLOOR }, lowLimit),
     ]);
 
     return { high, medium, low };
@@ -565,14 +560,24 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * write (`increment*` prefix) and returns nothing there; the parent replays
    * it against the committed row.
    *
-   * @returns the new count and importance, or null when the memory does not
-   *   exist or belongs to another character
+   * `by` counts several observations at once — a dedup merge folding losers
+   * applies their summed counts as one delta here rather than an absolute
+   * total read earlier (bug 226). `lastReinforcedAt` only moves forward: an
+   * `at` older than the stored value (a merge carrying a loser's timestamp)
+   * never rewinds a reinforcement committed since.
+   *
+   * @returns the new count, importance and lastReinforcedAt, or null when the
+   *   memory does not exist or belongs to another character
    */
   async incrementReinforcement(
     characterId: string,
     memoryId: string,
     at: string,
-  ): Promise<{ reinforcementCount: number; reinforcedImportance: number } | null> {
+    by: number = 1,
+  ): Promise<{ reinforcementCount: number; reinforcedImportance: number; lastReinforcedAt: string } | null> {
+    if (!Number.isInteger(by) || by < 1) {
+      throw new Error(`Memory reinforcement: delta must be a positive integer (got ${by})`);
+    }
     return this.safeQuery(
       async () => {
         const db = getRawDatabase();
@@ -582,22 +587,25 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const now = this.getCurrentTimestamp();
         const result = db.transaction(() => {
           const row = db
-            .prepare('SELECT "importance", "reinforcementCount" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
-            .get(memoryId, characterId) as { importance: number | null; reinforcementCount: number | null } | undefined;
+            .prepare('SELECT "importance", "reinforcementCount", "lastReinforcedAt" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
+            .get(memoryId, characterId) as
+            | { importance: number | null; reinforcementCount: number | null; lastReinforcedAt: string | null }
+            | undefined;
           if (!row) return null;
-          const reinforcementCount = (row.reinforcementCount ?? 1) + 1;
+          const reinforcementCount = (row.reinforcementCount ?? 1) + by;
           const reinforcedImportance = calculateReinforcedImportance(row.importance ?? 0.5, reinforcementCount);
+          const lastReinforcedAt = row.lastReinforcedAt && row.lastReinforcedAt > at ? row.lastReinforcedAt : at;
           db.prepare(
             'UPDATE "memories" SET "reinforcementCount" = ?, "reinforcedImportance" = ?, "lastReinforcedAt" = ?, "updatedAt" = ? WHERE "id" = ?'
-          ).run(reinforcementCount, reinforcedImportance, at, now, memoryId);
-          return { reinforcementCount, reinforcedImportance };
+          ).run(reinforcementCount, reinforcedImportance, lastReinforcedAt, now, memoryId);
+          return { reinforcementCount, reinforcedImportance, lastReinforcedAt };
         })();
 
         if (!result) {
           logger.warn('Memory not found for reinforcement', { memoryId, characterId });
           return null;
         }
-        logger.debug('Memory reinforcement counted', { memoryId, characterId, ...result });
+        logger.debug('Memory reinforcement counted', { memoryId, characterId, by, ...result });
         return result;
       },
       'Error reinforcing memory',
@@ -752,21 +760,33 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   // ==========================================================================
 
   /**
-   * Count a character's hot memories — the number the housekeeping cap and
-   * the consolidation watermark are measured against.
+   * How a character's memories split against the housekeeping cap (bug 210,
+   * locked decision 3): the cap counts **demotable** rows only — hot AUTO
+   * rows. MANUAL rows and CONSOLIDATED digests are hot but never demoted by
+   * policy, so they are reported as `protected` and never measured against it.
    */
-  async countHotByCharacterId(characterId: string): Promise<number> {
+  async countCapBreakdown(
+    characterId: string,
+  ): Promise<{ hotTotal: number; demotable: number; protected: number; cold: number }> {
     return this.safeQuery(
       async () => {
-        const rows = await rawQuery<Array<{ n: number | bigint }>>(
-          `SELECT COUNT(*) AS n FROM memories WHERE characterId = ? AND ${HOT_TIER_SQL}`,
+        const rows = await rawQuery<
+          Array<{ hot: number | bigint | null; demotable: number | bigint | null; cold: number | bigint | null }>
+        >(
+          `SELECT
+             SUM(CASE WHEN ${HOT_TIER_SQL} THEN 1 ELSE 0 END) AS hot,
+             SUM(CASE WHEN ${HOT_TIER_SQL} AND source = 'AUTO' THEN 1 ELSE 0 END) AS demotable,
+             SUM(CASE WHEN ${HOT_TIER_SQL} THEN 0 ELSE 1 END) AS cold
+           FROM memories WHERE characterId = ?`,
           [characterId],
         );
-        return Number(rows[0]?.n ?? 0);
+        const hotTotal = Number(rows[0]?.hot ?? 0);
+        const demotable = Number(rows[0]?.demotable ?? 0);
+        return { hotTotal, demotable, protected: hotTotal - demotable, cold: Number(rows[0]?.cold ?? 0) };
       },
-      'Error counting hot memories for character',
+      'Error counting memories against the housekeeping cap',
       { characterId },
-      0,
+      { hotTotal: 0, demotable: 0, protected: 0, cold: 0 },
     );
   }
 
@@ -881,11 +901,19 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       async () => {
         if (memoryIds.length === 0) return 0;
         const now = new Date().toISOString();
+        // `supersededAt` moves with `supersededById` and only with it: stamped
+        // when a digest supersedes the rows, cleared when that link is cut. A
+        // tier move that says nothing about the digest leaves it alone. Cold
+        // retention ages by it, not by `updatedAt` (bug 225).
+        const supersession: Partial<Memory> = {};
+        if (extra.supersededById !== undefined) {
+          supersession.supersededAt = extra.supersededById ? now : null;
+        }
         let changed = 0;
         for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
           const result = await this.updateMany(
             { characterId, id: { $in: chunk } } as TypedQueryFilter<Memory>,
-            { tier, ...extra, updatedAt: now } as Partial<Memory>,
+            { tier, ...extra, ...supersession, updatedAt: now } as Partial<Memory>,
           );
           changed += typeof result === 'number' ? result : 0;
         }
@@ -941,8 +969,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Ids of a character's superseded, cold, non-MANUAL memories last touched
+   * Ids of a character's superseded, cold, non-MANUAL memories superseded
    * before `olderThan` — the only rows `coldRetentionDays` may delete.
+   *
+   * Aged by `supersededAt`, not `updatedAt`: link rewrites (consolidation,
+   * the delete chokepoint's neighbour scrub) reset `updatedAt`, so a member
+   * that kept being re-linked never aged out (bug 225). A row superseded
+   * before the column existed and missed by the backfill falls back to
+   * `updatedAt`.
    */
   async findExpiredColdIds(characterId: string, olderThan: string): Promise<string[]> {
     return this.safeQuery(
@@ -953,7 +987,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
               AND tier = 'cold'
               AND supersededById IS NOT NULL
               AND source != 'MANUAL'
-              AND updatedAt < ?`,
+              AND COALESCE(supersededAt, updatedAt) < ?`,
           [characterId, olderThan],
         );
         return rows.map((r) => r.id);

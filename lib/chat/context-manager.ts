@@ -1364,6 +1364,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let memoryTokens = 0
   let memoriesIncluded = 0
   let debugMemories: DebugMemoryInfo[] = []
+  // Ids the archive and the dynamic head actually rendered this turn. The
+  // inter-character section skips them (bug 224), so a row reaches the model
+  // in at most one memory section.
+  const memoryIdsInWhisper = new Set<string>()
 
   // Sentence-shaped recent-window query (item 3): the tail of the conversation
   // as prose rather than a single one-line message, so the embedding represents
@@ -1628,6 +1632,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       memoryTokens = archiveFormatted.tokenCount + headFormatted.tokenCount
       memoriesIncluded = archiveFormatted.memoriesUsed + headFormatted.memoriesUsed
       debugMemories = [...archiveFormatted.debugMemories, ...headFormatted.debugMemories]
+      for (const d of debugMemories) {
+        if (typeof d.memoryId === 'string' && d.memoryId.length > 0) memoryIdsInWhisper.add(d.memoryId)
+      }
     } catch (error) {
       warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -1801,8 +1808,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           otherCharacterIds,
           INTER_CHAR_PER_CHARACTER_LIMIT,
         )
-        const interSeen = new Set<string>()
+        // Deduped within itself and against what the archive and head already
+        // rendered (bug 224): the archive's per-present digests come from the
+        // same `findHotDigests` query with a larger limit, so without this the
+        // top digests about each person in the room were whispered twice.
+        const interSeen = new Set<string>(memoryIdsInWhisper)
+        let interSkippedAsWhispered = 0
         const interCharacterMemories = [...digestLists.flat(), ...partitionMemories].filter(m => {
+          if (memoryIdsInWhisper.has(m.id)) {
+            interSkippedAsWhispered++
+            return false
+          }
           if (interSeen.has(m.id)) return false
           interSeen.add(m.id)
           return true
@@ -1834,7 +1850,21 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               }
             }),
           )
-          interCharacterRelevance = relevanceLists.flat()
+          interCharacterRelevance = relevanceLists.flat().filter(r => {
+            if (memoryIdsInWhisper.has(r.memory.id)) {
+              interSkippedAsWhispered++
+              return false
+            }
+            return true
+          })
+        }
+
+        if (interSkippedAsWhispered > 0) {
+          logger.debug('[ContextManager] Inter-character memories skipped as already whispered', {
+            chatId: chat.id,
+            characterId: character.id,
+            skipped: interSkippedAsWhispered,
+          })
         }
 
         interCharacterLoadedCount = interCharacterMemories.length + interCharacterRelevance.length

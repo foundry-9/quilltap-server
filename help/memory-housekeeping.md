@@ -19,6 +19,8 @@ Every memory lives on one of two shelves:
 
 A memory goes to the archive in one of two ways: housekeeping moves it there under cap pressure, or [Memory Consolidation](memory-consolidation.md) folds it into a digest and files the original away behind it. If the world brings up an archived memory again — and it was archived by housekeeping, not replaced by a digest — it is promoted straight back to the active shelf. Re-observing something a digest has absorbed reinforces the digest instead.
 
+A memory housekeeping archived is not forgotten in a drawer, either. The next consolidation run considers it alongside the active shelf, so what it said can be folded into a digest; once it has been, it sits behind that digest like any other replaced note, and the Consolidation card's cold-retention setting can eventually clear it away.
+
 ## What Housekeeping Does
 
 When enabled, housekeeping runs in two ways:
@@ -30,17 +32,17 @@ You can also run it on demand with the **Run housekeeping now** button — handy
 
 ## What Housekeeping Protects
 
-Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never archived or deleted, no matter what, and neither is a digest written by [Memory Consolidation](memory-consolidation.md). Everything else is protected by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold stays. A memory whose score falls below the threshold becomes eligible for the archive — but only the cap-enforcement sweep actually moves those, and only when the character is over the configured cap.
+Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never archived or deleted, no matter what, and neither is a digest written by [Memory Consolidation](memory-consolidation.md). Neither counts against the cap, either: the cap measures only the memories housekeeping is actually permitted to move, so a character rich in hand-written notes and digests is never declared "over the limit" on their account, and the housekeeper is never sent off on a sweep it could not possibly finish. Everything else is weighed by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold is spared by the slow retention sweep. When a character is over the cap, the cap-enforcement sweep archives just enough memories to come back inside it, starting from the lowest score — so the well-reinforced, well-connected, recently recalled memories are the last to go.
 
 The scoring stream worth dwelling on is the content component. The LLM's importance rating is time-decayed with a **thirty-day half-life**, and — crucially — its contribution to the protection score is **capped** so that importance alone can never make a memory permanent. A fresh fact the LLM rated 0.9 contributes the same 0.40 to its protection score as a fresh fact the LLM rated 0.4; to cross the protection threshold, the memory must also earn some evidence of use. At least one reinforcement, one related-memory link, or one recent access, combined with the capped content contribution and the small default reinforcement bonus, is typically enough. Without those signals, the LLM's one-shot importance rating is simply insufficient evidence for permanent protection — which is the whole point of the blend. The reference clock is reset every time the memory is reinforced with new details, so a fact that remains relevant — revisited, reinforced, linked, accessed — stays protected, while one the chats have genuinely moved on from becomes eligible for the cap-enforcement sweep. This replaces the earlier rule in which any memory rated 0.7 or higher was immortal regardless of age or usage, which — in practice — turned the housekeeper into a doorman who waved almost everyone through.
 
 A re-observation counts as reinforcement however faithfully it restates the original. A retelling close enough to be a near-copy writes no new memory and changes none of the existing one's words, but it still adds to that memory's reinforcement tally — so the facts a character is told most consistently are no longer, absurdly, the ones that look least established.
 
-Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days — "read" meaning the memory actually reached a character (whispered into a turn, returned by a search the character ran), not merely that a search glanced at it on the way past. All four signals combine into a single number used by the protection gate.
+Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days — "read" meaning the memory actually reached a character (whispered into a turn, returned by a search the character ran), not merely that a search glanced at it on the way past, nor that you opened it to have a look in the Commonplace Book or through the API. All four signals combine into a single number used by the protection gate.
 
 The conservative first-pass retention rule still applies: a memory is *also* only eligible for the slow sweep when it is old (more than 6 months), low-importance (below 0.3 after reinforcement), and either never accessed or inactive for 6+ months. The blended score changes what the cap-enforcement sweep can touch; it does not change the first pass.
 
-Both sweeps *archive* rather than delete. Once the retention-policy sweep is complete, if the character still has more active memories than their cap, housekeeping archives the lowest-weighted remaining active memories until the count is back inside the cap. Weighting uses the same formula the chat prompt uses for retrieval, so the memories that survive are the ones your characters would have reached for anyway.
+Both sweeps *archive* rather than delete. Once the retention-policy sweep is complete, if the character still has more automatic memories on the active shelf than their cap, housekeeping archives the lowest-scoring of them until the count is back inside the cap — exactly as many as the excess, and not one more. The score is the same blended protection score described above, so the thing that decides whether a memory may go also decides which goes first.
 
 ## Settings
 
@@ -50,9 +52,9 @@ Turns the feature on. When off, no sweeps happen automatically — though the **
 
 ### Per-character cap
 
-The number of **active** memories a character is allowed to carry before housekeeping engages. Archived memories do not count against it. Default **2000**. Acceptable range 100 – 100,000. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
+The number of **automatic** memories a character may keep on the active shelf before housekeeping engages. Archived memories, memories you wrote by hand, and consolidation digests do not count against it. Default **2000**. Acceptable range 100 – 100,000. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
 
-If you want a different cap for a particular character, that's what the per-character override is for (set programmatically through the API today; a UI for it is on the roadmap). The override takes precedence over the global cap, and any character without an override uses the global one.
+If you want a different cap for a particular character, open **Per-character overrides** beneath the cap. Each character is listed with two figures: how many memories are *counted* against the cap, and how many are *protected* (hand-written and digests) and so exempt. The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one.
 
 ### Merging similar memories (retired)
 
@@ -60,15 +62,15 @@ Earlier versions offered a tick-box to merge near-identical memories during the 
 
 ### Deleting archived memories
 
-Nothing is ever deleted by policy unless you ask for it. The Consolidation card's **cold retention** setting (blank by default, meaning *never*) lets the sweep delete archived memories that a digest has replaced and that have sat in the archive longer than the number of days you give. Archived memories housekeeping moved there by itself, and anything you wrote by hand, are never deleted this way.
+Nothing is ever deleted by policy unless you ask for it. The Consolidation card's **cold retention** setting (blank by default, meaning *never*) lets the sweep delete archived memories that a digest has replaced and that have sat in the archive longer than the number of days you give. A memory housekeeping archived is not deleted this way until consolidation has folded it into a digest — at which point it has been replaced like any other. Anything you wrote by hand is never deleted this way.
 
 ## Running Housekeeping on Demand
 
-The **Run housekeeping now** button enqueues a MEMORY_HOUSEKEEPING background job that sweeps every character owned by your user. It will use whatever cap you have currently configured. The job runs in the background; successful completion appears in the server log as `[Housekeeping] Job complete`.
+The **Run housekeeping now** button enqueues one MEMORY_HOUSEKEEPING background job for each character owned by your user. Each uses whatever cap you have currently configured for that character. A character already being swept — by the daily round, by the reactive trigger, or by an earlier press of the button — is not swept twice at once; the job already under way covers it. The jobs run in the background; each successful sweep appears in the server log as `[Housekeeping] Job complete`.
 
 ## A Note on Trust
 
-Housekeeping will never touch memories that are (a) manually created, (b) consolidation digests, (c) important, (d) recent, or (e) stably reinforced and still useful — and what it does touch goes to the archive, not the bin. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
+Housekeeping will never touch memories that are (a) manually created or (b) consolidation digests; the slow retention sweep also spares anything (c) important, (d) recent, or (e) stably reinforced and still useful, and the cap sweep takes those last of all — and what it does touch goes to the archive, not the bin. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
 
 If your instance was created before Quilltap 4.3, it is also worth running **Repair Missing Embeddings** first. Older gate fallbacks were known to write memories without embeddings when the embedding provider was briefly unavailable; those memories are invisible to the deduplication gate and to semantic search, and the deduplication tool can't see them either. The repair card is the second entry in this tab.
 

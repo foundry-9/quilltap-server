@@ -964,6 +964,28 @@ describe('remapBackupData() - consolidation references', () => {
     expect(chat.messages[0].id).toBe(remapper.getMapping()['msg-old'])
     expect(chat.otherExtractionWatermarkMessageId).toBe(chat.messages[0].id)
   })
+
+  it('remaps a chat\'s episodeExtractionWatermarkMessageId to the new id of its message', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      chats: [
+        {
+          id: 'chat-old',
+          participants: [],
+          tags: [],
+          episodeExtractionWatermarkMessageId: 'msg-old',
+          messages: [{ id: 'msg-old', type: 'message' }],
+        },
+      ] as unknown as BackupData['chats'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const chat = result.chats[0] as unknown as { episodeExtractionWatermarkMessageId: string; messages: Array<{ id: string }> }
+
+    expect(chat.messages[0].id).toBe(remapper.getMapping()['msg-old'])
+    expect(chat.episodeExtractionWatermarkMessageId).toBe(chat.messages[0].id)
+  })
 })
 
 describe('remapBackupData() - wardrobe items filed in subfolders', () => {

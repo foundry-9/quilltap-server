@@ -19,7 +19,18 @@ interface HousekeepingConfig {
 interface CharacterSummary {
   id: string
   name: string
-  memoryCount: number
+  /** Hot AUTO rows — the only number the cap is measured against (bug 210). */
+  demotable: number
+  /** Hot MANUAL rows and digests — never demoted, never counted against the cap. */
+  protected: number
+}
+
+interface CharacterCountsRow {
+  id: string
+  name: string
+  memoryCount?: number
+  demotable?: number
+  protected?: number
 }
 
 const DEFAULT_CONFIG: HousekeepingConfig = {
@@ -61,10 +72,11 @@ export function MemoryHousekeepingCard() {
 
   const rawCharacters = loadedCounts?.characters
   const characters: CharacterSummary[] = (Array.isArray(rawCharacters) ? rawCharacters : []).map(
-    (c: { id: string; name: string; memoryCount: number }) => ({
+    (c: CharacterCountsRow) => ({
       id: c.id,
       name: c.name,
-      memoryCount: c.memoryCount,
+      demotable: c.demotable ?? c.memoryCount ?? 0,
+      protected: c.protected ?? 0,
     }),
   )
 
@@ -175,7 +187,7 @@ export function MemoryHousekeepingCard() {
   return (
     <div className="space-y-4">
       <p className="qt-text-small qt-text-muted">
-        Automatic housekeeping retires low-importance, stale memories to the archive (the cold tier) once a character&rsquo;s active memories approach the cap. Nothing is destroyed: archived memories stay on the shelf, still guard against repeats, and return to active duty if they are observed again. High-importance, manually added, consolidated, recently accessed, and well-reinforced memories are never moved. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
+        Automatic housekeeping retires low-importance, stale memories to the archive (the cold tier) once a character&rsquo;s automatic memories approach the cap. Nothing is destroyed: archived memories stay on the shelf, still guard against repeats, return to active duty if they are observed again, and are offered to consolidation so their gist survives in a digest. Manually added memories and consolidated digests are never moved and never count against the cap. When a character is over the cap, the least protected memories go first; well-reinforced, well-connected, recently recalled ones go last. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
       </p>
 
       <label className="flex items-center gap-3 qt-body">
@@ -207,7 +219,7 @@ export function MemoryHousekeepingCard() {
           onBlur={(e) => handleCapBlur(Number(e.target.value))}
           className="qt-input w-32"
         />
-        <span className="qt-text-small qt-text-muted">active memories per character</span>
+        <span className="qt-text-small qt-text-muted">automatic memories per character</span>
       </div>
 
       {characters.length > 0 && (
@@ -236,14 +248,15 @@ export function MemoryHousekeepingCard() {
                         ? ''
                         : String(override)
                   const effectiveCap = override ?? config.perCharacterCap
-                  const overCap = character.memoryCount > effectiveCap
+                  const overCap = character.demotable > effectiveCap
 
                   return (
                     <div key={character.id} className="flex items-center gap-3">
                       <div className="flex-1 qt-body">
                         <span>{character.name}</span>{' '}
                         <span className={overCap ? 'qt-text-destructive qt-text-small' : 'qt-text-muted qt-text-small'}>
-                          ({character.memoryCount.toLocaleString()} memories)
+                          ({character.demotable.toLocaleString()} counted
+                          {character.protected > 0 && <> &middot; {character.protected.toLocaleString()} protected</>})
                         </span>
                       </div>
                       <input

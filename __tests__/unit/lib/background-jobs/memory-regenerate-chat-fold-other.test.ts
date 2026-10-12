@@ -24,7 +24,7 @@ import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 
 const chatsUpdate = jest.fn()
 
-function setup(otherPass: 'turn' | 'fold' | 'hybrid', watermark: string | null) {
+function setup(otherPass: 'turn' | 'fold' | 'hybrid', watermark: string | null, episodeWatermark: string | null = null) {
   ;(getMemoryExtractionModeSettings as jest.Mock).mockResolvedValue({
     otherPass,
     perTurnOtherFloor: 0.75,
@@ -32,7 +32,11 @@ function setup(otherPass: 'turn' | 'fold' | 'hybrid', watermark: string | null) 
   })
   ;(getRepositories as jest.Mock).mockReturnValue({
     chats: {
-      findById: jest.fn(async () => ({ id: 'chat-1', otherExtractionWatermarkMessageId: watermark })),
+      findById: jest.fn(async () => ({
+        id: 'chat-1',
+        otherExtractionWatermarkMessageId: watermark,
+        episodeExtractionWatermarkMessageId: episodeWatermark,
+      })),
       getMessages: jest.fn(async () => [
         { id: 'u1', type: 'message', role: 'USER' },
         { id: 'a1', type: 'message', role: 'ASSISTANT' },
@@ -76,5 +80,22 @@ describe('memory regenerate — fold-grain OTHER rebuild', () => {
     expect(chatsUpdate).not.toHaveBeenCalled()
     const calls = (enqueueMemoryExtraction as jest.Mock).mock.calls.map((c) => c[1])
     expect(calls.some((p) => p.foldOtherCatchup)).toBe(false)
+  })
+})
+
+describe('memory regenerate — episode watermark (bug 207)', () => {
+  it('clears the episode watermark, whose episodes the wipe removed, in every mode', async () => {
+    for (const mode of ['turn', 'fold', 'hybrid'] as const) {
+      chatsUpdate.mockClear()
+      setup(mode, null, 'm-30')
+      await handleMemoryRegenerateChat(job as never)
+      expect(chatsUpdate).toHaveBeenCalledWith('chat-1', { episodeExtractionWatermarkMessageId: null })
+    }
+  })
+
+  it('leaves a chat with no episode watermark alone', async () => {
+    setup('turn', null, null)
+    await handleMemoryRegenerateChat(job as never)
+    expect(chatsUpdate).not.toHaveBeenCalled()
   })
 })

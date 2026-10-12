@@ -13,6 +13,7 @@ import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-i
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
+import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
 type EmbeddingEntityType = 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
@@ -142,8 +143,16 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   }
 
   try {
-    // Generate embedding using the specified profile
-    const textToEmbed = `${memory.summary}\n\n${memory.content}`;
+    // Generate embedding using the specified profile. The text goes through
+    // the one builder the gate and create paths use, anchor line included —
+    // an inline `summary\n\ncontent` here stripped date/place from every row
+    // on each reindex (bug 204).
+    const textToEmbed = buildMemoryEmbeddingText(memory.summary, memory.content, memory);
+    logger.debug('[EmbeddingGenerate] Built memory embedding text', {
+      context: 'handleEmbeddingGenerate',
+      memoryId: memory.id,
+      textLength: textToEmbed.length,
+    });
     if (await skipIfOversize(textToEmbed, 'MEMORY', payload, job, repos, {
       memoryId: memory.id,
       characterId: memory.characterId,

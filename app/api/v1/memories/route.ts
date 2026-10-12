@@ -42,12 +42,12 @@ import {
   dispatchAction,
   type RequestContext,
 } from '@/lib/api/middleware';
-import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
+import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate, enqueueMemoryConsolidation, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryConsolidation, enqueueMemoryHousekeepingSweep, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
 import { setMemoryExtractionConcurrencyOverride } from '@/lib/background-jobs/processor';
 import {
   getMemoryExtractionConcurrency,
@@ -63,6 +63,7 @@ import {
 } from '@/lib/instance-settings';
 import { runConsolidation } from '@/lib/memory/consolidation';
 import { MemoryConsolidationSettingsSchema, MemoryExtractionModeSettingsSchema } from '@/lib/schemas/settings.types';
+import { MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
@@ -82,9 +83,17 @@ const createMemorySchema = z.object({
   importance: z.number().min(0).max(1).prefault(0.5),
   aboutCharacterId: z.uuid().nullable().optional(),
   chatId: z.uuid().nullable().optional(),
-  source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
+  /** Explicit project; otherwise derived from `chatId`'s chat when it has one. */
+  projectId: z.uuid().nullable().optional(),
   sourceMessageId: z.uuid().nullable().optional(),
-  skipGate: z.boolean().optional(),
+  kind: MemoryKindEnum.optional(),
+  /** ISO wall-clock time of the event the memory records. */
+  occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  entities: z.array(z.string().min(1)).optional(),
+  // Deliberately absent (bug 218, refactor decision 13): `source` is always
+  // MANUAL here — a client-claimed AUTO would switch on the extractor-only
+  // heuristics — and `skipGate` has left the API, so every manual write goes
+  // through the gate. Zod strips both if a caller still sends them.
 });
 
 const searchMemorySchema = z.object({
@@ -493,7 +502,19 @@ async function handleCreateMemory(
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json();
-  const validatedData = createMemorySchema.parse(body);
+  const parsed = createMemorySchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const validatedData = parsed.data;
+
+  if (body && typeof body === 'object' && ('skipGate' in body || ('source' in body && body.source !== 'MANUAL'))) {
+    logger.debug('[Memories API] Ignoring client-supplied source/skipGate on manual create', {
+      characterId: validatedData.characterId,
+      source: body.source,
+      skipGate: body.skipGate,
+    });
+  }
 
   // Verify character ownership
   const character = await repos.characters.findById(validatedData.characterId);
@@ -501,8 +522,29 @@ async function handleCreateMemory(
     return notFound('Character');
   }
 
-  // Create memory with embedding generation
-  const memory = await createMemoryWithEmbedding(
+  // Resolve the project: an explicit one must exist; otherwise the source
+  // chat's project (if any) is the memory's, as it is for extracted rows.
+  let projectId: string | null = null;
+  if (validatedData.projectId) {
+    const project = await repos.projects.findById(validatedData.projectId);
+    if (!project) {
+      return notFound('Project');
+    }
+    projectId = project.id;
+  }
+  if (validatedData.chatId) {
+    const chat = await repos.chats.findById(validatedData.chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+    if (!projectId) {
+      projectId = chat.projectId ?? null;
+    }
+  }
+
+  // Every manual write goes through the gate (decision 13): source forced to
+  // MANUAL, provenance stamped 'manual'.
+  const outcome = await createMemoryWithGate(
     {
       characterId: validatedData.characterId,
       content: validatedData.content,
@@ -512,18 +554,33 @@ async function handleCreateMemory(
       importance: validatedData.importance,
       aboutCharacterId: validatedData.aboutCharacterId,
       chatId: validatedData.chatId,
-      source: validatedData.source,
+      projectId,
+      source: 'MANUAL',
+      witnessedContext: 'manual',
       sourceMessageId: validatedData.sourceMessageId,
+      ...(validatedData.kind !== undefined && { kind: validatedData.kind }),
+      ...(validatedData.occurredAt !== undefined && { occurredAt: validatedData.occurredAt }),
+      ...(validatedData.entities !== undefined && { entities: validatedData.entities }),
     },
-    { userId: user.id, skipGate: validatedData.skipGate }
+    { userId: user.id }
   );
 
+  const memory = outcome.memory;
   if (!memory) {
     // Embedding generation failed after retry; no row was written because a
     // memory without an embedding would be invisible to every future gate
     // check. Surface this to the client so the UI can show the real reason.
     return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
   }
+
+  const inserted = outcome.action === 'INSERT' || outcome.action === 'INSERT_RELATED';
+  logger.debug('[Memories API] Manual memory create resolved', {
+    characterId: validatedData.characterId,
+    memoryId: memory.id,
+    action: outcome.action,
+    inserted,
+    projectId,
+  });
 
   // Schedule vocabulary refit for BUILTIN profiles (debounced)
   // This runs in the background and doesn't block the response
@@ -533,7 +590,9 @@ async function handleCreateMemory(
     });
   });
 
-  return NextResponse.json({ memory }, { status: 201 });
+  // 201 only when a row was created; a reinforcement or near-duplicate
+  // absorption returns 200 with the existing row, and `action` says which.
+  return NextResponse.json({ memory, action: outcome.action }, { status: inserted ? 201 : 200 });
 }
 
 async function handleSearch(
@@ -669,6 +728,10 @@ async function handleHousekeep(
       kept: result.kept,
       totalBefore: result.totalBefore,
       totalAfter: result.totalAfter,
+      hotTotal: result.hotTotal,
+      demotable: result.demotable,
+      protected: result.protected,
+      capUsed: result.capUsed,
       coldCount: result.coldCount,
       demotedIds: result.demotedIds,
       deletedIds: result.deletedIds,
@@ -683,12 +746,13 @@ async function handleHousekeepSweep(
   { user }: { user: { id: string } }
 ) {
   try {
-    const jobId = await enqueueMemoryHousekeeping(user.id, { reason: 'manual' });
+    // One job per character, deduped per character (bug 221).
+    const jobIds = await enqueueMemoryHousekeepingSweep(user.id, { reason: 'manual' });
     logger.info('[Memories API] Enqueued manual housekeeping sweep', {
       userId: user.id,
-      jobId,
+      jobs: jobIds.length,
     });
-    return NextResponse.json({ success: true, jobId });
+    return NextResponse.json({ success: true, jobId: jobIds[0] ?? null, jobIds });
   } catch (error) {
     logger.error('[Memories API] Failed to enqueue housekeeping sweep', {
       userId: user.id,
@@ -982,9 +1046,11 @@ async function handleConsolidate(
     const jobId = await enqueueMemoryConsolidation(user.id, {
       characterId,
       maxClustersPerRun,
+      // A real run honours the requested threshold as the dry run does (bug 223).
+      ...(clusterThreshold !== undefined && { clusterThreshold }),
       trigger: 'manual',
     });
-    logger.info('[Memories API] Consolidation job enqueued', { characterId, jobId });
+    logger.info('[Memories API] Consolidation job enqueued', { characterId, jobId, clusterThreshold });
     return NextResponse.json({ success: true, dryRun: false, jobId });
   } catch (error) {
     logger.error('[Memories API] Failed to enqueue consolidation', { characterId }, error instanceof Error ? error : undefined);
@@ -997,15 +1063,30 @@ async function handleCharacterMemoryCounts(
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const characters = await repos.characters.findByUserId(user.id);
+  // The housekeeping cap measures demotable rows only (hot AUTO; bug 210), so
+  // the card compares `demotable` to the cap. `memoryCount` stays the total
+  // across both tiers for older readers.
   const results = await Promise.all(
-    characters.map(async (c: { id: string; name: string }) => ({
-      id: c.id,
-      name: c.name,
-      memoryCount: await repos.memories.countByCharacterId(c.id),
-    }))
+    characters.map(async (c: { id: string; name: string }) => {
+      const breakdown: { hotTotal: number; demotable: number; protected: number; cold: number } =
+        await repos.memories.countCapBreakdown(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        memoryCount: breakdown.hotTotal + breakdown.cold,
+        hotTotal: breakdown.hotTotal,
+        demotable: breakdown.demotable,
+        protected: breakdown.protected,
+        cold: breakdown.cold,
+      };
+    })
   );
-  // Sort by memory count descending so busy characters surface first
-  results.sort((a, b) => b.memoryCount - a.memoryCount);
+  // Sort by the cap-measured count descending so characters nearest their cap surface first
+  results.sort((a, b) => b.demotable - a.demotable || b.memoryCount - a.memoryCount);
+  logger.debug('[Memories API] Character memory counts computed', {
+    userId: user.id,
+    characters: results.length,
+  });
   return NextResponse.json({ success: true, characters: results });
 }
 

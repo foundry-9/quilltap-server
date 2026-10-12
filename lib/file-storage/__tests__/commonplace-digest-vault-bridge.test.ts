@@ -1,7 +1,7 @@
 /**
  * Tests for the Commonplace digest vault bridge (memory-consolidation-and-tiers.md §C6):
- * the archived-character tombstone, the job-child host-RPC short-circuit, and
- * the skip-when-unchanged rewrite.
+ * the archived-character tombstone, the job-child refusal (bug 208: the mirror
+ * is parent-only, written after commit), and the skip-when-unchanged rewrite.
  *
  * `@/lib/repositories/factory` and `@/lib/file-storage/character-vault-bridge`
  * are mocked app-wide in jest.setup.ts — configured per-test here.
@@ -17,7 +17,7 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
 }))
 
 jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
-  callHost: jest.fn().mockResolvedValue({ written: 0, unchanged: 0, skipped: 0 }),
+  callHost: jest.fn(),
 }))
 
 import { writeCommonplaceDigestsToVault, type WriteCommonplaceDigestsInput } from '@/lib/file-storage/commonplace-digest-vault-bridge'
@@ -99,10 +99,12 @@ describe('writeCommonplaceDigestsToVault', () => {
     expect(mockWrite.mock.calls.map((c) => c[1])).toEqual(['Commonplace/Self.md'])
   })
 
-  it('routes through host-RPC from the job child', async () => {
+  it('refuses in the job child: no host-RPC, no vault write (bug 208)', async () => {
     process.env.QUILLTAP_JOB_CHILD = '1'
-    await writeCommonplaceDigestsToVault(input)
-    expect(mockCallHost).toHaveBeenCalledWith('writeCommonplaceDigestsToVault', input)
+    const result = await writeCommonplaceDigestsToVault(input)
+    expect(result.skippedReason).toBe('job-child')
+    expect(result.skipped).toBe(2)
+    expect(mockCallHost).not.toHaveBeenCalled()
     expect(mockWrite).not.toHaveBeenCalled()
   })
 })

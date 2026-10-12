@@ -15,8 +15,6 @@
  *   - `writeCharacterAvatarToVault` — project-less character-vault avatar writes
  *   - `writeLanternBackgroundToMountStore` — project-less Lantern background writes
  *   - `writeWardrobeItemImage` — wardrobe item pictures queued by the wardrobe tools
- *   - `writeCommonplaceDigestsToVault` — consolidation's `Commonplace/` digest
- *     mirrors (`doc_mount_*` document writes, like the summary bridge)
  *
  * `startScheduledAutonomousRun` is here for a different reason: ORDERING. The
  * scheduled run-start must commit `currentRunId`/`runState` on the RW connection
@@ -113,13 +111,6 @@ async function runMethod(
       );
       const params = args[0] as Parameters<typeof removeConversationSummariesFromVaults>[0];
       return removeConversationSummariesFromVaults(params);
-    }
-    case 'writeCommonplaceDigestsToVault': {
-      const { writeCommonplaceDigestsToVault } = await import(
-        '@/lib/file-storage/commonplace-digest-vault-bridge'
-      );
-      const params = args[0] as Parameters<typeof writeCommonplaceDigestsToVault>[0];
-      return writeCommonplaceDigestsToVault(params);
     }
     case 'startScheduledAutonomousRun': {
       const { startScheduledAutonomousRun } = await import(

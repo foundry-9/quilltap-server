@@ -4,6 +4,9 @@
  *    a real run enqueues a job; input is validated; the dry run is bounded)
  *  - GET/POST ?action=consolidation-config and ?action=extraction-mode-config
  *  - GET list honours ?tier= and ?source=CONSOLIDATED
+ *  - a real consolidate carries clusterThreshold into the job (bug 223)
+ *  - GET ?action=character-memory-counts reports the cap breakdown (bug 210)
+ *  - POST ?action=housekeep-sweep fans out per character (bug 221)
  */
 
 let mockCtx: any
@@ -36,10 +39,11 @@ jest.mock('@/lib/memory/consolidation', () => ({
 }))
 
 const mockEnqueue = jest.fn()
+const mockSweep = jest.fn()
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueMemoryConsolidation: (...args: unknown[]) => mockEnqueue(...args),
   enqueueEmbeddingGenerate: jest.fn(),
-  enqueueMemoryHousekeeping: jest.fn(),
+  enqueueMemoryHousekeepingSweep: (...args: unknown[]) => mockSweep(...args),
   enqueueMemoryRegenerateAll: jest.fn(),
 }))
 
@@ -129,6 +133,18 @@ describe('POST ?action=consolidate', () => {
     expect(mockRunConsolidation).not.toHaveBeenCalled()
   })
 
+  it('bug 223: a real run carries the requested clusterThreshold into the job', async () => {
+    mockAction = 'consolidate'
+    mockEnqueue.mockResolvedValue('job-10')
+    await POST(req({ characterId: CHAR_ID, clusterThreshold: 0.65 }))
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
+      characterId: CHAR_ID,
+      maxClustersPerRun: undefined,
+      clusterThreshold: 0.65,
+      trigger: 'manual',
+    })
+  })
+
   it('rejects a malformed body', async () => {
     mockAction = 'consolidate'
     const res: any = await POST(req({ characterId: 'not-a-uuid' }))
@@ -189,5 +205,37 @@ describe('GET list: tier and source filters', () => {
     mockAction = null
     await GET(req(undefined, `characterId=${CHAR_ID}&limit=20&tier=lukewarm`))
     expect(mockCtx.repos.memories.findByCharacterIdPaginated.mock.calls[0][1].tier).toBeUndefined()
+  })
+})
+
+describe('GET ?action=character-memory-counts (bug 210)', () => {
+  it('reports hotTotal / demotable / protected / cold and sorts by the demotable count', async () => {
+    mockAction = 'character-memory-counts'
+    mockCtx.repos.characters.findByUserId = jest.fn(async () => [
+      { id: 'a', name: 'Ariadne' },
+      { id: 'b', name: 'Bertram' },
+    ])
+    mockCtx.repos.memories.countCapBreakdown = jest.fn(async (id: string) =>
+      id === 'a'
+        ? { hotTotal: 2300, demotable: 1400, protected: 900, cold: 50 }
+        : { hotTotal: 1600, demotable: 1600, protected: 0, cold: 0 },
+    )
+    const res: any = await GET(req(undefined, 'action=character-memory-counts'))
+    const body = res.body ?? (await res.json())
+    expect(body.characters).toEqual([
+      { id: 'b', name: 'Bertram', memoryCount: 1600, hotTotal: 1600, demotable: 1600, protected: 0, cold: 0 },
+      { id: 'a', name: 'Ariadne', memoryCount: 2350, hotTotal: 2300, demotable: 1400, protected: 900, cold: 50 },
+    ])
+  })
+})
+
+describe('POST ?action=housekeep-sweep (bug 221)', () => {
+  it('fans out one job per character and returns every id', async () => {
+    mockAction = 'housekeep-sweep'
+    mockSweep.mockResolvedValue(['job-a', 'job-b'])
+    const res: any = await POST(req({}))
+    const body = res.body ?? (await res.json())
+    expect(mockSweep).toHaveBeenCalledWith('user-1', { reason: 'manual' })
+    expect(body).toEqual({ success: true, jobId: 'job-a', jobIds: ['job-a', 'job-b'] })
   })
 })

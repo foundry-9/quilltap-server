@@ -8,9 +8,10 @@
  *
  * Runs in the forked job child: every repository write buffers and the parent
  * commits the batch at the end, which is why the service plans everything
- * before it writes. The vault mirror goes through host-RPC. The parent
- * announces the change (realtime `memories`, frozen-archive invalidation) from
- * its commit hooks.
+ * before it writes. Every effect waits for that commit: the parent announces
+ * the change (realtime `memories`, frozen-archive invalidation) and writes the
+ * `Commonplace/` vault mirror from the committed rows in its commit hooks, so
+ * a batch that fails to commit leaves the vault untouched (bug 208).
  *
  * Automatic triggers (scheduled, watermark) bail when
  * `memoryConsolidation.enabled` is off; a manual run (Consolidate now, the
@@ -60,6 +61,9 @@ export async function handleMemoryConsolidation(job: BackgroundJob): Promise<voi
   const report = await runConsolidation(payload.characterId, {
     dryRun: payload.dryRun === true,
     ...(payload.maxClustersPerRun !== undefined && { maxClustersPerRun: payload.maxClustersPerRun }),
+    // A manual run's threshold rides in the payload (bug 223); otherwise the
+    // stored setting applies.
+    ...(typeof payload.clusterThreshold === 'number' && { settings: { clusterThreshold: payload.clusterThreshold } }),
     userId: job.userId,
     timeBudgetMs: CONSOLIDATION_JOB_TIME_BUDGET_MS,
     trigger,
@@ -90,6 +94,8 @@ export async function handleMemoryConsolidation(job: BackgroundJob): Promise<voi
     characterId: payload.characterId,
     trigger,
     dryRun: report.dryRun,
+    clusterThreshold: report.settings?.clusterThreshold,
+    clusterThresholdRequested: payload.clusterThreshold ?? null,
     skippedReason: report.skippedReason,
     digestsCreated: report.stats.digestsCreated,
     digestsUpdated: report.stats.digestsUpdated,

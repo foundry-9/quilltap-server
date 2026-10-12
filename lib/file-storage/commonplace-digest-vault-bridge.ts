@@ -8,10 +8,11 @@
  * `Others/` folder, so no user prose is ever touched. The extractor reads the
  * files back as canon (`cheap-llm-tasks/canon.ts`).
  *
- * Like the conversation-summary bridge, the write short-circuits to the parent
- * via host-RPC when running in the forked job child (`QUILLTAP_JOB_CHILD ===
- * '1'`): `writeDatabaseDocument` issues real `doc_mount_*` writes whose
- * server-computed ids the child's buffered-write proxy can't model.
+ * Parent-only. The mirror describes committed digests, so it is written after
+ * the batch that created them commits — by `lib/memory/commonplace-mirror.ts`,
+ * from the job dispatcher's commit hook or an in-process run — never from the
+ * forked job child, whose writes are still only buffered (bug 208). Called in
+ * the child, it writes nothing and reports `skippedReason: 'job-child'`.
  *
  * Archived characters are tombstones: their vault stays live and writable, so
  * this bridge checks `findByIdRaw(...).archivedAt` and skips them — it never
@@ -57,7 +58,7 @@ export interface WriteCommonplaceDigestsResult {
   unchanged: number;
   skipped: number;
   /** Why the whole mirror was skipped, when it was. */
-  skippedReason?: 'archived' | 'missing-character' | 'no-vault';
+  skippedReason?: 'archived' | 'missing-character' | 'no-vault' | 'job-child';
 }
 
 /**
@@ -68,13 +69,16 @@ export interface WriteCommonplaceDigestsResult {
 export async function writeCommonplaceDigestsToVault(
   input: WriteCommonplaceDigestsInput
 ): Promise<WriteCommonplaceDigestsResult> {
-  if (process.env.QUILLTAP_JOB_CHILD === '1') {
-    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
-    return callHost<WriteCommonplaceDigestsResult>('writeCommonplaceDigestsToVault', input);
-  }
-
   const result: WriteCommonplaceDigestsResult = { written: 0, unchanged: 0, skipped: 0 };
   const context = 'file-storage.commonplace-digest-vault-bridge';
+
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    logger.warn('Commonplace mirror refused in the job child; the parent writes it after commit', {
+      context,
+      characterId: input.holderCharacterId,
+    });
+    return { ...result, skipped: input.files.length, skippedReason: 'job-child' };
+  }
 
   try {
     // Tombstone guard, on the raw row: the overlay read is for live characters.

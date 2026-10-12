@@ -165,7 +165,7 @@ describe('child proxy — memory housekeeping writes', () => {
     expect(increments[0].args[0]).toBe('char-1');
     expect(increments[0].args[1]).toBe('m-1');
     expect(typeof increments[0].args[2]).toBe('string');
-    expect(increments[0].args).toHaveLength(3);
+    expect(increments[0].args[3]).toBe(1);
   });
 
   it('bug 182: two jobs absorbing one row from the same snapshot both count after the parent replays them', async () => {
@@ -223,6 +223,7 @@ describe('child proxy — memory housekeeping writes', () => {
     expect(await repo.incrementReinforcement('char-1', 'm-1', 'now')).toEqual({
       reinforcementCount: 2,
       reinforcedImportance: calculateReinforcedImportance(0.5, 2),
+      lastReinforcedAt: 'now',
     });
     db.close();
   });

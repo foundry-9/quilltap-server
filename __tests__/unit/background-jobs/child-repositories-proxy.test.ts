@@ -439,19 +439,37 @@ describe('child repository proxy — read-your-writes detector', () => {
     const proxied = getChildRepositoriesProxy();
 
     await runWithJobScope('job-rww-unmapped', async () => {
-      await (proxied.memories as unknown as typeof repos.memories).create({ content: 'x' } as never);
-      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      await (proxied.chats as unknown as typeof repos.chats).update('c-1', { title: 'x' } as never);
+      await (proxied.chats as unknown as typeof repos.chats).findById('c-1');
       // Dedup is per (jobId, readMethod): a second identical read stays quiet.
-      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      await (proxied.chats as unknown as typeof repos.chats).findById('c-1');
       flushPendingWrites();
     });
 
     const warnings = readYourWritesWarnings();
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toEqual(expect.objectContaining({
-      readMethod: 'memories.findById',
-      table: 'memories',
+      readMethod: 'chats.findById',
+      table: 'chats',
     }));
+  });
+
+  it('stays quiet for memories reads the job overlay answers (bug 209)', async () => {
+    const repos = makeFakeRepos();
+    // The snapshot cannot hold a row this job only buffered.
+    repos.memories.findById.mockResolvedValue(null);
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    let seen: unknown;
+    await runWithJobScope('job-rww-memories', async () => {
+      const created = await (proxied.memories as unknown as typeof repos.memories).create({ content: 'x' } as never);
+      seen = await (proxied.memories as unknown as typeof repos.memories).findById((created as { id: string }).id);
+      flushPendingWrites();
+    });
+
+    expect(readYourWritesWarnings()).toHaveLength(0);
+    expect(seen).toEqual(expect.objectContaining({ content: 'x' }));
   });
 });
 

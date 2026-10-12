@@ -81,7 +81,10 @@ describe('resolveWhenPhrase', () => {
   it('resolves relative phrases against the anchor', () => {
     expect(resolveWhenPhrase('yesterday', anchor)).toBe('2026-07-20T00:00:00.000Z')
     expect(resolveWhenPhrase('3 days ago', anchor)).toBe('2026-07-18T00:00:00.000Z')
-    expect(resolveWhenPhrase('last week', anchor)).toBe('2026-07-14T00:00:00.000Z')
+    // Bug 212: the previous Monday-anchored week, as the read side asks for it.
+    expect(resolveWhenPhrase('last week', anchor)).toBe('2026-07-13T00:00:00.000Z')
+    // Bug 212: the start of the read side's 18:00–06:00 window.
+    expect(resolveWhenPhrase('last night', anchor)).toBe('2026-07-20T18:00:00.000Z')
     expect(resolveWhenPhrase('two weeks ago', anchor)).toBe('2026-07-07T00:00:00.000Z')
     expect(resolveWhenPhrase('a couple of days ago', anchor)).toBe('2026-07-19T00:00:00.000Z')
   })

@@ -4,6 +4,35 @@
 
 ### 4.10-dev
 
+#### Fix bugs 203–226: memory system defects from the refactor audit
+
+Targeted fixes on the current code, ahead of the memory refactor phases. Three migrations: `add-episode-extraction-watermark-v1`, `add-memory-superseded-at-v1`, `recompute-reinforced-importance-v1`.
+
+- 203: `PUT /memories/[id]` goes through new `editMemory` (`lib/memory/memory-edit.ts`): changed text is re-embedded, `reinforcedImportance` recomputed, related links validated and written on both sides, the frozen archive invalidated, `memories` published, and a digest's Commonplace mirror refreshed.
+- 204: Background re-embeds and the BUILTIN vocabulary refit embed through `buildMemoryEmbeddingText`, so the anchor line is kept.
+- 205: `rebuildVectorIndex` (and the other two re-add paths in `memory-service.ts`) keep each row's tier; cold rows no longer pass hot-only recall.
+- 206: The fold OTHER pass reads wide windows in 60-message slices and advances its watermark only past slices it read. Shared rules in `lib/memory/fold-window.ts`.
+- 207: The fold episode pass has its own watermark, `chats.episodeExtractionWatermarkMessageId` (patch-only, backfilled from the last summary anchor, exported, remapped on restore/import). Hard rebuilds no longer re-extract the whole history; regenerate clears it.
+- 208: The Commonplace vault mirror is written by the parent after the job's batch commits, from committed rows (`lib/memory/commonplace-mirror.ts`). The `writeCommonplaceDigestsToVault` host-RPC method is removed.
+- 209: The job child's repository proxy keeps a per-job memory overlay, so the gate sees memories, links and footnotes written earlier in the same job. No more duplicate inserts, lost links or lost footnotes within one job.
+- 210: The housekeeping cap counts demotable rows only (hot AUTO, non-digest). Over the cap, exactly the excess is demoted, lowest protection first; protected AUTO rows can now be demoted, last. `character-memory-counts` and the Housekeeping card report `hotTotal` / `demotable` / `protected`.
+- 211: Consolidation takes cold AUTO rows with no successor (demoted by housekeeping) as candidates, so they can be digested and later expire.
+- 212: Memory event time uses one calendar per instance (Salon timezone, then `QUILLTAP_TIMEZONE`, then system) on write, read and in the classifier's date-only ranges (`lib/memory/memory-calendar.ts`). "Last night" written now falls inside "last night" asked. Existing rows are not backfilled.
+- 213: Every extraction pass sets `isDangerousChat` on its uncensored fallback from `shouldUseUncensoredRoute(chat)`; the fold episode pass now gets the fallback (`lib/memory/extraction-route.ts`).
+- 214: The text-search fallback honours `excludeMemoryIds`, `occurredWithin`, recall multipliers, `extraProbes`, `entityAnchors` and `weightClockMs`.
+- 215: Every recap importance band filters on `reinforcedImportance`, with limits in SQL.
+- 216: `reinforcedImportance = min(1, importance + log2(count) × 0.05)`, so count 1 equals importance. Migration recomputes every row.
+- 217: Vector-store invalidation after a job commit is keyed by the characters each write touched, including `bulkDelete` and memory-id-keyed writes (`lib/background-jobs/host/vector-store-invalidation.ts`).
+- 218: `POST /memories` always stores `source: MANUAL` / `witnessedContext: manual`, drops `skipGate`, resolves `projectId` (explicit or from the chat), accepts `kind` / `occurredAt` / `entities`, and returns 200 with the gate `action` when it reinforced an existing row (201 only on insert).
+- 219: `GET /memories/[id]` no longer updates `lastAccessedAt`.
+- 220: `createMemoryDirect` embeds first (one retry) and writes row and embedding together; on failure nothing is written.
+- 221: Housekeeping jobs dedupe per character regardless of reason; user-wide sweeps enqueue one job per character.
+- 222: Carina memory extraction passes the chat's `projectId`, project description and context summary.
+- 223: A real `?action=consolidate` run uses the requested `clusterThreshold` (new payload field).
+- 224: The inter-character memory section skips memories already shown in the archive or dynamic head.
+- 225: New `memories.supersededAt`; cold retention ages by it, not `updatedAt`. Deleting memories scrubs them from surviving digests' `consolidatedFrom` and releases a deleted digest's members.
+- 226: The dedup merge adds reinforcement counts as an atomic delta (`incrementReinforcement(…, by)`) instead of writing an absolute total.
+
 #### Fix bug 228: importing a chat with "Create New" dropped every message
 
 - The `duplicate` conflict strategy created the copy under a new chat id but inserted each message under its original id; `chat_messages.id` is global, so every insert failed with `UNIQUE constraint failed: chat_messages.id` and the copy had no messages. The default (non-`preserveIds`) path failed the same way when one bundle was imported twice.
