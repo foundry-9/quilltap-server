@@ -21,9 +21,12 @@
 
 - **The chat wipe** (`DELETE /memories?chatId=`, `MEMORY_REGENERATE_CHAT`) deletes only hot AUTO rows.
   A digest is also wiped once none of its members survive, per locked decision 4 of the refactor spec.
+  A member survives only if this wipe is not deleting it and its `supersededById` still names the
+  digest; all spared digests' members are read in one query.
   The result and the API response carry a `spared` / `sparedCount`, and the Salon's toast and
   confirmations say what is kept.
-- **The dedup tool** folds only hot AUTO rows.
+- **The dedup tool** folds only hot AUTO rows, and reports the rest per character as `sparedCount`
+  (the preview's "Kept aside" column).
 - The per-row delete is unchanged, and remains the true purge.
 
 Tests: `__tests__/unit/lib/memory/policy-protection.test.ts`.

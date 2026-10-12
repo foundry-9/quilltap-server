@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
-import { deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -129,10 +129,9 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return notFound('Memory');
       }
 
-      // Row, neighbours' links and vector together (bug 200): the unlink
-      // chokepoint alone left the vector behind, and an orphan at rank 1
-      // blinded the gate's near-duplicate and reinforce branches.
-      const deleted = await deleteMemoryWithVector(existingMemory.characterId, memoryId);
+      // The chokepoint removes the row, scrubs neighbours' links and removes
+      // the vector (bug 200: an orphan vector blinded the gate).
+      const deleted = await deleteMemoryWithUnlink(memoryId);
       if (!deleted) {
         return notFound('Memory');
       }

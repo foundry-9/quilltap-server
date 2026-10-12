@@ -9,17 +9,21 @@
 | **Who it bites** | continue, chained multi-character, nudged and autonomous-room turns, i.e. any turn built without a new user message |
 | **Provenance** | Original to v4. Recall moved into the trailing user message (the persona-whisper overhaul); the trailing-only branch for turns with no new user message was written for the scene note, progressions and inform, and recall was never added to it |
 | **Defect site** | `lib/chat/context-manager.ts`, the `else if` branch after the new-user-message branch (`trailingOnly`, was line 2810) |
-| **Fix site** | `lib/chat/context-manager.ts:2802-2822` |
+| **Fix site** | `lib/chat/context-manager.ts` (the trailing-only branch) |
 | **v5 status** | Not assessed |
 | **Index** | [bugs.md](../../bugs.md) |
 
 ---
 
-**FIXED in v4 (2026-10-12).** The trailing-only message now carries `llmRecallText`, after the scene
-note and before progressions and inform. That is the order recall takes on an ordinary turn. The
-branch's guard now also fires on recall alone. Tests: `__tests__/unit/context-management.test.ts`
+**FIXED in v4 (2026-10-12).** The trailing-only message now carries everything the turn posted:
+the Core whisper, `llmRecallText` and new Suparṇā mail, after the scene note and before progressions
+and inform. That is the order they take on an ordinary turn. The branch's guard now also fires on any
+of them alone. Mail and the Core whisper had the same defect, raised in review of PR 87: a letter was
+marked alerted and never offered again, and a Core whisper that fired on a chained turn was posted and
+never sent. Tests: `__tests__/unit/context-management.test.ts`
 (`recall on a turn with no new user message (bug 199)`): recall is delivered alone, delivered before
-inform, and not duplicated on an ordinary turn. Two of these fail against the old code.
+inform, followed by mail, and not duplicated on an ordinary turn. Three of these fail against the old
+code.
 
 ## Symptom
 
@@ -43,8 +47,9 @@ memories on. The whisper in the transcript made recall look delivered.
 
 ## Fix
 
-Add `llmRecallText` to the guard and to `trailingOnly`, in the ordinary turn's order. Core whisper
-(`coreWhisperLLMContext`) is skipped by design on continue turns and is unchanged.
+Add `coreWhisperLLMContext`, `llmRecallText` and `suparnaMailLLMContext` to the guard and to
+`trailingOnly`, in the ordinary turn's order. The Core whisper is still not computed in continue mode;
+it can fire on a chained turn, and is now delivered when it does.
 
 ## Verify
 

@@ -8,17 +8,20 @@
 
 - Filed bugs 199–226 from the memory refactor audit, one file each, with index rows. 203–226 stay open
   and name the refactor phase that closes them.
-- Bug 199: continue, chained and autonomous turns (no new user message) now send recalled memories to
-  the model. Before, recall was computed, posted as a whisper and stamped accessed, but left out of the
-  trailing-only message.
-- Bug 200: `DELETE /api/v1/memories/[id]` now removes the memory's vector too
-  (`deleteMemoryWithVector`). The gate ignores vector hits with no row behind them, so an orphan at
-  rank 1 no longer hides a live near-duplicate. Character archive already dropped the whole index, so
-  that half of the filing did not reproduce.
+- Bug 199: continue, chained and autonomous turns (no new user message) now send recalled memories,
+  new Suparṇā mail and the Core whisper to the model. Before, they were posted (recall stamped
+  accessed, letters marked alerted) but left out of the trailing-only message.
+- Bug 200: the delete chokepoint (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch`) now
+  removes the deleted rows' vectors, so the item delete, restore and every cascade stop leaving orphan
+  vectors; per-caller removal in the cascades, housekeeping and dedup is gone. The gate ignores vector
+  hits with no row and searches past them (up to 4 × K), so orphans no longer hide a live
+  near-duplicate. Character archive already dropped the whole index, so that half did not reproduce.
 - Bug 201: the chat wipe (`DELETE /memories?chatId=`, Re-extract, Regenerate) deletes only hot AUTO
   rows, plus digests with no surviving member. MANUAL rows, cold rows and live digests are kept, and
-  the response reports `sparedCount`. The dedup tool folds only hot AUTO rows. A shared predicate lives
-  in `lib/memory/policy-protection.ts`.
+  the response reports `sparedCount`. A digest counts as having a member only if that member is not
+  being wiped and still points at it. The dedup tool folds only hot AUTO rows and reports the rest as
+  `sparedCount` ("Kept aside" in the preview). A shared predicate lives in
+  `lib/memory/policy-protection.ts`.
 - Bug 202 closed as not a defect: R5 of the recall retuning keeps entity-anchor hits under the cosine
   floor. Corrected the comments in `searchMemoriesSemantic` that claimed the opposite.
 #### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)

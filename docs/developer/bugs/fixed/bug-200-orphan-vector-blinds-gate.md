@@ -9,7 +9,7 @@
 | **Who it bites** | anyone who deletes a single memory in the Commonplace Book, and any character whose vector index otherwise drifted from its rows |
 | **Provenance** | Original to v4. `vector_entries` has no foreign key to `memories`; the item route went through the unlink chokepoint (`deleteMemoryWithUnlink`) and not `deleteMemoryWithVector` |
 | **Defect site** | `app/api/v1/memories/[id]/route.ts` (DELETE, was line 132); `lib/memory/memory-gate.ts` (`runMemoryGateInner`, best match taken from the raw vector top-K, was lines 309-325) |
-| **Fix site** | `app/api/v1/memories/[id]/route.ts:135`; `lib/memory/memory-gate.ts:309-330` |
+| **Fix site** | `lib/memory/memory-gate.ts` (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch` remove vectors; `runMemoryGateInner` decides on live rows and searches past orphans) |
 | **v5 status** | Not assessed |
 | **Index** | [bugs.md](../../bugs.md) |
 
@@ -17,13 +17,22 @@
 
 **FIXED in v4 (2026-10-12).** There are two halves:
 
-1. `DELETE /api/v1/memories/[id]` now calls `deleteMemoryWithVector`, which removes the row, its
-   neighbours' links and its vector.
-2. The gate now decides on live rows only. Vector hits with no row behind them are dropped before the
-   best match is chosen, and are logged at `warn` with their ids.
+1. **Vector removal is part of the delete chokepoint.** `deleteMemoryWithUnlink` and
+   `deleteMemoriesWithUnlinkBatch` remove the deleted rows' vectors themselves (best-effort, logged),
+   so no caller that deletes through them can leave an orphan. The item route, restore's delete
+   service and every cascade inherit it; the per-caller removal loops in `memory-service.ts`,
+   housekeeping and the dedup tool are gone. `deleteMemoriesWithUnlinkBatchReport` returns the
+   vector count for the cascades that report it.
+2. **The gate decides on live rows only.** Vector hits with no row behind them are dropped before the
+   best match is chosen and logged at `warn`. When orphans crowd the top K, the gate searches wider
+   (up to 4 × K) until it has K live rows or the store runs out. It does not prune orphans itself: in
+   the job child a row inserted earlier in the same job is invisible to the snapshot (bug 209) and
+   would look like one.
 
-The second half also protects against orphans left by any other route, such as a vector removal that
-failed after its row was deleted. Tests: `__tests__/unit/lib/memory/memory-gate-orphan-vectors.test.ts`.
+The first version of this fix patched the item route alone and filtered orphans after a fixed top-K
+search; review of PR 87 moved both into the chokepoint and the gate. Tests:
+`__tests__/unit/lib/memory/memory-gate-orphan-vectors.test.ts`,
+`__tests__/unit/lib/memory/memory-gate-delete-with-unlink.test.ts`.
 
 **The character-archive half of the filing does not reproduce.** `pruneArchivedCharacterState`
 (`lib/characters/archive-service.ts:743`) deletes the memories, then calls
@@ -52,7 +61,8 @@ No test deleted a row and then gated a candidate. Duplicates are a quiet failure
 ## Fix
 
 As above. Phase B of the refactor gives the index an owner (`memoryIndex`) and drops `vector_entries`,
-so after that a row and its vector cannot drift apart. Until then the gate tolerates drift.
+so after that a row and its vector cannot drift apart. Until then the chokepoint removes vectors and
+the gate tolerates whatever drift is already there.
 
 ## Verify
 

@@ -103,7 +103,20 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
     expect(result.decision).toMatchObject({ action: 'SKIP_NEAR_DUPLICATE', existingMemory: { id: 'live' } })
   })
 
+  it('searches past orphans that fill the whole top K', async () => {
+    // Five orphans outrank the live near-duplicate; a top-5 search alone
+    // would see only orphans and insert.
+    const orphans = ['o1', 'o2', 'o3', 'o4', 'o5'].map((id, i) => hit(id, 0.99 - i * 0.001))
+    search.mockImplementation((_embedding: unknown, k: number) => [...orphans, hit('live', 0.93)].slice(0, k))
+
+    const result = await runMemoryGate('char-1', 'Charlie likes lighthouses.', 'Likes lighthouses', [], 'user-1')
+
+    expect(result.decision).toMatchObject({ action: 'SKIP_NEAR_DUPLICATE', existingMemory: { id: 'live' } })
+    expect(search.mock.calls.length).toBeGreaterThan(1)
+  })
+
   it('inserts when every hit is an orphan', async () => {
+    // The store holds nothing else: search returns fewer than K, so no wider search.
     search.mockReturnValue([hit('orphan', 0.99)])
 
     const result = await runMemoryGate('char-1', 'Charlie likes lighthouses.', 'Likes lighthouses', [], 'user-1')

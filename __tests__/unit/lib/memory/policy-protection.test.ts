@@ -21,6 +21,7 @@ jest.mock('@/lib/embedding/vector-store', () => ({
 
 jest.mock('@/lib/memory/memory-gate', () => ({
   deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[]) => ids.length),
+  deleteMemoriesWithUnlinkBatchReport: jest.fn(async (ids: string[]) => ({ deleted: ids.length, vectorsRemoved: ids.length })),
   deleteMemoryWithUnlink: jest.fn(),
 }))
 
@@ -48,12 +49,13 @@ import { deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service'
 import { deduplicateCharacterMemories } from '@/lib/tools/memory-dedup'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { deleteMemoriesWithUnlinkBatch, deleteMemoriesWithUnlinkBatchReport } from '@/lib/memory/memory-gate'
 import type { Memory } from '@/lib/schemas/types'
 
 const mockedRepos = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockedStore = getCharacterVectorStore as jest.MockedFunction<typeof getCharacterVectorStore>
 const mockedDeleteBatch = deleteMemoriesWithUnlinkBatch as jest.MockedFunction<typeof deleteMemoriesWithUnlinkBatch>
+const mockedWipeBatch = deleteMemoriesWithUnlinkBatchReport as jest.MockedFunction<typeof deleteMemoriesWithUnlinkBatchReport>
 
 function row(id: string, overrides: Partial<Memory> = {}): Memory {
   return {
@@ -101,16 +103,8 @@ describe('policyProtectionOf', () => {
 })
 
 describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
-  let removeVector: jest.Mock
-
   beforeEach(() => {
     jest.clearAllMocks()
-    removeVector = jest.fn()
-    mockedStore.mockResolvedValue({
-      hasVector: jest.fn(() => true),
-      removeVector,
-      save: jest.fn(),
-    } as never)
   })
 
   it('wipes hot AUTO rows and spares manual, cold and a digest with a surviving member', async () => {
@@ -130,10 +124,46 @@ describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
 
     const result = await deleteMemoriesByChatIdWithVectors('chat-1')
 
-    expect(mockedDeleteBatch).toHaveBeenCalledWith(['auto'])
-    expect(removeVector).toHaveBeenCalledTimes(1)
-    expect(removeVector).toHaveBeenCalledWith('auto')
+    expect(mockedWipeBatch).toHaveBeenCalledWith(['auto'])
     expect(result).toMatchObject({ deleted: 1, spared: 3 })
+  })
+
+  it('wipes a digest whose only listed member is being wiped or now belongs elsewhere', async () => {
+    // 'hot-member' is hot AUTO in this chat (re-promoted): it dies in this wipe.
+    // 'moved' still exists but was re-consolidated into another digest.
+    const moved = row('moved', { tier: 'cold', supersededById: 'other-digest', chatId: 'chat-2' })
+    mockedRepos.mockReturnValue({
+      memories: {
+        findByChatId: jest.fn(async () => [
+          row('hot-member'),
+          row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['hot-member', 'moved'] }),
+        ]),
+        findByIds: jest.fn(async (ids: string[]) => (ids.includes('moved') ? [moved] : [])),
+      },
+    } as never)
+
+    const result = await deleteMemoriesByChatIdWithVectors('chat-1')
+
+    expect(mockedWipeBatch).toHaveBeenCalledWith(['hot-member', 'digest'])
+    expect(result).toMatchObject({ deleted: 2, spared: 0 })
+  })
+
+  it('looks up every spared digest\'s members in one query', async () => {
+    const findByIds = jest.fn(async () => [])
+    mockedRepos.mockReturnValue({
+      memories: {
+        findByChatId: jest.fn(async () => [
+          row('d1', { source: 'CONSOLIDATED', consolidatedFrom: ['a', 'b'] }),
+          row('d2', { source: 'CONSOLIDATED', consolidatedFrom: ['b', 'c'] }),
+        ]),
+        findByIds,
+      },
+    } as never)
+
+    await deleteMemoriesByChatIdWithVectors('chat-1')
+
+    expect(findByIds).toHaveBeenCalledTimes(1)
+    expect(findByIds).toHaveBeenCalledWith(['a', 'b', 'c'])
   })
 
   it('wipes a digest whose members are all gone', async () => {
@@ -146,7 +176,7 @@ describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
 
     const result = await deleteMemoriesByChatIdWithVectors('chat-1')
 
-    expect(mockedDeleteBatch).toHaveBeenCalledWith(['digest'])
+    expect(mockedWipeBatch).toHaveBeenCalledWith(['digest'])
     expect(result).toMatchObject({ deleted: 1, spared: 0 })
   })
 
@@ -160,7 +190,7 @@ describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
 
     const result = await deleteMemoriesByChatIdWithVectors('chat-1')
 
-    expect(mockedDeleteBatch).not.toHaveBeenCalled()
+    expect(mockedWipeBatch).not.toHaveBeenCalled()
     expect(result).toEqual({ deleted: 0, vectorsRemoved: 0, characterCount: 0, spared: 1 })
   })
 })
