@@ -255,11 +255,20 @@ describe('buildImportedWardrobeItemIdMap', () => {
         doc({ mountPointId: 'skipped-mount' }),
         doc({ relativePath: 'Notes/Coat.md' }),
         doc({ relativePath: 'Wardrobe/instructions.md', fileName: 'instructions.md' }),
-        doc({ relativePath: 'Wardrobe/Old/Coat.md' }),
+        doc({ relativePath: 'Wardrobe/Old/instructions.md', fileName: 'instructions.md' }),
+        doc({ relativePath: `Wardrobe/images/${SRC_ITEM}/Coat.md` }),
       ],
       { mountPoints: new Map([['src-mount', 'dst-mount']]), wardrobeItems: new Map() },
     );
     expect(map.size).toBe(0);
+  });
+
+  it('maps an item filed in a wardrobe subfolder', () => {
+    const map = buildImportedWardrobeItemIdMap(
+      [doc({ relativePath: 'Wardrobe/Formal/Evening/Coat.md' })],
+      { mountPoints: new Map([['src-mount', 'dst-mount']]), wardrobeItems: new Map() },
+    );
+    expect(map.get(SRC_ITEM)).toBe(SRC_ITEM);
   });
 
   it('lets a carried vault document override the scaffold id importCharacters minted', () => {

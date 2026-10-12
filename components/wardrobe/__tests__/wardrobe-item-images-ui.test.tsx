@@ -229,7 +229,7 @@ describe('WardrobeItemRow — picture', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
     expect(screen.queryByRole('menuitem', { name: 'Generate image' })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Move' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Move to another wardrobe…' })).toBeInTheDocument()
   })
 })
 

@@ -29,6 +29,8 @@ describe('item drafts', () => {
       componentItemIds: [],
       // A leaf always replaces its slots; the flag is composite-only.
       replace: false,
+      // An item read without a folder sits at the top level.
+      folder: '',
     })
   })
 

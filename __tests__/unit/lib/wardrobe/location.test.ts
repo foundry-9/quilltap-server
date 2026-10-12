@@ -32,13 +32,13 @@ jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
 
 const mockReadMountItems = jest.fn();
 const mockCreateInMount = jest.fn();
-const mockUpdateInMount = jest.fn();
+const mockUpdateManyInMount = jest.fn(async () => []);
 const mockDeleteInMount = jest.fn();
 const mockResolveWardrobeMount = jest.fn();
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   readMountItems: (...a: unknown[]) => mockReadMountItems(...a),
   createInMount: (...a: unknown[]) => mockCreateInMount(...a),
-  updateInMount: (...a: unknown[]) => mockUpdateInMount(...a),
+  updateManyInMount: (...a: unknown[]) => mockUpdateManyInMount(...a),
   deleteInMount: (...a: unknown[]) => mockDeleteInMount(...a),
   resolveWardrobeMount: (...a: unknown[]) => mockResolveWardrobeMount(...a),
 }));
@@ -138,10 +138,9 @@ describe('location operations', () => {
   it('update strips identity and timestamps from the patch', async () => {
     const loc = (await resolveWardrobeLocation('group', 'grp-1', makeRepos() as never, USER))!;
     await loc.update('a', { id: 'x', createdAt: 'c', updatedAt: 'u', title: 'T' });
-    expect(mockUpdateInMount).toHaveBeenCalledWith(
+    expect(mockUpdateManyInMount).toHaveBeenCalledWith(
       { mountPointId: 'grp-mp', scope: 'group', characterId: null },
-      'a',
-      { title: 'T' },
+      [{ id: 'a', patch: { title: 'T' } }],
     );
   });
 
@@ -156,7 +155,7 @@ describe('location operations', () => {
     await expect(loc.delete('a')).rejects.toBeInstanceOf(CharacterArchivedError);
     await expect(loc.writableMountPointId()).rejects.toBeInstanceOf(CharacterArchivedError);
     expect(mockCreateInMount).not.toHaveBeenCalled();
-    expect(mockUpdateInMount).not.toHaveBeenCalled();
+    expect(mockUpdateManyInMount).not.toHaveBeenCalled();
     expect(mockDeleteInMount).not.toHaveBeenCalled();
   });
 

@@ -1437,6 +1437,11 @@
           ],
           "description": "When the item was archived; null or absent means active. An archived garment is hidden from every wardrobe list and picker unless the surface asks for archived entries, and is never offered to the outfit-selection LLM. It does not undress a character already wearing it."
         },
+        "folder": {
+          "type": "string",
+          "maxLength": 900,
+          "description": "The operator's folder for the item under its wardrobe's Wardrobe/ folder (e.g. \"Formal/Evening\"); empty or absent means the top level. Derived from the item file's path, never stored in its frontmatter. Filing only: it has no bearing on what a character can wear. Importers file the item at the same path, normalising one that is not a clean wardrobe folder (at most 8 segments, none named \"images\") or falling back to the top level."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }

@@ -31,6 +31,8 @@ export interface WardrobeItemDraft {
   componentItemIds: string[]
   /** Composite-only: clear the designated slots on equip instead of layering. */
   replace: boolean
+  /** Folder under `Wardrobe/` (`''` = root). Filing only. */
+  folder: string
 }
 
 /** The create/update body the wardrobe item routes accept. */
@@ -43,6 +45,7 @@ export interface WardrobeItemPayload {
   isDefault: boolean
   componentItemIds: string[]
   replace: boolean
+  folder: string
 }
 
 /** A blank draft, optionally pre-filled. */
@@ -56,6 +59,7 @@ export function emptyDraft(overrides?: Partial<WardrobeItemDraft>): WardrobeItem
     types: [],
     componentItemIds: [],
     replace: false,
+    folder: '',
     ...overrides,
   }
 }
@@ -71,6 +75,7 @@ export function draftFromItem(item: WardrobeItem): WardrobeItemDraft {
     types: [...item.types],
     componentItemIds: [...(item.componentItemIds ?? [])],
     replace: item.replace ?? false,
+    folder: item.folder ?? '',
   }
 }
 
@@ -89,6 +94,7 @@ export function draftToPayload(draft: WardrobeItemDraft): WardrobeItemPayload {
     isDefault: draft.isDefault,
     componentItemIds: [...draft.componentItemIds],
     replace: isComposite(draft) ? draft.replace : false,
+    folder: draft.folder,
   }
 }
 

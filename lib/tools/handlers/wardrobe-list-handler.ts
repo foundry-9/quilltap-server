@@ -128,6 +128,7 @@ export async function executeWardrobeListTool(
         types: item.types,
         appropriateness: item.appropriateness ?? null,
         is_own: item.characterId === context.characterId,
+        folder: item.folder || null,
         is_equipped: equipped.length > 0,
         // Preserve the original single-slot field shape; with arrays-per-slot
         // we expose the *first* slot the item appears in for back-compat,
@@ -245,6 +246,7 @@ export function formatWardrobeListResults(
   for (const item of output.items) {
     const typeTags = item.types.map((t) => `[${t}]`).join(' ');
     const equippedTag = item.is_equipped ? ` (EQUIPPED in ${item.equipped_slot})` : '';
+    const folderTag = item.folder ? ` [folder: ${item.folder}]` : '';
     const sharedTag = item.is_own ? '' : ' [shared — read-only]';
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
     const description = item.description ? ` - ${item.description}` : '';
@@ -256,7 +258,7 @@ export function formatWardrobeListResults(
     const wearTag = formatWardrobeListWearNote(item, nowMs);
     const pictureTag = item.image_file_id ? ` · picture: ${formatWardrobeImageHandle(item.image_file_id)}` : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
+    lines.push(`  ${typeTags} ${item.title}${folderTag}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
   }
 
   return lines.join('\n');

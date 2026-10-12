@@ -70,6 +70,7 @@ export function legacyPresetToComposite(preset: LegacyOutfitPreset): WardrobeIte
     replace: true,
     migratedFromClothingRecordId: null,
     archivedAt: null,
+    folder: '',
     createdAt: preset.createdAt,
     updatedAt: preset.updatedAt,
   };

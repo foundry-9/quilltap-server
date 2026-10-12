@@ -321,3 +321,51 @@ describe('wardrobe_read', () => {
     ).toBe(`You have worn it twice, first 14 Mar 2026, last ${phrase}.`)
   })
 })
+
+describe('folders in wardrobe_list and wardrobe_read', () => {
+  beforeEach(() => {
+    const own = { scope: 'character', id: CALLER, name: '' }
+    ;(loadWearablePool as jest.Mock).mockResolvedValue(
+      buildWearablePool(
+        CALLER,
+        { groupMountPointIds: [], projectMountPointIds: [] },
+        {
+          own: [
+            { ...wardrobeItem({ folder: 'Formal/Evening' }), origin: own },
+            { ...wardrobeItem({ id: 'item-2', title: 'Spats', types: ['footwear'], folder: '' }), origin: own },
+          ],
+          group: [],
+          project: [],
+          general: [],
+        },
+      ),
+    )
+  })
+
+  it('wardrobe_list carries the folder (null at the root) and tags the line after the title', async () => {
+    const output = await executeWardrobeListTool({}, context)
+
+    expect(output.items.map((i: any) => [i.item_id, i.folder])).toEqual([
+      ['item-1', 'Formal/Evening'],
+      ['item-2', null],
+    ])
+    const lines = formatWardrobeListResults(output, NOW_MS).split('\n')
+    expect(lines[1]).toBe(
+      '  [top] Greatcoat [folder: Formal/Evening] · worn by you 3×, last 3 days ago (4× in the household)',
+    )
+    expect(lines[2]).toBe('  [footwear] Spats · never worn')
+  })
+
+  it('wardrobe_read carries the folder and tags the title line', async () => {
+    const output = await executeWardrobeReadTool({ item_id: 'item-1' }, context)
+
+    expect(output.folder).toBe('Formal/Evening')
+    expect(formatWardrobeReadResults(output, NOW_MS).split('\n')[0]).toBe(
+      'Greatcoat (item-1) [folder: Formal/Evening]',
+    )
+
+    const root = await executeWardrobeReadTool({ item_id: 'item-2' }, context)
+    expect(root.folder).toBeNull()
+    expect(formatWardrobeReadResults(root, NOW_MS).split('\n')[0]).toBe('Spats (item-2)')
+  })
+})

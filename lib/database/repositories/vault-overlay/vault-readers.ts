@@ -29,7 +29,6 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_WARDROBE_JSON_PATH,
   CHARACTER_WARDROBE_FOLDER,
-  isWardrobeInstructionsFileName,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
   CharacterVaultPropertiesSchema,
@@ -48,6 +47,7 @@ import {
   parseScenarioFile,
   parseWardrobeItemFile,
   resolveAndCheckComponentItems,
+  isWardrobeItemDocumentPath,
 } from './parsers';
 
 export async function readVaultTextFile(
@@ -307,9 +307,12 @@ export async function readCharacterVaultScenarios(
  * if neither the new folder layout nor the legacy `wardrobe.json` is usable.
  *
  * Read order:
- *   1. `Wardrobe/*.md` (current format). Composite items reference their
- *      components via the `componentItems:` slug array, resolved here against
- *      the in-vault slug map (slug-first, UUID fallback).
+ *   1. Every `.md` under `Wardrobe/`, at any depth (current format) — each
+ *      item's `folder` is its path under `Wardrobe/`; `images/` and every
+ *      `instructions.md` are skipped (`isWardrobeItemDocumentPath`).
+ *      Composite items reference their components via the `componentItems:`
+ *      slug array, resolved here against the slug map of every item in the
+ *      tier, whatever its folder (slug-first, UUID fallback).
  *   2. legacy `wardrobe.json` (still honored so existing vaults don't lose
  *      hand-edits between this change shipping and the migration running).
  *
@@ -332,15 +335,27 @@ export async function readCharacterVaultWardrobe(
   const repos = getRepositories();
   const charId = characterId ?? mountPointId;
 
+  // Recursive: the operator's subfolders (`Wardrobe/Formal/Evening/`) hold
+  // items too, and each item's `folder` is derived from its path.
   const allDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     CHARACTER_WARDROBE_FOLDER,
     '.md',
+    { recursive: true },
   );
-  // `Wardrobe/instructions.md` is dressing guidance, never a garment. Filter
-  // before the length check so a folder holding only the instructions file
-  // still falls through to the legacy wardrobe.json branch below.
-  const itemDocs = allDocs.filter((doc) => !isWardrobeInstructionsFileName(doc.fileName));
+  // `instructions.md` is dressing guidance, never a garment, and
+  // `Wardrobe/images/` holds item pictures — the one predicate says which
+  // documents are items. Filter before the length check so a folder holding
+  // only the instructions file still falls through to the legacy
+  // wardrobe.json branch below.
+  const itemDocs = allDocs.filter((doc) => isWardrobeItemDocumentPath(doc.relativePath));
+  if (itemDocs.length !== allDocs.length) {
+    logger.debug('Wardrobe read skipped non-item documents', {
+      characterId: charId,
+      mountPointId,
+      skipped: allDocs.length - itemDocs.length,
+    });
+  }
 
   if (itemDocs.length > 0) {
     const items = itemDocs

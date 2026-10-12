@@ -2,7 +2,7 @@
 
 **Status:** Approved 2026-10-12, not yet built.
 **Owner subsystems:** The Salon (both pickers), The Scriptorium (the stores scenarios live in), Aurora (character vaults), Prospero (project stores).
-**Companion spec:** [wardrobe-folders.md](wardrobe-folders.md) was written the same day and shares nothing but the author; build them in either order.
+**Companion spec:** [wardrobe-folders.md](complete/wardrobe-folders.md) was written the same day and shares nothing but the author; build them in either order.
 **Implementation note:** This spec is written to be executed by Claude Code. Follow the CLAUDE.md standing rules throughout: changelog entry, help docs with `url` + In-Chat Navigation, debug logging on every touched backend path, `qt-*` classes not raw Tailwind, `npx tsc` not `npm run build`, DDL.md and `qtap-export.schema.json` kept current, migrations with a `PRETTY_LABELS` entry and `reportProgress`. The decisions in §2 were settled with the operator before this spec was written. **Do not reopen them.**
 
 ---

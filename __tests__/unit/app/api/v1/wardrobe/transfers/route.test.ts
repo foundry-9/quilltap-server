@@ -275,6 +275,40 @@ describe('wardrobe transfer route', () => {
     expectNoLedgerWrites()
   })
 
+  it('POST keeps each item\'s folder path at the destination — outfit and components alike', async () => {
+    seed(vaultOf('char-src'), [
+      makeItem({ id: 'outfit-1', title: 'Sunday Best', folder: 'Formal/Evening', componentItemIds: ['comp-a'] }),
+      makeItem({ id: 'comp-a', title: 'Coat', folder: 'Outerwear' }),
+    ])
+
+    const res = await POST(req({
+      action: 'copy',
+      itemId: 'outfit-1',
+      sourceCharacterId: 'char-src',
+      components: 'copy',
+      destination: { scope: 'general' },
+    }))
+
+    expect(res.status).toBe(200)
+    const byTitle = Object.fromEntries(created(GENERAL_MOUNT).map((i) => [i.title, i]))
+    expect(byTitle['Sunday Best'].folder).toBe('Formal/Evening')
+    expect(byTitle['Coat'].folder).toBe('Outerwear')
+  })
+
+  it('POST lands an item whose hand-made folder cannot be a wardrobe folder at the root', async () => {
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Odd boots', folder: 'Formal/images' })])
+
+    const res = await POST(req({
+      action: 'move',
+      itemId: 'item-1',
+      sourceCharacterId: 'char-src',
+      destination: { scope: 'general' },
+    }))
+
+    expect(res.status).toBe(200)
+    expect(created(GENERAL_MOUNT)[0].folder).toBe('')
+  })
+
   it('POST move removes source item after successful destination write', async () => {
     seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Travel boots', types: ['footwear'] })])
 

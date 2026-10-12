@@ -47,7 +47,12 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
     readMountItems: jest.fn(),
     createInMount: jest.fn(),
     updateInMount: jest.fn(),
+    updateManyInMount: jest.fn(),
     deleteInMount: jest.fn(),
+    listFoldersInMount: jest.fn(),
+    createFolderInMount: jest.fn(),
+    renameFolderInMount: jest.fn(),
+    deleteFolderInMount: jest.fn(),
     resolveWardrobeMount: jest.fn(),
   };
 });
@@ -96,6 +101,11 @@ import {
   readMountItems,
   resolveWardrobeMount,
   updateInMount,
+  updateManyInMount,
+  listFoldersInMount,
+  createFolderInMount,
+  renameFolderInMount,
+  deleteFolderInMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
@@ -118,6 +128,7 @@ import type { WardrobeScope } from '@/lib/wardrobe/location';
 const mockReadItems = jest.mocked(readMountItems);
 const mockCreate = jest.mocked(createInMount);
 const mockUpdate = jest.mocked(updateInMount);
+const mockUpdateMany = jest.mocked(updateManyInMount);
 const mockDelete = jest.mocked(deleteInMount);
 const mockResolveMount = jest.mocked(resolveWardrobeMount);
 const mockGeneralMount = jest.mocked(getGeneralMountPointId);
@@ -260,6 +271,16 @@ beforeEach(() => {
   mockUpdate.mockImplementation(async (_mount, id, patch) =>
     ({ ...wardrobeItem({ id }), ...patch }) as never,
   );
+  // The location's `update` is `updateMany` with one patch; route the batch
+  // through the single-item mock so the PUT assertions read one call each.
+  mockUpdateMany.mockImplementation(async (mount, patches) => {
+    const out = [];
+    for (const { id, patch } of patches) {
+      const updated = await mockUpdate(mount, id, patch);
+      if (updated) out.push(updated);
+    }
+    return out as never;
+  });
   mockDelete.mockResolvedValue(true);
   mockReadInstructions.mockResolvedValue(null as never);
   mockWriteInstructions.mockResolvedValue(undefined as never);
@@ -1086,5 +1107,144 @@ describe('item pictures', () => {
     mockDelete.mockResolvedValue(false);
     await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), { id: 'proj-1', itemId: 'item-1' });
     expect(mockCleanupItemImages).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Folders — ?action=folders / create-folder / rename-folder / delete-folder / move-items
+// ============================================================================
+
+describe('folder actions', () => {
+  const mockListFolders = jest.mocked(listFoldersInMount);
+  const mockCreateFolder = jest.mocked(createFolderInMount);
+  const mockRenameFolder = jest.mocked(renameFolderInMount);
+  const mockDeleteFolder = jest.mocked(deleteFolderInMount);
+  const PROJECT_MOUNT = { mountPointId: 'mount-1', scope: 'project', characterId: null };
+
+  function post(action: string, body: unknown, scope: WardrobeScope = 'project') {
+    return collection(scope).POST(
+      req(`https://x.test/?action=${action}`, body, 'POST'),
+      ctx(),
+      { id: OWNER_ID[scope] },
+    );
+  }
+
+  beforeEach(() => {
+    mockListFolders.mockReset();
+    mockCreateFolder.mockReset();
+    mockRenameFolder.mockReset();
+    mockDeleteFolder.mockReset();
+  });
+
+  it('GET ?action=folders answers the tier’s folders', async () => {
+    const folders = [{ path: 'Formal', name: 'Formal', itemCount: 2 }];
+    mockListFolders.mockResolvedValue(folders);
+
+    const res = await collection().GET(req('https://x.test/?action=folders'), ctx(), { id: 'proj-1' });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ folders });
+    expect(mockListFolders).toHaveBeenCalledWith(PROJECT_MOUNT);
+  });
+
+  it('GET ?action=folders: an unprovisioned General has no folders', async () => {
+    mockGeneralMount.mockResolvedValue(null as never);
+    const res = await collection('general').GET(req('https://x.test/?action=folders'), ctx(), { id: '' });
+    await expect(res.json()).resolves.toEqual({ folders: [] });
+  });
+
+  it('create-folder normalises the path before the writer sees it', async () => {
+    mockCreateFolder.mockResolvedValue({ path: 'Formal/Evening', name: 'Evening', itemCount: 0 });
+
+    const res = await post('create-folder', { path: ' /Formal// Evening ' });
+
+    expect(res.status).toBe(200);
+    expect(mockCreateFolder).toHaveBeenCalledWith(PROJECT_MOUNT, 'Formal/Evening');
+    await expect(res.json()).resolves.toEqual({
+      folder: { path: 'Formal/Evening', name: 'Evening', itemCount: 0 },
+    });
+  });
+
+  it('create-folder refuses the reserved images segment with a 400', async () => {
+    const res = await post('create-folder', { path: 'Formal/images' });
+    expect(res.status).toBe(400);
+    expect(mockCreateFolder).not.toHaveBeenCalled();
+  });
+
+  it('rename-folder passes one normalised segment and maps a collision to 409', async () => {
+    mockRenameFolder.mockResolvedValue({ path: 'Dress', name: 'Dress', itemCount: 1 });
+    const ok = await post('rename-folder', { path: 'Formal', name: ' Dress ' });
+    expect(ok.status).toBe(200);
+    expect(mockRenameFolder).toHaveBeenCalledWith(PROJECT_MOUNT, 'Formal', 'Dress');
+
+    const slashed = await post('rename-folder', { path: 'Formal', name: 'A/B' });
+    expect(slashed.status).toBe(400);
+
+    const { WardrobeFolderConflictError } = jest.requireActual('@/lib/wardrobe/folders');
+    mockRenameFolder.mockRejectedValue(new WardrobeFolderConflictError('Dress'));
+    const clash = await post('rename-folder', { path: 'Formal', name: 'Dress' });
+    expect(clash.status).toBe(409);
+  });
+
+  it('delete-folder answers the counts the writer moved, and 404s a missing folder', async () => {
+    mockDeleteFolder.mockResolvedValue({ movedItems: 3, movedFolders: 1, parent: '' });
+    const res = await post('delete-folder', { path: 'Formal' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ movedItems: 3, movedFolders: 1 });
+
+    const { WardrobeFolderNotFoundError } = jest.requireActual('@/lib/wardrobe/folders');
+    mockDeleteFolder.mockRejectedValue(new WardrobeFolderNotFoundError('Nope'));
+    expect((await post('delete-folder', { path: 'Nope' })).status).toBe(404);
+  });
+
+  it('move-items files every item in one batch and answers them serialised', async () => {
+    mockReadItems.mockResolvedValue([wardrobeItem({ id: 'a' }), wardrobeItem({ id: 'b' })] as never);
+
+    const res = await post('move-items', { itemIds: ['a', 'b', 'a'], folder: 'Formal/' });
+
+    expect(res.status).toBe(200);
+    expect(mockUpdateMany).toHaveBeenCalledTimes(1);
+    expect(mockUpdateMany).toHaveBeenCalledWith(PROJECT_MOUNT, [
+      { id: 'a', patch: { folder: 'Formal' } },
+      { id: 'b', patch: { folder: 'Formal' } },
+    ]);
+    const body = await res.json();
+    expect(body.items.map((i: { id: string; folder: string; origin: unknown }) => [i.id, i.folder, i.origin])).toEqual([
+      ['a', 'Formal', PROJECT_ORIGIN],
+      ['b', 'Formal', PROJECT_ORIGIN],
+    ]);
+  });
+
+  it('move-items refuses a borrowed id, naming it, before anything moves', async () => {
+    mockReadItems.mockResolvedValue([wardrobeItem({ id: 'a' })] as never);
+
+    const res = await post('move-items', { itemIds: ['a', 'from-general'], folder: 'Formal' }, 'character');
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('from-general');
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('item PUT carries a normalised folder', async () => {
+    await item().PUT(req('https://x.test/', { folder: 'Formal//Evening' }, 'PUT'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+    expect(mockUpdate.mock.calls[0][2]).toMatchObject({ folder: 'Formal/Evening' });
+  });
+
+  it('collection POST files a new item in the requested folder, root by default', async () => {
+    await collection().POST(
+      req('https://x.test/', { title: 'Gown', types: ['top'], folder: 'Formal' }, 'POST'),
+      ctx(),
+      { id: 'proj-1' },
+    );
+    const created = mockCreate.mock.calls.at(-1)?.[1] as { folder: string } | undefined;
+    expect(created?.folder).toBe('Formal');
+
+    await collection().POST(req('https://x.test/', { title: 'Coat', types: ['top'] }, 'POST'), ctx(), {
+      id: 'proj-1',
+    });
+    expect((mockCreate.mock.calls.at(-1)?.[1] as { folder: string }).folder).toBe('');
   });
 });

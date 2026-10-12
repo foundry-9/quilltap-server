@@ -116,34 +116,56 @@ beforeEach(() => {
   routeFetch()
 })
 
+const generalTierRow = (): HTMLElement | null =>
+  screen.queryAllByTestId('wardrobe-tier-row').find((row) => row.textContent?.includes('General')) ?? null
+
 describe('WardrobeControlDialog — Show shared', () => {
-  it('lists shared items by default and drops them when unticked, keeping the character’s own', async () => {
+  it('shows each shared wardrobe as a tier row by default and drops it when unticked, keeping the character’s own', async () => {
     renderDialog()
 
-    // Default on: the merged list shows both tiers.
-    expect(await screen.findByTitle('Apple Watch')).toBeInTheDocument()
-    expect(screen.getByTitle('Linen Shirt')).toBeInTheDocument()
+    // Default on: the closet's root lists Alice's own garment, then one tier
+    // row per wardrobe she borrows from; entering it shows its items.
+    expect(await screen.findByTitle('Linen Shirt')).toBeInTheDocument()
+    await waitFor(() => expect(generalTierRow()).not.toBeNull())
+    expect(screen.queryByTitle('Apple Watch')).toBeNull()
     expect(sharedCheckbox()).toBeChecked()
 
-    fireEvent.click(sharedCheckbox())
+    fireEvent.click(generalTierRow() as HTMLElement)
+    expect(await screen.findByTitle('Apple Watch')).toBeInTheDocument()
+    expect(screen.queryByTitle('Linen Shirt')).toBeNull()
 
+    // Unticking while inside a shared wardrobe goes back to the closet.
+    fireEvent.click(sharedCheckbox())
     await waitFor(() => expect(screen.queryByTitle('Apple Watch')).toBeNull())
+    expect(generalTierRow()).toBeNull()
     expect(screen.getByTitle('Linen Shirt')).toBeInTheDocument()
 
     // And back again — hiding is a view filter, not a fetch.
     fireEvent.click(sharedCheckbox())
+    await waitFor(() => expect(generalTierRow()).not.toBeNull())
+  })
+
+  it('a search looks in the shared wardrobes too, and honours the toggle', async () => {
+    renderDialog()
+    await screen.findByTitle('Linen Shirt')
+
+    fireEvent.change(screen.getByLabelText('Search wardrobe by title'), { target: { value: 'watch' } })
     expect(await screen.findByTitle('Apple Watch')).toBeInTheDocument()
+    expect(screen.getByText('Searching everywhere')).toBeInTheDocument()
+
+    fireEvent.click(sharedCheckbox())
+    await waitFor(() => expect(screen.queryByTitle('Apple Watch')).toBeNull())
   })
 
   it('leaves the archived toggle alone', async () => {
     renderDialog()
 
-    await screen.findByTitle('Apple Watch')
+    await waitFor(() => expect(generalTierRow()).not.toBeNull())
     const archived = screen.getByLabelText('Show archived')
     expect(archived).not.toBeChecked()
 
     fireEvent.click(sharedCheckbox())
-    await waitFor(() => expect(screen.queryByTitle('Apple Watch')).toBeNull())
+    await waitFor(() => expect(generalTierRow()).toBeNull())
     expect(archived).not.toBeChecked()
   })
 })

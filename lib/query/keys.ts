@@ -264,6 +264,13 @@ export const queryKeys = {
     list: (tierKey: string, filters: { includeArchived: boolean }) =>
       ['wardrobe', 'list', tierKey, filters] as const,
     /**
+     * Prefix of every `folders(...)` key — invalidate after any item write
+     * (an item's folder may be new) and after every folder mutation.
+     */
+    folderLists: ['wardrobe', 'folders'] as const,
+    /** One wardrobe container's folder tree (`?action=folders`), by `wardrobeTierKey`. */
+    folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
+    /**
      * What every character in one chat is wearing (`?action=outfit`). Under
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
      */

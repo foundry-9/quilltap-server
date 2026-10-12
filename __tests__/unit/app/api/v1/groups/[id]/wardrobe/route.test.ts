@@ -74,14 +74,27 @@ jest.mock('@/lib/wardrobe/item-images', () => {
   }
 })
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
-  WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
-  readMountItems: jest.fn(),
-  createInMount: jest.fn(),
-  updateInMount: jest.fn(),
-  deleteInMount: jest.fn(),
-  resolveWardrobeMount: jest.fn(),
-}))
+jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
+  const updateInMount = jest.fn()
+  return {
+    WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
+    readMountItems: jest.fn(),
+    createInMount: jest.fn(),
+    updateInMount,
+    // The location's `update` is a one-patch batch; route it through the
+    // single-item mock so the assertions read one call.
+    updateManyInMount: jest.fn(async (mount: unknown, patches: Array<{ id: string; patch: unknown }>) => {
+      const out = []
+      for (const { id, patch } of patches) {
+        const updated = await updateInMount(mount, id, patch)
+        if (updated) out.push(updated)
+      }
+      return out
+    }),
+    deleteInMount: jest.fn(),
+    resolveWardrobeMount: jest.fn(),
+  }
+})
 
 import { GET, POST } from '@/app/api/v1/groups/[id]/wardrobe/route'
 import { GET as GET_ITEM, PUT, DELETE } from '@/app/api/v1/groups/[id]/wardrobe/[itemId]/route'
