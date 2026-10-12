@@ -22,6 +22,7 @@ import {
   collectUnalertedMail,
   listMailbox,
   markAlerted,
+  markMailAlertsDelivered,
   resolveMailPath,
   letterFileName,
   discardLetter,
@@ -235,6 +236,44 @@ describe('collectUnalertedMail + markAlerted', () => {
 
   it('markAlerted is a no-op (no throw) when the letter was already deleted', async () => {
     await expect(markAlerted('rv', 'Mail/gone.md')).resolves.toBeUndefined();
+  });
+});
+
+describe('markMailAlertsDelivered', () => {
+  it('marks every owed letter, so the next turn announces none of them', async () => {
+    const first = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Ariadne', fromCharacterId: 'c-1',
+      sentAt: '2026-06-14T00:00:00.000Z', body: 'one', inReplyTo: null,
+    });
+    const second = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Theseus', fromCharacterId: 'c-2',
+      sentAt: '2026-06-15T00:00:00.000Z', body: 'two', inReplyTo: null,
+    });
+
+    await markMailAlertsDelivered({ vaultId: 'rv', paths: [first.path, second.path] }, { chatId: 'chat-1', via: 'finalizer' });
+
+    expect(await collectUnalertedMail('rv')).toEqual([]);
+  });
+
+  it('does nothing when nothing is owed', async () => {
+    await markMailAlertsDelivered(null, { chatId: 'chat-1', via: 'finalizer' });
+    await markMailAlertsDelivered({ vaultId: 'rv', paths: [] }, { chatId: 'chat-1', via: 'finalizer' });
+
+    expect(writeDatabaseDocument).not.toHaveBeenCalled();
+  });
+
+  it('keeps going past a letter it cannot write, and never throws', async () => {
+    const ok = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Ariadne', fromCharacterId: 'c-1',
+      sentAt: '2026-06-14T00:00:00.000Z', body: 'one', inReplyTo: null,
+    });
+    jest.mocked(readDatabaseDocument).mockRejectedValueOnce(new Error('disk on fire'));
+
+    await expect(
+      markMailAlertsDelivered({ vaultId: 'rv', paths: ['Mail/broken.md', ok.path] }, { chatId: 'chat-1', via: 'finalizer' }),
+    ).resolves.toBeUndefined();
+
+    expect(await collectUnalertedMail('rv')).toEqual([]);
   });
 });
 

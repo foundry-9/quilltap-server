@@ -286,6 +286,51 @@ export async function markAlerted(vaultId: string, path: string): Promise<void> 
 }
 
 /**
+ * The letters one turn announced to its character, owed an `alerted` flip once
+ * the turn has delivered them. `buildContext` collects and announces; it never
+ * marks — a provider failure or an abort before anything is persisted must
+ * leave the letters unalerted so the next attempt offers them again.
+ */
+export interface MailAlertsOwed {
+  vaultId: string;
+  paths: string[];
+}
+
+/**
+ * Mark a turn's announced letters `alerted`. Called only once the turn is known
+ * to have reached the model and ended in something the chat keeps: a persisted
+ * reply (finalizer or preserved partial), tool results saved without prose, or
+ * a deliberate pass. Warn-only per letter — a mail failure never breaks a turn.
+ */
+export async function markMailAlertsDelivered(
+  owed: MailAlertsOwed | null | undefined,
+  context: { chatId: string; via: string },
+): Promise<void> {
+  if (!owed || owed.paths.length === 0) return;
+  let marked = 0;
+  for (const path of owed.paths) {
+    try {
+      await markAlerted(owed.vaultId, path);
+      marked++;
+    } catch (err) {
+      logger.warn('markMailAlertsDelivered: could not mark letter alerted', {
+        chatId: context.chatId,
+        vaultId: owed.vaultId,
+        path,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  logger.debug('markMailAlertsDelivered', {
+    chatId: context.chatId,
+    vaultId: owed.vaultId,
+    via: context.via,
+    requested: owed.paths.length,
+    marked,
+  });
+}
+
+/**
  * Discard a letter from a vault. Deletes through `deleteDatabaseDocument` —
  * never a raw link delete — so a hard-linked letter loses only this link, a
  * group of one is dissolved, and the file row and its content are collected

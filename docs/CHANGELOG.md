@@ -86,13 +86,21 @@
   breadcrumb browser with bulk move; tools see `folder` read-only.
 - Both linked from `ROADMAP.md`. Design only; nothing built yet.
 
-#### Fix bugs 199 and 227: recall and mail dropped on turns with no new user message
+#### Fix bugs 199 and 227: recall, mail and Core whisper dropped on turns with no new user message
 
 - `buildContext` now includes `llmRecallText` and `suparnaMailLLMContext` in the trailing-only user
   message used by continue, nudge, chained and autonomous turns, in the same order as on a turn with a
   new user message. Before, those turns posted the Commonplace Book and Suparṇā whispers, stamped the
   recalled memories as shown and marked each letter alerted, but the model received neither text.
-- Help: `help/post-office.md` states that the mail check covers turns with no new message.
+- The trailing sections (Core whisper, recall, mail, progressions, inform, turn note) are built once, in
+  one ordered list, and both branches use it. The Core whisper was also missing from turns with no new
+  user message.
+- Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
+  `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`) flips the letters from the finalizer, the
+  preserved-partial path, a tool-only save, or a turn-skip. A provider failure that saves nothing leaves
+  them unalerted and they are announced again on the next attempt. A swipe skips the mail check.
+- Help: `help/post-office.md` states that the mail check covers turns with no new message and that a
+  failed turn re-announces its letters.
 
 #### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change
 

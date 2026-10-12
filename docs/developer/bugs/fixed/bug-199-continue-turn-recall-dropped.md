@@ -15,9 +15,10 @@
 
 ---
 
-**FIXED in v4 (2026-10-12).** `llmRecallText` is now in the trailing-only branch's guard and in
-`trailingOnly`, after the scene note and before the mail (bug 227) and the progressions report — the
-same relative order it has in `trailingContextSections`. Test: `__tests__/unit/context-management.test.ts`,
+**FIXED in v4 (2026-10-12).** `llmRecallText` now reaches the model on turns with no new user message.
+Both branches draw on one ordered `trailingContextSections` list (the no-message tail adds the scene
+note in front), so recall sits after the Core whisper and before the mail (bug 227) and the
+progressions report on every turn. Test: `__tests__/unit/context-management.test.ts`,
 *recall on a turn with no new user message (bug 199)*.
 
 ## Symptom
@@ -42,8 +43,9 @@ The whisper is posted either way, so the Salon looks right. The recall tests in
 
 ## Fix
 
-Add `llmRecallText` to the guard and to `trailingOnly`. The comment above the branch now names recall
-and mail and why neither may be dropped.
+The trailing sections are now built once, in one ordered list, and both branches use it — the
+duplicated guard and `trailingOnly` list were how recall, mail (bug 227) and the Core whisper each went
+missing. Recall rides after the Core whisper and before the mail on both kinds of turn.
 
 ## Verify
 

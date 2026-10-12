@@ -43,7 +43,11 @@ import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
 import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
-import { buildSuparnaMailLLMContext } from '@/lib/services/suparna-notifications/writer'
+import { buildSuparnaMailLLMContext, postSuparnaMailWhisper } from '@/lib/services/suparna-notifications/writer'
+import * as coreWhisper from '@/lib/services/aurora-notifications/core-whisper'
+import * as coreWhisperTrigger from '@/lib/chat/context/core-whisper-trigger'
+import * as progressionsSection from '@/lib/progressions/prompt-section'
+import * as narrationAnchor from '@/lib/chat/context/user-narration-anchor'
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
@@ -60,6 +64,33 @@ jest.mock('@/lib/services/suparna-notifications/writer', () => ({
   ...jest.requireActual('@/lib/services/suparna-notifications/writer'),
   postSuparnaMailWhisper: jest.fn().mockResolvedValue(null),
 }))
+
+// Pass-through mocks: the real implementations run unless a test overrides
+// them, so the whole-tail ordering test can make every section fire at once.
+jest.mock('@/lib/services/aurora-notifications/core-whisper', () => {
+  const actual = jest.requireActual('@/lib/services/aurora-notifications/core-whisper')
+  return {
+    ...actual,
+    resolveCoreWhisperConfig: jest.fn(actual.resolveCoreWhisperConfig),
+    assembleCorePacket: jest.fn(actual.assembleCorePacket),
+    buildCoreWhisperLLMContext: jest.fn(actual.buildCoreWhisperLLMContext),
+    buildCoreWhisperContent: jest.fn(actual.buildCoreWhisperContent),
+    buildCoreWhisperOpaqueContent: jest.fn(actual.buildCoreWhisperOpaqueContent),
+    postCoreWhisper: jest.fn(actual.postCoreWhisper),
+  }
+})
+jest.mock('@/lib/chat/context/core-whisper-trigger', () => {
+  const actual = jest.requireActual('@/lib/chat/context/core-whisper-trigger')
+  return { ...actual, shouldFireCoreWhisper: jest.fn(actual.shouldFireCoreWhisper) }
+})
+jest.mock('@/lib/progressions/prompt-section', () => {
+  const actual = jest.requireActual('@/lib/progressions/prompt-section')
+  return { ...actual, buildProgressionsSection: jest.fn(actual.buildProgressionsSection) }
+})
+jest.mock('@/lib/chat/context/user-narration-anchor', () => {
+  const actual = jest.requireActual('@/lib/chat/context/user-narration-anchor')
+  return { ...actual, buildUserNarrationAnchor: jest.fn(actual.buildUserNarrationAnchor) }
+})
 
 const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>
 const mockedCollectUnalertedMail = collectUnalertedMail as jest.MockedFunction<typeof collectUnalertedMail>
@@ -1467,6 +1498,145 @@ describe('Context Manager', () => {
     })
 
     // ------------------------------------------------------------------
+    // The trailing sections keep one order on both kinds of turn.
+    // ------------------------------------------------------------------
+
+    describe('trailing sections on a turn with and without a new user message', () => {
+      const CORE = 'CORE-WHISPER-SECTION'
+      const PROGRESSIONS = 'PROGRESSIONS-SECTION'
+      const ANCHOR = 'SCENE-NOTE-SECTION'
+      const letter = {
+        path: 'Mail/2026-10-12-from-iris.md',
+        from: 'Iris',
+        sentAt: timestamp,
+        body: 'Meet me at the lighthouse.',
+        alerted: false,
+        inReplyTo: null,
+      }
+
+      const enable = (sections: { core?: boolean; everything?: boolean }) => {
+        ;(coreWhisper.resolveCoreWhisperConfig as jest.Mock).mockReturnValue({
+          enabled: true, interval: 12, silenceThreshold: 3, packetTokenBudget: 4096, fireOnContextTransition: true,
+        })
+        ;(coreWhisperTrigger.shouldFireCoreWhisper as jest.Mock).mockReturnValue({ fire: true, reason: 'periodic' })
+        ;(coreWhisper.assembleCorePacket as jest.Mock).mockResolvedValue({ entries: [] })
+        ;(coreWhisper.buildCoreWhisperContent as jest.Mock).mockReturnValue('persona')
+        ;(coreWhisper.buildCoreWhisperOpaqueContent as jest.Mock).mockReturnValue('opaque')
+        ;(coreWhisper.buildCoreWhisperLLMContext as jest.Mock).mockReturnValue(CORE)
+        ;(coreWhisper.postCoreWhisper as jest.Mock).mockResolvedValue(null)
+        if (sections.everything) {
+          ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+          ;(narrationAnchor.buildUserNarrationAnchor as jest.Mock).mockReturnValue(ANCHOR)
+          mockedCollectUnalertedMail.mockResolvedValue([letter])
+        }
+      }
+
+      afterEach(() => {
+        const restore = (mod: string, mocked: Record<string, unknown>, names: string[]) => {
+          const actual = jest.requireActual(mod)
+          for (const name of names) (mocked[name] as jest.Mock).mockReset().mockImplementation(actual[name])
+        }
+        restore('@/lib/services/aurora-notifications/core-whisper', coreWhisper as any, [
+          'resolveCoreWhisperConfig', 'assembleCorePacket', 'buildCoreWhisperLLMContext',
+          'buildCoreWhisperContent', 'buildCoreWhisperOpaqueContent', 'postCoreWhisper',
+        ])
+        restore('@/lib/chat/context/core-whisper-trigger', coreWhisperTrigger as any, ['shouldFireCoreWhisper'])
+        restore('@/lib/progressions/prompt-section', progressionsSection as any, ['buildProgressionsSection'])
+        restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
+      })
+
+      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean }) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue(opts.recall ? [memory] : []),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+          },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue(opts.inform ? [{
+              id: 'row-1', chatId: 'chat-1', batchId: 'batch-1', participantId: 'participant-a',
+              contentMarkdown: 'The lamp gutters.', recordMessageId: null,
+              createdAt: timestamp, updatedAt: timestamp, consumedAt: null, consumedByMessageId: null,
+            }] : []),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+          chatSettings: { findByUserId: jest.fn().mockResolvedValue(null) },
+          chats: { getMessages: jest.fn().mockResolvedValue([]) },
+        } as any)
+
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: { ...characterA, characterDocumentMountPointId: 'vault-a' } as any,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1', userId: 'user', participants: allParticipants, title: 'Test Chat',
+            contextSummary: null, sillyTavernMetadata: null, tags: [], messageCount: 2,
+            lastMessageAt: timestamp, lastRenameCheckInterchange: 0, createdAt: timestamp, updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          newUserMessage: opts.newUserMessage ?? undefined,
+          embeddingProfileId: null,
+          skipMemories: !opts.recall,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+          turnSkip: opts.offerSkip ? { offerSkip: true, characterName: 'Lyra', recentlyAddressed: false } : undefined,
+        } as any)
+      }
+
+      it('delivers the Core whisper on a turn with no new user message', async () => {
+        enable({ core: true })
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false })
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(CORE)
+      })
+
+      it('keeps every section in the same order on both paths, with the scene note leading the no-message tail', async () => {
+        enable({ everything: true })
+        const withMessage = await build({ newUserMessage: 'Onward.', recall: true, inform: true, offerSkip: true })
+        const withMessageTail = withMessage.messages[withMessage.messages.length - 1].content as string
+        expect(withMessageTail.startsWith('Onward.\n\n---\n\n')).toBe(true)
+        const sections = withMessageTail.slice('Onward.\n\n---\n\n'.length).split('\n\n---\n\n')
+
+        enable({ everything: true })
+        const withoutMessage = await build({ newUserMessage: null, recall: true, inform: true, offerSkip: true })
+        const withoutMessageTail = withoutMessage.messages[withoutMessage.messages.length - 1].content as string
+
+        // Same sections, same order; the scene note is the only addition and leads.
+        expect(withoutMessageTail).toBe([ANCHOR, ...sections].join('\n\n---\n\n'))
+
+        // And that order is the documented one.
+        const at = (needle: string) => {
+          const index = withoutMessageTail.indexOf(needle)
+          expect(index).toBeGreaterThanOrEqual(0)
+          return index
+        }
+        const order = [
+          at(ANCHOR),
+          at(CORE),
+          at('You also recall about the others present'),
+          at('Suparṇā of the Post Office has delivered new mail to you'),
+          at(PROGRESSIONS),
+          at(INFORM_BLOCK_HEADER),
+          at('[NOTHING TO ADD]'),
+        ]
+        expect([...order].sort((a, b) => a - b)).toEqual(order)
+      })
+    })
+
+    // ------------------------------------------------------------------
     // Suparṇā's mail on a turn with no new user message (bug 227).
     // ------------------------------------------------------------------
 
@@ -1480,7 +1650,7 @@ describe('Context Manager', () => {
         inReplyTo: null,
       }
 
-      const buildWithMail = async (newUserMessage: string | null) => {
+      const buildWithMail = async (newUserMessage: string | null, regenerationOfMessageIds?: string[]) => {
         mockedGetRepositories.mockReturnValue({
           memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
           chatInforms: {
@@ -1523,18 +1693,38 @@ describe('Context Manager', () => {
             { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
             { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
           ],
+          regenerationOfMessageIds,
         } as any)
       }
 
-      it('rides its own trailing user message, since the letter is marked alerted either way', async () => {
+      it('rides its own trailing user message', async () => {
         const result = await buildWithMail(null)
-
-        // The letter is stamped alerted on this turn, so this is its only chance.
-        expect(mockedMarkAlerted).toHaveBeenCalledWith('vault-a', letter.path)
 
         const last = result.messages[result.messages.length - 1]
         expect(last.role).toBe('user')
         expect(last.content).toBe(buildSuparnaMailLLMContext([letter]))
+      })
+
+      it('owes the alerted flip to delivery instead of marking it here', async () => {
+        const result = await buildWithMail(null)
+
+        // Context building has not made the call yet: a provider failure must
+        // leave the letter unalerted, so the flip is handed to the finalizer.
+        expect(mockedMarkAlerted).not.toHaveBeenCalled()
+        expect(result.mailAlertsOwed).toEqual({ vaultId: 'vault-a', paths: [letter.path] })
+      })
+
+      it('skips the mail check on a swipe', async () => {
+        ;(postSuparnaMailWhisper as jest.Mock).mockClear()
+        const result = await buildWithMail(null, ['m2'])
+
+        // A re-roll of a line already spoken gets no new letter, posts no
+        // whisper and owes nothing — the swipe path never reaches the finalizer.
+        expect(mockedCollectUnalertedMail).not.toHaveBeenCalled()
+        expect(postSuparnaMailWhisper).not.toHaveBeenCalled()
+        expect(result.mailAlertsOwed).toBeNull()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content ?? '').not.toContain('Suparṇā')
       })
 
       it('still rides the new user message as a trailing section when there is one', async () => {
