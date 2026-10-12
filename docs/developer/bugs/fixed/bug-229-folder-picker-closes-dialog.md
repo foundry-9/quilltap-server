@@ -1,4 +1,4 @@
-# Bug 199 — A click inside the Move-to-folder picker closes the whole wardrobe dialog
+# Bug 229 — A click inside the Move-to-folder picker closes the whole wardrobe dialog
 
 | | |
 |---|---|

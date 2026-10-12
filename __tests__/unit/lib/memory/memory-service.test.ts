@@ -55,6 +55,7 @@ jest.mock('@/lib/memory/memory-gate', () => {
     ...actual,
     deleteMemoryWithUnlink: jest.fn(),
     deleteMemoriesWithUnlinkBatch: jest.fn(),
+    deleteMemoriesWithUnlinkBatchReport: jest.fn(),
   }
 })
 
@@ -83,6 +84,7 @@ const loggerMock = jest.requireMock('@/lib/logger') as {
 const memoryGateMock = jest.requireMock('@/lib/memory/memory-gate') as {
   deleteMemoryWithUnlink: jest.Mock
   deleteMemoriesWithUnlinkBatch: jest.Mock
+  deleteMemoriesWithUnlinkBatchReport: jest.Mock
 }
 
 const mockGetRepositories = repositoriesMock.getRepositories
@@ -90,7 +92,7 @@ const mockGenerateEmbedding = embeddingMock.generateEmbeddingForUser
 const mockGetCharacterVectorStore = vectorStoreMock.getCharacterVectorStore
 const mockLogger = loggerMock.logger
 const mockDeleteMemoryWithUnlink = memoryGateMock.deleteMemoryWithUnlink
-const mockDeleteMemoriesWithUnlinkBatch = memoryGateMock.deleteMemoriesWithUnlinkBatch
+const mockDeleteMemoriesWithUnlinkBatch = memoryGateMock.deleteMemoriesWithUnlinkBatchReport
 
 // Mock memories
 const mockMemories = [
@@ -329,7 +331,9 @@ describe('Memory Service', () => {
   // deleteMemoryWithVector Tests
   // ============================================================================
   describe('deleteMemoryWithVector', () => {
-    it('should delete memory through the chokepoint and remove vector', async () => {
+    // Vector removal lives in the chokepoint (bug 200); this wrapper only
+    // confirms ownership and delegates.
+    it('should delete memory through the chokepoint', async () => {
       mockMemoriesRepo.findById.mockResolvedValue({ id: 'memory-1', characterId: 'char-1' })
       mockDeleteMemoryWithUnlink.mockResolvedValue(true)
 
@@ -337,8 +341,6 @@ describe('Memory Service', () => {
 
       expect(result).toBe(true)
       expect(mockDeleteMemoryWithUnlink).toHaveBeenCalledWith('memory-1')
-      expect(mockVectorStore.removeVector).toHaveBeenCalledWith('memory-1')
-      expect(mockVectorStore.save).toHaveBeenCalled()
     })
 
     it('should return false when memory not found', async () => {
@@ -348,7 +350,6 @@ describe('Memory Service', () => {
 
       expect(result).toBe(false)
       expect(mockDeleteMemoryWithUnlink).not.toHaveBeenCalled()
-      expect(mockVectorStore.removeVector).not.toHaveBeenCalled()
     })
 
     it('should return false when memory belongs to a different character', async () => {
@@ -358,17 +359,6 @@ describe('Memory Service', () => {
 
       expect(result).toBe(false)
       expect(mockDeleteMemoryWithUnlink).not.toHaveBeenCalled()
-    })
-
-    it('should still return true even if vector removal fails', async () => {
-      mockMemoriesRepo.findById.mockResolvedValue({ id: 'memory-1', characterId: 'char-1' })
-      mockDeleteMemoryWithUnlink.mockResolvedValue(true)
-      mockGetCharacterVectorStore.mockRejectedValue(new Error('Vector store error'))
-
-      const result = await deleteMemoryWithVector('char-1', 'memory-1')
-
-      expect(result).toBe(true)
-      expect(mockLogger.warn).toHaveBeenCalled()
     })
   })
 
@@ -380,16 +370,14 @@ describe('Memory Service', () => {
       // Memories from two different characters
       const memoriesForMessage = [mockMemories[0], mockMemories[1]]
       mockMemoriesRepo.findBySourceMessageId.mockResolvedValue(memoriesForMessage)
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(2)
-      mockVectorStore.hasVector.mockReturnValue(true)
+      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 2, vectorsRemoved: 2 })
 
       const result = await deleteMemoriesBySourceMessageWithVectors('msg-1')
 
-      expect(result.deleted).toBe(2)
-      expect(result.vectorsRemoved).toBe(2)
+      expect(result).toEqual({ deleted: 2, vectorsRemoved: 2 })
       expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledWith(['memory-1', 'memory-2'])
-      expect(mockVectorStore.removeVector).toHaveBeenCalledTimes(2)
-      expect(mockVectorStore.save).toHaveBeenCalledTimes(2) // Once per character
+      // The chokepoint owns vector removal; the cascade never touches the store.
+      expect(mockVectorStore.removeVector).not.toHaveBeenCalled()
     })
 
     it('should return zeros when no memories exist', async () => {
@@ -402,46 +390,9 @@ describe('Memory Service', () => {
       expect(mockDeleteMemoriesWithUnlinkBatch).not.toHaveBeenCalled()
     })
 
-    it('should handle multiple memories from same character', async () => {
-      const memoriesSameChar = [mockMemories[0], mockMemories[2]]
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue(memoriesSameChar)
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(2)
-      mockVectorStore.hasVector.mockReturnValue(true)
-
-      const result = await deleteMemoriesBySourceMessageWithVectors('msg-1')
-
-      expect(result.deleted).toBe(2)
-      // Only one save call since both are from same character
-      expect(mockVectorStore.save).toHaveBeenCalledTimes(1)
-    })
-
-    it('should skip vector removal for memories without vectors', async () => {
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(1)
-      mockVectorStore.hasVector.mockReturnValue(false) // No vector exists
-
-      const result = await deleteMemoriesBySourceMessageWithVectors('msg-1')
-
-      expect(result.deleted).toBe(1)
-      expect(result.vectorsRemoved).toBe(0)
-      expect(mockVectorStore.removeVector).not.toHaveBeenCalled()
-    })
-
-    it('should continue deletion even if vector store fails', async () => {
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(1)
-      mockGetCharacterVectorStore.mockRejectedValue(new Error('Vector store error'))
-
-      const result = await deleteMemoriesBySourceMessageWithVectors('msg-1')
-
-      expect(result.deleted).toBe(1)
-      expect(mockLogger.warn).toHaveBeenCalled()
-    })
-
     it('should log cascade delete info', async () => {
       mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(1)
-      mockVectorStore.hasVector.mockReturnValue(true)
+      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 1, vectorsRemoved: 1 })
 
       await deleteMemoriesBySourceMessageWithVectors('msg-1')
 
@@ -450,6 +401,7 @@ describe('Memory Service', () => {
         expect.objectContaining({
           sourceMessageId: 'msg-1',
           deleted: 1,
+          vectorsRemoved: 1,
         })
       )
     })
@@ -471,13 +423,11 @@ describe('Memory Service', () => {
       mockMemoriesRepo.findBySourceMessageId
         .mockResolvedValueOnce([mockMemories[0]])
         .mockResolvedValueOnce([mockMemories[2]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(2)
-      mockVectorStore.hasVector.mockReturnValue(true)
+      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 2, vectorsRemoved: 2 })
 
       const result = await deleteMemoriesBySourceMessagesWithVectors(['msg-1', 'msg-2'])
 
-      expect(result.deleted).toBe(2)
-      expect(result.vectorsRemoved).toBe(2)
+      expect(result).toEqual({ deleted: 2, vectorsRemoved: 2 })
       expect(mockMemoriesRepo.findBySourceMessageId).toHaveBeenCalledTimes(2)
       // The chokepoint is called once with the full union of doomed IDs so
       // the neighbour-scan only fires once for the whole swipe group.
@@ -485,23 +435,9 @@ describe('Memory Service', () => {
       expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledWith(['memory-1', 'memory-3'])
     })
 
-    it('should accumulate counts across messages', async () => {
-      // First message has 2 memories, second has 1
-      mockMemoriesRepo.findBySourceMessageId
-        .mockResolvedValueOnce([mockMemories[0], mockMemories[1]])
-        .mockResolvedValueOnce([mockMemories[2]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(3)
-      mockVectorStore.hasVector.mockReturnValue(true)
-
-      const result = await deleteMemoriesBySourceMessagesWithVectors(['msg-1', 'msg-2'])
-
-      expect(result.deleted).toBe(3)
-    })
-
     it('should log bulk deletion info', async () => {
       mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(1)
-      mockVectorStore.hasVector.mockReturnValue(true)
+      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 1, vectorsRemoved: 1 })
 
       await deleteMemoriesBySourceMessagesWithVectors(['msg-1', 'msg-2'])
 

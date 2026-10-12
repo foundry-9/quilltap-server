@@ -5,6 +5,7 @@
  * This is the main entry point for the message API route.
  */
 
+import { markMailAlertsDelivered, type MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
 import { acceptsApiKey, requiresApiKey } from '@/lib/plugins/provider-validation'
@@ -1463,6 +1464,7 @@ async function processMessage(
     // A preserved partial is a persisted turn, so it spends this turn's
     // informs exactly as a completed one does.
     informRowIds: builtContext.informRowIds,
+    mailAlertsOwed: builtContext.mailAlertsOwed,
   })
 
   const previousResponseId = findPreviousResponseId(
@@ -1703,6 +1705,7 @@ async function processMessage(
           streaming: streamingState,
           controller,
           encoder,
+          mailAlertsOwed: builtContext.mailAlertsOwed,
         })
       } else {
         // Sentinel when the skip option wasn't offered: route to the existing
@@ -1767,6 +1770,9 @@ async function processMessage(
       characterParticipant.id,
       toolWhisperContext
     )
+
+    // The model read this turn's mail and acted (tools ran); the turn is kept.
+    await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'tool-only' })
 
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
@@ -2048,6 +2054,8 @@ async function handleTurnSkip(params: {
   streaming: StreamingState
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
+  /** This turn's announced letters: a deliberate pass still read them. */
+  mailAlertsOwed: MailAlertsOwed | null
 }): Promise<ProcessMessageResult> {
   const {
     repos,
@@ -2059,6 +2067,7 @@ async function handleTurnSkip(params: {
     streaming,
     controller,
     encoder,
+    mailAlertsOwed,
   } = params
 
   logger.info('[TurnSkip] Character passed the turn', {
@@ -2066,6 +2075,10 @@ async function handleTurnSkip(params: {
     characterId: character.id,
     participantId: characterParticipant.id,
   })
+
+  // A pass is an answer: the character read its mail and chose to say
+  // nothing. Mark the letters so the next turn does not announce them again.
+  await markMailAlertsDelivered(mailAlertsOwed, { chatId, via: 'turn-skip' })
 
   // Post the Host announcement (errors swallowed by the writer contract).
   const hostMessage = await postHostTurnPassAnnouncement({

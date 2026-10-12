@@ -80,12 +80,16 @@ describe('executeImport — chat informs', () => {
   const testUserId = generateId()
 
   let informsCreate: jest.Mock
+  /** Messages as `addMessage` received them — under their reminted ids. */
+  let addedMessages: Array<{ id: string }>
+  const landedId = (index: number) => addedMessages[index].id
 
   /**
    * The destination chat as it exists after `importChats`: Alice and Bob in
    * their seats, the Host record and Alice's reply in the transcript.
    */
   function primeRepos() {
+    addedMessages = []
     const createdChat = {
       id: NEW_CHAT_ID,
       participants: [{ id: ALICE }, { id: BOB }],
@@ -93,11 +97,10 @@ describe('executeImport — chat informs', () => {
     const chatsRepo = repoStub({
       findById: jest.fn(async (id: string) => (id === NEW_CHAT_ID ? createdChat : null)),
       create: jest.fn(async (data: Record<string, unknown>) => ({ ...data, id: NEW_CHAT_ID })),
-      addMessage: jest.fn().mockResolvedValue(undefined),
-      getMessages: jest.fn(async () => [
-        { id: RECORD_MESSAGE_ID, type: 'message' },
-        { id: ASSISTANT_MESSAGE_ID, type: 'message' },
-      ]),
+      addMessage: jest.fn(async (_chatId: string, message: { id: string }) => {
+        addedMessages.push(message)
+      }),
+      getMessages: jest.fn(async () => addedMessages),
     })
 
     const userRepos = new Proxy({} as Record<string, unknown>, {
@@ -166,9 +169,12 @@ describe('executeImport — chat informs', () => {
     expect(informsCreate.mock.calls[0][0]).toMatchObject({
       chatId: NEW_CHAT_ID,
       participantId: ALICE,
-      recordMessageId: RECORD_MESSAGE_ID,
+      recordMessageId: landedId(0),
       contentMarkdown: 'You notice the clock has stopped.',
     })
+    // The chat landed under a fresh id, so its messages were reminted and the
+    // record pointer followed (bug 228).
+    expect(landedId(0)).not.toBe(RECORD_MESSAGE_ID)
   })
 
   it('keeps a consumed row with its swipe anchor', async () => {
@@ -181,7 +187,7 @@ describe('executeImport — chat informs', () => {
 
     expect(informsCreate.mock.calls[0][0]).toMatchObject({
       consumedAt: '2026-09-19T21:16:00.000Z',
-      consumedByMessageId: ASSISTANT_MESSAGE_ID,
+      consumedByMessageId: landedId(1),
     })
   })
 
@@ -233,7 +239,7 @@ describe('executeImport — chat informs', () => {
 })
 
 describe('remapChatInform', () => {
-  const idMaps = { chats: new Map([[OLD_CHAT_ID, NEW_CHAT_ID]]) } as never
+  const idMaps = { chats: new Map([[OLD_CHAT_ID, NEW_CHAT_ID]]), messages: new Map() } as never
 
   const known = {
     participantIds: new Set([ALICE]),

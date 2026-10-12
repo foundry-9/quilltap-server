@@ -23,7 +23,7 @@ import {
   linkRelatedMemories,
   calculateReinforcedImportance,
   deleteMemoryWithUnlink,
-  deleteMemoriesWithUnlinkBatch,
+  deleteMemoriesWithUnlinkBatchReport,
   extractNovelDetails,
 } from './memory-gate'
 import {
@@ -37,6 +37,7 @@ import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } 
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
+import { partitionByPolicyProtection } from './policy-protection'
 export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
@@ -710,21 +711,8 @@ export async function deleteMemoryWithVector(
     return false
   }
 
-  const deleted = await deleteMemoryWithUnlink(memoryId)
-  if (!deleted) {
-    return false
-  }
-
-  // Remove from vector store
-  try {
-    const vectorStore = await getCharacterVectorStore(characterId)
-    await vectorStore.removeVector(memoryId)
-    await vectorStore.save()
-  } catch (error) {
-    logger.warn(`[Memory] Failed to remove vector for memory ${memoryId}`, { characterId, memoryId, error: String(error) })
-  }
-
-  return true
+  // The chokepoint removes the vector too.
+  return deleteMemoryWithUnlink(memoryId)
 }
 
 /**
@@ -814,8 +802,11 @@ export async function searchMemoriesSemantic(
     /**
      * Entity strings (place/person/thing names) unioned into the candidate
      * pool via the literal `searchByContent` path, so a verbatim place name
-     * cannot be sliced off by the cosine floor. Injector-path companion to
-     * `applyLiteralPhraseBoost` (which stays tool-only).
+     * buried below the vector store's top-K cap still reaches ranking.
+     * Injector-path companion to `applyLiteralPhraseBoost` (which stays
+     * tool-only). Anchor hits get no boost and still face the cosine floor:
+     * R5 of the recall retuning made related expansion the only exemption
+     * (see bug 202).
      */
     entityAnchors?: readonly string[]
     /**
@@ -1014,7 +1005,9 @@ export async function searchMemoriesSemantic(
     // buried because the vector store's candidate cap excluded it. Two
     // sources of literal phrases: the whole query (tool path,
     // `applyLiteralPhraseBoost`) and the turn's entity anchors (injector
-    // path) — a verbatim place name must not be sliced off by the cosine floor.
+    // path) — a verbatim place name must not be lost to the top-K cap. The
+    // union widens the pool only: anchor hits are scored at their raw cosine
+    // and face the floor like any other row (R5; bug 202).
     const literalPhrase = options.applyLiteralPhraseBoost
       ? getLiteralPhrase(query)
       : null
@@ -1640,55 +1633,19 @@ export async function deleteMemoriesBySourceMessageWithVectors(
   sourceMessageId: string
 ): Promise<{ deleted: number; vectorsRemoved: number }> {
   const repos = getRepositories()
-
-  // First, find all memories to get character IDs for vector cleanup
   const memories = await repos.memories.findBySourceMessageId(sourceMessageId)
-
   if (memories.length === 0) {
-
     return { deleted: 0, vectorsRemoved: 0 }
   }
 
-  // Group memories by character for efficient vector store operations
-  const memoryIdsByCharacter = new Map<string, string[]>()
-  for (const memory of memories) {
-    const existing = memoryIdsByCharacter.get(memory.characterId) || []
-    existing.push(memory.id)
-    memoryIdsByCharacter.set(memory.characterId, existing)
-  }
-
-  // Remove vectors from each character's store
-  let vectorsRemoved = 0
-  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      for (const memoryId of memoryIds) {
-        const removed = vectorStore.hasVector(memoryId)
-        if (removed) {
-          await vectorStore.removeVector(memoryId)
-          vectorsRemoved++
-        }
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn('[Memory] Failed to remove vectors for character', {
-        characterId,
-        memoryCount: memoryIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  // Delete the memories through the chokepoint so neighbours' relatedMemoryIds
-  // get scrubbed before the rows go away.
-  const allMemoryIds = memories.map(m => m.id)
-  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
+  // The chokepoint scrubs neighbours' relatedMemoryIds and removes the vectors.
+  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(memories.map(m => m.id))
 
   logger.info('[Memory] Cascade deleted memories for source message', {
     sourceMessageId,
     deleted,
     vectorsRemoved,
-    characterCount: memoryIdsByCharacter.size,
+    characterCount: new Set(memories.map(m => m.characterId)).size,
   })
 
   return { deleted, vectorsRemoved }
@@ -1720,98 +1677,85 @@ export async function deleteMemoriesBySourceMessagesWithVectors(
     return { deleted: 0, vectorsRemoved: 0 }
   }
 
-  const memoryIdsByCharacter = new Map<string, string[]>()
-  for (const memory of allMemories) {
-    const existing = memoryIdsByCharacter.get(memory.characterId) || []
-    existing.push(memory.id)
-    memoryIdsByCharacter.set(memory.characterId, existing)
-  }
-
-  let vectorsRemoved = 0
-  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      for (const memoryId of memoryIds) {
-        if (vectorStore.hasVector(memoryId)) {
-          await vectorStore.removeVector(memoryId)
-          vectorsRemoved++
-        }
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn('[Memory] Failed to remove vectors for character during swipe-group cascade', {
-        characterId,
-        memoryCount: memoryIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  const totalDeleted = await deleteMemoriesWithUnlinkBatch(allMemories.map(m => m.id))
+  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(allMemories.map(m => m.id))
 
   logger.info('[Memory] Bulk cascade deleted memories for swipe group', {
     messageCount: sourceMessageIds.length,
-    totalDeleted,
+    totalDeleted: deleted,
     totalVectorsRemoved: vectorsRemoved,
   })
 
-  return { deleted: totalDeleted, vectorsRemoved }
+  return { deleted, vectorsRemoved }
 }
 
 /**
- * Delete every memory tied to the given chat (across all characters) and
- * remove their entries from each character's vector store.
+ * Delete the chat's extracted memories (across all characters) and remove
+ * their entries from each character's vector store.
  *
  * Used by the DELETE /api/v1/memories?chatId= route and by the
  * MEMORY_REGENERATE_CHAT job when wiping a chat's auto-extracted memories
  * before re-running extraction from scratch.
+ *
+ * Only what extraction would write back is wiped (bug 201): MANUAL rows and
+ * cold rows are spared, and so is a digest while any of its members survives —
+ * removing it would leave those members' `supersededById` dangling. The
+ * per-row delete remains the way to purge any of them.
  */
 export async function deleteMemoriesByChatIdWithVectors(
   chatId: string,
-): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number }> {
+): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number; spared: number }> {
   const repos = getRepositories()
 
-  const memories = await repos.memories.findByChatId(chatId)
-  if (memories.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0, characterCount: 0 }
-  }
+  const chatMemories = await repos.memories.findByChatId(chatId)
+  const { actionable, spared, sparedBy } = partitionByPolicyProtection(chatMemories)
+  const doomedIds = new Set(actionable.map(m => m.id))
 
-  const memoryIdsByCharacter = new Map<string, string[]>()
-  for (const memory of memories) {
-    const existing = memoryIdsByCharacter.get(memory.characterId) || []
-    existing.push(memory.id)
-    memoryIdsByCharacter.set(memory.characterId, existing)
-  }
-
-  let vectorsRemoved = 0
-  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      for (const memoryId of memoryIds) {
-        if (vectorStore.hasVector(memoryId)) {
-          await vectorStore.removeVector(memoryId)
-          vectorsRemoved++
-        }
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn('[Memory] Failed to remove vectors for character during chat wipe', {
-        characterId,
-        memoryCount: memoryIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      })
+  // A digest with no surviving member describes nothing; it may go. A member
+  // survives when it is not being wiped here and still names this digest —
+  // a row re-promoted or re-consolidated elsewhere no longer speaks for it.
+  // One lookup for every spared digest's members.
+  const sparedDigests = spared.filter(m => m.source === 'CONSOLIDATED')
+  const memberIds = [...new Set(sparedDigests.flatMap(d => d.consolidatedFrom ?? []))]
+    .filter(id => !doomedIds.has(id))
+  const members = memberIds.length > 0 ? await repos.memories.findByIds(memberIds) : []
+  const survivingDigestIds = new Set(
+    members.map(m => m.supersededById).filter((id): id is string => !!id),
+  )
+  const memories = [...actionable]
+  let digestsKept = 0
+  for (const digest of sparedDigests) {
+    if (survivingDigestIds.has(digest.id)) {
+      digestsKept++
+    } else {
+      memories.push(digest)
     }
   }
+  const sparedCount = chatMemories.length - memories.length
+  if (sparedCount > 0) {
+    logger.info('[Memory] Chat wipe spared manual, cold and digest rows', {
+      chatId,
+      spared: sparedCount,
+      manual: sparedBy.manual,
+      cold: sparedBy.cold,
+      digests: digestsKept,
+    })
+  }
 
-  const allMemoryIds = memories.map(m => m.id)
-  const deleted = await deleteMemoriesWithUnlinkBatch(allMemoryIds)
+  if (memories.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0, characterCount: 0, spared: sparedCount }
+  }
+
+  // The chokepoint scrubs neighbours' relatedMemoryIds and removes the vectors.
+  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(memories.map(m => m.id))
+  const characterCount = new Set(memories.map(m => m.characterId)).size
 
   logger.info('[Memory] Cascade deleted memories for chat', {
     chatId,
     deleted,
     vectorsRemoved,
-    characterCount: memoryIdsByCharacter.size,
+    spared: sparedCount,
+    characterCount,
   })
 
-  return { deleted, vectorsRemoved, characterCount: memoryIdsByCharacter.size }
+  return { deleted, vectorsRemoved, characterCount, spared: sparedCount }
 }

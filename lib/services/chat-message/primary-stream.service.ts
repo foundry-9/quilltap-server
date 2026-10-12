@@ -28,6 +28,7 @@
  * whole turn — subsequent callers no-op.
  */
 
+import { markMailAlertsDelivered, type MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   encodeContentChunk,
@@ -69,6 +70,12 @@ export interface MakePreservePartialOnErrorOptions {
    * too. Empty on a swipe and on turns with no informs.
    */
   informRowIds?: string[]
+  /**
+   * This turn's announced letters (`BuiltContext.mailAlertsOwed`). Marked
+   * alerted here for the same reason as the informs: the model read them and
+   * the turn is now a persisted message.
+   */
+  mailAlertsOwed?: MailAlertsOwed | null
 }
 
 /**
@@ -80,7 +87,7 @@ export interface MakePreservePartialOnErrorOptions {
 export function makePreservePartialOnError(
   opts: MakePreservePartialOnErrorOptions
 ): (error: unknown) => Promise<void> {
-  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId, informRowIds } = opts
+  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId, informRowIds, mailAlertsOwed } = opts
   let partialPreserved = false
 
   return async function preservePartialOnError(error: unknown): Promise<void> {
@@ -129,6 +136,7 @@ export function makePreservePartialOnError(
           consumed,
         })
       }
+      await markMailAlertsDelivered(mailAlertsOwed, { chatId, via: 'preserved-partial' })
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,
         messageId: preservedMessageId,

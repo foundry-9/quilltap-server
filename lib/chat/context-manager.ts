@@ -191,7 +191,7 @@ import {
   buildSuparnaMailLLMContext,
   postSuparnaMailWhisper,
 } from '@/lib/services/suparna-notifications/writer'
-import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { collectUnalertedMail, type MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail'
 import {
   assembleCorePacket,
@@ -358,6 +358,15 @@ export interface BuiltContext {
    * See `lib/chat/context/inform-block.ts`.
    */
   informRowIds: string[]
+  /**
+   * The letters Suparṇā announced this turn, owed an `alerted` flip. Null when
+   * none were announced, and always null on a swipe. Like `informRowIds`, they
+   * are marked only once the turn has delivered them — by the finalizer, the
+   * preserved-partial path, the tool-only save or a deliberate pass — never
+   * here, so a failed or aborted turn offers the letters again.
+   * See `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`).
+   */
+  mailAlertsOwed: MailAlertsOwed | null
   /** Warnings generated during context building */
   warnings: string[]
   /** Debug info: the actual memories that were included */
@@ -2661,17 +2670,23 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Post Office: after the Commonplace Book whisper, check this character's
   // mailbox for letters Suparṇā has not yet announced. Each new letter triggers
   // a Suparṇā whisper — EVENT-like, not a snapshot, so we never sweep prior mail
-  // whispers — and is then marked `alerted`.
+  // whispers. The letters are NOT marked `alerted` here: this turn's call has
+  // not been made yet. They are returned as `mailAlertsOwed` and marked once
+  // the turn has delivered them (`markMailAlertsDelivered`), so a provider
+  // failure or an abort offers them again on the next attempt — at the cost of
+  // a second whisper, which is the honest record of a letter re-announced.
   //
-  // Parent-vs-child write boundary: buildContext runs in both the parent (HTTP)
-  // and the forked background-jobs child. The `alerted` flip is a CONTENT update
-  // to an existing file (no link/folder deletion, no GC), routed through
-  // writeDatabaseDocument; the mount-index partition's writes buffer over IPC in
-  // the child and commit parent-side, so the flip replays correctly there too.
+  // A swipe re-rolls a line already spoken; a letter that arrived since does
+  // not belong in it (the same rule the inform block keeps for new passages),
+  // and the swipe path never reaches the finalizer that would mark it. So a
+  // regeneration skips the mail check altogether.
+  //
   // The whole check is wrapped warn-only — a mail failure must never break the turn.
   let suparnaMailLLMContext = ''
+  let mailAlertsOwed: MailAlertsOwed | null = null
   const mailVaultId = character.characterDocumentMountPointId ?? null
-  if (mailVaultId) {
+  const isRegeneration = (regenerationOfMessageIds?.length ?? 0) > 0
+  if (mailVaultId && !isRegeneration) {
     try {
       const unalerted = await collectUnalertedMail(mailVaultId)
       if (unalerted.length > 0) {
@@ -2682,9 +2697,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           content: buildSuparnaMailWhisper(unalerted),
         })
         suparnaMailLLMContext = buildSuparnaMailLLMContext(unalerted)
-        for (const letter of unalerted) {
-          await markAlerted(mailVaultId, letter.path)
-        }
+        mailAlertsOwed = { vaultId: mailVaultId, paths: unalerted.map(letter => letter.path) }
+        logger.debug('[Suparna] Mail announced; alerted flip deferred to delivery', {
+          chatId: chat.id,
+          characterId: character.id,
+          vaultId: mailVaultId,
+          letters: unalerted.length,
+        })
       }
     } catch (mailError) {
       logger.warn('[Suparna] Mail check failed; turn continues', {
@@ -2774,6 +2793,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // The trailing sections, in their one order: who the character is (Core
+  // whisper), what it remembers (recall), what arrived for it (mail), what it
+  // is carrying (progressions), what the operator says is so (inform), and
+  // the turn note last. Built ONCE and used by both branches below — two
+  // hand-kept copies of this list is how recall, mail and the Core whisper
+  // went missing from turns with no new user message while their side effects
+  // (whisper posted, rows stamped, cadence advanced) still ran (bug 199).
+  const trailingContextSections = [
+    coreWhisperLLMContext,
+    llmRecallText,
+    suparnaMailLLMContext,
+    progressionsLLMContext,
+    informBlock,
+    turnSkipInstruction,
+  ].filter((section): section is string => !!section)
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -2782,13 +2817,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, activeUserParticipantId, chat.impersonatingParticipantIds)
     }
 
-    const trailingContextSections: string[] = []
-    if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
-    if (llmRecallText) trailingContextSections.push(llmRecallText)
-    if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
-    if (progressionsLLMContext) trailingContextSections.push(progressionsLLMContext)
-    if (informBlock) trailingContextSections.push(informBlock)
-    if (turnSkipInstruction) trailingContextSections.push(turnSkipInstruction)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
       : newUserMessage
@@ -2799,19 +2827,33 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (userNarrationAnchor || turnSkipInstruction || progressionsLLMContext || informBlock) {
-    // Chained / continue turns carry no new user message, so neither the note,
-    // the progressions report nor the inform block can ride as a trailing
-    // section above. Push them as their own trailing user message (same off-scene/timestamp
-    // pattern) so the model sees them this turn, in the same order they would
-    // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
-    // is required. The scene note leads: it is about the scene, the others
-    // about the character.
-    const trailingOnly = [userNarrationAnchor, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
-    contextMessages.push({
-      role: 'user',
-      content: trailingOnly.join('\n\n---\n\n'),
-    })
+  } else {
+    // Chained / continue / autonomous turns carry no new user message, so the
+    // sections ride as their own trailing user message, in the same order,
+    // with the scene note leading: it is about the scene, the others about the
+    // character. Anthropic 4.6+ rejects role=assistant tails, so 'user' is
+    // required.
+    //
+    // This message may follow a user-role line: in a multi-character chat every
+    // other seat's line is attributed as `user` (message-attribution.ts), so a
+    // chained turn's history routinely ends in one. That shape predates bug
+    // 199 (the scene note, progressions and informs have always ridden here). OpenAI-compatible APIs accept adjacent user messages, Anthropic's
+    // Messages API combines them into one turn, and the Google plugin merges
+    // them before sending.
+    if (llmRecallText) {
+      logger.debug('[CommonplaceWhisper] Delivering recall in the trailing-only message (no new user message)', {
+        chatId: chat.id,
+        participantId: respondingParticipant?.id,
+        length: llmRecallText.length,
+      })
+    }
+    const trailingOnly = [userNarrationAnchor, ...trailingContextSections].filter((section): section is string => !!section)
+    if (trailingOnly.length > 0) {
+      contextMessages.push({
+        role: 'user',
+        content: trailingOnly.join('\n\n---\n\n'),
+      })
+    }
   }
 
   // Calculate final token usage
@@ -2838,6 +2880,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Consumed by the finalizer once this turn persists an assistant message —
     // never here. Empty on a swipe: a swipe re-applies, it never consumes.
     informRowIds: informBlockResult.rowIds,
+    mailAlertsOwed,
     warnings,
     // Debug info for the debug panel
     debugMemories,

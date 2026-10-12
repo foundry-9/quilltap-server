@@ -41,6 +41,7 @@ import {
   importInstanceSettings,
 } from './import-configuration';
 import { reconcileRelationships, remapChatInform } from './reconcile';
+import { remapImportedMessageId } from './message-id-remap';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
@@ -464,6 +465,7 @@ async function executeImportStrict(
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
+    messages: new Map(),
   };
 
   // Initialize counts
@@ -653,8 +655,8 @@ async function executeImportStrict(
     }
 
     // 7a. Conversation annotations attached to imported chats. Remap chatId
-    // through idMaps.chats; sourceMessageId stays as-is because the message
-    // import preserves message IDs.
+    // through idMaps.chats, and sourceMessageId through idMaps.messages for a
+    // chat whose message ids were reminted (bug 228).
     if (data.conversationAnnotations && data.conversationAnnotations.length > 0) {
       const globalRepos = getRepositories();
       let annotationsImported = 0;
@@ -665,6 +667,9 @@ async function executeImportStrict(
           await globalRepos.conversationAnnotations.create({
             ...annotationData,
             chatId: remappedChatId,
+            ...(annotation.sourceMessageId && {
+              sourceMessageId: remapImportedMessageId(idMaps, annotation.chatId, annotation.sourceMessageId),
+            }),
           });
           annotationsImported++;
         } catch (error) {

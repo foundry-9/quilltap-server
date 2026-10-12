@@ -394,17 +394,8 @@ export async function runHousekeeping(
   }
 
   if (!opts.dryRun && expiredIds.length > 0) {
+    // The chokepoint removes the rows' vectors too.
     const deletedCount = await deleteMemoriesWithUnlinkBatch(expiredIds)
-
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      for (const id of expiredIds) {
-        await vectorStore.removeVector(id)
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn(`[Housekeeping] Failed to clean up vector store`, { characterId, error: String(error) })
-    }
     result.deleted = deletedCount
     result.deletedIds = expiredIds
     vectorStoreDirty = true

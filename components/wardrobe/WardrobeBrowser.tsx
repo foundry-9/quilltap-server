@@ -131,7 +131,7 @@ export function WardrobeBrowser({
   const [selectModeState, setSelectModeState] = useState({ key: containerKey, on: false })
   const [newFolderState, setNewFolderState] = useState({ key: '', name: '' })
   // The Move-to-folder picker's state lives in the actions hook, so the
-  // dialog's `overlayOpen` counts it (bug 199).
+  // dialog's `overlayOpen` counts it (bug 229).
   const picker = actions.folderPicker
   const [moving, setMoving] = useState(false)
 

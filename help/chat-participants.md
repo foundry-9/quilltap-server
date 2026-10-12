@@ -507,7 +507,7 @@ The heavier instruments — best wielded with deliberation:
 - **Replace** — find and replace text across the conversation
 - **Bulk Replace** — re-attribute messages between characters in bulk
 - **Re-extract Memories** — re-run the Commonplace Book extractor across the chat
-- **Delete Memories** — remove this chat's memories from the Commonplace Book (with a count of how many would go)
+- **Delete Memories** — remove the memories extracted from this chat from the Commonplace Book (with a count of how many are on record). Hand-written entries, archived entries and consolidated digests are left on the shelf; delete one of those from the Commonplace Book itself if you truly mean it
 
 The count on that last button keeps its own counsel and revises it as the
 evening wears on. Memories are laid down a minute or two behind the

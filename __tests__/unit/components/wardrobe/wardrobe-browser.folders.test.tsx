@@ -8,7 +8,7 @@
  *  - select mode puts checkboxes only on manageable rows;
  *  - the Move-to-folder picker disables the folder the item is already in;
  *  - a click inside that picker does not close the dialog around the browser
- *    (bug 199: the picker must count as one of the actions' overlays).
+ *    (bug 229: the picker must count as one of the actions' overlays).
  */
 
 import React from 'react'
@@ -277,7 +277,7 @@ describe('WardrobeBrowser — folders', () => {
     expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled()
   })
 
-  it('a click inside the picker does not close the dialog around the browser (bug 199)', async () => {
+  it('a click inside the picker does not close the dialog around the browser (bug 229)', async () => {
     const onDialogClose = jest.fn()
     renderBrowser(characterContainer, makeData([COAT, GLOVES], ownOnly), makeActions(), onDialogClose)
     await waitFor(() => expect(folderRows()).toHaveLength(2))

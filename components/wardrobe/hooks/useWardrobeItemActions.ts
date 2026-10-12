@@ -51,7 +51,7 @@ export interface TransferRequest {
  * The Move-to-folder picker. It lives here, beside the other overlays, so
  * `overlayOpen` sees it: the dialog's click-outside handler would otherwise
  * treat a click inside the (portalled) picker as a click outside the dialog
- * and close both (bug 199).
+ * and close both (bug 229).
  */
 export interface FolderPickerRequest {
   items: ListedWardrobeItem[]

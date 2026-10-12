@@ -11,6 +11,11 @@ import * as costEstimation from '@/lib/services/cost-estimation.service'
 import * as rngDetector from '@/lib/services/chat-message/rng-pattern-detector.service'
 import * as rngHandler from '@/lib/tools/handlers/rng-handler'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
+
+jest.mock('@/lib/post-office/mailbox', () => ({
+  markMailAlertsDelivered: jest.fn(),
+}))
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -737,7 +742,11 @@ describe('message-finalizer.service — inform consumption', () => {
     return repos
   }
 
-  const finalize = (informRowIds: string[], repos: ReturnType<typeof informRepos>) =>
+  const finalize = (
+    informRowIds: string[],
+    repos: ReturnType<typeof informRepos>,
+    mailAlertsOwed: { vaultId: string; paths: string[] } | null = null,
+  ) =>
     finalizeMessageResponse({
       repos: repos as any,
       chatId: 'chat-1',
@@ -776,7 +785,7 @@ describe('message-finalizer.service — inform consumption', () => {
       compression: {
         existingMessages: [],
         content: 'Hello there',
-        builtContext: { originalSystemPrompt: 'System prompt', informRowIds } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds, mailAlertsOwed } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: { enabled: false } as any,
@@ -818,5 +827,25 @@ describe('message-finalizer.service — inform consumption', () => {
     await expect(finalize(['row-1'], repos)).rejects.toThrow('disk on fire')
 
     expect(repos.chatInforms.markConsumed).not.toHaveBeenCalled()
+  })
+
+  // Suparṇā's letters ride the same rule: marked alerted only once the reply
+  // that read them is saved (bug 227), never at context-building time.
+  it('marks the turn\'s announced letters alerted once the reply is saved', async () => {
+    const repos = informRepos()
+    const owed = { vaultId: 'vault-a', paths: ['Mail/one.md'] }
+
+    await finalize([], repos, owed)
+
+    expect(markMailAlertsDelivered).toHaveBeenCalledWith(owed, { chatId: 'chat-1', via: 'finalizer' })
+  })
+
+  it('leaves the letters unalerted when the save throws', async () => {
+    const repos = informRepos()
+    repos.chats.addMessage.mockRejectedValueOnce(new Error('disk on fire'))
+
+    await expect(finalize([], repos, { vaultId: 'vault-a', paths: ['Mail/one.md'] })).rejects.toThrow('disk on fire')
+
+    expect(markMailAlertsDelivered).not.toHaveBeenCalled()
   })
 })
