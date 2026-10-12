@@ -45,6 +45,7 @@ function makeIdMaps(): any {
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
+    messages: new Map(),
   };
 }
 

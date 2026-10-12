@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Fix bug 228: importing a chat with "Create New" dropped every message
+
+- The `duplicate` conflict strategy created the copy under a new chat id but inserted each message under its original id; `chat_messages.id` is global, so every insert failed with `UNIQUE constraint failed: chat_messages.id` and the copy had no messages. The default (non-`preserveIds`) path failed the same way when one bundle was imported twice.
+- A chat created under a fresh id now gets fresh message ids (`remintChatMessageIds`, `lib/import/quilltap-import/message-id-remap.ts`), one per message even when a bundle chat repeats an id. `swipeGroupId` (`swipe-<messageId>` only), `otherExtractionWatermarkMessageId` and `courierCheckpoints[*].lastResolvedMessageId` (object or JSON string) are rewritten through the same map. If any `summaryAnchorMessageIds` entry does not resolve, the summary is cleared with its anchors and `lastSummaryTurn`, as `?action=rebuild-summary` does. `preserveIds` imports keep source ids.
+- New `idMaps.messages`, keyed by source chat and filled only after each message insert succeeds; `remapImportedMessageId` resolves inform `recordMessageId` / `consumedByMessageId`, annotation and memory `sourceMessageId`, and file `linkedTo` message ids (only through a chat named in the same array).
+- The duplicate and fresh-id paths of `importChats` are one path; duplicate only adds the "(imported)" title.
+- The `duplicate` path also recorded a random id in `idMaps.chats` that was never the copy's id, so informs, annotations, chat documents and memories for a duplicated chat pointed at a chat that did not exist. It now records the created chat's id.
+- Debug log per chat on message import; per-message warn on failure.
+- Test: `__tests__/unit/lib/import/quilltap-import/duplicate-chat-message-ids.test.ts`. Help: `help/system-import-export.md`.
+
 #### Fix bug 227: mail marked announced before its turn succeeded
 
 - Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
