@@ -33,6 +33,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildMemoryEmbeddingText } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { MERGE_THRESHOLD, NEAR_DUPLICATE_THRESHOLD } from './memory-gate'
 
 const logger = createServiceLogger('AnchorGateProbe')
@@ -82,9 +83,9 @@ export interface RunAnchorGateProbeInput {
   embeddingProfileId?: string
 }
 
-function hasAnchors(memory: Memory): boolean {
+function hasAnchors(memory: Memory, timeZone: string): boolean {
   return (
-    buildMemoryEmbeddingText(memory.summary, memory.content, memory) !==
+    buildMemoryEmbeddingText(memory.summary, memory.content, memory, timeZone) !==
     buildMemoryEmbeddingText(memory.summary, memory.content)
   )
 }
@@ -95,6 +96,8 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const sample = await repos.memories.findRecent(input.characterId, limit)
   const vectorStore = await getCharacterVectorStore(input.characterId)
   const storeDimensions = vectorStore.getDimensions()
+  // Anchor dates render on the instance's memory calendar, as the gate's do.
+  const memoryTimeZone = await refreshMemoryTimeZone()
 
   // Neighbours are looked up by id across the whole corpus; createdAt decides
   // which ones the gate could have seen.
@@ -137,7 +140,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const rows: AnchorGateProbeRow[] = []
   for (const memory of sample) {
     const createdMs = Date.parse(memory.createdAt)
-    const anchored = hasAnchors(memory)
+    const anchored = hasAnchors(memory, memoryTimeZone)
     const row: AnchorGateProbeRow = {
       memoryId: memory.id,
       summary: memory.summary,
@@ -150,7 +153,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     }
 
     try {
-      const anchoredVec = await embed(buildMemoryEmbeddingText(memory.summary, memory.content, memory))
+      const anchoredVec = await embed(buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone))
       if (storeDimensions !== null && anchoredVec.length !== storeDimensions) {
         logger.warn('Probe embedding dimension does not match the store; skipping row', {
           memoryId: memory.id,
@@ -188,7 +191,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
       for (const id of neighbourIds) {
         const neighbour = memoryCache.get(id)
         if (!neighbour) continue
-        const neighbourVec = hasAnchors(neighbour)
+        const neighbourVec = hasAnchors(neighbour, memoryTimeZone)
           ? await anchorFreeEmbedding(neighbour)
           : neighbour.embedding && neighbour.embedding.length === freeVec.length
             ? neighbour.embedding

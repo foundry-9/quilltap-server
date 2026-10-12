@@ -107,3 +107,29 @@ describe('processTurnForMemory — otherPass mode', () => {
     expect(otherWrites()).toHaveLength(4)
   })
 })
+
+describe('processTurnForMemory — uncensored fallback (bug 213)', () => {
+  const policy = { failoverAllowed: true, desk: { textProfileId: 'desk' } }
+  const profiles = [{ id: 'desk', isDangerousCompatible: true }]
+
+  it('carries isDangerousChat on the fallback for a chat on the uncensored route', async () => {
+    mockMode.mockResolvedValue({ otherPass: 'fold', perTurnOtherFloor: 0.75, foldCandidatesPerSubject: 3 })
+    await processTurnForMemory({
+      ...(ctx() as object),
+      conciergePolicy: policy,
+      availableProfiles: profiles,
+      isDangerousChat: true,
+    } as never)
+    expect(mockSelf.mock.calls[0][5]).toEqual({ conciergePolicy: policy, availableProfiles: profiles, isDangerousChat: true })
+  })
+
+  it('says false for a moderated chat', async () => {
+    mockMode.mockResolvedValue({ otherPass: 'fold', perTurnOtherFloor: 0.75, foldCandidatesPerSubject: 3 })
+    await processTurnForMemory({
+      ...(ctx() as object),
+      conciergePolicy: policy,
+      availableProfiles: profiles,
+    } as never)
+    expect(mockSelf.mock.calls[0][5]).toMatchObject({ isDangerousChat: false })
+  })
+})

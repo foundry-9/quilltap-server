@@ -72,6 +72,7 @@ function bundleChat() {
     tags: [],
     summaryAnchorMessageIds: [USER_MSG, REPLY_A, 'not-in-the-bundle'],
     otherExtractionWatermarkMessageId: REPLY_B,
+    episodeExtractionWatermarkMessageId: REPLY_A,
     courierCheckpoints: {
       [ALICE_CHARACTER]: { lastResolvedMessageId: REPLY_B, resolvedAt: '2026-10-12T00:05:00.000Z' },
     },
@@ -228,6 +229,7 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
     expect(copy.lastSummaryTurn).toBe(0)
     void newUser
     expect(copy.otherExtractionWatermarkMessageId).toBe(newB)
+    expect(copy.episodeExtractionWatermarkMessageId).toBe(newA)
     expect(copy.courierCheckpoints).toEqual({
       [ALICE_CHARACTER]: { lastResolvedMessageId: newB, resolvedAt: '2026-10-12T00:05:00.000Z' },
     })
@@ -434,12 +436,17 @@ describe('remintChatMessageIds', () => {
     const result = remintChatMessageIds(
       {
         otherExtractionWatermarkMessageId: 'gone',
+        episodeExtractionWatermarkMessageId: 'gone',
         courierCheckpoints: { c: { lastResolvedMessageId: 'gone', resolvedAt: 'x' } },
       },
       [message(USER_MSG)] as never
     )
-    expect(result.chatPatch).toEqual({ otherExtractionWatermarkMessageId: null, courierCheckpoints: null })
-    expect(result.droppedRefs).toBe(2)
+    expect(result.chatPatch).toEqual({
+      otherExtractionWatermarkMessageId: null,
+      episodeExtractionWatermarkMessageId: null,
+      courierCheckpoints: null,
+    })
+    expect(result.droppedRefs).toBe(3)
     expect('summaryAnchorMessageIds' in result.chatPatch).toBe(false)
   })
 })

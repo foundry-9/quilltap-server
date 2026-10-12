@@ -38,6 +38,7 @@ jest.mock('@/lib/logger', () => {
 import { executeCheapLLMTask } from '../core-execution';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import type { ChatMessage } from '../types';
+import { resetMemoryTimeZoneCacheForTests, setCachedInstanceTimeZone } from '@/lib/memory/memory-calendar';
 
 const SELECTION: CheapLLMSelection = {
   provider: 'OPENAI',
@@ -206,5 +207,51 @@ describe('extractMemorySearchKeywords — TODAY line', () => {
     const prompt = lastUserPrompt();
     expect(prompt).toContain('TODAY: 2026-07-28 (Tuesday)');
     expect(prompt).toContain('timeline mode: realtime');
+  });
+});
+
+describe('extractMemorySearchKeywords — one memory calendar (bug 212)', () => {
+  const CHICAGO_NOW_ISO = '2026-10-12T19:00:00.000Z'; // 14:00 CDT, Monday
+
+  beforeEach(() => {
+    setCachedInstanceTimeZone('America/Chicago');
+  });
+  afterEach(() => {
+    resetMemoryTimeZoneCacheForTests();
+  });
+
+  async function runAt(messages: ChatMessage[]): Promise<MemorySearchExtraction> {
+    const res = await extractMemorySearchKeywords(
+      messages, 'Amy', SELECTION, 'user-1', 'chat-1', 'char-1',
+      { nowIso: CHICAGO_NOW_ISO, timelineMode: 'realtime' },
+    );
+    return res.result ?? { keywords: [] };
+  }
+
+  it('widens a date-only classifier range to local days, not UTC days', async () => {
+    nextResponse = JSON.stringify({
+      keywords: ['harbour'],
+      retrospective: true,
+      timeRange: { from: '2026-10-05', to: '2026-10-06' },
+    });
+    const r = await runAt(userSays('what happened at the harbour that week?'));
+    expect(r.timeRange).toEqual({
+      from: '2026-10-05T05:00:00.000Z',
+      to: '2026-10-07T04:59:59.999Z',
+    });
+  });
+
+  it('resolves the deterministic scan on the instance calendar', async () => {
+    nextResponse = JSON.stringify({ keywords: ['lighthouse'], retrospective: false, timeRange: null });
+    const r = await runAt(userSays('do you remember last night at the lighthouse?'));
+    expect(r.timeRange).toEqual({ from: '2026-10-11T23:00:00.000Z', to: '2026-10-12T11:00:00.000Z' });
+  });
+
+  it('renders TODAY on the instance calendar', async () => {
+    await extractMemorySearchKeywords(
+      userSays('hello'), 'Amy', SELECTION, 'user-1', 'chat-1', 'char-1',
+      { nowIso: '2026-10-13T04:30:00.000Z', timelineMode: 'realtime' }, // 23:30 CDT Monday
+    );
+    expect(lastUserPrompt()).toContain('TODAY: 2026-10-12 (Monday)');
   });
 });

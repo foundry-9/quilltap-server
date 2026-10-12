@@ -27,6 +27,7 @@ import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { calculateReinforcedImportance } from './reinforced-importance'
 
 // =============================================================================
@@ -271,7 +272,12 @@ async function runMemoryGateInner(
   const debugInfo: string[] = []
   // Anchor line included so the gate compares/writes the same vector shape the
   // create path stores (see buildMemoryEmbeddingText).
-  const embeddingText = buildMemoryEmbeddingText(candidateSummary, candidateContent, candidateAnchors)
+  const embeddingText = buildMemoryEmbeddingText(
+    candidateSummary,
+    candidateContent,
+    candidateAnchors,
+    await refreshMemoryTimeZone(),
+  )
 
   let embeddingResult: Awaited<ReturnType<typeof generateEmbeddingForUser>>
   try {
@@ -506,7 +512,7 @@ export async function reembedMemory(
   const repos = getRepositories()
   try {
     const embeddingResult = await generateEmbeddingForUser(
-      buildMemoryEmbeddingText(memory.summary, memory.content, memory),
+      buildMemoryEmbeddingText(memory.summary, memory.content, memory, await refreshMemoryTimeZone()),
       userId,
       embeddingProfileId,
       { priority: 'background' }
@@ -546,21 +552,26 @@ export async function reembedMemory(
  * The count is incremented atomically against the row at write time
  * (`MemoriesRepository.incrementReinforcement`), never written as an absolute
  * value from the gate's snapshot — two jobs reinforcing the same row would
- * otherwise both write N+1 (bug 182). Returns null when the row is missing. In
+ * otherwise both write N+1 (bug 182). `by` counts several observations at once
+ * (a dedup merge folding losers, bug 226); `at` defaults to now and never
+ * rewinds a later `lastReinforcedAt`. Returns null when the row is missing. In
  * the job child the write is buffered and replayed by the parent, so the
- * caller gets the snapshot's count plus one as its local view.
+ * caller gets the snapshot's count plus `by` as its local view.
  */
 export async function countReinforcement(
   memory: Memory,
+  opts: { by?: number; at?: string } = {},
 ): Promise<Pick<Memory, 'reinforcementCount' | 'lastReinforcedAt' | 'reinforcedImportance'> | null> {
   const repos = getRepositories()
-  const at = new Date().toISOString()
-  const counted = await repos.memories.incrementReinforcement(memory.characterId, memory.id, at)
+  const by = opts.by ?? 1
+  const at = opts.at ?? new Date().toISOString()
+  const counted = await repos.memories.incrementReinforcement(memory.characterId, memory.id, at, by)
   if (counted === null) return null
   if (counted === undefined) {
-    const reinforcementCount = (memory.reinforcementCount ?? 1) + 1
+    const reinforcementCount = (memory.reinforcementCount ?? 1) + by
     logger.debug('[MemoryGate] Reinforcement buffered (job child); using local view', {
       memoryId: memory.id,
+      by,
       reinforcementCount,
     })
     return {
@@ -569,7 +580,7 @@ export async function countReinforcement(
       reinforcedImportance: calculateReinforcedImportance(memory.importance, reinforcementCount),
     }
   }
-  return { ...counted, lastReinforcedAt: at }
+  return counted
 }
 
 /**
@@ -596,6 +607,47 @@ export async function absorbNearDuplicate(existingMemory: Memory): Promise<Memor
     reinforcedImportance: counted.reinforcedImportance,
   })
   return { ...existingMemory, ...counted }
+}
+
+/**
+ * Promote the row a hand-written candidate was folded into (the
+ * `promoteOnMatch` create option). The operator wrote this on purpose, so the
+ * survivor must carry that intent: an extracted (AUTO) row becomes MANUAL —
+ * out of reach of demotion and retention deletion — and keeps the higher of
+ * its own importance and the one asked for, with `reinforcedImportance`
+ * recomputed from its current count. A digest keeps its CONSOLIDATED source
+ * (it is already protected, and its members point at it). Works in the job
+ * child: `patchMemory` returns the local view of a buffered write.
+ */
+export async function promoteMatchedMemory(
+  memory: Memory,
+  requestedImportance: number | undefined,
+): Promise<Memory> {
+  const importance = Math.max(memory.importance, requestedImportance ?? memory.importance)
+  const patch: Partial<Memory> = {}
+  if (memory.source === 'AUTO') patch.source = 'MANUAL'
+  if (importance !== memory.importance) {
+    patch.importance = importance
+    patch.reinforcedImportance = calculateReinforcedImportance(importance, memory.reinforcementCount ?? 1)
+  }
+  if (Object.keys(patch).length === 0) {
+    logger.debug('[MemoryGate] Matched memory already carries the manual intent', { memoryId: memory.id })
+    return memory
+  }
+  const promoted = await patchMemory(memory, patch)
+  if (!promoted) {
+    logger.warn('[MemoryGate] Failed to promote matched memory for a manual write', {
+      memoryId: memory.id,
+      characterId: memory.characterId,
+    })
+    return memory
+  }
+  logger.debug('[MemoryGate] Promoted matched memory for a manual write', {
+    memoryId: memory.id,
+    fields: Object.keys(patch),
+    importance,
+  })
+  return promoted
 }
 
 /**
@@ -813,10 +865,115 @@ async function removeDeletedVectors(idsByCharacter: ReadonlyMap<string, readonly
 }
 
 /**
+ * Scrub the digest bookkeeping that points at deleted rows (bug 225):
+ *
+ * - a surviving digest's `consolidatedFrom` drops the deleted members, so its
+ *   size on the memory card and the model-facing "from N notes" provenance
+ *   count only members that still exist;
+ * - a surviving member of a deleted digest loses its `supersededById` and
+ *   becomes a cap-demoted cold row (still cold, no digest), which the next
+ *   consolidation can re-digest — rather than naming a digest that is gone.
+ *
+ * Scoped to the doomed rows' holders (a digest and its members share one) and
+ * read through the repository, so in the job child the per-job memory overlay
+ * applies. The `consolidatedFrom` scrub is a removal delta
+ * (`removeConsolidatedMembers`), never a whole-array write built from a read:
+ * two deletes from one digest in one job each buffer only their own removal,
+ * and the replay applies both.
+ *
+ * Runs before the rows are deleted, alongside the `relatedMemoryIds` scrub.
+ * Returns how many surviving rows it rewrote.
+ */
+async function scrubDigestLinks(doomed: ReadonlySet<string>, holderIds: Iterable<string>): Promise<number> {
+  const holders = Array.from(new Set(holderIds))
+  if (doomed.size === 0 || holders.length === 0) return 0
+  const repos = getRepositories()
+  const doomedIds = Array.from(doomed)
+  let touched = 0
+
+  const digests = await repos.memories.findDigestsContainingMembers(holders, doomedIds)
+  for (const digest of digests) {
+    if (doomed.has(digest.id)) continue
+    const removed = (digest.consolidatedFrom ?? []).filter(id => doomed.has(id))
+    if (removed.length === 0) continue
+    await repos.memories.removeConsolidatedMembers(digest.characterId, digest.id, removed)
+    touched++
+  }
+
+  const orphanedByCharacter = new Map<string, string[]>()
+  for (const member of await repos.memories.findIdsSupersededByAny(holders, doomedIds)) {
+    if (doomed.has(member.id)) continue
+    const list = orphanedByCharacter.get(member.characterId) ?? []
+    list.push(member.id)
+    orphanedByCharacter.set(member.characterId, list)
+  }
+  for (const [characterId, ids] of orphanedByCharacter) {
+    await repos.memories.updateTierBulk(characterId, ids, 'cold', { supersededById: null })
+    touched += ids.length
+  }
+
+  logger.debug('[MemoryGate] Scrubbed digest links to deleted memories', {
+    doomed: doomed.size,
+    holders: holders.length,
+    digestsScanned: digests.length,
+    touched,
+    orphanedMembers: Array.from(orphanedByCharacter.values()).reduce((n, ids) => n + ids.length, 0),
+  })
+  return touched
+}
+
+/** Holder id → the subject buckets of the digests a delete removed. */
+type DeletedDigestBuckets = Map<string, Set<string>>
+
+function addDigestBucket(
+  buckets: DeletedDigestBuckets,
+  row: { characterId: string; aboutCharacterId?: string | null; source?: string | null },
+): void {
+  if (row.source !== 'CONSOLIDATED') return
+  if (!row.characterId || !row.aboutCharacterId) return // the no-subject bucket has no mirror
+  const set = buckets.get(row.characterId) ?? new Set<string>()
+  set.add(row.aboutCharacterId)
+  buckets.set(row.characterId, set)
+}
+
+/**
+ * Refresh the Commonplace mirror (`Commonplace/<Subject>.md`) of every bucket
+ * a delete just took a digest out of, so the vault stops presenting a deleted
+ * digest as canon. Parent-only by construction: in the job child
+ * `mirrorCommonplaceForSubjects` writes nothing, and the dispatcher mirrors a
+ * child's digest deletes after its batch commits. Never throws.
+ */
+async function mirrorBucketsAfterDigestDelete(buckets: DeletedDigestBuckets): Promise<void> {
+  if (buckets.size === 0) return
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    logger.debug('[MemoryGate] Digest deleted in the job child; the dispatcher mirrors after commit', {
+      holders: buckets.size,
+    })
+    return
+  }
+  try {
+    const { mirrorCommonplaceForSubjects } = await import('./commonplace-mirror')
+    for (const [holderId, subjects] of buckets) {
+      const written = await mirrorCommonplaceForSubjects(holderId, subjects)
+      logger.debug('[MemoryGate] Refreshed Commonplace mirror after digest delete', {
+        characterId: holderId,
+        subjects: subjects.size,
+        written,
+      })
+    }
+  } catch (error) {
+    logger.warn('[MemoryGate] Commonplace mirror refresh after digest delete failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
  * Delete a single memory, scrub the deleted ID from every neighbour's
- * `relatedMemoryIds`, and remove its vector. The single chokepoint for memory
- * deletion — parallel
- * to `createMemoryWithGate` on the write side. Idempotent: if the row is
+ * `relatedMemoryIds` and from the digest bookkeeping (`consolidatedFrom`,
+ * `supersededById` — see {@link scrubDigestLinks}), and remove its vector.
+ * The single chokepoint for memory deletion — parallel to
+ * `createMemoryWithGate` on the write side. Idempotent: if the row is
  * already gone, returns false without touching neighbours.
  *
  * Callers that need to cascade many memories at once should use
@@ -850,6 +1007,7 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
     })
     charactersAffected.add(neighbour.characterId)
   }
+  const digestLinksScrubbed = await scrubDigestLinks(new Set([memoryId]), [target.characterId])
 
   const deleted = await repos.memories.delete(memoryId)
   const vectorsRemoved = deleted
@@ -859,6 +1017,7 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   const logFields = {
     memoryId,
     vectorsRemoved,
+    digestLinksScrubbed,
     neighbourCount: neighbours.length,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,
@@ -871,7 +1030,12 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   // Collection-wide: this takes a memory id, not a chat id, so there is no
   // narrower hint to give. A no-op from the job child by design — the parent
   // chokepoints announce a child's deletions.
-  if (deleted) publishRealtime('memories')
+  if (deleted) {
+    publishRealtime('memories')
+    const buckets: DeletedDigestBuckets = new Map()
+    addDigestBucket(buckets, target)
+    await mirrorBucketsAfterDigestDelete(buckets)
+  }
 
   return deleted
 }
@@ -957,19 +1121,24 @@ export async function deleteMemoriesWithUnlinkBatchReport(
   // by-character split also means we never touch unrelated rows — the
   // repository's bulkDelete is `characterId`-scoped. Chunked because each ID
   // is one bind variable, and a full-wipe cascade can pass more IDs than
-  // SQLITE_MAX_VARIABLE_NUMBER allows in a single statement.
+  // SQLITE_MAX_VARIABLE_NUMBER allows in a single statement. Resolved before
+  // the digest scrub, which is scoped to these holders; the digest rows'
+  // buckets are noted for the Commonplace mirror refresh after the delete.
   const idsByCharacter = new Map<string, string[]>()
+  const deletedDigestBuckets: DeletedDigestBuckets = new Map()
   for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
-    const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
-      `SELECT id, characterId FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
+    const toResolve = await rawQuery<Array<{ id: string; characterId: string; source?: string | null; aboutCharacterId?: string | null }>>(
+      `SELECT id, characterId, source, aboutCharacterId FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
       chunk
     )
     for (const row of toResolve) {
       const list = idsByCharacter.get(row.characterId) ?? []
       list.push(row.id)
       idsByCharacter.set(row.characterId, list)
+      addDigestBucket(deletedDigestBuckets, row)
     }
   }
+  const digestLinksScrubbed = await scrubDigestLinks(doomedSet, idsByCharacter.keys())
 
   // In the job child, `bulkDelete` is a buffered write and returns nothing —
   // the rows go at commit. Counting `undefined` produced NaN (logged as
@@ -996,6 +1165,7 @@ export async function deleteMemoriesWithUnlinkBatchReport(
     vectorsRemoved,
     countSource,
     neighboursTouched,
+    digestLinksScrubbed,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,
   }
@@ -1006,7 +1176,10 @@ export async function deleteMemoriesWithUnlinkBatchReport(
 
   // Collection-wide for the same reason as the single-ID path, and doubly so:
   // a batch can span several chats.
-  if (deleted > 0) publishRealtime('memories')
+  if (deleted > 0) {
+    publishRealtime('memories')
+    await mirrorBucketsAfterDigestDelete(deletedDigestBuckets)
+  }
 
   return { deleted, vectorsRemoved }
 }

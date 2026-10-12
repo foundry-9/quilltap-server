@@ -1,6 +1,6 @@
 /**
  * Housekeeping demotes instead of deleting (consolidation-and-tiers spec B4):
- * the cap counts hot rows, passes 1 and 3 move rows to the cold tier, MANUAL
+ * the cap counts demotable (hot AUTO) rows (bug 210), passes 1 and 3 move rows to the cold tier, MANUAL
  * and CONSOLIDATED rows are untouched, and the only deletion is the retention
  * sweep of superseded cold AUTO rows.
  */
@@ -133,6 +133,52 @@ describe('housekeeping demotion', () => {
     const result = await runHousekeeping('char-1', { maxMemories: 1 })
     expect(result.demoted).toBe(0)
     expect(repo.updateTierBulk).not.toHaveBeenCalled()
+  })
+
+  it('bug 210: MANUAL rows and digests do not count against the cap', async () => {
+    // 6 protected-by-source rows alone exceed a cap of 5; 4 AUTO rows are under it.
+    memories = [
+      ...Array.from({ length: 3 }, (_, i) => makeMemory({ id: `man${i}`, source: 'MANUAL', importance: 0.8 })),
+      ...Array.from({ length: 3 }, (_, i) => makeMemory({ id: `dig${i}`, source: 'CONSOLIDATED', importance: 0.8 })),
+      ...Array.from({ length: 4 }, (_, i) =>
+        makeMemory({ id: `auto${i}`, importance: 0.8, reinforcedImportance: 0.8 }),
+      ),
+    ]
+    const result = await runHousekeeping('char-1', { maxMemories: 5, dryRun: true })
+    expect(result.hotTotal).toBe(10)
+    expect(result.demotable).toBe(4)
+    expect(result.protected).toBe(6)
+    expect(result.demoted).toBe(0)
+    expect(result.demotedIds).toEqual([])
+  })
+
+  it('bug 210: over the cap, demotes exactly demotable − cap rows, lowest protection first', async () => {
+    const recent = new Date().toISOString()
+    memories = [
+      makeMemory({ id: 'manual', source: 'MANUAL', importance: 0.1 }),
+      makeMemory({ id: 'digest', source: 'CONSOLIDATED', importance: 0.1 }),
+      // Well-reinforced, well-linked, recently recalled: highest protection.
+      makeMemory({
+        id: 'strong',
+        importance: 0.9,
+        reinforcedImportance: 0.9,
+        reinforcementCount: 12,
+        relatedMemoryIds: ['a', 'b', 'c', 'd'],
+        lastAccessedAt: recent,
+        createdAt: recent,
+      }),
+      makeMemory({ id: 'mid', importance: 0.7, reinforcedImportance: 0.7, reinforcementCount: 4, createdAt: recent }),
+      makeMemory({ id: 'weak1', importance: 0.4, reinforcedImportance: 0.4 }),
+      makeMemory({ id: 'weak2', importance: 0.45, reinforcedImportance: 0.45 }),
+    ]
+    // 4 demotable, cap 2 → demote 2; pass 1 keeps everything (importance ≥ 0.3).
+    const result = await runHousekeeping('char-1', { maxMemories: 2 })
+    expect(result.demotable).toBe(4)
+    expect(result.demoted).toBe(2)
+    expect(result.demotedIds.sort()).toEqual(['weak1', 'weak2'])
+    expect(result.demotedIds).not.toContain('manual')
+    expect(result.demotedIds).not.toContain('digest')
+    expect(result.totalAfter).toBe(4) // manual, digest, strong, mid
   })
 
   it('a dry run reports demotions but writes nothing', async () => {

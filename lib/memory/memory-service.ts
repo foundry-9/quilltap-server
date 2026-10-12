@@ -20,6 +20,7 @@ import {
   runMemoryGate,
   reinforceMemory,
   absorbNearDuplicate,
+  promoteMatchedMemory,
   linkRelatedMemories,
   calculateReinforcedImportance,
   deleteMemoryWithUnlink,
@@ -34,6 +35,7 @@ import {
 import { boostGateThreshold, combineRecallMultipliers, recallTuningOf, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { selectSpecificAnchors } from './recall-tuning'
 import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -75,8 +77,9 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
       autoSettings.perCharacterCap ??
       2000
 
-    // The cap measures the hot tier; the cold archive never counts against it.
-    const count = await repos.memories.countHotByCharacterId(characterId)
+    // The cap measures demotable rows only — hot AUTO (bug 210). MANUAL rows,
+    // digests and the cold archive never count against it.
+    const { demotable: count } = await repos.memories.countCapBreakdown(characterId)
     if (count < Math.floor(cap * HOUSEKEEPING_WATERMARK)) {
       return
     }
@@ -193,7 +196,7 @@ const FALLBACK_ANCHOR_MAX_ENTITIES = 6
  * caller-supplied anchor always wins — and MANUAL memories pass through
  * untouched (they carry the user's deliberate choices).
  */
-function applyEpisodicFallbackAnchors(data: CreateMemoryOptions): CreateMemoryOptions {
+function applyEpisodicFallbackAnchors(data: CreateMemoryOptions, timeZone: string): CreateMemoryOptions {
   if (data.source && data.source !== 'AUTO') return data
   const needEntities = !data.entities || data.entities.length === 0
   const needOccurredAt = !data.occurredAt
@@ -206,7 +209,7 @@ function applyEpisodicFallbackAnchors(data: CreateMemoryOptions): CreateMemoryOp
     if (needOccurredAt) {
       const anchorIso = data.sourceMessageTimestamp ?? new Date().toISOString()
       for (const detail of details) {
-        const resolved = resolveWhenPhrase(detail, anchorIso)
+        const resolved = resolveWhenPhrase(detail, anchorIso, timeZone)
         if (resolved) {
           next.occurredAt = resolved
           break
@@ -296,6 +299,13 @@ export interface MemoryServiceOptions {
   skipEmbedding?: boolean
   /** Skip the Memory Gate check (force-insert without similarity check) */
   skipGate?: boolean
+  /**
+   * The candidate is a deliberate (hand-written) memory: when the gate folds
+   * it into an existing row (REINFORCE / SKIP_NEAR_DUPLICATE), promote that
+   * row — AUTO becomes MANUAL, importance becomes the higher of the two — so
+   * the operator's intent is not lost to an extracted, demotable survivor.
+   */
+  promoteOnMatch?: boolean
 }
 
 /**
@@ -387,7 +397,7 @@ export async function createMemoryWithGate(
   // FIRST WRITE (not just reinforce) so entities/occurredAt get populated even
   // when the extractor model omits them. Only fills gaps — never overrides a
   // caller-supplied anchor.
-  data = applyEpisodicFallbackAnchors(data)
+  data = applyEpisodicFallbackAnchors(data, await refreshMemoryTimeZone())
 
   const anchors: EpisodicAnchorView = {
     occurredAt: data.occurredAt ?? null,
@@ -398,6 +408,14 @@ export async function createMemoryWithGate(
   // If gate or embedding is skipped, use the direct creation flow
   if (options.skipGate || options.skipEmbedding) {
     const memory = await createMemoryDirect(data, options)
+    if (!memory) {
+      // Embedding failed after retry; nothing was written (bug 220).
+      return {
+        memory: null,
+        action: 'SKIP_EMBEDDING_FAILED',
+        reason: 'Embedding failed after retry (gate skipped)',
+      }
+    }
     return { memory, action: 'SKIP_GATE' }
   }
 
@@ -424,7 +442,8 @@ export async function createMemoryWithGate(
       // reinforcement (count, lastReinforcedAt, reinforcedImportance). The
       // action stays SKIP_NEAR_DUPLICATE so callers can tell "absorbed" from
       // "reinforced with novel detail".
-      const absorbed = await absorbNearDuplicate(decision.existingMemory)
+      let absorbed = await absorbNearDuplicate(decision.existingMemory)
+      if (options.promoteOnMatch) absorbed = await promoteMatchedMemory(absorbed, data.importance)
       return {
         memory: absorbed,
         action: 'SKIP_NEAR_DUPLICATE',
@@ -446,7 +465,7 @@ export async function createMemoryWithGate(
       // Boost the existing memory instead of creating a new row. The
       // candidate's anchors ride along so a retelling that supplies better
       // when/where anchors than the original capture can upgrade the row.
-      const { memory: reinforced, novelDetails } = await reinforceMemory(
+      const { memory: reinforcedRow, novelDetails } = await reinforceMemory(
         decision.existingMemory,
         data.content,
         data.summary,
@@ -454,6 +473,9 @@ export async function createMemoryWithGate(
         options.embeddingProfileId,
         anchors
       )
+      const reinforced = options.promoteOnMatch
+        ? await promoteMatchedMemory(reinforcedRow, data.importance)
+        : reinforcedRow
       return {
         memory: reinforced,
         action: 'REINFORCE',
@@ -520,7 +542,8 @@ function memoryRowFromOptions(data: CreateMemoryOptions, importance: number) {
     kind: data.kind ?? 'semantic',
     reinforcementCount: 1,
     relatedMemoryIds: [],
-    reinforcedImportance: importance,
+    // Bug 216: one formula for every writer — at count 1 it equals importance.
+    reinforcedImportance: calculateReinforcedImportance(importance, 1),
   }
 }
 
@@ -534,62 +557,74 @@ function memoryCreateOptions(data: CreateMemoryOptions): { createdAt: string; up
     : undefined
 }
 
+/** Delay before the one retry of a skip-gate embedding (matches the gate's). */
+const DIRECT_EMBEDDING_RETRY_DELAY_MS = 500
+
 /**
- * Direct memory creation without gate (original flow).
+ * Direct memory creation without gate.
  * Used when skipGate or skipEmbedding is true.
+ *
+ * With `skipEmbedding` the row is written bare, by the caller's explicit
+ * choice. Otherwise the embedding is generated FIRST (one retry, like the
+ * gate) and the row is written only if it succeeded — a row without a vector
+ * is invisible to recall and to every later gate check, so an embedding
+ * failure writes nothing and returns null, the same contract as the gate's
+ * SKIP_EMBEDDING_FAILED (bug 220).
  */
 async function createMemoryDirect(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions
-): Promise<Memory> {
-  const repos = getRepositories()
-  const importance = data.importance ?? 0.5
-
-  const memory = await repos.memories.create(
-    memoryRowFromOptions(data, importance),
-    memoryCreateOptions(data)
-  )
-
+): Promise<Memory | null> {
   if (options.skipEmbedding) {
-    return memory
+    logger.debug('[Memory] Direct create without embedding (skipEmbedding)', { characterId: data.characterId })
+    return createMemoryDirectWithEmbedding(data, options, null)
   }
 
   // Generate embedding (anchor line included so the vector carries when/where)
+  const embeddingText = buildMemoryEmbeddingText(data.summary, data.content, data, await refreshMemoryTimeZone())
+  let embedding: Float32Array
   try {
-    const embeddingResult = await generateEmbeddingForUser(
-      buildMemoryEmbeddingText(data.summary, data.content, data),
+    embedding = (await generateEmbeddingForUser(
+      embeddingText,
       options.userId,
       options.embeddingProfileId,
       { priority: 'background' }
-    )
-
-    const updatedMemory = await repos.memories.updateForCharacter(
-      data.characterId,
-      memory.id,
-      { embedding: embeddingResult.embedding }
-    )
-
-    const vectorStore = await getCharacterVectorStore(data.characterId)
-    await vectorStore.addVector(memory.id, embeddingResult.embedding, {
-      memoryId: memory.id,
+    )).embedding
+  } catch (firstError) {
+    logger.debug('[Memory] Direct-create embedding attempt 1 failed; retrying', {
       characterId: data.characterId,
+      error: firstError instanceof Error ? firstError.message : String(firstError),
     })
-    await vectorStore.save()
-
-    return updatedMemory || memory
-  } catch (error) {
-    if (error instanceof EmbeddingError) {
-      logger.warn(`[Memory] Embedding generation failed for memory ${memory.id}: ${error.message}`, { characterId: data.characterId, userId: options.userId })
-    } else {
-      logger.warn(`[Memory] Unexpected error generating embedding for memory ${memory.id}`, { characterId: data.characterId, userId: options.userId, error: String(error) })
+    try {
+      await new Promise(resolve => setTimeout(resolve, DIRECT_EMBEDDING_RETRY_DELAY_MS))
+      embedding = (await generateEmbeddingForUser(
+        embeddingText,
+        options.userId,
+        options.embeddingProfileId,
+        { priority: 'background' }
+      )).embedding
+    } catch (error) {
+      if (error instanceof EmbeddingError) {
+        logger.warn(`[Memory] Skipping direct memory write — embedding failed after retry: ${error.message}`, { characterId: data.characterId, userId: options.userId })
+      } else {
+        logger.warn('[Memory] Skipping direct memory write — unexpected embedding error after retry', { characterId: data.characterId, userId: options.userId, error: String(error) })
+      }
+      return null
     }
-    return memory
   }
+
+  return createMemoryDirectWithEmbedding(data, options, embedding)
 }
 
 /**
- * Create a memory and store a pre-computed embedding (from gate).
- * Avoids regenerating the embedding when the gate already computed it.
+ * Persist a new memory row together with its embedding, then index the vector.
+ *
+ * The one persist tail for new rows: the gate feeds it the embedding it
+ * already computed, and the direct path embeds first and delegates here. The
+ * embedding rides in the `create` call itself, so no row ever exists without
+ * its vector — and in the job child the single buffered create carries it
+ * (the proxy down-converts the Float32Array for IPC and the read-your-writes
+ * overlay holds the whole row).
  */
 async function createMemoryDirectWithEmbedding(
   data: CreateMemoryOptions,
@@ -600,33 +635,54 @@ async function createMemoryDirectWithEmbedding(
   const importance = data.importance ?? 0.5
 
   const memory = await repos.memories.create(
-    memoryRowFromOptions(data, importance),
+    embedding
+      ? { ...memoryRowFromOptions(data, importance), embedding }
+      : memoryRowFromOptions(data, importance),
     memoryCreateOptions(data)
   )
 
   if (embedding) {
-    // Use the pre-computed embedding from the gate
-    const updatedMemory = await repos.memories.updateForCharacter(
-      data.characterId,
-      memory.id,
-      { embedding }
-    )
-
+    // A new row is always hot; stamp it so the index never has to guess.
     const vectorStore = await getCharacterVectorStore(data.characterId)
     await vectorStore.addVector(memory.id, embedding, {
       memoryId: memory.id,
       characterId: data.characterId,
+      tier: 'hot',
     })
     await vectorStore.save()
-
-    return updatedMemory || memory
   }
+  logger.debug('[Memory] New memory persisted', {
+    characterId: data.characterId,
+    memoryId: memory.id,
+    embedded: !!embedding,
+    userId: options.userId,
+  })
 
   return memory
 }
 
 /**
- * Update a memory and regenerate its embedding if content changed
+ * The edited text of a memory could not be embedded, so the edit was not
+ * written. Carries the provider's message for the caller to report.
+ */
+export class MemoryReembedError extends Error {
+  constructor(
+    public readonly memoryId: string,
+    public readonly originalError?: unknown,
+  ) {
+    super(
+      `Could not embed the edited memory: ${originalError instanceof Error ? originalError.message : String(originalError)}`
+    )
+    this.name = 'MemoryReembedError'
+  }
+}
+
+/**
+ * Update a memory and regenerate its embedding if content changed.
+ *
+ * The embedding is generated from the edited text BEFORE anything is written
+ * and lands in the same update; if it cannot be generated this throws
+ * {@link MemoryReembedError} and the row is untouched.
  */
 export async function updateMemoryWithEmbedding(
   characterId: string,
@@ -652,43 +708,58 @@ export async function updateMemoryWithEmbedding(
     (data.entities !== undefined &&
       JSON.stringify(data.entities) !== JSON.stringify(existingMemory.entities ?? []))
 
-  // Update the memory
-  const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, data)
+  // Embed first, write second: a failed embed must leave the row as it was,
+  // never new text over the old vector. The embedding rides in the same
+  // update as the text, so there is no window where they disagree.
+  let embedding: Memory['embedding'] | undefined
+  if (contentChanged && !options.skipEmbedding) {
+    const merged = { ...existingMemory, ...data } as Memory
+    try {
+      const embeddingResult = await generateEmbeddingForUser(
+        buildMemoryEmbeddingText(merged.summary, merged.content, merged, await refreshMemoryTimeZone()),
+        options.userId,
+        options.embeddingProfileId
+      )
+      embedding = embeddingResult.embedding
+    } catch (error) {
+      logger.warn(`[Memory] Failed to embed edited memory ${memoryId}; row left unchanged`, {
+        characterId,
+        memoryId,
+        userId: options.userId,
+        error: String(error),
+      })
+      throw new MemoryReembedError(memoryId, error)
+    }
+  }
+
+  const patch: Partial<Memory> = embedding ? { ...data, embedding } : data
+  const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, patch)
   if (!updatedMemory) {
     return null
   }
 
-  // Regenerate embedding if content changed
-  if (contentChanged && !options.skipEmbedding) {
+  if (embedding) {
     try {
-      const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(updatedMemory.summary, updatedMemory.content, updatedMemory),
-        options.userId,
-        options.embeddingProfileId
-      )
-
-      // Update memory with new embedding
-      const memoryWithEmbedding = await repos.memories.updateForCharacter(
-        characterId,
-        memoryId,
-        { embedding: embeddingResult.embedding }
-      )
-
-      // Update vector store
       const vectorStore = await getCharacterVectorStore(characterId)
       if (vectorStore.hasVector(memoryId)) {
-        await vectorStore.updateVector(memoryId, embeddingResult.embedding)
+        await vectorStore.updateVector(memoryId, embedding)
       } else {
-        await vectorStore.addVector(memoryId, embeddingResult.embedding, {
+        await vectorStore.addVector(memoryId, embedding, {
           memoryId,
           characterId,
+          tier: updatedMemory.tier === 'cold' ? 'cold' : 'hot',
         })
       }
       await vectorStore.save()
-
-      return memoryWithEmbedding || updatedMemory
+      logger.debug('[Memory] Updated memory re-embedded', { characterId, memoryId })
     } catch (error) {
-      logger.warn(`[Memory] Failed to regenerate embedding for memory ${memoryId}`, { characterId, memoryId, userId: options.userId, error: String(error) })
+      // The row already carries the new embedding; the vector index is
+      // rebuilt from rows on the next reindex.
+      logger.warn(`[Memory] Vector store update failed for memory ${memoryId} (row embedding is current)`, {
+        characterId,
+        memoryId,
+        error: String(error),
+      })
     }
   }
 
@@ -1388,56 +1459,57 @@ export function markMemoriesAccessed(characterId: string, memoryIds: string[]): 
 async function searchMemoriesText(
   characterId: string,
   query: string,
-  options: {
-    limit?: number
-    minImportance?: number
-    source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
-    aboutCharacterId?: string
-    includeCold?: boolean
-  }
+  options: Parameters<typeof searchMemoriesSemantic>[2],
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
   const limit = options.limit || 20
+  const excluded = options.excludeMemoryIds
+  const includeCold = options.includeCold === true
+  const weightClock = options.weightClockMs !== undefined ? new Date(options.weightClockMs) : undefined
 
-  // Try full-phrase search first
-  let memories = await repos.memories.searchByContent(characterId, query)
+  // Bug 214: the fallback honours the same candidate options as the vector
+  // path — exclusions, extra probes, entity anchors, the event-time window,
+  // the recall multipliers and the replay clock. The text score is not a
+  // cosine, so R1's boost gate (whose constants are on the neural cosine
+  // scale) is switched off here, as it is for TF-IDF embeddings.
+  const probes = [query, ...(options.extraProbes ?? [])
+    .map(p => p?.trim())
+    .filter((p): p is string => !!p && p.length > 0)
+    .slice(0, 2)]
+  const entityPhrases = (options.entityAnchors ?? [])
+    .map(entity => entity?.trim())
+    .filter((p): p is string => !!p && p.length >= 2)
+    .slice(0, 3)
 
-  // If full-phrase search returned too few results, broaden to per-word search.
-  // Filter out common stop words to keep results relevant.
-  const STOP_WORDS = new Set([
-    'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'shall', 'that', 'this', 'these',
-    'those', 'it', 'its', 'my', 'your', 'his', 'her', 'our', 'their',
-    'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
-    'not', 'no', 'nor', 'if', 'then', 'than', 'so', 'as', 'about',
-    'from', 'into', 'up', 'out', 'off', 'over', 'under', 'again',
-    'before', 'after', 'between', 'through',
-  ])
-
-  if (memories.length < limit) {
-    const queryWords = query.toLowerCase().split(/\s+/)
-      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
-
-    if (queryWords.length > 0) {
-      const existingIds = new Set(memories.map(m => m.id))
-
-      // Search for each significant word individually
-      for (const word of queryWords) {
-        const wordResults = await repos.memories.searchByContent(characterId, word)
-        for (const mem of wordResults) {
-          if (!existingIds.has(mem.id)) {
-            existingIds.add(mem.id)
-            memories.push(mem)
-          }
-        }
-      }
+  const pool = new Map<string, Memory>()
+  const addAll = (hits: Memory[]) => {
+    for (const m of hits) {
+      if (!pool.has(m.id)) pool.set(m.id, m)
     }
   }
 
+  for (const probe of probes) {
+    // Full-phrase search first, then per-word when it found too few.
+    const phraseHits = await repos.memories.searchByContent(characterId, probe)
+    addAll(phraseHits)
+    if (phraseHits.length < limit) {
+      for (const word of significantQueryWords(probe)) {
+        addAll(await repos.memories.searchByContent(characterId, word))
+      }
+    }
+  }
+  // Entity anchors widen the pool only; they still need a non-zero text score.
+  for (const phrase of entityPhrases) {
+    addAll(await repos.memories.searchByContent(characterId, phrase))
+  }
+
+  let memories = [...pool.values()]
+
   // Apply filters
-  if (!options.includeCold) {
+  if (excluded && excluded.size > 0) {
+    memories = memories.filter(m => !excluded.has(m.id))
+  }
+  if (!includeCold) {
     memories = memories.filter(m => m.tier !== 'cold')
   }
   if (options.minImportance !== undefined) {
@@ -1450,60 +1522,134 @@ async function searchMemoriesText(
     memories = memories.filter(m => m.aboutCharacterId === options.aboutCharacterId)
   }
 
-  // Score based on text matching
-  const queryLower = query.toLowerCase()
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
-  const results: SemanticSearchResult[] = memories.map(memory => {
-    let score = 0
-    const contentLower = memory.content.toLowerCase()
-    const summaryLower = memory.summary.toLowerCase()
+  // Score each memory by its best text match across the query and probes.
+  let results: SemanticSearchResult[] = memories
+    .map(memory => {
+      const score = Math.max(...probes.map(probe => scoreTextMatch(memory, probe)))
+      const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
+      return {
+        memory,
+        score: Math.min(score, 1.0),
+        usedEmbedding: false,
+        effectiveWeight,
+        rawWeight,
+      } as SemanticSearchResult
+    })
+    // Filter out zero-score results (no words matched at all)
+    .filter(r => r.score > 0)
 
-    // Exact full-phrase match in summary is highest score
-    if (summaryLower.includes(queryLower)) {
-      score += 0.4
+  // Event-time window — the same two-stage rule as the vector path: a hard
+  // filter without a recallContext (tool path); on the injector path, hard only
+  // when enough hits survive, else the bounded window boost.
+  let effectiveRecallContext: RecallContext | undefined = options.recallContext
+    ? {
+        ...options.recallContext,
+        tuning: { ...recallTuningOf(options.recallContext), boostGate: null },
+      }
+    : undefined
+  if (options.occurredWithin) {
+    const from = Date.parse(options.occurredWithin.from)
+    const to = Date.parse(options.occurredWithin.to)
+    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
+      const inWindow = (r: SemanticSearchResult): boolean => {
+        const t = Date.parse(r.memory.occurredAt ?? r.memory.createdAt)
+        return Number.isFinite(t) && t >= from && t <= to
+      }
+      const windowHits = results.filter(inWindow)
+      if (!effectiveRecallContext || windowHits.length >= limit) {
+        results = windowHits
+      } else {
+        effectiveRecallContext = { ...effectiveRecallContext, occurredWithin: options.occurredWithin }
+      }
     }
-    // Exact full-phrase match in content
-    if (contentLower.includes(queryLower)) {
-      score += 0.3
+  }
+
+  if (effectiveRecallContext) {
+    const recallContext = effectiveRecallContext
+    const bestScore = results.reduce((best, r) => Math.max(best, r.score), 0)
+    const adjusted: SemanticSearchResult[] = []
+    for (const r of results) {
+      const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
+      const adj = combineRecallMultipliers(r.memory, recallContext, { cosine: r.score, bestCosine: bestScore })
+      if (adj.exclude) continue
+      const blendedAfter = blendedBefore * adj.multiplier
+      r.recallAdjustment = { multiplier: adj.multiplier, fired: adj.fired, blendedBefore, blendedAfter }
+      adjusted.push(r)
     }
+    results = adjusted.sort(byBlendedAfter)
+  } else {
+    // Combine text score with the decaying ranking weight for final ordering.
+    results.sort((a, b) => {
+      const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
+      const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
+      return finalScoreB - finalScoreA
+    })
+  }
 
-    // Per-word matching in content and summary
-    if (queryWords.length > 0) {
-      const contentWordMatches = queryWords.filter(w => contentLower.includes(w)).length
-      const summaryWordMatches = queryWords.filter(w => summaryLower.includes(w)).length
-      // Score based on proportion of query words matched
-      score += 0.2 * (contentWordMatches / queryWords.length)
-      score += 0.1 * (summaryWordMatches / queryWords.length)
-    }
-
-    // Keyword matches
-    const matchingKeywords = memory.keywords.filter(kw =>
-      queryWords.some(qw => kw.toLowerCase().includes(qw))
-    )
-    score += 0.1 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
-
-    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
-
-    return {
-      memory,
-      score: Math.min(score, 1.0),
-      usedEmbedding: false,
-      effectiveWeight,
-      rawWeight,
-    }
+  logger.debug('[Memory] Text-search fallback ranked', {
+    characterId,
+    candidates: pool.size,
+    returned: Math.min(results.length, limit),
+    probes: probes.length,
+    entityAnchors: entityPhrases.length,
+    excluded: excluded?.size ?? 0,
+    windowed: !!options.occurredWithin,
+    recallContext: !!options.recallContext,
+    pinnedClock: weightClock !== undefined,
   })
 
-  // Filter out zero-score results (no words matched at all)
-  const scoredResults = results.filter(r => r.score > 0)
+  return results.slice(0, limit)
+}
 
-  // Combine text score with the decaying ranking weight for final ordering.
-  scoredResults.sort((a, b) => {
-    const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
-    const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
-    return finalScoreB - finalScoreA
-  })
+/** Stop words the text-search fallback ignores when matching word by word. */
+const TEXT_SEARCH_STOP_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+  'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'can', 'shall', 'that', 'this', 'these',
+  'those', 'it', 'its', 'my', 'your', 'his', 'her', 'our', 'their',
+  'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
+  'not', 'no', 'nor', 'if', 'then', 'than', 'so', 'as', 'about',
+  'from', 'into', 'up', 'out', 'off', 'over', 'under', 'again',
+  'before', 'after', 'between', 'through',
+])
 
-  return scoredResults.slice(0, limit)
+function significantQueryWords(text: string): string[] {
+  return text.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !TEXT_SEARCH_STOP_WORDS.has(w))
+}
+
+/** Text-match score in [0, 1] for one memory against one query string. */
+function scoreTextMatch(memory: Memory, text: string): number {
+  const queryLower = text.toLowerCase()
+  const queryWords = significantQueryWords(text)
+  let score = 0
+  const contentLower = memory.content.toLowerCase()
+  const summaryLower = memory.summary.toLowerCase()
+
+  // Exact full-phrase match in summary is highest score
+  if (summaryLower.includes(queryLower)) {
+    score += 0.4
+  }
+  // Exact full-phrase match in content
+  if (contentLower.includes(queryLower)) {
+    score += 0.3
+  }
+
+  // Per-word matching in content and summary
+  if (queryWords.length > 0) {
+    const contentWordMatches = queryWords.filter(w => contentLower.includes(w)).length
+    const summaryWordMatches = queryWords.filter(w => summaryLower.includes(w)).length
+    // Score based on proportion of query words matched
+    score += 0.2 * (contentWordMatches / queryWords.length)
+    score += 0.1 * (summaryWordMatches / queryWords.length)
+  }
+
+  // Keyword matches
+  const matchingKeywords = memory.keywords.filter(kw =>
+    queryWords.some(qw => kw.toLowerCase().includes(qw))
+  )
+  score += 0.1 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
+  return score
 }
 
 /**
@@ -1532,13 +1678,15 @@ export async function generateMissingEmbeddings(
   let skipped = 0
 
   const vectorStore = await getCharacterVectorStore(characterId)
+  // Anchor dates render on the instance's memory calendar.
+  const memoryTimeZone = await refreshMemoryTimeZone()
 
   for (const memory of memoriesWithoutEmbeddings) {
     try {
       options.onProgress?.(processed + failed + skipped, memoriesWithoutEmbeddings.length, memory)
 
       const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(memory.summary, memory.content, memory),
+        buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone),
         options.userId,
         options.embeddingProfileId,
         { priority: 'background' }
@@ -1553,6 +1701,7 @@ export async function generateMissingEmbeddings(
       await vectorStore.addVector(memory.id, embeddingResult.embedding, {
         memoryId: memory.id,
         characterId,
+        tier: memory.tier === 'cold' ? 'cold' : 'hot',
       })
 
       processed++
@@ -1601,15 +1750,21 @@ export async function rebuildVectorIndex(
 
   let indexed = 0
   let failed = 0
+  let coldIndexed = 0
 
   for (const memory of memoriesWithEmbeddings) {
     try {
       options.onProgress?.(indexed + failed, memoriesWithEmbeddings.length)
 
+      // Tier rides with the vector: the store was just emptied, so load()
+      // stamped nothing, and an entry with no tier reads as hot — every cold
+      // row would leak into hot-only recall until the next unload (bug 205).
       await vectorStore.addVector(memory.id, memory.embedding!, {
         memoryId: memory.id,
         characterId,
+        tier: memory.tier === 'cold' ? 'cold' : 'hot',
       })
+      if (memory.tier === 'cold') coldIndexed++
       indexed++
     } catch (error) {
       logger.warn(`[Memory] Failed to index memory ${memory.id}`, { characterId, memoryId: memory.id, error: String(error) })
@@ -1618,6 +1773,8 @@ export async function rebuildVectorIndex(
   }
 
   await vectorStore.save()
+
+  logger.debug('[Memory] Rebuilt vector index', { characterId, indexed, coldIndexed, failed })
 
   return { indexed, failed }
 }

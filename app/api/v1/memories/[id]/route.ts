@@ -10,9 +10,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { badRequest, errorResponse, notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
 import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
+import { editMemory } from '@/lib/memory/memory-edit';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -54,13 +55,14 @@ export const GET = createContextParamsHandler<{ id: string }>(
           .filter(Boolean),
       };
 
-      // Update access time (fire and forget)
-      repos.memories.updateAccessTime(memory.characterId, memoryId).catch((err: Error) =>
-        logger.warn('[Memories API v1] Failed to update access time', {
-          memoryId,
-          error: err.message,
-        })
-      );
+      // Viewing a memory is not an access (bug 219, refactor decision 7):
+      // `lastAccessedAt` records that a model was shown the row, and it feeds
+      // protection's recent-access bonus and housekeeping's inactivity clock.
+      // An operator's or script's inspection must not move either.
+      logger.debug('[Memories API v1] Fetched memory (access time not stamped)', {
+        memoryId,
+        characterId: memory.characterId,
+      });
 
       return NextResponse.json({ memory: memoryWithTags });
     } catch (error) {
@@ -90,15 +92,41 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     const body = await req.json();
     const validatedData = updateMemorySchema.parse(body);
 
-    const memory = await repos.memories.updateForCharacter(
-      existingMemory.characterId,
-      memoryId,
-      validatedData
-    );
+    // Through the edit chokepoint, not a raw row update: it re-embeds changed
+    // text, recomputes reinforcedImportance, links both sides, invalidates the
+    // frozen archive, publishes `memories` and refreshes a digest's
+    // Commonplace mirror (bug 203).
+    const result = await editMemory(existingMemory.characterId, memoryId, validatedData, {
+      userId: user.id,
+    });
 
-    if (!memory) {
+    if (!result.ok) {
+      if (result.reason === 'embedding-failed') {
+        // The provider could not embed the new text; nothing was saved.
+        logger.warn('[Memories API v1] Memory edit refused: embedding failed', {
+          memoryId,
+          characterId: existingMemory.characterId,
+          error: result.message,
+        });
+        return errorResponse(
+          `The memory was not saved because its new text could not be embedded. ${result.message}`,
+          502
+        );
+      }
+      if (result.reason === 'invalid-related') {
+        return badRequest(
+          `relatedMemoryIds must name existing memories of the same character: ${result.invalidIds.join(', ')}`
+        );
+      }
       return notFound('Memory');
     }
+    const memory = result.memory;
+
+    logger.debug('[Memories API v1] Memory updated', {
+      memoryId,
+      characterId: existingMemory.characterId,
+      fields: Object.keys(validatedData),
+    });
 
     // Schedule refit for BUILTIN profiles (non-blocking)
     scheduleRefit(user.id).catch((err: Error) =>

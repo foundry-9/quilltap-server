@@ -16,7 +16,7 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { enqueueMemoryHousekeeping } from './queue-service';
+import { enqueueMemoryHousekeepingSweep } from './queue-service';
 
 const moduleLogger = logger.child({ module: 'scheduled-housekeeping' });
 
@@ -127,8 +127,9 @@ export function isHousekeepingSchedulerRunning(): boolean {
 
 /**
  * One scheduled pass: for each user with auto-housekeeping enabled, enqueue
- * a MEMORY_HOUSEKEEPING job that sweeps all of their characters. The enqueue
- * helper dedupes against in-flight jobs for the same (userId, characterId).
+ * one MEMORY_HOUSEKEEPING job per character they own. The enqueue helper
+ * dedupes per character against any in-flight housekeeping job, so the daily
+ * sweep and a watermark sweep never work on one character at once (bug 221).
  */
 export async function runScheduledHousekeeping(): Promise<{ usersProcessed: number; jobsEnqueued: number }> {
   moduleLogger.info('Starting scheduled memory housekeeping pass');
@@ -166,10 +167,10 @@ export async function runScheduledHousekeeping(): Promise<{ usersProcessed: numb
       }
 
       try {
-        await enqueueMemoryHousekeeping(settings.userId, {
+        const jobIds = await enqueueMemoryHousekeepingSweep(settings.userId, {
           reason: 'scheduled',
         }, housekeepingOptions);
-        jobsEnqueued++;
+        jobsEnqueued += jobIds.length;
         usersProcessed++;
       } catch (error) {
         moduleLogger.warn('Failed to enqueue scheduled housekeeping for user', {

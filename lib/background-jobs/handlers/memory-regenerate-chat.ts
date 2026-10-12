@@ -15,7 +15,8 @@
  * Observations of other characters are no longer (only) per-turn: in the
  * `fold` / `hybrid` extraction modes most of them come from the fold-grain
  * OTHER pass. The regenerate resets the chat's fold-grain watermark and
- * enqueues one fold-grain catch-up so those rows are rebuilt too.
+ * enqueues one fold-grain catch-up so those rows are rebuilt too. It also
+ * clears the episode pass's watermark, whose episodes the wipe removed.
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
@@ -55,6 +56,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
 
   const wipeResult = await deleteMemoriesByChatIdWithVectors(payload.chatId);
   await rebuildFoldGrainObservations(job, payload, chat.otherExtractionWatermarkMessageId ?? null);
+  await resetEpisodeWatermark(job, payload, chat.episodeExtractionWatermarkMessageId ?? null);
 
   const allRawMessages = await repos.chats.getMessages(payload.chatId);
   const messageEvents = allRawMessages.filter(
@@ -124,8 +126,9 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
  * Reset the fold-grain OTHER watermark and enqueue one catch-up pass, so a
  * regenerate rebuilds the observations of others that the per-turn pass no
  * longer writes. No-op in `turn` mode, where the per-turn pass still writes
- * them all. The catch-up covers the chat's newest
- * `FOLD_OTHER_MAX_WINDOW_MESSAGES` messages, as the daily sweep does.
+ * them all. The catch-up reads the chat's whole history in consecutive slices
+ * of `FOLD_OTHER_MAX_WINDOW_MESSAGES`, advancing the watermark past each one
+ * (bug 206), so the rebuilt observations cover the whole chat.
  */
 async function rebuildFoldGrainObservations(
   job: BackgroundJob,
@@ -162,5 +165,26 @@ async function rebuildFoldGrainObservations(
     chatId: payload.chatId,
     previousWatermark,
     otherPass: mode.otherPass,
+  });
+}
+
+/**
+ * The wipe removed the chat's episode memories too, so the fold-time episode
+ * pass's watermark no longer marks anything it wrote. Clearing it lets the
+ * next hard-rebuild fold read the history again, in slices, and rebuild the
+ * episodes (bug 207). Independent of the extraction mode: the episode pass
+ * runs in every mode.
+ */
+async function resetEpisodeWatermark(
+  job: BackgroundJob,
+  payload: MemoryRegenerateChatPayload,
+  previousWatermark: string | null,
+): Promise<void> {
+  if (!previousWatermark) return;
+  await getRepositories().chats.update(payload.chatId, { episodeExtractionWatermarkMessageId: null });
+  logger.debug('[MemoryRegenerateChat] Reset episode watermark', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    previousWatermark,
   });
 }

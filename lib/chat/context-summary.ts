@@ -22,6 +22,8 @@ import { writeConversationSummaryToVaults, computeConversationStats } from '@/li
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 import { runFoldOtherPass } from '@/lib/memory/fold-other-pass'
+import { buildExtractionUncensoredFallback } from '@/lib/memory/extraction-route'
+import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { applyAutoTitle } from '@/lib/chat/auto-title'
 
@@ -546,18 +548,52 @@ export async function generateContextSummary(
       logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
+    // The uncensored fallback both fold passes retry an empty answer on,
+    // resolved once from the chat's Concierge state (bug 213).
+    let foldUncensoredFallback: UncensoredFallbackOptions | undefined
+    if (availableProfiles) {
+      try {
+        const chatSettingsForFold = await repos.chatSettings.findByUserId(userId)
+        foldUncensoredFallback = buildExtractionUncensoredFallback(
+          chat,
+          resolveConciergeSettings(chatSettingsForFold, chat),
+          availableProfiles,
+        )
+      } catch (e) {
+        logger.warn('[Context Summary] Could not resolve the fold passes\' uncensored fallback; running without it', {
+          chatId,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
+    }
+    logger.debug('[Context Summary] Fold memory passes routed', {
+      chatId,
+      hasUncensoredFallback: foldUncensoredFallback !== undefined,
+      uncensoredRoute: foldUncensoredFallback?.isDangerousChat === true,
+    })
+
+    // Both fold passes place their watermarks against the transcript this fold
+    // already read; handing it over saves each a full read and decompression.
+    const foldTranscript = allChatMessages.filter(
+      (m): m is MessageEvent => m.type === 'message',
+    ) as unknown as MessageEvent[]
+    const foldWindowMessages = turnsToFold.flatMap(t => t.messages)
+
     // Episodic spine: fold-time episode pass. Over the just-folded window, ask
     // the cheap LLM for 0–2 consolidated episode records and write them as
     // dated `kind: 'episodic'` memories linked to the window's per-turn
-    // fragments. Piggybacks the fold cadence — no new trigger. Best-effort:
-    // a failed episode pass never fails the fold.
+    // fragments. Piggybacks the fold cadence — no new trigger. The pass keeps
+    // its own watermark, so a hard rebuild's turns-1..N window only reads what
+    // it has not (bug 207). Best-effort: a failed episode pass never fails the
+    // fold.
     try {
-      const windowMessages = turnsToFold.flatMap(t => t.messages)
       await runFoldEpisodePass({
         chatId,
         userId,
-        windowMessages,
+        windowMessages: foldWindowMessages,
+        chatMessages: foldTranscript,
         cheapLLM,
+        uncensoredFallback: foldUncensoredFallback,
         timelineMode: chat.timelineMode ?? 'realtime',
         projectId: chat.projectId ?? null,
         inAutonomousRoom: chat.chatType === 'autonomous',
@@ -572,18 +608,14 @@ export async function generateContextSummary(
     // (the pass checks), advances the chat's OTHER watermark, and inherits the
     // Concierge policy exactly as the per-turn pass does. Best-effort.
     try {
-      const windowMessages = turnsToFold.flatMap(t => t.messages)
-      const chatSettingsForOther = await repos.chatSettings.findByUserId(userId)
-      const otherPolicy = resolveConciergeSettings(chatSettingsForOther, chat)
       await runFoldOtherPass({
         chatId,
         userId,
-        windowMessages,
+        windowMessages: foldWindowMessages,
+        chatMessages: foldTranscript,
         cheapLLM,
         cheapMaxTokens: resolveMaxTokens(connectionProfile),
-        uncensoredFallback: availableProfiles
-          ? { conciergePolicy: otherPolicy, availableProfiles }
-          : undefined,
+        uncensoredFallback: foldUncensoredFallback,
         timelineMode: chat.timelineMode ?? 'realtime',
         projectId: chat.projectId ?? null,
         inAutonomousRoom: chat.chatType === 'autonomous',

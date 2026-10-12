@@ -140,8 +140,6 @@ export interface ChildShutdownAckMessage {
  *     participant character's vault
  *   - `removeConversationSummariesFromVaults` — sweep a deleted conversation's
  *     summary out of every participant vault
- *   - `writeCommonplaceDigestsToVault` — mirror a character's consolidated
- *     memory digests into `Commonplace/` in their own vault
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -163,7 +161,6 @@ export interface ChildHostRpcRequestMessage {
     | 'writeWardrobeItemImage'
     | 'writeConversationSummaryToVaults'
     | 'removeConversationSummariesFromVaults'
-    | 'writeCommonplaceDigestsToVault'
     | 'startScheduledAutonomousRun';
   args: unknown[];
 }

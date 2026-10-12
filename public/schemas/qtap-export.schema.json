@@ -568,6 +568,10 @@
           "type": ["string", "null"],
           "description": "Message id up to which the other-subject (fold) extraction pass has covered this chat. Absent/null = never. A message-id reference, remapped with the messages."
         },
+        "episodeExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "Message id up to which the fold-time episode extraction pass has read this chat. Absent/null = never. A message-id reference, remapped with the messages."
+        },
         "timelineMode": {
           "type": ["string", "null"],
           "enum": ["realtime", "narrative", null],
@@ -1011,6 +1015,10 @@
         "supersededById": {
           "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
           "description": "Memory id of the CONSOLIDATED digest that replaced this cold row. Null/absent when not superseded. Remapped with the memory ids on import."
+        },
+        "supersededAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "When this row went cold under its digest; set and cleared with supersededById. Cold retention ages superseded rows by it. Null/absent when not superseded (older bundles: retention falls back to updatedAt)."
         },
         "consolidatedFrom": {
           "type": "array",

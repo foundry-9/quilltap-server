@@ -131,12 +131,18 @@ export const MemorySchema = z.object({
   reinforcementCount: z.number().int().min(1).default(1),  // How many times this memory has been observed
   lastReinforcedAt: TimestampSchema.nullable().optional(),  // Null until first reinforcement
   relatedMemoryIds: z.array(UUIDSchema).default([]),       // Bidirectional links to related memories
-  reinforcedImportance: z.number().min(0).max(1).default(0.5), // importance + log2(count+1)*0.05, capped at 1.0
+  reinforcedImportance: z.number().min(0).max(1).default(0.5), // importance + log2(count)*0.05, capped at 1.0 (count 1 = importance)
   // ── Tiers and consolidation ─────────────────────────────────────────────────
   /** Storage tier — see {@link MemoryTierEnum}. */
   tier: MemoryTierEnum.default('hot'),
   /** The digest that replaced this row when it went cold. Null otherwise. */
   supersededById: UUIDSchema.nullable().optional(),
+  /**
+   * When this row went cold under its digest (set and cleared alongside
+   * `supersededById`). Cold retention ages superseded rows by this, never by
+   * `updatedAt`, which every link rewrite resets (bug 225).
+   */
+  supersededAt: TimestampSchema.nullable().optional(),
   /** Digest rows only: ids of the member memories folded into it. */
   consolidatedFrom: z.array(UUIDSchema).default([]),
   /** Last time the consolidator considered this row (clustered or not). */

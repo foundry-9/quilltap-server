@@ -646,7 +646,8 @@ CREATE TABLE "chats" (
   "courierCheckpoints" TEXT DEFAULT NULL,
   "commonplaceSceneCache" TEXT DEFAULT NULL,
   "commonplaceRecallHistory" TEXT DEFAULT NULL,
-  "otherExtractionWatermarkMessageId" TEXT DEFAULT NULL,  -- added in 4.10 (add-memory-tiers-v1): message id the other-subject (fold) extraction pass has covered up to; NULL = never. Message-id reference, remapped on restore
+  "otherExtractionWatermarkMessageId" TEXT DEFAULT NULL,  -- added in 4.10 (add-memory-tiers-v1): message id the other-subject (fold) extraction pass has covered up to; NULL = never. Advanced per slice of at most 60 eligible messages, never past one the pass did not read (bug 206). Patch-only. Message-id reference, remapped on restore
+  "episodeExtractionWatermarkMessageId" TEXT DEFAULT NULL,  -- added in 4.10 (add-episode-extraction-watermark-v1): message id the fold-time episode pass has read up to; a fold window is cut to what lies past it so a hard rebuild never re-extracts covered history (bug 207). NULL = never. Backfilled from the last summaryAnchorMessageIds entry. Patch-only; message-id reference, remapped on restore and import
   "timelineMode" TEXT DEFAULT NULL,  -- added in 4.9 (add-episodic-memory-fields-v1): 'realtime' (NULL reads as realtime) | 'narrative' — which clock the chat's story runs on (episodic recall)
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
@@ -1350,12 +1351,13 @@ CREATE TABLE "memories" (
   "relatedMemoryIds" TEXT DEFAULT '[]',
   "reinforcedImportance" REAL DEFAULT 0.5,
   "witnessedContext" TEXT DEFAULT NULL,  -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
-  "occurredAt" TEXT DEFAULT NULL,        -- added in 4.9 (add-episodic-memory-fields-v1): ISO wall-clock EVENT time (vs createdAt, the write clock). Backfilled from the source message's createdAt, else the memory's own createdAt.
+  "occurredAt" TEXT DEFAULT NULL,        -- added in 4.9 (add-episodic-memory-fields-v1): ISO wall-clock EVENT time (vs createdAt, the write clock). Backfilled from the source message's createdAt, else the memory's own createdAt. Resolved dates are local window starts on the instance memory calendar; legacy UTC-midnight values were re-stamped at local midnight of the same date in 4.10 (rezone-legacy-memory-occurred-at-v1).
   "narrativeTime" TEXT DEFAULT NULL,     -- added in 4.9: free-text in-story time for fictional-timeline chats ("the third night at sea")
   "entities" TEXT DEFAULT '[]',          -- added in 4.9: JSON string[] of the episode's proper nouns (places, people, named things)
   "kind" TEXT DEFAULT 'semantic',        -- added in 4.9: 'semantic' (standing fact) | 'episodic' (specific dated occurrence)
   "tier" TEXT DEFAULT 'hot',             -- added in 4.10 (add-memory-tiers-v1): 'hot' | 'cold'. Cold = consolidated member or cap-pressure demotion; hidden from ordinary recall, still read by the gate, search tool, UI and CLI
   "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the CONSOLIDATED digest that replaced this cold row
+  "supersededAt" TEXT DEFAULT NULL,      -- added in 4.10 (add-memory-superseded-at-v1): when the row went cold under its digest; set/cleared with supersededById. Cold retention ages by it, not updatedAt (bug 225). Backfilled from updatedAt for rows already superseded
   "consolidatedFrom" TEXT DEFAULT '[]',  -- added in 4.10: on a digest, JSON string[] of the member memory ids it folds
   "consolidatedAt" TEXT DEFAULT NULL     -- added in 4.10: last time the consolidator considered this row
 );
@@ -1367,6 +1369,7 @@ CREATE INDEX "idx_memories_occurredAt" ON "memories" ("occurredAt" DESC);  -- ad
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 CREATE INDEX "idx_memories_character_tier" ON "memories" ("characterId", "tier");  -- added in 4.10 (add-memory-tiers-v1)
+CREATE INDEX "idx_memories_supersededById" ON "memories" ("supersededById") WHERE "supersededById" IS NOT NULL;  -- added in 4.10 (add-memories-superseded-by-index-v1): the delete chokepoint's "members of a deleted digest" lookup
 ```
 
 `aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:
@@ -1377,7 +1380,7 @@ CREATE INDEX "idx_memories_character_tier" ON "memories" ("characterId", "tier")
 
 `createMemoryWithGate` (the chokepoint for AUTO writes) applies a name-presence safety net before insert: when `aboutCharacterId` differs from the holder, the about-character's `name + aliases` (plus `user` / `the user` for `controlledBy: 'user'` characters) must appear in `summary + content`; otherwise `aboutCharacterId` is collapsed to the holder. Manual memories bypass the safety net.
 
-Tiers (4.10+): `tier` is `'hot'` (default; eligible for recall) or `'cold'`. A `source = 'CONSOLIDATED'` row is a digest; its `consolidatedFrom` lists the member ids, and each member is `tier = 'cold'` with `supersededById` pointing back at the digest. A cold row with no `supersededById` was demoted by cap pressure. Export bundles and backups carry all four columns; rows from before tiers read as hot / null / `[]`, and restore/import remap `supersededById` and `consolidatedFrom` with the memory ids (as `relatedMemoryIds`).
+Tiers (4.10+): `tier` is `'hot'` (default; eligible for recall) or `'cold'`. A `source = 'CONSOLIDATED'` row is a digest; its `consolidatedFrom` lists the member ids, and each member is `tier = 'cold'` with `supersededById` pointing back at the digest. A cold row with no `supersededById` was demoted by cap pressure. `supersededAt` records when a member went cold under its digest (stamped and cleared by `updateTierBulk` alongside `supersededById`); `coldRetentionDays` ages superseded rows by it rather than by `updatedAt`, which every link rewrite resets. Deleting a memory through the chokepoint (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch`) scrubs it from surviving digests' `consolidatedFrom` and cuts `supersededById` (and `supersededAt`) on the surviving members of a deleted digest, which become cap-demoted cold rows. Export bundles and backups carry all five columns; rows from before tiers read as hot / null / `[]`, and restore/import remap `supersededById` and `consolidatedFrom` with the memory ids (as `relatedMemoryIds`).
 
 ### prompt_templates
 

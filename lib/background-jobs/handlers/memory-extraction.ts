@@ -25,7 +25,8 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { Character, MessageEvent } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
-import type { MemoryExtractionPayload } from '../queue-service';
+import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
+import { enqueueMemoryExtraction, type MemoryExtractionPayload } from '../queue-service';
 
 export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryExtractionPayload;
@@ -61,12 +62,32 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
       created: catchup.memoriesWritten,
       reinforced: catchup.memoriesReinforced,
       watermarkAdvancedTo: catchup.watermarkAdvancedTo,
+      slicesDeferred: catchup.slicesDeferred,
     });
     // A pass lost to a timeout never happened and the watermark did not move:
     // fail the job so it retries (bug 107), rather than reporting a clean
     // finish over the hole.
     if (catchup.passesLostToTimeout > 0) {
       throw new CheapLLMTaskLostError('fold-other-catchup', `${catchup.passesLostToTimeout} pass(es) timed out`);
+    }
+    // One job reads a bounded number of slices. The rest of a long backlog is
+    // the next job's, from the watermark this one advanced to — keyed on that
+    // watermark so successive steps never dedupe into each other.
+    if (catchup.slicesDeferred > 0 && catchup.watermarkAdvancedTo) {
+      await enqueueMemoryExtraction(job.userId, {
+        chatId: payload.chatId,
+        turnOpenerMessageId: null,
+        extractionAnchorMessageId: `continue:${catchup.watermarkAdvancedTo}`,
+        connectionProfileId: payload.connectionProfileId,
+        foldOtherCatchup: true,
+        ...(payload.foldOtherIgnoreIdle ? { foldOtherIgnoreIdle: true } : {}),
+      });
+      logger.debug('[MemoryExtraction] Fold-grain OTHER catch-up continues in a follow-up job', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        from: catchup.watermarkAdvancedTo,
+        slicesDeferred: catchup.slicesDeferred,
+      });
     }
     return;
   }
@@ -131,20 +152,10 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   // project lookup is guarded — a broken project store must not sink the whole
   // extraction, so we degrade to no project description.
   const chatContextSummary = chat.contextSummary ?? null;
-  let projectDescription: string | null = null;
-  if (chat.projectId) {
-    try {
-      const project = await repos.projects.findById(chat.projectId);
-      projectDescription = project?.description ?? null;
-    } catch (error) {
-      logger.debug('[MemoryExtraction] Project description unavailable; continuing without it', {
-        jobId: job.id,
-        chatId: payload.chatId,
-        projectId: chat.projectId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
+  const projectDescription = await loadExtractionProjectDescription(chat.projectId, {
+    jobId: job.id,
+    chatId: payload.chatId,
+  });
   // Anchor derived memories to the historical chat timestamp rather than
   // letting createdAt default to "now". Without this, a regenerate sweep
   // re-extracts a chat from 2025-08 and the new memory rows look like

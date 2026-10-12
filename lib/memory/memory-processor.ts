@@ -48,6 +48,7 @@ import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { MemoryGateOutcome } from './memory-gate'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 
 export type RateLimitDecision =
   | { mode: 'allow' }
@@ -129,6 +130,12 @@ export interface TurnMemoryExtractionContext {
   cheapLLMSettings: CheapLLMSettings
   availableProfiles?: ConnectionProfile[]
   conciergePolicy?: ResolvedConciergePolicy
+  /**
+   * Whether the chat is on the uncensored route — callers pass
+   * `shouldUseUncensoredRoute(chat)` (Unmoderated), never the classifier's
+   * `chats.isDangerousChat` telemetry. Selects the uncensored cheap LLM and
+   * rides on the uncensored fallback options.
+   */
   isDangerousChat?: boolean
   memoryExtractionLimits?: MemoryExtractionLimits
   /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
@@ -245,6 +252,12 @@ export interface WriteOptions {
   sourceMessageId: string | null
   /** `createdAt` of the source message — the wall-clock anchor for `occurredAt`. */
   sourceMessageCreatedAt: string | null
+  /**
+   * The memory-calendar zone the extractor's clock was rendered in. The `when`
+   * phrase resolves in this same zone, so the prompt and the resolver cannot
+   * disagree; absent, it is read here (`refreshMemoryTimeZone`).
+   */
+  timeZone?: string
   debugLogs: string[]
   createdIds: string[]
   reinforcedIds: string[]
@@ -263,11 +276,15 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
   // (authoritative from the transcript — never asked of the model); a retold
   // EVENT's `when` phrase resolves against that same anchor and overrides it.
   // On fictional timelines the raw phrase is preserved as `narrativeTime`.
+  // The phrase resolves on the instance's memory calendar (bug 212), in the
+  // zone the extractor's clock was shown in.
+  const timeZone = opts.timeZone ?? await refreshMemoryTimeZone()
   const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
     when: opts.candidate.when,
     referenceIso: anchorIso,
     fallbackIso: anchorIso,
     timelineMode,
+    timeZone,
   })
 
   if (opts.ctx.dryRun) {
@@ -413,9 +430,16 @@ export async function processTurnForMemory(
       ctx.availableProfiles ?? []
     )
 
+    // `isDangerousChat` here is the caller's `shouldUseUncensoredRoute(chat)`
+    // (Unmoderated): with it set, an empty answer from a cheap model already
+    // routed to the desk still retries on the desk's text profile (bug 213).
     const uncensoredFallback: UncensoredFallbackOptions | undefined =
       ctx.conciergePolicy && ctx.availableProfiles
-        ? { conciergePolicy: ctx.conciergePolicy, availableProfiles: ctx.availableProfiles }
+        ? {
+            conciergePolicy: ctx.conciergePolicy,
+            availableProfiles: ctx.availableProfiles,
+            isDangerousChat: ctx.isDangerousChat === true,
+          }
         : undefined
 
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
@@ -430,13 +454,21 @@ export async function processTurnForMemory(
 
     // Episodic spine: give the extractor a clock, anchored to the turn's own
     // message timestamps (batch re-extraction passes its historical override).
+    // The memory-calendar zone is resolved once, before any prompt is built,
+    // and rides on the clock to every prompt and every `when` resolution.
     const clock: ExtractionClock = {
       nowIso:
         ctx.sourceMessageTimestamp ??
         ctx.transcript.turnTimestamp ??
         new Date().toISOString(),
       timelineMode: ctx.timelineMode ?? 'realtime',
+      timeZone: await refreshMemoryTimeZone(),
     }
+    logger.debug('[Memory] Extraction clock set', {
+      chatId: ctx.chatId,
+      nowIso: clock.nowIso,
+      timeZone: clock.timeZone,
+    })
 
     // Pre-resolve per-character rate limits so we know which characters to
     // skip entirely, throttle, or allow before we start firing LLM calls.
@@ -582,6 +614,7 @@ export async function processTurnForMemory(
             candidate,
             passLabel: `SELF memory for ${slice.characterName}`,
             ctx,
+            timeZone: clock.timeZone,
             sourceMessageId: slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? sourceMessageId,
             sourceMessageCreatedAt: slice.lastMessageCreatedAt ?? null,
             debugLogs,
@@ -731,6 +764,7 @@ export async function processTurnForMemory(
             candidate,
             passLabel: `OTHER memory ${observer.characterName} about ${subject.subjectName}`,
             ctx,
+            timeZone: clock.timeZone,
             sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
             sourceMessageCreatedAt: observer.lastMessageCreatedAt ?? null,
             debugLogs,

@@ -13,6 +13,8 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
+import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
+import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh';
 import type { EmbeddingRefitPayload } from '../queue-service';
 import { enqueueEmbeddingReindexAll } from '../queue-service';
 
@@ -91,7 +93,11 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
   }
 
   // Prepare documents for TF-IDF fitting
-  const documents = allMemories.map(m => `${m.summary}\n\n${m.content}`);
+  // Same text the rows are embedded with (anchor line included), so tokens
+  // that occur only in anchor lines make it into the fitted vocabulary (bug 204).
+  // Anchor dates render on the instance's memory calendar (cold cache in the child).
+  const memoryTimeZone = await refreshMemoryTimeZone();
+  const documents = allMemories.map(m => buildMemoryEmbeddingText(m.summary, m.content, m, memoryTimeZone));
 
   // Include help docs in the corpus for better vocabulary coverage
   try {

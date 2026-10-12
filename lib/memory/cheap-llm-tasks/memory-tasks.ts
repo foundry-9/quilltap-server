@@ -15,6 +15,8 @@ import {
   type ContextTag,
 } from '@/lib/memory/recall-tags'
 import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
+import { getMemoryTimeZone, zonedDateStamp, zonedDayBoundsIso, zonedParts } from '@/lib/memory/memory-calendar'
+import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh'
 import { executeCheapLLMTask, type CheapLLMLatencyClass } from './core-execution'
 import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/llm/llm-json'
@@ -119,17 +121,43 @@ export interface ExtractionClock {
   timelineMode: 'realtime' | 'narrative'
   /** Current in-story time, when known (narrative chats only). */
   narrativeNow?: string | null
+  /**
+   * The memory-calendar zone this clock is read in (bug 212). The caller
+   * resolves it once and hands the same value to the `when` resolver, so the
+   * date the model is shown and the date its phrases resolve against cannot
+   * disagree. Absent, the extraction entry point resolves it before building
+   * the prompt ({@link withMemoryTimeZone}).
+   */
+  timeZone?: string
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/**
+ * The clock with its memory-calendar zone resolved. Every extraction entry
+ * point calls this before building a prompt: the zone is read from the
+ * instance settings (`refreshMemoryTimeZone`), so a cold cache in the job
+ * child never renders the clock in the env/system fallback zone.
+ */
+async function withMemoryTimeZone<C extends ExtractionClock | undefined>(clock: C): Promise<C> {
+  if (!clock || clock.timeZone) return clock
+  const timeZone = await refreshMemoryTimeZone()
+  logger.debug('[Memory] Extraction clock zone resolved', { timeZone, nowIso: clock.nowIso })
+  return { ...clock, timeZone } as C
+}
+
+/** `2026-07-14 (Tuesday), <nowIso>` — the clock's local date on the memory calendar. */
+function renderClockStamp(clock: ExtractionClock): string {
+  const ms = Date.parse(clock.nowIso)
+  if (!Number.isFinite(ms)) return clock.nowIso
+  const timeZone = clock.timeZone ?? getMemoryTimeZone()
+  return `${zonedDateStamp(ms, timeZone)} (${WEEKDAYS[zonedParts(ms, timeZone).weekday]}), ${clock.nowIso}`
+}
+
 /** Render the CLOCK footer block. Returns `''` when no clock was supplied. */
 function renderClockBlock(clock: ExtractionClock | undefined): string {
   if (!clock) return ''
-  const ms = Date.parse(clock.nowIso)
-  const stamp = Number.isFinite(ms)
-    ? `${clock.nowIso.slice(0, 10)} (${WEEKDAYS[new Date(ms).getUTCDay()]}), ${clock.nowIso}`
-    : clock.nowIso
+  const stamp = renderClockStamp(clock)
   const lines = [
     'CLOCK',
     `Current date/time: ${stamp}`,
@@ -945,6 +973,7 @@ export async function extractSelfMemoriesFromTurn(
   if (!target) {
     return { success: true, result: [], usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   const targetLabel = formatNameWithPronouns(target.characterName, target.characterPronouns ?? null)
@@ -1011,6 +1040,7 @@ export async function extractOtherMemoriesFromTurn(
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const perSubjectCap = resolveMaxMemories(resolvedMaxTokens)
   const observerLabel = formatNameWithPronouns(observer.characterName, observer.characterPronouns ?? null)
@@ -1071,6 +1101,7 @@ export async function extractOtherMemoriesFromFold(
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const cap = Math.max(1, perSubjectCap)
   const observerLabel = formatNameWithPronouns(observer.name, observer.pronouns)
@@ -1298,10 +1329,12 @@ export async function extractEpisodesFromFold(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions,
 ): Promise<CheapLLMTaskResult<FoldEpisode[]>> {
   if (windowMessages.length === 0) {
     return { success: true, result: [] }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const rendered = windowMessages
     .map(m => {
@@ -1312,7 +1345,7 @@ export async function extractEpisodesFromFold(
     .join('\n\n')
 
   const clockLine =
-    `CLOCK: current date/time ${clock.nowIso}; timeline mode ${clock.timelineMode}` +
+    `CLOCK: current date/time ${renderClockStamp(clock)}; timeline mode ${clock.timelineMode}` +
     (clock.narrativeNow?.trim() ? `; current in-story time ${clock.narrativeNow.trim()}` : '')
 
   const messages: LLMMessage[] = [
@@ -1327,6 +1360,8 @@ export async function extractEpisodesFromFold(
     parseFoldEpisodes,
     'fold-episode-extraction',
     chatId,
+    undefined,
+    uncensoredFallback,
   )
 }
 
@@ -1368,11 +1403,6 @@ export interface MemorySearchExtraction {
  */
 const DAY_REFERENCE_SCAN_MESSAGES = 4
 
-/** Local `YYYY-MM-DD` stamp (never `toISOString().slice(0,10)`, which is UTC). */
-function localDateStamp(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 
 /**
  * Merge a deterministically-resolved day reference into the LLM's parsed
@@ -1469,11 +1499,15 @@ export async function extractMemorySearchKeywords(
   // talking at 21:44 CDT that it is already tomorrow, and every "today" the
   // model resolves then lands on a day containing none of the memories it
   // means (see lib/memory/day-references.ts, which does the same math).
+  //
+  // Bug 212: "local" is the instance's memory calendar (instance timezone →
+  // QUILLTAP_TIMEZONE → system), the same one the write side stamps with.
+  const memoryTimeZone = clock?.timeZone ?? await refreshMemoryTimeZone()
   const nowIso = clock?.nowIso ?? new Date().toISOString()
   const nowMs = Date.parse(nowIso)
   const timelineMode = clock?.timelineMode ?? 'realtime'
   const todayLine = Number.isFinite(nowMs)
-    ? `TODAY: ${localDateStamp(new Date(nowMs))} (${WEEKDAYS[new Date(nowMs).getDay()]}); timeline mode: ${timelineMode}`
+    ? `TODAY: ${zonedDateStamp(nowMs, memoryTimeZone)} (${WEEKDAYS[zonedParts(nowMs, memoryTimeZone).weekday]}); timeline mode: ${timelineMode}`
     : `TODAY: ${nowIso}; timeline mode: ${timelineMode}`
 
   // Deterministic day-reference resolution (Fix 1). Scanned over the most
@@ -1489,6 +1523,7 @@ export async function extractMemorySearchKeywords(
             .map(m => m.content)
             .join('\n'),
           new Date(nowMs),
+          memoryTimeZone,
         )
       : null
 
@@ -1554,10 +1589,11 @@ export async function extractMemorySearchKeywords(
             Number.isFinite(Date.parse(from)) &&
             Number.isFinite(Date.parse(to))
           ) {
-            // Normalize date-only bounds to full-day coverage.
-            const fromIso = from.length === 10 ? `${from}T00:00:00.000Z` : from
-            const toIso = to.length === 10 ? `${to}T23:59:59.999Z` : to
-            if (Date.parse(fromIso) <= Date.parse(toIso)) {
+            // Normalize date-only bounds to full LOCAL-day coverage on the
+            // memory calendar (bug 212), not UTC days.
+            const fromIso = from.length === 10 ? zonedDayBoundsIso(from, memoryTimeZone)?.from ?? null : from
+            const toIso = to.length === 10 ? zonedDayBoundsIso(to, memoryTimeZone)?.to ?? null : to
+            if (fromIso && toIso && Date.parse(fromIso) <= Date.parse(toIso)) {
               timeRange = { from: fromIso, to: toIso }
             }
           }

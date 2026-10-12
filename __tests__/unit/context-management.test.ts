@@ -39,6 +39,7 @@ import {
   type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
 import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
+import { resetFrozenArchiveCacheForTests } from '@/lib/memory/frozen-archive-cache'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
@@ -1064,6 +1065,89 @@ describe('Context Manager', () => {
       expect(userMsg.role).toBe('user')
       expect(userMsg.content).toContain('You also recall about the others present')
       expect(userMsg.content).toContain('## Memories About Other Characters')
+    })
+
+    it('does not repeat an archive digest in the inter-character section (bug 224)', async () => {
+      resetFrozenArchiveCacheForTests()
+      const digest: Memory = {
+        ...memory,
+        id: 'digest-b',
+        content: 'Lyra and Iris crossed the Shivering Bridge together',
+        summary: 'Lyra and Iris crossed the Shivering Bridge together',
+        importance: 0.9,
+        source: 'CONSOLIDATED' as Memory['source'],
+      }
+      const partitionOnly: Memory = {
+        ...memory,
+        id: 'mem-partition',
+        content: 'Iris hums when she is nervous',
+        summary: 'Iris hums when she is nervous',
+      }
+      const repoMock = {
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([digest, partitionOnly]),
+          findHotDigests: jest.fn().mockImplementation(async (_holder: string, about: string) =>
+            about === 'char-b' ? [digest] : [],
+          ),
+          findMostImportant: jest.fn().mockResolvedValue([]),
+        },
+        characters: {
+          findNamesByIds: jest.fn().mockResolvedValue(new Map([['char-b', 'Iris'], ['char-a', 'Lyra']])),
+        },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      }
+      mockedGetRepositories.mockReturnValue(repoMock as any)
+      mockedSearchMemories.mockResolvedValue([])
+
+      const result = await buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-224',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: null,
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        embeddingProfileId: null,
+        skipMemories: false,
+        maxMemories: 1,
+        minMemoryImportance: 0.3,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      })
+
+      const everything = result.messages
+        .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n')
+      // The digest is in the archive, so it appears exactly once.
+      expect(everything.split('Shivering Bridge').length - 1).toBe(1)
+      // The inter-character section still carries what the archive does not.
+      expect(everything).toContain('You also recall about the others present')
+      expect(everything).toContain('Iris hums when she is nervous')
     })
 
     // Anti-committee §9: the chained-turn scene note. A chained turn carries no

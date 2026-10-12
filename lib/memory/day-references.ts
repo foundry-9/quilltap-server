@@ -11,15 +11,24 @@
  * tomorrow in UTC, and the window misses every memory it was meant to catch.
  *
  * This module resolves the common English day references deterministically,
- * against the SERVER-LOCAL calendar. Quilltap is self-hosted, so the server's
- * local timezone IS the user's timezone: plain `Date` local-time accessors
- * (`getFullYear`/`getMonth`/`getDate`, `new Date(y, m, d)`) are the correct
- * calendar math here. Never use the `getUTC*` family for these boundaries.
+ * against the instance's memory calendar (`lib/memory/memory-calendar.ts`:
+ * instance timezone → `QUILLTAP_TIMEZONE` → system). The write side
+ * (`resolveWhenPhrase` in `episodic.ts`) uses the same calendar and stamps
+ * each phrase inside the window this module returns for it, so "last night"
+ * written lands inside "last night" read (bug 212). Never use the `getUTC*`
+ * family or bare `Date` local accessors for these boundaries.
  *
  * Pure + I/O-free — no logging, no DB, no LLM — so it is trivially unit-testable
  * and safe to import from the forked job child (same contract as
  * `lib/memory/recall-tags.ts`).
  */
+
+import {
+  getMemoryTimeZone,
+  startOfZonedDayMs,
+  startOfZonedWeekMs,
+  zonedTimeOnDayMs,
+} from './memory-calendar'
 
 export interface DayReferenceResolution {
   /**
@@ -88,20 +97,18 @@ const DAY_REFERENCE_PATTERN = new RegExp(
 )
 
 /** Local midnight of the day `offsetDays` from the local day containing `d`. */
-function startOfLocalDay(d: Date, offsetDays = 0): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offsetDays, 0, 0, 0, 0)
+function startOfLocalDay(d: Date, tz: string, offsetDays = 0): Date {
+  return new Date(startOfZonedDayMs(d.getTime(), tz, offsetDays))
 }
 
 /** Local wall-clock time on the day `offsetDays` from the local day containing `d`. */
-function localTimeOnDay(d: Date, offsetDays: number, hours: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offsetDays, hours, 0, 0, 0)
+function localTimeOnDay(d: Date, tz: string, offsetDays: number, hours: number): Date {
+  return new Date(zonedTimeOnDayMs(d.getTime(), tz, offsetDays, hours))
 }
 
 /** Local midnight of the most recent Monday (today, when today is Monday). */
-function startOfLocalWeek(d: Date, weekOffset = 0): Date {
-  // getDay(): 0 = Sunday … 6 = Saturday. Monday-anchored weeks, so Sunday is 6 days in.
-  const daysSinceMonday = (d.getDay() + 6) % 7
-  return startOfLocalDay(d, -daysSinceMonday + weekOffset * 7)
+function startOfLocalWeek(d: Date, tz: string, weekOffset = 0): Date {
+  return new Date(startOfZonedWeekMs(d.getTime(), tz, weekOffset))
 }
 
 function window(from: Date, to: Date): { from: string; to: string } {
@@ -109,7 +116,7 @@ function window(from: Date, to: Date): { from: string; to: string } {
 }
 
 /** Resolve one matched phrase into its window. */
-function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null {
+function resolvePhrase(phrase: string, now: Date, tz: string): DayReferenceResolution | null {
   const p = phrase.toLowerCase().trim()
 
   // Today and its parts — from local midnight up to the current instant. A
@@ -123,12 +130,12 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
     p === 'this evening' ||
     p === 'tonight'
   ) {
-    return { timeRange: window(startOfLocalDay(now), now), pastPointing: true, matched: p }
+    return { timeRange: window(startOfLocalDay(now, tz), now), pastPointing: true, matched: p }
   }
 
   if (p === 'last night') {
     return {
-      timeRange: window(localTimeOnDay(now, -1, 18), localTimeOnDay(now, 0, 6)),
+      timeRange: window(localTimeOnDay(now, tz, -1, 18), localTimeOnDay(now, tz, 0, 6)),
       pastPointing: true,
       matched: p,
     }
@@ -136,7 +143,7 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
 
   if (p === 'yesterday') {
     return {
-      timeRange: window(startOfLocalDay(now, -1), startOfLocalDay(now)),
+      timeRange: window(startOfLocalDay(now, tz, -1), startOfLocalDay(now, tz)),
       pastPointing: true,
       matched: p,
     }
@@ -144,19 +151,19 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
 
   if (p === 'day before yesterday') {
     return {
-      timeRange: window(startOfLocalDay(now, -2), startOfLocalDay(now, -1)),
+      timeRange: window(startOfLocalDay(now, tz, -2), startOfLocalDay(now, tz, -1)),
       pastPointing: true,
       matched: p,
     }
   }
 
   if (p === 'this week') {
-    return { timeRange: window(startOfLocalWeek(now), now), pastPointing: true, matched: p }
+    return { timeRange: window(startOfLocalWeek(now, tz), now), pastPointing: true, matched: p }
   }
 
   if (p === 'last week') {
     return {
-      timeRange: window(startOfLocalWeek(now, -1), startOfLocalWeek(now)),
+      timeRange: window(startOfLocalWeek(now, tz, -1), startOfLocalWeek(now, tz)),
       pastPointing: true,
       matched: p,
     }
@@ -166,7 +173,7 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
   // merge policy applies a window only when `pastPointing` is true.
   if (p === 'tomorrow') {
     return {
-      timeRange: window(startOfLocalDay(now, 1), startOfLocalDay(now, 2)),
+      timeRange: window(startOfLocalDay(now, tz, 1), startOfLocalDay(now, tz, 2)),
       pastPointing: false,
       matched: p,
     }
@@ -174,7 +181,7 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
 
   if (p === 'next week') {
     return {
-      timeRange: window(startOfLocalWeek(now, 1), startOfLocalWeek(now, 2)),
+      timeRange: window(startOfLocalWeek(now, tz, 1), startOfLocalWeek(now, tz, 2)),
       pastPointing: false,
       matched: p,
     }
@@ -186,7 +193,7 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
     const n = /^\d{1,2}$/.test(raw) ? Number(raw) : NUMBER_WORDS[raw]
     if (!n || n < 1 || n > MAX_DAYS_AGO) return null
     return {
-      timeRange: window(startOfLocalDay(now, -n), startOfLocalDay(now, -n + 1)),
+      timeRange: window(startOfLocalDay(now, tz, -n), startOfLocalDay(now, tz, -n + 1)),
       pastPointing: true,
       matched: p,
     }
@@ -197,19 +204,24 @@ function resolvePhrase(phrase: string, now: Date): DayReferenceResolution | null
 
 /**
  * Scan conversation text for an explicit day reference and resolve it against
- * `now` using the SERVER-LOCAL timezone. Returns null when no reference found.
+ * `now` on the memory calendar (`timeZone`, default the instance's memory
+ * timezone). Returns null when no reference found.
  * Later (more recent) matches in the text win over earlier ones — the most
  * recent utterance reflects the turn's current focus, so "we talked about that
  * yesterday, but today…" resolves to today.
  */
-export function resolveDayReference(text: string, now: Date): DayReferenceResolution | null {
+export function resolveDayReference(
+  text: string,
+  now: Date,
+  timeZone: string = getMemoryTimeZone(),
+): DayReferenceResolution | null {
   if (!text || !Number.isFinite(now.getTime())) return null
 
   let latest: DayReferenceResolution | null = null
   DAY_REFERENCE_PATTERN.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = DAY_REFERENCE_PATTERN.exec(text)) !== null) {
-    const resolved = resolvePhrase(match[0], now)
+    const resolved = resolvePhrase(match[0], now, timeZone)
     // An unresolvable match (e.g. "97 days ago") still consumed its span; the
     // previous winner stands rather than being clobbered by a null.
     if (resolved) latest = resolved

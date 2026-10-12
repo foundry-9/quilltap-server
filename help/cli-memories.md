@@ -204,7 +204,7 @@ quilltap memories consolidate --instance Friday --character Friday --dry-run --m
 quilltap memories consolidate --instance Friday --character Friday                     # do it (background job)
 ```
 
-Unlike its read-only siblings, `consolidate` does real work, and so it does not touch the database itself: it asks the **running** Quilltap server (on `--port`, default 3000) to do it, exactly as the *Consolidate now* buttons in **Settings → Memory → Consolidation** do. A `--dry-run` writes nothing and prints each proposed cluster: the notes it would fold, the digest it would write, the notes kept standalone, and any contradictions. `--max` caps the number of clusters (default 10, at most 40 for a dry run) and `--threshold` overrides the similarity a note needs to join a cluster, for a dry run only. Without `--dry-run`, the server queues a consolidation job and the CLI prints its id. See [Memory Consolidation](memory-consolidation.md).
+Unlike its read-only siblings, `consolidate` does real work, and so it does not touch the database itself: it asks the **running** Quilltap server (on `--port`, default 3000) to do it, exactly as the *Consolidate now* buttons in **Settings → Memory → Consolidation** do. A `--dry-run` writes nothing and prints each proposed cluster: the notes it would fold, the digest it would write, the notes kept standalone, and any contradictions. `--max` caps the number of clusters (default 10, at most 40 for a dry run) and `--threshold` overrides the similarity a note needs to join a cluster for that run — dry or real, so the real run gathers what its rehearsal showed. Without `--dry-run`, the server queues a consolidation job and the CLI prints its id. See [Memory Consolidation](memory-consolidation.md).
 
 ## Common Flags
 

@@ -1,0 +1,232 @@
+/**
+ * Bug 225 — cold retention ages by `supersededAt`, and deletes scrub digest links.
+ *
+ * - `findExpiredColdIds` used `updatedAt < cutoff`, and every link rewrite
+ *   resets `updatedAt`, so a superseded member that kept being re-linked never
+ *   aged out. It now ages by `supersededAt` (falling back to `updatedAt` only
+ *   for a row with no stamp), which `updateTierBulk` sets and clears with
+ *   `supersededById`.
+ * - The delete chokepoint scrubbed `relatedMemoryIds` only, leaving surviving
+ *   digests' `consolidatedFrom` naming deleted members and surviving members
+ *   of a deleted digest pointing `supersededById` at nothing.
+ *
+ * The SQL runs against a real in-memory SQLite table; the repository writes
+ * the delete helpers issue are applied to the same table.
+ */
+
+import path from 'path'
+
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(),
+}))
+
+jest.mock('@/lib/database/manager', () => ({
+  __esModule: true,
+  rawQuery: jest.fn(),
+  registerBlobColumns: jest.fn(),
+  getDatabase: jest.fn(),
+  getDatabaseAsync: jest.fn(),
+  initializeDatabase: jest.fn(),
+}))
+
+jest.mock('@/lib/database/backends/sqlite/client', () => ({
+  getRawDatabase: jest.fn(),
+}))
+
+jest.mock('@/lib/embedding/vector-store', () => ({
+  getCharacterVectorStore: jest.fn(),
+}))
+
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  generateEmbeddingForUser: jest.fn(),
+  EmbeddingError: class extends Error {},
+}))
+
+jest.mock('@/lib/realtime/bus', () => ({
+  publishRealtime: jest.fn(),
+}))
+
+jest.mock('@/lib/logger', () => {
+  const make = (): Record<string, unknown> => ({
+    debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+    child: jest.fn(() => make()),
+  })
+  return { logger: make() }
+})
+
+import { rawQuery } from '@/lib/database/manager'
+import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
+import { getRepositories } from '@/lib/repositories/factory'
+import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { deleteMemoryWithUnlink, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { MemoriesRepository } from '@/lib/database/repositories/memories.repository'
+
+// Real binding by absolute root path — a bare require resolves to the suite-wide mock.
+const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'))
+
+const CHAR = 'char-1'
+let db: InstanceType<typeof Database>
+
+function seed(rows: Array<Record<string, unknown>>) {
+  const insert = db.prepare(`INSERT INTO memories
+    (id, characterId, tier, source, supersededById, supersededAt, consolidatedFrom, relatedMemoryIds, updatedAt)
+    VALUES (@id, @characterId, @tier, @source, @supersededById, @supersededAt, @consolidatedFrom, @relatedMemoryIds, @updatedAt)`)
+  for (const r of rows) {
+    insert.run({
+      characterId: CHAR, tier: 'hot', source: 'AUTO', supersededById: null, supersededAt: null,
+      consolidatedFrom: '[]', relatedMemoryIds: '[]', updatedAt: '2026-01-01T00:00:00.000Z',
+      ...r,
+    })
+  }
+}
+
+function read(id: string) {
+  return db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as Record<string, unknown> | undefined
+}
+
+/** Repository writes the delete helpers issue, applied to the real table. */
+function installRepos() {
+  const now = '2026-09-01T00:00:00.000Z'
+  const real = new MemoriesRepository()
+  const memories = {
+    findById: jest.fn(async (id: string) => read(id) ?? null),
+    // The digest scrub's reads and its removal delta are the production SQL.
+    findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
+    findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
+    removeConsolidatedMembers: jest.fn((c: string, d: string, m: string[]) => real.removeConsolidatedMembers(c, d, m)),
+    updateForCharacter: jest.fn(async (_c: string, id: string, patch: Record<string, unknown>) => {
+      for (const [k, v] of Object.entries(patch)) {
+        db.prepare(`UPDATE memories SET "${k}" = ?, updatedAt = ? WHERE id = ?`)
+          .run(Array.isArray(v) ? JSON.stringify(v) : v, now, id)
+      }
+      return read(id)
+    }),
+    updateTierBulk: jest.fn(async (_c: string, ids: string[], tier: string, extra: Record<string, unknown>) => {
+      for (const id of ids) {
+        db.prepare(`UPDATE memories SET tier = ?, supersededById = ?, supersededAt = NULL, updatedAt = ? WHERE id = ?`)
+          .run(tier, extra.supersededById ?? null, now, id)
+      }
+      return ids.length
+    }),
+    delete: jest.fn(async (id: string) => db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes > 0),
+    bulkDelete: jest.fn(async (_c: string, ids: string[]) => {
+      let n = 0
+      for (const id of ids) n += db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes
+      return n
+    }),
+  }
+  ;(getRepositories as jest.Mock).mockReturnValue({ memories })
+  return memories
+}
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  db = new Database(':memory:')
+  db.exec(`CREATE TABLE memories (
+    id TEXT PRIMARY KEY, characterId TEXT, aboutCharacterId TEXT, tier TEXT, source TEXT,
+    supersededById TEXT, supersededAt TEXT, consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT)`)
+  ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) =>
+    db.prepare(sql).all(...params))
+  ;(getRawDatabase as jest.Mock).mockReturnValue(db)
+  ;(getCharacterVectorStore as jest.Mock).mockResolvedValue({
+    removeVector: jest.fn(async () => true),
+    save: jest.fn(async () => undefined),
+  })
+})
+
+afterEach(() => {
+  db.close()
+})
+
+describe('bug 225 — findExpiredColdIds ages by supersededAt', () => {
+  it('expires a superseded member whose links were rewritten after it went cold', async () => {
+    seed([
+      // Superseded in February; a link rewrite in September reset updatedAt.
+      { id: 'relinked', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      // Superseded recently: not yet expired.
+      { id: 'fresh', tier: 'cold', supersededById: 'digest', supersededAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' },
+      // Never stamped (missed the backfill): falls back to updatedAt.
+      { id: 'legacy', tier: 'cold', supersededById: 'digest', supersededAt: null, updatedAt: '2026-01-15T00:00:00.000Z' },
+      // Cap-demoted, MANUAL, and hot rows are never retention's to delete.
+      { id: 'demoted', tier: 'cold', updatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'manual', tier: 'cold', source: 'MANUAL', supersededById: 'digest', supersededAt: '2026-01-01T00:00:00.000Z' },
+    ])
+
+    const repo = new MemoriesRepository()
+    const ids = await repo.findExpiredColdIds(CHAR, '2026-06-01T00:00:00.000Z')
+
+    expect(ids.sort()).toEqual(['legacy', 'relinked'])
+  })
+
+  it('updateTierBulk stamps supersededAt with supersededById and clears it with the link', async () => {
+    const repo = new MemoriesRepository()
+    const updateMany = jest
+      .spyOn(repo as unknown as { updateMany: (...a: unknown[]) => Promise<number> }, 'updateMany')
+      .mockResolvedValue(1)
+
+    await repo.updateTierBulk(CHAR, ['m-1'], 'cold', { supersededById: '7e0c6f2e-0000-4000-8000-000000000001' })
+    const supersede = updateMany.mock.calls[0][1] as Record<string, unknown>
+    expect(typeof supersede.supersededAt).toBe('string')
+    expect(supersede.supersededAt).toBe(supersede.updatedAt)
+
+    await repo.updateTierBulk(CHAR, ['m-1'], 'hot', { supersededById: null })
+    expect((updateMany.mock.calls[1][1] as Record<string, unknown>).supersededAt).toBeNull()
+
+    // A tier move that says nothing about the digest leaves the clock alone.
+    await repo.updateTierBulk(CHAR, ['m-1'], 'cold')
+    expect(updateMany.mock.calls[2][1]).not.toHaveProperty('supersededAt')
+  })
+})
+
+describe('bug 225 — the delete chokepoint scrubs digest links', () => {
+  it('batch delete drops deleted members from a surviving digest\'s consolidatedFrom', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'm-2', 'm-3']) },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z' },
+      { id: 'm-2', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z', relatedMemoryIds: JSON.stringify(['m-1']) },
+      { id: 'm-3', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z' },
+    ])
+    installRepos()
+
+    const deleted = await deleteMemoriesWithUnlinkBatch(['m-1', 'm-3'])
+
+    expect(deleted).toBe(2)
+    expect(JSON.parse(read('digest')!.consolidatedFrom as string)).toEqual(['m-2'])
+    expect(JSON.parse(read('m-2')!.relatedMemoryIds as string)).toEqual([])
+    // The surviving member still belongs to the surviving digest.
+    expect(read('m-2')!.supersededById).toBe('digest')
+  })
+
+  it('deleting a digest cuts supersededById on its surviving members', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'm-2']) },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z' },
+      { id: 'm-2', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z' },
+    ])
+    const memories = installRepos()
+
+    expect(await deleteMemoryWithUnlink('digest')).toBe(true)
+
+    expect(read('digest')).toBeUndefined()
+    for (const id of ['m-1', 'm-2']) {
+      const member = read(id)!
+      expect(member.tier).toBe('cold')
+      expect(member.supersededById).toBeNull()
+      expect(member.supersededAt).toBeNull()
+    }
+    expect(memories.updateTierBulk).toHaveBeenCalledWith(CHAR, ['m-1', 'm-2'], 'cold', { supersededById: null })
+  })
+
+  it('single delete of a member drops it from its digest', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'm-2']) },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest' },
+      { id: 'm-2', tier: 'cold', supersededById: 'digest' },
+    ])
+    installRepos()
+
+    expect(await deleteMemoryWithUnlink('m-1')).toBe(true)
+
+    expect(JSON.parse(read('digest')!.consolidatedFrom as string)).toEqual(['m-2'])
+  })
+})

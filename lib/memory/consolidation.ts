@@ -10,8 +10,10 @@
  * One run, per character:
  *
  *   1. **Load** (paged, yielding between pages): every row feeds the link
- *      index; hot AUTO rows older than `matureAfterDays` with an embedding are
- *      candidates, bucketed by subject (self / another character / no subject);
+ *      index; AUTO rows older than `matureAfterDays` with an embedding are
+ *      candidates — hot rows, and cold rows housekeeping demoted with no
+ *      successor (`supersededById` null, bug 211) — bucketed by subject
+ *      (self / another character / no subject);
  *      each bucket's existing hot digests come along as cluster seeds. MANUAL
  *      rows are never candidates — nothing sends a hand-written row cold.
  *   2. **Cluster** each bucket (`consolidation-clustering.ts`, pure) and pick
@@ -31,8 +33,11 @@
  *      inserted directly with their embedding — never through the memory gate,
  *      which would absorb a digest into its own members.
  *   5. **Mirror** each touched bucket's digests into the holder's vault
- *      (`Commonplace/<Subject>.md`, `Commonplace/Self.md`) through the
- *      host-RPC bridge, where the extractor's canon loaders read them back.
+ *      (`Commonplace/<Subject>.md`, `Commonplace/Self.md`), where the
+ *      extractor's canon loaders read them back. The mirror is written from
+ *      committed rows only (`commonplace-mirror.ts`, bug 208): in-process runs
+ *      write it after their writes land; job runs leave it to the parent's
+ *      commit hook, so a batch that fails to commit leaves the vault alone.
  *
  * A dry run does steps 1–3 and plans step 4, writes nothing, and returns the
  * report. {@link runConsolidation} is callable in-process (CLI, API) as well
@@ -64,6 +69,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 import {
   clusterBucket,
@@ -90,8 +96,7 @@ import {
   renderSelfCanonBlock,
 } from './cheap-llm-tasks/canon'
 import type { UncensoredFallbackOptions } from './cheap-llm-tasks/types'
-import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
-import type { CommonplaceDigestEntry } from './commonplace-file'
+import { mirrorCommonplaceForSubjects } from './commonplace-mirror'
 
 const log = logger.child({ module: 'memory:consolidation' })
 
@@ -162,6 +167,8 @@ export interface ConsolidationClusterReport {
 export interface ConsolidationStats {
   rowsLoaded: number
   candidates: number
+  /** Candidates that were cold — demoted by housekeeping, never superseded (bug 211). */
+  demotedCandidates: number
   digestsLoaded: number
   immatureSkipped: number
   noEmbeddingSkipped: number
@@ -236,8 +243,6 @@ interface Bucket {
   aboutCharacterId: string | null
   rows: Memory[]
   digests: Memory[]
-  /** False when the subject character no longer exists — no mirror file then. */
-  subjectExists: boolean
 }
 
 type TaggedCluster = Cluster & { bucketKey: string }
@@ -246,6 +251,7 @@ function emptyStats(): ConsolidationStats {
   return {
     rowsLoaded: 0,
     candidates: 0,
+    demotedCandidates: 0,
     digestsLoaded: 0,
     immatureSkipped: 0,
     noEmbeddingSkipped: 0,
@@ -334,7 +340,6 @@ async function loadCorpus(
         aboutCharacterId: key === 'none' ? null : about,
         rows: [],
         digests: [],
-        subjectExists: key !== 'none',
       }
       buckets.set(key, bucket)
     }
@@ -345,9 +350,10 @@ async function loadCorpus(
     for (const memory of page) {
       stats.rowsLoaded++
       rowIndex.set(memory.id, { id: memory.id, relatedMemoryIds: memory.relatedMemoryIds ?? [] })
-      if ((memory.tier ?? 'hot') !== 'hot') continue
+      const isHot = (memory.tier ?? 'hot') === 'hot'
 
       if (memory.source === 'CONSOLIDATED') {
+        if (!isHot) continue
         if (!hasEmbedding(memory)) {
           stats.noEmbeddingSkipped++
           continue
@@ -358,6 +364,14 @@ async function loadCorpus(
       }
       // Hand-written rows are never sent cold by policy (spec §B4).
       if (memory.source !== 'AUTO') continue
+      // Cold rows a digest superseded belong to it. Cold rows with no
+      // successor were demoted by housekeeping's cap; they re-enter here so
+      // their gist reaches a digest and they can retire like any other
+      // superseded row, instead of sitting cold forever (bug 211).
+      if (!isHot) {
+        if (memory.supersededById) continue
+        stats.demotedCandidates++
+      }
       const created = Date.parse(memory.createdAt)
       if (!Number.isFinite(created) || created > matureCutoffMs) {
         stats.immatureSkipped++
@@ -511,7 +525,6 @@ async function describeBuckets(
     }
     if (!subject) {
       bucket.ref.subjectName = 'an unnamed acquaintance'
-      bucket.subjectExists = false
       canon.set(bucket.key, null)
       continue
     }
@@ -639,64 +652,21 @@ async function executePlan(
   }
 }
 
-/** Mirror every touched bucket's post-run digests into the holder's vault. */
-async function mirrorTouchedBuckets(
-  holder: Character,
+/**
+ * The digest subjects a plan touches — the buckets whose Commonplace files the
+ * run changes. The no-subject bucket has no mirror and is left out.
+ */
+function touchedSubjects(
   buckets: Map<string, Bucket>,
   plan: ConsolidationWritePlan,
   bucketKeyByOutcome: readonly string[],
-  nowIso: string,
-): Promise<number> {
-  const touched = new Map<string, PlannedDigest[]>()
+): string[] {
+  const subjects = new Set<string>()
   for (const digest of [...plan.creates, ...plan.updates]) {
-    const key = bucketKeyByOutcome[digest.clusterIndex]
-    const list = touched.get(key) ?? []
-    list.push(digest)
-    touched.set(key, list)
+    const bucket = buckets.get(bucketKeyByOutcome[digest.clusterIndex])
+    if (bucket?.aboutCharacterId) subjects.add(bucket.aboutCharacterId)
   }
-
-  const files = []
-  for (const [key, planned] of touched) {
-    const bucket = buckets.get(key)
-    if (!bucket || bucket.ref.kind === 'none' || !bucket.subjectExists) continue
-    const plannedById = new Map(planned.map((d) => [d.id, d]))
-    const entries: CommonplaceDigestEntry[] = []
-    for (const existing of bucket.digests) {
-      const revised = plannedById.get(existing.id)
-      entries.push(
-        revised
-          ? { content: revised.content, kind: revised.kind, occurredAt: revised.occurredAt, reinforcedImportance: revised.reinforcedImportance }
-          : {
-              content: existing.content,
-              kind: existing.kind ?? 'semantic',
-              occurredAt: existing.occurredAt ?? null,
-              reinforcedImportance: existing.reinforcedImportance ?? existing.importance,
-            },
-      )
-    }
-    for (const d of planned) {
-      if (d.action !== 'create') continue
-      entries.push({ content: d.content, kind: d.kind, occurredAt: d.occurredAt, reinforcedImportance: d.reinforcedImportance })
-    }
-    files.push({
-      subjectCharacterId: bucket.ref.kind === 'self' ? holder.id : (bucket.ref.subjectCharacterId as string),
-      subjectName: bucket.ref.subjectName,
-      isSelf: bucket.ref.kind === 'self',
-      digests: entries,
-    })
-  }
-  if (files.length === 0) return 0
-
-  try {
-    const result = await writeCommonplaceDigestsToVault({ holderCharacterId: holder.id, files, updatedAt: nowIso })
-    return result?.written ?? 0
-  } catch (error) {
-    log.warn('Commonplace mirror failed after consolidation (digests are still written)', {
-      characterId: holder.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return 0
-  }
+  return Array.from(subjects)
 }
 
 // ============================================================================
@@ -979,6 +949,8 @@ export async function runConsolidation(
     // be embedded would be invisible to recall and the gate, so its whole
     // cluster is dropped (no partial writes) and the plan rebuilt without it.
     const failed = new Set<number>()
+    // Anchor dates render on the instance's memory calendar (cold cache in the child).
+    const memoryTimeZone = await refreshMemoryTimeZone()
     for (const digest of [...plan.creates, ...plan.updates]) {
       if (failed.has(digest.clusterIndex)) continue
       try {
@@ -987,7 +959,7 @@ export async function runConsolidation(
             occurredAt: digest.occurredAt,
             narrativeTime: digest.narrativeTime,
             entities: digest.entities,
-          }),
+          }, memoryTimeZone),
           userId,
           undefined,
           { priority: 'background' },
@@ -1037,7 +1009,18 @@ export async function runConsolidation(
       // cover the frozen archive and the realtime hint for job runs.
       invalidateFrozenArchive(characterId)
       publishRealtime('memories')
-      stats.mirrorFilesWritten = await mirrorTouchedBuckets(holder, buckets, plan, finalBucketKey, nowIso)
+      const subjects = touchedSubjects(buckets, plan, finalBucketKey)
+      if (process.env.QUILLTAP_JOB_CHILD === '1') {
+        // The child's writes are only buffered: the batch may yet fail to
+        // commit. The vault mirror waits for the parent's commit hook, which
+        // writes it from the committed rows (bug 208).
+        log.debug('Commonplace mirror deferred to the parent commit hook', {
+          characterId,
+          subjects: subjects.length,
+        })
+      } else {
+        stats.mirrorFilesWritten = await mirrorCommonplaceForSubjects(characterId, subjects, nowIso)
+      }
     }
   }
 
@@ -1048,6 +1031,7 @@ export async function runConsolidation(
     trigger,
     dryRun,
     candidates: stats.candidates,
+    demotedCandidates: stats.demotedCandidates,
     digestsLoaded: stats.digestsLoaded,
     clustersFound: stats.clustersFound,
     clustersSelected: stats.clustersSelected,

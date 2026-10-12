@@ -62,14 +62,13 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         summary: form.formData.summary,
         keywords,
         importance: form.formData.importance,
-        source: 'MANUAL' as const,
       }
 
       const url = isEditing
         ? `/api/v1/memories/${memory.id}`
         : `/api/v1/memories`
 
-      const result = await fetchJson<{ id: string }>(url, {
+      const result = await fetchJson<{ memory?: { id: string }; action?: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -83,7 +82,12 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         throw new Error(result.error || 'Failed to save memory')
       }
 
-      showSuccessToast(isEditing ? 'Memory updated' : 'Memory created')
+      // A new memory that the gate folded into an existing one comes back as
+      // 200 with the gate's action rather than 201.
+      const merged = !isEditing && result.status === 200
+      showSuccessToast(
+        isEditing ? 'Memory updated' : merged ? 'Already on file — the existing memory has been reinforced instead' : 'Memory created'
+      )
       onSave()
     })
   }

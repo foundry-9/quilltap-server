@@ -182,3 +182,20 @@ describe('generateContextSummary — fold title', () => {
     expect(mockApply).not.toHaveBeenCalled()
   })
 })
+
+describe('generateContextSummary — one transcript read feeds both fold passes (finding 13)', () => {
+  it('hands both passes the transcript the fold already read', async () => {
+    const { runFoldEpisodePass } = jest.requireMock('@/lib/memory/fold-episode-pass') as { runFoldEpisodePass: jest.Mock }
+    const { runFoldOtherPass } = jest.requireMock('@/lib/memory/fold-other-pass') as { runFoldOtherPass: jest.Mock }
+    primeRepos()
+    await generateContextSummary(options())
+
+    const repos = mockRepos.mock.results[0].value
+    // One read for the fold, one fresh read for the whisper sweep; the passes read none.
+    expect((repos.chats.getMessages as jest.Mock).mock.calls).toHaveLength(2)
+    const episodeTranscript = runFoldEpisodePass.mock.calls[0][0].chatMessages
+    const otherTranscript = runFoldOtherPass.mock.calls[0][0].chatMessages
+    expect(episodeTranscript).toHaveLength(24)
+    expect(otherTranscript).toBe(episodeTranscript)
+  })
+})

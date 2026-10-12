@@ -20,17 +20,25 @@
  * 'hybrid', never in 'turn'.
  *
  * Watermark: `chats.otherExtractionWatermarkMessageId` is advanced to the last
- * message covered after every pass that was not lost to a timeout. Messages at
- * or before it are never re-read, which is also what keeps a fold that
- * re-walks old turns (a summary rebuild) from re-paying for them. The daily
- * maintenance sweep uses the same watermark to catch up short or idle chats
- * that never reach a fold (`findFoldOtherCatchupCandidates`).
+ * message covered after every slice that was not lost to a timeout. Messages
+ * at or before it are never re-read, which is also what keeps a fold that
+ * re-walks old turns (a summary rebuild) from re-paying for them. A window
+ * wider than one prompt is read in consecutive slices, so the watermark never
+ * passes a message the prompt did not see (bug 206). The pass reads from its
+ * watermark through the end of the window it is handed (`foldPassRange`), so
+ * a slice an earlier run lost to a timeout is read before a newer fold window
+ * rather than jumped; and one run reads at most
+ * {@link FOLD_OTHER_MAX_SLICES_PER_JOB} slices, leaving the rest of a long
+ * backlog to the next fold or sweep. The daily maintenance
+ * sweep uses the same watermark to catch up short or idle chats that never
+ * reach a fold (`findFoldOtherCatchupCandidates`).
  *
  * Best-effort throughout: never throws into the fold.
  *
  * @module memory/fold-other-pass
  */
 
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { getRepositories } from '@/lib/repositories/factory'
 import {
   extractOtherMemoriesFromFold,
@@ -49,6 +57,13 @@ import {
   resolveExtractionRateLimit,
   type ExtractedCandidate,
 } from './memory-processor'
+import {
+  isFoldEligibleMessage,
+  messagesPastWatermark,
+  foldPassRange,
+  sliceFoldWindow,
+} from './fold-window'
+import { buildExtractionUncensoredFallback, loadExtractionProjectDescription } from './extraction-route'
 import { resolveSpeakerNames, speakerLabel } from '@/lib/chat/speaker-names'
 import { resolveUserCharacterParticipant } from '@/lib/services/chat-message/turn-transcript'
 import { getMemoryExtractionModeSettings, getMemoryExtractionLimits } from '@/lib/instance-settings'
@@ -67,8 +82,11 @@ import type {
 } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
-/** A fold window can be a whole rebuilt history; the prompt reads at most the newest this many messages. */
+/** One prompt reads at most this many eligible messages; a wider window is read in consecutive slices of it. */
 export const FOLD_OTHER_MAX_WINDOW_MESSAGES = 60
+
+/** One run reads at most this many slices; a longer backlog continues on the next fold or sweep, from the advanced watermark. */
+export const FOLD_OTHER_MAX_SLICES_PER_JOB = 4
 
 /** A chat must have been quiet this long before the sweep treats its tail as uncovered. */
 export const FOLD_OTHER_CATCHUP_IDLE_MS = 2 * 60 * 60 * 1000
@@ -84,6 +102,12 @@ export interface RunFoldOtherPassInput {
   userId: string
   /** The covered window: chronological, may contain system/tool rows (they are filtered). */
   windowMessages: MessageEvent[]
+  /**
+   * The chat's whole transcript (`type: 'message'` rows, chronological), when
+   * the caller already holds it. Saves a second full read and decompression;
+   * read here only when absent and a watermark needs it.
+   */
+  chatMessages?: MessageEvent[]
   cheapLLM: CheapLLMSelection
   /** The profile whose token budget bounds the call (per-turn uses the chat profile). */
   cheapMaxTokens?: number
@@ -108,6 +132,8 @@ export interface FoldOtherPassResult {
   candidatesProposed: number
   /** Passes that never happened because the cheap LLM timed out. The caller may fail a job on this. */
   passesLostToTimeout: number
+  /** Slices left unread because the run hit {@link FOLD_OTHER_MAX_SLICES_PER_JOB}. */
+  slicesDeferred: number
   watermarkAdvancedTo: string | null
   usage: { promptTokens: number; completionTokens: number; totalTokens: number }
   extractedCandidates?: ExtractedCandidate[]
@@ -121,37 +147,26 @@ function emptyResult(skippedReason?: string): FoldOtherPassResult {
     memoriesReinforced: 0,
     candidatesProposed: 0,
     passesLostToTimeout: 0,
+    slicesDeferred: 0,
     watermarkAdvancedTo: null,
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
   }
 }
 
 /** A message that carries conversation: a spoken USER/ASSISTANT line from a seat, not staff or tool output. */
-export function isFoldOtherEligibleMessage(m: MessageEvent): boolean {
-  if (m.type !== 'message') return false
-  if (m.role !== 'USER' && m.role !== 'ASSISTANT') return false
-  if (m.systemSender) return false
-  if (!m.participantId) return false
-  return typeof m.content === 'string' && m.content.trim().length > 0
-}
+export const isFoldOtherEligibleMessage = isFoldEligibleMessage
 
-/**
- * Messages strictly after the watermark. A watermark that names a message no
- * longer in the chat (deleted) is treated as absent — better to re-read the
- * tail once than to go blind forever.
- */
-export function messagesPastWatermark<T extends { id: string }>(
-  allMessages: ReadonlyArray<T>,
-  watermarkMessageId: string | null | undefined,
-): T[] {
-  if (!watermarkMessageId) return [...allMessages]
-  const idx = allMessages.findIndex(m => m.id === watermarkMessageId)
-  if (idx === -1) return [...allMessages]
-  return allMessages.slice(idx + 1)
-}
+export { messagesPastWatermark }
 
 /**
  * Run the fold-grain OTHER pass over a window. See module docs.
+ *
+ * A window wider than {@link FOLD_OTHER_MAX_WINDOW_MESSAGES} eligible messages
+ * (a regenerate, a first catch-up, a hard-rebuild fold on a chat with no
+ * watermark) is read in consecutive slices, oldest first, and the watermark
+ * advances past each slice as it is read. A slice that loses a pass to a
+ * timeout stops the run there, so nothing past the last read slice is marked
+ * covered (bug 206).
  */
 export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<FoldOtherPassResult> {
   const result = emptyResult()
@@ -169,23 +184,24 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
     const chat = await repos.chats.findById(chatId)
     if (!chat) return emptyResult('no-chat')
 
-    // Drop what the watermark already covers. The fold may re-walk early turns
-    // (a summary rebuild); the watermark is what stops us paying twice.
+    // Read from the watermark through the end of the window. The fold may
+    // re-walk early turns (a summary rebuild); the watermark is what stops us
+    // paying twice. A fold of only newer turns after a lost slice hands us a
+    // window past a gap; the gap is read first, never jumped.
     let window = input.windowMessages
     if (chat.otherExtractionWatermarkMessageId && window.length > 0) {
-      const all = (await repos.chats.getMessages(chatId)).filter(
-        (m): m is MessageEvent => m.type === 'message',
-      ) as unknown as MessageEvent[]
-      const watermarkIdx = all.findIndex(m => m.id === chat.otherExtractionWatermarkMessageId)
-      if (watermarkIdx !== -1) {
-        const order = new Map(all.map((m, i) => [m.id, i]))
-        const before = window.length
-        window = window.filter(m => (order.get(m.id) ?? Infinity) > watermarkIdx)
+      const all = input.chatMessages ?? (await loadTranscript(chatId))
+      const before = window.length
+      const range = foldPassRange(window, all, chat.otherExtractionWatermarkMessageId)
+      if (range.applied) {
+        window = range.messages
         logger.debug('[FoldOtherPass] Applied watermark to window', {
           chatId,
           watermark: chat.otherExtractionWatermarkMessageId,
           before,
           after: window.length,
+          gap: range.gap,
+          transcriptHandedIn: input.chatMessages !== undefined,
         })
         if (window.length === 0) return emptyResult('behind-watermark')
       }
@@ -193,17 +209,33 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
 
     const coverThrough =
       input.coverThroughMessageId ?? window[window.length - 1]?.id ?? null
-    const eligible = window.filter(isFoldOtherEligibleMessage)
-    const trimmed = eligible.slice(-FOLD_OTHER_MAX_WINDOW_MESSAGES)
-    if (trimmed.length < eligible.length) {
-      logger.debug('[FoldOtherPass] Window trimmed to newest messages', {
+    const eligible = window.filter(isFoldEligibleMessage)
+    const allSlices = sliceFoldWindow(eligible, FOLD_OTHER_MAX_WINDOW_MESSAGES, coverThrough)
+    const slices = allSlices.slice(0, FOLD_OTHER_MAX_SLICES_PER_JOB)
+    result.slicesDeferred = allSlices.length - slices.length
+    if (result.slicesDeferred > 0) {
+      logger.info('[FoldOtherPass] Backlog wider than one run; the rest waits for the next fold or sweep', {
+        chatId,
+        slicesRead: slices.length,
+        slicesDeferred: result.slicesDeferred,
+      })
+    }
+    if (slices.length > 1) {
+      logger.info('[FoldOtherPass] Window wider than one prompt; reading it in slices', {
         chatId,
         eligible: eligible.length,
-        kept: trimmed.length,
+        slices: slices.length,
+        perSlice: FOLD_OTHER_MAX_WINDOW_MESSAGES,
       })
     }
 
-    // Seats and characters.
+    if (slices.length === 0) {
+      result.skippedReason = 'nothing-to-observe'
+      await advanceWatermark(chatId, coverThrough, input.dryRun === true, result)
+      return result
+    }
+
+    // Seats and characters, hydrated once for every slice.
     const participantsById = new Map(chat.participants.map(p => [p.id, p]))
     const participantCharacters = new Map<string, Character>()
     for (const p of chat.participants) {
@@ -220,202 +252,227 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
       }
     }
     const userCharacter = resolveUserCharacterParticipant(chat.participants, participantCharacters)
-
-    // Observers: characters who spoke in the window. Subjects: those plus the
-    // user-controlled character even if silent — as in the per-turn pass.
-    interface Seat { id: string; name: string; pronouns: Pronouns | null; isUser: boolean }
-    const observers: Seat[] = []
-    const seen = new Set<string>()
-    const lastMessageByCharacter = new Map<string, MessageEvent>()
-    for (const m of trimmed) {
-      const seat = participantsById.get(m.participantId as string)
-      if (!seat || seat.type !== 'CHARACTER' || !seat.characterId) continue
-      lastMessageByCharacter.set(seat.characterId, m)
-      if (seen.has(seat.characterId)) continue
-      const character = participantCharacters.get(seat.characterId)
-      if (!character) continue
-      seen.add(seat.characterId)
-      observers.push({
-        id: seat.characterId,
-        name: character.name,
-        pronouns: character.pronouns ?? null,
-        isUser: seat.controlledBy === 'user',
-      })
-    }
-    const subjects: Seat[] = [...observers]
-    if (userCharacter && !seen.has(userCharacter.id)) {
-      subjects.push({ id: userCharacter.id, name: userCharacter.name, pronouns: userCharacter.pronouns ?? null, isUser: true })
-    }
-
-    result.observers = observers.length
-    logger.debug('[FoldOtherPass] Pass set up', {
-      chatId,
-      mode: modeSettings.otherPass,
-      perSubjectCap,
-      windowMessages: trimmed.length,
-      observers: observers.length,
-      subjects: subjects.length,
-    })
-
-    if (trimmed.length === 0 || observers.length === 0 || subjects.length < 2) {
-      result.skippedReason = 'nothing-to-observe'
-      await advanceWatermark(chatId, coverThrough, input.dryRun === true, result)
-      return result
-    }
-
     const speakerNames = await resolveSpeakerNames(chat)
-    const rendered: FoldOtherMessage[] = trimmed.map(m => ({
-      speaker: speakerLabel(m, speakerNames),
-      content: m.content ?? '',
-      createdAt: m.createdAt ?? null,
-    }))
-    const lastStamped = [...trimmed].reverse().find(m => m.createdAt)
-    const clock: ExtractionClock = {
-      nowIso: lastStamped?.createdAt ?? new Date().toISOString(),
-      timelineMode: input.timelineMode,
-    }
+    const limits = await getMemoryExtractionLimits()
     const orienting: OrientingContext = {
       projectDescription: input.projectDescription ?? null,
       chatContextSummary: input.chatContextSummary ?? null,
     }
-    const limits = await getMemoryExtractionLimits()
     const collected: ExtractedCandidate[] = []
     const createdIds: string[] = []
     const reinforcedIds: string[] = []
     const debugLogs: string[] = []
-    const writeCtx = {
-      chatId,
-      userId,
-      projectId: input.projectId ?? null,
-      timelineMode: input.timelineMode,
-      inAutonomousRoom: input.inAutonomousRoom,
-      dryRun: input.dryRun,
-      transcript: { turnTimestamp: clock.nowIso },
-    }
+    const observerIds = new Set<string>()
+    let slicesWithNothingToObserve = 0
 
-    for (const observer of observers) {
-      const rl = await resolveExtractionRateLimit(observer.id, limits)
-      if (rl.mode === 'skip') {
-        logger.debug('[FoldOtherPass] Observer rate-limited; skipping', {
-          chatId,
-          observer: observer.name,
-          recentCount: rl.recentCount,
-          cap: rl.cap,
-        })
-        continue
-      }
+    for (let sliceIndex = 0; sliceIndex < slices.length; sliceIndex++) {
+      const slice = slices[sliceIndex]
+      const sliceMessages = slice.messages
 
-      const observerCharacter = participantCharacters.get(observer.id)
-      const observerVault = {
-        characterId: observer.id,
-        mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
-      }
-      type ResolvedSubject = OtherSubjectInput & { canonSource: string }
-      const resolved: ResolvedSubject[] = []
-      for (const subject of subjects.filter(s => s.id !== observer.id)) {
-        const subjectCharacter = participantCharacters.get(subject.id)
-        const canon = await loadCanonForObserverAboutSubject(observerVault, {
-          id: subject.id,
-          name: subject.name,
-          identity: subjectCharacter?.identity ?? null,
-          description: subjectCharacter?.description ?? null,
-        })
-        resolved.push({
-          id: subject.id,
-          name: subject.name,
-          pronouns: subject.pronouns,
-          isUser: subject.isUser,
-          canonBlock: renderOtherCanonBlock(canon),
-          canonSource: canon.source,
+      // Observers: characters who spoke in the slice. Subjects: those plus the
+      // user-controlled character even if silent — as in the per-turn pass.
+      interface Seat { id: string; name: string; pronouns: Pronouns | null; isUser: boolean }
+      const observers: Seat[] = []
+      const seen = new Set<string>()
+      const lastMessageByCharacter = new Map<string, MessageEvent>()
+      for (const m of sliceMessages) {
+        const seat = participantsById.get(m.participantId as string)
+        if (!seat || seat.type !== 'CHARACTER' || !seat.characterId) continue
+        lastMessageByCharacter.set(seat.characterId, m)
+        if (seen.has(seat.characterId)) continue
+        const character = participantCharacters.get(seat.characterId)
+        if (!character) continue
+        seen.add(seat.characterId)
+        observers.push({
+          id: seat.characterId,
+          name: character.name,
+          pronouns: character.pronouns ?? null,
+          isUser: seat.controlledBy === 'user',
         })
       }
-      if (resolved.length === 0) continue
+      const subjects: Seat[] = [...observers]
+      if (userCharacter && !seen.has(userCharacter.id)) {
+        subjects.push({ id: userCharacter.id, name: userCharacter.name, pronouns: userCharacter.pronouns ?? null, isUser: true })
+      }
+      for (const o of observers) observerIds.add(o.id)
 
-      const extraction = await extractOtherMemoriesFromFold(
-        rendered,
-        { id: observer.id, name: observer.name, pronouns: observer.pronouns },
-        resolved,
-        perSubjectCap,
-        input.cheapLLM,
-        userId,
-        input.uncensoredFallback,
+      logger.debug('[FoldOtherPass] Slice set up', {
         chatId,
-        input.cheapMaxTokens,
-        input.inAutonomousRoom,
-        orienting,
-        clock,
-      )
+        mode: modeSettings.otherPass,
+        perSubjectCap,
+        slice: sliceIndex + 1,
+        slices: slices.length,
+        windowMessages: sliceMessages.length,
+        observers: observers.length,
+        subjects: subjects.length,
+      })
 
-      if (extraction.usage) {
-        result.usage.promptTokens += extraction.usage.promptTokens
-        result.usage.completionTokens += extraction.usage.completionTokens
-        result.usage.totalTokens += extraction.usage.totalTokens
-      }
-      if (!extraction.success) {
-        if (extraction.timedOut) result.passesLostToTimeout++
-        logger.warn('[FoldOtherPass] OTHER extraction failed', {
-          chatId,
-          observer: observer.name,
-          timedOut: extraction.timedOut === true,
-          error: extraction.error,
-        })
+      if (observers.length === 0 || subjects.length < 2) {
+        slicesWithNothingToObserve++
+        await advanceWatermark(chatId, slice.coverThroughMessageId, input.dryRun === true, result)
         continue
       }
 
-      const bySubject = extraction.result ?? new Map<string, MemoryCandidate[]>()
-      const lastMessage = lastMessageByCharacter.get(observer.id) ?? trimmed[trimmed.length - 1]
-      for (const subject of resolved) {
-        // The parser allows one extra slot for an anchored event; the fold
-        // grain's contract is a hard cap per subject.
-        const proposed = (bySubject.get(subject.id) ?? []).slice(0, perSubjectCap)
-        const candidates = rl.mode === 'throttle' ? applyImportanceFloor(proposed, rl.floor) : proposed
-        result.candidatesProposed += candidates.length
-        logger.debug('[FoldOtherPass] Candidates for pair', {
-          chatId,
-          observer: observer.name,
-          subject: subject.name,
-          canon: subject.canonSource,
-          proposed: proposed.length,
-          kept: candidates.length,
-        })
-        for (const candidate of candidates) {
-          await writeCandidate({
-            characterId: observer.id,
-            characterName: observer.name,
-            aboutCharacterId: subject.id,
-            aboutCharacterName: subject.name,
-            pass: 'OTHER',
-            candidate,
-            passLabel: `fold OTHER memory ${observer.name} about ${subject.name}`,
-            ctx: writeCtx,
-            sourceMessageId: lastMessage?.id ?? null,
-            sourceMessageCreatedAt: lastMessage?.createdAt ?? null,
-            debugLogs,
-            createdIds,
-            reinforcedIds,
-            collected,
+      const rendered: FoldOtherMessage[] = sliceMessages.map(m => ({
+        speaker: speakerLabel(m, speakerNames),
+        content: m.content ?? '',
+        createdAt: m.createdAt ?? null,
+      }))
+      const lastStamped = [...sliceMessages].reverse().find(m => m.createdAt)
+      // The memory-calendar zone is resolved before the prompt is built and
+      // rides on the clock to the `when` resolver (writeCandidate).
+      const clock: ExtractionClock = {
+        nowIso: lastStamped?.createdAt ?? new Date().toISOString(),
+        timelineMode: input.timelineMode,
+        timeZone: await refreshMemoryTimeZone(),
+      }
+      const writeCtx = {
+        chatId,
+        userId,
+        projectId: input.projectId ?? null,
+        timelineMode: input.timelineMode,
+        inAutonomousRoom: input.inAutonomousRoom,
+        dryRun: input.dryRun,
+        transcript: { turnTimestamp: clock.nowIso },
+      }
+      let sliceTimeouts = 0
+
+      for (const observer of observers) {
+        const rl = await resolveExtractionRateLimit(observer.id, limits)
+        if (rl.mode === 'skip') {
+          logger.debug('[FoldOtherPass] Observer rate-limited; skipping', {
+            chatId,
+            observer: observer.name,
+            recentCount: rl.recentCount,
+            cap: rl.cap,
+          })
+          continue
+        }
+
+        const observerCharacter = participantCharacters.get(observer.id)
+        const observerVault = {
+          characterId: observer.id,
+          mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
+        }
+        type ResolvedSubject = OtherSubjectInput & { canonSource: string }
+        const resolved: ResolvedSubject[] = []
+        for (const subject of subjects.filter(s => s.id !== observer.id)) {
+          const subjectCharacter = participantCharacters.get(subject.id)
+          const canon = await loadCanonForObserverAboutSubject(observerVault, {
+            id: subject.id,
+            name: subject.name,
+            identity: subjectCharacter?.identity ?? null,
+            description: subjectCharacter?.description ?? null,
+          })
+          resolved.push({
+            id: subject.id,
+            name: subject.name,
+            pronouns: subject.pronouns,
+            isUser: subject.isUser,
+            canonBlock: renderOtherCanonBlock(canon),
+            canonSource: canon.source,
           })
         }
+        if (resolved.length === 0) continue
+
+        const extraction = await extractOtherMemoriesFromFold(
+          rendered,
+          { id: observer.id, name: observer.name, pronouns: observer.pronouns },
+          resolved,
+          perSubjectCap,
+          input.cheapLLM,
+          userId,
+          input.uncensoredFallback,
+          chatId,
+          input.cheapMaxTokens,
+          input.inAutonomousRoom,
+          orienting,
+          clock,
+        )
+
+        if (extraction.usage) {
+          result.usage.promptTokens += extraction.usage.promptTokens
+          result.usage.completionTokens += extraction.usage.completionTokens
+          result.usage.totalTokens += extraction.usage.totalTokens
+        }
+        if (!extraction.success) {
+          if (extraction.timedOut) {
+            result.passesLostToTimeout++
+            sliceTimeouts++
+          }
+          logger.warn('[FoldOtherPass] OTHER extraction failed', {
+            chatId,
+            observer: observer.name,
+            slice: sliceIndex + 1,
+            timedOut: extraction.timedOut === true,
+            error: extraction.error,
+          })
+          continue
+        }
+
+        const bySubject = extraction.result ?? new Map<string, MemoryCandidate[]>()
+        const lastMessage = lastMessageByCharacter.get(observer.id) ?? sliceMessages[sliceMessages.length - 1]
+        for (const subject of resolved) {
+          // The parser allows one extra slot for an anchored event; the fold
+          // grain's contract is a hard cap per subject.
+          const proposed = (bySubject.get(subject.id) ?? []).slice(0, perSubjectCap)
+          const candidates = rl.mode === 'throttle' ? applyImportanceFloor(proposed, rl.floor) : proposed
+          result.candidatesProposed += candidates.length
+          logger.debug('[FoldOtherPass] Candidates for pair', {
+            chatId,
+            observer: observer.name,
+            subject: subject.name,
+            canon: subject.canonSource,
+            proposed: proposed.length,
+            kept: candidates.length,
+          })
+          for (const candidate of candidates) {
+            await writeCandidate({
+              characterId: observer.id,
+              characterName: observer.name,
+              aboutCharacterId: subject.id,
+              aboutCharacterName: subject.name,
+              pass: 'OTHER',
+              candidate,
+              passLabel: `fold OTHER memory ${observer.name} about ${subject.name}`,
+              ctx: writeCtx,
+              timeZone: clock.timeZone,
+              sourceMessageId: lastMessage?.id ?? null,
+              sourceMessageCreatedAt: lastMessage?.createdAt ?? null,
+              debugLogs,
+              createdIds,
+              reinforcedIds,
+              collected,
+            })
+          }
+        }
       }
+
+      // A pass lost to a timeout leaves the watermark where it was: this slice
+      // and everything after it are still uncovered, and the next fold or
+      // sweep will take them up. Later slices are not read now — reading them
+      // would let a later advance skip this one.
+      if (sliceTimeouts > 0) {
+        logger.warn('[FoldOtherPass] Passes lost to timeout; watermark not advanced past this slice', {
+          chatId,
+          slice: sliceIndex + 1,
+          slices: slices.length,
+          passesLostToTimeout: result.passesLostToTimeout,
+        })
+        break
+      }
+      await advanceWatermark(chatId, slice.coverThroughMessageId, input.dryRun === true, result)
     }
 
+    result.observers = observerIds.size
     result.memoriesWritten = createdIds.length
     result.memoriesReinforced = reinforcedIds.length
     if (input.dryRun) result.extractedCandidates = collected
-
-    // A pass lost to a timeout leaves the watermark where it was: the window
-    // is still uncovered and the next fold or sweep will take it up.
-    if (result.passesLostToTimeout === 0) {
-      await advanceWatermark(chatId, coverThrough, input.dryRun === true, result)
-    } else {
-      logger.warn('[FoldOtherPass] Passes lost to timeout; watermark not advanced', {
-        chatId,
-        passesLostToTimeout: result.passesLostToTimeout,
-      })
-    }
+    if (slicesWithNothingToObserve === slices.length) result.skippedReason = 'nothing-to-observe'
 
     logger.info('[FoldOtherPass] Fold-grain OTHER pass complete', {
       chatId,
+      slices: slices.length,
       observers: result.observers,
       candidatesProposed: result.candidatesProposed,
       memoriesWritten: result.memoriesWritten,
@@ -431,6 +488,13 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
     result.skippedReason = 'error'
     return result
   }
+}
+
+async function loadTranscript(chatId: string): Promise<MessageEvent[]> {
+  logger.debug('[FoldOtherPass] Reading the transcript to place the watermark', { chatId })
+  return (await getRepositories().chats.getMessages(chatId)).filter(
+    (m): m is MessageEvent => m.type === 'message',
+  ) as unknown as MessageEvent[]
 }
 
 async function advanceWatermark(
@@ -603,14 +667,7 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
     input.availableProfiles,
   )
 
-  let projectDescription: string | null = null
-  if (chat.projectId) {
-    try {
-      projectDescription = (await repos.projects.findById(chat.projectId))?.description ?? null
-    } catch {
-      // degrade to no project description
-    }
-  }
+  const projectDescription = await loadExtractionProjectDescription(chat.projectId, { chatId })
 
   logger.debug('[FoldOtherCatchup] Running catch-up pass', {
     chatId,
@@ -621,9 +678,10 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
     chatId,
     userId,
     windowMessages: window,
+    chatMessages: messages,
     cheapLLM,
     cheapMaxTokens: resolveMaxTokens(input.connectionProfile),
-    uncensoredFallback: { conciergePolicy, availableProfiles: input.availableProfiles },
+    uncensoredFallback: buildExtractionUncensoredFallback(chat, conciergePolicy, input.availableProfiles),
     timelineMode: chat.timelineMode ?? 'realtime',
     projectId: chat.projectId ?? null,
     inAutonomousRoom: chat.chatType === 'autonomous',

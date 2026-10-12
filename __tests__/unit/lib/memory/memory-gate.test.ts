@@ -165,34 +165,37 @@ describe('extractNovelDetails', () => {
 // =============================================================================
 
 describe('calculateReinforcedImportance', () => {
-  it('calculates correctly for reinforcementCount=1', () => {
-    // base 0.5, count 1 -> 0.5 + log2(2) * 0.05 = 0.5 + 1 * 0.05 = 0.55
-    const result = calculateReinforcedImportance(0.5, 1)
-    expect(result).toBeCloseTo(0.55, 10)
+  // Bug 216 / locked decision 6: min(1, i + log2(n) * 0.05), so count 1 equals importance.
+  it.each([0, 0.1, 0.3, 0.5, 0.65, 0.9, 1.0])('equals importance at reinforcementCount=1 (i=%p)', (i) => {
+    expect(calculateReinforcedImportance(i, 1)).toBeCloseTo(i, 10)
+  })
+
+  it('adds one step per doubling of the count', () => {
+    // base 0.5, count 2 -> 0.5 + log2(2) * 0.05 = 0.55
+    expect(calculateReinforcedImportance(0.5, 2)).toBeCloseTo(0.55, 10)
+    // count 4 -> 0.6
+    expect(calculateReinforcedImportance(0.5, 4)).toBeCloseTo(0.6, 10)
   })
 
   it('calculates correctly for reinforcementCount=10 and stays below 1.0', () => {
-    // base 0.5, count 10 -> 0.5 + log2(11) * 0.05 ~= 0.5 + 3.459 * 0.05 ~= 0.673
     const result = calculateReinforcedImportance(0.5, 10)
-    expect(result).toBeCloseTo(0.5 + Math.log2(11) * 0.05, 10)
+    expect(result).toBeCloseTo(0.5 + Math.log2(10) * 0.05, 10)
     expect(result).toBeLessThan(1.0)
   })
 
   it('caps at 1.0 for large count with high base importance', () => {
-    // base 0.9, count 100 -> 0.9 + log2(101) * 0.05 ~= 0.9 + 6.658 * 0.05 ~= 1.233 -> capped at 1.0
     const result = calculateReinforcedImportance(0.9, 100)
     expect(result).toBe(1.0)
   })
 
-  it('applies minimal boost for count of 0', () => {
-    // base 0.5, count 0 -> 0.5 + log2(1) * 0.05 = 0.5 + 0 * 0.05 = 0.5
-    const result = calculateReinforcedImportance(0.5, 0)
-    expect(result).toBeCloseTo(0.5, 10)
+  it('treats a count below 1 as 1 (no negative bonus)', () => {
+    expect(calculateReinforcedImportance(0.5, 0)).toBeCloseTo(0.5, 10)
+    expect(calculateReinforcedImportance(0.5, -3)).toBeCloseTo(0.5, 10)
+    expect(calculateReinforcedImportance(0.5, Number.NaN)).toBeCloseTo(0.5, 10)
   })
 
   it('handles base importance of 0', () => {
-    // base 0, count 5 -> 0 + log2(6) * 0.05 ~= 0 + 2.585 * 0.05 ~= 0.129
-    const result = calculateReinforcedImportance(0, 5)
+    const result = calculateReinforcedImportance(0, 6)
     expect(result).toBeCloseTo(Math.log2(6) * 0.05, 10)
     expect(result).toBeGreaterThan(0)
   })

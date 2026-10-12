@@ -1120,6 +1120,14 @@ export const ChatMetadataSchema = z.object({
    * first fold-grain pass.
    */
   otherExtractionWatermarkMessageId: z.string().nullable().optional(),
+  /**
+   * The Commonplace Book — the last message the fold-time episode pass has
+   * read. A fold window (a hard rebuild re-walks turns 1..N) is cut to what
+   * lies past it, so the pass never re-extracts history it already covered
+   * (bug 207). Null until the first episode pass (backfilled from the summary
+   * anchors by add-episode-extraction-watermark-v1). Patch-only.
+   */
+  episodeExtractionWatermarkMessageId: z.string().nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
@@ -1469,6 +1477,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Fold-grain OTHER extraction watermark. See ChatMetadataSchema for the contract. */
   otherExtractionWatermarkMessageId: z.string().nullable().optional(),
+
+  /** Fold-time episode pass watermark. See ChatMetadataSchema for the contract. */
+  episodeExtractionWatermarkMessageId: z.string().nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.

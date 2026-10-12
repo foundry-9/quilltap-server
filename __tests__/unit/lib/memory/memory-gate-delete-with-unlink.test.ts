@@ -13,14 +13,26 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/database/manager', () => ({
-  __esModule: true,
-  rawQuery: jest.fn(),
-  registerBlobColumns: jest.fn(),
-  getDatabase: jest.fn(),
-  getDatabaseAsync: jest.fn(),
-  initializeDatabase: jest.fn(),
-}))
+// The digest-link scrub (bug 225) reads through repository methods now, which
+// `buildRepo` answers with nothing; the routing below stays as a guard so any
+// raw digest query still gets an empty answer and the scripted
+// `scriptedRawQuery` sees exactly the relatedMemoryIds scan and the doomed-id
+// resolves these tests pin.
+jest.mock('@/lib/database/manager', () => {
+  const scriptedRawQuery = jest.fn()
+  const isDigestScrub = (sql: string) =>
+    sql.includes('consolidatedFrom') || sql.includes('supersededById IN')
+  return {
+    __esModule: true,
+    scriptedRawQuery,
+    rawQuery: jest.fn((sql: string, params: unknown[]) =>
+      isDigestScrub(sql) ? Promise.resolve([]) : scriptedRawQuery(sql, params)),
+    registerBlobColumns: jest.fn(),
+    getDatabase: jest.fn(),
+    getDatabaseAsync: jest.fn(),
+    initializeDatabase: jest.fn(),
+  }
+})
 
 jest.mock('@/lib/embedding/vector-store', () => ({
   getCharacterVectorStore: jest.fn(),
@@ -50,7 +62,7 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
-const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock }
+const dbMock = { rawQuery: (jest.requireMock('@/lib/database/manager') as { scriptedRawQuery: jest.Mock }).scriptedRawQuery }
 
 let deleteMemoryWithUnlink: typeof import('@/lib/memory/memory-gate').deleteMemoryWithUnlink
 let deleteMemoriesWithUnlinkBatch: typeof import('@/lib/memory/memory-gate').deleteMemoriesWithUnlinkBatch
@@ -82,6 +94,12 @@ function buildRepo(rows: FakeMemoryRow[]) {
           bulkDeleted.push({ characterId, ids })
           return ids.length
         }),
+        // The digest scrub (bug 225; covered in memory-delete-digest-chokepoint.test.ts)
+        // finds nothing to scrub here.
+        findDigestsContainingMembers: jest.fn(async () => []),
+        findIdsSupersededByAny: jest.fn(async () => []),
+        removeConsolidatedMembers: jest.fn(async () => 0),
+        updateTierBulk: jest.fn(async () => 0),
         updateForCharacter: jest.fn(async (characterId: string, memoryId: string, patch: { relatedMemoryIds?: string[] }) => {
           updates.push({ characterId, memoryId, relatedMemoryIds: patch.relatedMemoryIds ?? [] })
           return null
