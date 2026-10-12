@@ -25,8 +25,10 @@ const {
   setItemArchived,
   updateItem,
   validateComponentRefs,
+  moveItemsToFolder,
 } = require('@/lib/wardrobe/item-mutations') as typeof import('@/lib/wardrobe/item-mutations');
 const { buildCompositeTypes } = require('@/lib/wardrobe/composite-types') as typeof import('@/lib/wardrobe/composite-types');
+const { resolveWardrobeFolder } = require('@/lib/wardrobe/folders') as typeof import('@/lib/wardrobe/folders');
 
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
@@ -68,6 +70,13 @@ function makeLocation(overrides: Record<string, unknown> = {}) {
     update: jest.fn(async (id: string, patch: Partial<WardrobeItem>) => ({ ...item(id, ['top']), ...patch })),
     delete: jest.fn(async () => true),
     writableMountPointId: jest.fn(async () => 'vault-1'),
+    // The real resolver over this wardrobe's (fixture) folders.
+    resolveFolder: jest.fn(async (requested: string) =>
+      resolveWardrobeFolder(['Formal', 'Hats: Summer', 'Accessories/images'], requested),
+    ),
+    updateMany: jest.fn(async (patches: Array<{ id: string; patch: Partial<WardrobeItem> }>) =>
+      patches.map(({ id, patch }) => ({ ...item(id, ['top']), ...patch })),
+    ),
     ...overrides,
   };
 }
@@ -282,5 +291,45 @@ describe('componentLookupFor', () => {
     const lookup = await componentLookupFor({} as never, location as never);
     expect(mockReadGeneralWardrobe).not.toHaveBeenCalled();
     expect(Array.from(lookup.keys())).toEqual(['hat']);
+  });
+});
+
+describe('folders', () => {
+  it('a create files into an existing folder as stored, and normalises a new one', async () => {
+    const location = makeLocation();
+    const hand = await createItem(location as never, { title: 'Boater', types: ['accessories'], folder: 'hats: summer' } as never);
+    expect(hand.folder).toBe('Hats: Summer');
+    const fresh = await createItem(location as never, { title: 'Cape', types: ['top'], folder: 'formal/Rainy: days' } as never);
+    expect(fresh.folder).toBe('Formal/Rainy_ days');
+    const root = await createItem(location as never, { title: 'Coat', types: ['top'] } as never);
+    expect(root.folder).toBe('');
+  });
+
+  it('an update naming the folder the item is already in moves nothing — even a hand-made one', async () => {
+    const location = makeLocation();
+    const hat = { ...item('hat', ['accessories']), folder: 'Accessories/images' };
+    await updateItem(location as never, hat, { description: 'Straw.', folder: 'accessories/images' });
+    const patch = location.update.mock.calls[0][1] as Partial<WardrobeItem>;
+    expect(patch).not.toHaveProperty('folder');
+    expect(location.resolveFolder).not.toHaveBeenCalled();
+  });
+
+  it('an update that changes folder resolves it', async () => {
+    const location = makeLocation();
+    await updateItem(location as never, item('coat', ['top']), { folder: 'formal' });
+    expect((location.update.mock.calls[0][1] as Partial<WardrobeItem>).folder).toBe('Formal');
+  });
+
+  it('moveItemsToFolder files a batch in one updateMany that refuses missing ids', async () => {
+    const location = makeLocation();
+    const moved = await moveItemsToFolder(location as never, ['a', 'b', 'a'], 'formal');
+    expect(location.updateMany).toHaveBeenCalledWith(
+      [
+        { id: 'a', patch: { folder: 'Formal' } },
+        { id: 'b', patch: { folder: 'Formal' } },
+      ],
+      { requireAll: true },
+    );
+    expect(moved.map((i) => i.folder)).toEqual(['Formal', 'Formal']);
   });
 });

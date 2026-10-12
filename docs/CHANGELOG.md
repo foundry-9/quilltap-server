@@ -27,6 +27,12 @@
 - `wardrobe_list` / `wardrobe_read` results carry `folder` (read-only) and render `[folder: …]`.
 - `qtap-export.schema.json` documents `folder` on wardrobe items; imported items keep their folder
   (normalised, or the top level when it cannot be).
+- Review fixes: the wardrobe projection sweeps only files that parse as items (notes under `Wardrobe/` are
+  never deleted); a requested folder resolves against the tier's existing folders (hand-made spellings kept,
+  only new parts normalised) and an edit that keeps its folder moves nothing; folder rename stamps ids into
+  id-less files first; delete-folder pre-checks non-item files and same-name subfolders (409, nothing moved);
+  `GET ?action=folders` no longer provisions stores; projection ensures only missing folders; folder moves no
+  longer re-read the wardrobe for casing; the delete confirmation mentions archived pieces.
 
 #### Specs: scenarios from anywhere; wardrobe folders
 

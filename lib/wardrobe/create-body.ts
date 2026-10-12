@@ -19,7 +19,6 @@
 
 import type { z } from 'zod';
 import type { createWardrobeSchema, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { normalizeWardrobeFolderPath } from '@/lib/wardrobe/folders';
 
 /** A parsed `createWardrobeSchema` body. A full `WardrobeItem` satisfies it too. */
 export type WardrobeCreateBody = z.infer<typeof createWardrobeSchema>;
@@ -36,8 +35,8 @@ function prose(value: string | null | undefined): string | null {
  * Map a validated create body onto the stored item fields for `characterId`
  * (`null` for a shared item). Optional body fields resolve to their storage
  * defaults; `migratedFromClothingRecordId` is always `null` for a fresh item.
- * The folder is normalised (`WardrobeFolderPathError` for one that breaks the
- * rules); a missing folder is the root.
+ * The folder is carried as requested (a missing one is the root);
+ * `createItem` resolves it against the destination's folders before writing.
  */
 export function wardrobeItemFromCreateBody(
   body: WardrobeCreateBody,
@@ -55,6 +54,6 @@ export function wardrobeItemFromCreateBody(
     replace: body.replace ?? false,
     migratedFromClothingRecordId: null,
     imageFileId: null,
-    folder: normalizeWardrobeFolderPath(body.folder),
+    folder: body.folder ?? '',
   };
 }

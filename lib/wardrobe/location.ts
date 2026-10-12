@@ -34,6 +34,7 @@ import {
   createInMount,
   deleteFolderInMount,
   deleteInMount,
+  listFolderPathsInMount,
   listFoldersInMount,
   readMountItems,
   renameFolderInMount,
@@ -45,7 +46,7 @@ import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import type { WardrobeFolder } from '@/lib/wardrobe/folders';
+import { resolveWardrobeFolder, type WardrobeFolder } from '@/lib/wardrobe/folders';
 import {
   GENERAL_WARDROBE_ORIGIN,
   type WardrobeOrigin,
@@ -76,10 +77,19 @@ export interface WardrobeLocation {
    * in patch order (an id not in the folder is skipped). `update` is this
    * with one patch.
    */
-  updateMany(patches: Array<{ id: string; patch: Partial<WardrobeItem> }>): Promise<WardrobeItem[]>;
+  updateMany(
+    patches: Array<{ id: string; patch: Partial<WardrobeItem> }>,
+    opts?: { requireAll?: boolean },
+  ): Promise<WardrobeItem[]>;
   delete(id: string): Promise<boolean>;
   /** Every folder under `Wardrobe/` (empty ones included), with direct item counts. */
   listFolders(): Promise<WardrobeFolder[]>;
+  /**
+   * Resolve an operator's requested folder against this wardrobe's folders
+   * (`resolveWardrobeFolder`): an existing folder as stored, else the new
+   * part normalised. Throws `WardrobeFolderPathError`.
+   */
+  resolveFolder(requested: string): Promise<string>;
   /** Create a folder (normalised path); an existing one in any casing is answered. */
   createFolder(path: string): Promise<WardrobeFolder>;
   /** Rename a folder in place to `newName` (one normalised segment). */
@@ -121,7 +131,7 @@ export function locationForMount(
   };
 
   // Identity and timestamps are the writer's, never a patch's.
-  const updateMany: WardrobeLocation['updateMany'] = async (patches) => {
+  const updateMany: WardrobeLocation['updateMany'] = async (patches, opts) => {
     const cleaned = patches.map(({ id: itemId, patch }) => {
       const rest = { ...patch };
       delete rest.id;
@@ -129,7 +139,7 @@ export function locationForMount(
       delete rest.updatedAt;
       return { id: itemId, patch: rest };
     });
-    return updateManyInMount(await writableMount(), cleaned);
+    return updateManyInMount(await writableMount(), cleaned, opts);
   };
 
   return {
@@ -158,6 +168,10 @@ export function locationForMount(
     },
     async listFolders() {
       return listFoldersInMount(mount);
+    },
+    async resolveFolder(requested) {
+      if (!requested || !requested.trim()) return '';
+      return resolveWardrobeFolder(await listFolderPathsInMount(mount), requested);
     },
     async createFolder(path) {
       return createFolderInMount(await writableMount(), path);

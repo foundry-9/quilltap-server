@@ -273,12 +273,17 @@ export function WardrobeBrowser({
   const deleteFolder = async (path: string): Promise<void> => {
     if (!container) return
     const parent = parentFolder(path)
+    // The list holds archived pieces only when "Show archived" is ticked, but
+    // the server moves them all; say so rather than understate the move.
     const count = tierItems.filter((i) => isUnderFolder(i.folder ?? '', path)).length
-    const parentLabel = parent ? `*${folderName(parent)}*` : 'the top of the wardrobe'
+    const archivedNote = showArchived ? '' : ' (and any archived pieces filed there)'
+    const parentLabel = parent ? `"${folderName(parent)}"` : 'the top of the wardrobe'
     const message =
       count > 0
-        ? `Send its ${plural(count, 'item')} up to ${parentLabel}? Only the folder itself goes.`
-        : `Remove the empty folder "${folderName(path)}"?`
+        ? `Send its ${plural(count, 'item')}${archivedNote} up to ${parentLabel}? Only the folder itself goes.`
+        : showArchived
+          ? `Remove the empty folder "${folderName(path)}"?`
+          : `Remove the folder "${folderName(path)}"? Anything archived in it goes up to ${parentLabel}.`
     if (!(await actions.confirm(message))) return
     try {
       const result = await folderOps.deleteFolder(container, path)

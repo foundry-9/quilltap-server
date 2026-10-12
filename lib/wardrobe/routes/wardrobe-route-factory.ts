@@ -217,11 +217,19 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   // --------------------------------------------------------------------------
 
   async function handleGetFolders(_req: NextRequest, ctx: RequestContext, params: P) {
-    const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
-      ensure: scope !== 'character',
-    });
+    // A read probe never provisions a store: a project or group with no store
+    // yet (or an unprovisioned General) simply has no folders.
+    const id = config.paramsToId(params);
+    const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
     if (!location) {
       if (scope === 'general') return successResponse({ folders: [] });
+      if (scope !== 'character' && id) {
+        const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
+        if (owner) {
+          logger.debug(`${logTag} No store yet; no wardrobe folders`, { [logIdKey]: id, context: 'wardrobe' });
+          return successResponse({ folders: [] });
+        }
+      }
       return notFound(LABELS[scope].owner);
     }
     const folders = await location.listFolders();

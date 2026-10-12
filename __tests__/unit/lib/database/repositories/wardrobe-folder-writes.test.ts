@@ -25,12 +25,17 @@ jest.mock('@/lib/logger', () => {
 });
 
 interface FolderRow { id: string; path: string }
-interface Link { relativePath: string }
-const store: { items: WardrobeItem[]; folders: FolderRow[]; strays: Link[] } = {
+interface Link { relativePath: string; content?: string }
+const store: { items: WardrobeItem[]; folders: FolderRow[]; strays: Link[]; unstamped: Set<string> } = {
   items: [],
   folders: [],
   strays: [],
+  unstamped: new Set(),
 };
+const itemPath = (i: WardrobeItem) => `Wardrobe/${i.folder ? `${i.folder}/` : ''}${i.title}.md`;
+const itemContent = (i: WardrobeItem) =>
+  // Fixture ids are short; a stamped file carries a UUID-shaped id line.
+  `---\n${store.unstamped.has(i.id) ? '' : 'id: 00000000-0000-4000-8000-000000000000\n'}title: ${i.title}\ntypes:\n  - top\n---\n`;
 const lower = (s: string) => s.toLowerCase();
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -44,11 +49,17 @@ jest.mock('@/lib/repositories/factory', () => ({
     },
     docMountFileLinks: {
       findByMountPointId: jest.fn(async () => [
-        ...store.items.map((i) => ({
-          relativePath: `Wardrobe/${i.folder ? `${i.folder}/` : ''}${i.title}.md`,
-        })),
+        ...store.items.map((i) => ({ relativePath: itemPath(i) })),
         ...store.strays,
       ]),
+    },
+    docMountDocuments: {
+      findManyByMountPointsInFolder: jest.fn(async (_mps: string[], folder: string) =>
+        [
+          ...store.items.map((i) => ({ relativePath: itemPath(i), content: itemContent(i) })),
+          ...store.strays.filter((l) => l.content !== undefined),
+        ].filter((d) => lower(d.relativePath).startsWith(`${lower(folder)}/`)),
+      ),
     },
   }),
 }));
@@ -64,6 +75,8 @@ jest.mock('@/lib/database/repositories/vault-overlay/vault-readers', () => ({
 const projectMock = jest.fn(async (_mp: string, _owner: string, items: WardrobeItem[]) => {
   for (const item of items) if (item.folder) ensureRows(item.folder);
   store.items = items.map((i) => ({ ...i, folder: canonical(i.folder) }));
+  // A projection writes every item's id into its file.
+  store.unstamped.clear();
 });
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-sync', () => ({
   projectVaultWardrobe: (...a: [string, string, WardrobeItem[]]) => projectMock(...a),
@@ -134,7 +147,11 @@ import {
   updateManyInMount,
   type WardrobeMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { WardrobeFolderConflictError, WardrobeFolderNotFoundError } from '@/lib/wardrobe/folders';
+import {
+  WardrobeFolderConflictError,
+  WardrobeFolderNotFoundError,
+  WardrobeItemNotInLocationError,
+} from '@/lib/wardrobe/folders';
 
 const MOUNT: WardrobeMount = { mountPointId: 'm-1', scope: 'project', characterId: null };
 
@@ -160,6 +177,7 @@ beforeEach(() => {
   store.items = [];
   store.folders = [];
   store.strays = [];
+  store.unstamped = new Set();
   readMock.mockClear();
   projectMock.mockClear();
   moveFolderMock.mockClear();
@@ -167,22 +185,42 @@ beforeEach(() => {
 });
 
 describe('updateManyInMount', () => {
-  it('moves a batch with one read-modify and one projection, answering stored casing', async () => {
+  it('moves a batch with one read and one projection, and no read-back', async () => {
     store.folders = [{ id: 'f-0', path: 'Wardrobe/Formal' }];
     store.items = [item('a', 'Coat'), item('b', 'Hat'), item('c', 'Scarf')];
 
     const moved = await updateManyInMount(MOUNT, [
-      { id: 'a', patch: { folder: 'formal' } },
-      { id: 'b', patch: { folder: 'formal' } },
-      { id: 'missing', patch: { folder: 'formal' } },
+      { id: 'a', patch: { folder: 'Formal' } },
+      { id: 'b', patch: { folder: 'Formal' } },
+      { id: 'missing', patch: { folder: 'Formal' } },
     ]);
 
+    expect(readMock).toHaveBeenCalledTimes(1);
     expect(projectMock).toHaveBeenCalledTimes(1);
     expect(moved.map((i) => [i.id, i.folder])).toEqual([
       ['a', 'Formal'],
       ['b', 'Formal'],
     ]);
     expect(store.items.find((i) => i.id === 'c')!.folder).toBe('');
+  });
+
+  it('with requireAll, refuses the whole batch over a missing id before writing', async () => {
+    store.items = [item('a', 'Coat')];
+    await expect(
+      updateManyInMount(MOUNT, [{ id: 'a', patch: { folder: 'Formal' } }, { id: 'borrowed', patch: { folder: 'Formal' } }], {
+        requireAll: true,
+      }),
+    ).rejects.toBeInstanceOf(WardrobeItemNotInLocationError);
+    expect(projectMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a hand-made folder an item brings, and refuses a path that climbs out', async () => {
+    store.items = [item('a', 'Coat'), item('b', 'Hat')];
+    await updateManyInMount(MOUNT, [
+      { id: 'a', patch: { folder: 'Hats: Summer' } },
+      { id: 'b', patch: { folder: '../escape' } },
+    ]);
+    expect(store.items.map((i) => i.folder)).toEqual(['Hats: Summer', '']);
   });
 });
 
@@ -239,6 +277,18 @@ describe('renameFolderInMount', () => {
     expect(projectMock).not.toHaveBeenCalled();
   });
 
+  it('stamps ids into files that lack one before moving them, so no item changes identity', async () => {
+    store.folders = [{ id: 'f-0', path: 'Wardrobe/Formal' }];
+    store.items = [item('a', 'Gown', 'Formal')];
+    store.unstamped.add('a');
+
+    await renameFolderInMount(MOUNT, 'Formal', 'Evening');
+
+    expect(projectMock).toHaveBeenCalledTimes(1);
+    expect(projectMock.mock.invocationCallOrder[0]).toBeLessThan(moveFolderMock.mock.invocationCallOrder[0]);
+    expect(store.items[0]).toMatchObject({ id: 'a', folder: 'Evening' });
+  });
+
   it('refuses a name a sibling already holds, in any casing', async () => {
     store.folders = [{ id: 'f-0', path: 'Wardrobe/Formal' }, { id: 'f-1', path: 'Wardrobe/Dress' }];
     await expect(renameFolderInMount(MOUNT, 'Formal', 'dress')).rejects.toBeInstanceOf(
@@ -284,10 +334,23 @@ describe('deleteFolderInMount', () => {
     ]);
   });
 
-  it('refuses, before moving anything, a folder holding files that are not items', async () => {
+  it.each([
+    ['a .txt', { relativePath: 'Wardrobe/Formal/notes.txt' }],
+    ['a note with no slots', { relativePath: 'Wardrobe/Formal/notes.md', content: '# Press the tails.' }],
+    ['a nested instructions.md', { relativePath: 'Wardrobe/Formal/instructions.md', content: 'Tweeds.' }],
+  ])('refuses, before moving anything, a folder holding %s', async (_label, stray) => {
     store.folders = [{ id: 'f-0', path: 'Wardrobe/Formal' }];
     store.items = [item('a', 'Coat', 'Formal')];
-    store.strays = [{ relativePath: 'Wardrobe/Formal/notes.txt' }];
+    store.strays = [stray];
+
+    await expect(deleteFolderInMount(MOUNT, 'Formal')).rejects.toBeInstanceOf(WardrobeFolderConflictError);
+    expect(projectMock).not.toHaveBeenCalled();
+    expect(deleteFolderMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses, before moving anything, a folder whose subfolder shares its name', async () => {
+    store.folders = [{ id: 'f-0', path: 'Wardrobe/Formal' }, { id: 'f-1', path: 'Wardrobe/Formal/Formal' }];
+    store.items = [item('a', 'Coat', 'Formal'), item('b', 'Gown', 'Formal/Formal')];
 
     await expect(deleteFolderInMount(MOUNT, 'Formal')).rejects.toBeInstanceOf(WardrobeFolderConflictError);
     expect(projectMock).not.toHaveBeenCalled();

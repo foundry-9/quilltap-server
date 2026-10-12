@@ -34,6 +34,8 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   updateInMount: jest.fn(),
   deleteInMount: jest.fn(),
   resolveWardrobeMount: jest.fn(),
+  // A destination with no folders yet: every carried folder is created.
+  listFolderPathsInMount: jest.fn(async () => []),
 }))
 
 jest.mock('@/lib/database/repositories/characters.repository', () => ({

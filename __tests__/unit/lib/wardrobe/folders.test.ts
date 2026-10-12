@@ -11,6 +11,7 @@ import {
   folderOfWardrobePath,
   isSameFolder,
   isUnderFolder,
+  isSafeWardrobeFolderPath,
   isValidWardrobeFolderPath,
   joinFolder,
   normalizeWardrobeFolderName,
@@ -18,6 +19,7 @@ import {
   normalizeWardrobeFolderPathOrRoot,
   parentFolder,
   rebaseFolder,
+  resolveWardrobeFolder,
   WARDROBE_FOLDER_MAX_DEPTH,
   WardrobeFolderPathError,
   wardrobeFolderStorePath,
@@ -122,5 +124,48 @@ describe('path helpers', () => {
     expect(rebaseFolder('Formal/Evening/Gala', 'Formal/Evening', 'Formal')).toBe('Formal/Gala');
     expect(rebaseFolder('Formal', 'Formal', '')).toBe('');
     expect(rebaseFolder('Casual', 'Formal', '')).toBe('Casual');
+  });
+});
+
+describe('isSafeWardrobeFolderPath', () => {
+  it('accepts any folder a real store can hold, hand-made spellings included', () => {
+    expect(isSafeWardrobeFolderPath('')).toBe(true);
+    expect(isSafeWardrobeFolderPath('Hats: Summer')).toBe(true);
+    expect(isSafeWardrobeFolderPath('Formal/images')).toBe(true);
+  });
+
+  it('refuses paths that climb, are empty-segmented, or sit under images/', () => {
+    expect(isSafeWardrobeFolderPath('../escape')).toBe(false);
+    expect(isSafeWardrobeFolderPath('Formal//Evening')).toBe(false);
+    expect(isSafeWardrobeFolderPath('/Formal')).toBe(false);
+    expect(isSafeWardrobeFolderPath('images/abc')).toBe(false);
+    expect(isSafeWardrobeFolderPath('A\\B')).toBe(false);
+  });
+});
+
+describe('resolveWardrobeFolder', () => {
+  const EXISTING = ['Formal', 'Formal/Evening', 'Hats: Summer', 'Accessories/images'];
+
+  it('answers an existing folder exactly as stored, in any casing', () => {
+    expect(resolveWardrobeFolder(EXISTING, 'formal/evening')).toBe('Formal/Evening');
+    expect(resolveWardrobeFolder(EXISTING, 'hats: summer')).toBe('Hats: Summer');
+    expect(resolveWardrobeFolder(EXISTING, '/accessories/images/')).toBe('Accessories/images');
+  });
+
+  it('keeps an existing ancestor as stored and normalises only the new part', () => {
+    expect(resolveWardrobeFolder(EXISTING, 'Hats: Summer/Straw: boaters')).toBe('Hats: Summer/Straw_ boaters');
+    expect(() => resolveWardrobeFolder(EXISTING, 'Formal/images')).toThrow(WardrobeFolderPathError);
+  });
+
+  it('normalises a wholly new folder, and reads empty as the root', () => {
+    expect(resolveWardrobeFolder(EXISTING, ' Rainy: days ')).toBe('Rainy_ days');
+    expect(resolveWardrobeFolder(EXISTING, '')).toBe('');
+    expect(() => resolveWardrobeFolder(EXISTING, 'images')).toThrow(WardrobeFolderPathError);
+  });
+
+  it('holds the depth cap across an existing ancestor', () => {
+    const deep = Array.from({ length: 7 }, (_, i) => `L${i}`).join('/');
+    expect(resolveWardrobeFolder([deep], `${deep}/L7`)).toBe(`${deep}/L7`);
+    expect(() => resolveWardrobeFolder([deep], `${deep}/L7/L8`)).toThrow(WardrobeFolderPathError);
   });
 });

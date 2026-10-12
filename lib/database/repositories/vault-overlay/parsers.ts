@@ -267,6 +267,29 @@ export function isWardrobeItemDocumentPath(relativePath: string): boolean {
 }
 
 /**
+ * True for a document the wardrobe owns: an item path
+ * ({@link isWardrobeItemDocumentPath}) whose frontmatter carries a valid
+ * `types` list — exactly the files `parseWardrobeItemFile` turns into items.
+ * The projection sweeps only these, so a note or a half-written file kept
+ * under `Wardrobe/` is never deleted by a wardrobe write. Quiet: no logging.
+ */
+export function isWardrobeItemDocument(doc: { relativePath: string; content?: string | null }): boolean {
+  if (!isWardrobeItemDocumentPath(doc.relativePath)) return false;
+  return parseWardrobeTypesField(parseFrontmatter(doc.content ?? '').data?.types) !== null;
+}
+
+/**
+ * True when a wardrobe file carries its own UUID `id` in frontmatter. A file
+ * without one takes a path-derived id ({@link resolveWardrobeItemId}), which
+ * changes if the file moves — so anything that moves files without
+ * re-projecting them must stamp ids first.
+ */
+export function hasStableWardrobeItemId(content: string | null | undefined): boolean {
+  const id = parseFrontmatter(content ?? '').data?.id;
+  return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id);
+}
+
+/**
  * The item id of a `Wardrobe/*.md` document, read from its frontmatter alone
  * (see {@link resolveWardrobeItemId}). Callers check
  * {@link isWardrobeItemDocumentPath} first.

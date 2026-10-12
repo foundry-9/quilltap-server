@@ -29,6 +29,12 @@ export interface ProjectArrayOptions {
    * Folders themselves are never deleted.
    */
   recursive?: { excludeSubfolders: readonly string[] };
+  /**
+   * Which existing files the projection owns and may sweep. Without it every
+   * stale `.md` is swept (the flat callers' behaviour); with it, a file it
+   * rejects — a note kept beside the items — is left alone.
+   */
+  ownsFile?: (doc: { relativePath: string; content?: string | null }) => boolean;
 }
 
 /**
@@ -46,7 +52,8 @@ export interface ProjectArrayOptions {
  * it.
  *
  * `opts.recursive` is off by default; the flat callers (prompts, scenarios)
- * see exactly the top-level behaviour they always have.
+ * see exactly the top-level behaviour they always have. `opts.ownsFile`
+ * narrows the sweep to the files the caller owns.
  */
 export async function projectArrayIntoVaultFolder<T>(
   mountPointId: string,
@@ -78,8 +85,16 @@ export async function projectArrayIntoVaultFolder<T>(
     const sub = recursive && slash >= 0 ? mapped.fileName.slice(0, slash) : '';
     if (!subfolders.has(sub.toLowerCase())) subfolders.set(sub.toLowerCase(), sub);
   }
+  // A folder already holding a document exists; ensure only the others (a
+  // write would create them too, but an empty projection target must exist).
+  // Flat mode keeps its one unconditional ensure.
+  const occupied = new Set(
+    existing.map((d) => d.relativePath.slice(0, d.relativePath.lastIndexOf('/')).toLowerCase()),
+  );
   for (const sub of subfolders.values()) {
-    await ensureFolderPath(mountPointId, sub ? `${folder}/${sub}` : folder);
+    const target = sub ? `${folder}/${sub}` : folder;
+    if (recursive && occupied.has(target.toLowerCase())) continue;
+    await ensureFolderPath(mountPointId, target);
   }
   if (subfolders.size > 1 || (recursive && subfolders.size === 1 && !subfolders.has(''))) {
     logger.debug('Recursive vault projection ensured subfolders', {
@@ -121,6 +136,7 @@ export async function projectArrayIntoVaultFolder<T>(
     if (writtenPaths.has(relPath.toLowerCase())) continue;
     const fileSegment = relPath.slice(relPath.lastIndexOf('/') + 1).toLowerCase();
     if (preserved.has(fileSegment)) continue;
+    if (opts?.ownsFile && !opts.ownsFile(doc)) continue;
     if (recursive) {
       const rest = relPath.slice(folderPrefixLength);
       const firstSlash = rest.indexOf('/');

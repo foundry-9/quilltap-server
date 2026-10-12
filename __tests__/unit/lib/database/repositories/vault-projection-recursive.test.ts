@@ -146,6 +146,38 @@ describe('projectArrayIntoVaultFolder — recursive', () => {
     ]);
   });
 
+  it('ensures only folders that do not already hold a document', async () => {
+    findManyByMountPointsInFolderMock.mockResolvedValue([
+      existingDoc('Wardrobe/Coat.md'),
+      existingDoc('Wardrobe/Formal/Gown.md'),
+    ]);
+
+    await projectArrayIntoVaultFolder(
+      'm-1',
+      'Wardrobe',
+      [{ file: 'Coat.md' }, { file: 'Formal/Gown.md' }, { file: 'Rainy/Mac.md' }],
+      mapper,
+      'char-1',
+      RECURSIVE,
+    );
+
+    expect(ensureFolderPathMock.mock.calls.map((c) => c[1])).toEqual(['Wardrobe/Rainy']);
+  });
+
+  it('sweeps only the files ownsFile claims', async () => {
+    findManyByMountPointsInFolderMock.mockResolvedValue([
+      existingDoc('Wardrobe/Formal/notes.md'),
+      existingDoc('Wardrobe/Formal/Old.md'),
+    ]);
+
+    await projectArrayIntoVaultFolder('m-1', 'Wardrobe', [], mapper, 'char-1', {
+      ...RECURSIVE,
+      ownsFile: (doc) => !doc.relativePath.endsWith('notes.md'),
+    });
+
+    expect(deleteDatabaseDocumentMock.mock.calls.map((c) => c[1])).toEqual(['Wardrobe/Formal/Old.md']);
+  });
+
   it('does not delete a file it just wrote when only the casing differs', async () => {
     findManyByMountPointsInFolderMock.mockResolvedValue([existingDoc('Wardrobe/Formal/Coat.md')]);
 

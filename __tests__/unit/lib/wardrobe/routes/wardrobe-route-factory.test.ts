@@ -50,6 +50,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
     updateManyInMount: jest.fn(),
     deleteInMount: jest.fn(),
     listFoldersInMount: jest.fn(),
+    listFolderPathsInMount: jest.fn(async () => []),
     createFolderInMount: jest.fn(),
     renameFolderInMount: jest.fn(),
     deleteFolderInMount: jest.fn(),
@@ -103,6 +104,7 @@ import {
   updateInMount,
   updateManyInMount,
   listFoldersInMount,
+  listFolderPathsInMount,
   createFolderInMount,
   renameFolderInMount,
   deleteFolderInMount,
@@ -273,7 +275,15 @@ beforeEach(() => {
   );
   // The location's `update` is `updateMany` with one patch; route the batch
   // through the single-item mock so the PUT assertions read one call each.
-  mockUpdateMany.mockImplementation(async (mount, patches) => {
+  mockUpdateMany.mockImplementation(async (mount, patches, opts) => {
+    if (opts?.requireAll) {
+      const present = new Set(((await mockReadItems(mount)) as Array<{ id: string }>).map((i) => i.id));
+      const missing = patches.map((p) => p.id).filter((id) => !present.has(id));
+      if (missing.length > 0) {
+        const { WardrobeItemNotInLocationError } = jest.requireActual('@/lib/wardrobe/folders');
+        throw new WardrobeItemNotInLocationError(missing);
+      }
+    }
     const out = [];
     for (const { id, patch } of patches) {
       const updated = await mockUpdate(mount, id, patch);
@@ -1147,6 +1157,31 @@ describe('folder actions', () => {
     expect(mockListFolders).toHaveBeenCalledWith(PROJECT_MOUNT);
   });
 
+  it('GET ?action=folders never provisions a store: a project without one has no folders', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+    const res = await collection().GET(req('https://x.test/?action=folders'), ctx(), { id: 'proj-1' });
+    await expect(res.json()).resolves.toEqual({ folders: [] });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
+    expect(mockListFolders).not.toHaveBeenCalled();
+  });
+
+  it('GET ?action=folders 404s a project that does not exist', async () => {
+    findProject.mockResolvedValue(null);
+    const res = await collection().GET(req('https://x.test/?action=folders'), ctx(), { id: 'nope' });
+    expect(res.status).toBe(404);
+  });
+
+  it('move-items into an existing hand-made folder files it as stored, unrespelled', async () => {
+    jest.mocked(listFolderPathsInMount).mockResolvedValueOnce(['Hats: Summer']);
+    mockReadItems.mockResolvedValue([wardrobeItem({ id: 'a' })] as never);
+
+    const res = await post('move-items', { itemIds: ['a'], folder: 'hats: summer' });
+
+    expect(res.status).toBe(200);
+    expect(mockUpdateMany.mock.calls[0][1]).toEqual([{ id: 'a', patch: { folder: 'Hats: Summer' } }]);
+  });
+
   it('GET ?action=folders: an unprovisioned General has no folders', async () => {
     mockGeneralMount.mockResolvedValue(null as never);
     const res = await collection('general').GET(req('https://x.test/?action=folders'), ctx(), { id: '' });
@@ -1204,10 +1239,14 @@ describe('folder actions', () => {
 
     expect(res.status).toBe(200);
     expect(mockUpdateMany).toHaveBeenCalledTimes(1);
-    expect(mockUpdateMany).toHaveBeenCalledWith(PROJECT_MOUNT, [
-      { id: 'a', patch: { folder: 'Formal' } },
-      { id: 'b', patch: { folder: 'Formal' } },
-    ]);
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      PROJECT_MOUNT,
+      [
+        { id: 'a', patch: { folder: 'Formal' } },
+        { id: 'b', patch: { folder: 'Formal' } },
+      ],
+      { requireAll: true },
+    );
     const body = await res.json();
     expect(body.items.map((i: { id: string; folder: string; origin: unknown }) => [i.id, i.folder, i.origin])).toEqual([
       ['a', 'Formal', PROJECT_ORIGIN],
@@ -1222,7 +1261,7 @@ describe('folder actions', () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toContain('from-general');
-    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it('item PUT carries a normalised folder', async () => {

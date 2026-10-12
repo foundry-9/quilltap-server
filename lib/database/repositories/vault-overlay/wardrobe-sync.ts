@@ -28,7 +28,7 @@ import {
   WARDROBE_INSTRUCTIONS_FILENAME,
 } from './schema';
 import { joinFolder, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
-import { hasLinkedVault } from './parsers';
+import { hasLinkedVault, isWardrobeItemDocument } from './parsers';
 import { readCharacterVaultWardrobe } from './vault-readers';
 import { projectArrayIntoVaultFolder } from './vault-projection';
 
@@ -129,6 +129,10 @@ export async function projectVaultWardrobe(
       // Subfolders are the operator's filing; `images/` holds item pictures
       // and is never swept.
       recursive: { excludeSubfolders: WARDROBE_RESERVED_FOLDER_SEGMENTS },
+      // Only item files are the wardrobe's to sweep: a note, or a file that
+      // doesn't parse as an item, kept under `Wardrobe/` (at any depth) is
+      // left exactly where the operator put it.
+      ownsFile: isWardrobeItemDocument,
     },
   );
 

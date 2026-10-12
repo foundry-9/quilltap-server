@@ -13,8 +13,11 @@
  *     composite already claimed;
  *   - `archived: boolean` becomes `archivedAt` through `archivedPatch`, which
  *     is idempotent (re-archiving keeps the original date, bug 188);
- *   - a `folder` is normalised (`normalizeWardrobeFolderPath`) on create, on
- *     update, and in `moveItemsToFolder` — the one way a batch is filed.
+ *   - a requested `folder` is resolved against the wardrobe's own folders
+ *     (`location.resolveFolder`: an existing folder as stored, else the new
+ *     part normalised) on create, on an update that changes it, and in
+ *     `moveItemsToFolder` — the one way a batch is filed. An update naming
+ *     the folder the item is already in moves nothing.
  *
  * Cycles are refused by the folder writer (`WardrobeComponentCycleError`).
  *
@@ -31,7 +34,7 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types';
 import { wardrobeItemFromCreateBody, type WardrobeCreateBody } from '@/lib/wardrobe/create-body';
-import { normalizeWardrobeFolderPath } from '@/lib/wardrobe/folders';
+import { isSameFolder, WardrobeItemNotInLocationError } from '@/lib/wardrobe/folders';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 
@@ -106,6 +109,8 @@ export async function createItem(
   opts: CreateItemOptions = {},
 ): Promise<WardrobeItem> {
   const fields = wardrobeItemFromCreateBody(body, location.characterId);
+  // The root needs no lookup (the tools always create there).
+  fields.folder = fields.folder ? await location.resolveFolder(fields.folder) : '';
   if (isComposite(fields)) {
     fields.types = compositeTypes(opts.lookup, fields.componentItemIds, fields.types);
   }
@@ -149,7 +154,10 @@ export async function updateItem(
 ): Promise<WardrobeItem | null> {
   const { archived, ...fields } = patch;
   const next: Partial<WardrobeItem> = { ...fields };
-  if (fields.folder !== undefined) next.folder = normalizeWardrobeFolderPath(fields.folder);
+  if (fields.folder !== undefined) {
+    if (isSameFolder(fields.folder, current.folder)) delete next.folder;
+    else next.folder = await location.resolveFolder(fields.folder);
+  }
 
   if (archived !== undefined) {
     const stamp = archivedPatch(current.archivedAt, archived, new Date().toISOString());
@@ -195,31 +203,25 @@ export async function setItemArchived(
 }
 
 /** Thrown when a move names an item that isn't filed in this location (a 400). */
-export class WardrobeItemNotInLocationError extends Error {
-  constructor(public readonly itemIds: string[]) {
-    super(`Not in this wardrobe (shared items are filed where they live): ${itemIds.join(', ')}`);
-    this.name = 'WardrobeItemNotInLocationError';
-  }
-}
+export { WardrobeItemNotInLocationError };
 
 /**
- * File several items into one folder at a location, with one projection.
- * Every id must be an item of this location — a borrowed item (one shown in
- * a character's view from a shared tier) is refused, naming it, before
- * anything moves. Returns the moved items as written.
+ * File several items into one folder at a location, with one read and one
+ * projection. Every id must be an item of this location — a borrowed item
+ * (one shown in a character's view from a shared tier) refuses the batch,
+ * naming it, before anything moves. Returns the moved items as written.
  */
 export async function moveItemsToFolder(
   location: WardrobeLocation,
   itemIds: readonly string[],
   folder: string,
 ): Promise<WardrobeItem[]> {
-  const target = normalizeWardrobeFolderPath(folder);
+  const target = await location.resolveFolder(folder);
   const uniqueIds = Array.from(new Set(itemIds));
-  const present = new Set((await location.readItems(true)).map((item) => item.id));
-  const missing = uniqueIds.filter((id) => !present.has(id));
-  if (missing.length > 0) throw new WardrobeItemNotInLocationError(missing);
-
-  const moved = await location.updateMany(uniqueIds.map((id) => ({ id, patch: { folder: target } })));
+  const moved = await location.updateMany(
+    uniqueIds.map((id) => ({ id, patch: { folder: target } })),
+    { requireAll: true },
+  );
   logger.debug('[ItemMutations] Moved wardrobe items to folder', {
     scope: location.scope,
     mountPointId: location.mountPointId,

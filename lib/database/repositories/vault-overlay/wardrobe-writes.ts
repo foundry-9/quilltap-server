@@ -33,7 +33,7 @@ import {
   folderSegments,
   isSameFolder,
   isUnderFolder,
-  isValidWardrobeFolderPath,
+  isSafeWardrobeFolderPath,
   joinFolder,
   normalizeWardrobeFolderPathOrRoot,
   parentFolder,
@@ -42,6 +42,7 @@ import {
   WardrobeFolderConflictError,
   WardrobeFolderNotFoundError,
   WardrobeFolderPathError,
+  WardrobeItemNotInLocationError,
   WARDROBE_RESERVED_FOLDER_SEGMENTS,
   type WardrobeFolder,
 } from '@/lib/wardrobe/folders';
@@ -51,7 +52,7 @@ import {
   moveDatabaseFolder,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { isWardrobeItemDocumentPath } from './parsers';
+import { hasStableWardrobeItemId, isWardrobeItemDocument } from './parsers';
 import { CHARACTER_WARDROBE_FOLDER } from './schema';
 import { readCharacterVaultWardrobe } from './vault-readers';
 import { projectVaultWardrobe } from './wardrobe-sync';
@@ -190,14 +191,15 @@ function assertNoCycles(item: WardrobeItem, peers: Map<string, WardrobeItem>): v
 }
 
 /**
- * The folder an item is written to: a normal-form folder as given, anything
- * else (an imported bundle's `../x`, a hand-made `Formal/images`) normalised,
- * or the root when it can't be. Only folders a write *brings* pass through
- * here — an item already on disk keeps the path it has.
+ * The folder an item is written to: a structurally safe folder as given
+ * (normal form, or a hand-made folder the store already holds), anything else
+ * (an imported bundle's `../x`) normalised, or the root when it can't be. The
+ * operator-facing paths resolve folders first (`resolveWardrobeFolder`); this
+ * is the last line of defence for the ones that don't.
  */
 function safeFolder(folder: string | null | undefined): string {
   if (!folder) return '';
-  if (isValidWardrobeFolderPath(folder)) return folder;
+  if (isSafeWardrobeFolderPath(folder)) return folder;
   const normalised = normalizeWardrobeFolderPathOrRoot(folder);
   logger.debug('Wardrobe write normalised an incoming folder', { folder, normalised, context: 'wardrobe' });
   return normalised;
@@ -220,10 +222,7 @@ export async function createInMount(mount: WardrobeMount, item: WardrobeItem): P
       folder: stored.folder,
       context: 'wardrobe',
     });
-    if (!stored.folder) return stored;
-    // The store keeps a folder's first casing; answer with what was written.
-    const written = (await readMountItems(mount)).find((i) => i.id === stored.id);
-    return written ?? stored;
+    return stored;
   });
 }
 
@@ -243,27 +242,42 @@ export interface WardrobeItemPatch {
   patch: Partial<WardrobeItem>;
 }
 
+/** Options for {@link updateManyInMount}. */
+export interface UpdateManyOptions {
+  /**
+   * Refuse the whole batch — before anything is written — when any id isn't
+   * in the folder (`WardrobeItemNotInLocationError`). Without it a missing id
+   * is skipped.
+   */
+  requireAll?: boolean;
+}
+
 /**
  * Patch several items in the folder with one read and **one** projection.
  * Returns the updated items in patch order; an id that isn't in the folder is
- * skipped. A batch that moves items between folders reads the folder back
- * after projecting, so the returned items carry each folder's stored casing.
+ * skipped (or, with `requireAll`, refuses the batch).
  */
 export async function updateManyInMount(
   mount: WardrobeMount,
   patches: readonly WardrobeItemPatch[],
+  opts: UpdateManyOptions = {},
 ): Promise<WardrobeItem[]> {
   if (patches.length === 0) return [];
-  return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches));
+  return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches, opts));
 }
 
 /** The body of {@link updateManyInMount}, for callers already on the mount's chain. */
 async function updateManyUnserialized(
   mount: WardrobeMount,
   patches: readonly WardrobeItemPatch[],
+  opts: UpdateManyOptions = {},
 ): Promise<WardrobeItem[]> {
   const current = await readMountItems(mount);
   const indexById = new Map(current.map((item, idx) => [item.id, idx]));
+  if (opts.requireAll) {
+    const missing = patches.map((p) => p.id).filter((id) => !indexById.has(id));
+    if (missing.length > 0) throw new WardrobeItemNotInLocationError(Array.from(new Set(missing)));
+  }
   const next = current.slice();
   const now = new Date().toISOString();
   const updatedIds: string[] = [];
@@ -303,12 +317,7 @@ async function updateManyUnserialized(
     context: 'wardrobe',
   });
 
-  // The store keeps a folder's first casing (`formal` lands in `Formal/`), so
-  // a batch that moved folders reads back what was actually written.
-  const written = movesFolder
-    ? new Map((await readMountItems(mount)).map((item) => [item.id, item]))
-    : null;
-  return updatedIds.map((id) => written?.get(id) ?? next[indexById.get(id) as number]);
+  return updatedIds.map((id) => next[indexById.get(id) as number]);
 }
 
 // ============================================================================
@@ -363,6 +372,19 @@ export async function listFoldersInMount(mount: WardrobeMount): Promise<Wardrobe
     context: 'wardrobe',
   });
   return folders;
+}
+
+/**
+ * The paths of every folder under the tier's `Wardrobe/`, from the store's
+ * folder rows alone (every item's folder has one — writes create them), minus
+ * `images/`. One query, no item parse: what `resolveWardrobeFolder` resolves
+ * an operator's request against.
+ */
+export async function listFolderPathsInMount(mount: WardrobeMount): Promise<string[]> {
+  const rows = await getRepositories().docMountFolders.findByMountPointId(mount.mountPointId);
+  return rows
+    .map((row) => folderUnderWardrobe(row.path))
+    .filter((folder): folder is string => folder !== null);
 }
 
 /**
@@ -430,6 +452,32 @@ export async function renameFolderInMount(
     if (!from) throw new WardrobeFolderNotFoundError(folder);
     const to = joinFolder(parentFolder(from), newName);
     if (to !== from) {
+      // The store moves the files without rewriting them, and an item file
+      // with no frontmatter `id` takes its id from its path — moving it would
+      // mint a new one and orphan its outfit slots, ledger, outfits and
+      // pictures. Stamp every such file with the id it has now, first.
+      const docs = await getRepositories().docMountDocuments.findManyByMountPointsInFolder(
+        [mount.mountPointId],
+        wardrobeFolderStorePath(from),
+        '.md',
+        { recursive: true },
+      );
+      const unstamped = docs.filter(
+        (doc) => isWardrobeItemDocument(doc) && !hasStableWardrobeItemId(doc.content),
+      );
+      if (unstamped.length > 0) {
+        logger.debug('Stamping ids into wardrobe files before a folder rename', {
+          mountPointId: mount.mountPointId,
+          folder: from,
+          count: unstamped.length,
+          context: 'wardrobe',
+        });
+        await projectVaultWardrobe(
+          mount.mountPointId,
+          mount.characterId ?? mount.mountPointId,
+          await readMountItems(mount),
+        );
+      }
       try {
         await moveDatabaseFolder(
           mount.mountPointId,
@@ -480,12 +528,29 @@ export async function deleteFolderInMount(
     const storeFrom = wardrobeFolderStorePath(from);
     const storePrefix = `${storeFrom}/`.toLowerCase();
 
-    const links = await repos.docMountFileLinks.findByMountPointId(mount.mountPointId);
-    const strays = links.filter(
-      (link) =>
-        link.relativePath.toLowerCase().startsWith(storePrefix) &&
-        !isWardrobeItemDocumentPath(link.relativePath),
+    // Everything is checked before anything moves, so a refusal leaves the
+    // wardrobe exactly as it was.
+    //
+    // 1. Files the wardrobe doesn't own — a picture, a `.txt`, a note or a
+    //    nested `instructions.md` (the projection never sweeps those, so the
+    //    folder could not empty).
+    const links = (await repos.docMountFileLinks.findByMountPointId(mount.mountPointId)).filter(
+      (link) => link.relativePath.toLowerCase().startsWith(storePrefix),
     );
+    const docsByPath = new Map(
+      (
+        await repos.docMountDocuments.findManyByMountPointsInFolder(
+          [mount.mountPointId],
+          storeFrom,
+          '.md',
+          { recursive: true },
+        )
+      ).map((doc) => [doc.relativePath.toLowerCase(), doc]),
+    );
+    const strays = links.filter((link) => {
+      const doc = docsByPath.get(link.relativePath.toLowerCase());
+      return !doc || !isWardrobeItemDocument(doc);
+    });
     if (strays.length > 0) {
       throw new WardrobeFolderConflictError(
         from,
@@ -493,10 +558,26 @@ export async function deleteFolderInMount(
       );
     }
 
-    // Items: one batch, one projection. Each is re-rooted from under the
-    // folder to under its parent, so subfolder contents keep their shape.
+    // 2. A subfolder sharing the folder's own name (`Formal/Formal`) would be
+    //    sent up into the very place being removed.
+    const rows = (await repos.docMountFolders.findByMountPointId(mount.mountPointId))
+      .filter((row) => row.path.toLowerCase().startsWith(storePrefix))
+      .sort((a, b) => b.path.length - a.path.length);
     const items = await readMountItems(mount);
     const moving = items.filter((item) => isUnderFolder(item.folder ?? '', from));
+    const landsInside = [
+      ...moving.map((item) => item.folder ?? ''),
+      ...rows.map((row) => folderUnderWardrobe(row.path) ?? ''),
+    ].some((sub) => sub && isUnderFolder(rebaseFolder(sub, from, parent), from));
+    if (landsInside) {
+      throw new WardrobeFolderConflictError(
+        from,
+        `Folder "${from}" holds a subfolder of the same name; rename one of them first`,
+      );
+    }
+
+    // Items: one batch, one projection. Each is re-rooted from under the
+    // folder to under its parent, so subfolder contents keep their shape.
     if (moving.length > 0) {
       await updateManyUnserialized(
         mount,
@@ -509,18 +590,24 @@ export async function deleteFolderInMount(
 
     // Subfolders: re-create each (empty ones included) under the parent,
     // then drop the old rows deepest first.
-    const rows = (await repos.docMountFolders.findByMountPointId(mount.mountPointId))
-      .filter((row) => row.path.toLowerCase().startsWith(storePrefix))
-      .sort((a, b) => b.path.length - a.path.length);
     for (const row of rows) {
       const sub = folderUnderWardrobe(row.path);
       if (!sub) continue;
       await ensureFolderPath(mount.mountPointId, wardrobeFolderStorePath(rebaseFolder(sub, from, parent)));
     }
-    for (const row of rows) {
-      await deleteDatabaseFolder(mount.mountPointId, row.path);
+    try {
+      for (const row of rows) {
+        await deleteDatabaseFolder(mount.mountPointId, row.path);
+      }
+      await deleteDatabaseFolder(mount.mountPointId, storeFrom);
+    } catch (error) {
+      // The checks above should make this unreachable; if a file arrived in
+      // the meantime, say so as a conflict rather than a 500.
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_EMPTY') {
+        throw new WardrobeFolderConflictError(from, `Folder "${from}" is not empty yet; its items were moved up`);
+      }
+      throw error;
     }
-    await deleteDatabaseFolder(mount.mountPointId, storeFrom);
 
     // The subfolders that moved up are the folder's direct children.
     const childDepth = folderSegments(from).length + 1;

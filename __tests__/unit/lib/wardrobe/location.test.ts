@@ -141,6 +141,7 @@ describe('location operations', () => {
     expect(mockUpdateManyInMount).toHaveBeenCalledWith(
       { mountPointId: 'grp-mp', scope: 'group', characterId: null },
       [{ id: 'a', patch: { title: 'T' } }],
+      undefined,
     );
   });
 

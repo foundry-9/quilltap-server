@@ -54,6 +54,17 @@ export class WardrobeFolderConflictError extends Error {
   }
 }
 
+/**
+ * A filing request named items that aren't filed in this wardrobe — a
+ * borrowed item seen from a character's merged view (a 400 at the route).
+ */
+export class WardrobeItemNotInLocationError extends Error {
+  constructor(public readonly itemIds: string[]) {
+    super(`Not in this wardrobe (shared items are filed where they live): ${itemIds.join(', ')}`);
+    this.name = 'WardrobeItemNotInLocationError';
+  }
+}
+
 /** A folder as the browser and the folder routes see it. */
 export interface WardrobeFolder {
   /** Path relative to `Wardrobe/`, e.g. `Formal/Evening`. Never `''`. */
@@ -128,6 +139,55 @@ export function normalizeWardrobeFolderName(input: string | null | undefined): s
   const name = normalizeWardrobeFolderPath(input);
   if (!name) throw new WardrobeFolderPathError('A folder needs a name');
   return name;
+}
+
+/**
+ * True when `path` is structurally safe to write under `Wardrobe/`, whatever
+ * its spelling: no empty, `.` or `..` segment, no backslash, not under the
+ * reserved first-level `images/`, within the path cap. Every folder the reader
+ * can produce from a real store passes — including hand-made ones the
+ * normaliser would respell (`Hats: Summer`, `Formal/images`) — while an
+ * imported `../x` does not.
+ */
+export function isSafeWardrobeFolderPath(path: string): boolean {
+  if (path === '') return true;
+  if (path.length > 900 || path.includes('\\')) return false;
+  const segments = path.split('/');
+  if (segments.some((s) => s.length === 0 || s.trim() !== s || s === '.' || s === '..')) return false;
+  return !isReservedSegment(segments[0]);
+}
+
+/**
+ * Resolve an operator's requested folder against the folders a wardrobe
+ * already has. A folder that exists (in any casing) is answered exactly as
+ * stored — even a hand-made one the rules would respell, so filing into a
+ * Scriptorium folder never quietly makes a sanitised sibling. Otherwise the
+ * longest existing ancestor keeps its stored spelling and only the new
+ * remainder is normalised (and the whole must stay within the depth cap).
+ * Throws {@link WardrobeFolderPathError} when the new part breaks the rules.
+ */
+export function resolveWardrobeFolder(existing: readonly string[], requested: string | null | undefined): string {
+  const raw = (requested ?? '')
+    .split(/[\\/]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+  if (raw.length === 0) return '';
+
+  const byKey = new Map(existing.map((path) => [path.toLowerCase(), path]));
+  for (let depth = raw.length; depth > 0; depth--) {
+    const stored = byKey.get(raw.slice(0, depth).join('/').toLowerCase());
+    if (!stored) continue;
+    if (depth === raw.length) return stored;
+    const rest = normalizeWardrobeFolderPath(raw.slice(depth).join('/'));
+    const joined = joinFolder(stored, rest);
+    if (folderSegments(joined).length > WARDROBE_FOLDER_MAX_DEPTH) {
+      throw new WardrobeFolderPathError(
+        `Wardrobe folders nest at most ${WARDROBE_FOLDER_MAX_DEPTH} deep`,
+      );
+    }
+    return joined;
+  }
+  return normalizeWardrobeFolderPath(raw.join('/'));
 }
 
 /**

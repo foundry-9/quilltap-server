@@ -12,7 +12,7 @@ import { isComposite } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
-import { draftFromItem, emptyDraft, validateDraft } from '@/lib/wardrobe/item-draft'
+import { draftFromItem, emptyDraft, payloadForEdit, validateDraft } from '@/lib/wardrobe/item-draft'
 import {
   GENERAL_CONTAINER,
   containerForListedItem,
@@ -392,7 +392,8 @@ export function WardrobeItemEditor({
       showErrorToast(validation.error)
       return
     }
-    const payload = validation.payload
+    // An edit that leaves the folder alone doesn't send it.
+    const payload = isEditing ? payloadForEdit(validation.payload, initialDraft.folder) : validation.payload
 
     clearError()
 

@@ -50,3 +50,16 @@ describe('item drafts', () => {
     expect(ok.ok).toBe(true)
   })
 })
+
+describe('payloadForEdit', () => {
+  const { payloadForEdit } = jest.requireActual('@/lib/wardrobe/item-draft') as typeof import('@/lib/wardrobe/item-draft')
+  const base = draftToPayload(emptyDraft({ title: 'Boater', types: ['accessories'], folder: 'Hats: Summer' }))
+
+  it('drops an unchanged folder (any casing) so a hand-made one is never re-resolved', () => {
+    expect(payloadForEdit(base, 'hats: summer')).not.toHaveProperty('folder')
+  })
+
+  it('keeps a folder that changed', () => {
+    expect(payloadForEdit(base, '').folder).toBe('Hats: Summer')
+  })
+})

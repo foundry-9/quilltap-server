@@ -16,7 +16,7 @@
 import { logger } from '@/lib/logger';
 import {
   normalizeWardrobeFolderName,
-  normalizeWardrobeFolderPath,
+  WardrobeFolderPathError,
   type WardrobeFolder,
 } from '@/lib/wardrobe/folders';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
@@ -26,7 +26,9 @@ export async function createWardrobeFolder(
   location: WardrobeLocation,
   path: string,
 ): Promise<WardrobeFolder> {
-  const folder = await location.createFolder(normalizeWardrobeFolderPath(path));
+  const resolved = await location.resolveFolder(path);
+  if (!resolved) throw new WardrobeFolderPathError('A folder needs a name');
+  const folder = await location.createFolder(resolved);
   logger.debug('[FolderMutations] Created wardrobe folder', {
     scope: location.scope,
     mountPointId: location.mountPointId,
@@ -44,7 +46,9 @@ export async function renameWardrobeFolder(
   path: string,
   name: string,
 ): Promise<WardrobeFolder> {
-  const from = normalizeWardrobeFolderPath(path);
+  // The folder named is an existing one, matched as stored (hand-made
+  // spellings included); the store answers a missing one with a 404.
+  const from = path.trim().replace(/^\/+|\/+$/g, '');
   const folder = await location.renameFolder(from, normalizeWardrobeFolderName(name));
   logger.debug('[FolderMutations] Renamed wardrobe folder', {
     scope: location.scope,
@@ -62,7 +66,7 @@ export async function deleteWardrobeFolder(
   location: WardrobeLocation,
   path: string,
 ): Promise<{ movedItems: number; movedFolders: number }> {
-  const folder = normalizeWardrobeFolderPath(path);
+  const folder = path.trim().replace(/^\/+|\/+$/g, '');
   const { movedItems, movedFolders, parent } = await location.deleteFolder(folder);
   logger.debug('[FolderMutations] Deleted wardrobe folder', {
     scope: location.scope,
