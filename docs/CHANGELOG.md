@@ -18,8 +18,9 @@
   gate, chat wipe and dedup deleting manual rows and digests, entity anchors cut by the cosine floor).
   Seven phases, each with tests, acceptance and a V4test walkthrough, shipped one PR per phase. The
   fifteen decisions in §7 (including moving housekeeping settings to `instance_settings.memoryMaintenance`
-  and a single instance-wide calendar for event time) are locked. Linked from `ROADMAP.md`. Design only;
-  nothing built yet.
+  and a single instance-wide calendar for event time) are locked. The four code audits the diagnosis
+  rests on (creation, gate/merge, scoring/recall, maintenance) are appended in full. Linked from
+  `ROADMAP.md`. Design only; nothing built yet.
 
 #### Specs: scenarios from anywhere; wardrobe folders
 
