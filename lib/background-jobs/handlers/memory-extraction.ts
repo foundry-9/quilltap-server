@@ -12,6 +12,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { runFoldOtherCatchup } from '@/lib/memory/fold-other-pass';
+import { runFoldEpisodeCatchup } from '@/lib/memory/fold-episode-catchup';
 import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import {
   buildTurnTranscript,
@@ -40,6 +41,52 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
   if (!chatSettings) {
     throw new Error(`Chat settings not found for user: ${job.userId}`);
+  }
+
+  // Idle catch-up for the fold episode pass (enqueued by the daily maintenance
+  // sweep, bug 232): the folded history past the episode watermark.
+  if (payload.foldEpisodeCatchup) {
+    const availableProfiles = await repos.connections.findByUserId(job.userId);
+    const catchup = await runFoldEpisodeCatchup({
+      chatId: payload.chatId,
+      userId: job.userId,
+      connectionProfile,
+      cheapLLMSettings: chatSettings.cheapLLMSettings,
+      availableProfiles,
+    });
+    logger.info('[MemoryExtraction] Fold episode catch-up processed', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      skippedReason: catchup.skippedReason ?? null,
+      episodes: catchup.episodesExtracted,
+      written: catchup.memoriesWritten,
+      fragmentsLinked: catchup.fragmentsLinked,
+      watermarkAdvancedTo: catchup.watermarkAdvancedTo,
+      slicesDeferred: catchup.slicesDeferred,
+    });
+    // A slice lost to a timeout was not read and the watermark stayed before
+    // it: fail the job so it retries, as the OTHER catch-up does.
+    if (catchup.timedOut) {
+      throw new CheapLLMTaskLostError('fold-episode-catchup', 'an episode slice timed out');
+    }
+    // The rest of a long backlog is the next job's, keyed on the watermark
+    // this one advanced to so successive steps never dedupe into each other.
+    if (catchup.slicesDeferred > 0 && catchup.watermarkAdvancedTo) {
+      await enqueueMemoryExtraction(job.userId, {
+        chatId: payload.chatId,
+        turnOpenerMessageId: null,
+        extractionAnchorMessageId: `continue-episode:${catchup.watermarkAdvancedTo}`,
+        connectionProfileId: payload.connectionProfileId,
+        foldEpisodeCatchup: true,
+      });
+      logger.debug('[MemoryExtraction] Fold episode catch-up continues in a follow-up job', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        from: catchup.watermarkAdvancedTo,
+        slicesDeferred: catchup.slicesDeferred,
+      });
+    }
+    return;
   }
 
   // Idle catch-up for the fold-grain OTHER pass (enqueued by the daily

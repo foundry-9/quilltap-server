@@ -362,27 +362,18 @@ async function runSlice(
           .slice(0, MAX_FRAGMENT_LINKS)
         if (fragmentIds.length === 0) continue
 
-        const episodeLinks = new Set(memory.relatedMemoryIds ?? [])
-        let episodeLinksChanged = false
-        for (const fragmentId of fragmentIds) {
-          if (!episodeLinks.has(fragmentId)) {
-            episodeLinks.add(fragmentId)
-            episodeLinksChanged = true
-          }
-        }
-        if (episodeLinksChanged) {
-          await repos.memories.updateForCharacter(characterId, memory.id, {
-            relatedMemoryIds: [...episodeLinks],
-          })
+        // Links are deltas against the rows at commit, never lists built from
+        // this read: another job linking the same rows keeps its links (bug 231).
+        const existingEpisodeLinks = new Set(memory.relatedMemoryIds ?? [])
+        const newEpisodeLinks = fragmentIds.filter(id => !existingEpisodeLinks.has(id))
+        if (newEpisodeLinks.length > 0) {
+          await repos.memories.addRelatedMemoryIds(characterId, memory.id, newEpisodeLinks)
         }
         for (const fragment of fragments) {
           if (fragment.id === memory.id) continue
           if (!fragmentIds.includes(fragment.id)) continue
-          const links = fragment.relatedMemoryIds ?? []
-          if (links.includes(memory.id)) continue
-          await repos.memories.updateForCharacter(characterId, fragment.id, {
-            relatedMemoryIds: [...links, memory.id],
-          })
+          if ((fragment.relatedMemoryIds ?? []).includes(memory.id)) continue
+          await repos.memories.addRelatedMemoryIds(characterId, fragment.id, [memory.id])
           result.fragmentsLinked++
         }
       } catch (perCharacterError) {

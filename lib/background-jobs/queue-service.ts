@@ -87,6 +87,14 @@ export interface MemoryExtractionPayload {
    * fold-grain observations rebuilt now rather than at the next daily sweep.
    */
   foldOtherIgnoreIdle?: boolean;
+  /**
+   * When true this is the idle catch-up for the fold episode pass: the handler
+   * runs `runFoldEpisodeCatchup` over the chat's folded history past
+   * `episodeExtractionWatermarkMessageId` (bug 232). Enqueued by the daily
+   * maintenance sweep; `extractionAnchorMessageId` carries the fold boundary,
+   * or `continue-episode:<watermark>` for a follow-up job.
+   */
+  foldEpisodeCatchup?: boolean;
 }
 
 /**
@@ -544,7 +552,8 @@ export async function enqueueMemoryExtraction(
       return existingPayload.chatId === payload.chatId
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
         && existingAnchor === incomingAnchor
-        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false);
+        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false)
+        && (existingPayload.foldEpisodeCatchup ?? false) === (payload.foldEpisodeCatchup ?? false);
     });
     if (existing) {
       return existing.id;

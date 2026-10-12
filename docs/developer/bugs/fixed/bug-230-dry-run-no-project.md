@@ -2,18 +2,24 @@
 
 | | |
 |---|---|
-| **Status** | Open — closed by Phase D of the [memory system refactor](../features/memory-system-refactor.md) (dry run on `buildExtractionContext`), or sooner as a targeted fix |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md), which still owns the rest of smell A.6 #27) |
 | **Found** | 2026-10-12, while fixing bug 222 (the same omission on the Carina path) |
-| **Fixed** | — |
+| **Fixed** | 2026-10-12 |
 | **Severity** | Low — a preview only; nothing is written, but the preview can differ from what live extraction would produce in a project chat |
 | **Who it bites** | anyone using the Memories dry run on a chat that belongs to a project |
 | **Provenance** | Original to v4. Recorded earlier only as smell A.6 #27 in the refactor spec's Appendix A |
 | **Defect site** | `app/api/v1/chats/[id]/actions/memories.ts:313-326` (the `processTurnForMemory` call) |
-| **Fix site** | — |
+| **Fix site** | `app/api/v1/chats/[id]/actions/memories.ts` (`handleExtractMemoriesDryRun`) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-12).** The dry run passes `projectId: chat.projectId`, the project
+description from `loadExtractionProjectDescription` and `chatContextSummary: chat.contextSummary` to
+`processTurnForMemory`, as the per-turn and Carina handlers do, so its prompt carries the same
+project and summary as a live extraction. The rest of smell #27 (profile, timestamps, fold passes,
+autonomous chats) stays with Phase D. Test: `__tests__/unit/api/memories-dry-run-project.test.ts`.
 
 ## Symptom
 

@@ -2,18 +2,32 @@
 
 | | |
 |---|---|
-| **Status** | Open — closed by Phase D of the [memory system refactor](../features/memory-system-refactor.md) (one cursor per pass, one sweep), or sooner with an episode sweep |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md), whose cursor table and single sweep still absorb it) |
 | **Found** | 2026-10-12, fixing review finding #7 on PR 90 |
-| **Fixed** | — |
+| **Fixed** | 2026-10-12 |
 | **Severity** | Low — episodes for the older part of a long chat are missing until the chat folds enough more times; nothing is lost from the transcript |
 | **Who it bites** | a long chat whose episodes were wiped by Regenerate Memories and which then folds rarely or never again |
 | **Provenance** | Introduced by the PR 90 review fix that caps each fold pass at 4 slices per run (`FOLD_EPISODE_MAX_SLICES_PER_JOB`). The fold OTHER pass has an idle catch-up that continues its backlog in follow-up jobs; the episode pass has none |
 | **Defect site** | `lib/memory/fold-episode-pass.ts` (the per-run slice cap); no episode equivalent of `runFoldOtherCatchup` (`lib/memory/fold-other-pass.ts`) or of the idle sweep that drives it |
-| **Fix site** | — |
+| **Fix site** | `lib/memory/fold-episode-catchup.ts` (new), `lib/memory/fold-catchup.ts` (new, shared with the OTHER catch-up), `lib/background-jobs/maintenance/fold-episode-catchup.ts` (new), `lib/background-jobs/handlers/memory-extraction.ts`, `lib/background-jobs/queue-service.ts`, `lib/background-jobs/scheduled-maintenance.ts` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-12).** The daily maintenance sweep now has an episode catch-up beside the
+OTHER one. It selects idle chats (quiet more than two hours, active within 30 days) whose
+`episodeExtractionWatermarkMessageId` is behind their fold boundary (the last surviving
+`summaryAnchorMessageIds` entry) and enqueues a MEMORY_EXTRACTION job with `foldEpisodeCatchup:
+true`. The job runs the ordinary episode pass over the folded history on the chat's
+Concierge-resolved cheap LLM; the pass's watermark rule reads only what lies past the watermark, and
+a job that leaves slices unread enqueues its successor keyed `continue-episode:<watermark>`, so the
+backlog drains monotonically. A catch-up never reads past the fold boundary: episodes are still made
+only from folded history. A slice lost to a timeout fails the job for retry. The idle and lookback
+windows, the seat-profile pick and the route resolution are shared with the OTHER catch-up in
+`lib/memory/fold-catchup.ts`. Tests: `__tests__/unit/lib/memory/fold-episode-catchup.test.ts` (a
+600-message regenerated chat drains to its fold end over three jobs, every folded message read once)
+and the episode block in `memory-extraction-catchup-continuation.test.ts`.
 
 ## Symptom
 

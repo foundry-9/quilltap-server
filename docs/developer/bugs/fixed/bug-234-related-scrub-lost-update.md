@@ -2,18 +2,30 @@
 
 | | |
 |---|---|
-| **Status** | Open — closed by Phase B of the [memory system refactor](../features/memory-system-refactor.md) (`retireMemories`), or sooner with a removal delta |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase B of the [memory system refactor](../../features/memory-system-refactor.md), whose `retireMemories` remains the structural work) |
 | **Found** | 2026-10-12, fixing review finding #2 on PR 90 |
-| **Fixed** | — |
+| **Fixed** | 2026-10-12 |
 | **Severity** | Low — a dangling id in `relatedMemoryIds`; readers skip ids with no row, so the cost is a wasted lookup and a wrong link count |
 | **Who it bites** | background jobs that delete two memories sharing a neighbour (regenerate, housekeeping, retention, dedup) |
 | **Provenance** | Original to v4. The `consolidatedFrom` half of the same pattern was fixed in PR 90 (review finding #2) with a removal delta |
 | **Defect site** | `lib/memory/memory-gate.ts` `deleteMemoryWithUnlink` (neighbour scan via `rawQuery`, ~`:995`) and `deleteMemoriesWithUnlinkBatch` (~`:1091`): both read neighbours from the committed snapshot and write each neighbour's whole `relatedMemoryIds` list back |
-| **Fix site** | — |
+| **Fix site** | `lib/database/repositories/memories.repository.ts` (new `removeRelatedMemoryIdsForCharacter`), `lib/memory/memory-gate.ts` (`deleteMemoryWithUnlink`, `deleteMemoriesWithUnlinkBatchReport`), `lib/background-jobs/child/child-repositories-proxy.ts` (character-wide scrub in the overlay) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-12).** Both delete chokepoints scrub `relatedMemoryIds` with one SQL removal
+delta per holder, `MemoriesRepository.removeRelatedMemoryIdsForCharacter(characterId, ids)`, which
+removes the ids from every row of that character that names them, against the rows as they stand at
+write time. There is no neighbour read and no whole-list write, so two deletes in one job (or two
+jobs) each remove their own id and the replay applies both. The scrub is scoped to the deleted rows'
+holders (the instance-wide batch scan is gone), and the `currentLinks` option the dedup merge used
+to protect its survivor's fresh list is no longer needed: the delta lands after the survivor's own
+write. In the job child the overlay applies a buffered character-wide scrub to every memory row a
+later read returns. The digest created and member-deleted in the same job (the "smaller relative")
+is unchanged. Tests: the bug 234 block in `child-proxy-memory-gate-overlay.test.ts`,
+`memories-link-deltas.test.ts`, and the rewritten `memory-gate-delete-with-unlink.test.ts`.
 
 ## Symptom
 

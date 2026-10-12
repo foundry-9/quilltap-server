@@ -46,6 +46,7 @@ import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-asset
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
 import { enqueueFoldOtherCatchups } from './maintenance/fold-other-catchup';
+import { enqueueFoldEpisodeCatchups } from './maintenance/fold-episode-catchup';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
@@ -80,6 +81,7 @@ export interface MaintenanceSweepSummary {
   terminals: { rows: number; transcripts: number };
   orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
   foldOtherCatchup: { enqueued: number; deferred: number };
+  foldEpisodeCatchup: { enqueued: number; deferred: number };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
 }
@@ -197,6 +199,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     terminals: { rows: 0, transcripts: 0 },
     orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
     foldOtherCatchup: { enqueued: 0, deferred: 0 },
+    foldEpisodeCatchup: { enqueued: 0, deferred: 0 },
     failures: [],
   };
 
@@ -258,6 +261,13 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   await runSweep(summary, 'fold-other-catchup', 'Fold-grain OTHER catch-up failed — continuing',
     () => enqueueFoldOtherCatchups(),
     (result) => { summary.foldOtherCatchup = result; });
+
+  // 9. Fold episode catch-up: enqueue a MEMORY_EXTRACTION job for each chat
+  //    idle > 2 h whose episode watermark is behind its fold boundary, so a
+  //    capped backlog drains without waiting for more folds (bug 232).
+  await runSweep(summary, 'fold-episode-catchup', 'Fold episode catch-up failed — continuing',
+    () => enqueueFoldEpisodeCatchups(),
+    (result) => { summary.foldEpisodeCatchup = result; });
 
   try {
     await setLastMaintenanceSweepAt();

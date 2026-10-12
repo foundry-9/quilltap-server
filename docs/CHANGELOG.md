@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Fix bugs 230–234: the remaining open memory bugs
+
+Targeted fixes ahead of the memory refactor phases that were to close them. No migrations.
+
+- 230: The memory dry run (`?action=extract-memories-dry-run`) passes the chat's `projectId`, project description and context summary to the extractor, as the per-turn and Carina handlers do.
+- 231: Related links and reinforcement footnotes are written as deltas against the live row: new `MemoriesRepository.addRelatedMemoryIds`, `removeRelatedMemoryIds` and `appendReinforcementFootnotes` (read and write in one SQLite transaction). The gate, the fold episode pass's fragment links and the memory editor use them, so two jobs touching one memory both keep their links and footnotes. The job child's overlay applies the same deltas. Footnote helpers moved to `lib/memory/reinforcement-footnotes.ts`; `appendCappedFootnotes` now skips a footnote the content already has.
+- 232: The fold episode pass has an idle catch-up. The daily maintenance sweep enqueues a `foldEpisodeCatchup` MEMORY_EXTRACTION job for each chat idle over two hours whose episode watermark is behind its fold boundary (last `summaryAnchorMessageIds` entry); each job reads up to 4 slices and enqueues its successor (`continue-episode:<watermark>`). Shared catch-up rules moved to `lib/memory/fold-catchup.ts`.
+- 233: Search and replace writes each memory through `editMemory`, which re-embeds the new text in the same write; a memory whose text cannot be embedded is left unchanged and listed in `errors`. `MemoriesRepository.replaceInMemories` removed.
+- 234: The delete chokepoints scrub `relatedMemoryIds` with one SQL removal delta per holder (`removeRelatedMemoryIdsForCharacter`) instead of reading neighbours and writing whole lists; the instance-wide neighbour scan and `DeleteBatchOptions.currentLinks` are gone.
+
 #### Document Commonplace cleanup on character deletion
 
 - Deleting a character (not archiving) removes its `Commonplace/` digest files along with its digests. Confirmed as intended; documented in `help/memory-consolidation.md` and bug 208.

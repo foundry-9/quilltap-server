@@ -111,13 +111,13 @@ describe('child proxy — memory housekeeping writes', () => {
       memories: {
         bulkDelete: realBulkDelete,
         updateForCharacter: jest.fn(),
+        removeRelatedMemoryIdsForCharacter: jest.fn(),
         // The digest scrub's reads: nothing to scrub.
         findDigestsContainingMembers: jest.fn(async () => []),
         findIdsSupersededByAny: jest.fn(async () => []),
       },
     } as never);
     mockedRawQuery.mockImplementation((async (sql: string) => {
-      if (sql.includes('relatedMemoryIds IS NOT NULL')) return [];
       return [
         { id: 'm-1', characterId: 'char-1' },
         { id: 'm-2', characterId: 'char-1' },

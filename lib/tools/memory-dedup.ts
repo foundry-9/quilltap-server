@@ -310,9 +310,8 @@ export async function deduplicateCharacterMemories(
     // changed. A cluster whose fold fails keeps its discards rather than
     // deleting what the survivor never absorbed.
     // Links are unioned minus only the cluster itself; the delete then scrubs
-    // whatever is actually removed (from these fresh lists, not the database
-    // row), so links to a failed cluster's kept discards survive.
-    const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
+    // whatever is actually removed with a removal delta applied after the
+    // survivor's write, so links to a failed cluster's kept discards survive.
     const keptIds = new Set<string>()
     for (const { survivor, losers } of allMerges) {
       let applied = null
@@ -327,12 +326,7 @@ export async function deduplicateCharacterMemories(
           error: error instanceof Error ? error.message : String(error),
         })
       }
-      if (applied) {
-        survivorLinks.set(survivor.id, {
-          characterId: applied.characterId,
-          relatedMemoryIds: applied.relatedMemoryIds ?? [],
-        })
-      } else {
+      if (!applied) {
         for (const loser of losers) keptIds.add(loser.id)
       }
     }
@@ -347,10 +341,8 @@ export async function deduplicateCharacterMemories(
 
     // Bulk delete discarded memories through the chokepoint (which also
     // removes their vectors) so neighbours'
-    // relatedMemoryIds get scrubbed, the survivors from their new link lists.
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds, {
-      currentLinks: survivorLinks,
-    })
+    // relatedMemoryIds get scrubbed, the survivors' new link lists included.
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds)
     logger.info('[MemoryDedup] Bulk deleted memories', {
       context: 'memory-dedup.deduplicateCharacterMemories',
       characterId,

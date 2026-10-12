@@ -96,6 +96,7 @@ function makeVectorStore() {
 
 let updateForCharacter: jest.Mock<any>
 let incrementReinforcement: jest.Mock<any>
+let appendReinforcementFootnotes: jest.Mock<any>
 let vectorStore: ReturnType<typeof makeVectorStore>
 
 beforeEach(() => {
@@ -108,7 +109,14 @@ beforeEach(() => {
     reinforcedImportance: gate.calculateReinforcedImportance(0.6, 8),
     lastReinforcedAt: at,
   }))
-  factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, incrementReinforcement } })
+  // The footnote delta (bug 231): appends against the row it is given.
+  appendReinforcementFootnotes = jest.fn(async (_c: string, _id: string, details: string[]) => ({
+    content: gate.appendCappedFootnotes('Friday keeps the ledger.', details).content,
+    appended: details,
+  }))
+  factoryMock.getRepositories.mockReturnValue({
+    memories: { updateForCharacter, incrementReinforcement, appendReinforcementFootnotes },
+  })
   vectorStore = makeVectorStore()
   vectorMock.getCharacterVectorStore.mockResolvedValue(vectorStore)
   embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: EMBEDDING, model: 'test', dimensions: 2 })
@@ -194,6 +202,7 @@ describe('F3 — reinforcement footnote cap', () => {
     )
 
     expect(novelDetails).toEqual([])
+    expect(appendReinforcementFootnotes).not.toHaveBeenCalled()
     expect(incrementReinforcement).toHaveBeenCalledTimes(1)
     const patch = updateForCharacter.mock.calls[0][2] as Partial<Memory>
     expect(patch).not.toHaveProperty('reinforcementCount')
@@ -216,8 +225,9 @@ describe('F3 — reinforcement footnote cap', () => {
 
     expect(novelDetails).toContain('Marguerite')
     expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    const patch = updateForCharacter.mock.calls[0][2] as Partial<Memory>
-    expect(patch.content).toContain('[+] Marguerite')
+    // Footnotes land as a delta against the live row, never a content patch.
+    expect(appendReinforcementFootnotes).toHaveBeenCalledWith('char-1', 'mem-1', novelDetails)
+    expect(updateForCharacter.mock.calls.some(c => 'content' in (c[2] as object))).toBe(false)
     expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)
   })
 })
@@ -284,16 +294,15 @@ function noDigestScrub() {
 
 describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
   function setupBatch(bulkDeleteResult: unknown) {
-    dbMock.rawQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('relatedMemoryIds IS NOT NULL')) return []
-      return [
-        { id: 'a', characterId: 'char-1' },
-        { id: 'b', characterId: 'char-1' },
-        { id: 'c', characterId: 'char-2' },
-      ]
-    })
+    dbMock.rawQuery.mockImplementation(async () => [
+      { id: 'a', characterId: 'char-1' },
+      { id: 'b', characterId: 'char-1' },
+      { id: 'c', characterId: 'char-2' },
+    ])
     const bulkDelete = jest.fn(async () => bulkDeleteResult)
-    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete, ...noDigestScrub() } })
+    factoryMock.getRepositories.mockReturnValue({
+      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsForCharacter: jest.fn(), ...noDigestScrub() },
+    })
     return bulkDelete
   }
 
@@ -305,28 +314,20 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
     expect(Number.isFinite(deleted)).toBe(true)
   })
 
-  it('scrubs a merge survivor from its new links (currentLinks), not the stale row', async () => {
-    dbMock.rawQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('relatedMemoryIds IS NOT NULL')) {
-        // The database still holds the survivor's pre-merge row.
-        return [
-          { id: 'survivor', characterId: 'char-1', relatedMemoryIds: '["a"]' },
-          { id: 'other', characterId: 'char-1', relatedMemoryIds: '["a"]' },
-        ]
-      }
-      return [{ id: 'a', characterId: 'char-1' }]
-    })
+  it('scrubs neighbours (a merge survivor included) with a removal delta, never a stale list', async () => {
+    dbMock.rawQuery.mockImplementation(async () => [{ id: 'a', characterId: 'char-1' }])
     const bulkDelete = jest.fn(async () => 1)
-    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete, ...noDigestScrub() } })
-
-    await gate.deleteMemoriesWithUnlinkBatch(['a'], {
-      currentLinks: new Map([['survivor', { characterId: 'char-1', relatedMemoryIds: ['a', 'n1', 'kept'] }]]),
+    const removeRelatedMemoryIdsForCharacter = jest.fn(async () => 2)
+    factoryMock.getRepositories.mockReturnValue({
+      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsForCharacter, ...noDigestScrub() },
     })
 
-    const writes = Object.fromEntries(updateForCharacter.mock.calls.map(c => [c[1], (c[2] as Partial<Memory>).relatedMemoryIds]))
-    expect(writes.other).toEqual([])
-    // Union kept (n1, and a kept loser); only the deleted id is removed.
-    expect(writes.survivor).toEqual(['n1', 'kept'])
+    await gate.deleteMemoriesWithUnlinkBatch(['a'])
+
+    // Applied after the survivor's own link write, the delta removes only the
+    // deleted id from whatever list the row then holds (bug 234).
+    expect(removeRelatedMemoryIdsForCharacter).toHaveBeenCalledWith('char-1', ['a'])
+    expect(updateForCharacter).not.toHaveBeenCalled()
   })
 
   it('trusts the repository count in the parent', async () => {

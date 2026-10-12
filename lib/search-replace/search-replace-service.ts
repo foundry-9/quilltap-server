@@ -6,15 +6,39 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service';
+import { editMemory, type MemoryEditPatch } from '@/lib/memory/memory-edit';
 import { logger } from '@/lib/logger';
-import type { ChatMetadata } from '@/lib/schemas/types';
+import type { ChatMetadata, Memory } from '@/lib/schemas/types';
 import type {
   SearchReplaceScope,
   SearchReplaceRequest,
   SearchReplacePreview,
   SearchReplaceResult,
 } from '@/components/tools/search-replace/types';
+
+/**
+ * The fields of one memory a search and replace would rewrite: content,
+ * summary and keywords. Null when the search text appears in none of them.
+ * Pure, so the replacement is computed from the row as read and the write can
+ * go through `editMemory` with the old row as its baseline (bug 233).
+ */
+export function planMemoryReplacement(
+  memory: Pick<Memory, 'content' | 'summary' | 'keywords'>,
+  searchText: string,
+  replaceText: string
+): MemoryEditPatch | null {
+  if (!searchText) return null;
+  const replace = (text: string) => text.split(searchText).join(replaceText);
+  const patch: MemoryEditPatch = {};
+
+  if (memory.content.includes(searchText)) patch.content = replace(memory.content);
+  if (memory.summary.includes(searchText)) patch.summary = replace(memory.summary);
+  if (memory.keywords?.some((keyword) => keyword.includes(searchText))) {
+    patch.keywords = memory.keywords.map((keyword) => replace(keyword));
+  }
+
+  return Object.keys(patch).length > 0 ? patch : null;
+}
 
 /**
  * Get chat IDs based on scope
@@ -178,40 +202,38 @@ export async function executeSearchReplace(
         memoryQuery.chatId,
         request.searchText
       );
-      if (memoriesToUpdate.length > 0) {
-        onProgress?.('Updating memories', 0, memoriesToUpdate.length);
+      // Each row goes through editMemory, which embeds the new text before it
+      // writes and writes text and vector together, then invalidates the
+      // archive, publishes `memories` and re-mirrors a digest. Rewriting the
+      // rows first and re-embedding afterwards compared the new text with
+      // itself, so nothing was ever re-embedded (bug 233).
+      for (let i = 0; i < memoriesToUpdate.length; i++) {
+        const memory = memoriesToUpdate[i];
+        onProgress?.('Updating memories', i + 1, memoriesToUpdate.length);
 
-        const memoryIds = memoriesToUpdate.map((m) => m.id);
-        const updatedMemories = await repos.memories.replaceInMemories(
-          memoryIds,
-          request.searchText,
-          request.replaceText
-        );
+        const patch = planMemoryReplacement(memory, request.searchText, request.replaceText);
+        if (!patch) continue;
 
-        memoriesUpdated = updatedMemories.length;
-
-        // Regenerate embeddings for updated memories
-        for (let i = 0; i < updatedMemories.length; i++) {
-          const memory = updatedMemories[i];
-          onProgress?.('Regenerating embeddings', i + 1, updatedMemories.length);
-
-          try {
-            await updateMemoryWithEmbedding(
-              memory.characterId,
-              memory.id,
-              {
-                content: memory.content,
-                summary: memory.summary,
-              },
-              { userId }
-            );
-          } catch (error) {
-            // Log but don't fail - embedding regeneration is best-effort
-            logger.warn('Failed to regenerate embedding for memory', {
+        try {
+          const outcome = await editMemory(memory.characterId, memory.id, patch, { userId });
+          if (outcome.ok) {
+            memoriesUpdated++;
+            logger.debug('Replaced text in memory and re-embedded it', {
               memoryId: memory.id,
-              error: error instanceof Error ? error.message : String(error),
+              characterId: memory.characterId,
+              fields: Object.keys(patch),
             });
+          } else if (outcome.reason === 'embedding-failed') {
+            const errorMsg = `Memory ${memory.id} left unchanged: its new text could not be embedded (${outcome.message})`;
+            logger.warn(errorMsg, { memoryId: memory.id, characterId: memory.characterId });
+            errors.push(errorMsg);
+          } else {
+            logger.debug('Memory skipped during replace', { memoryId: memory.id, reason: outcome.reason });
           }
+        } catch (error) {
+          const errorMsg = `Failed to update memory ${memory.id}: ${error instanceof Error ? error.message : String(error)}`;
+          logger.error(errorMsg);
+          errors.push(errorMsg);
         }
       }
     }

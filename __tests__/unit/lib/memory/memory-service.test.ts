@@ -164,6 +164,7 @@ describe('Memory Service', () => {
       findByCharacterId: jest.fn(),
       findBySourceMessageId: jest.fn(),
       updateForCharacter: jest.fn(),
+      addRelatedMemoryIds: jest.fn(),
       deleteForCharacter: jest.fn(),
       deleteBySourceMessageId: jest.fn(),
       searchByContent: jest.fn(),
@@ -371,12 +372,9 @@ describe('Memory Service', () => {
       // reflect it (pre-fix this was the stale [] and the fold pass clobbered it).
       expect(outcome.memory?.relatedMemoryIds).toEqual(['related-1'])
       expect(outcome.relatedMemoryIds).toEqual(['related-1'])
-      // The link write actually happened on the new memory row.
-      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledWith(
-        'char-1',
-        'new-mem',
-        { relatedMemoryIds: ['related-1'] },
-      )
+      // The link write actually happened on both rows, as deltas (bug 231).
+      expect(mockMemoriesRepo.addRelatedMemoryIds).toHaveBeenCalledWith('char-1', 'new-mem', ['related-1'])
+      expect(mockMemoriesRepo.addRelatedMemoryIds).toHaveBeenCalledWith('char-1', 'related-1', ['new-mem'])
     })
   })
 

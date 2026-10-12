@@ -4,7 +4,9 @@
  *   - deleteMemoriesWithUnlinkBatch / deleteMemoriesWithUnlinkBatchReport
  *
  * These verify that the deleted ID is scrubbed from every neighbour's
- * `relatedMemoryIds` *before* the rows are removed.
+ * `relatedMemoryIds` *before* the rows are removed — as one removal delta per
+ * holder (`removeRelatedMemoryIdsForCharacter`, bug 234), never as a
+ * whole-list write built from a read.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
@@ -16,8 +18,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 // The digest-link scrub (bug 225) reads through repository methods now, which
 // `buildRepo` answers with nothing; the routing below stays as a guard so any
 // raw digest query still gets an empty answer and the scripted
-// `scriptedRawQuery` sees exactly the relatedMemoryIds scan and the doomed-id
-// resolves these tests pin.
+// `scriptedRawQuery` sees exactly the doomed-id resolves these tests pin.
 jest.mock('@/lib/database/manager', () => {
   const scriptedRawQuery = jest.fn()
   const isDigestScrub = (sql: string) =>
@@ -76,11 +77,13 @@ interface FakeMemoryRow {
 
 function buildRepo(rows: FakeMemoryRow[]) {
   const updates: Array<{ characterId: string; memoryId: string; relatedMemoryIds: string[] }> = []
+  const scrubs: Array<{ characterId: string; ids: string[] }> = []
   const deleted: string[] = []
   const bulkDeleted: Array<{ characterId: string; ids: string[] }> = []
 
   return {
     updates,
+    scrubs,
     deleted,
     bulkDeleted,
     repo: {
@@ -100,6 +103,22 @@ function buildRepo(rows: FakeMemoryRow[]) {
         findIdsSupersededByAny: jest.fn(async () => []),
         removeConsolidatedMembers: jest.fn(async () => 0),
         updateTierBulk: jest.fn(async () => 0),
+        // The repository's removal delta, simulated over the fake rows: every
+        // row of the character naming a removed id loses it.
+        removeRelatedMemoryIdsForCharacter: jest.fn(async (characterId: string, ids: string[]) => {
+          scrubs.push({ characterId, ids: [...ids] })
+          const removing = new Set(ids)
+          let changed = 0
+          for (const row of rows) {
+            if (row.characterId !== characterId) continue
+            const links: string[] = row.relatedMemoryIds ? JSON.parse(row.relatedMemoryIds) : []
+            const next = links.filter(id => !removing.has(id))
+            if (next.length === links.length) continue
+            updates.push({ characterId, memoryId: row.id, relatedMemoryIds: next })
+            changed++
+          }
+          return changed
+        }),
         updateForCharacter: jest.fn(async (characterId: string, memoryId: string, patch: { relatedMemoryIds?: string[] }) => {
           updates.push({ characterId, memoryId, relatedMemoryIds: patch.relatedMemoryIds ?? [] })
           return null
@@ -128,14 +147,14 @@ describe('deleteMemoryWithUnlink', () => {
       { id: 'C', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['B']) },
     ]
 
-    const { repo, updates, deleted } = buildRepo(rows)
+    const { repo, updates, scrubs, deleted } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-
-    // LIKE scan returns A and C (rows that contain "B").
-    dbMock.rawQuery.mockResolvedValueOnce([rows[0], rows[2]])
 
     const result = await deleteMemoryWithUnlink('B')
     expect(result).toBe(true)
+    expect(scrubs).toEqual([{ characterId: 'char-1', ids: ['B'] }])
+    expect(repo.memories.updateForCharacter).not.toHaveBeenCalled()
+    expect(dbMock.rawQuery).not.toHaveBeenCalled()
     expect(updates).toEqual([
       { characterId: 'char-1', memoryId: 'A', relatedMemoryIds: [] },
       { characterId: 'char-1', memoryId: 'C', relatedMemoryIds: [] },
@@ -151,29 +170,29 @@ describe('deleteMemoryWithUnlink', () => {
     expect(result).toBe(false)
     expect(updates).toEqual([])
     expect(deleted).toEqual([])
-    // No LIKE scan should fire when the target doesn't exist.
-    expect(dbMock.rawQuery).not.toHaveBeenCalled()
+    expect(repo.memories.removeRelatedMemoryIdsForCharacter).not.toHaveBeenCalled()
   })
 
-  it('handles cross-character neighbours', async () => {
+  it('scopes the scrub to the deleted row\'s holder', async () => {
     const rows: FakeMemoryRow[] = [
-      { id: 'X', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['T']) },
-      { id: 'T', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['X']) },
+      { id: 'X', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['Y']) },
+      { id: 'T', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['U']) },
+      { id: 'U', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['T']) },
     ]
-    const { repo, updates } = buildRepo(rows)
+    const { repo, updates, scrubs } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-    dbMock.rawQuery.mockResolvedValueOnce([rows[0]])
 
     await deleteMemoryWithUnlink('T')
 
+    expect(scrubs).toEqual([{ characterId: 'char-2', ids: ['T'] }])
     expect(updates).toEqual([
-      { characterId: 'char-1', memoryId: 'X', relatedMemoryIds: [] },
+      { characterId: 'char-2', memoryId: 'U', relatedMemoryIds: [] },
     ])
   })
 })
 
 describe('deleteMemoriesWithUnlinkBatch', () => {
-  it('scans neighbours once for the whole batch and skips inter-doomed edges', async () => {
+  it('scrubs neighbours with one delta per holder for the whole batch', async () => {
     // Graph A↔B↔C↔D. Delete {B, C} together. A and D should be scrubbed; B
     // and C shouldn't churn against each other.
     const rows: FakeMemoryRow[] = [
@@ -186,9 +205,7 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const { repo, updates, bulkDeleted } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
 
-    // First rawQuery: scan all rows with non-empty links.
-    dbMock.rawQuery.mockResolvedValueOnce(rows)
-    // Second rawQuery: resolve doomed → characterId.
+    // The only rawQuery: resolve doomed → characterId.
     dbMock.rawQuery.mockResolvedValueOnce([
       { id: 'B', characterId: 'char-1' },
       { id: 'C', characterId: 'char-1' },
@@ -197,8 +214,11 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const deleted = await deleteMemoriesWithUnlinkBatch(['B', 'C'])
 
     expect(deleted).toBe(2)
-    // Only A and D updated; B and C are doomed and skipped.
-    expect(updates.map(u => u.memoryId).sort()).toEqual(['A', 'D'])
+    expect(repo.memories.removeRelatedMemoryIdsForCharacter).toHaveBeenCalledTimes(1)
+    expect(repo.memories.removeRelatedMemoryIdsForCharacter).toHaveBeenCalledWith('char-1', ['B', 'C'])
+    expect(repo.memories.updateForCharacter).not.toHaveBeenCalled()
+    // A and D lose their links; the doomed rows go with the delete.
+    expect(updates.filter(u => u.memoryId === 'A' || u.memoryId === 'D').map(u => u.memoryId).sort()).toEqual(['A', 'D'])
     const aUpdate = updates.find(u => u.memoryId === 'A')
     const dUpdate = updates.find(u => u.memoryId === 'D')
     expect(aUpdate?.relatedMemoryIds).toEqual([])
@@ -220,9 +240,7 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const { repo, bulkDeleted } = buildRepo([])
     factoryMock.getRepositories.mockReturnValue(repo)
 
-    // Candidate scan finds no neighbours; each resolve chunk echoes its IDs
-    // back under a single character.
-    dbMock.rawQuery.mockResolvedValueOnce([])
+    // Each resolve chunk echoes its IDs back under a single character.
     dbMock.rawQuery.mockImplementation(async (_sql: string, params: string[]) =>
       params.map(id => ({ id, characterId: 'char-1' }))
     )
@@ -230,9 +248,9 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const deleted = await deleteMemoriesWithUnlinkBatch(ids)
 
     expect(deleted).toBe(2000)
-    // 1 candidate scan + 3 resolve chunks (900 + 900 + 200).
-    expect(dbMock.rawQuery).toHaveBeenCalledTimes(4)
-    const resolveCalls = dbMock.rawQuery.mock.calls.slice(1)
+    // 3 resolve chunks (900 + 900 + 200); no whole-table neighbour scan.
+    expect(dbMock.rawQuery).toHaveBeenCalledTimes(3)
+    const resolveCalls = dbMock.rawQuery.mock.calls
     expect(resolveCalls.map(([, params]) => (params as string[]).length)).toEqual([900, 900, 200])
     for (const [sql, params] of resolveCalls) {
       expect((sql as string).match(/\?/g)?.length).toBe((params as string[]).length)
@@ -248,7 +266,6 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     ]
     const { repo, bulkDeleted } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-    dbMock.rawQuery.mockResolvedValueOnce(rows)
     dbMock.rawQuery.mockResolvedValueOnce([
       { id: 'X', characterId: 'char-A' },
       { id: 'Y', characterId: 'char-B' },
@@ -287,7 +304,6 @@ describe('vector removal in the chokepoint (bug 200)', () => {
     const rows: FakeMemoryRow[] = [{ id: 'B', characterId: 'char-1', relatedMemoryIds: null }]
     const { repo } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-    dbMock.rawQuery.mockResolvedValueOnce([])
     const { store, removed } = fakeStore()
     vectorStoreMock.getCharacterVectorStore.mockResolvedValue(store)
 
@@ -305,7 +321,6 @@ describe('vector removal in the chokepoint (bug 200)', () => {
     ]
     const { repo } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-    dbMock.rawQuery.mockResolvedValueOnce([])
     dbMock.rawQuery.mockResolvedValueOnce([
       { id: 'X', characterId: 'char-A' },
       { id: 'Y', characterId: 'char-B' },
@@ -324,7 +339,6 @@ describe('vector removal in the chokepoint (bug 200)', () => {
     const rows: FakeMemoryRow[] = [{ id: 'X', characterId: 'char-A', relatedMemoryIds: null }]
     const { repo, bulkDeleted } = buildRepo(rows)
     factoryMock.getRepositories.mockReturnValue(repo)
-    dbMock.rawQuery.mockResolvedValueOnce([])
     dbMock.rawQuery.mockResolvedValueOnce([{ id: 'X', characterId: 'char-A' }])
     vectorStoreMock.getCharacterVectorStore.mockRejectedValue(new Error('index unavailable'))
 
