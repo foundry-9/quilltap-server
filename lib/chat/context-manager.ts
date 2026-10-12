@@ -2799,15 +2799,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (userNarrationAnchor || turnSkipInstruction || progressionsLLMContext || informBlock) {
+  } else if (userNarrationAnchor || coreWhisperLLMContext || llmRecallText || suparnaMailLLMContext || turnSkipInstruction || progressionsLLMContext || informBlock) {
     // Chained / continue turns carry no new user message, so neither the note,
-    // the progressions report nor the inform block can ride as a trailing
-    // section above. Push them as their own trailing user message (same off-scene/timestamp
-    // pattern) so the model sees them this turn, in the same order they would
-    // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
-    // is required. The scene note leads: it is about the scene, the others
-    // about the character.
-    const trailingOnly = [userNarrationAnchor, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
+    // the Core whisper, the recalled memories, new mail, the progressions
+    // report nor the inform block can ride as a trailing section above. Push them as their own trailing user
+    // message (same off-scene/timestamp pattern) so the model sees them this
+    // turn, in the same order they would have taken there. Anthropic 4.6+
+    // rejects role=assistant tails, so 'user' is required. The scene note
+    // leads: it is about the scene, the others about the character.
+    //
+    // Everything posted this turn must be here (bug 199): by this point each
+    // whisper is posted — recall's rows stamped accessed and recorded in the
+    // anti-repetition ring, each letter marked alerted — so leaving one out
+    // records as shown what the model never saw, and nothing re-offers it.
+    if (llmRecallText) {
+      logger.debug('[CommonplaceWhisper] Delivering recall in the trailing-only message (no new user message)', {
+        chatId: chat.id,
+        participantId: respondingParticipant?.id,
+        length: llmRecallText.length,
+      })
+    }
+    const trailingOnly = [userNarrationAnchor, coreWhisperLLMContext, llmRecallText, suparnaMailLLMContext, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
     contextMessages.push({
       role: 'user',
       content: trailingOnly.join('\n\n---\n\n'),

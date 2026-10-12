@@ -232,7 +232,7 @@ export interface IdMappingState {
    * Source chat id → (source message id → the id the chat import minted for
    * it). Present only for chats created under a fresh id (the `duplicate`
    * strategy, or any import without `preserveIds`), whose messages are
-   * reminted because `chat_messages.id` is global (bug 199). Keyed per chat
+   * reminted because `chat_messages.id` is global (bug 227). Keyed per chat
    * because two chats in one bundle can share source message ids, and an
    * entry is recorded only once its message has actually been inserted.
    * Read through `remapImportedMessageId` by every sidecar that names a

@@ -1,5 +1,5 @@
 /**
- * Bug 199 — a chat imported under a fresh id must not reuse its bundle's
+ * Bug 227 — a chat imported under a fresh id must not reuse its bundle's
  * message ids.
  *
  * `chat_messages.id` is a global primary key. The `duplicate` conflict
@@ -86,7 +86,7 @@ function bundleChat() {
   }
 }
 
-describe('executeImport — message ids of a chat imported under a fresh id (bug 199)', () => {
+describe('executeImport — message ids of a chat imported under a fresh id (bug 227)', () => {
   /** Every chat row by id, and every message row by its (global) id. */
   let chats: Map<string, Record<string, unknown>>
   let messages: Map<string, { chatId: string; message: Record<string, unknown> }>

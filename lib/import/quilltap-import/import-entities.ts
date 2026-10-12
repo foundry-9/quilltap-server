@@ -404,7 +404,7 @@ export async function importChats(
       // Only a chat that keeps its source id keeps its message ids. A chat
       // created under a fresh id gets fresh message ids too: `chat_messages.id`
       // is global, so the duplicate's original — or an earlier import of the
-      // same bundle — already holds them (bug 199).
+      // same bundle — already holds them (bug 227).
       const reminted = keepsSourceIds ? null : remintChatMessageIds(chatData, chat.messages);
       // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
       // well as `scenarioText`; the migration that cleared those rows has long

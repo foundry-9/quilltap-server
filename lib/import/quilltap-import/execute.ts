@@ -656,7 +656,7 @@ async function executeImportStrict(
 
     // 7a. Conversation annotations attached to imported chats. Remap chatId
     // through idMaps.chats, and sourceMessageId through idMaps.messages for a
-    // chat whose message ids were reminted (bug 199).
+    // chat whose message ids were reminted (bug 227).
     if (data.conversationAnnotations && data.conversationAnnotations.length > 0) {
       const globalRepos = getRepositories();
       let annotationsImported = 0;

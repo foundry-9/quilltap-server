@@ -251,7 +251,7 @@ describe('importFiles', () => {
     expect(created.linkedTo).toEqual(['chat-1', 'msg-1'])
   })
 
-  it('follows a message reminted with its duplicated chat (bug 199)', async () => {
+  it('follows a message reminted with its duplicated chat (bug 227)', async () => {
     const idMaps = emptyIdMaps()
     idMaps.chats.set('chat-old', 'chat-copy')
     idMaps.messages.set('chat-old', new Map([['msg-old', 'msg-copy']]))

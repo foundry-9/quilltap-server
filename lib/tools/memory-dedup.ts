@@ -14,9 +14,9 @@ import { cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
 import { planMemoryMerge, applyMemoryMerge } from '@/lib/memory/memory-merge'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
+import { partitionByPolicyProtection } from '@/lib/memory/policy-protection'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getUserRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { logger } from '@/lib/logger'
 
 // =============================================================================
@@ -41,6 +41,8 @@ interface CharacterDedupResult {
   originalCount: number
   withEmbeddings: number
   withoutEmbeddings: number
+  /** Rows never considered for folding (bug 201): MANUAL, digests and cold rows. `originalCount` = eligible + spared. */
+  sparedCount: number
   clustersFound: number
   memoriesInClusters: number
   removedCount: number
@@ -164,17 +166,29 @@ export async function deduplicateCharacterMemories(
   const repos = getRepositories()
 
 
-  // Fetch all memories
-  const allMemories = await repos.memories.findByCharacterId(characterId)
-  const originalCount = allMemories.length
+  // Fetch all memories. Only hot AUTO rows are folded (bug 201): MANUAL rows,
+  // digests and cold rows are never touched — deleting a digest strands its
+  // members' `supersededById`, and a MANUAL row is the operator's own words.
+  const everyMemory = await repos.memories.findByCharacterId(characterId)
+  const originalCount = everyMemory.length
+  const { actionable: allMemories, spared, sparedBy } = partitionByPolicyProtection(everyMemory)
+  const sparedCount = spared.length
+  logger.debug('[MemoryDedup] Candidate rows for folding', {
+    context: 'memory-dedup.deduplicateCharacterMemories',
+    characterId,
+    total: originalCount,
+    candidates: allMemories.length,
+    sparedBy,
+  })
 
-  if (originalCount < 2) {
+  if (allMemories.length < 2) {
     return {
       characterId,
       characterName,
       originalCount,
       withEmbeddings: allMemories.filter(m => m.embedding && m.embedding.length > 0).length,
       withoutEmbeddings: allMemories.filter(m => !m.embedding || m.embedding.length === 0).length,
+      sparedCount,
       clustersFound: 0,
       memoriesInClusters: 0,
       removedCount: 0,
@@ -196,6 +210,7 @@ export async function deduplicateCharacterMemories(
       originalCount,
       withEmbeddings: withEmbeddings.length,
       withoutEmbeddings: withoutEmbeddings.length,
+      sparedCount,
       clustersFound: 0,
       memoriesInClusters: 0,
       removedCount: 0,
@@ -330,7 +345,8 @@ export async function deduplicateCharacterMemories(
       })
     }
 
-    // Bulk delete discarded memories through the chokepoint so neighbours'
+    // Bulk delete discarded memories through the chokepoint (which also
+    // removes their vectors) so neighbours'
     // relatedMemoryIds get scrubbed, the survivors from their new link lists.
     const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds, {
       currentLinks: survivorLinks,
@@ -341,21 +357,6 @@ export async function deduplicateCharacterMemories(
       requested: removeIds.length,
       deleted: deletedCount,
     })
-
-    // Clean up vector store
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      for (const id of removeIds) {
-        await vectorStore.removeVector(id)
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn('[MemoryDedup] Failed to clean up vector store', {
-        context: 'memory-dedup.deduplicateCharacterMemories',
-        characterId,
-        error: String(error),
-      })
-    }
 
     invalidateFrozenArchive(characterId)
   }
@@ -369,6 +370,7 @@ export async function deduplicateCharacterMemories(
     originalCount,
     withEmbeddings: withEmbeddings.length,
     withoutEmbeddings: withoutEmbeddings.length,
+    sparedCount,
     clustersFound: allClusters.length,
     memoriesInClusters: allClusters.reduce((sum, c) => sum + c.size, 0),
     removedCount,
@@ -433,6 +435,7 @@ export async function deduplicateAllMemories(
         originalCount: 0,
         withEmbeddings: 0,
         withoutEmbeddings: 0,
+        sparedCount: 0,
         clustersFound: 0,
         memoriesInClusters: 0,
         removedCount: 0,

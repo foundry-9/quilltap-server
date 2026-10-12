@@ -173,7 +173,7 @@ describe('executeImport — chat informs', () => {
       contentMarkdown: 'You notice the clock has stopped.',
     })
     // The chat landed under a fresh id, so its messages were reminted and the
-    // record pointer followed (bug 199).
+    // record pointer followed (bug 227).
     expect(landedId(0)).not.toBe(RECORD_MESSAGE_ID)
   })
 

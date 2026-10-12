@@ -53,7 +53,7 @@ export type ChatInformRemapResult =
  *   destination, may not have the seat at all.
  * - `recordMessageId` and `consumedByMessageId` are message ids. They go
  *   through `remapImportedMessageId`, which is the identity unless the chat
- *   was created under a fresh id and its messages reminted (bug 199) — and a
+ *   was created under a fresh id and its messages reminted (bug 227) — and a
  *   message import that warned and continued leaves a hole either way.
  *
  * A row whose seat or whose Host record is missing is **dropped**: an inform
