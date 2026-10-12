@@ -4,6 +4,15 @@
 
 ### 4.10-dev
 
+#### Fix bug 199: importing a chat with "Create New" dropped every message
+
+- The `duplicate` conflict strategy created the copy under a new chat id but inserted each message under its original id; `chat_messages.id` is global, so every insert failed with `UNIQUE constraint failed: chat_messages.id` and the copy had no messages. The default (non-`preserveIds`) path failed the same way when one bundle was imported twice.
+- A chat created under a fresh id now gets fresh message ids (`remintChatMessageIds`, `lib/import/quilltap-import/message-id-remap.ts`). `swipeGroupId` (`swipe-<messageId>`), `summaryAnchorMessageIds`, `otherExtractionWatermarkMessageId` and `courierCheckpoints[*].lastResolvedMessageId` are rewritten through the same map; references to messages not in the bundle are dropped or nulled. `preserveIds` imports keep source ids.
+- New `idMaps.messages`; inform `recordMessageId` / `consumedByMessageId`, annotation `sourceMessageId`, memory `sourceMessageId` and file `linkedTo` message ids follow it.
+- The `duplicate` path also recorded a random id in `idMaps.chats` that was never the copy's id, so informs, annotations, chat documents and memories for a duplicated chat pointed at a chat that did not exist. It now records the created chat's id.
+- Debug log per chat on message import; per-message warn on failure.
+- Test: `__tests__/unit/lib/import/quilltap-import/duplicate-chat-message-ids.test.ts`. Help: `help/system-import-export.md`.
+
 #### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
 
 - One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.

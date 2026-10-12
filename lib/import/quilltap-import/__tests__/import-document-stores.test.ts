@@ -50,6 +50,7 @@ function makeIdMaps(): IdMappingState {
     characterVaultMounts: new Map(), skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
+    messages: new Map(),
   };
 }
 

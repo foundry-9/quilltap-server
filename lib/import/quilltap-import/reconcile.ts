@@ -50,9 +50,10 @@ export type ChatInformRemapResult =
  *   chat row, so `chats.create` preserves their ids verbatim — but a chat the
  *   conflict strategy skipped, or one whose roster was edited in the
  *   destination, may not have the seat at all.
- * - `recordMessageId` and `consumedByMessageId` are message ids, which
- *   `addMessage` also preserves verbatim — but a message import that warned
- *   and continued leaves a hole.
+ * - `recordMessageId` and `consumedByMessageId` are message ids. They go
+ *   through `idMaps.messages`, which is the identity unless the chat was
+ *   created under a fresh id and its messages reminted (bug 199) — and a
+ *   message import that warned and continued leaves a hole either way.
  *
  * A row whose seat or whose Host record is missing is **dropped**: an inform
  * aimed at nobody would sit pending forever, and a record pointer into empty
@@ -73,7 +74,10 @@ export function remapChatInform(
     };
   }
 
-  const recordMessageId = inform.recordMessageId ?? null;
+  const remapMessageId = (id: string | null | undefined): string | null =>
+    id ? idMaps.messages.get(id) ?? id : null;
+
+  const recordMessageId = remapMessageId(inform.recordMessageId);
   if (recordMessageId && !known.messageIds.has(recordMessageId)) {
     return {
       ok: false,
@@ -81,7 +85,7 @@ export function remapChatInform(
     };
   }
 
-  const consumedByMessageId = inform.consumedByMessageId ?? null;
+  const consumedByMessageId = remapMessageId(inform.consumedByMessageId);
   const consumedByMessageIdCleared = Boolean(
     consumedByMessageId && !known.messageIds.has(consumedByMessageId)
   );

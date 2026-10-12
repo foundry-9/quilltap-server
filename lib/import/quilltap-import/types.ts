@@ -228,6 +228,15 @@ export interface IdMappingState {
    * because the bundle's vault wins over the scaffold those items landed in.
    */
   wardrobeItems: Map<string, string>;
+  /**
+   * Source message id → the id the chat import minted for it. Populated only
+   * for chats created under a fresh id (the `duplicate` strategy, or any
+   * import without `preserveIds`), whose messages are reminted because
+   * `chat_messages.id` is global (bug 199). A message id absent from the map
+   * kept its source id. Read by every sidecar that names a message: informs,
+   * conversation annotations, memories' `sourceMessageId`, file `linkedTo`.
+   */
+  messages: Map<string, string>;
 }
 
 export interface ImportCounts {

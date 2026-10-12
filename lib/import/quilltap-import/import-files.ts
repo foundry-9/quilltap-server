@@ -131,7 +131,9 @@ async function remapLinkedTo(
       idMaps.characters.get(id) ??
       idMaps.chats.get(id) ??
       idMaps.projects.get(id) ??
-      idMaps.groups.get(id);
+      idMaps.groups.get(id) ??
+      // A message reminted with its chat (bug 199).
+      idMaps.messages.get(id);
     if (mapped) {
       kept.push(mapped);
       if (idMaps.chats.get(id)) resolvedChatIds.push(mapped);

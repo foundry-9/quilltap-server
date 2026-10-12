@@ -160,6 +160,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 - Creates a copy even if item exists
 - Imported character becomes "Alice 2" if "Alice" exists
+- A chat copied this way arrives titled "… (imported)", sitting beside its original with every last line of the transcript intact — swipes, summaries and Informs following along to the copy rather than wandering back to the original
 - Useful for having multiple versions
 
 ## Understanding Import Results

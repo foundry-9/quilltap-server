@@ -60,7 +60,8 @@ function emptyIdMaps(): IdMappingState {
     groups: new Map(),
     mountPoints: new Map(),
     docMountFileLinks: new Map(),
-  }
+    messages: new Map(),
+  } as unknown as IdMappingState
 }
 
 const OPTIONS: ImportOptions = {
@@ -248,6 +249,25 @@ describe('importFiles', () => {
 
     const created = filesCreate.mock.calls[0][0] as Record<string, unknown>
     expect(created.linkedTo).toEqual(['chat-1', 'msg-1'])
+  })
+
+  it('follows a message reminted with its duplicated chat (bug 199)', async () => {
+    const idMaps = emptyIdMaps()
+    idMaps.chats.set('chat-old', 'chat-copy')
+    idMaps.messages.set('msg-old', 'msg-copy')
+
+    await importFiles(
+      'user-1',
+      [makeFile({ linkedTo: ['chat-old', 'msg-old'] })] as never,
+      [],
+      OPTIONS,
+      repos as never,
+      idMaps,
+      warnings
+    )
+
+    const created = filesCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(created.linkedTo).toEqual(['chat-copy', 'msg-copy'])
   })
 
   it('creates folders parents-first and reuses one that already exists', async () => {
