@@ -30,6 +30,7 @@ import {
   type ResolvedScenario,
 } from '@/lib/chat/scenario-selection';
 import { lookupScenarioRef } from '@/lib/scenarios/location';
+import { combineScenarioText, recoverPresetBody } from '@/lib/chat/scenario-text';
 import { postHostScenarioRevisionAnnouncement } from '@/lib/services/host-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { setScenarioSchema } from '../schemas';
@@ -71,6 +72,30 @@ async function findCharacterOwningScenario(
 }
 
 /**
+ * An ordinary save keeps the scene the chat has. When the request resolves to
+ * the chat's own source file but that file has been revised since it was
+ * picked, the chat's stored preset body (verified against the source's hash)
+ * is kept, with the request's notes beneath it; only "Reload from source"
+ * (`reload: true`) pulls the revised copy in. Returns null when there is
+ * nothing to keep — a different file, an unchanged one, or a stored body that
+ * no longer matches its hash — and the resolved recipe stands.
+ */
+export function keepCurrentScene(next: ResolvedScenario, chat: ChatMetadata): ResolvedScenario | null {
+  const current = chat.scenarioSource;
+  const incoming = next.scenarioSource;
+  if (!current || !incoming) return null;
+  if (current.mountPointId !== incoming.mountPointId || current.path !== incoming.path) return null;
+  if (current.bodySha256 === incoming.bodySha256) return null;
+  const body = recoverPresetBody(chat.scenarioText, chat.scenarioNotes);
+  if (body === null || hashScenarioBody(body) !== current.bodySha256) return null;
+  return {
+    scenarioText: combineScenarioText(body, next.scenarioNotes) ?? null,
+    scenarioSource: current,
+    scenarioNotes: next.scenarioNotes,
+  };
+}
+
+/**
  * Change (or clear) the chat's scenario.
  */
 export async function handleSetScenario(
@@ -102,6 +127,18 @@ export async function handleSetScenario(
   } catch (error) {
     if (error instanceof ScenarioRefRefusedError) return badRequest(error.message);
     throw error;
+  }
+
+  if (!validatedData.reload) {
+    const kept = keepCurrentScene(next, chat);
+    if (kept) {
+      logger.debug('[Chats v1] Source file revised; keeping the chat\'s scene (no reload asked)', {
+        chatId,
+        mountPointId: kept.scenarioSource?.mountPointId,
+        path: kept.scenarioSource?.path,
+      });
+      next = kept;
+    }
   }
 
   const previous: ResolvedScenario = {

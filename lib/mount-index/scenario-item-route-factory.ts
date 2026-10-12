@@ -39,7 +39,7 @@ import {
   ScenarioFilenameError,
   ScenarioNotFoundError,
   resolveScenarioLocation,
-  type ScenarioLocation,
+  type StoreScenarioLocation,
 } from '@/lib/scenarios/location';
 
 export interface ScenarioItemRouteConfig {
@@ -92,7 +92,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
     ownerId: string | undefined,
     { user, repos }: RequestContext,
     forWrite = false,
-  ): Promise<{ ok: true; location: ScenarioLocation } | { ok: false; response: NextResponse }> {
+  ): Promise<{ ok: true; location: StoreScenarioLocation } | { ok: false; response: NextResponse }> {
     let location = await resolveScenarioLocation(scope, ownerId, repos, user.id);
     if (location && forWrite) {
       location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: true });
@@ -310,7 +310,7 @@ export function createScenarioCollectionBodies<P extends Record<string, string>>
     ownerId: string | undefined,
     { user, repos }: RequestContext,
     forWrite: boolean,
-  ): Promise<{ ok: true; location: ScenarioLocation } | { ok: false; response: NextResponse }> {
+  ): Promise<{ ok: true; location: StoreScenarioLocation } | { ok: false; response: NextResponse }> {
     if (scope !== 'general' && ownerId) {
       const row = scope === 'project'
         ? await repos.projects.findByIdRaw(ownerId)

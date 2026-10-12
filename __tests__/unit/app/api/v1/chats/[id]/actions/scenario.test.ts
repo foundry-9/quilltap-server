@@ -237,7 +237,7 @@ describe('chats [id] scenario action', () => {
     )
 
     const res = await handleSetScenario(
-      makeRequest({ scenarioRef: { mountPointId: MOUNT, path: 'Scenarios/rooftop.md' }, scenario: 'Rain.' }),
+      makeRequest({ scenarioRef: { mountPointId: MOUNT, path: 'Scenarios/rooftop.md' }, scenario: 'Rain.', reload: true }),
       CHAT_ID,
       ctx,
     )
@@ -245,6 +245,78 @@ describe('chats [id] scenario action', () => {
     expect((await res.json()).changed).toBe(true)
     expect(ctx.repos.chats.update).toHaveBeenCalledWith(CHAT_ID, expect.objectContaining({ scenarioNotes: 'Rain.' }))
     expect(postHostScenarioRevisionAnnouncement).toHaveBeenCalled()
+  })
+
+  describe('an ordinary save keeps the scene; only Reload takes the revised copy', () => {
+    const SOURCE = { path: 'Scenarios/rooftop.md', body: 'A rooftop.' }
+    const REVISED = { path: 'Scenarios/rooftop.md', body: 'A rooftop at night.' }
+
+    beforeEach(() => {
+      ctx.repos.chats.findById.mockResolvedValue(makeChat({ ...recipe('A rooftop.\n\nRain.', SOURCE, 'Rain.') }))
+    })
+
+    it('keeps the stored body when the notes change but the file was revised', async () => {
+      resolveScenarioSelection.mockResolvedValue(recipe('A rooftop at night.\n\nThunder.', REVISED, 'Thunder.'))
+
+      await handleSetScenario(
+        makeRequest({ scenarioRef: { mountPointId: MOUNT, path: SOURCE.path }, scenario: 'Thunder.' }),
+        CHAT_ID,
+        ctx,
+      )
+
+      expect(ctx.repos.chats.update).toHaveBeenCalledWith(CHAT_ID, {
+        scenarioText: 'A rooftop.\n\nThunder.',
+        scenarioSource: recipe(null, SOURCE).scenarioSource,
+        scenarioNotes: 'Thunder.',
+      })
+    })
+
+    it('does nothing at all when only re-saving the same notes', async () => {
+      resolveScenarioSelection.mockResolvedValue(recipe('A rooftop at night.\n\nRain.', REVISED, 'Rain.'))
+
+      const res = await handleSetScenario(
+        makeRequest({ scenarioRef: { mountPointId: MOUNT, path: SOURCE.path }, scenario: 'Rain.' }),
+        CHAT_ID,
+        ctx,
+      )
+
+      expect((await res.json()).changed).toBe(false)
+      expect(ctx.repos.chats.update).not.toHaveBeenCalled()
+    })
+
+    it('takes the revised copy when reload is asked for', async () => {
+      resolveScenarioSelection.mockResolvedValue(recipe('A rooftop at night.\n\nRain.', REVISED, 'Rain.'))
+
+      await handleSetScenario(
+        makeRequest({ scenarioRef: { mountPointId: MOUNT, path: SOURCE.path }, scenario: 'Rain.', reload: true }),
+        CHAT_ID,
+        ctx,
+      )
+
+      expect(ctx.repos.chats.update).toHaveBeenCalledWith(
+        CHAT_ID,
+        expect.objectContaining({ scenarioText: 'A rooftop at night.\n\nRain.' }),
+      )
+      expect(postHostScenarioRevisionAnnouncement).toHaveBeenCalled()
+    })
+
+    it('falls back to the file when the stored text no longer matches its source hash', async () => {
+      ctx.repos.chats.findById.mockResolvedValue(
+        makeChat({ ...recipe('Hand-edited.\n\nRain.', SOURCE, 'Rain.') }),
+      )
+      resolveScenarioSelection.mockResolvedValue(recipe('A rooftop at night.\n\nRain.', REVISED, 'Rain.'))
+
+      await handleSetScenario(
+        makeRequest({ scenarioRef: { mountPointId: MOUNT, path: SOURCE.path }, scenario: 'Rain.' }),
+        CHAT_ID,
+        ctx,
+      )
+
+      expect(ctx.repos.chats.update).toHaveBeenCalledWith(
+        CHAT_ID,
+        expect.objectContaining({ scenarioText: 'A rooftop at night.\n\nRain.' }),
+      )
+    })
   })
 
   it('records a change of provenance alone without a recompile or an announcement', async () => {

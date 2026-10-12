@@ -32,7 +32,7 @@ Only the four kinds of shelf are offered: character vaults, each project's own s
 
 A chat now remembers which file its scene was read from. The **Scenario** control in the chat's sidebar names it — **From: *Owner* › *Name*** — and keeps an eye on the original:
 
-- **"— the shelf copy has been revised"** means the file has been edited since the scene was picked. **Reload from source** reads it afresh, keeps your notes beneath it, and the Host announces the revision as for any change of scene.
+- **"— the shelf copy has been revised"** means the file has been edited since the scene was picked. **Reload from source** reads it afresh, keeps your notes beneath it, and the Host announces the revision as for any change of scene. Until you press it, the chat keeps the scene it has — amending your notes and pressing **Change scenario** does not quietly bring in the new copy.
 - **"— the shelf copy is gone"** means the file has been deleted or renamed. The chat's scene is unaffected; there is simply nothing to reload.
 
 Chats begun before this remembering began, and scenes typed by hand, have no such line.

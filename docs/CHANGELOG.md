@@ -20,6 +20,8 @@
 - Scenario label on the New Chat form now points at the select (`htmlFor` was `new-chat-scenario`, which matched nothing).
 - Scenario item routes heal `Scenarios/` (and a group's `Knowledge/`) on PUT/rename/DELETE; GET stays a read probe. Startup heals report `provisioned` / `healed` / `failed` separately and count a folder failure as failed.
 - A character scenario ref lookup reads the character row once instead of three times.
+- `?action=scenario` takes `reload`; an ordinary save that resolves to the chat's own revised source file keeps the stored scene (verified by hash) with the new notes. Only "Reload from source" (`reload: true`) takes the revised copy.
+- Character scenario location is read-only (`StoreScenarioLocation` carries writes for General/project/group). Removed the unused character write methods, `resolveBody`, `resolveScenarioRef`, and the test-only `listScenariosInFolder` / `readScenarioByPath` / `resolveScenarioBody`.
 - Help: new `help/scenario-browser.md`; updated `general-scenarios.md`, `project-scenarios.md`, `groups.md`, `chats.md`.
 - Review fixes: the in-chat control no longer selects a source whose file is gone (saving it replaced the scene with the notes alone); leaving Custom for a preset clears the box instead of appending the old scene as notes; the character location's `update` keeps `defaultScenarioId` on a retitle and refuses a retitle onto an existing file. The scenario-by-ref query is one hook, `useScenarioRefBody`; `components/scenario/types.ts` reuses `ScenarioRef` from `chat.types`.
 

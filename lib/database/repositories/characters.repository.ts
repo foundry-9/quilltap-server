@@ -879,7 +879,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    */
   async addScenario(
     characterId: string,
-    data: { title: string; content: string; description?: string; archived?: boolean }
+    data: { title: string; content: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     // A vault-backed character re-keys each scenario from its file path when
     // the vault is read back, so the id minted below is transient. Callers
@@ -895,7 +895,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         id,
         title: data.title,
         content: data.content,
-        ...(data.description && data.description.trim().length > 0 && { description: data.description.trim() }),
         // Omission means active; never persist an explicit `archived: false`.
         ...(data.archived === true && { archived: true }),
         createdAt: now,
@@ -930,7 +929,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async updateScenario(
     characterId: string,
     scenarioId: string,
-    data: { title?: string; content?: string; description?: string; archived?: boolean }
+    data: { title?: string; content?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.updateInSubArray<CharacterScenario>(
       characterId,

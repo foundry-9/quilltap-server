@@ -3,7 +3,7 @@
  * Tests combining a resolved preset scenario body with free-text notes.
  */
 
-import { combineScenarioText } from '@/lib/chat/scenario-text'
+import { combineScenarioText, recoverPresetBody } from '@/lib/chat/scenario-text'
 
 describe('combineScenarioText', () => {
   it('appends free text beneath a preset body with a blank-line separator', () => {
@@ -48,5 +48,20 @@ describe('combineScenarioText', () => {
 
   it('trims the free text before appending', () => {
     expect(combineScenarioText('Base.', '  padded notes  ')).toBe('Base.\n\npadded notes')
+  })
+})
+
+describe('recoverPresetBody', () => {
+  it('inverts combineScenarioText', () => {
+    const text = combineScenarioText('A rooftop.', '  Rain.  ')
+    expect(recoverPresetBody(text, 'Rain.')).toBe('A rooftop.')
+  })
+
+  it('is the whole text when there were no notes', () => {
+    expect(recoverPresetBody('A rooftop.', null)).toBe('A rooftop.')
+  })
+
+  it('refuses to guess when the text does not end in the notes', () => {
+    expect(recoverPresetBody('A rooftop.', 'Rain.')).toBeNull()
   })
 })

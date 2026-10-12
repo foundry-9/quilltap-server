@@ -2496,6 +2496,7 @@ Change (or clear) the chat's scenario mid-conversation. Fields mirror the create
 {
   "scenario": "free-text notes",
   "scenarioRef": { "mountPointId": "store-uuid", "path": "Scenarios/reading-room.md" },
+  "reload": true,
   "scenarioId": "character-scenario-uuid",
   "projectScenarioPath": "Scenarios/bridge.md",
   "groupScenarioPath": "Scenarios/parlour.md",
@@ -2509,7 +2510,8 @@ Change (or clear) the chat's scenario mid-conversation. Fields mirror the create
 **Notes**:
 
 - `projectScenarioPath` resolves against the chat's own `projectId` (not a client-supplied one). A `scenarioId` is resolved against whichever active participant character owns it; a character whose vault is unavailable is skipped rather than failing the request.
-- `scenarioRef` names a scenario anywhere: a character vault, a project's or group's official store, or Quilltap General. A ref whose path leaves `Scenarios/` or whose mount is none of those four kinds is a **400**; one whose file has gone missing fails soft like the other kinds. "Reload from source" in the Salon is this action with `{ scenarioRef: <the chat's source>, scenario: <its notes> }`.
+- `scenarioRef` names a scenario anywhere: a character vault, a project's or group's official store, or Quilltap General. A ref whose path leaves `Scenarios/` or whose mount is none of those four kinds is a **400**; one whose file has gone missing fails soft like the other kinds. "Reload from source" in the Salon is this action with `{ scenarioRef: <the chat's source>, scenario: <its notes>, reload: true }`.
+- **An ordinary save keeps the scene the chat has.** When the request resolves to the chat's own source file and that file has been revised since it was picked, the chat's stored preset body is kept (recovered from `scenarioText` minus the old notes and verified against `scenarioSource.bodySha256`), with the request's notes beneath it. Only `reload: true` takes the revised copy. If the stored body no longer matches its hash, the file's current text is used.
 - Every legacy kind fails soft — an unresolvable pointer logs a warning and falls through to the next tier.
 - The chat stores the recipe: `scenarioText` (what the prompt reads), `scenarioSource` (`{ mountPointId, path, bodySha256 }` — the file and the SHA-256 of its body as resolved; null for a custom scene) and `scenarioNotes` (the free text). All three are written together, here and at chat creation only.
 - On an actual change: rewrites `chat.scenarioText` (with its source and notes), calls `compileAllIdentityStacks` (the scene is baked into `{{scenario}}` in each precompiled stack), and posts a Host announcement with `systemKind: "scenario-change"`, worded as a revision. A blank result retires the scene with a matching notice. A stack-recompile failure is logged and non-fatal — the read-through fallback covers it.
@@ -6811,14 +6813,14 @@ Delete one group wardrobe item. Cleans up equipped references across chats first
 
 ### Scenarios
 
-Every scenario is addressed through one chokepoint, `resolveScenarioLocation` / `resolveScenarioRef` (`lib/scenarios/location.ts`): a location is one owner's `Scenarios/` folder — a character vault, a project's or group's official store, or Quilltap General — and a `{ mountPointId, path }` ref names any scenario in any of them.
+Every scenario is addressed through one chokepoint, `resolveScenarioLocation` / `lookupScenarioRef` (`lib/scenarios/location.ts`): a location is one owner's `Scenarios/` folder — a character vault, a project's or group's official store, or Quilltap General — and a `{ mountPointId, path }` ref names any scenario in any of them.
 
 Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, `archived`, body) kept in a `Scenarios/` folder. They exist at three file-backed tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
 
 **Archived scenarios.** A file carrying `archived: true` is excluded from every list response unless the request passes **`?includeArchived=true`**; absence of the key means active, and the serializer never writes `archived: false`. The parameter is honoured by all three tiers' collection GETs, by the participant-aggregate route below, and by the item-level `PUT`/`POST ?action=rename`/`DELETE` on the freshly-listed scenarios they return (so a manager with "Show archived" ticked gets back a list that still contains the row it just changed). Two rules hold regardless of the parameter:
 
 - An archived scenario **never wins default-conflict resolution** — its `isDefault` comes back `false` even when it is being listed, and `rawIsDefault` still reflects what the file claims.
-- `resolveScenarioBody()` ignores the flag entirely, so a chat that already resolved an archived scenario keeps working.
+- A location's `read` ignores the flag entirely, so a chat that already resolved an archived scenario keeps working.
 
 `archived` is also accepted on the create and update bodies. On `PUT` it is **optional and preserving**: the endpoint rewrites the whole file from the request body, so omitting `archived` keeps the file's current state rather than silently un-archiving it.
 

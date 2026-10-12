@@ -15,7 +15,8 @@
  * The current scene seeds the control. When the chat recorded where its scene
  * came from (`?action=scenario-source`), that source is the authority: the
  * provenance line names it, says when the shelf copy has since been revised
- * or removed, and offers "Reload from source" — the same file, with the same
+ * or removed, and offers "Reload from source" (`reload: true`; an ordinary
+ * save keeps the scene the chat has) — the same file, with the same
  * notes beneath. A chat with no source (a custom scene, or one from before
  * sources were recorded) falls back to matching the text against the presets,
  * as it always has.
@@ -384,7 +385,7 @@ export function ChatScenarioControl({
   const handleReload = () => {
     if (!sourceInfo?.source) return
     const { mountPointId, path } = sourceInfo.source
-    return postScenario({ scenarioRef: { mountPointId, path }, scenario: sourceInfo.notes ?? '' })
+    return postScenario({ scenarioRef: { mountPointId, path }, scenario: sourceInfo.notes ?? '', reload: true })
   }
 
   return (

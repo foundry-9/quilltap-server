@@ -27,7 +27,7 @@
  * picker unless the caller opts in with `includeArchived`. Absence of the key
  * means active — an archived file is written with `archived: true`, an active
  * one omits the key entirely. Archived scenarios never win default resolution,
- * even when they are being listed. `resolveScenarioBody()` deliberately ignores
+ * even when they are being listed. A location's `read` deliberately ignores
  * the flag so a chat whose scenario was archived mid-life keeps resolving.
  *
  * @module mount-index/scenarios-common
@@ -36,10 +36,7 @@
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import {
-  readDatabaseDocument,
-  writeDatabaseDocument,
-} from '@/lib/mount-index/database-store';
+import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import {
   parseFrontmatter,
   serializeFrontmatter,
@@ -180,38 +177,9 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
 }
 
 /**
- * List all `<folderName>/*.md` files in the given mount point, parsed and
- * sorted alphabetically. If multiple files have `isDefault: true`, the
- * alphabetically-first wins; the others are demoted in the result and a
- * warning naming the offenders is returned.
- *
- * Files at nested paths under the folder are excluded (top-level only).
- * Files with empty bodies are dropped with a logged warning.
- *
- * Archived scenarios are excluded unless `options.includeArchived` is true.
- * Either way they are barred from winning default resolution — an archived
- * file cannot be the scope's default.
- */
-export async function listScenariosInFolder(
-  mountPointId: string,
-  folderName: string,
-  options: { includeArchived?: boolean } = {},
-): Promise<ListScenariosResult> {
-  const repos = getRepositories();
-
-  const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
-    [mountPointId],
-    folderName,
-    '.md',
-  );
-
-  return buildScenarioList(docs, parseScenarioDoc, options, { mountPointId, folderName });
-}
-
-/**
  * Turn one folder's already-fetched documents into a sorted scenario list with
- * default-conflict resolution applied — the pure half of
- * `listScenariosInFolder`, shared with the instance-wide lister (which fetches
+ * default-conflict resolution applied — what every scenario
+ * location's `list` runs, shared with the instance-wide lister (which fetches
  * every owner's documents in a single query and buckets them by mount).
  *
  * `parse` is the scope's parser: `parseScenarioDoc` for the store tiers, the
@@ -267,59 +235,6 @@ export function buildScenarioList(
   }
 
   return { scenarios: parsed, warnings };
-}
-
-/**
- * Read a single scenario by relative path and return its parsed shape. The
- * `isDefault` field reflects ONLY the file's own frontmatter — does not
- * cross-reference siblings.
- */
-export async function readScenarioByPath(
-  mountPointId: string,
-  relativePath: string,
-): Promise<ParsedScenario | null> {
-  const repos = getRepositories();
-  const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, relativePath);
-  if (!doc) return null;
-  return parseScenarioDoc(doc);
-}
-
-/**
- * Resolve a scenario's body by `<folderName>/<filename>.md` path. Accepts bare
- * filename or full relative path. Returns null when the file is missing or has
- * no usable body. Used by chat creation to bake the scenario into
- * `chat.scenarioText`.
- *
- * Deliberately ignores `archived` — archiving hides a scenario from the menus,
- * it does not break the chats that already chose it.
- */
-export async function resolveScenarioBody(
-  mountPointId: string,
-  scenarioPath: string,
-  folderName: string,
-): Promise<string | null> {
-  let normalised = scenarioPath.trim();
-  if (!normalised.startsWith(`${folderName}/`)) {
-    normalised = `${folderName}/${normalised.replace(/^\/+/, '')}`;
-  }
-  if (!/\.md$/i.test(normalised)) {
-    normalised = `${normalised}.md`;
-  }
-
-  try {
-    const { content } = await readDatabaseDocument(mountPointId, normalised);
-    const parsed = parseFrontmatter(content);
-    const body = content.slice(parsed.bodyStartOffset).trim();
-    return body.length > 0 ? body : null;
-  } catch (error) {
-    logger.warn('Failed to resolve scenario body', {
-      mountPointId,
-      scenarioPath,
-      folderName,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
 }
 
 /**

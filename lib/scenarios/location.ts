@@ -96,6 +96,15 @@ export class ScenarioFilenameError extends Error {
   }
 }
 
+/** The scopes whose scenarios are plain files this module writes: General, projects, groups. */
+export type StoreScenarioScope = Exclude<ScenarioScope, 'character'>;
+
+/**
+ * One owner's `Scenarios/` folder, for reading. Every scope has one. Writes
+ * live on {@link StoreScenarioLocation}: the character tier is written through
+ * the characters repository (its vault projection is the single writer), so
+ * its location is read-only.
+ */
 export interface ScenarioLocation {
   scope: ScenarioScope;
   /** Owner id; null for General. */
@@ -106,17 +115,20 @@ export interface ScenarioLocation {
   list(opts?: { includeArchived?: boolean }): Promise<ListScenariosResult>;
   /** One scenario, archived included; `isDefault` reflects only the file (or column) itself. */
   read(path: string): Promise<ParsedScenario | null>;
-  /** Body only; ignores `archived` (a chat whose scene was archived mid-life keeps resolving). */
-  resolveBody(path: string): Promise<string | null>;
+  /** The id a character-tier scenario carries (`stableUuidFromString('scenario:…')`); null for other scopes. */
+  idForPath(path: string): string | null;
+  /** Parse one of this folder's documents with the scope's parser. */
+  parse(doc: DocMountDocument, defaultScenarioId?: string | null): ParsedScenario | null;
+}
+
+/** A file-backed owner's folder — General, a project, a group — with its writes. */
+export interface StoreScenarioLocation extends ScenarioLocation {
+  scope: StoreScenarioScope;
   create(input: CreateScenarioInput): Promise<ParsedScenario>;
   update(path: string, patch: UpdateScenarioInput): Promise<ParsedScenario>;
   rename(path: string, filename: string): Promise<ParsedScenario>;
   delete(path: string): Promise<void>;
   setDefault(path: string | null): Promise<void>;
-  /** The id a character-tier scenario carries (`stableUuidFromString('scenario:…')`); null for other scopes. */
-  idForPath(path: string): string | null;
-  /** Parse one of this folder's documents with the scope's parser. */
-  parse(doc: DocMountDocument, defaultScenarioId?: string | null): ParsedScenario | null;
 }
 
 export interface ResolveScenarioLocationOptions {
@@ -139,11 +151,6 @@ function usableCharacter(character: CharacterRow | null, userId: string): (Chara
   if (!character || character.userId !== userId || character.archivedAt) return null;
   if (!character.characterDocumentMountPointId) return null;
   return character as CharacterRow & { characterDocumentMountPointId: string };
-}
-
-/** The path a character scenario's file is projected to — the overlay's own naming. */
-export function characterScenarioPathForTitle(title: string): string {
-  return `${SCENARIOS_FOLDER}/${sanitizeFileName(title)}.md`;
 }
 
 /** Ref → character-scenario id. A pure function of the ref. */
@@ -205,12 +212,12 @@ function cleanFilename(filename: string, emptyMessage: string): string {
 // ============================================================================
 
 function storeLocation(
-  scope: Exclude<ScenarioScope, 'character'>,
+  scope: StoreScenarioScope,
   id: string | null,
   mountPointId: string,
   ownerName: string,
   repos: RepositoryContainer,
-): ScenarioLocation {
+): StoreScenarioLocation {
   const findDoc = (path: string) => repos.docMountDocuments.findByMountPointAndPath(mountPointId, path);
 
   const list: ScenarioLocation['list'] = async (opts = {}) => {
@@ -234,11 +241,6 @@ function storeLocation(
     ownerName,
     list,
     read,
-    async resolveBody(path) {
-      const normalized = normalizeScenarioPath(path);
-      if (!normalized.ok) return null;
-      return (await read(normalized.path))?.body ?? null;
-    },
     async create(input) {
       const cleaned = cleanFilename(input.filename, 'Filename cannot be empty after sanitisation');
       const path = `${SCENARIOS_FOLDER}/${cleaned}.md`;
@@ -316,7 +318,7 @@ function storeLocation(
 }
 
 // ============================================================================
-// Character tier — reads the vault folder, writes through the repository
+// Character tier — read-only; writes go through the characters repository
 // ============================================================================
 
 function characterLocation(
@@ -325,139 +327,29 @@ function characterLocation(
   repos: RepositoryContainer,
 ): ScenarioLocation {
   const characterId = character.id;
-  const ownerName = character.name;
+  // The character's default is a column on the row this location was built
+  // from; nothing writes through a character location, so that copy holds.
+  const defaultScenarioId = character.defaultScenarioId ?? null;
   const idForPath = (path: string) => characterScenarioIdForPath(mountPointId, path);
-
-  // The default is a column on the row the location was built from. Reads use
-  // that copy; any write through this location forgets it, so the next read
-  // after a write goes back to the row.
-  let knownDefaultId: string | null | undefined = character.defaultScenarioId ?? null;
-  const currentDefaultId = async () => {
-    if (knownDefaultId === undefined) {
-      knownDefaultId = (await repos.characters.findByIdRaw(characterId))?.defaultScenarioId ?? null;
-    }
-    return knownDefaultId;
-  };
-  type Characters = RepositoryContainer['characters'];
-  const chars = {
-    addScenario: (...args: Parameters<Characters['addScenario']>) => {
-      knownDefaultId = undefined;
-      return repos.characters.addScenario(...args);
-    },
-    updateScenario: (...args: Parameters<Characters['updateScenario']>) => {
-      knownDefaultId = undefined;
-      return repos.characters.updateScenario(...args);
-    },
-    removeScenario: (...args: Parameters<Characters['removeScenario']>) => {
-      knownDefaultId = undefined;
-      return repos.characters.removeScenario(...args);
-    },
-    update: (...args: Parameters<Characters['update']>) => {
-      knownDefaultId = undefined;
-      return repos.characters.update(...args);
-    },
-  };
-  const parse = (doc: DocMountDocument, defaultScenarioId?: string | null) =>
-    parseScenarioForScope('character', doc, { characterId, defaultScenarioId });
-
-  const read: ScenarioLocation['read'] = async (path) => {
-    const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, requirePath(path));
-    return doc ? parse(doc, await currentDefaultId()) : null;
-  };
-
-  const readOrThrow = async (path: string) => {
-    const scenario = await read(path);
-    if (!scenario) throw new ScenarioNotFoundError(path);
-    return scenario;
-  };
+  const parse = (doc: DocMountDocument, defaultId: string | null = defaultScenarioId) =>
+    parseScenarioForScope('character', doc, { characterId, defaultScenarioId: defaultId });
 
   return {
     scope: 'character',
     id: characterId,
     mountPointId,
-    ownerName,
+    ownerName: character.name,
     async list(opts = {}) {
-      const [docs, defaultScenarioId] = await Promise.all([
-        repos.docMountDocuments.findManyByMountPointsInFolder([mountPointId], SCENARIOS_FOLDER, '.md'),
-        currentDefaultId(),
-      ]);
-      return buildScenarioList(docs, (doc) => parse(doc, defaultScenarioId), opts, {
+      const docs = await repos.docMountDocuments.findManyByMountPointsInFolder([mountPointId], SCENARIOS_FOLDER, '.md');
+      return buildScenarioList(docs, (doc) => parse(doc), opts, {
         scope: 'character',
         id: characterId,
         mountPointId,
       });
     },
-    read,
-    async resolveBody(path) {
-      const normalized = normalizeScenarioPath(path);
-      if (!normalized.ok) return null;
-      return (await read(normalized.path))?.body ?? null;
-    },
-    async create(input) {
-      const title = (input.name ?? input.filename).trim();
-      const path = characterScenarioPathForTitle(title);
-      if (await repos.docMountDocuments.findByMountPointAndPath(mountPointId, path)) {
-        throw new ScenarioConflictError(sanitizeFileName(title));
-      }
-      const added = await chars.addScenario(characterId, {
-        title,
-        content: input.body,
-        ...(input.description !== undefined && { description: input.description }),
-        ...(input.archived !== undefined && { archived: input.archived }),
-      });
-      if (!added) throw new ScenarioNotFoundError(path);
-      if (input.isDefault) await chars.update(characterId, { defaultScenarioId: idForPath(path) });
-      logger.debug('[ScenarioLocation] Created character scenario', { characterId, mountPointId, path });
-      return readOrThrow(path);
-    },
-    async update(path, patch) {
-      const current = await readOrThrow(path);
-      const title = patch.name ?? current.name;
-      // A retitle re-projects the file under its new name, which re-keys it.
-      const newPath = characterScenarioPathForTitle(title);
-      // Two scenarios projecting to one file would overwrite each other.
-      if (newPath !== current.path && (await repos.docMountDocuments.findByMountPointAndPath(mountPointId, newPath))) {
-        throw new ScenarioConflictError(sanitizeFileName(title));
-      }
-      const updated = await chars.updateScenario(characterId, idForPath(current.path), {
-        title,
-        content: patch.body,
-        ...(patch.description !== undefined && { description: patch.description }),
-        ...(patch.archived !== undefined && { archived: patch.archived }),
-      });
-      if (!updated) throw new ScenarioNotFoundError(current.path);
-      // The default is a column keyed by the path-derived id, so a retitled
-      // default must follow its file (as `rename` does) or it would dangle.
-      if (patch.isDefault || (current.isDefault && newPath !== current.path)) {
-        await chars.update(characterId, { defaultScenarioId: idForPath(newPath) });
-      }
-      logger.debug('[ScenarioLocation] Updated character scenario', { characterId, mountPointId, path: current.path, newPath });
-      return readOrThrow(newPath);
-    },
-    async rename(path, filename) {
-      const current = await readOrThrow(path);
-      const title = cleanFilename(filename, 'newFilename cannot be empty after sanitisation');
-      const newPath = characterScenarioPathForTitle(title);
-      if (newPath === current.path) return current;
-      if (await repos.docMountDocuments.findByMountPointAndPath(mountPointId, newPath)) {
-        throw new ScenarioConflictError(title);
-      }
-      const wasDefault = current.isDefault;
-      const updated = await chars.updateScenario(characterId, idForPath(current.path), { title });
-      if (!updated) throw new ScenarioNotFoundError(current.path);
-      if (wasDefault) await chars.update(characterId, { defaultScenarioId: idForPath(newPath) });
-      logger.debug('[ScenarioLocation] Renamed character scenario', { characterId, mountPointId, from: current.path, to: newPath });
-      return readOrThrow(newPath);
-    },
-    async delete(path) {
-      const resolved = requirePath(path);
-      const removed = await chars.removeScenario(characterId, idForPath(resolved));
-      if (!removed) throw new ScenarioNotFoundError(resolved);
-      logger.debug('[ScenarioLocation] Deleted character scenario', { characterId, mountPointId, path: resolved });
-    },
-    async setDefault(path) {
-      const defaultScenarioId = path === null ? null : idForPath((await readOrThrow(path)).path);
-      await chars.update(characterId, { defaultScenarioId });
+    async read(path) {
+      const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, requirePath(path));
+      return doc ? parse(doc) : null;
     },
     idForPath,
     parse,
@@ -474,6 +366,20 @@ function characterLocation(
  * non-General scope arrives without an id, or when the backing store doesn't
  * exist and `ensure` is off (or can't be provisioned).
  */
+export async function resolveScenarioLocation(
+  scope: StoreScenarioScope,
+  id: string | null | undefined,
+  repos: RepositoryContainer,
+  userId: string,
+  opts?: ResolveScenarioLocationOptions,
+): Promise<StoreScenarioLocation | null>;
+export async function resolveScenarioLocation(
+  scope: ScenarioScope,
+  id: string | null | undefined,
+  repos: RepositoryContainer,
+  userId: string,
+  opts?: ResolveScenarioLocationOptions,
+): Promise<ScenarioLocation | null>;
 export async function resolveScenarioLocation(
   scope: ScenarioScope,
   id: string | null | undefined,
@@ -658,12 +564,3 @@ export async function lookupScenarioRef(
   return { status: 'ok', location, scenario };
 }
 
-/** Ref → location (via classify) and the parsed scenario. Null when the mount is not a scenario owner or the file is missing. */
-export async function resolveScenarioRef(
-  ref: ScenarioRef,
-  repos: RepositoryContainer,
-  userId: string,
-): Promise<{ location: ScenarioLocation; scenario: ParsedScenario } | null> {
-  const lookup = await lookupScenarioRef(ref, repos, userId);
-  return lookup.status === 'ok' ? { location: lookup.location, scenario: lookup.scenario } : null;
-}

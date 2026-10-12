@@ -256,6 +256,8 @@ describe('ChatScenarioControl', () => {
       expect(savedPayload()).toEqual({
         scenarioRef: { mountPointId: 'mp-proj', path: 'project/atrium.md' },
         scenario: 'Keep the cracked pane.',
+        // Only Reload asks for the revised copy; an ordinary save keeps the scene.
+        reload: true,
       })
     })
   })

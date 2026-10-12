@@ -46,13 +46,13 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 import {
   characterScenarioIdForPath,
-  characterScenarioPathForTitle,
   classifyScenarioMount,
   lookupScenarioRef,
   resolveScenarioLocation,
   ScenarioConflictError,
 } from '@/lib/scenarios/location'
 import { parseScenarioFile } from '@/lib/database/repositories/vault-overlay/parsers'
+import { sanitizeFileName } from '@/lib/mount-index/character-vault'
 import { isScenarioContentArchived } from '@/lib/mount-index/scenarios-common'
 import { makeScenarioStores, type FakeScenarioStores } from '../../../__tests__/helpers/scenario-stores'
 
@@ -189,21 +189,9 @@ describe('the character tier', () => {
     expect(stores.repos.characters.findByIdRaw).not.toHaveBeenCalled()
   })
 
-  it('re-reads the default after a write through the location', async () => {
-    const path = 'Scenarios/Rooftop.md'
-    stores.put(VAULT, path, '# Rooftop\n\nRain.')
-    const location = await resolveScenarioLocation('character', 'char-1', stores.repos, USER)
-    stores.calls.characterUpdate.mockImplementation(async (_id: string, patch: { defaultScenarioId: string }) => {
-      stores.characters[0].defaultScenarioId = patch.defaultScenarioId
-      return {}
-    })
-    await location!.setDefault(path)
-    const { scenarios } = await location!.list()
-    expect(scenarios[0].isDefault).toBe(true)
-  })
-
   it("derives a scenario's id from its path the way the vault overlay does", async () => {
-    const path = characterScenarioPathForTitle('A Tavern: at Dusk')
+    // The overlay names a character scenario's file `Scenarios/<sanitizeFileName(title)>.md`.
+    const path = `Scenarios/${sanitizeFileName('A Tavern: at Dusk')}.md`
     expect(path).toBe('Scenarios/A Tavern_ at Dusk.md')
     stores.put(VAULT, path, '# A Tavern: at Dusk\n\nSmoke and fiddles.')
 
@@ -227,17 +215,10 @@ describe('the character tier', () => {
     expect(scenarios[0].isDefault).toBe(true)
   })
 
-  it('writes through the characters repository, never the files', async () => {
+  it('is read-only: character scenarios are written through the characters repository', async () => {
     const location = await resolveScenarioLocation('character', 'char-1', stores.repos, USER)
-    // The repository's projection would write the file; emulate it.
-    stores.calls.addScenario.mockImplementation(async (_id: string, data: { title: string; content: string }) => {
-      stores.put(VAULT, characterScenarioPathForTitle(data.title), `# ${data.title}\n\n${data.content}`)
-      return { id: 'x' }
-    })
-    const created = await location!.create({ filename: 'ignored', name: 'Harbour', body: 'Gulls.' })
-    expect(stores.calls.addScenario).toHaveBeenCalledWith('char-1', { title: 'Harbour', content: 'Gulls.' })
-    expect(mockWrite).not.toHaveBeenCalled()
-    expect(created.path).toBe('Scenarios/Harbour.md')
+    expect(location).not.toHaveProperty('create')
+    expect(location).not.toHaveProperty('setDefault')
   })
 })
 
