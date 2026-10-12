@@ -74,6 +74,9 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // `chats` — without this a tool-driven outfit change left the
             // wardrobe dialog's cached snapshot stale (bug 198).
             queryKeys.wardrobe.outfit(id),
+            // Where the scene came from. A scenario change posts the Host's
+            // revision announcement, which publishes `chats`.
+            queryKeys.chats.scenarioSource(id),
           ]
         : [queryKeys.chats.all]
 

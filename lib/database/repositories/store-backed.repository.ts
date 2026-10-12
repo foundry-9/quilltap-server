@@ -97,6 +97,15 @@ export abstract class AbstractStoreBackedRepository<
     return this._findAll();
   }
 
+  /**
+   * Find the entity whose official store is `mountPointId`, **without the
+   * document-store overlay**. The scenario location uses it to classify a mount
+   * as a project's or a group's; only `id` and `name` are needed.
+   */
+  async findByOfficialMountPointIdRaw(mountPointId: string): Promise<T | null> {
+    return this.findOneByFilter({ officialMountPointId: mountPointId } as unknown as TypedQueryFilter<T>);
+  }
+
   /** Find by IDs, each hydrated from its document store. */
   async findByIds(ids: string[]): Promise<T[]> {
     if (ids.length === 0) return [];

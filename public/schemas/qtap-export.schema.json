@@ -541,6 +541,20 @@
           "type": ["string", "null"],
           "description": "The resolved scenario content persisted on this chat at creation time"
         },
+        "scenarioSource": {
+          "type": ["object", "null"],
+          "description": "Where the preset under scenarioText was read from: the scenario file's store (mountPointId, remapped with the document stores on import; dropped to null when that store did not come across), its path, and the SHA-256 of its body at pick time. Null for a custom scene and for chats from before sources were recorded.",
+          "required": ["mountPointId", "path", "bodySha256"],
+          "properties": {
+            "mountPointId": { "type": "string", "format": "uuid" },
+            "path": { "type": "string", "maxLength": 500, "description": "Scenarios/<file>.md inside that store" },
+            "bodySha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "scenarioNotes": {
+          "type": ["string", "null"],
+          "description": "The free-text notes layered beneath the preset in scenarioText (so a reload from source keeps them)"
+        },
         "coreWhisperEnabled": {
           "type": ["boolean", "null"],
           "description": "Per-chat override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit. Resolution: chat > character > global."

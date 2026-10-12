@@ -25,19 +25,22 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
-import { ensureProjectScenariosFolder } from '@/lib/mount-index/project-scenarios';
+import { SINGLE_USER_ID } from '@/lib/auth/single-user';
+import { resolveScenarioLocation } from '@/lib/scenarios/location';
 
 export async function ensureProjectScenariosForAllProjects(): Promise<{
   total: number;
+  /** A store was found, adopted or created for an owner that recorded none. */
+  provisioned: number;
+  /** The recorded store pointer was stale and has been replaced. */
   healed: number;
-  created: number;
+  /** No store could be resolved, or a folder could not be created. */
   failed: number;
 }> {
   const repos = getRepositories();
   let total = 0;
+  let provisioned = 0;
   let healed = 0;
-  let created = 0;
   let failed = 0;
 
   let projects;
@@ -49,24 +52,26 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
     logger.error('ensure-project-scenarios: failed to list projects', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { total: 0, healed: 0, created: 0, failed: 1 };
+    return { total: 0, provisioned: 0, healed: 0, failed: 1 };
   }
 
   total = projects.length;
 
   for (const project of projects) {
     try {
-      const result = await ensureOwnerOfficialStore('project', project.id, project.name);
-      if (!result) {
+      // `ensure: true` finds, adopts or creates the official store and heals
+      // the `Scenarios/` folder inside it; a folder failure throws, and is
+      // counted as a failure below rather than reported as healthy.
+      const location = await resolveScenarioLocation('project', project.id, repos, SINGLE_USER_ID, { ensure: true });
+      if (!location) {
         failed++;
         continue;
       }
-      if (result.created) {
-        created++;
-      } else if (project.officialMountPointId !== result.mountPointId) {
+      if (!project.officialMountPointId) {
+        provisioned++;
+      } else if (project.officialMountPointId !== location.mountPointId) {
         healed++;
       }
-      await ensureProjectScenariosFolder(result.mountPointId);
     } catch (error) {
       failed++;
       logger.warn('ensure-project-scenarios: failed for project; continuing', {
@@ -77,6 +82,6 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
     }
   }
 
-  logger.info('ensure-project-scenarios: complete', { total, healed, created, failed });
-  return { total, healed, created, failed };
+  logger.info('ensure-project-scenarios: complete', { total, provisioned, healed, failed });
+  return { total, provisioned, healed, failed };
 }

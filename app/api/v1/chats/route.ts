@@ -11,7 +11,12 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
-import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
+import {
+  resolveScenarioSelection,
+  ScenarioRefRefusedError,
+  type ResolvedScenario,
+} from '@/lib/chat/scenario-selection';
+import { ScenarioRefSchema } from '@/lib/schemas/chat.types';
 import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
@@ -100,6 +105,13 @@ const createChatSchema = z.object({
   title: z.string().optional(),
   scenario: z.string().optional(), // Free-text scenario notes; appended beneath any resolved preset body, or used as the whole scenario when no preset is chosen.
   scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
+  /**
+   * A scenario from anywhere in the instance — `{ mountPointId, path }` — as picked in
+   * the scenario browser. Resolved first; a ref naming a mount that holds no scenarios
+   * (anything but a character vault, a project's or group's official store, or General)
+   * is a 400.
+   */
+  scenarioRef: ScenarioRefSchema.optional(),
   /**
    * Relative path of a project scenario file (`Scenarios/<filename>.md`) inside the
    * project's official document store. Server resolves the body from frontmatter +
@@ -1215,22 +1227,30 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // notes beneath it. The precedence chain lives in `resolveScenarioSelection`
   // so the in-chat scenario picker resolves a selection exactly the way the New
   // Chat dialog does.
-  const resolvedScenario = await resolveScenarioSelection(
-    {
-      scenario: validatedData.scenario,
-      scenarioId: validatedData.scenarioId,
-      projectScenarioPath: validatedData.projectScenarioPath,
-      groupScenarioPath: validatedData.groupScenarioPath,
-      groupScenarioGroupId: validatedData.groupScenarioGroupId,
-      generalScenarioPath: validatedData.generalScenarioPath,
-    },
-    {
-      repos,
-      projectId: validatedData.projectId,
-      character: primaryCharacter,
-      logTag: '[Chats v1]',
-    },
-  );
+  let resolvedScenario: ResolvedScenario;
+  try {
+    resolvedScenario = await resolveScenarioSelection(
+      {
+        scenario: validatedData.scenario,
+        scenarioRef: validatedData.scenarioRef,
+        scenarioId: validatedData.scenarioId,
+        projectScenarioPath: validatedData.projectScenarioPath,
+        groupScenarioPath: validatedData.groupScenarioPath,
+        groupScenarioGroupId: validatedData.groupScenarioGroupId,
+        generalScenarioPath: validatedData.generalScenarioPath,
+      },
+      {
+        repos,
+        userId: user.id,
+        projectId: validatedData.projectId,
+        characterId: primaryCharacter?.id ?? null,
+        logTag: '[Chats v1]',
+      },
+    );
+  } catch (error) {
+    if (error instanceof ScenarioRefRefusedError) return badRequest(error.message);
+    throw error;
+  }
   // The greeting is composed with the opener's subprompts in play, the same
   // as every later turn. Resolved here (fails soft to none).
   const openerSubprompts = await resolveSelectedSubprompts(
@@ -1240,7 +1260,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
-    resolvedScenario,
+    resolvedScenario.scenarioText ?? undefined,
     buildResult.firstCharacter.selectedSystemPromptId,
     openerSubprompts,
   );
@@ -1316,7 +1336,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     lastMessageAt: null,
     lastRenameCheckInterchange: 0,
     projectId: validatedData.projectId || null,
-    scenarioText: resolvedScenario || null,
+    // The recipe travels together: the text the prompt reads, the file the
+    // preset came from, and the notes layered beneath it.
+    scenarioText: resolvedScenario.scenarioText,
+    scenarioSource: resolvedScenario.scenarioSource,
+    scenarioNotes: resolvedScenario.scenarioNotes,
     disabledTools: projectToolDefaults.disabledTools,
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
@@ -1354,7 +1378,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
     projectMountPointIds,
-    scenarioText: resolvedScenario,
+    scenarioText: resolvedScenario.scenarioText ?? undefined,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
     progress,
@@ -1459,7 +1483,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     user.id,
     repos,
     validatedData.projectId || null,
-    resolvedScenario || null,
+    resolvedScenario.scenarioText,
     { skipFirstMessage: isContinuation || isAutonomous, projectMountPointIds },
   );
 

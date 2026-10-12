@@ -4,12 +4,14 @@
  * Covers the whole chokepoint in `lib/mount-index/scenarios-common.ts`:
  * - parseScenarioDoc: `archived: true` / `"true"` / `false` / absent
  * - buildScenarioFileContent: omission-means-false round-trip
- * - listScenariosInFolder: hidden by default, revealed by includeArchived
+ * - buildScenarioList (what every location's `list` runs): hidden by default,
+ *   revealed by includeArchived
  * - archived scenarios never win `isDefault` conflict resolution
- * - resolveScenarioBody still resolves an archived file (chats keep working)
+ * - an archived file still parses to its body, so a chat that picked it keeps
+ *   resolving (the location's `read` never filters on `archived`)
  *
- * Strategy: mock getRepositories() and the database-store reader. No real
- * database or filesystem.
+ * Strategy: pure functions over hand-built document rows. No real database
+ * or filesystem.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
@@ -28,23 +30,17 @@ jest.mock('@/lib/logger', () => {
 
 jest.mock('@/lib/repositories/factory');
 jest.mock('@/lib/mount-index/database-store', () => ({
-  readDatabaseDocument: jest.fn(),
   writeDatabaseDocument: jest.fn(),
 }));
 
 import {
   buildScenarioFileContent,
+  buildScenarioList,
   isScenarioContentArchived,
-  listScenariosInFolder,
   parseScenarioDoc,
-  resolveScenarioBody,
 } from '@/lib/mount-index/scenarios-common';
 import type { DocMountDocumentWithLink } from '@/lib/database/repositories/doc-mount-documents.repository';
 
-const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory')
-  .getRepositories as jest.Mock;
-const readDatabaseDocumentMock = jest.requireMock('@/lib/mount-index/database-store')
-  .readDatabaseDocument as jest.Mock;
 
 const MOUNT_ID = 'mount-001';
 const FOLDER = 'Scenarios';
@@ -69,12 +65,14 @@ function withFrontmatter(lines: string[], body: string): string {
 
 let findManyByMountPointsInFolder: jest.Mock;
 
+/** One folder's list, as a location's `list` builds it from its document rows. */
+async function listScenariosInFolder(_mountPointId: string, _folder: string, options: { includeArchived?: boolean } = {}) {
+  return buildScenarioList(await findManyByMountPointsInFolder(), parseScenarioDoc, options);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   findManyByMountPointsInFolder = jest.fn();
-  getRepositoriesMock.mockReturnValue({
-    docMountDocuments: { findManyByMountPointsInFolder },
-  });
 });
 
 // ============================================================================
@@ -229,16 +227,15 @@ describe('listScenariosInFolder — archived scenarios cannot be the default', (
 });
 
 // ============================================================================
-// resolveScenarioBody — deliberately archived-blind
+// Reading one file — deliberately archived-blind
 // ============================================================================
 
-describe('resolveScenarioBody — archiving does not break existing chats', () => {
-  it('resolves the body of an archived scenario', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: withFrontmatter(['name: Shelved', 'archived: true'], 'The body still resolves.'),
-    });
-
-    await expect(resolveScenarioBody(MOUNT_ID, 'shelved', FOLDER))
-      .resolves.toBe('The body still resolves.');
+describe('reading an archived scenario — archiving does not break existing chats', () => {
+  it('still parses the body of an archived scenario', () => {
+    const parsed = parseScenarioDoc(
+      doc('shelved.md', withFrontmatter(['name: Shelved', 'archived: true'], 'The body still resolves.')),
+    );
+    expect(parsed?.archived).toBe(true);
+    expect(parsed?.body).toBe('The body still resolves.');
   });
 });

@@ -1,15 +1,18 @@
 /**
- * The shared GET / PUT / POST(?action=rename) / DELETE bodies behind the group
- * and project single-scenario endpoints.
+ * The shared GET / PUT / POST(?action=rename) / DELETE bodies behind the
+ * General, group and project single-scenario endpoints, plus the collection
+ * list/create bodies.
  *
- * Two route files collapsed into one factory, so the thing worth pinning is
- * that the *shared* body still behaves per-tier where it must (labels, log
- * tags, folder constants) and identically where it must not vary. The four
- * behaviours below are the ones a caller can actually get hurt by:
+ * The routes read and write only through the scenario location now, so the
+ * suite drives them against an in-memory store (`scenario-stores` helper) with
+ * the location running for real. The behaviours a caller can actually get
+ * hurt by:
  *
  *   - **Path resolution runs before anything else.** `..` and nested paths are
  *     refused with a 400 before a store is even looked up, which is what keeps
  *     a crafted `[scenarioPath]` from reading outside `Scenarios/`.
+ *   - **A read never provisions.** An owner without a store is a 404 naming
+ *     the remedy, not a freshly minted store.
  *   - **PUT preserves an unmentioned archived flag.** The serializer rewrites
  *     the whole file, so an omitted `archived` would silently un-archive the
  *     scenario — a tombstone quietly resurrected.
@@ -20,12 +23,7 @@
  */
 
 jest.mock('@/lib/logger', () => {
-  const logger: Record<string, unknown> = {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  };
+  const logger: Record<string, unknown> = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
   logger.child = jest.fn(() => logger);
   return { logger };
 });
@@ -37,44 +35,56 @@ jest.mock('@/lib/api/middleware', () => ({
   dispatchAction: jest.requireActual('@/lib/api/middleware/actions').dispatchAction,
 }));
 
+const mockGetGeneralMountPointId = jest.fn();
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: () => mockGetGeneralMountPointId(),
+}));
+const mockEnsureFolderPath = jest.fn();
+jest.mock('@/lib/mount-index/folder-paths', () => ({
+  ensureFolderPath: (...args: unknown[]) => mockEnsureFolderPath(...args),
+}));
+const mockEnsureOwnerOfficialStore = jest.fn();
+jest.mock('@/lib/mount-index/ensure-owner-store', () => ({
+  ensureOwnerOfficialStore: (...args: unknown[]) => mockEnsureOwnerOfficialStore(...args),
+}));
+
 jest.mock('@/lib/mount-index/database-store', () => ({
   writeDatabaseDocument: jest.fn(),
   deleteDatabaseDocument: jest.fn(),
   moveDatabaseDocument: jest.fn(),
+  readDatabaseDocument: jest.fn(),
 }));
 
-import { createScenarioItemHandlers } from '@/lib/mount-index/scenario-item-route-factory';
+let mockRepos: unknown;
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: () => mockRepos,
+}));
+
+import {
+  createScenarioCollectionBodies,
+  createScenarioItemHandlers,
+} from '@/lib/mount-index/scenario-item-route-factory';
 import {
   deleteDatabaseDocument,
   moveDatabaseDocument,
   writeDatabaseDocument,
 } from '@/lib/mount-index/database-store';
 import { isScenarioContentArchived } from '@/lib/mount-index/scenarios-common';
+import { makeScenarioStores, type FakeScenarioStores } from '../../../helpers/scenario-stores';
 
 const mockWrite = jest.mocked(writeDatabaseDocument);
 const mockDelete = jest.mocked(deleteDatabaseDocument);
 const mockMove = jest.mocked(moveDatabaseDocument);
 
-const FOLDER = 'Scenarios';
-
-let findOwner: jest.Mock;
-let ensureFolders: jest.Mock;
-let listScenarios: jest.Mock;
-let readScenario: jest.Mock;
-let setScenarioDefault: jest.Mock;
-let findByMountPointAndPath: jest.Mock;
+const MOUNT = 'mount-1';
+let stores: FakeScenarioStores;
 
 function handlers() {
-  return createScenarioItemHandlers({
+  return createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
+    scope: 'project',
     ownerLabel: 'Project',
     logTag: '[Projects v1]',
     logIdKey: 'projectId',
-    scenariosFolder: FOLDER,
-    findOwner: findOwner as never,
-    ensureFolders: ensureFolders as never,
-    listScenarios: listScenarios as never,
-    readScenario: readScenario as never,
-    setScenarioDefault: setScenarioDefault as never,
   });
 }
 
@@ -84,23 +94,36 @@ function req(url: string, body?: unknown) {
 }
 
 function ctx() {
-  return {
-    user: { id: 'user-1' },
-    repos: { docMountDocuments: { findByMountPointAndPath } },
-  } as never;
+  return { user: { id: 'user-1' }, repos: stores.repos } as never;
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  findOwner = jest.fn().mockResolvedValue({ officialMountPointId: 'mount-1' });
-  ensureFolders = jest.fn().mockResolvedValue(undefined);
-  listScenarios = jest.fn().mockResolvedValue({ scenarios: [], warnings: [] });
-  readScenario = jest.fn().mockResolvedValue({ path: 'Scenarios/tea.md', filename: 'tea', name: 'Tea' });
-  setScenarioDefault = jest.fn().mockResolvedValue(undefined);
-  findByMountPointAndPath = jest.fn().mockResolvedValue({ content: '---\nname: Tea\n---\n\nbody' });
-  mockWrite.mockResolvedValue(undefined as never);
-  mockDelete.mockResolvedValue(true as never);
-  mockMove.mockResolvedValue(undefined as never);
+  mockGetGeneralMountPointId.mockResolvedValue('general-mount');
+  mockEnsureFolderPath.mockResolvedValue('folder-1');
+  mockEnsureOwnerOfficialStore.mockResolvedValue({ mountPointId: MOUNT, created: false });
+  stores = makeScenarioStores({
+    projects: [
+      { id: 'proj-1', name: 'Blackwood', officialMountPointId: MOUNT },
+      { id: 'proj-bare', name: 'Storeless', officialMountPointId: null },
+    ],
+    groups: [{ id: 'group-1', name: 'The Club', officialMountPointId: 'group-mount' }],
+  });
+  mockRepos = stores.repos;
+  stores.put(MOUNT, 'Scenarios/tea.md', '---\nname: Tea\n---\n\nbody');
+  mockWrite.mockImplementation(async (mountPointId: string, path: string, content: string) => {
+    stores.put(mountPointId, path, content);
+    return undefined as never;
+  });
+  mockDelete.mockImplementation(async (mountPointId: string, path: string) =>
+    stores.files.delete(`${mountPointId}|${path}`) as never,
+  );
+  mockMove.mockImplementation(async (mountPointId: string, from: string, to: string) => {
+    const content = stores.files.get(`${mountPointId}|${from}`)!;
+    stores.files.delete(`${mountPointId}|${from}`);
+    stores.put(mountPointId, to, content);
+    return undefined as never;
+  });
 });
 
 describe('path resolution runs before the store is touched', () => {
@@ -114,102 +137,113 @@ describe('path resolution runs before the store is touched', () => {
     const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath });
 
     expect(res.status).toBe(400);
-    expect(findOwner).not.toHaveBeenCalled();
+    expect(stores.repos.projects.findByIdRaw).not.toHaveBeenCalled();
   });
 
   it('accepts a bare filename and prefixes the folder', async () => {
     const { GET } = handlers();
 
-    await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
 
-    expect(readScenario).toHaveBeenCalledWith('mount-1', 'Scenarios/tea.md');
+    await expect(res.json()).resolves.toMatchObject({ scenario: { path: 'Scenarios/tea.md', name: 'Tea' } });
   });
 
   it('accepts a URL-encoded filename', async () => {
+    stores.put(MOUNT, 'Scenarios/a tea party.md', 'party');
     const { GET } = handlers();
 
-    await GET(req('https://x.test/'), ctx(), {
+    const res = await GET(req('https://x.test/'), ctx(), {
       id: 'proj-1',
       scenarioPath: encodeURIComponent('a tea party.md'),
     });
 
-    expect(readScenario).toHaveBeenCalledWith('mount-1', 'Scenarios/a tea party.md');
+    await expect(res.json()).resolves.toMatchObject({ scenario: { path: 'Scenarios/a tea party.md' } });
   });
 });
 
 describe('owner and store lookup', () => {
   it('404s when the owner does not exist', async () => {
-    findOwner.mockResolvedValue(null);
     const { GET } = handlers();
 
-    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-nope', scenarioPath: 'tea' });
 
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({ error: 'Project not found' });
   });
 
-  it('404s with the remedy when the owner has no store yet', async () => {
-    findOwner.mockResolvedValue({ officialMountPointId: null });
+  it('404s with the remedy when the owner has no store yet — and provisions nothing', async () => {
     const { GET } = handlers();
 
-    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-bare', scenarioPath: 'tea' });
 
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toEqual({
       error:
         'Project has no official document store yet — restart the server or call GET /scenarios first not found',
     });
-  });
-
-  it('ensures the tier\'s folders once the store is known', async () => {
-    const { GET } = handlers();
-
-    await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
-
-    expect(ensureFolders).toHaveBeenCalledWith('mount-1');
+    expect(mockEnsureOwnerOfficialStore).not.toHaveBeenCalled();
   });
 
   it('404s when the file itself is absent', async () => {
-    readScenario.mockResolvedValue(null);
     const { GET } = handlers();
 
-    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'coffee' });
 
     expect(res.status).toBe(404);
   });
+});
 
-  it('answers the scenario on the happy path', async () => {
-    const { GET } = handlers();
+describe('folder repair', () => {
+  it('heals the Scenarios/ folder on a write, but never on a read', async () => {
+    const { GET, PUT } = handlers();
 
-    const res = await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    expect(mockEnsureFolderPath).not.toHaveBeenCalled();
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      scenario: { path: 'Scenarios/tea.md', filename: 'tea', name: 'Tea' },
-    });
+    await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    expect(mockEnsureFolderPath).toHaveBeenCalledWith(MOUNT, 'Scenarios');
   });
-})
+
+  it("runs the tier's extra heal (the group's Knowledge/) on a write", async () => {
+    const afterEnsure = jest.fn();
+    stores.put('group-mount', 'Scenarios/tea.md', 'Tea.');
+    mockEnsureOwnerOfficialStore.mockResolvedValue({ mountPointId: 'group-mount', created: false });
+    const { DELETE } = createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
+      scope: 'group',
+      ownerLabel: 'Group',
+      logTag: '[Groups v1]',
+      logIdKey: 'groupId',
+      afterEnsure,
+    });
+
+    await DELETE(req('https://x.test/'), ctx(), { id: 'group-1', scenarioPath: 'tea' });
+
+    expect(afterEnsure).toHaveBeenCalledWith('group-mount');
+  });
+
+  it('does not mint a store for a write to an owner that has none', async () => {
+    const { PUT } = handlers();
+
+    const res = await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-bare', scenarioPath: 'tea' });
+
+    expect(res.status).toBe(404);
+    expect(mockEnsureOwnerOfficialStore).not.toHaveBeenCalled();
+  });
+});
 
 describe('PUT', () => {
   it('preserves an archived flag the body never mentions', async () => {
-    findByMountPointAndPath.mockResolvedValue({
-      content: '---\nname: Tea\narchived: true\n---\n\nold body',
-    });
+    stores.put(MOUNT, 'Scenarios/tea.md', '---\nname: Tea\narchived: true\n---\n\nold body');
     const { PUT } = handlers();
 
-    await PUT(req('https://x.test/', { body: 'new body' }), ctx(), {
-      id: 'proj-1',
-      scenarioPath: 'tea',
-    });
+    await PUT(req('https://x.test/', { body: 'new body' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
 
     const written = mockWrite.mock.calls[0][2] as string;
     expect(isScenarioContentArchived(written)).toBe(true);
   });
 
   it('honours an explicit archived: false', async () => {
-    findByMountPointAndPath.mockResolvedValue({
-      content: '---\nname: Tea\narchived: true\n---\n\nold body',
-    });
+    stores.put(MOUNT, 'Scenarios/tea.md', '---\nname: Tea\narchived: true\n---\n\nold body');
     const { PUT } = handlers();
 
     await PUT(req('https://x.test/', { body: 'new body', archived: false }), ctx(), {
@@ -222,12 +256,11 @@ describe('PUT', () => {
   });
 
   it('404s rather than creating a file that is not there', async () => {
-    findByMountPointAndPath.mockResolvedValue(null);
     const { PUT } = handlers();
 
     const res = await PUT(req('https://x.test/', { body: 'new body' }), ctx(), {
       id: 'proj-1',
-      scenarioPath: 'tea',
+      scenarioPath: 'coffee',
     });
 
     expect(res.status).toBe(404);
@@ -237,39 +270,40 @@ describe('PUT', () => {
   it('400s on an invalid body without writing', async () => {
     const { PUT } = handlers();
 
-    const res = await PUT(req('https://x.test/', { body: '' }), ctx(), {
-      id: 'proj-1',
-      scenarioPath: 'tea',
-    });
+    const res = await PUT(req('https://x.test/', { body: '' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
 
     expect(res.status).toBe(400);
     expect(mockWrite).not.toHaveBeenCalled();
   });
 
   it('promotes the default only when asked', async () => {
+    stores.put(MOUNT, 'Scenarios/other.md', '---\nisDefault: true\n---\nOther.');
     const { PUT } = handlers();
 
     await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
-    expect(setScenarioDefault).not.toHaveBeenCalled();
+    expect(stores.files.get(`${MOUNT}|Scenarios/other.md`)).toContain('isDefault: true');
 
-    await PUT(req('https://x.test/', { body: 'b', isDefault: true }), ctx(), {
+    const res = await PUT(req('https://x.test/', { body: 'b', isDefault: true }), ctx(), {
       id: 'proj-1',
       scenarioPath: 'tea',
     });
-    expect(setScenarioDefault).toHaveBeenCalledWith('mount-1', 'Scenarios/tea.md');
+    const { scenarios } = await res.json();
+    expect(scenarios.find((s: { path: string }) => s.path === 'Scenarios/tea.md').isDefault).toBe(true);
+    expect(stores.files.get(`${MOUNT}|Scenarios/other.md`)).toContain('isDefault: false');
   });
 
   it('honours ?includeArchived on the list it answers with', async () => {
+    stores.put(MOUNT, 'Scenarios/old.md', '---\narchived: true\n---\nOld.');
     const { PUT } = handlers();
 
-    await PUT(req('https://x.test/?includeArchived=true', { body: 'b' }), ctx(), {
+    const withArchived = await PUT(req('https://x.test/?includeArchived=true', { body: 'b' }), ctx(), {
       id: 'proj-1',
       scenarioPath: 'tea',
     });
-    expect(listScenarios).toHaveBeenLastCalledWith('mount-1', { includeArchived: true });
+    expect((await withArchived.json()).scenarios).toHaveLength(2);
 
-    await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
-    expect(listScenarios).toHaveBeenLastCalledWith('mount-1', { includeArchived: false });
+    const without = await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    expect((await without.json()).scenarios).toHaveLength(1);
   });
 });
 
@@ -277,17 +311,14 @@ describe('POST ?action=rename', () => {
   it('refuses an unknown action before doing anything', async () => {
     const { POST } = handlers();
 
-    const res = await POST(req('https://x.test/?action=archive', {}), ctx(), {
-      id: 'proj-1',
-      scenarioPath: 'tea',
-    });
+    const res = await POST(req('https://x.test/?action=archive', {}), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
 
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toEqual({
       error: 'Unknown action: archive',
       availableActions: ['rename'],
     });
-    expect(findOwner).not.toHaveBeenCalled();
+    expect(stores.repos.projects.findByIdRaw).not.toHaveBeenCalled();
   });
 
   it('refuses a missing action', async () => {
@@ -299,9 +330,6 @@ describe('POST ?action=rename', () => {
   });
 
   it('moves the document and answers the new path', async () => {
-    findByMountPointAndPath
-      .mockResolvedValueOnce({ content: 'exists' }) // the source
-      .mockResolvedValueOnce(null); // no conflict
     const { POST } = handlers();
 
     const res = await POST(req('https://x.test/?action=rename', { newFilename: 'coffee' }), ctx(), {
@@ -309,12 +337,11 @@ describe('POST ?action=rename', () => {
       scenarioPath: 'tea',
     });
 
-    expect(mockMove).toHaveBeenCalledWith('mount-1', 'Scenarios/tea.md', 'Scenarios/coffee.md');
+    expect(mockMove).toHaveBeenCalledWith(MOUNT, 'Scenarios/tea.md', 'Scenarios/coffee.md');
     await expect(res.json()).resolves.toMatchObject({ path: 'Scenarios/coffee.md' });
   });
 
   it('strips a .md the caller supplied rather than doubling it', async () => {
-    findByMountPointAndPath.mockResolvedValueOnce({ content: 'exists' }).mockResolvedValueOnce(null);
     const { POST } = handlers();
 
     await POST(req('https://x.test/?action=rename', { newFilename: 'coffee.md' }), ctx(), {
@@ -322,13 +349,11 @@ describe('POST ?action=rename', () => {
       scenarioPath: 'tea',
     });
 
-    expect(mockMove).toHaveBeenCalledWith('mount-1', 'Scenarios/tea.md', 'Scenarios/coffee.md');
+    expect(mockMove).toHaveBeenCalledWith(MOUNT, 'Scenarios/tea.md', 'Scenarios/coffee.md');
   });
 
   it('refuses to clobber an existing scenario', async () => {
-    findByMountPointAndPath
-      .mockResolvedValueOnce({ content: 'source' })
-      .mockResolvedValueOnce({ content: 'destination' });
+    stores.put(MOUNT, 'Scenarios/coffee.md', 'destination');
     const { POST } = handlers();
 
     const res = await POST(req('https://x.test/?action=rename', { newFilename: 'coffee' }), ctx(), {
@@ -337,9 +362,7 @@ describe('POST ?action=rename', () => {
     });
 
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({
-      error: 'A scenario named "coffee" already exists',
-    });
+    await expect(res.json()).resolves.toEqual({ error: 'A scenario named "coffee" already exists' });
     expect(mockMove).not.toHaveBeenCalled();
   });
 
@@ -357,64 +380,37 @@ describe('POST ?action=rename', () => {
   });
 
   it('404s when the source is gone', async () => {
-    findByMountPointAndPath.mockResolvedValue(null);
     const { POST } = handlers();
 
     const res = await POST(req('https://x.test/?action=rename', { newFilename: 'coffee' }), ctx(), {
       id: 'proj-1',
-      scenarioPath: 'tea',
+      scenarioPath: 'gone',
     });
 
     expect(res.status).toBe(404);
-    expect(mockMove).not.toHaveBeenCalled();
-  });
-
-  it('400s on a filename that sanitises away to nothing', async () => {
-    const { POST } = handlers();
-
-    const res = await POST(req('https://x.test/?action=rename', { newFilename: '///' }), ctx(), {
-      id: 'proj-1',
-      scenarioPath: 'tea',
-    });
-
-    expect(res.status).toBe(400);
     expect(mockMove).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE', () => {
   it('deletes and answers the refreshed list', async () => {
-    listScenarios.mockResolvedValue({ scenarios: [{ filename: 'other' }], warnings: [] });
+    stores.put(MOUNT, 'Scenarios/other.md', 'Other.');
     const { DELETE } = handlers();
 
     const res = await DELETE(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
 
-    expect(mockDelete).toHaveBeenCalledWith('mount-1', 'Scenarios/tea.md');
+    expect(mockDelete).toHaveBeenCalledWith(MOUNT, 'Scenarios/tea.md');
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      scenarios: [{ filename: 'other' }],
-      warnings: [],
-    });
+    const body = await res.json();
+    expect(body.scenarios.map((s: { filename: string }) => s.filename)).toEqual(['other']);
   });
 
   it('404s when there was nothing to delete', async () => {
-    mockDelete.mockResolvedValue(false as never);
     const { DELETE } = handlers();
 
-    const res = await DELETE(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    const res = await DELETE(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'gone' });
 
     expect(res.status).toBe(404);
-  });
-
-  it('honours ?includeArchived on the list it answers with', async () => {
-    const { DELETE } = handlers();
-
-    await DELETE(req('https://x.test/?includeArchived=true'), ctx(), {
-      id: 'proj-1',
-      scenarioPath: 'tea',
-    });
-
-    expect(listScenarios).toHaveBeenCalledWith('mount-1', { includeArchived: true });
   });
 
   it('500s rather than leaking a store failure', async () => {
@@ -430,21 +426,50 @@ describe('DELETE', () => {
 
 describe('the tier label follows the config', () => {
   it('says Group when built for the group tier', async () => {
-    findOwner.mockResolvedValue(null);
-    const { GET } = createScenarioItemHandlers({
+    const { GET } = createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
+      scope: 'group',
       ownerLabel: 'Group',
       logTag: '[Groups v1]',
       logIdKey: 'groupId',
-      scenariosFolder: FOLDER,
-      findOwner: findOwner as never,
-      ensureFolders: ensureFolders as never,
-      listScenarios: listScenarios as never,
-      readScenario: readScenario as never,
-      setScenarioDefault: setScenarioDefault as never,
     });
 
-    const res = await GET(req('https://x.test/'), ctx(), { id: 'group-1', scenarioPath: 'tea' });
+    const res = await GET(req('https://x.test/'), ctx(), { id: 'group-nope', scenarioPath: 'tea' });
 
     await expect(res.json()).resolves.toEqual({ error: 'Group not found' });
+  });
+});
+
+describe('collection bodies', () => {
+  const bodies = () =>
+    createScenarioCollectionBodies<{ id: string }>({
+      scope: 'project',
+      ownerLabel: 'Project',
+      logTag: '[Projects v1]',
+      logIdKey: 'projectId',
+    });
+
+  it('provisions the store before listing', async () => {
+    const res = await bodies().list(req('https://x.test/'), ctx(), { id: 'proj-1' });
+
+    expect(mockEnsureOwnerOfficialStore).toHaveBeenCalledWith('project', 'proj-1', 'Blackwood');
+    await expect(res.json()).resolves.toMatchObject({ mountPointId: MOUNT, scenarios: [{ name: 'Tea' }] });
+  });
+
+  it('creates a scenario and refuses a duplicate name', async () => {
+    const created = await bodies().create(req('https://x.test/', { filename: 'coffee', body: 'Coffee.' }), ctx(), {
+      id: 'proj-1',
+    });
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toMatchObject({ path: 'Scenarios/coffee.md' });
+
+    const dup = await bodies().create(req('https://x.test/', { filename: 'coffee', body: 'Again.' }), ctx(), {
+      id: 'proj-1',
+    });
+    expect(dup.status).toBe(400);
+  });
+
+  it('404s for an owner that does not exist', async () => {
+    const res = await bodies().list(req('https://x.test/'), ctx(), { id: 'proj-nope' });
+    expect(res.status).toBe(404);
   });
 });

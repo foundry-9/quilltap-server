@@ -4,6 +4,7 @@
  * Validation schemas for chat route requests
  */
 
+import { ScenarioRefSchema } from '@/lib/schemas/chat.types';
 import { z } from 'zod';
 import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
@@ -43,6 +44,14 @@ export const updateChatSchema = z.object({
  */
 export const setScenarioSchema = z.object({
   scenario: z.string().nullish(),
+  /** A scenario anywhere (the browser's pick, or "Reload from source"). Most specific, so first. */
+  scenarioRef: ScenarioRefSchema.nullish(),
+  /**
+   * Re-read the source file even when it is the chat's own source and its
+   * text has changed since it was picked ("Reload from source"). Without it,
+   * re-saving the chat's own source keeps the scene the chat already has.
+   */
+  reload: z.boolean().optional(),
   scenarioId: z.uuid().nullish(),
   projectScenarioPath: z.string().max(500).nullish(),
   groupScenarioPath: z.string().max(500).nullish(),

@@ -20,7 +20,13 @@ import type {
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
-import { toScenarioOption, type ScenarioOption } from '@/components/scenario/types'
+import {
+  scenarioSelectionToPayload,
+  scenarioSelectionToValue,
+  toScenarioOption,
+  type ScenarioOption,
+} from '@/components/scenario/types'
+import { seedScenarioSelection } from '../scenario-seed'
 import { toAutonomousSettingsHint } from '../autonomous-settings-hint'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 
@@ -157,11 +163,8 @@ const INITIAL_STATE: NewChatFormState = {
   roleplayTemplateId: null,
   roleplayTemplateTouched: false,
   scenario: '',
-  scenarioId: null,
-  projectScenarioPath: null,
-  generalScenarioPath: null,
-  groupScenarioPath: null,
-  groupScenarioGroupId: null,
+  scenarioSelection: { kind: 'custom' },
+  scenarioTouched: false,
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
@@ -480,21 +483,6 @@ export function useNewChat({
             (!selectedProjectId || Boolean(projectRes?.ok))
         )
 
-        // Project default wins over general default for pre-selection. When a
-        // project default exists, seed `projectScenarioPath`; otherwise fall
-        // back to the general default.
-        // `!s.archived` is belt-and-braces: the server already refuses to let
-        // an archived file win default resolution, but with "Show archived"
-        // ticked an archived row carrying a stale `isDefault: true` would
-        // otherwise be a candidate for auto-selection here.
-        const projectDefaultScenarioPath =
-          loadedProjectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
-        const generalDefaultScenarioPath =
-          loadedGeneralScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
-        const seededGeneralScenarioPath = projectDefaultScenarioPath
-          ? null
-          : generalDefaultScenarioPath
-
         // Continuation mode: seed multi-character + form state from the
         // source chat's roster, bypassing the single-character seed branch.
         if (
@@ -539,11 +527,6 @@ export function useNewChat({
           setState((prev) => ({
             ...prev,
             timestampConfig: initialTimestampConfig ?? prev.timestampConfig,
-            // Continuation mode intentionally does NOT pre-fill scenario:
-            // the whole point is to pick a new one.
-            scenarioId: null,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               initialImageProfileId ||
               loadedProject?.defaultImageProfileId ||
@@ -588,16 +571,11 @@ export function useNewChat({
           }
           setSelectedCharacters(seededSelected)
 
-          // Scenario default: project default wins over character default.
-          // The character default still rides on `state.scenarioId` so the form
-          // can render the override-visibility note offering a one-click switch.
-          // General default fills in only when no project default exists.
+          // The scenario default is seeded by the effect below, once the cast
+          // and the tiers have both landed.
           setState((prev) => ({
             ...prev,
             timestampConfig: char.defaultTimestampConfig ?? null,
-            scenarioId: char.defaultScenarioId ?? null,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               loadedProject?.defaultImageProfileId ||
               char.defaultImageProfileId ||
@@ -608,18 +586,9 @@ export function useNewChat({
           // Project-only seeding (page mode)
           setState((prev) => ({
             ...prev,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId: loadedProject.defaultImageProfileId || prev.imageProfileId,
             avatarGenerationEnabled:
               loadedProject.defaultAvatarGenerationEnabled ?? prev.avatarGenerationEnabled,
-          }))
-        } else if (generalDefaultScenarioPath) {
-          // No project, no initial character — still pre-select the general
-          // default so the dropdown lands on something meaningful.
-          setState((prev) => ({
-            ...prev,
-            generalScenarioPath: generalDefaultScenarioPath,
           }))
         }
 
@@ -688,6 +657,36 @@ export function useNewChat({
     showArchivedScenarios,
   ])
 
+  // The scenario default, re-seeded whenever the cast or the tiers change —
+  // until the user picks one by hand (`scenarioTouched`). Character default >
+  // project default > general default, the order the server has always
+  // applied; continuation mode skips the character's (the point is a new
+  // scene). `!s.archived` is belt-and-braces: the server already refuses to
+  // let an archived file win default resolution, but with "Show archived"
+  // ticked an archived row carrying a stale `isDefault: true` would otherwise
+  // be a candidate here.
+  const singleLlmCharacter = useMemo(() => {
+    const llm = selectedCharacters.filter((sc) => sc.controlledBy === 'llm')
+    return llm.length === 1 ? llm[0].character : null
+  }, [selectedCharacters])
+  const characterDefaultScenarioId = continuationFromChatId ? null : singleLlmCharacter?.defaultScenarioId ?? null
+  const projectDefaultScenarioPath = projectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
+  const generalDefaultScenarioPath = generalScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the seed is form state the user then edits; it follows reference data (cast, tiers) that loads asynchronously, and stops once the picker is touched
+    setState((prev) => {
+      const next = seedScenarioSelection(prev, {
+        characterDefaultScenarioId,
+        projectDefaultPath: projectDefaultScenarioPath,
+        generalDefaultPath: generalDefaultScenarioPath,
+      })
+      return next === prev.scenarioSelection ||
+        scenarioSelectionToValue(next) === scenarioSelectionToValue(prev.scenarioSelection)
+        ? prev
+        : { ...prev, scenarioSelection: next }
+    })
+  }, [characterDefaultScenarioId, projectDefaultScenarioPath, generalDefaultScenarioPath])
+
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
   // Matches behavior of the former /salon/new page for multi-char mode.
   useEffect(() => {
@@ -704,7 +703,6 @@ export function useNewChat({
       setState((prev) => ({
         ...prev,
         timestampConfig: char.defaultTimestampConfig ?? prev.timestampConfig,
-        scenarioId: char.defaultScenarioId ?? prev.scenarioId,
         imageProfileId:
           project?.defaultImageProfileId ||
           char.defaultImageProfileId ||
@@ -843,18 +841,9 @@ export function useNewChat({
         requestBody.scenario = state.scenario
       }
 
-      // Preset selection (mutually exclusive among the four sources):
-      // character scenarioId > projectScenarioPath > groupScenarioPath > generalScenarioPath.
-      if (state.scenarioId) {
-        requestBody.scenarioId = state.scenarioId
-      } else if (state.projectScenarioPath) {
-        requestBody.projectScenarioPath = state.projectScenarioPath
-      } else if (state.groupScenarioPath) {
-        requestBody.groupScenarioPath = state.groupScenarioPath
-        requestBody.groupScenarioGroupId = state.groupScenarioGroupId
-      } else if (state.generalScenarioPath) {
-        requestBody.generalScenarioPath = state.generalScenarioPath
-      }
+      // The one preset pointer the dropdown shows — exactly one field (or
+      // none, for Custom), so what is sent is what was seen.
+      Object.assign(requestBody, scenarioSelectionToPayload(state.scenarioSelection))
 
       if (state.timestampConfig && state.timestampConfig.mode !== 'NONE') {
         requestBody.timestampConfig = state.timestampConfig

@@ -8,7 +8,7 @@
  * them. There is no entity row for it — it is simply a JSON document living at
  * the mount root, provisioned idempotently at startup the same way character
  * vaults get their `metadata.json` (`ensureCharacterMetadataFile`) and the
- * general mount gets its `Scenarios/` folder (`ensureGeneralScenariosFolder`).
+ * general mount gets its `Scenarios/` folder (the scenario location's `ensure`).
  *
  * All helpers degrade gracefully when the mount has not yet been provisioned
  * (the race window before instrumentation finishes migrations): reads return

@@ -31,7 +31,8 @@ import type {
   UserControlledCharacter,
 } from './types'
 import type { ProjectListEntry, RefetchedScenarioTiers } from './hooks/useNewChat'
-import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
+import { ScenarioSelect } from '@/components/scenario/ScenarioSelect'
+import { ScenarioBrowserDialog, useScenarioRefBody } from '@/components/scenario/ScenarioBrowserDialog'
 import type { ScenarioSelection } from '@/components/scenario/types'
 import { SubpromptPicker } from '@/components/subprompts'
 import dynamic from 'next/dynamic'
@@ -190,6 +191,10 @@ export function NewChatForm({
     [singleLlm],
   )
 
+  const scenarioSelection = state.scenarioSelection
+  const selectedCharacterScenarioId =
+    scenarioSelection.kind === 'character' ? scenarioSelection.scenarioId : null
+
   /**
    * What the dropdown offers. Archived scenarios are hidden unless "Show
    * archived" is ticked — with one exception: whatever is currently selected
@@ -199,79 +204,71 @@ export function NewChatForm({
   const singleCharacterScenarios = useMemo(() => {
     if (!singleLlm) return null
     const visible = allCharacterScenarios.filter(
-      (s) => showArchivedScenarios || s.archived !== true || s.id === state.scenarioId,
+      (s) => showArchivedScenarios || s.archived !== true || s.id === selectedCharacterScenarioId,
     )
     return visible.length > 0 ? visible : null
-  }, [singleLlm, allCharacterScenarios, showArchivedScenarios, state.scenarioId])
+  }, [singleLlm, allCharacterScenarios, showArchivedScenarios, selectedCharacterScenarioId])
 
-  const showScenarioDropdown = hasAnyScenarioOptions({
-    projectScenarios,
-    generalScenarios,
-    groupScenarios,
-    characterScenarios: singleCharacterScenarios,
-  })
-
-  const selectedProjectScenario = state.projectScenarioPath
-    ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
-    : undefined
-  const selectedGeneralScenario = state.generalScenarioPath
-    ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
-    : undefined
-  const selectedGroupScenario = state.groupScenarioPath
-    ? groupScenarios.find(
-        (s) =>
-          s.path === state.groupScenarioPath &&
-          s.groupId === state.groupScenarioGroupId
-      )
-    : undefined
-  // Looked up against the unfiltered list: a scenario the chat already points
+  // The body behind the one selection, previewed under the dropdown. Looked up
+  // against the unfiltered character list: a scenario the form already points
   // at keeps previewing even after it's archived.
-  const selectedCharacterScenario = state.scenarioId
-    ? allCharacterScenarios.find((s) => s.id === state.scenarioId)
-    : undefined
-  const selectedPreset = selectedProjectScenario
-    ? { kind: 'project' as const, content: selectedProjectScenario.body }
-    : selectedGeneralScenario
-      ? { kind: 'general' as const, content: selectedGeneralScenario.body }
-      : selectedGroupScenario
-        ? { kind: 'group' as const, content: selectedGroupScenario.body }
-        : selectedCharacterScenario
-          ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-          : null
+  const selectedPresetBody = useMemo((): string | null => {
+    switch (scenarioSelection.kind) {
+      case 'project':
+        return projectScenarios.find((s) => s.path === scenarioSelection.path)?.body ?? null
+      case 'general':
+        return generalScenarios.find((s) => s.path === scenarioSelection.path)?.body ?? null
+      case 'group':
+        return (
+          groupScenarios.find(
+            (s) => s.path === scenarioSelection.path && s.groupId === scenarioSelection.groupId,
+          )?.body ?? null
+        )
+      case 'character':
+        return allCharacterScenarios.find((s) => s.id === scenarioSelection.scenarioId)?.content ?? null
+      default:
+        return null
+    }
+  }, [scenarioSelection, projectScenarios, generalScenarios, groupScenarios, allCharacterScenarios])
+
+  // A pick from elsewhere carries no body in the option lists; read it by ref.
+  const { data: storePreview } = useScenarioRefBody(
+    scenarioSelection.kind === 'store' ? scenarioSelection : null,
+  )
+
+  const selectedPreset =
+    scenarioSelection.kind === 'custom'
+      ? null
+      : {
+          kind: scenarioSelection.kind,
+          content:
+            scenarioSelection.kind === 'store' ? storePreview?.scenario.body ?? '' : selectedPresetBody ?? '',
+        }
 
   // The character's own default — used to render the override-visibility note
-  // when the form is currently using the project default but the character
-  // also has one.
+  // when the form is using the project default but the character also has one.
   const characterDefaultScenario = useMemo(() => {
     if (!singleLlm) return undefined
     const id = singleLlm.character.defaultScenarioId
     if (!id) return undefined
     return singleCharacterScenarios?.find((s) => s.id === id)
   }, [singleLlm, singleCharacterScenarios])
-  const showOverrideNote =
-    Boolean(selectedProjectScenario) &&
-    Boolean(characterDefaultScenario)
-
-  const scenarioSelection: ScenarioSelection = selectedProjectScenario
-    ? { kind: 'project', path: selectedProjectScenario.path }
-    : selectedGeneralScenario
-      ? { kind: 'general', path: selectedGeneralScenario.path }
-      : selectedGroupScenario
-        ? { kind: 'group', groupId: selectedGroupScenario.groupId, path: selectedGroupScenario.path }
-        : selectedCharacterScenario
-          ? { kind: 'character', scenarioId: selectedCharacterScenario.id }
-          : { kind: 'custom' }
+  const showOverrideNote = scenarioSelection.kind === 'project' && Boolean(characterDefaultScenario)
 
   const handleScenarioSelectionChange = (selection: ScenarioSelection) => {
-    setState((prev) => ({
-      ...prev,
-      scenarioId: selection.kind === 'character' ? selection.scenarioId : null,
-      projectScenarioPath: selection.kind === 'project' ? selection.path : null,
-      generalScenarioPath: selection.kind === 'general' ? selection.path : null,
-      groupScenarioPath: selection.kind === 'group' ? selection.path : null,
-      groupScenarioGroupId: selection.kind === 'group' ? selection.groupId : null,
-    }))
+    setState((prev) => ({ ...prev, scenarioSelection: selection, scenarioTouched: true }))
   }
+
+  // --- The scenario browser ------------------------------------------------
+  const [browserOpen, setBrowserOpen] = useState(false)
+  const scenarioHierarchy = useMemo(
+    () => ({
+      projectId: selectedProjectId ?? project?.id ?? null,
+      groupIds: [...new Set(groupScenarios.map((s) => s.groupId))],
+      characterId: singleLlm?.character.id ?? null,
+    }),
+    [selectedProjectId, project, groupScenarios, singleLlm],
+  )
 
   // --- The Host's Scenario Builder -----------------------------------------
   const [builderOpen, setBuilderOpen] = useState(false)
@@ -292,11 +289,8 @@ export function NewChatForm({
     setState((prev) => ({
       ...prev,
       scenario: scene,
-      scenarioId: null,
-      projectScenarioPath: null,
-      generalScenarioPath: null,
-      groupScenarioPath: null,
-      groupScenarioGroupId: null,
+      scenarioSelection: { kind: 'custom' },
+      scenarioTouched: true,
     }))
     setScenarioEditorKey((k) => k + 1)
   }
@@ -352,11 +346,8 @@ export function NewChatForm({
     if (!characterDefaultScenario) return
     setState((prev) => ({
       ...prev,
-      scenarioId: characterDefaultScenario.id,
-      projectScenarioPath: null,
-      generalScenarioPath: null,
-      groupScenarioPath: null,
-      groupScenarioGroupId: null,
+      scenarioSelection: { kind: 'character', scenarioId: characterDefaultScenario.id },
+      scenarioTouched: true,
       scenario: '',
     }))
   }
@@ -729,7 +720,7 @@ export function NewChatForm({
 
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <label htmlFor="new-chat-scenario" className="block text-sm qt-text-primary">
+            <label htmlFor="new-chat-scenario-select" className="block text-sm qt-text-primary">
               Starting Scenario (Optional)
             </label>
             <button
@@ -746,17 +737,24 @@ export function NewChatForm({
               Ask the Host to set the scene
             </button>
           </div>
-          {showScenarioDropdown && (
-            <ScenarioSelect
-              id="new-chat-scenario-select"
-              selection={scenarioSelection}
-              onChange={handleScenarioSelectionChange}
-              projectScenarios={projectScenarios}
-              generalScenarios={generalScenarios}
-              groupScenarios={groupScenarios}
-              characterScenarios={singleCharacterScenarios}
-              characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
-              disabled={creating}
+          <ScenarioSelect
+            id="new-chat-scenario-select"
+            selection={scenarioSelection}
+            onChange={handleScenarioSelectionChange}
+            onBrowse={() => setBrowserOpen(true)}
+            projectScenarios={projectScenarios}
+            generalScenarios={generalScenarios}
+            groupScenarios={groupScenarios}
+            characterScenarios={singleCharacterScenarios}
+            characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
+            disabled={creating}
+          />
+          {browserOpen && (
+            <ScenarioBrowserDialog
+              isOpen={browserOpen}
+              onClose={() => setBrowserOpen(false)}
+              hierarchy={scenarioHierarchy}
+              onPick={handleScenarioSelectionChange}
             />
           )}
           {onShowArchivedScenariosChange && (
@@ -785,7 +783,7 @@ export function NewChatForm({
               — click to switch.
             </p>
           )}
-          {selectedPreset && (
+          {selectedPreset && selectedPreset.content && (
             <div className="rounded-lg border qt-border-default qt-bg-muted/40 px-3 py-2 text-sm qt-text-secondary whitespace-pre-wrap">
               {selectedPreset.content}
             </div>

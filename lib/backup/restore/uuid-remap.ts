@@ -9,6 +9,7 @@
  */
 
 import { UuidRemapper } from '../uuid-remapper';
+import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import {
   withConciergeSettingsFromLegacy,
@@ -313,6 +314,12 @@ export function remapBackupData(
       ),
       userId: targetUserId,
     };
+
+    // The scenario source names a mount; mounts are remapped by the same
+    // remapper, so the pointer follows its store.
+    if (chat.scenarioSource) {
+      remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
+    }
 
     // Remap participants
     remappedChat.participants = chat.participants.map((participant: ChatParticipantBase) => ({

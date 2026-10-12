@@ -20,7 +20,9 @@ Quilltap now keeps scenarios in three places, each pitched at a different scale:
 - **General Scenarios** — instance-wide; available to *every* non-help chat you begin, project or no.
 - **Character Scenarios** — personal to one character; the parlour she returns to.
 
-When a chat is started, all three groups appear in the same **Starting Scenario** drop-down, neatly partitioned. Should both a project default and a general default be standing by, the project default wins pre-selection (the more particular wish wins out over the household custom). Character defaults remain a polite override — you'll see a note offering a one-click switch when applicable.
+When a chat is started, all three groups appear in the same **Starting Scenario** drop-down, neatly partitioned. Pre-selection follows the order the chat itself obeys: a single character's own default first, then the project default, then the general default (the more particular wish wins out over the household custom). What the drop-down shows is exactly what the chat will be given. When the project default is showing and the character has a default of her own, a note offers a one-click switch.
+
+And should the scene you want live on some *other* shelf — another project's, another character's — **Browse all scenarios…** in the same drop-down opens the [Scenario Browser](scenario-browser.md), which searches every shelf in the house.
 
 ## The Files Themselves
 
@@ -117,4 +119,5 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Project Scenarios](project-scenarios.md) — Per-project scenarios offered alongside the general ones.
 - [The Scenario Builder](scenario-builder.md) — Having the Host research and draft a scene.
+- [The Scenario Browser](scenario-browser.md) — Plucking a scene from any shelf in the house.
 - [The Scriptorium](scriptorium.md) — Browsing and editing document stores directly.
