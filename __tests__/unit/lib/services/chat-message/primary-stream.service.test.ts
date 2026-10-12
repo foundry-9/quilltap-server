@@ -42,6 +42,11 @@ const mockAttemptHardErrorFailover = jest.fn<() => Promise<{ recovered: boolean;
 const mockIsToolUnsupportedError = jest.fn<(e: unknown) => boolean>(() => false)
 const mockIsRecoverableRequestError = jest.fn<(e: unknown) => boolean>(() => false)
 
+const mockMarkMailAlertsDelivered = jest.fn()
+jest.mock('@/lib/post-office/mailbox', () => ({
+  markMailAlertsDelivered: (...args: unknown[]) => mockMarkMailAlertsDelivered(...args),
+}))
+
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
     debug: jest.fn(),
@@ -287,6 +292,43 @@ describe('primary-stream.service', () => {
       await preserve(new Error('boom'))
 
       expect(markConsumed).not.toHaveBeenCalled()
+    })
+
+    it('marks the turn\'s announced letters alerted against the preserved message', async () => {
+      mockSaveAssistantMessage.mockResolvedValueOnce('pre')
+      mockMarkMailAlertsDelivered.mockClear()
+      const owed = { vaultId: 'vault-a', paths: ['Mail/one.md'] }
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed: jest.fn() } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming: makeStreaming({ hasStartedStreaming: true, fullResponse: 'partial response here' }),
+        preGeneratedAssistantMessageId: 'pre',
+        mailAlertsOwed: owed,
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(mockMarkMailAlertsDelivered).toHaveBeenCalledWith(owed, { chatId: 'c', via: 'preserved-partial' })
+    })
+
+    it('leaves the letters unalerted when the preserve itself fails to persist', async () => {
+      mockSaveAssistantMessage.mockRejectedValueOnce(new Error('db-down'))
+      mockMarkMailAlertsDelivered.mockClear()
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed: jest.fn() } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming: makeStreaming({ hasStartedStreaming: true, fullResponse: 'something' }),
+        preGeneratedAssistantMessageId: 'pre',
+        mailAlertsOwed: { vaultId: 'vault-a', paths: ['Mail/one.md'] },
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(mockMarkMailAlertsDelivered).not.toHaveBeenCalled()
     })
   })
 

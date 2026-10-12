@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Fix bug 227: mail marked announced before its turn succeeded
+
+- Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
+  `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`) flips the letters from the finalizer, the
+  preserved-partial path, a tool-only save, or a turn-skip. A provider failure that saves nothing leaves
+  them unalerted and they are announced again on the next attempt.
+- A swipe skips the mail check. It used to post a mail whisper into the re-roll and mark the letter.
+- The trailing sections (Core whisper, recall, mail, progressions, inform, turn note) are built once, in
+  one ordered list, and both the new-message and no-message branches use it (follow-up to bug 199).
+- Help: `help/post-office.md` states that the mail check covers turns with no new message and that a
+  failed turn re-announces its letters.
+
 #### Memory refactor, Phase 0: bugs filed, three fixed, one closed
 
 - Filed bugs 199–226 from the memory refactor audit, one file each, with index rows. 203–226 stay open
