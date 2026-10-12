@@ -38,6 +38,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
       jobId: job.id,
       chatId: payload.chatId,
       deleted: wipeResult.deleted,
+      spared: wipeResult.spared,
       vectorsRemoved: wipeResult.vectorsRemoved,
     });
     return;
@@ -91,6 +92,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
       jobId: job.id,
       chatId: payload.chatId,
       deleted: wipeResult.deleted,
+      spared: wipeResult.spared,
       vectorsRemoved: wipeResult.vectorsRemoved,
       extractionsEnqueued: 1,
     });

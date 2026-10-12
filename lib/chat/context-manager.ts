@@ -2797,9 +2797,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // whisper), what it remembers (recall), what arrived for it (mail), what it
   // is carrying (progressions), what the operator says is so (inform), and
   // the turn note last. Built ONCE and used by both branches below — two
-  // hand-kept copies of this list is how recall (bug 199) and mail (bug 227)
+  // hand-kept copies of this list is how recall, mail and the Core whisper
   // went missing from turns with no new user message while their side effects
-  // (whisper posted, rows stamped, cadence advanced) still ran.
+  // (whisper posted, rows stamped, cadence advanced) still ran (bug 199).
   const trailingContextSections = [
     coreWhisperLLMContext,
     llmRecallText,
@@ -2836,11 +2836,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     //
     // This message may follow a user-role line: in a multi-character chat every
     // other seat's line is attributed as `user` (message-attribution.ts), so a
-    // chained turn's history routinely ends in one. That shape predates bugs
-    // 199/227 (the scene note, progressions and informs have always ridden
-    // here). OpenAI-compatible APIs accept adjacent user messages, Anthropic's
+    // chained turn's history routinely ends in one. That shape predates bug
+    // 199 (the scene note, progressions and informs have always ridden here). OpenAI-compatible APIs accept adjacent user messages, Anthropic's
     // Messages API combines them into one turn, and the Google plugin merges
     // them before sending.
+    if (llmRecallText) {
+      logger.debug('[CommonplaceWhisper] Delivering recall in the trailing-only message (no new user message)', {
+        chatId: chat.id,
+        participantId: respondingParticipant?.id,
+        length: llmRecallText.length,
+      })
+    }
     const trailingOnly = [userNarrationAnchor, ...trailingContextSections].filter((section): section is string => !!section)
     if (trailingOnly.length > 0) {
       contextMessages.push({

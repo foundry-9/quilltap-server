@@ -830,7 +830,7 @@ describe('message-finalizer.service — inform consumption', () => {
   })
 
   // Suparṇā's letters ride the same rule: marked alerted only once the reply
-  // that read them is saved (bug 227 review), never at context-building time.
+  // that read them is saved (bug 227), never at context-building time.
   it('marks the turn\'s announced letters alerted once the reply is saved', async () => {
     const repos = informRepos()
     const owed = { vaultId: 'vault-a', paths: ['Mail/one.md'] }

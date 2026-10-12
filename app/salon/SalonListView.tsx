@@ -118,7 +118,7 @@ export function SalonListView() {
 
   const handleReextractMemories = useCallback(async (chatId: string) => {
     const confirmed = await showConfirmation(
-      'This will delete all existing memories from this chat and re-extract them from the conversation. Are you sure?'
+      'This will delete the memories extracted from this chat and re-extract them from the conversation. Hand-written entries, archived entries and consolidated digests are kept. Are you sure?'
     )
     if (!confirmed) return
 

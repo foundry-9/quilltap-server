@@ -4,6 +4,38 @@
 
 ### 4.10-dev
 
+#### Fix bug 227: mail marked announced before its turn succeeded
+
+- Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
+  `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`) flips the letters from the finalizer, the
+  preserved-partial path, a tool-only save, or a turn-skip. A provider failure that saves nothing leaves
+  them unalerted and they are announced again on the next attempt.
+- A swipe skips the mail check. It used to post a mail whisper into the re-roll and mark the letter.
+- The trailing sections (Core whisper, recall, mail, progressions, inform, turn note) are built once, in
+  one ordered list, and both the new-message and no-message branches use it (follow-up to bug 199).
+- Help: `help/post-office.md` states that the mail check covers turns with no new message and that a
+  failed turn re-announces its letters.
+
+#### Memory refactor, Phase 0: bugs filed, three fixed, one closed
+
+- Filed bugs 199–226 from the memory refactor audit, one file each, with index rows. 203–226 stay open
+  and name the refactor phase that closes them.
+- Bug 199: continue, chained and autonomous turns (no new user message) now send recalled memories,
+  new Suparṇā mail and the Core whisper to the model. Before, they were posted (recall stamped
+  accessed, letters marked alerted) but left out of the trailing-only message.
+- Bug 200: the delete chokepoint (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch`) now
+  removes the deleted rows' vectors, so the item delete, restore and every cascade stop leaving orphan
+  vectors; per-caller removal in the cascades, housekeeping and dedup is gone. The gate ignores vector
+  hits with no row and searches past them (up to 4 × K), so orphans no longer hide a live
+  near-duplicate. Character archive already dropped the whole index, so that half did not reproduce.
+- Bug 201: the chat wipe (`DELETE /memories?chatId=`, Re-extract, Regenerate) deletes only hot AUTO
+  rows, plus digests with no surviving member. MANUAL rows, cold rows and live digests are kept, and
+  the response reports `sparedCount`. A digest counts as having a member only if that member is not
+  being wiped and still points at it. The dedup tool folds only hot AUTO rows and reports the rest as
+  `sparedCount` ("Kept aside" in the preview). A shared predicate lives in
+  `lib/memory/policy-protection.ts`.
+- Bug 202 closed as not a defect: R5 of the recall retuning keeps entity-anchor hits under the cosine
+  floor. Corrected the comments in `searchMemoriesSemantic` that claimed the opposite.
 #### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
 
 - One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.
@@ -85,22 +117,6 @@
   wear-ledger export/restore/import side-channels); five folder actions on the route factory; a
   breadcrumb browser with bulk move; tools see `folder` read-only.
 - Both linked from `ROADMAP.md`. Design only; nothing built yet.
-
-#### Fix bugs 199 and 227: recall, mail and Core whisper dropped on turns with no new user message
-
-- `buildContext` now includes `llmRecallText` and `suparnaMailLLMContext` in the trailing-only user
-  message used by continue, nudge, chained and autonomous turns, in the same order as on a turn with a
-  new user message. Before, those turns posted the Commonplace Book and Suparṇā whispers, stamped the
-  recalled memories as shown and marked each letter alerted, but the model received neither text.
-- The trailing sections (Core whisper, recall, mail, progressions, inform, turn note) are built once, in
-  one ordered list, and both branches use it. The Core whisper was also missing from turns with no new
-  user message.
-- Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
-  `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`) flips the letters from the finalizer, the
-  preserved-partial path, a tool-only save, or a turn-skip. A provider failure that saves nothing leaves
-  them unalerted and they are announced again on the next attempt. A swipe skips the mail check.
-- Help: `help/post-office.md` states that the mail check covers turns with no new message and that a
-  failed turn re-announces its letters.
 
 #### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change
 

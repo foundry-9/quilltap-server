@@ -59,6 +59,8 @@ export const MAX_REINFORCEMENT_FOOTNOTES = 8
 
 /** Top-K results to fetch from vector store during gate check */
 const GATE_TOP_K = 5
+/** Widest search the gate will make to see past orphan vectors (bug 200). */
+const GATE_MAX_SEARCH_K = GATE_TOP_K * 4
 
 /** Milliseconds to wait before retrying embedding generation once. */
 const EMBEDDING_RETRY_DELAY_MS = 500
@@ -307,22 +309,47 @@ async function runMemoryGateInner(
   debugInfo.push(`[Gate] Generated embedding (${embedding.length} dimensions)`)
 
   const vectorStore = await getCharacterVectorStore(characterId)
-  const results = vectorStore.search(embedding, GATE_TOP_K)
+  const repos = getRepositories()
+
+  // A vector whose row is gone (an orphan) must not stand at rank 1: with no
+  // row behind it the near-duplicate and reinforce branches were skipped and a
+  // live second match was never considered (bug 200). Decide on live rows only,
+  // and widen the search past any orphans so they cannot crowd live neighbours
+  // out of the top K. Orphans are not pruned here: in the job child a row this
+  // job inserted is invisible to the snapshot (bug 209) and would look like one.
+  let k = GATE_TOP_K
+  let vectorResults = vectorStore.search(embedding, k)
+  let memoryMap = new Map<string, Memory>()
+  for (;;) {
+    const matchedIds = vectorResults.map(r => r.id)
+    const matchedMemories = matchedIds.length > 0 ? await repos.memories.findByIds(matchedIds) : []
+    memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
+    const live = vectorResults.filter(r => memoryMap.has(r.id)).length
+    const storeExhausted = vectorResults.length < k
+    if (live >= GATE_TOP_K || storeExhausted || k >= GATE_MAX_SEARCH_K) break
+    k = Math.min(GATE_MAX_SEARCH_K, k + (GATE_TOP_K - live))
+    vectorResults = vectorStore.search(embedding, k)
+  }
+  const results = vectorResults.filter(r => memoryMap.has(r.id)).slice(0, GATE_TOP_K)
+  const orphanIds = vectorResults.filter(r => !memoryMap.has(r.id)).map(r => r.id)
+  if (orphanIds.length > 0) {
+    logger.warn('[MemoryGate] Vector index holds entries with no memory row; ignoring them', {
+      characterId,
+      orphanIds,
+      searchedK: k,
+    })
+    debugInfo.push(`[Gate] Ignored ${orphanIds.length} orphan vector(s)`)
+  }
 
   if (results.length === 0) {
     debugInfo.push('[Gate] No existing memories in vector store → INSERT')
     return { decision: { action: 'INSERT' }, embedding, debugInfo }
   }
 
-  // Get full memory data for matched IDs (only the top-K, not the entire corpus)
-  const repos = getRepositories()
-  const matchedIds = results.map(r => r.id)
-  const matchedMemories = await repos.memories.findByIds(matchedIds)
-  const memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
-
   // Find best match
+  // Every entry in `results` has a live row (filtered above).
   const bestResult = results[0]
-  const bestMemory = memoryMap.get(bestResult.id)
+  const bestMemory = memoryMap.get(bestResult.id)!
 
   debugInfo.push(`[Gate] Best match: score=${bestResult.score.toFixed(3)}, id=${bestResult.id}`)
 
@@ -330,10 +357,9 @@ async function runMemoryGateInner(
   // than DATE_GUARD_DAYS from the best match is a DIFFERENT OCCASION of the
   // same activity — link, never absorb.
   const distinctOccasion =
-    bestMemory !== undefined &&
     bestResult.score >= MERGE_THRESHOLD &&
     occasionsAreDistinct(candidateAnchors?.occurredAt, bestMemory.occurredAt)
-  if (distinctOccasion && bestMemory) {
+  if (distinctOccasion) {
     debugInfo.push(
       `[Gate] Score ${bestResult.score.toFixed(3)} but occurredAt differs by > ${DATE_GUARD_DAYS} days ` +
       `(candidate ${candidateAnchors?.occurredAt}, existing ${bestMemory.occurredAt}) → INSERT_RELATED (date guard)`
@@ -349,7 +375,7 @@ async function runMemoryGateInner(
     }
   }
 
-  if (bestResult.score >= NEAR_DUPLICATE_THRESHOLD && bestMemory) {
+  if (bestResult.score >= NEAR_DUPLICATE_THRESHOLD) {
     debugInfo.push(`[Gate] Score >= ${NEAR_DUPLICATE_THRESHOLD} → SKIP_NEAR_DUPLICATE`)
     const { memory: target } = await resolveColdForAbsorb(bestMemory, debugInfo)
     return {
@@ -363,7 +389,7 @@ async function runMemoryGateInner(
     }
   }
 
-  if (bestResult.score >= MERGE_THRESHOLD && bestMemory) {
+  if (bestResult.score >= MERGE_THRESHOLD) {
     debugInfo.push(`[Gate] Score >= ${MERGE_THRESHOLD} → REINFORCE`)
     const { memory: target, redirected } = await resolveColdForAbsorb(bestMemory, debugInfo)
     if (redirected) {
@@ -392,7 +418,6 @@ async function runMemoryGateInner(
   const rawRelated = results
     .filter(r => r.score >= RELATED_THRESHOLD && r.score < MERGE_THRESHOLD)
     .map(r => ({ memory: memoryMap.get(r.id)!, similarity: r.score }))
-    .filter(r => r.memory)
   // A cold, superseded member is linked via its digest; collapse duplicates
   // (several members of one cluster) onto the digest's best similarity.
   const relatedById = new Map<string, { memory: Memory; similarity: number }>()
@@ -758,8 +783,39 @@ function parseRelatedIds(raw: string | null | undefined): string[] {
 }
 
 /**
- * Delete a single memory and scrub the deleted ID from every neighbour's
- * `relatedMemoryIds`. The single chokepoint for memory deletion — parallel
+ * Remove deleted memories' vectors from their characters' indexes. Part of the
+ * delete chokepoint (bug 200): `vector_entries` has no foreign key to
+ * `memories`, so a row deleted without this leaves an orphan vector behind.
+ * Best-effort — a failed removal is logged, never rethrown, because the rows
+ * are already gone and the gate tolerates orphans. In the job child the store's
+ * `save()` buffers like any other write and commits with the job.
+ */
+async function removeDeletedVectors(idsByCharacter: ReadonlyMap<string, readonly string[]>): Promise<number> {
+  let removed = 0
+  for (const [characterId, ids] of idsByCharacter) {
+    try {
+      const store = await getCharacterVectorStore(characterId)
+      let removedHere = 0
+      for (const id of ids) {
+        if (await store.removeVector(id)) removedHere++
+      }
+      if (removedHere > 0) await store.save()
+      removed += removedHere
+    } catch (error) {
+      logger.warn('[MemoryGate] Failed to remove vectors for deleted memories', {
+        characterId,
+        memoryCount: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return removed
+}
+
+/**
+ * Delete a single memory, scrub the deleted ID from every neighbour's
+ * `relatedMemoryIds`, and remove its vector. The single chokepoint for memory
+ * deletion — parallel
  * to `createMemoryWithGate` on the write side. Idempotent: if the row is
  * already gone, returns false without touching neighbours.
  *
@@ -796,9 +852,13 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   }
 
   const deleted = await repos.memories.delete(memoryId)
+  const vectorsRemoved = deleted
+    ? await removeDeletedVectors(new Map([[target.characterId, [memoryId]]]))
+    : 0
 
   const logFields = {
     memoryId,
+    vectorsRemoved,
     neighbourCount: neighbours.length,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,
@@ -819,7 +879,8 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
 /**
  * Batch version of {@link deleteMemoryWithUnlink}. Scans neighbours once
  * against the full doomed set, scrubs every doomed ID from each neighbour's
- * `relatedMemoryIds` in one update per neighbour, then deletes the batch.
+ * `relatedMemoryIds` in one update per neighbour, deletes the batch, then
+ * removes the deleted rows' vectors.
  *
  * Use this for cascades: character deletion, chat-wipe, swipe-group cleanup,
  * housekeeping retention sweeps. Calling the single-ID helper in a loop is
@@ -830,18 +891,31 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
  */
 export async function deleteMemoriesWithUnlinkBatch(
   memoryIds: string[],
-  options: {
-    /**
-     * Rows whose links the caller has just rewritten in this same operation
-     * (a merge survivor), keyed by id. The scrub reads these lists instead of
-     * the database row: in the job child the database still holds the
-     * pre-write row, and scrubbing from it would overwrite the caller's
-     * fresher list.
-     */
-    currentLinks?: ReadonlyMap<string, { characterId: string; relatedMemoryIds: string[] }>
-  } = {},
+  options: DeleteBatchOptions = {},
 ): Promise<number> {
-  if (memoryIds.length === 0) return 0
+  return (await deleteMemoriesWithUnlinkBatchReport(memoryIds, options)).deleted
+}
+
+export interface DeleteBatchOptions {
+  /**
+   * Rows whose links the caller has just rewritten in this same operation
+   * (a merge survivor), keyed by id. The scrub reads these lists instead of
+   * the database row: in the job child the database still holds the
+   * pre-write row, and scrubbing from it would overwrite the caller's
+   * fresher list.
+   */
+  currentLinks?: ReadonlyMap<string, { characterId: string; relatedMemoryIds: string[] }>
+}
+
+/**
+ * {@link deleteMemoriesWithUnlinkBatch}, also reporting how many vectors the
+ * chokepoint removed. For cascades that log or return that count.
+ */
+export async function deleteMemoriesWithUnlinkBatchReport(
+  memoryIds: string[],
+  options: DeleteBatchOptions = {},
+): Promise<{ deleted: number; vectorsRemoved: number }> {
+  if (memoryIds.length === 0) return { deleted: 0, vectorsRemoved: 0 }
 
   const startedAt = Date.now()
   const repos = getRepositories()
@@ -914,9 +988,12 @@ export async function deleteMemoriesWithUnlinkBatch(
     }
   }
 
+  const vectorsRemoved = await removeDeletedVectors(idsByCharacter)
+
   const logFields = {
     requested: memoryIds.length,
     deleted,
+    vectorsRemoved,
     countSource,
     neighboursTouched,
     charactersAffected: charactersAffected.size,
@@ -931,7 +1008,7 @@ export async function deleteMemoriesWithUnlinkBatch(
   // a batch can span several chats.
   if (deleted > 0) publishRealtime('memories')
 
-  return deleted
+  return { deleted, vectorsRemoved }
 }
 
 // =============================================================================

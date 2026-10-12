@@ -1,7 +1,7 @@
 /**
  * Unit tests for the memory-deletion chokepoint helpers:
  *   - deleteMemoryWithUnlink (single)
- *   - deleteMemoriesWithUnlinkBatch
+ *   - deleteMemoriesWithUnlinkBatch / deleteMemoriesWithUnlinkBatchReport
  *
  * These verify that the deleted ID is scrubbed from every neighbour's
  * `relatedMemoryIds` *before* the rows are removed.
@@ -54,6 +54,7 @@ const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mo
 
 let deleteMemoryWithUnlink: typeof import('@/lib/memory/memory-gate').deleteMemoryWithUnlink
 let deleteMemoriesWithUnlinkBatch: typeof import('@/lib/memory/memory-gate').deleteMemoriesWithUnlinkBatch
+let deleteMemoriesWithUnlinkBatchReport: typeof import('@/lib/memory/memory-gate').deleteMemoriesWithUnlinkBatchReport
 
 interface FakeMemoryRow {
   id: string
@@ -96,6 +97,7 @@ beforeEach(() => {
     const gate = require('@/lib/memory/memory-gate')
     deleteMemoryWithUnlink = gate.deleteMemoryWithUnlink
     deleteMemoriesWithUnlinkBatch = gate.deleteMemoriesWithUnlinkBatch
+    deleteMemoriesWithUnlinkBatchReport = gate.deleteMemoriesWithUnlinkBatchReport
   })
 })
 
@@ -241,5 +243,76 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
       { characterId: 'char-A', ids: ['X'] },
       { characterId: 'char-B', ids: ['Y'] },
     ])
+  })
+})
+
+// Bug 200: vector removal lives in the chokepoint, so no caller that deletes
+// through it can leave an orphan vector behind.
+describe('vector removal in the chokepoint (bug 200)', () => {
+  const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock }
+
+  function fakeStore() {
+    const removed: string[] = []
+    return {
+      removed,
+      store: {
+        removeVector: jest.fn(async (id: string) => {
+          removed.push(id)
+          return true
+        }),
+        save: jest.fn(async () => undefined),
+      },
+    }
+  }
+
+  it('removes the vector of a single deleted memory', async () => {
+    const rows: FakeMemoryRow[] = [{ id: 'B', characterId: 'char-1', relatedMemoryIds: null }]
+    const { repo } = buildRepo(rows)
+    factoryMock.getRepositories.mockReturnValue(repo)
+    dbMock.rawQuery.mockResolvedValueOnce([])
+    const { store, removed } = fakeStore()
+    vectorStoreMock.getCharacterVectorStore.mockResolvedValue(store)
+
+    await deleteMemoryWithUnlink('B')
+
+    expect(vectorStoreMock.getCharacterVectorStore).toHaveBeenCalledWith('char-1')
+    expect(removed).toEqual(['B'])
+    expect(store.save).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes every deleted row\'s vector from its own character\'s index', async () => {
+    const rows: FakeMemoryRow[] = [
+      { id: 'X', characterId: 'char-A', relatedMemoryIds: null },
+      { id: 'Y', characterId: 'char-B', relatedMemoryIds: null },
+    ]
+    const { repo } = buildRepo(rows)
+    factoryMock.getRepositories.mockReturnValue(repo)
+    dbMock.rawQuery.mockResolvedValueOnce([])
+    dbMock.rawQuery.mockResolvedValueOnce([
+      { id: 'X', characterId: 'char-A' },
+      { id: 'Y', characterId: 'char-B' },
+    ])
+    const stores = { 'char-A': fakeStore(), 'char-B': fakeStore() } as Record<string, ReturnType<typeof fakeStore>>
+    vectorStoreMock.getCharacterVectorStore.mockImplementation(async (cid: string) => stores[cid].store)
+
+    const report = await deleteMemoriesWithUnlinkBatchReport(['X', 'Y'])
+
+    expect(stores['char-A'].removed).toEqual(['X'])
+    expect(stores['char-B'].removed).toEqual(['Y'])
+    expect(report).toEqual({ deleted: 2, vectorsRemoved: 2 })
+  })
+
+  it('still reports the rows deleted when the vector store fails', async () => {
+    const rows: FakeMemoryRow[] = [{ id: 'X', characterId: 'char-A', relatedMemoryIds: null }]
+    const { repo, bulkDeleted } = buildRepo(rows)
+    factoryMock.getRepositories.mockReturnValue(repo)
+    dbMock.rawQuery.mockResolvedValueOnce([])
+    dbMock.rawQuery.mockResolvedValueOnce([{ id: 'X', characterId: 'char-A' }])
+    vectorStoreMock.getCharacterVectorStore.mockRejectedValue(new Error('index unavailable'))
+
+    const deleted = await deleteMemoriesWithUnlinkBatch(['X'])
+
+    expect(deleted).toBe(1)
+    expect(bulkDeleted).toEqual([{ characterId: 'char-A', ids: ['X'] }])
   })
 })

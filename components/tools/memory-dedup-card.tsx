@@ -11,6 +11,8 @@ interface CharacterResult {
   originalCount: number
   withEmbeddings: number
   withoutEmbeddings: number
+  /** Hand-written, digest and archived (cold) rows, never folded. */
+  sparedCount?: number
   clustersFound: number
   memoriesInClusters: number
   removedCount: number
@@ -220,6 +222,7 @@ export function MemoryDedupCard() {
                               <tr>
                                 <th className="text-left px-3 py-2 qt-text-secondary font-medium">Character</th>
                                 <th className="text-right px-3 py-2 qt-text-secondary font-medium">Memories</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium" title="Hand-written entries, consolidated digests and archived entries are never folded">Kept aside</th>
                                 <th className="text-right px-3 py-2 qt-text-secondary font-medium">Clusters</th>
                                 <th className="text-right px-3 py-2 qt-text-secondary font-medium">Removable</th>
                                 <th className="text-right px-3 py-2 qt-text-secondary font-medium">Details</th>
@@ -233,6 +236,7 @@ export function MemoryDedupCard() {
                                 >
                                   <td className="px-3 py-2 text-foreground truncate max-w-[150px]">{char.characterName}</td>
                                   <td className="text-right px-3 py-2 qt-text-primary">{char.originalCount}</td>
+                                  <td className="text-right px-3 py-2 qt-text-primary">{char.sparedCount ?? 0}</td>
                                   <td className="text-right px-3 py-2 qt-text-primary">{char.clustersFound}</td>
                                   <td className="text-right px-3 py-2 qt-text-primary">{char.removedCount}</td>
                                   <td className="text-right px-3 py-2 qt-text-primary">{char.mergedDetailCount}</td>
