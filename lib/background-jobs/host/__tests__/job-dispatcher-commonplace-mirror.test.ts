@@ -23,8 +23,12 @@ jest.mock('@/lib/memory/recall/archive', () => ({
   invalidateFrozenArchive: jest.fn(),
   invalidateAllFrozenArchives: jest.fn(),
 }));
-jest.mock('@/lib/memory/consolidation-triggers', () => ({
-  maybeEnqueueConsolidationAfterCommit: jest.fn(async () => undefined),
+jest.mock('@/lib/memory/maintenance/triggers', () => ({
+  maybeEnqueueMaintenanceAfterCommit: jest.fn(async () => undefined),
+}));
+const recordMaintenanceOutcome = jest.fn();
+jest.mock('@/lib/memory/maintenance/ledger', () => ({
+  recordMaintenanceOutcome: (...args: unknown[]) => recordMaintenanceOutcome(...(args as [])),
 }));
 
 const mirrorCommonplaceAfterCommit = jest.fn(async () => undefined);
@@ -51,9 +55,9 @@ function consolidationJob(id: string): BackgroundJob {
   return {
     id,
     userId: 'user-1',
-    type: 'MEMORY_CONSOLIDATION',
+    type: 'MEMORY_MAINTENANCE',
     status: 'PROCESSING',
-    payload: { characterId: 'holder-1', trigger: 'manual' },
+    payload: { characterId: 'holder-1', reason: 'manual', phases: ['consolidate', 'mirror'] },
     priority: 0,
     attempts: 1,
     maxAttempts: 1,
@@ -133,7 +137,24 @@ describe('Commonplace mirror after a consolidation job (bug 208)', () => {
 
     expect(mainDb.calls).toEqual(['BEGIN IMMEDIATE', 'COMMIT']);
     expect(repos.backgroundJobs.markCompleted).toHaveBeenCalledWith('job-ok');
-    expect(mirrorCommonplaceAfterCommit).toHaveBeenCalledWith('MEMORY_CONSOLIDATION', job.payload, writes);
+    expect(mirrorCommonplaceAfterCommit).toHaveBeenCalledWith('MEMORY_MAINTENANCE', job.payload, writes);
+  });
+
+  it('the maintenance summary reaches the parent ledger only after the commit', async () => {
+    const summary = { characterId: 'holder-1', reason: 'manual', dryRun: false, phases: [] };
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb({ failCommit: 'disk full' }) as never);
+    const failing = consolidationJob('job-ledger-fail');
+    inFlight(failing);
+    await handleChildJobResult({ type: 'job-result', jobId: failing.id, ok: true, writes, result: summary } as never);
+    await flush();
+    expect(recordMaintenanceOutcome).not.toHaveBeenCalled();
+
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
+    const ok = consolidationJob('job-ledger-ok');
+    inFlight(ok);
+    await handleChildJobResult({ type: 'job-result', jobId: ok.id, ok: true, writes, result: summary } as never);
+    await flush();
+    expect(recordMaintenanceOutcome).toHaveBeenCalledWith(summary);
   });
 
   it('a job that failed in the child writes no mirror', async () => {
@@ -159,7 +180,8 @@ describe('Commonplace mirror after a batch that deletes a digest', () => {
   const deleteWrites: ChildWritePayload[] = [{ method: 'memories.delete', args: ['digest-1'] }];
 
   function sweepJob(id: string): BackgroundJob {
-    return { ...consolidationJob(id), type: 'MEMORY_HOUSEKEEPING' } as BackgroundJob;
+    // Any job type: a chat wipe inside a regenerate deletes digests too.
+    return { ...consolidationJob(id), type: 'MEMORY_REGENERATE_CHAT' } as BackgroundJob;
   }
 
   it('reads the buckets before commit and mirrors them after, for any job type', async () => {

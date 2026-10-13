@@ -4,31 +4,35 @@ import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import type { MaintenanceReport } from '@/lib/memory/maintenance/types'
 
-interface CharacterResult {
+/**
+ * Near-duplicate folding: the maintenance job's first phase, run on its own.
+ * The preview is a user-wide dry run of `fold-near-duplicates` (LLM-free, so
+ * it may span every character); "Fold" enqueues one maintenance job per
+ * character with that phase alone.
+ */
+const MAINTAIN_URL = '/api/v1/memories?action=maintain'
+
+interface CharacterRow {
   characterId: string
   characterName: string
-  originalCount: number
-  withEmbeddings: number
-  withoutEmbeddings: number
-  /** Hand-written, digest and archived (cold) rows, never folded. */
-  sparedCount?: number
-  clustersFound: number
-  memoriesInClusters: number
-  removedCount: number
-  mergedDetailCount: number
-  finalCount: number
+  eligible: number
+  groups: number
+  folding: number
 }
 
-interface DedupPreview {
-  threshold: number
-  dryRun: boolean
-  characters: CharacterResult[]
-  totalOriginal: number
-  totalRemoved: number
-  totalMergedDetails: number
-  totalFinal: number
-  processedAt: string
+function rowsFrom(reports: MaintenanceReport[]): CharacterRow[] {
+  return reports
+    .filter((r) => !r.skippedReason)
+    .map((r) => ({
+      characterId: r.characterId,
+      characterName: r.characterName ?? 'Unnamed',
+      eligible: r.fold?.eligible ?? 0,
+      groups: r.fold?.groups.length ?? 0,
+      folding: r.fold?.folded ?? 0,
+    }))
+    .sort((a, b) => b.folding - a.folding)
 }
 
 type Step = 'idle' | 'analyzing' | 'preview' | 'running' | 'complete'
@@ -36,34 +40,33 @@ type Step = 'idle' | 'analyzing' | 'preview' | 'running' | 'complete'
 export function MemoryDedupCard() {
   const [showDialog, setShowDialog] = useState(false)
   const [step, setStep] = useState<Step>('idle')
-  const [threshold, setThreshold] = useState(0.80)
-  const [preview, setPreview] = useState<DedupPreview | null>(null)
-  const [result, setResult] = useState<DedupPreview | null>(null)
+  const [preview, setPreview] = useState<CharacterRow[] | null>(null)
+  const [jobsQueued, setJobsQueued] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = async () => {
     setShowDialog(true)
     setStep('analyzing')
     setPreview(null)
-    setResult(null)
     setError(null)
 
     try {
-      const response = await fetch(
-        `/api/v1/system/tools?action=memory-dedup-preview&threshold=${threshold}`
-      )
+      const response = await fetch(MAINTAIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phases: ['fold-near-duplicates'], dryRun: true }),
+      })
+      const data = await response.json()
       if (!response.ok) {
-        const data = await response.json()
         throw new Error(data.error || 'Failed to analyze memories')
       }
-      const data = await response.json()
-      setPreview(data.result)
+      setPreview(rowsFrom(data.reports ?? []))
       setStep('preview')
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to analyze memories')
       setError(errorMessage)
       setStep('preview')
-      console.error('Memory dedup preview failed', { error: errorMessage })
+      console.error('Near-duplicate preview failed', { error: errorMessage })
     }
   }
 
@@ -73,28 +76,24 @@ export function MemoryDedupCard() {
     setError(null)
 
     try {
-      const response = await fetch('/api/v1/system/tools?action=memory-dedup', {
+      const response = await fetch(MAINTAIN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threshold }),
+        body: JSON.stringify({ phases: ['fold-near-duplicates'] }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to deduplicate memories')
-      }
-
       const data = await response.json()
-      setResult(data.result)
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fold near-duplicates')
+      }
+      const queued = Array.isArray(data.jobIds) ? data.jobIds.length : 0
+      setJobsQueued(queued)
       setStep('complete')
-      showSuccessToast(
-        `Removed ${data.result.totalRemoved} duplicate memories, merged ${data.result.totalMergedDetails} details`
-      )
+      showSuccessToast(`Folding dispatched — ${queued} character${queued === 1 ? '' : 's'} queued`)
     } catch (err) {
-      const errorMessage = getErrorMessage(err, 'Failed to deduplicate memories')
+      const errorMessage = getErrorMessage(err, 'Failed to fold near-duplicates')
       setError(errorMessage)
       setStep('preview')
-      console.error('Memory dedup failed', { error: errorMessage })
+      console.error('Near-duplicate fold failed', { error: errorMessage })
       showErrorToast(errorMessage)
     }
   }
@@ -103,11 +102,12 @@ export function MemoryDedupCard() {
     setShowDialog(false)
     setStep('idle')
     setPreview(null)
-    setResult(null)
     setError(null)
   }
 
-  const totalRemovable = preview?.totalRemoved ?? 0
+  const totalFolding = preview?.reduce((sum, r) => sum + r.folding, 0) ?? 0
+  const totalGroups = preview?.reduce((sum, r) => sum + r.groups, 0) ?? 0
+  const totalEligible = preview?.reduce((sum, r) => sum + r.eligible, 0) ?? 0
 
   return (
     <>
@@ -116,36 +116,17 @@ export function MemoryDedupCard() {
         <div className="flex items-start gap-4 mb-6">
           <div className="flex-1">
             <h2 className="qt-heading-2 mb-1">
-              Memory Deduplication
+              Near-Duplicate Folding
             </h2>
             <p className="qt-text-small">
-              Find and merge duplicate memories across all characters. Semantically similar
-              memories are clustered, the best version is kept, and unique details from
-              duplicates are preserved as footnotes.
+              Finds extracted memories that say the same thing about the same subject on the
+              same occasion (as alike as the house demands of a repetition at the door) and
+              folds each set into its sturdiest member, keeping any stray detail as a footnote.
+              Hand-written entries, digests and archived entries are left strictly alone.
             </p>
           </div>
           <div className="flex-shrink-0 text-primary">
             <Icon name="cpu" className="w-8 h-8" />
-          </div>
-        </div>
-
-        {/* Threshold Slider */}
-        <div className="mb-4">
-          <label className="qt-text-small font-medium block mb-2">
-            Similarity Threshold: {threshold.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0.70"
-            max="0.95"
-            step="0.01"
-            value={threshold}
-            onChange={(e) => setThreshold(parseFloat(e.target.value))}
-            className="qt-range w-full"
-          />
-          <div className="flex justify-between qt-text-xs mt-1">
-            <span>0.70 (more aggressive)</span>
-            <span>0.95 (more conservative)</span>
           </div>
         </div>
 
@@ -176,7 +157,7 @@ export function MemoryDedupCard() {
                       <Icon name="cpu" className="w-5 h-5 text-primary" />
                     </div>
                     <h2 className="qt-heading-4">
-                      {step === 'complete' ? 'Deduplication Complete' : 'Memory Deduplication'}
+                      {step === 'complete' ? 'Folding Dispatched' : 'Near-Duplicate Folding'}
                     </h2>
                   </div>
                   <button
@@ -198,7 +179,7 @@ export function MemoryDedupCard() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <p className="qt-text-small">Analyzing memories for duplicates...</p>
+                    <p className="qt-text-small">Comparing notes for repetitions...</p>
                   </div>
                 )}
 
@@ -211,66 +192,48 @@ export function MemoryDedupCard() {
                       </div>
                     ) : preview ? (
                       <div className="space-y-4">
-                        <p className="qt-text-small">
-                          Analysis at threshold <span className="font-semibold">{preview.threshold.toFixed(2)}</span>:
-                        </p>
-
-                        {/* Results table */}
                         <div className="max-h-64 overflow-y-auto border qt-border-default rounded-lg">
                           <table className="w-full text-sm">
                             <thead className="qt-bg-muted sticky top-0">
                               <tr>
                                 <th className="text-left px-3 py-2 qt-text-secondary font-medium">Character</th>
-                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Memories</th>
-                                <th className="text-right px-3 py-2 qt-text-secondary font-medium" title="Hand-written entries, consolidated digests and archived entries are never folded">Kept aside</th>
-                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Clusters</th>
-                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Removable</th>
-                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Details</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium" title="Hot extracted memories with an embedding — the only ones folding considers">Eligible</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Sets</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">To fold</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {preview.characters.map((char) => (
-                                <tr
-                                  key={char.characterId}
-                                  className={char.clustersFound === 0 ? 'opacity-50' : ''}
-                                >
-                                  <td className="px-3 py-2 text-foreground truncate max-w-[150px]">{char.characterName}</td>
-                                  <td className="text-right px-3 py-2 qt-text-primary">{char.originalCount}</td>
-                                  <td className="text-right px-3 py-2 qt-text-primary">{char.sparedCount ?? 0}</td>
-                                  <td className="text-right px-3 py-2 qt-text-primary">{char.clustersFound}</td>
-                                  <td className="text-right px-3 py-2 qt-text-primary">{char.removedCount}</td>
-                                  <td className="text-right px-3 py-2 qt-text-primary">{char.mergedDetailCount}</td>
+                              {preview.map((row) => (
+                                <tr key={row.characterId} className={row.groups === 0 ? 'opacity-50' : ''}>
+                                  <td className="px-3 py-2 text-foreground truncate max-w-[150px]">{row.characterName}</td>
+                                  <td className="text-right px-3 py-2 qt-text-primary">{row.eligible}</td>
+                                  <td className="text-right px-3 py-2 qt-text-primary">{row.groups}</td>
+                                  <td className="text-right px-3 py-2 qt-text-primary">{row.folding}</td>
                                 </tr>
                               ))}
                             </tbody>
                             <tfoot className="qt-bg-muted border-t qt-border-default">
                               <tr className="font-semibold">
                                 <td className="px-3 py-2 text-foreground">Total</td>
-                                <td className="text-right px-3 py-2 text-foreground">{preview.totalOriginal}</td>
-                                <td className="text-right px-3 py-2 text-foreground">
-                                  {preview.characters.reduce((sum, c) => sum + c.clustersFound, 0)}
-                                </td>
-                                <td className="text-right px-3 py-2 text-foreground">{preview.totalRemoved}</td>
-                                <td className="text-right px-3 py-2 text-foreground">{preview.totalMergedDetails}</td>
+                                <td className="text-right px-3 py-2 text-foreground">{totalEligible}</td>
+                                <td className="text-right px-3 py-2 text-foreground">{totalGroups}</td>
+                                <td className="text-right px-3 py-2 text-foreground">{totalFolding}</td>
                               </tr>
                             </tfoot>
                           </table>
                         </div>
 
-                        {totalRemovable > 0 && (
+                        {totalFolding > 0 ? (
                           <div className="qt-bg-primary/10 border qt-border-primary/30 rounded-lg p-3">
                             <p className="text-sm text-foreground">
-                              <span className="font-semibold">{preview.totalRemoved}</span> duplicate memories
-                              can be removed. <span className="font-semibold">{preview.totalMergedDetails}</span> unique
-                              details will be preserved as footnotes in surviving memories.
+                              <span className="font-semibold">{totalFolding}</span> repetitions would be folded
+                              into <span className="font-semibold">{totalGroups}</span> surviving memories.
                             </p>
                           </div>
-                        )}
-
-                        {totalRemovable === 0 && (
+                        ) : (
                           <div className="qt-bg-muted rounded-lg p-3">
                             <p className="text-sm qt-text-secondary">
-                              No duplicate memories found at this threshold. Try lowering the threshold to find more matches.
+                              Not a single repetition to be found. The books are in admirable order.
                             </p>
                           </div>
                         )}
@@ -286,54 +249,22 @@ export function MemoryDedupCard() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <p className="qt-text-small">Deduplicating memories...</p>
-                    <p className="qt-text-xs">Merging unique details and removing duplicates</p>
+                    <p className="qt-text-small">Dispatching the folding...</p>
                   </div>
                 )}
 
                 {/* Complete step */}
-                {step === 'complete' && result && (
+                {step === 'complete' && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
                         <Icon name="check" className="w-8 h-8 qt-text-success" />
                       </div>
                     </div>
-
-                    {/* Results table */}
-                    <div className="max-h-64 overflow-y-auto border qt-border-default rounded-lg">
-                      <table className="w-full text-sm">
-                        <thead className="qt-bg-muted sticky top-0">
-                          <tr>
-                            <th className="text-left px-3 py-2 qt-text-secondary font-medium">Character</th>
-                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">Before</th>
-                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">Removed</th>
-                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">After</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {result.characters.filter(c => c.removedCount > 0).map((char) => (
-                            <tr key={char.characterId}>
-                              <td className="px-3 py-2 text-foreground truncate max-w-[150px]">{char.characterName}</td>
-                              <td className="text-right px-3 py-2 qt-text-primary">{char.originalCount}</td>
-                              <td className="text-right px-3 py-2 qt-text-destructive">{char.removedCount}</td>
-                              <td className="text-right px-3 py-2 qt-text-primary">{char.finalCount}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="qt-bg-muted border-t qt-border-default">
-                          <tr className="font-semibold">
-                            <td className="px-3 py-2 text-foreground">Total</td>
-                            <td className="text-right px-3 py-2 text-foreground">{result.totalOriginal}</td>
-                            <td className="text-right px-3 py-2 qt-text-destructive">{result.totalRemoved}</td>
-                            <td className="text-right px-3 py-2 text-foreground">{result.totalFinal}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-
-                    <p className="text-center qt-text-xs">
-                      {result.totalMergedDetails} unique details preserved as footnotes in surviving memories.
+                    <p className="text-center qt-text-small">
+                      {jobsQueued} maintenance {jobsQueued === 1 ? 'job has' : 'jobs have'} been sent below
+                      stairs. Each character&apos;s repetitions are folded in the background; the
+                      Commonplace Book will reflect the tidying as each finishes.
                     </p>
                   </div>
                 )}
@@ -348,10 +279,10 @@ export function MemoryDedupCard() {
                     </button>
                     <button
                       onClick={handleRun}
-                      disabled={!preview || totalRemovable === 0}
+                      disabled={!preview || totalFolding === 0}
                       className="qt-button qt-button-primary"
                     >
-                      Run Deduplication
+                      Fold Repetitions
                     </button>
                   </>
                 )}

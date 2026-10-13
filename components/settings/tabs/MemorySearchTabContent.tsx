@@ -46,7 +46,7 @@ export function MemorySearchTabContent() {
           <MemoryRecallCard />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Memory Deduplication" description="Find and remove duplicate memories" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>
+        <CollapsibleCard title="Near-Duplicate Folding" description="Fold repeated memories into one" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>
           <MemoryDedupCard />
         </CollapsibleCard>
 

@@ -6,9 +6,10 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { BackgroundJobType } from '@/lib/schemas/types';
+import { BackgroundJobType, type BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { MAINTENANCE_PHASES, type MaintenancePhase, type MaintenanceReason, type MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
@@ -316,22 +317,23 @@ export interface ConversationRenderEnqueueResult {
 }
 
 /**
- * Payload for memory-housekeeping job.
- * Leave every field undefined to fall back to `instance_settings.memoryMaintenance`.
+ * Payload for a memory-maintenance job (memory refactor §3.9). One job per
+ * character; the phases run in their fixed order.
  */
-export interface MemoryHousekeepingPayload {
+export interface MemoryMaintenancePayload {
+  characterId: string;
+  /** Phases asked for; omitted, every phase the settings allow. */
+  phases?: MaintenancePhase[];
+  /** Why the job was enqueued (for the ledger and logs). */
+  reason: MaintenanceReason;
   /**
-   * Character to housekeep. New jobs always carry one: a user-wide sweep fans
-   * out per character at enqueue time (bug 221). A job without one — from
-   * before that change — still sweeps every character owned by userId.
+   * Phases asked for by hand, which run whatever the enabled switches and
+   * per-phase toggles say. Set at enqueue: a manual request's phases (all of
+   * them when it names none); empty for an automatic request.
    */
-  characterId?: string;
-  /** Override the per-character cap (otherwise `resolveMemorySettings().maintenance.capFor`). */
-  maxMemories?: number;
-  /** Dry run — preview deletions without applying. Default false. */
-  dryRun?: boolean;
-  /** Why the job was enqueued (for debug logs). */
-  reason?: 'watermark' | 'scheduled' | 'manual';
+  exemptPhases?: MaintenancePhase[];
+  /** Per-run overrides (a manual run's cluster threshold, say — bug 223). */
+  settings?: MaintenanceRunSettings;
 }
 
 /**
@@ -624,267 +626,158 @@ export async function enqueueCarinaMemoryExtraction(
   return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
 }
 
-/**
- * Enqueue memory housekeeping for one character, or — with no `characterId` —
- * for every character the user owns.
- *
- * Dedupe key is the character, whatever the reason (bug 221): a user-wide
- * sweep fans out into one job per character, each of which collides with any
- * PENDING or PROCESSING housekeeping job for that character — a watermark
- * job, a scheduled one or a manual one — so two sweeps never work on one
- * character at once. A legacy user-wide job still in flight (no
- * `characterId` on its payload) covers every character and absorbs any new
- * enqueue for this user.
- *
- * Returns the job id for a single character; for a user-wide sweep, the first
- * of the per-character ids (or the in-flight legacy job's id), and `''` when
- * the user owns no characters. Callers that need every id use
- * {@link enqueueMemoryHousekeepingSweep}.
- */
-export async function enqueueMemoryHousekeeping(
-  userId: string,
-  payload: MemoryHousekeepingPayload = {},
-  options?: EnqueueJobOptions
-): Promise<string> {
-  if (!payload.characterId) {
-    const ids = await enqueueMemoryHousekeepingSweep(userId, payload, options);
-    return ids[0] ?? '';
-  }
-  return enqueueMemoryHousekeepingForCharacter(userId, { ...payload, characterId: payload.characterId }, options);
+/** Union two phase lists; `undefined` (every phase) absorbs anything. */
+function unionPhases(a: MaintenancePhase[] | undefined, b: MaintenancePhase[] | undefined): MaintenancePhase[] | undefined {
+  if (!a || !b) return undefined;
+  return Array.from(new Set([...a, ...b]));
 }
 
 /**
- * The user-wide half of {@link enqueueMemoryHousekeeping}: one job per
- * character the user owns, each deduped per character. Returns every job id
- * (new or already in flight), in character order, without duplicates.
+ * The phases a request asks for by hand: they run whatever the enabled
+ * switches and per-phase toggles say. A manual request exempts what it names
+ * (every phase when it names none); an automatic one exempts nothing.
  */
-export async function enqueueMemoryHousekeepingSweep(
-  userId: string,
-  payload: Omit<MemoryHousekeepingPayload, 'characterId'> = {},
-  options?: EnqueueJobOptions
-): Promise<string[]> {
-  const repos = getRepositories();
-  const characters = await repos.characters.findByUserId(userId);
+function exemptPhasesOf(payload: MemoryMaintenancePayload): MaintenancePhase[] {
+  if (payload.exemptPhases) return payload.exemptPhases;
+  if (payload.reason !== 'manual') return [];
+  return payload.phases ?? [...MAINTENANCE_PHASES];
+}
 
-  // One read of the in-flight jobs for the whole sweep, deduped in memory —
-  // not two job-list reads per character.
-  let inFlight: InFlightHousekeeping | null = null;
+/** Fold `payload` into a waiting job's payload. Each phase keeps its own exemption. */
+function widenPayload(prior: MemoryMaintenancePayload, payload: MemoryMaintenancePayload): MemoryMaintenancePayload {
+  const phases = unionPhases(prior.phases, payload.phases);
+  const exemptPhases = Array.from(new Set([...exemptPhasesOf(prior), ...exemptPhasesOf(payload)]));
+  const widened: MemoryMaintenancePayload = {
+    ...prior,
+    ...(phases ? { phases } : {}),
+    // For the ledger and the logs only: what may skip the switches is `exemptPhases`.
+    reason: payload.reason === 'manual' ? 'manual' : prior.reason,
+    exemptPhases,
+    ...(payload.settings ? { settings: { ...prior.settings, ...payload.settings } } : {}),
+  };
+  if (!phases) delete widened.phases;
+  return widened;
+}
+
+/**
+ * Enqueue (or widen) one character's maintenance job against an already-read
+ * list of the user's PENDING maintenance jobs, which it keeps up to date.
+ */
+async function enqueueMaintenanceAgainst(
+  userId: string,
+  payload: MemoryMaintenancePayload,
+  pending: BackgroundJob[] | null,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const normalized: MemoryMaintenancePayload = { ...payload, exemptPhases: exemptPhasesOf(payload) };
+  const existing = pending?.find(
+    j => (j.payload as Record<string, unknown>).characterId === payload.characterId
+  );
+  if (existing) {
+    const widened = widenPayload(existing.payload as unknown as MemoryMaintenancePayload, normalized);
+    await getRepositories().backgroundJobs.update(existing.id, { payload: widened as unknown as Record<string, unknown> });
+    existing.payload = widened as unknown as Record<string, unknown>;
+    logger.debug('[Maintenance] Pending job widened to the requested phases', {
+      characterId: payload.characterId,
+      existingJobId: existing.id,
+      phases: widened.phases ?? 'all',
+      exemptPhases: widened.exemptPhases,
+      reason: widened.reason,
+    });
+    return existing.id;
+  }
+  const id = await enqueueJob(
+    userId,
+    'MEMORY_MAINTENANCE',
+    normalized as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  pending?.push({ id, payload: normalized } as unknown as BackgroundJob);
+  return id;
+}
+
+/** The user's PENDING maintenance jobs, or null when they cannot be read. */
+async function findPendingMaintenance(userId: string, characterId?: string): Promise<BackgroundJob[] | null> {
   try {
-    inFlight = await findInFlightHousekeeping(userId);
+    const pending = await getRepositories().backgroundJobs.findByUserId(userId, 'PENDING');
+    return pending.filter(j => j.type === 'MEMORY_MAINTENANCE');
   } catch (error) {
-    logger.warn('[Housekeeping] Failed to check for existing jobs during sweep enqueue', {
-      userId,
+    logger.warn('[Maintenance] Failed to check for pending jobs during enqueue', {
+      characterId,
       error: error instanceof Error ? error.message : String(error),
     });
-    // Fall through to enqueue every character — double work is better than none.
+    // A duplicate run is wasteful, not harmful.
+    return null;
   }
+}
 
-  if (inFlight?.legacyJobId && characters.length > 0) {
-    logger.debug('[Housekeeping] Legacy user-wide job in flight covers the sweep; not enqueuing', {
-      userId,
-      existingJobId: inFlight.legacyJobId,
-      reason: payload.reason ?? 'unknown',
-    });
-    return [inFlight.legacyJobId];
-  }
+/**
+ * Enqueue memory maintenance for one character.
+ *
+ * Dedupe key is the character, whatever the reason (bug 221): a PENDING
+ * maintenance job for the same character absorbs the request — it widens to
+ * the phases asked for and adopts the requested overrides — so the daily
+ * sweep, a watermark run and a manual run collapse into one job. Each phase
+ * keeps its own exemption (`exemptPhases`): a manual request's phases run
+ * whatever the switches say, an automatic request's never do, so merging
+ * the two never lends a scheduled phase the manual exemption.
+ *
+ * A PROCESSING job never absorbs a request: it has already read the corpus
+ * and may be past the phase asked for. A new PENDING job is created instead,
+ * and the handler defers it while the running one finishes, so two runs
+ * never work on one character at once.
+ *
+ * Retry-hostile: a rerun redoes every model call, and the next scheduled or
+ * watermark pass picks up whatever this one left, so attempts default to 1.
+ */
+export async function enqueueMemoryMaintenance(
+  userId: string,
+  payload: MemoryMaintenancePayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const pending = await findPendingMaintenance(userId, payload.characterId);
+  return enqueueMaintenanceAgainst(userId, payload, pending, options);
+}
 
-  const byCharacter = inFlight?.byCharacter ?? new Map<string, string>();
+/**
+ * One maintenance job per listed character, each deduped per character, with
+ * one read of the user's pending jobs for the whole batch. Returns every job
+ * id, new or widened, without duplicates.
+ */
+export async function enqueueMemoryMaintenanceMany(
+  userId: string,
+  characterIds: readonly string[],
+  payload: Omit<MemoryMaintenancePayload, 'characterId'>,
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  const pending = await findPendingMaintenance(userId);
   const ids: string[] = [];
-  for (const character of characters) {
-    let id = byCharacter.get(character.id);
-    if (id) {
-      logger.debug('[Housekeeping] Job already in flight for character; not enqueuing another', {
-        characterId: character.id,
-        existingJobId: id,
-        reason: payload.reason ?? 'unknown',
-      });
-    } else {
-      id = await enqueueHousekeepingJob(userId, { ...payload, characterId: character.id }, options);
-      byCharacter.set(character.id, id);
-    }
+  for (const characterId of characterIds) {
+    const id = await enqueueMaintenanceAgainst(userId, { ...payload, characterId }, pending, options);
     if (id && !ids.includes(id)) ids.push(id);
   }
-  logger.debug('[Housekeeping] User-wide sweep fanned out per character', {
-    userId,
-    reason: payload.reason ?? 'unknown',
-    characters: characters.length,
-    jobs: ids.length,
-  });
   return ids;
 }
 
-/** The housekeeping jobs a user has PENDING or PROCESSING, by what they cover. */
-interface InFlightHousekeeping {
-  /** characterId → id of an in-flight job for that character. */
-  byCharacter: Map<string, string>;
-  /** A legacy user-wide job (no `characterId`) in flight, which covers everyone. */
-  legacyJobId: string | null;
-}
-
-/** Read the user's in-flight housekeeping jobs once. Throws on a read failure. */
-async function findInFlightHousekeeping(userId: string): Promise<InFlightHousekeeping> {
-  const repos = getRepositories();
-  const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-  const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-  const byCharacter = new Map<string, string>();
-  let legacyJobId: string | null = null;
-  for (const job of [...pending, ...processing]) {
-    if (job.type !== 'MEMORY_HOUSEKEEPING') continue;
-    const characterId = (job.payload as Record<string, unknown> | undefined)?.characterId;
-    if (typeof characterId === 'string' && characterId) {
-      if (!byCharacter.has(characterId)) byCharacter.set(characterId, job.id);
-    } else if (characterId === undefined || characterId === null) {
-      legacyJobId ??= job.id;
-    }
-  }
-  return { byCharacter, legacyJobId };
-}
-
-/** Per-character enqueue with the per-character dedupe (bug 221). */
-async function enqueueMemoryHousekeepingForCharacter(
-  userId: string,
-  payload: MemoryHousekeepingPayload & { characterId: string },
-  options?: EnqueueJobOptions
-): Promise<string> {
-  try {
-    const { byCharacter, legacyJobId } = await findInFlightHousekeeping(userId);
-    // Same character, or a legacy user-wide job that sweeps every character.
-    const existingId = byCharacter.get(payload.characterId) ?? legacyJobId;
-    if (existingId) {
-      logger.debug('[Housekeeping] Job already in flight for character; not enqueuing another', {
-        characterId: payload.characterId,
-        existingJobId: existingId,
-        reason: payload.reason ?? 'unknown',
-      });
-      return existingId;
-    }
-  } catch (error) {
-    logger.warn('[Housekeeping] Failed to check for existing jobs during enqueue', {
-      characterId: payload.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through to enqueue anyway — double work is better than none.
-  }
-
-  return enqueueHousekeepingJob(userId, payload, options);
-}
-
 /**
- * Write one housekeeping job, no dedupe lookup — callers have already
- * checked what is in flight.
+ * One maintenance job per live character the user owns (each deduped per
+ * character). Returns every job id, new or widened.
  */
-async function enqueueHousekeepingJob(
+export async function enqueueMemoryMaintenanceForUser(
   userId: string,
-  payload: MemoryHousekeepingPayload & { characterId: string },
+  payload: Omit<MemoryMaintenancePayload, 'characterId'>,
   options?: EnqueueJobOptions
-): Promise<string> {
-  // Housekeeping is retry-hostile: each retry re-runs the whole sweep from
-  // scratch, and a single sweep on a character with tens of thousands of
-  // memories can burn minutes of main-thread time. The daily scheduler
-  // re-enqueues anyway, so we cap attempts at 1 and let failures wait for
-  // the next natural pass rather than thrashing.
-  return enqueueJob(
+): Promise<string[]> {
+  const characters = await getRepositories().characters.findByUserId(userId);
+  const live = characters.filter(c => !c.archivedAt).map(c => c.id);
+  const ids = await enqueueMemoryMaintenanceMany(userId, live, payload, options);
+  logger.debug('[Maintenance] User-wide run fanned out per character', {
     userId,
-    'MEMORY_HOUSEKEEPING',
-    payload as unknown as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
-}
-
-/**
- * Payload for a memory-consolidation job (memory-consolidation-and-tiers.md §C1).
- * One job per character.
- */
-export interface MemoryConsolidationPayload {
-  characterId: string;
-  /** Run clustering and the model calls, write nothing, log the report. */
-  dryRun?: boolean;
-  /** Override `memoryConsolidation.maxClustersPerRun` for this run. */
-  maxClustersPerRun?: number;
-  /**
-   * Override `memoryConsolidation.clusterThreshold` for this run, so a real
-   * run clusters exactly as the dry run that preceded it did (bug 223).
-   */
-  clusterThreshold?: number;
-  /** Why the job was enqueued. Automatic triggers bail when consolidation is disabled. */
-  trigger: 'scheduled' | 'watermark' | 'manual';
-}
-
-/**
- * Enqueue a memory-consolidation job for one character.
- *
- * Dedupes: a PENDING or PROCESSING MEMORY_CONSOLIDATION job for the same
- * character (and the same dry-run flag — a dry run never stands in for a real
- * run, or vice versa) makes this a no-op returning the existing job id.
- *
- * Retry-hostile like housekeeping: a rerun redoes every model call, and the
- * next scheduled or watermark pass picks up whatever this one left, so
- * attempts default to 1.
- */
-export async function enqueueMemoryConsolidation(
-  userId: string,
-  payload: MemoryConsolidationPayload,
-  options?: EnqueueJobOptions
-): Promise<string> {
-  const repos = getRepositories();
-  const dryRun = payload.dryRun === true;
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'MEMORY_CONSOLIDATION') return false;
-      const p = j.payload as Record<string, unknown>;
-      return p.characterId === payload.characterId && (p.dryRun === true) === dryRun;
-    });
-    if (existing) {
-      const existingPayload = existing.payload as Record<string, unknown>;
-      if (
-        payload.clusterThreshold !== undefined &&
-        existingPayload.clusterThreshold !== payload.clusterThreshold
-      ) {
-        if (existing.status === 'PENDING') {
-          // The waiting run takes the threshold the caller asked for, rather
-          // than silently running at another (bug 223).
-          await repos.backgroundJobs.update(existing.id, {
-            payload: { ...existingPayload, clusterThreshold: payload.clusterThreshold },
-          });
-          logger.debug('[Consolidation] Pending job adopts the requested cluster threshold', {
-            characterId: payload.characterId,
-            existingJobId: existing.id,
-            clusterThreshold: payload.clusterThreshold,
-          });
-        } else {
-          logger.warn('[Consolidation] A run is already in progress at another threshold; the requested threshold applies to the next run only if requested again', {
-            characterId: payload.characterId,
-            existingJobId: existing.id,
-            requested: payload.clusterThreshold,
-            inProgress: existingPayload.clusterThreshold ?? 'stored setting',
-          });
-        }
-      }
-      logger.debug('[Consolidation] Job already in flight for character; not enqueuing another', {
-        characterId: payload.characterId,
-        existingJobId: existing.id,
-        trigger: payload.trigger,
-        dryRun,
-      });
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[Consolidation] Failed to check for existing jobs during enqueue', {
-      characterId: payload.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through — a duplicate run is wasteful, not harmful.
-  }
-
-  return enqueueJob(
-    userId,
-    'MEMORY_CONSOLIDATION',
-    payload as unknown as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
+    reason: payload.reason,
+    characters: live.length,
+    jobs: ids.length,
+  });
+  return ids;
 }
 
 /**

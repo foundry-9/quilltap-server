@@ -9,20 +9,22 @@
  *
  * Actions (via ?action= query parameter):
  * - POST ?action=search - Semantic/keyword search (characterId in body)
- * - POST ?action=housekeep - Run memory cleanup synchronously (characterId in body)
- * - POST ?action=housekeep-sweep - Enqueue a background sweep across every character owned by the user
+ * - POST ?action=maintain - Memory maintenance ({ characterId?, phases?, dryRun?, settings? }). A dry run runs in-process and returns the report (`reports` for a user-wide dry run, allowed only for the LLM-free phases); otherwise one MEMORY_MAINTENANCE job per character (or for every character the user owns) is enqueued and `{ jobIds }` returned
+ * - POST ?action=housekeep - The demote and retire phases for one character (characterId, maxMemories?, dryRun? in body): a dry run returns the plan in-process; a live run enqueues a maintenance job and returns { jobId }. Alias kept for the character page's dialog
+ * - POST ?action=housekeep-sweep - Enqueue the demote and retire phases for every character the user owns
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=maintenance-config - Update memory maintenance settings (enabled, per-character cap and overrides; instance-wide). `housekeeping-config` is the old name and still answers.
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
- * - POST ?action=consolidate - Fold clusters of hot memories into digests (characterId, dryRun?, maxClustersPerRun?, clusterThreshold? in body). dryRun runs in-process and returns the report; otherwise enqueues a job and returns { jobId }
+ * - POST ?action=consolidate - The consolidate phase alone (characterId, dryRun?, maxClustersPerRun?, clusterThreshold? in body). dryRun runs in-process and returns the consolidation report; otherwise enqueues a maintenance job and returns { jobId }
  * - POST ?action=consolidation-config - Update consolidation settings (instance-wide)
  * - POST ?action=extraction-mode-config - Update the extraction grain of the OTHER pass (instance-wide)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
  * - POST ?action=anchor-gate-probe - Measure whether the embedded anchor line suppresses gate reinforcement (read-only dev tool; characterId in body)
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
- * - GET ?action=housekeep&characterId= - Get housekeeping preview
+ * - GET ?action=housekeep&characterId= - Preview the demote and retire phases (dry run)
+ * - GET ?action=maintenance-status[&characterId=] - The maintenance ledger: last run per phase, last outcome, last demotion's effectiveness
  * - GET ?action=embeddings&characterId= - Get embedding status
  * - GET ?action=maintenance-config - Read memory maintenance settings (`housekeeping-config` still answers)
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
@@ -44,20 +46,26 @@ import { searchMemories } from '@/lib/memory/recall/search';
 import { generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/index-store/backfill';
 import { admitCandidate, admissionInserted } from '@/lib/memory/admission';
 import { retireChatMemories } from '@/lib/memory/retire';
-import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
+import {
+  runMaintenance,
+  getMaintenanceLedgerStatus,
+  MAINTENANCE_PHASES,
+  type MaintenancePhase,
+  type MaintenanceReport,
+} from '@/lib/memory/maintenance';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
-import { resolveMemoryMaintenance } from '@/lib/memory/settings';
 import { MemoryCandidateSchema, MEMORY_ENTITY_CAP } from '@/lib/memory/candidate';
 import {
   MemoryMaintenanceCapSchema,
   MemoryMaintenanceCapOverridesSchema,
+  MemoryMaintenancePhaseTogglesSchema,
   MEMORY_MAINTENANCE_CAP_MIN,
   MEMORY_MAINTENANCE_CAP_MAX,
 } from '@/lib/schemas/settings.types';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate, enqueueMemoryConsolidation, enqueueMemoryHousekeepingSweep, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryMaintenance, enqueueMemoryMaintenanceForUser, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
 import {
   getMemoryMaintenanceSettings,
   setMemoryMaintenanceSettings,
@@ -70,7 +78,6 @@ import {
   getMemoryExtractionModeSettings,
   setMemoryExtractionModeSettings,
 } from '@/lib/instance-settings';
-import { runConsolidation } from '@/lib/memory/consolidation';
 import { MemoryConsolidationSettingsSchema, MemoryExtractionModeSettingsSchema } from '@/lib/schemas/settings.types';
 import { MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
@@ -120,10 +127,23 @@ const housekeepingOptionsSchema = z.object({
   characterId: z.uuid('Character ID is required'),
   /** The cap for this run; absent, the character's own (override → global). One bound, from the schema. */
   maxMemories: MemoryMaintenanceCapSchema.optional(),
-  maxAgeMonths: z.number().min(1).max(120).optional(),
-  maxInactiveMonths: z.number().min(1).max(120).optional(),
-  minImportance: z.number().min(0).max(1).optional(),
+  // The old age / inactivity / importance knobs are gone (decision 7); Zod strips them.
   dryRun: z.boolean().optional(),
+});
+
+/** `?action=maintain`. */
+const maintainSchema = z.object({
+  /** One character; omitted, every character the user owns (not for a dry run). */
+  characterId: z.uuid().optional(),
+  phases: z.array(z.enum(MAINTENANCE_PHASES)).min(1).optional(),
+  dryRun: z.boolean().optional(),
+  settings: z
+    .object({
+      consolidation: MemoryConsolidationSettingsSchema.partial().optional(),
+      maxClustersPerRun: z.number().int().min(1).max(1000).optional(),
+      cap: MemoryMaintenanceCapSchema.optional(),
+    })
+    .optional(),
 });
 
 const generateEmbeddingsSchema = z.object({
@@ -141,6 +161,7 @@ const rebuildIndexSchema = z.object({
 // overrides too); unknown keys such as the retired merge knobs are stripped.
 const maintenanceConfigSchema = z.object({
   enabled: z.boolean().optional(),
+  phases: MemoryMaintenancePhaseTogglesSchema.partial().optional(),
   perCharacterCap: MemoryMaintenanceCapSchema.optional(),
   perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.optional(),
 });
@@ -162,11 +183,6 @@ const recallConfigSchema = z.object({
 const consolidationConfigSchema = MemoryConsolidationSettingsSchema.partial();
 
 const extractionModeConfigSchema = MemoryExtractionModeSettingsSchema.partial();
-
-/** Dry-run clusters are bounded: each cluster is one model call, in-process. */
-const CONSOLIDATE_DRY_RUN_DEFAULT_CLUSTERS = 10;
-const CONSOLIDATE_DRY_RUN_MAX_CLUSTERS = 40;
-const CONSOLIDATE_DRY_RUN_TIME_BUDGET_MS = 120_000;
 
 const consolidateSchema = z.object({
   characterId: z.uuid('Character ID is required'),
@@ -196,6 +212,7 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
     req,
     {
       housekeep: () => handleHousekeepPreview(req, { user, repos }, characterId),
+      'maintenance-status': () => handleMaintenanceStatus(req, { user, repos }),
       embeddings: () => handleEmbeddingStatus(req, { user, repos }, characterId),
       'maintenance-config': () => handleReadMaintenanceConfig(req, { user, repos }),
       'housekeeping-config': () => handleReadMaintenanceConfig(req, { user, repos }),
@@ -253,6 +270,7 @@ export const POST = createContextHandler(async (req, { user, repos }) =>
     req,
     {
       search: () => handleSearch(req, { user, repos }),
+      maintain: () => handleMaintain(req, { user, repos }),
       housekeep: () => handleHousekeep(req, { user, repos }),
       'housekeep-sweep': () => handleHousekeepSweep(req, { user }),
       embeddings: () => handleGenerateEmbeddings(req, { user, repos }),
@@ -727,6 +745,156 @@ async function handleAnchorGateProbe(
   }
 }
 
+/** In-process dry runs are bounded: each consolidation cluster is one model call. */
+const MAINTAIN_DRY_RUN_DEFAULT_CLUSTERS = 10;
+const MAINTAIN_DRY_RUN_MAX_CLUSTERS = 40;
+const MAINTAIN_DRY_RUN_TIME_BUDGET_MS = 120_000;
+
+async function handleMaintain(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = maintainSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, phases, dryRun, settings } = parsed.data;
+
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+
+  if (dryRun) {
+    // A dry run that may call the model (consolidation) names one character;
+    // the LLM-free phases may dry-run across every character the user owns.
+    const mayCallModel = !phases || phases.includes('consolidate');
+    if (!characterId && mayCallModel) {
+      return badRequest('A dry run that includes consolidation names one character (characterId)');
+    }
+    const maxClustersPerRun = Math.min(
+      settings?.maxClustersPerRun ?? MAINTAIN_DRY_RUN_DEFAULT_CLUSTERS,
+      MAINTAIN_DRY_RUN_MAX_CLUSTERS
+    );
+    const targets: Array<{ id: string }> = characterId
+      ? [{ id: characterId }]
+      : (await repos.characters.findByUserId(user.id)).filter((c: { archivedAt?: string | null }) => !c.archivedAt);
+    logger.debug('[Memories API] Maintenance dry run (in-process)', {
+      characterId: characterId ?? 'all',
+      characters: targets.length,
+      phases: phases ?? 'all',
+      maxClustersPerRun,
+    });
+    try {
+      const reports: MaintenanceReport[] = [];
+      for (const target of targets) {
+        reports.push(
+          await runMaintenance(
+            {
+              characterId: target.id,
+              reason: 'manual',
+              dryRun: true,
+              ...(phases ? { phases } : {}),
+              settings: { ...settings, maxClustersPerRun },
+            },
+            { userId: user.id, timeBudgetMs: MAINTAIN_DRY_RUN_TIME_BUDGET_MS }
+          )
+        );
+      }
+      return NextResponse.json(
+        characterId
+          ? { success: true, dryRun: true, report: reports[0] }
+          : { success: true, dryRun: true, reports }
+      );
+    } catch (error) {
+      logger.error('[Memories API] Maintenance dry run failed', { characterId }, error instanceof Error ? error : undefined);
+      return serverError('Maintenance dry run failed');
+    }
+  }
+
+  try {
+    const payload = {
+      reason: 'manual' as const,
+      ...(phases ? { phases: phases as MaintenancePhase[] } : {}),
+      ...(settings ? { settings } : {}),
+    };
+    const jobIds = characterId
+      ? [await enqueueMemoryMaintenance(user.id, { ...payload, characterId })]
+      : await enqueueMemoryMaintenanceForUser(user.id, payload);
+    logger.info('[Memories API] Maintenance enqueued', { userId: user.id, characterId: characterId ?? 'all', phases: phases ?? 'all', jobs: jobIds.length });
+    return NextResponse.json({ success: true, dryRun: false, jobId: jobIds[0] ?? null, jobIds });
+  } catch (error) {
+    logger.error('[Memories API] Failed to enqueue maintenance', { characterId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to enqueue maintenance');
+  }
+}
+
+async function handleMaintenanceStatus(
+  req: NextRequest,
+  { repos }: { user: { id: string }; repos: any }
+) {
+  const characterId = req.nextUrl.searchParams.get('characterId');
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+  const ledger = await getMaintenanceLedgerStatus(characterId ?? undefined);
+  logger.debug('[Memories API] Maintenance status read', { characterId: characterId ?? 'all', entries: ledger.length });
+  return NextResponse.json({ success: true, ledger });
+}
+
+/** The demote and retire phases, in the old housekeeping result's shape. */
+function housekeepingView(report: MaintenanceReport) {
+  const demote = report.demote;
+  const retire = report.retire;
+  const hotTotal = demote?.hotTotal ?? 0;
+  const demoted = demote?.demoted ?? 0;
+  return {
+    demoted,
+    deleted: retire?.retired ?? 0,
+    kept: hotTotal - demoted,
+    totalBefore: hotTotal,
+    totalAfter: hotTotal - demoted,
+    hotTotal,
+    demotable: demote?.demotable ?? 0,
+    protected: demote?.protected ?? 0,
+    capUsed: demote?.cap ?? 0,
+    demotedIds: demote?.demotedIds ?? [],
+    deletedIds: retire?.retiredIds ?? [],
+    details: [
+      ...(demote?.demotedIds ?? []).map((memoryId) => ({
+        memoryId,
+        action: 'demoted' as const,
+        reason: `Exceeded demotable-memory limit (${demote?.cap})`,
+      })),
+      ...(retire?.retiredIds ?? []).map((memoryId) => ({
+        memoryId,
+        action: 'deleted' as const,
+        reason: `Superseded archive row older than the ${retire?.retentionDays}-day retention window`,
+      })),
+    ],
+  };
+}
+
+/** A dry run of the demote and retire phases (live runs are enqueued). */
+async function runHousekeepingPhases(characterId: string, userId: string, cap: number | undefined, dryRun: true) {
+  return runMaintenance(
+    {
+      characterId,
+      reason: 'manual',
+      dryRun,
+      phases: ['demote', 'retire'],
+      ...(cap !== undefined ? { settings: { cap } } : {}),
+    },
+    { userId }
+  );
+}
+
 async function handleHousekeep(
   req: NextRequest,
   { user, repos }: { user: { id: string }; repos: any }
@@ -738,7 +906,7 @@ async function handleHousekeep(
     return validationError(optionsResult.error);
   }
 
-  const { characterId, ...optionData } = optionsResult.data;
+  const { characterId, maxMemories, dryRun } = optionsResult.data;
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
@@ -746,35 +914,35 @@ async function handleHousekeep(
     return notFound('Character');
   }
 
-  // The manual action honours the character's cap override, as the sweep does.
-  const maintenance = await resolveMemoryMaintenance();
-  const options: HousekeepingOptions = {
-    ...optionData,
-    maxMemories: optionData.maxMemories ?? maintenance.capFor(characterId),
-  };
+  if (!dryRun) {
+    // A live run goes through the queue like every other one, so it never
+    // overlaps a maintenance job already working on this character (bug 221).
+    try {
+      const jobId = await enqueueMemoryMaintenance(user.id, {
+        characterId,
+        reason: 'manual',
+        phases: ['demote', 'retire'],
+        ...(maxMemories !== undefined ? { settings: { cap: maxMemories } } : {}),
+      });
+      logger.info('[Memories API] Demote/retire run enqueued', { characterId, jobId, cap: maxMemories ?? 'configured' });
+      return NextResponse.json({ success: true, dryRun: false, queued: true, jobId });
+    } catch (error) {
+      logger.error('[Memories API] Failed to enqueue demote/retire run', { characterId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to enqueue housekeeping');
+    }
+  }
 
-  // Run housekeeping (or preview if dryRun)
-  const result = options.dryRun
-    ? await getHousekeepingPreview(characterId, options)
-    : await runHousekeeping(characterId, options);
+  // Absent a cap, the preview uses the character's own (override → global), as the sweep does.
+  const report = await runHousekeepingPhases(characterId, user.id, maxMemories, true);
+  const view = housekeepingView(report);
+  const counts = await repos.memories.countCapBreakdown(characterId);
 
   return NextResponse.json({
     success: true,
-    dryRun: !!options.dryRun,
+    dryRun: true,
     result: {
-      demoted: result.demoted,
-      deleted: result.deleted,
-      kept: result.kept,
-      totalBefore: result.totalBefore,
-      totalAfter: result.totalAfter,
-      hotTotal: result.hotTotal,
-      demotable: result.demotable,
-      protected: result.protected,
-      capUsed: result.capUsed,
-      coldCount: result.coldCount,
-      demotedIds: result.demotedIds,
-      deletedIds: result.deletedIds,
-      details: options.dryRun ? result.details : undefined,
+      ...view,
+      coldCount: counts.cold,
     },
   });
 }
@@ -785,8 +953,8 @@ async function handleHousekeepSweep(
 ) {
   try {
     // One job per character, deduped per character (bug 221).
-    const jobIds = await enqueueMemoryHousekeepingSweep(user.id, { reason: 'manual' });
-    logger.info('[Memories API] Enqueued manual housekeeping sweep', {
+    const jobIds = await enqueueMemoryMaintenanceForUser(user.id, { reason: 'manual', phases: ['demote', 'retire'] });
+    logger.info('[Memories API] Enqueued manual demote/retire sweep', {
       userId: user.id,
       jobs: jobIds.length,
     });
@@ -815,49 +983,34 @@ async function handleHousekeepPreview(
     return notFound('Character');
   }
 
-  // Parse options from query params
   const { searchParams } = req.nextUrl;
-  const maintenance = await resolveMemoryMaintenance();
-  const options: HousekeepingOptions = { maxMemories: maintenance.capFor(characterId) };
-
+  let cap: number | undefined;
   if (searchParams.has('maxMemories')) {
-    const cap = MemoryMaintenanceCapSchema.safeParse(Number(searchParams.get('maxMemories')));
-    if (!cap.success) {
+    const parsedCap = MemoryMaintenanceCapSchema.safeParse(Number(searchParams.get('maxMemories')));
+    if (!parsedCap.success) {
       return badRequest(
         `maxMemories must be an integer between ${MEMORY_MAINTENANCE_CAP_MIN} and ${MEMORY_MAINTENANCE_CAP_MAX}`,
       );
     }
-    options.maxMemories = cap.data;
-  }
-  if (searchParams.has('maxAgeMonths')) {
-    const val = parseInt(searchParams.get('maxAgeMonths')!, 10);
-    if (isNaN(val) || val < 1 || val > 1200) {
-      return badRequest('maxAgeMonths must be an integer between 1 and 1200');
-    }
-    options.maxAgeMonths = val;
-  }
-  if (searchParams.has('minImportance')) {
-    const val = parseFloat(searchParams.get('minImportance')!);
-    if (isNaN(val) || val < 0 || val > 1) {
-      return badRequest('minImportance must be a number between 0 and 1');
-    }
-    options.minImportance = val;
+    cap = parsedCap.data;
   }
 
-  const preview = await getHousekeepingPreview(characterId, options);
+  const report = await runHousekeepingPhases(characterId, user.id, cap, true);
+  const view = housekeepingView(report);
+  const counts = await repos.memories.countCapBreakdown(characterId);
 
   return NextResponse.json({
     success: true,
     preview: {
-      wouldDemote: preview.demoted,
-      wouldDelete: preview.deleted,
-      wouldKeep: preview.kept,
-      totalBefore: preview.totalBefore,
-      totalAfter: preview.totalAfter,
-      coldCount: preview.coldCount,
+      wouldDemote: view.demoted,
+      wouldDelete: view.deleted,
+      wouldKeep: view.kept,
+      totalBefore: view.totalBefore,
+      totalAfter: view.totalAfter,
+      coldCount: counts.cold,
       // The cap the preview used: the request's, else the character's configured one.
-      capUsed: preview.capUsed,
-      details: preview.details,
+      capUsed: view.capUsed,
+      details: view.details,
     },
   });
 }
@@ -880,13 +1033,20 @@ async function handleWriteMaintenanceConfig(
     return validationError(parsed.error);
   }
 
-  const settings = await setMemoryMaintenanceSettings(parsed.data);
+  // Per-phase toggles merge into the stored ones, so a card can send one.
+  const { phases, ...rest } = parsed.data;
+  const current = phases ? await getMemoryMaintenanceSettings() : null;
+  const settings = await setMemoryMaintenanceSettings({
+    ...rest,
+    ...(phases && current ? { phases: { ...current.phases, ...phases } } : {}),
+  });
 
   logger.info('[Memories API] Memory maintenance settings updated', {
     userId: user.id,
     enabled: settings.enabled,
     perCharacterCap: settings.perCharacterCap,
     capOverrides: Object.keys(settings.perCharacterCapOverrides).length,
+    phases: settings.phases,
   });
 
   return NextResponse.json({ success: true, settings });
@@ -1027,11 +1187,12 @@ async function handleConsolidate(
   if (!character) {
     return notFound('Character');
   }
+  const consolidation = clusterThreshold !== undefined ? { clusterThreshold } : undefined;
 
   if (dryRun) {
     const maxClusters = Math.min(
-      maxClustersPerRun ?? CONSOLIDATE_DRY_RUN_DEFAULT_CLUSTERS,
-      CONSOLIDATE_DRY_RUN_MAX_CLUSTERS
+      maxClustersPerRun ?? MAINTAIN_DRY_RUN_DEFAULT_CLUSTERS,
+      MAINTAIN_DRY_RUN_MAX_CLUSTERS
     );
     logger.debug('[Memories API] Consolidation dry run (in-process)', {
       characterId,
@@ -1039,15 +1200,21 @@ async function handleConsolidate(
       clusterThreshold,
     });
     try {
-      const report = await runConsolidation(characterId, {
-        dryRun: true,
-        maxClustersPerRun: maxClusters,
-        settings: clusterThreshold !== undefined ? { clusterThreshold } : undefined,
-        userId: user.id,
-        timeBudgetMs: CONSOLIDATE_DRY_RUN_TIME_BUDGET_MS,
-        trigger: 'manual',
-      });
-      return NextResponse.json({ success: true, dryRun: true, report });
+      const report = await runMaintenance(
+        {
+          characterId,
+          reason: 'manual',
+          dryRun: true,
+          phases: ['consolidate'],
+          settings: { maxClustersPerRun: maxClusters, ...(consolidation ? { consolidation } : {}) },
+        },
+        { userId: user.id, timeBudgetMs: MAINTAIN_DRY_RUN_TIME_BUDGET_MS }
+      );
+      if (!report.consolidation) {
+        // The run never reached the phase: the character is archived (or gone).
+        return badRequest(`Consolidation skipped: ${report.skippedReason ?? 'not run'}`);
+      }
+      return NextResponse.json({ success: true, dryRun: true, report: report.consolidation });
     } catch (error) {
       logger.error('[Memories API] Consolidation dry run failed', { characterId }, error instanceof Error ? error : undefined);
       return serverError('Consolidation dry run failed');
@@ -1055,14 +1222,17 @@ async function handleConsolidate(
   }
 
   try {
-    const jobId = await enqueueMemoryConsolidation(user.id, {
+    const jobId = await enqueueMemoryMaintenance(user.id, {
       characterId,
-      maxClustersPerRun,
+      reason: 'manual',
+      phases: ['consolidate', 'mirror'],
       // A real run honours the requested threshold as the dry run does (bug 223).
-      ...(clusterThreshold !== undefined && { clusterThreshold }),
-      trigger: 'manual',
+      settings: {
+        ...(maxClustersPerRun !== undefined ? { maxClustersPerRun } : {}),
+        ...(consolidation ? { consolidation } : {}),
+      },
     });
-    logger.info('[Memories API] Consolidation job enqueued', { characterId, jobId, clusterThreshold });
+    logger.info('[Memories API] Consolidation enqueued as a maintenance job', { characterId, jobId, clusterThreshold });
     return NextResponse.json({ success: true, dryRun: false, jobId });
   } catch (error) {
     logger.error('[Memories API] Failed to enqueue consolidation', { characterId }, error instanceof Error ? error : undefined);

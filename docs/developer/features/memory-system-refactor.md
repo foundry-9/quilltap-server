@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7); Phases F–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7). **Phase F done 2026-10-13** (see the Phase F amendment in §7); Phase G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -1105,6 +1105,86 @@ departures:
   trace in `debugMemoryLogs`, inter-character never repeating an archive row) were not run here;
   `assemble-deliver.test.ts` and the continue-turn test in `context-management.test.ts` cover the
   same paths with mocked providers.
+
+**Amendment (2026-10-13, Phase F).** Phase F landed as §3.9 describes, with these departures:
+
+- **The near-duplicate fold writes in the parent, not in the job's batch.** `applyFold` refuses to
+  run in the child (it cannot read its buffered writes back), and a buffered fold would race
+  admission: a candidate reinforcing a row the batch is about to retire is an observation lost. So
+  the child plans (`planNearDuplicateFolds`, pure) and the parent applies
+  (`applyNearDuplicateFolds`, host-RPC `foldNearDuplicates`) under admission's per-character lock
+  (`withAdmissionLock`), re-reading every row first and skipping any that went cold, MANUAL or
+  missing since planning; absorbed rows are retired only after their survivor took them in. Like
+  admission, these writes commit outside the job's batch. Grouping is survivor-first, not
+  transitive: rows are visited by `protection` descending and each claims the later rows that are
+  near-duplicates *of it*, so A≈B≈C never folds C into A. Rows compare only within a bucket of
+  subject, kind and embedding length, at admission's near-duplicate cosine for the default
+  profile (0.90 neural, 0.80 Built-in TF-IDF, after PR 96).
+- **Consolidation, demotion and retention still write the index from the child** (buffered, as
+  Phase B allowed), so invariant 9's throw still waits. Every phase plans against one corpus read
+  (`MaintenanceCorpus`), kept in step with each earlier phase's plan in dry run and live alike;
+  the only dry/live difference is that a dry-run survivor keeps its old vector where a live fold
+  re-embeds.
+- **The child hands its summary to the parent on the `job-result` message** (a new `result` field;
+  `setJobResult` in the child proxy). The dispatcher records it in the ledger only after the batch
+  commits; the archive invalidation, realtime hints and mirror keep their existing commit hooks,
+  now keyed on `MEMORY_MAINTENANCE`. `invalidateAllFrozenArchives` is no longer reached from a job
+  (every maintenance job names its character).
+- **Which phases run.** Scheduled runs ask for every phase; the job drops what settings forbid. A
+  watermark asks only for what is due: the cap watermark (demotable ≥ 90% of the cap) for fold →
+  demote → retire, the consolidation watermark (unconsidered > `watermark`) for consolidate →
+  mirror. `memoryMaintenance.phases` (`foldNearDuplicates`, `demote`, `retire`, default on) is new:
+  §3.9's "each skippable by settings" needed a setting, and Phase G's card will expose it. It
+  gates every phase a scheduled or watermark request asks for, named or not; a phase asked for by
+  hand (`exemptPhases`, set at enqueue: a manual request's phases, or all of them) runs regardless
+  of it and of the enabled switches (review of PR 97). Consolidation keeps
+  its own `memoryConsolidation.enabled`; `retire` also needs `coldRetentionDays`. A fold now runs
+  automatically whenever maintenance is on (the old dedup tool was manual-only); it never touches
+  MANUAL, digests or cold rows (decision 4).
+- **The near-duplicate fold takes admission's lock one group at a time** (one survivor re-embed),
+  never for the whole phase, and under a job's time budget stops starting groups after 40% of it
+  (`FOLD_BUDGET_SHARE`); the rest are deferred to the next run and consolidation gets what the
+  budget has left (review of PR 97).
+- **The ledger's throttles keep the old values**: cap watermark 90%, 15 minutes between demotions,
+  an hour's backoff after a demotion that moved fewer than max(10, 1% of the excess) — a demotion
+  that found no excess included, as the old outcome cache did — six hours
+  between watermark consolidations. The check itself is debounced to once per character per two
+  minutes (the cap check used to run on every insert, the consolidation check every ten minutes).
+  The ledger lives in parent memory and seeds itself once per process from the last 100
+  `MEMORY_MAINTENANCE` rows, which replaces both durable job-table throttles.
+- **Dedupe.** One job per character whatever the reason. A pending job widens to the union of the
+  phases asked for (an unscoped job stays unscoped) and of the hand-asked `exemptPhases`, and merges
+  `settings` (bug 223's threshold); merging a manual request never lends a scheduled phase its
+  exemption. A running job never absorbs a request (it has read the corpus and may be past the
+  phase): a new pending job is made, and the handler defers it two minutes, re-enqueued, while
+  another run for the character is PROCESSING. A user-wide fan-out and the daily sweep read each
+  owner's pending jobs once (review of PR 97). A live `?action=housekeep` enqueues rather than
+  writing in-process, so nothing demotes beside a running job. Dry runs are
+  never enqueued: they run in-process (the API, bounded as the consolidate dry run was), so the
+  dedupe never needs a dry-run flag.
+- **Retire** is planned from the corpus and is AUTO-only, as §3.9 says; the old SQL took any
+  non-MANUAL row, so a superseded cold digest is no longer retention's to delete.
+  `findExpiredColdIds` is removed.
+- **Surfaces moved forward from Phase G where this phase needed them.** `POST ?action=maintain`
+  (dry run user-wide only for the LLM-free phases) and `GET ?action=maintenance-status` landed
+  here, because the acceptance names a dry run of the phases and the ledger in
+  `quilltap memories status`; the CLI's status reads the ledger from the server and the job rows
+  from the database. The dedup tool's deletion took `system/tools?action=memory-dedup` with it, so
+  its card now previews and enqueues the fold phase through `maintain` (no threshold slider). The
+  character page's dialog lost the three dropped knobs. `housekeep`, `housekeep-sweep` and
+  `consolidate` remain as aliases over `runMaintenance`; the one Maintenance card, `maintain` in
+  the CLI and the merged help page stay with Phase G.
+- **Self canon** for the self bucket now includes `Commonplace/Self.md`
+  (`loadCanonForSelfWithCommonplace`), as §3.9 asks.
+- Migration `drop-housekeeping-consolidation-jobs-v1` deletes rows of the two retired job types,
+  which would otherwise fail to parse.
+- **Not run in this environment:** the V4test acceptance walk (dry run listing phases and counts,
+  a real over-cap run demoting `demotable − cap`, `quilltap memories status`, the forced failure
+  leaving no `Commonplace/*.md`). `run-maintenance.test.ts` and `ledger-and-triggers.test.ts`
+  cover the same paths with mocked I/O; the failure is forced with
+  `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN=1` (honoured outside production only), and the dispatcher suite pins that a failed batch
+  writes no mirror and records nothing in the ledger. Friday's first run should still be a dry run
+  reviewed by Charlie (§8).
 
 ## 8. Risks
 

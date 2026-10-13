@@ -149,6 +149,17 @@ export const MemoryMaintenanceCapSchema = z
 export const MemoryMaintenanceCapOverridesSchema = z.record(z.string(), MemoryMaintenanceCapSchema);
 export type MemoryMaintenanceCapOverrides = z.infer<typeof MemoryMaintenanceCapOverridesSchema>;
 
+/** Per-phase switches for the memory maintenance job. */
+export const MemoryMaintenancePhaseTogglesSchema = z.object({
+  /** Fold near-duplicate AUTO rows into one survivor (LLM-free). */
+  foldNearDuplicates: z.boolean().default(true),
+  /** Send the lowest-protection demotable rows cold when over the cap. */
+  demote: z.boolean().default(true),
+  /** Delete superseded cold rows past `coldRetentionDays`. */
+  retire: z.boolean().default(true),
+});
+export type MemoryMaintenancePhaseToggles = z.infer<typeof MemoryMaintenancePhaseTogglesSchema>;
+
 /**
  * Memory maintenance (formerly per-user `chat_settings.autoHousekeepingSettings`,
  * moved by `move-memory-maintenance-settings-v1`). Stored under
@@ -163,6 +174,14 @@ export const MemoryMaintenanceSettingsSchema = z.object({
   perCharacterCap: MemoryMaintenanceCapSchema.default(2000),
   /** Per-character cap overrides keyed by characterId. */
   perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.default({}),
+  /**
+   * Which of the maintenance job's own phases run when nobody asked for them
+   * by hand: every phase of a scheduled or watermark request (named or not).
+   * A phase a manual request asks for runs regardless. Consolidation has its own
+   * switch (`memoryConsolidation.enabled`); the Commonplace mirror always
+   * follows consolidation; retirement also needs `coldRetentionDays`.
+   */
+  phases: MemoryMaintenancePhaseTogglesSchema.prefault({}),
 });
 
 export type MemoryMaintenanceSettings = z.infer<typeof MemoryMaintenanceSettingsSchema>;

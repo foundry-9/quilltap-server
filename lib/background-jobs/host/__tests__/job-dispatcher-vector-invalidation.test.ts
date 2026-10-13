@@ -126,7 +126,7 @@ describe('applyWritesUnsafe — memory-index invalidation after commit', () => {
 
   it('a batch of only memories.bulkDeleteUnsafe(charA) reloads charA', async () => {
     jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
-    await applyWritesUnsafe('job-1', [{ method: 'memories.bulkDeleteUnsafe', args: ['charA', ['m1']] }], 'MEMORY_HOUSEKEEPING');
+    await applyWritesUnsafe('job-1', [{ method: 'memories.bulkDeleteUnsafe', args: ['charA', ['m1']] }], 'MEMORY_MAINTENANCE');
     expect(vectorNotifications()).toEqual(['charA']);
     await new Promise((r) => setImmediate(r));
     expect(reload).toHaveBeenCalledWith('charA');
@@ -142,7 +142,7 @@ describe('applyWritesUnsafe — memory-index invalidation after commit', () => {
         { method: 'memories.bulkDeleteUnsafe', args: ['charA', ['m3']] },
         { method: 'chats.update', args: ['chat-1', {}] },
       ],
-      'MEMORY_HOUSEKEEPING',
+      'MEMORY_MAINTENANCE',
     );
     await new Promise((r) => setImmediate(r));
     expect(reload).toHaveBeenCalledTimes(2);
@@ -159,7 +159,7 @@ describe('applyWritesUnsafe — memory-index invalidation after commit', () => {
         { method: 'memories.bulkDeleteUnsafe', args: ['charA', ['m1']] },
         { method: 'memories.update', args: ['m9', { tier: 'cold' }] },
       ],
-      'MEMORY_HOUSEKEEPING',
+      'MEMORY_MAINTENANCE',
     );
     // The owner was read before the batch committed.
     const firstPrepare = db.prepare.mock.invocationCallOrder[0];
@@ -178,7 +178,7 @@ describe('applyWritesUnsafe — memory-index invalidation after commit', () => {
     db.prepare('INSERT INTO memories (id, characterId) VALUES (?, ?)').run('m9', 'charB');
     jest.mocked(getRawDatabase).mockReturnValue(db as never);
     try {
-      await applyWritesUnsafe('job-6', [{ method: 'memories.update', args: ['m9', { tier: 'cold' }] }], 'MEMORY_HOUSEKEEPING');
+      await applyWritesUnsafe('job-6', [{ method: 'memories.update', args: ['m9', { tier: 'cold' }] }], 'MEMORY_MAINTENANCE');
       expect(vectorNotifications()).toEqual(['charB']);
       await new Promise((r) => setImmediate(r));
       expect(reload).toHaveBeenCalledWith('charB');

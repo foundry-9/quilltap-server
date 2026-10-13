@@ -33,7 +33,7 @@ import {
   renderCommonplaceFile,
   COMMONPLACE_FILE_TOKEN_BUDGET,
 } from '../commonplace-file'
-import { characterIdsFromMemoryWrites } from '../consolidation-triggers'
+import { characterIdsFromMemoryWrites } from '../maintenance/triggers'
 import { estimateTokens } from '@/lib/tokens/token-counter'
 
 const mockRead = readVaultTextFile as jest.MockedFunction<typeof readVaultTextFile>

@@ -32,7 +32,7 @@ quilltap memories find     [filters] [--in summary|content|both] <pattern>  # Su
 quilltap memories grep     [filters] [-i] [-l] [--max N] [--context N] <pattern>  # Pattern + snippets
 quilltap memories show     <id|prefix> [--depth N] [--no-related]        # Full record + neighbours
 quilltap memories tree     <id|prefix> [--depth N] [--max-nodes N]       # ASCII walk of the graph
-quilltap memories status   [--character <name|id>]                       # Per-holder rollup
+quilltap memories status   [--character <name|id>] [--port <n>]          # Per-holder rollup + maintenance ledger
 quilltap memories validate [--character <name|id>] [--list]              # Read-only health check
 quilltap memories consolidate --character <name|id> [--dry-run] [--max N] [--threshold X]  # Ask the running server to consolidate
 ```
@@ -175,9 +175,12 @@ abc12345  (imp 0.85)  "Charles prefers concrete examples over abstractions..."
 quilltap memories status                          # every holder with memories
 quilltap memories status --character Ariadne      # one holder
 quilltap memories status --json                   # structured
+quilltap memories status --port 3001              # ask a server on another port for the ledger
 ```
 
-Each holder block reports total counts, the AUTO/MANUAL split, the active / archived / digest split, the about-distribution (self-referential vs. inter-character vs. legacy-null), embedding presence, several graph statistics (nodes with links, isolated nodes, average and maximum degree), and a top-five list ranked by reinforced importance.
+Each holder block reports total counts, the AUTO/MANUAL split, the active / archived / digest split, the about-distribution (self-referential vs. inter-character vs. legacy-null), embedding presence, several graph statistics (nodes with links, isolated nodes, average and maximum degree), a *Maintenance* section, and a top-five list ranked by reinforced importance.
+
+The *Maintenance* section comes from two places. The running server keeps a ledger of each character's maintenance rounds — when each step (fold, consolidate, demote, retire, mirror) last ran and why, and whether the last demotion actually made a dent in the excess — and `status` asks it for that ledger (on `--port`, default 3000) for a second and a half before giving up politely. Whether or not the server answers, the section also lists the character's three most recent `MEMORY_MAINTENANCE` jobs from the database, with their state, reason, steps and any error.
 
 The `dangling edges` count is worth its weight. Since `relatedMemoryIds` is a JSON array of UUIDs rather than a foreign key constraint, a deleted memory could once leave stale pointers in its former neighbours. The deletion chokepoint introduced in version 4.5 scrubs neighbours' arrays whenever a memory is removed, and the `repair-dangling-related-memory-edges` migration swept up the historical drift. The `dangling edges` value should now sit at zero forever; if it climbs, run `validate` (see below) for the offending IDs.
 

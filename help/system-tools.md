@@ -54,32 +54,32 @@ For detailed instructions, see [Backup & Restore](system-backup-restore.md).
 
 For detailed instructions, see [Import & Export Data](system-import-export.md).
 
-### 3. Memory Deduplication
+### 3. Near-Duplicate Folding
 
-**Purpose:** Find and merge semantically duplicate memories across all your characters.
+**Purpose:** Fold extracted memories that say the same thing into one, across all your characters. (It lives on the Commonplace Book tab; it is the first step of the memory maintenance round, run on its own.)
 
 **What it does:**
 
-- Analyzes all character memories using cosine similarity on their embeddings
-- Clusters duplicate memories and selects the best version to keep
-- Extracts unique details from duplicates and preserves them as footnotes in surviving memories
-- Removes duplicate memories and cleans up the vector store
-- Provides a preview before making any changes
-- Leaves alone your hand-written (**MANUAL**) memories, consolidated digests, and anything already in the archive (the cold tier) — it folds only the hot, automatically extracted entries, so a digest is never pulled from under the members that point to it. The preview's **Kept aside** column counts them for each character
+- Compares each character's active, automatically extracted memories by their embeddings, and gathers those that are at least 0.90 alike (0.80 under the Built-in profile, whose measure runs lower), about the same person, of the same kind and from the same occasion (a week apart is a different occasion)
+- Keeps the sturdiest of each set — the one the protection score most wants to keep — and folds the others into it: any detail they add becomes a footnote, their reinforcement counts are added on, their links carried over
+- Retires the folded memories and cleans their vectors out of the index
+- Leaves alone your hand-written (**MANUAL**) memories, consolidated digests, and anything already in the archive (the cold tier)
+- Consults no model; it is plain arithmetic, so the preview is quick and costs nothing
 
 **How to use it:**
 
-1. Adjust the **Similarity Threshold** slider (default 0.80). Lower values are more aggressive (find more duplicates), higher values are more conservative.
-2. Click **Analyze Memories** to see a preview of what would be deduplicated.
-3. Review the per-character results table showing clusters found, removable memories, and details to merge.
-4. Click **Run Deduplication** to execute the cleanup, or **Cancel** to abort.
+1. Click **Analyze Memories** to preview, for every character, how many memories are eligible, how many sets were found and how many memories would be folded.
+2. Click **Fold Repetitions** to send one maintenance job per character to do it in the background, or **Cancel** to abort.
+
+The old similarity slider is gone: the threshold is the one the house already uses when a new memory arrives, so nothing is folded here that would not have been folded at the door.
 
 **When to use it:**
 
 - After importing large character exports that may contain duplicates
-- Periodically to keep memory databases clean and efficient
-- When characters have accumulated many similar memories over time
+- Before switching on memory housekeeping for the first time on an instance with a long history
 - After changing embedding providers (which may cause duplicate entries)
+
+When memory housekeeping is switched on, this step also runs on its own in every maintenance round.
 
 ### 4. Tasks Queue
 

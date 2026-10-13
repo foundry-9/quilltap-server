@@ -32,7 +32,7 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
 }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/background-jobs/host/processor-host', () => ({ patchChildMemoryIndex: jest.fn() }))
-jest.mock('@/lib/memory/consolidation-triggers', () => ({ maybeEnqueueConsolidationForCharacters: jest.fn(async () => []) }))
+jest.mock('@/lib/memory/maintenance/triggers', () => ({ maybeEnqueueMaintenance: jest.fn(async () => []) }))
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/instance-settings', () => ({ getMemoryMaintenanceSettings: jest.fn(async () => ({ enabled: false })) }))
 jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({ callHost: jest.fn() }))

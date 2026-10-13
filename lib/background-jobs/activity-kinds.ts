@@ -40,8 +40,7 @@ export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> =
   MEMORY_EXTRACTION: 'memory',
   MEMORY_REGENERATE_CHAT: 'memory',
   MEMORY_REGENERATE_ALL: 'memory',
-  MEMORY_HOUSEKEEPING: 'memory',
-  MEMORY_CONSOLIDATION: 'memory',
+  MEMORY_MAINTENANCE: 'memory',
   CARINA_MEMORY_EXTRACTION: 'memory',
 
   // ── Emb ──────────────────────────────────────────────────────────────────

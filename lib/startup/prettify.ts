@@ -166,6 +166,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-memory-extraction-cursors-v1': 'Gathering every chronicle’s bookmarks into one drawer…',
   'drop-inter-character-memory-jobs-v1': 'Dismissing a clerk who had nothing left to file…',
   'add-tfidf-text-shape-version-v1': 'Noting which edition of the word-ledger each index was drawn from…',
+  'drop-housekeeping-consolidation-jobs-v1': 'Retiring two charwomen in favour of one capable housekeeper…',
   'add-chat-scenario-source-v1': "Noting where each chat's scene was found",
   'add-episode-extraction-watermark-v1': 'Slipping a bookmark into each chronicle, lest old chapters be retold…',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',

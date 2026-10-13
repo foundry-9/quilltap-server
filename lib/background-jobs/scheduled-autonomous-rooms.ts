@@ -6,7 +6,7 @@
  * handler (`handlers/autonomous-room-schedule-tick.ts`) so DB reads + writes
  * follow the project's child-process write-buffering pattern.
  *
- * Mirrors the existing scheduled-cleanup / scheduled-housekeeping shape.
+ * Mirrors the existing scheduled-cleanup / memory-maintenance scheduler shape.
  */
 
 import { logger } from '@/lib/logger';

@@ -71,7 +71,6 @@ const indexMock = jest.requireMock('@/lib/memory/index-store') as {
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock<any> }
 
 const retire = require('@/lib/memory/retire') as typeof import('@/lib/memory/retire')
-const outcomeCache = require('@/lib/memory/housekeeping-outcome-cache') as typeof import('@/lib/memory/housekeeping-outcome-cache')
 const injector = require('@/lib/memory/recall/assemble') as typeof import('@/lib/memory/recall/assemble')
 
 const EMBEDDING = new Float32Array([0.6, 0.8])
@@ -216,12 +215,5 @@ describe('F8 — retireMemories count', () => {
     setupBatch(1)
     const { retired } = await retire.retireMemories(['a', 'b', 'c'], { reason: 'message-cascade' })
     expect(retired).toBe(2)
-  })
-})
-
-describe('F8 — housekeeping outcome cache', () => {
-  it('a non-finite deleted count still arms the ineffective-sweep backoff', () => {
-    outcomeCache.recordHousekeepingOutcome('char-nan', Number.NaN, 5013, 5000)
-    expect(outcomeCache.shouldSkipWatermarkSweep('char-nan')).toBe(true)
   })
 })

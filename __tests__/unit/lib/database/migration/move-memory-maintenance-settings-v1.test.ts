@@ -97,8 +97,9 @@ describe('move-memory-maintenance-settings-v1', () => {
 
     const stored = JSON.parse(instanceValue('memoryMaintenance')!)
     expect(stored).toEqual({ enabled: true, perCharacterCap: 10000, perCharacterCapOverrides: { 'char-a': 2500 } })
-    // The stored value is one the schema accepts as is.
-    expect(MemoryMaintenanceSettingsSchema.parse(stored)).toEqual(stored)
+    // The stored value is one the schema accepts as is (later keys, such as
+    // the Phase F per-phase toggles, fill from their defaults).
+    expect(MemoryMaintenanceSettingsSchema.parse(stored)).toMatchObject(stored)
     expect(instanceValue('memoryExtractionConcurrency')).toBeUndefined()
     expect(columns()).toEqual(['id', 'userId', 'timezone', 'updatedAt'])
     expect(await migration.shouldRun()).toBe(false)

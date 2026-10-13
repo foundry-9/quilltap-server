@@ -103,6 +103,12 @@ export interface ChildJobResultMessage {
   jobId: string;
   ok: boolean;
   writes: ChildWritePayload[];
+  /**
+   * What the handler handed back (`setJobResult`), for the parent's commit
+   * hooks — the maintenance job's summary, which the parent records in its
+   * ledger once the batch has landed. Absent for most jobs.
+   */
+  result?: unknown;
   error?: { message: string; stack?: string };
 }
 
@@ -157,6 +163,9 @@ export interface ChildShutdownAckMessage {
  *     embeds, the parent searches, decides and writes against the real rows
  *   - `countRecentAdmissions` — the extraction rate limit's read of the
  *     parent's ledger of recent admissions (`admission/rate-ledger.ts`)
+ *   - `foldNearDuplicates` — maintenance's near-duplicate fold
+ *     (`applyNearDuplicateFolds`): the child plans, the parent folds under
+ *     admission's per-character lock and retires the folded rows
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -180,7 +189,8 @@ export interface ChildHostRpcRequestMessage {
     | 'removeConversationSummariesFromVaults'
     | 'startScheduledAutonomousRun'
     | 'admitMemory'
-    | 'countRecentAdmissions';
+    | 'countRecentAdmissions'
+    | 'foldNearDuplicates';
   args: unknown[];
 }
 

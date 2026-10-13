@@ -13,8 +13,9 @@
  *   - **Job runs** (the forked child): the child writes no vault files. The
  *     parent's dispatcher calls {@link mirrorCommonplaceAfterCommit} once the
  *     job's write batch has committed; a failed batch never reaches it.
- *   - **In-process runs** (the parent): `runConsolidation` commits as it goes,
- *     then calls {@link mirrorCommonplaceForSubjects} itself.
+ *   - **In-process runs** (the parent): `runMaintenance` commits as it goes,
+ *     then calls {@link mirrorCommonplaceForSubjects} itself in its `mirror`
+ *     phase.
  *
  * Parent-only. Called in the job child it does nothing and says so.
  *
@@ -45,7 +46,7 @@ export interface CommittedMemoryWrite {
 }
 
 /** The job types whose committed batch can change a Commonplace mirror. */
-const MIRRORING_JOB_TYPES = new Set<string>(['MEMORY_CONSOLIDATION'])
+const MIRRORING_JOB_TYPES = new Set<string>(['MEMORY_MAINTENANCE'])
 
 function isJobChild(): boolean {
   return process.env.QUILLTAP_JOB_CHILD === '1'
@@ -197,7 +198,7 @@ export async function mirrorCommonplaceForSubjects(
 }
 
 /**
- * Dispatcher commit hook: once a consolidation job's batch has committed,
+ * Dispatcher commit hook: once a maintenance job's batch has committed,
  * mirror every bucket it touched. Never throws.
  */
 export async function mirrorCommonplaceAfterCommit(
@@ -210,7 +211,7 @@ export async function mirrorCommonplaceAfterCommit(
   try {
     const touched = await subjectsTouchedByWrites(writes)
     if (touched.size === 0) {
-      log.debug('Committed consolidation batch touched no mirrored bucket', { jobType })
+      log.debug('Committed maintenance batch touched no mirrored bucket', { jobType })
       return
     }
     const updatedAt = new Date().toISOString()
@@ -247,8 +248,8 @@ export function memoryIdsDeletedByWrites(writes: readonly CommittedMemoryWrite[]
 /**
  * The holders and subject buckets of the digests a write batch is about to
  * delete. Must run **before** the batch commits — a deleted row cannot be
- * read afterwards. Any job type counts: a digest deleted by a housekeeping
- * sweep or a dedup merge leaves its bucket's mirror as stale as one deleted by
+ * read afterwards. Any job type counts: a digest deleted by a chat wipe or a
+ * retention sweep leaves its bucket's mirror as stale as one revised by
  * consolidation. Never throws; a failed read resolves nothing.
  */
 export async function digestBucketsDeletedByWrites(

@@ -23,16 +23,17 @@
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
  * a write transaction on the raw mount-index DB. The forked job child runs
  * against a readonly connection with buffered writes and cannot do that. So
- * there is no `MAINTENANCE` job type, no child handler, and no queue row — this
- * runs inline on the parent (the only DB writer), exactly like the LLM-log
- * cleanup and memory-housekeeping schedulers.
+ * there is no job type, no child handler, and no queue row — this runs inline
+ * on the parent (the only DB writer), like the LLM-log cleanup. (Memory
+ * maintenance is the opposite case: `lib/memory/maintenance/scheduler.ts`
+ * enqueues `MEMORY_MAINTENANCE` jobs that run in the child.)
  *
  * ## Dev-restart friendliness
  * These are in-process `setInterval` timers, not durable cron: "daily" means
  * "24h after process start." The startup tick is deferred by a 5-minute grace
  * and short-circuits if a successful sweep ran within the last 20h, so frequent
- * `npm run dev` restarts don't re-sweep on every boot. Unlike the housekeeping
- * scheduler (which peeks recent job rows), this tick has no job rows, so it
+ * `npm run dev` restarts don't re-sweep on every boot. Unlike the memory
+ * maintenance scheduler (which peeks recent job rows), this tick has no job rows, so it
  * reads/writes `lastMaintenanceSweepAt` in `instance_settings` instead. The
  * 24h interval fires regardless of the startup short-circuit.
  */

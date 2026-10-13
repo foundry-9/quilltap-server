@@ -3,9 +3,9 @@
  *
  * Covers the predicate, the chat wipe (`retireChatMemories` — `retireMemories`
  * under `keep: 'manual'`, behind `DELETE /memories?chatId=` and
- * `MEMORY_REGENERATE_CHAT`) and the near-duplicate folding tool
- * (`deduplicateCharacterMemories`), both running through the real
- * `retireMemories` against mocked repositories.
+ * `MEMORY_REGENERATE_CHAT`) and maintenance's near-duplicate fold
+ * (`planNearDuplicateFolds` / `applyNearDuplicateFolds`), both running through
+ * the real `retireMemories` against mocked repositories.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals'
@@ -39,9 +39,21 @@ jest.mock('@/lib/memory/commonplace-mirror', () => ({
   mirrorCommonplaceForSubjects: jest.fn(async () => 0),
 }))
 
-jest.mock('@/lib/memory/admission', () => ({
+jest.mock('@/lib/memory/admission/fold', () => ({
   foldInto: jest.fn(() => ({ footnotes: [] })),
-  applyFold: jest.fn(async (survivor: { characterId: string }) => ({ characterId: survivor.characterId, relatedMemoryIds: [] })),
+  FOLD_CAPS: {},
+}))
+
+jest.mock('@/lib/memory/admission/apply', () => ({
+  applyFold: jest.fn(async (survivor: { id: string; characterId: string }) => ({ ...survivor, relatedMemoryIds: [] })),
+}))
+
+jest.mock('@/lib/memory/admission/admit', () => ({
+  withAdmissionLock: jest.fn(async (_c: string, fn: () => Promise<unknown>) => fn()),
+}))
+
+jest.mock('@/lib/background-jobs/host/processor-host', () => ({
+  notifyChild: jest.fn(),
 }))
 
 jest.mock('@/lib/memory/recall/archive', () => ({
@@ -60,7 +72,8 @@ jest.mock('@/lib/logger', () => ({
 
 import { policyProtectionOf, partitionByPolicyProtection } from '@/lib/memory/policy-protection'
 import { retireChatMemories } from '@/lib/memory/retire'
-import { deduplicateCharacterMemories } from '@/lib/tools/memory-dedup'
+import { planNearDuplicateFolds, applyNearDuplicateFolds } from '@/lib/memory/maintenance/fold-near-duplicates'
+import { ADMISSION_THRESHOLDS } from '@/lib/memory/settings-defaults'
 import { getRepositories } from '@/lib/repositories/factory'
 import { rawQuery } from '@/lib/database/manager'
 import type { Memory } from '@/lib/schemas/types'
@@ -230,10 +243,12 @@ describe('retireChatMemories (bug 201)', () => {
   })
 })
 
-describe('deduplicateCharacterMemories (bug 201)', () => {
+describe('near-duplicate folding (bug 201)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
+
+  const NOW = Date.parse('2026-10-13T00:00:00.000Z')
 
   it('never folds a MANUAL row, a digest or a cold row, however similar', async () => {
     // Identical embeddings: every row is a duplicate of every other.
@@ -244,18 +259,20 @@ describe('deduplicateCharacterMemories (bug 201)', () => {
       row('digest', { source: 'CONSOLIDATED', importance: 1 }),
       row('cold', { tier: 'cold', supersededById: 'digest' }),
     ]
-    const bulkDeleteUnsafe = installRepos(all, { findByCharacterId: jest.fn(async () => all) })
+    const bulkDeleteUnsafe = installRepos(all, {
+      findByIds: jest.fn(async (ids: string[]) => all.filter(m => ids.includes(m.id))),
+    })
 
-    const result = await deduplicateCharacterMemories('char-1', 'Friday', 0.8, false)
+    const plan = await planNearDuplicateFolds(all, ADMISSION_THRESHOLDS, NOW)
+    expect(plan.eligible).toBe(2)
+    expect(plan.groups).toEqual([{ survivorId: 'auto-1', absorbedIds: ['auto-2'], minCosine: expect.any(Number) }])
 
-    expect(result.originalCount).toBe(5)
-    expect(result.clustersFound).toBe(1)
-    expect(result.memoriesInClusters).toBe(2)
+    const applied = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1' })
+
     expect(bulkDeleteUnsafe).toHaveBeenCalledTimes(1)
-    const [, deletedIds] = bulkDeleteUnsafe.mock.calls[0]
-    expect(deletedIds).toHaveLength(1)
-    expect(['auto-1', 'auto-2']).toContain(deletedIds[0])
-    expect(result.finalCount).toBe(4)
+    expect(bulkDeleteUnsafe.mock.calls[0][1]).toEqual(['auto-2'])
+    expect(applied.retiredIds).toEqual(['auto-2'])
+    expect(applied.survivors.map(m => m.id)).toEqual(['auto-1'])
   })
 
   it('finds nothing to fold when fewer than two rows are eligible', async () => {
@@ -264,12 +281,45 @@ describe('deduplicateCharacterMemories (bug 201)', () => {
       row('manual', { source: 'MANUAL' }),
       row('digest', { source: 'CONSOLIDATED' }),
     ]
-    const bulkDeleteUnsafe = installRepos(all, { findByCharacterId: jest.fn(async () => all) })
+    const plan = await planNearDuplicateFolds(all, ADMISSION_THRESHOLDS, NOW)
+    expect(plan.groups).toEqual([])
+  })
 
-    const result = await deduplicateCharacterMemories('char-1', 'Friday', 0.8, false)
+  it('takes admission\'s lock one group at a time and stops at the deadline', async () => {
+    const { withAdmissionLock } = jest.requireMock('@/lib/memory/admission/admit') as { withAdmissionLock: jest.Mock }
+    const v = (x: number) => new Float32Array([x, 1, 0])
+    const all = [
+      row('a1', { importance: 0.9, embedding: v(0) }),
+      row('a2', { embedding: v(0) }),
+      row('b1', { importance: 0.9, embedding: new Float32Array([0, 0, 1]), aboutCharacterId: 'other' }),
+      row('b2', { embedding: new Float32Array([0, 0, 1]), aboutCharacterId: 'other' }),
+    ]
+    installRepos(all, { findByIds: jest.fn(async (ids: string[]) => all.filter(m => ids.includes(m.id))) })
+    const plan = await planNearDuplicateFolds(all, ADMISSION_THRESHOLDS, NOW)
+    expect(plan.groups).toHaveLength(2)
 
-    expect(result.clustersFound).toBe(0)
-    expect(result.finalCount).toBe(3)
+    const both = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1' })
+    expect(withAdmissionLock).toHaveBeenCalledTimes(2)
+    expect(both.retiredIds.sort()).toEqual(['a2', 'b2'])
+
+    withAdmissionLock.mockClear()
+    const late = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1', deadlineAt: Date.now() - 1 })
+    expect(withAdmissionLock).not.toHaveBeenCalled()
+    expect(late).toMatchObject({ groupsDeferred: 2, retiredIds: [], survivors: [] })
+  })
+
+  it('skips a group whose rows went cold or MANUAL after planning, and retires nothing for it', async () => {
+    const planned = [row('auto-1', { importance: 0.9 }), row('auto-2')]
+    const plan = await planNearDuplicateFolds(planned, ADMISSION_THRESHOLDS, NOW)
+    // Between planning and applying, the absorbed row was demoted.
+    const now = [planned[0], row('auto-2', { tier: 'cold' })]
+    const bulkDeleteUnsafe = installRepos(now, {
+      findByIds: jest.fn(async (ids: string[]) => now.filter(m => ids.includes(m.id))),
+    })
+
+    const applied = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1' })
+
+    expect(applied.groupsFailed).toBe(1)
     expect(bulkDeleteUnsafe).not.toHaveBeenCalled()
   })
 })

@@ -36,19 +36,14 @@ function job(type: string, payload: Record<string, unknown>): BackgroundJob {
 describe('invalidateFrozenArchivesForCompletedJob', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('drops the swept character after a single-character sweep', async () => {
-    await invalidateFrozenArchivesForCompletedJob(job('MEMORY_HOUSEKEEPING', { characterId: 'char-1' }));
+  it('drops the maintained character after a maintenance run', async () => {
+    await invalidateFrozenArchivesForCompletedJob(job('MEMORY_MAINTENANCE', { characterId: 'char-1', reason: 'scheduled' }));
     expect(invalidateFrozenArchive).toHaveBeenCalledWith('char-1');
     expect(invalidateAllFrozenArchives).not.toHaveBeenCalled();
   });
 
-  it('drops everything after a user-wide sweep', async () => {
-    await invalidateFrozenArchivesForCompletedJob(job('MEMORY_HOUSEKEEPING', { reason: 'scheduled' }));
-    expect(invalidateAllFrozenArchives).toHaveBeenCalledTimes(1);
-  });
-
-  it('leaves the cache alone for a dry run', async () => {
-    await invalidateFrozenArchivesForCompletedJob(job('MEMORY_HOUSEKEEPING', { characterId: 'char-1', dryRun: true }));
+  it('every maintenance job names its character; one without does nothing', async () => {
+    await invalidateFrozenArchivesForCompletedJob(job('MEMORY_MAINTENANCE', { reason: 'scheduled' }));
     expect(invalidateFrozenArchive).not.toHaveBeenCalled();
     expect(invalidateAllFrozenArchives).not.toHaveBeenCalled();
   });

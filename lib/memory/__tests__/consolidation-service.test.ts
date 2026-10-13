@@ -1,5 +1,7 @@
 /**
- * runConsolidation end to end with the I/O mocked (memory-consolidation-and-tiers.md §C3–C6).
+ * The consolidate phase end to end with the I/O mocked
+ * (memory-consolidation-and-tiers.md §C3–C6), driven through `runMaintenance`
+ * with the consolidate and mirror phases (memory refactor §3.9).
  */
 
 jest.mock('@/lib/logger', () => {
@@ -13,7 +15,18 @@ jest.mock('@/lib/logger', () => {
   return { logger: makeLogger() }
 })
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/instance-settings', () => ({ getMemoryConsolidationSettings: jest.fn() }))
+jest.mock('@/lib/instance-settings', () => ({
+  getMemoryConsolidationSettings: jest.fn(),
+  getMemoryMaintenanceSettings: jest.fn(async () => ({
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    phases: { foldNearDuplicates: true, demote: true, retire: true },
+  })),
+  getMemoryExtractionLimits: jest.fn(async () => ({})),
+  getMemoryExtractionModeSettings: jest.fn(async () => ({})),
+  getMemoryRecallSettings: jest.fn(async () => ({})),
+}))
 jest.mock('@/lib/embedding/embedding-service', () => ({
   __esModule: true,
   EmbeddingError: class EmbeddingError extends Error {},
@@ -52,7 +65,8 @@ jest.mock('../cheap-llm-tasks/consolidation-tasks', () => ({
   consolidateMemoryCluster: jest.fn(),
 }))
 
-import { runConsolidation } from '../consolidation'
+import { runMaintenance } from '../maintenance/run'
+import type { RunConsolidationOptions, ConsolidationReport } from '../consolidation'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
@@ -190,7 +204,19 @@ afterAll(() => {
   delete process.env.QUILLTAP_JOB_CHILD
 })
 
-describe('runConsolidation', () => {
+/** One run of the consolidate (and mirror) phases; the consolidation report and the run's. */
+async function runConsolidation(
+  characterId: string,
+  opts: Pick<RunConsolidationOptions, 'dryRun' | 'now' | 'timeBudgetMs'> = {},
+): Promise<ConsolidationReport & { run: Awaited<ReturnType<typeof runMaintenance>> }> {
+  const run = await runMaintenance(
+    { characterId, reason: 'manual', phases: ['consolidate', 'mirror'], dryRun: opts.dryRun },
+    { now: opts.now, timeBudgetMs: opts.timeBudgetMs },
+  )
+  return { ...(run.consolidation as ConsolidationReport), run }
+}
+
+describe('the consolidate phase', () => {
   it('dry run: clusters, calls the model, reports — and writes nothing', async () => {
     const report = await runConsolidation(HOLDER, { dryRun: true, now: NOW })
 
@@ -252,7 +278,7 @@ describe('runConsolidation', () => {
 
     // In-process: the writes have landed, so the mirror is written from them.
     expect(mirrorCommonplaceForSubjects).toHaveBeenCalledWith(HOLDER, [LAURA], NOW.toISOString())
-    expect(report.stats.mirrorFilesWritten).toBe(1)
+    expect(report.run.mirror).toEqual({ subjects: [LAURA], filesWritten: 1, deferredToCommit: false })
     expect(report.stats.digestsCreated).toBe(1)
     expect(report.stats.membersSuperseded).toBe(2)
     expect(report.clusters[0].status).toBe('written')
@@ -263,7 +289,7 @@ describe('runConsolidation', () => {
     const report = await runConsolidation(HOLDER, { now: NOW })
     expect(repos.memories.create).toHaveBeenCalledTimes(1) // buffered in a real child
     expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
-    expect(report.stats.mirrorFilesWritten).toBe(0)
+    expect(report.run.mirror).toEqual({ subjects: [LAURA], filesWritten: 0, deferredToCommit: true })
   })
 
   it('bug 211: a cold row demoted with no successor re-enters as a candidate and is superseded', async () => {
@@ -314,8 +340,9 @@ describe('runConsolidation', () => {
 
   it('leaves archived characters alone', async () => {
     repos.characters.findByIdRaw.mockResolvedValue({ id: HOLDER, name: 'Friday', userId: 'user-1', archivedAt: '2026-09-01T00:00:00.000Z' })
-    const report = await runConsolidation(HOLDER, { now: NOW })
-    expect(report.skippedReason).toBe('archived')
+    const run = await runMaintenance({ characterId: HOLDER, reason: 'manual', phases: ['consolidate'] }, { now: NOW })
+    expect(run.skippedReason).toBe('archived')
+    expect(run.consolidation).toBeUndefined()
     expect(repos.memories.findByCharacterIdInBatches).not.toHaveBeenCalled()
     expect(consolidateMemoryCluster).not.toHaveBeenCalled()
   })
