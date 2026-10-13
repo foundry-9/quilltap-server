@@ -71,12 +71,6 @@ function estimateTokensForJob(job: BackgroundJob): number {
       const assistantMsgTokens = Math.ceil((payload.assistantMessage?.length || 0) / 4);
       return baseTokens + userMsgTokens + assistantMsgTokens + 300;
     }
-    case 'INTER_CHARACTER_MEMORY': {
-      const payload = job.payload as { userMessage?: string; assistantMessage?: string };
-      const userMsgTokens = Math.ceil((payload.userMessage?.length || 0) / 4);
-      const assistantMsgTokens = Math.ceil((payload.assistantMessage?.length || 0) / 4);
-      return baseTokens + userMsgTokens + assistantMsgTokens + 400;
-    }
     case 'CONTEXT_SUMMARY': {
       return baseTokens + 2000;
     }
@@ -110,7 +104,6 @@ function estimateTokensForJob(job: BackgroundJob): number {
 function getJobTypeName(type: string): string {
   const typeNames: Record<string, string> = {
     MEMORY_EXTRACTION: 'Memory Extraction',
-    INTER_CHARACTER_MEMORY: 'Character Memory',
     CONTEXT_SUMMARY: 'Context Summary',
     TITLE_UPDATE: 'Title Update',
     LLM_LOG_CLEANUP: 'LLM Log Cleanup',

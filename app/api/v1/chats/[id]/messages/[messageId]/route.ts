@@ -34,7 +34,6 @@ import {
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from '@/lib/services/chat-message/memory-trigger.service';
-import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import {
   saveImageToAlbum,
   SaveImageToAlbumError,
@@ -188,16 +187,14 @@ async function handleResolveExternalTurn(
     }
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings?.cheapLLMSettings,
-      conciergePolicy,
-      isDangerousChat: chat.isDangerousChat === true,
     };
 
-    // Fire-and-forget post-response triggers. Memory extraction is gated to
-    // the user's turn inside the helper, so multi-character courier chains
-    // remain consistent with the streaming finalizer's behavior.
+    // Fire-and-forget post-response triggers. Every Courier reply enqueues
+    // extraction for the turn it closes; the queue dedupes a turn's repeat
+    // enqueues on (chat, opener, anchor), so a multi-character Courier chain
+    // still extracts each turn once.
     if (connectionProfile) {
       void triggerTurnMemoryExtraction(repos, {
         chatId: id,

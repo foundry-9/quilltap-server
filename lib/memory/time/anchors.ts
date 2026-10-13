@@ -3,14 +3,15 @@
  * `when` phrase into the `occurredAt` / `narrativeTime` pair stamped on a
  * memory row.
  *
- * Shared by the per-turn extractor (`memory-processor.ts`, where the phrase
- * is resolved against the source turn's timestamp and falls back to the same
- * stamp) and the fold-episode pass (`fold-episode-pass.ts`, where it is
- * resolved against the window's newest message but falls back to its oldest).
+ * Called once, by the extraction pass runner (`lib/memory/extraction/run.ts`),
+ * with the anchors each pass names: the turn passes resolve against the source
+ * message's timestamp and fall back to the same stamp; the fold passes resolve
+ * against the stretch's newest message (the episode pass falling back to its
+ * oldest).
  * Pure: no I/O, no clock — callers supply every timestamp.
  *
  * Kept apart from `clock.ts` so it reaches `resolveWhenPhrase` through the
- * module boundary (the fold-pass suite substitutes that parser).
+ * module boundary (a suite can substitute that parser).
  *
  * @module memory/time/anchors
  */

@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7); Phases D–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7); Phases E–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -985,6 +985,67 @@ departures:
   `MemoryServiceOptions`; `memory-gate.ts` is deleted outright (`extractNovelDetails` moved to
   `admission/novel-details.ts`, the threshold constants to the façade's `ADMISSION_THRESHOLDS`
   only). The Memories API answers `action` with the action kind (`insert`, `reinforce`, …).
+
+**Amendment (2026-10-13, Phase D).** Phase D landed as §3.7 describes, with these departures:
+
+- **The pass interface is shaped by calls, not by `window`/`prompt`/`parse` triples.** An
+  `ExtractionPass` says which cheap-LLM calls it makes over a `TranscriptWindow` (`calls(ctx,
+  window)`); each `PassCall` carries its holders, its messages and its own `parse(raw)` into
+  `DraftBatch`es (holders, subject, drafts, pass floor, source message, time anchors). `runPass`
+  owns the rest for every pass: rate limit → `executeCheapLLMTask` → parse (the pass's cap) →
+  floor → `candidateFromDraft` → event time → `admitCandidate`. The episode pass's fragment
+  linking is its `afterBatch` hook. Every parser yields `MemoryDraft`s (the episode parser too:
+  narrative → content, episodic, targeting past/narrow/history), so every pass reaches
+  `MemoryCandidateSchema` through one `candidateFromDraft`.
+- **Turn passes have no cursor.** A turn is addressed by its opener (and, in autonomous rooms, its
+  closing anchor) — `TurnLocator`, listed by `listExtractionTurns`, the one scan that replaces the
+  five opener scans. Only the fold passes keep cursors, so the cursor table's `pass` is
+  `'other-fold' | 'episode-fold'`.
+- **Both watermark columns move.** The migration backfills `other-fold` *and* `episode-fold`
+  (from `episodeExtractionWatermarkMessageId`, which Phase 0's bug 207 fix had added) and drops
+  both. Exports and backups keep carrying the two field names on the chat; import and restore
+  remap them with the messages and write them to the table (`extraction/cursor-bundle.ts`), so old
+  and new bundles read the same way. A second migration, `drop-inter-character-memory-jobs-v1`,
+  deletes queued rows of the retired job type, which would otherwise fail to parse.
+- **`createdAt` is the source message's time on every extraction path, not the wall clock.** §3.7
+  says "the write clock". Taken literally that would date every regenerated memory to the
+  regenerate, which resets salience and protection's age term for a whole rebuilt corpus — a recall
+  change outside this phase's remit (decision 14). What is uniform now is the rule: the fold OTHER
+  pass (which used now) and the episode pass (which used the event date) use their source
+  message, like the turn passes, and the turn passes use each slice's own last message rather than
+  the turn's latest. `occurredAt` remains the event.
+- **The rate limiter's memory lives in the parent.** "Counts admissions it saw" needs a count that
+  outlives one unit of work, or the per-hour cap means nothing. Admission (already in the parent)
+  records each AUTO insert in an in-memory ledger (`admission/rate-ledger.ts`); a context reads it
+  once per character (host-RPC `countRecentAdmissions` from the child) and adds its own inserts as
+  they land. A restart forgets the hour. Rebuilds of history (regenerate, queue-memories, import,
+  the dry run) carry `backfill: true`: the limit is off for them and their inserts are not counted.
+  A fold slice whose calls would all be skipped is deferred unread (cursor left before it), never
+  passed over (review of PR 94). The limit now also applies to the episode pass, and a
+  rate-limited character remains a subject of others' OTHER calls (the limit stops a holder gaining
+  memories, not others observing them).
+- **The route honours the global default cheap profile** (`buildCheapLLMConfig`). Of the three
+  config builders only the context summary's did; extraction now resolves the same way.
+- **Caps.** `passCap(base, maxTokens) = max(1, min(base, ceil(maxTokens / 8000)))` with base 2 for
+  the turn passes, `foldCandidatesPerSubject` for `other-fold`. The episode pass keeps
+  `FOLD_EPISODE_CAP` (2) without the budget clamp: it is per stretch, not per subject, and the
+  spec names only the fold OTHER cap. On a default profile (8,000 output tokens) the fold OTHER cap
+  falls from 3 to 1 per subject (plus the event slot). Kept on review of PR 94 (Charlie). Watch this
+  against the V4test acceptance count; raise the clamp's divisor in a tuning commit if the fold pass
+  goes too quiet.
+- **The dry run embeds.** `admitCandidate({ dryRun: true })` embeds the candidate, gathers its
+  neighbours and decides, writing nothing (`decideOnly`), so `memory-diff` reports decisions; a dry
+  run therefore costs embedding calls. A whole-chat dry run decides as a regenerate would: past the
+  rows the chat wipe would retire (`previewChatWipe`) and against its own would-be inserts (the
+  parent-side `DryRunBook`), so a later near-duplicate reinforces an earlier candidate (review of
+  PR 94). Invariant 10's test pins equality given the same admission decisions.
+- **Regenerate enqueues the episode catch-up at once** and anchored turn jobs for autonomous rooms
+  (smell 29); queue-memories and the dry run resolve the connection profile from the chat's seats
+  first (smells 27, 28).
+- **Not run in this environment:** the V4test acceptance walk (room-turn candidate count,
+  `memory-diff` on an autonomous chat, regenerate coverage). The new tests cover the same paths
+  with mocked models: `run-pass-invariants.test.ts`, `admission-dry-run.test.ts`,
+  `fold-cursor-slicing.test.ts`, `context-and-carina.test.ts` and the migration's integration test.
 
 ## 8. Risks
 

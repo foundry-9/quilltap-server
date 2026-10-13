@@ -1,62 +1,55 @@
 /**
  * Chats API v1 - Memory Actions
  *
- * - queue-memories: enqueues one per-turn MEMORY_EXTRACTION job for every
- *   USER message in the chat. Each job rebuilds the turn transcript at
- *   execution time and runs user / self / inter-character extraction passes.
+ * - queue-memories: enqueues one MEMORY_EXTRACTION turn job for every turn of
+ *   the chat (`listExtractionTurns`). Each job rebuilds its turn transcript at
+ *   execution time and runs the turn passes.
  *
- * - extract-memories-dry-run: walks every USER turn inline, runs the same
- *   per-turn extraction passes with `dryRun: true`, and streams NDJSON
- *   progress to the client. Nothing is persisted — used by the
- *   `quilltap memory-diff` developer tool to compare current vs proposed
- *   extraction without touching the database.
+ * - extract-memories-dry-run: runs the chat through the extraction pipeline
+ *   with `dryRun: true` (`runExtractionDryRun`) — every turn, then both fold
+ *   passes over the history a regenerate would rebuild — and streams NDJSON
+ *   progress. Nothing is written; admission decides and reports. Used by the
+ *   `quilltap memory-diff` developer tool.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs';
-import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import {
-  buildTurnTranscript,
-  resolveUserCharacterParticipant,
-} from '@/lib/services/chat-message/turn-transcript';
-import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
-import { getMemoryExtractionLimits } from '@/lib/instance-settings';
-import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
+  buildExtractionContext,
+  ExtractionContextError,
+  pickExtractionConnectionProfileId,
+  runExtractionDryRun,
+  toExtractedCandidate,
+} from '@/lib/memory/extraction';
+import { listExtractionTurns, loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript';
 import type { RequestContext } from '@/lib/api/middleware';
-import type {
-  Character,
-  ChatMetadata,
-  MessageEvent,
-} from '@/lib/schemas/types';
+import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 
 /**
- * Resolve the cheap-LLM connection profile id the user has configured for
- * memory extraction. Returns null when no valid profile is configured.
+ * The connection profile a chat's extraction runs against — the same one the
+ * live pipeline uses: an LLM seat's profile, else any seat's. A chat with no
+ * seat profile falls back to the user's configured cheap profile. Null when
+ * neither exists.
  */
-async function resolveCheapLLMProfileId(
+async function resolveExtractionProfileId(
+  chat: ChatMetadata,
   ctx: RequestContext,
 ): Promise<string | null> {
+  const seatProfileId = pickExtractionConnectionProfileId(chat);
+  if (seatProfileId) return seatProfileId;
+
   const { user, repos } = ctx;
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  const cheapLLMSettings = chatSettings?.cheapLLMSettings;
-
-  if (cheapLLMSettings?.defaultCheapProfileId) {
-    const profile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId);
-    if (profile && profile.userId === user.id) {
-      return cheapLLMSettings.defaultCheapProfileId;
-    }
+  const cheapLLMSettings = (await repos.chatSettings.findByUserId(user.id))?.cheapLLMSettings;
+  for (const id of [
+    cheapLLMSettings?.defaultCheapProfileId,
+    cheapLLMSettings?.strategy === 'USER_DEFINED' ? cheapLLMSettings.userDefinedProfileId : null,
+  ]) {
+    if (!id) continue;
+    const profile = await repos.connections.findById(id);
+    if (profile && profile.userId === user.id) return id;
   }
-
-  if (cheapLLMSettings?.strategy === 'USER_DEFINED' && cheapLLMSettings?.userDefinedProfileId) {
-    const profile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId);
-    if (profile && profile.userId === user.id) {
-      return cheapLLMSettings.userDefinedProfileId;
-    }
-  }
-
   return null;
 }
 
@@ -76,55 +69,22 @@ export async function handleQueueMemories(
   ctx: RequestContext,
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
-  const connectionProfileId = await resolveCheapLLMProfileId(ctx);
+  const connectionProfileId = await resolveExtractionProfileId(chat, ctx);
 
   if (!connectionProfileId) {
-    logger.warn('[Chats v1] No valid cheap LLM configured', { userId: user.id });
-    return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+    logger.warn('[Chats v1] No connection profile for memory extraction', { userId: user.id, chatId });
+    return badRequest('No connection profile available for memory extraction. Give a seat a profile or set a cheap LLM profile in settings.');
   }
 
-  // Salon chats: walk forward and enqueue one job per non-system USER
-  // message. Each job covers the turn that opens at that user message —
-  // the handler walks forward from there until the next USER to assemble
-  // the transcript.
-  //
-  // Autonomous chats: there is no USER role in history, so we enqueue one
-  // job per non-system, non-silent ASSISTANT message and pass that message
-  // ID as the dedupe anchor. Each job's transcript walks from the start of
-  // history through that anchor (matching the live autonomous trigger),
-  // and the anchor keeps each job's dedupe key distinct.
-  const messages = await repos.chats.getMessages(chatId);
+  const messages = await loadChatMessageEvents(chatId);
   const isAutonomous = chat.chatType === 'autonomous';
-  const batchEntries: Array<{ turnOpenerMessageId: string | null; extractionAnchorMessageId?: string | null }> = [];
-
-  if (isAutonomous) {
-    for (const m of messages) {
-      if (m.type !== 'message') continue;
-      const event = m as unknown as MessageEvent;
-      if (event.role !== 'ASSISTANT') continue;
-      if (event.systemSender) continue;
-      if (event.isSilentMessage) continue;
-      if (!event.participantId) continue;
-      batchEntries.push({
-        turnOpenerMessageId: null,
-        extractionAnchorMessageId: event.id,
-      });
-    }
-  } else {
-    for (const m of messages) {
-      if (m.type !== 'message') continue;
-      const event = m as unknown as MessageEvent;
-      if (event.role !== 'USER') continue;
-      if (event.systemSender) continue;
-      batchEntries.push({ turnOpenerMessageId: event.id });
-    }
-  }
+  const batchEntries = listExtractionTurns(messages, chat.chatType);
 
   if (batchEntries.length === 0) {
     return badRequest(
       isAutonomous
         ? 'No assistant messages found in this chat — nothing to extract memories from.'
-        : 'No user messages found in this chat — nothing to extract memories from.',
+        : 'No messages found in this chat — nothing to extract memories from.',
     );
   }
 
@@ -153,16 +113,22 @@ export async function handleQueueMemories(
 }
 
 /**
- * Run the per-turn extraction pipeline against an existing chat without
- * persisting anything, streaming NDJSON progress events to the client.
+ * Run the chat through the extraction pipeline without writing anything,
+ * streaming NDJSON progress events to the client.
  *
  * Wire format (one JSON object per line):
- *   { "type": "start", "chatId": "...", "turnCount": N }
+ *   { "type": "start", "chatId": "...", "turnCount": N, "concurrency": C }
+ *   { "type": "candidate", "turnIndex": i, ...ExtractedCandidate }
  *   { "type": "turn", "index": i, "total": N, "sourceMessageId": "...",
  *     "candidatesAdded": K, "debugLogs": [...] }
- *   { "type": "candidate", "turnIndex": i, ...ExtractedCandidate }
  *   { "type": "turn-error", "index": i, "error": "..." }
+ *   { "type": "candidate", "turnIndex": null, "foldPass": "other-fold", ...ExtractedCandidate }
+ *   { "type": "fold", "pass": "other-fold" | "episode-fold", "slices": S,
+ *     "skippedReason": null, "candidatesAdded": K, "debugLogs": [...] }
  *   { "type": "done", "totalCandidates": M }
+ *
+ * Each candidate carries `extractionPass` (its provenance) and `decision`
+ * (what admission would do: insert, reinforce, absorb, …).
  *
  * No auth scoping beyond the route's existing authenticated middleware —
  * Quilltap is single-user per instance and this is a developer tool.
@@ -173,11 +139,11 @@ export async function handleExtractMemoriesDryRun(
   chat: ChatMetadata,
   ctx: RequestContext,
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
-  const connectionProfileId = await resolveCheapLLMProfileId(ctx);
+  const { user } = ctx;
+  const connectionProfileId = await resolveExtractionProfileId(chat, ctx);
 
   if (!connectionProfileId) {
-    return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+    return badRequest('No connection profile available for memory extraction. Give a seat a profile or set a cheap LLM profile in settings.');
   }
 
   // Bounded turn-parallelism. Defaults to 4: enough to give a noticeable
@@ -194,70 +160,21 @@ export async function handleExtractMemoriesDryRun(
     concurrency = Math.min(parsed, 32);
   }
 
-  const connectionProfile = await repos.connections.findById(connectionProfileId);
-  if (!connectionProfile) {
-    return badRequest(`Cheap LLM connection profile not found: ${connectionProfileId}`);
+  // The live pipeline's own context, in dry-run mode: same profile, same
+  // route, same clock, same project and summary, autonomous rooms included.
+  let extraction;
+  try {
+    extraction = await buildExtractionContext(chatId, user.id, { chat, connectionProfileId, dryRun: true, backfill: true });
+  } catch (error) {
+    if (error instanceof ExtractionContextError) return badRequest(error.message);
+    throw error;
   }
-
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  if (!chatSettings) {
-    return badRequest('Chat settings not found.');
-  }
-
-  const allRawMessages = await repos.chats.getMessages(chatId);
-  const messageEvents = allRawMessages.filter(
-    (m): m is MessageEvent => m.type === 'message',
-  ) as unknown as MessageEvent[];
-
-  const participantCharacters = new Map<string, Character>();
-  for (const participant of chat.participants) {
-    if (participant.type === 'CHARACTER' && participant.characterId) {
-      const character = await repos.characters.findById(participant.characterId);
-      if (character) {
-        participantCharacters.set(participant.characterId, character);
-      }
-    }
-  }
-
-  const userCharacter = resolveUserCharacterParticipant(chat.participants, participantCharacters);
-
-  const turnOpenerIds: string[] = [];
-  for (const event of messageEvents) {
-    if (event.role !== 'USER') continue;
-    if (event.systemSender) continue;
-    turnOpenerIds.push(event.id);
-  }
-
-  if (turnOpenerIds.length === 0) {
-    return badRequest('No user messages found in this chat — nothing to extract memories from.');
-  }
-
-  const availableProfiles = await repos.connections.findByUserId(user.id);
-  // Pass the chat so its Concierge state shapes the policy (only an
-  // Unmoderated chat routes direct), and derive the dangerous flag through the
-  // canonical accessor — otherwise a flagged Moderated or Locked chat would
-  // still reroute memory extraction to the uncensored provider.
-  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
-  const isDangerousChat = shouldUseUncensoredRoute(chat);
-  const memoryExtractionLimits = await getMemoryExtractionLimits();
-
-  // The live per-turn handler and the Carina handler both hand the extractor
-  // the chat's project and running summary; the preview must send the same
-  // prompt or it previews a different extraction (bug 230).
-  const projectId = chat.projectId ?? null;
-  const projectDescription = await loadExtractionProjectDescription(projectId, {
-    chatId,
-    context: 'dry-run',
-  });
-  const chatContextSummary = chat.contextSummary ?? null;
 
   logger.info('[Chats v1] Streaming dry-run memory extraction', {
     chatId,
-    turnCount: turnOpenerIds.length,
     concurrency,
-    projectId,
-    hasProjectDescription: projectDescription !== null,
-    hasContextSummary: chatContextSummary !== null,
+    connectionProfileId,
+    projectId: extraction.project.id,
   });
 
   const encoder = new TextEncoder();
@@ -290,106 +207,46 @@ export async function handleExtractMemoriesDryRun(
       }, 5000);
 
       try {
-        send({ type: 'start', chatId, turnCount: turnOpenerIds.length, concurrency });
-
-        let totalCandidates = 0;
-
-        // Process a single turn. The body is identical to the previous
-        // serial loop body — extracting it into a function lets the worker
-        // pool below pull turns concurrently without duplicating logic.
-        const processTurn = async (i: number): Promise<void> => {
-          const turnOpenerMessageId = turnOpenerIds[i];
-          try {
-            const transcript = buildTurnTranscript(
-              messageEvents,
-              chat.participants,
-              participantCharacters,
-              {
-                turnOpenerMessageId,
-                userCharacterId: userCharacter?.id,
-                userCharacterName: userCharacter?.name,
-                userCharacterPronouns: userCharacter?.pronouns ?? null,
-              },
-            );
-
-            if (transcript.characterSlices.length === 0) {
+        let turnCount = 0;
+        const { candidates } = await runExtractionDryRun(extraction, {
+          concurrency,
+          hooks: {
+            isCancelled: () => closed,
+            onStart: (count) => {
+              turnCount = count;
+              send({ type: 'start', chatId, turnCount: count, concurrency });
+            },
+            onTurn: (index, total, result) => {
+              const turnCandidates = result.admitted.map(toExtractedCandidate);
+              for (const candidate of turnCandidates) send({ type: 'candidate', turnIndex: index, ...candidate });
               send({
                 type: 'turn',
-                index: i,
-                total: turnOpenerIds.length,
-                sourceMessageId: turnOpenerMessageId,
-                candidatesAdded: 0,
-                debugLogs: ['[Memory] Turn has no character contributions — skipped'],
+                index,
+                total,
+                sourceMessageId: result.sourceMessageId,
+                candidatesAdded: turnCandidates.length,
+                debugLogs: result.debugLogs,
               });
-              return;
-            }
-
-            const result = await processTurnForMemory({
-              transcript,
-              participantCharacters,
-              chatId,
-              userId: user.id,
-              connectionProfile,
-              cheapLLMSettings: chatSettings.cheapLLMSettings,
-              availableProfiles,
-              conciergePolicy,
-              isDangerousChat,
-              memoryExtractionLimits,
-              timelineMode: chat.timelineMode ?? 'realtime',
-              projectId,
-              projectDescription,
-              chatContextSummary,
-              dryRun: true,
-            });
-
-            if (closed) return;
-            const candidates = result.extractedCandidates ?? [];
-            for (const candidate of candidates) {
-              send({ type: 'candidate', turnIndex: i, ...candidate });
-            }
-            totalCandidates += candidates.length;
-
-            send({
-              type: 'turn',
-              index: i,
-              total: turnOpenerIds.length,
-              sourceMessageId: result.sourceMessageId,
-              candidatesAdded: candidates.length,
-              debugLogs: result.debugLogs,
-            });
-          } catch (err) {
-            if (closed) return;
-            const message = err instanceof Error ? err.message : String(err);
-            logger.warn('[Chats v1] Dry-run turn failed', { chatId, turnOpenerMessageId, error: message });
-            send({
-              type: 'turn-error',
-              index: i,
-              total: turnOpenerIds.length,
-              sourceMessageId: turnOpenerMessageId,
-              error: message,
-            });
-          }
-        };
-
-        // Worker pool: `concurrency` parallel pullers share a cursor over
-        // turnOpenerIds. Each worker grabs the next index, awaits its turn,
-        // then loops. Settles when the cursor is exhausted (or `closed`
-        // flips). NDJSON output is interleaved across turns; the CLI sorts
-        // by `index` when assembling the final extracted.json so this is
-        // safe for the diff workflow.
-        let nextIndex = 0;
-        const worker = async (): Promise<void> => {
-          while (!closed) {
-            const i = nextIndex++;
-            if (i >= turnOpenerIds.length) return;
-            await processTurn(i);
-          }
-        };
-
-        const workerCount = Math.min(concurrency, turnOpenerIds.length);
-        await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-        if (!closed) send({ type: 'done', totalCandidates });
+            },
+            onTurnError: (index, total, sourceMessageId, error) => {
+              send({ type: 'turn-error', index, total, sourceMessageId, error });
+            },
+            onFold: (pass, result) => {
+              const foldCandidates = result.admitted.map(toExtractedCandidate);
+              for (const candidate of foldCandidates) send({ type: 'candidate', turnIndex: null, foldPass: pass, ...candidate });
+              send({
+                type: 'fold',
+                pass,
+                slices: result.slices,
+                skippedReason: result.skippedReason ?? null,
+                candidatesAdded: foldCandidates.length,
+                debugLogs: result.debugLogs,
+              });
+            },
+          },
+        });
+        logger.debug('[Chats v1] Dry-run stream finished', { chatId, turnCount, candidates });
+        if (!closed) send({ type: 'done', totalCandidates: candidates });
       } catch (err) {
         if (!closed) {
           const message = err instanceof Error ? err.message : String(err);

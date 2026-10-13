@@ -18,7 +18,7 @@
  */
 
 import { buildTurnTranscript, type TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
-import type { OtherSubjectInput } from '@/lib/memory/cheap-llm-tasks/memory-tasks'
+import type { OtherSubjectInput } from '@/lib/memory/extraction'
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 
 function userMsg(id: string, participantId: string, content: string): MessageEvent {

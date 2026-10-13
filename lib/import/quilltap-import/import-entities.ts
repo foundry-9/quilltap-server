@@ -7,6 +7,7 @@
  * @module import/quilltap-import/import-entities
  */
 
+import { takeBundleCursors, restoreBundleCursors } from '@/lib/memory/extraction/cursor-bundle';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
@@ -412,9 +413,13 @@ export async function importChats(
       // between a stale bundle and the bug coming back.
       // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
       // the chat's three-state posture is derived from it here.
-      const cleaned = withConciergeModeFromLegacy(
-        stripScenarioSeededSummary(reminted ? { ...chatData, ...reminted.chatPatch } : chatData)
+      // The fold passes' cursors travel on the chat under their legacy names
+      // (already remapped to the new message ids); they are written once the
+      // chat exists.
+      const { chat: bundledChat, cursors } = takeBundleCursors(
+        reminted ? { ...chatData, ...reminted.chatPatch } : chatData
       );
+      const cleaned = withConciergeModeFromLegacy(stripScenarioSeededSummary(bundledChat));
       const createData = keepsSourceIds
         ? { ...cleaned, id: chat.id }
         : isDuplicate
@@ -423,6 +428,7 @@ export async function importChats(
       const createOptions = keepsSourceIds ? getPreserveIdsCreateOptions(chat.id, options) : undefined;
       const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);
+      await restoreBundleCursors(newChat.id, cursors);
 
       messages += await addImportedMessages(newChat.id, chat, reminted, idMaps, repos, warnings);
 

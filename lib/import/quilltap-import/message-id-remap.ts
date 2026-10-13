@@ -17,8 +17,9 @@
  *   exactly as `?action=rebuild-summary` does, so the ordinary cadence
  *   refolds rather than trusting a summary with a partial anchor set.
  * - `chat.otherExtractionWatermarkMessageId` /
- *   `chat.episodeExtractionWatermarkMessageId` — nulled when unresolvable,
- *   which simply lets the next fold-grain pass catch up.
+ *   `chat.episodeExtractionWatermarkMessageId` (the bundle's carriage of the
+ *   fold passes' cursors) — nulled when unresolvable, which simply lets the
+ *   next fold-grain pass catch up.
  * - `chat.courierCheckpoints[*].lastResolvedMessageId` — a checkpoint whose
  *   message is gone (or that cannot be read) is dropped, so the next Courier
  *   turn sends full context.
@@ -32,19 +33,22 @@
 import { randomUUID } from 'crypto';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import type { IdMappingState } from './types';
+import { BUNDLE_CURSOR_FIELDS, type BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 
 const SWIPE_PREFIX = 'swipe-';
 
 type MessageRefFields =
   | 'summaryAnchorMessageIds'
-  | 'otherExtractionWatermarkMessageId'
-  | 'episodeExtractionWatermarkMessageId'
   | 'courierCheckpoints'
   | 'contextSummary'
   | 'lastSummaryTurn';
 
-/** The chat-row fields that name messages, rewritten for the new ids. */
-export type ChatMessageRefPatch = Partial<Pick<ChatMetadata, MessageRefFields>>;
+/**
+ * The chat-row fields that name messages, rewritten for the new ids — plus the
+ * fold passes' cursors, which a bundle carries on the chat under their legacy
+ * field names (`lib/memory/extraction/cursor-bundle.ts`).
+ */
+export type ChatMessageRefPatch = Partial<Pick<ChatMetadata, MessageRefFields>> & BundleCursorFields;
 
 export interface RemintedChatMessages {
   /** The bundle's messages, each under a fresh id. Order is preserved. */
@@ -90,7 +94,7 @@ function readJsonObject(value: unknown): Record<string, unknown> | null {
  * database.
  */
 export function remintChatMessageIds(
-  chat: Partial<Pick<ChatMetadata, MessageRefFields>>,
+  chat: Partial<Pick<ChatMetadata, MessageRefFields>> & BundleCursorFields,
   messages: MessageEvent[],
   mintId: () => string = randomUUID
 ): RemintedChatMessages {
@@ -125,7 +129,7 @@ export function remintChatMessageIds(
     }
   }
 
-  for (const field of ['otherExtractionWatermarkMessageId', 'episodeExtractionWatermarkMessageId'] as const) {
+  for (const field of Object.values(BUNDLE_CURSOR_FIELDS)) {
     const watermark = chat[field];
     if (!watermark) continue;
     const mapped = idMap.get(watermark) ?? null;

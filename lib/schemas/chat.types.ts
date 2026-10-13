@@ -1111,23 +1111,8 @@ export const ChatMetadataSchema = z.object({
    */
   timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
 
-  /**
-   * The Commonplace Book — the last message a fold-grain OTHER extraction pass
-   * has covered (memory consolidation and tiers, workstream A). Advanced by
-   * every fold-grain pass; the daily maintenance sweep runs a catch-up pass
-   * for idle chats whose last message sits past it, so short chats that never
-   * fold still get their observations of others extracted. Null until the
-   * first fold-grain pass.
-   */
-  otherExtractionWatermarkMessageId: z.string().nullable().optional(),
-  /**
-   * The Commonplace Book — the last message the fold-time episode pass has
-   * read. A fold window (a hard rebuild re-walks turns 1..N) is cut to what
-   * lies past it, so the pass never re-extracts history it already covered
-   * (bug 207). Null until the first episode pass (backfilled from the summary
-   * anchors by add-episode-extraction-watermark-v1). Patch-only.
-   */
-  episodeExtractionWatermarkMessageId: z.string().nullable().optional(),
+  // The fold-grain extraction passes' read positions live in
+  // `memory_extraction_cursors` (memory refactor Phase D), not on the chat.
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
@@ -1474,12 +1459,6 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Timeline clock ('realtime' | 'narrative'; NULL = realtime). See ChatMetadataSchema for the contract. */
   timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
-
-  /** Fold-grain OTHER extraction watermark. See ChatMetadataSchema for the contract. */
-  otherExtractionWatermarkMessageId: z.string().nullable().optional(),
-
-  /** Fold-time episode pass watermark. See ChatMetadataSchema for the contract. */
-  episodeExtractionWatermarkMessageId: z.string().nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.

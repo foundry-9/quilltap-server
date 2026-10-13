@@ -162,34 +162,34 @@ flowchart TD
 
 From chat messages landing in the database through extraction, gating, reinforcement, and storage.
 
-Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/admission/`, `lib/memory/scoring/`
+Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/extraction/`, `lib/memory/admission/`, `lib/memory/scoring/`
 
 ```mermaid
 flowchart TD
-    subgraph Trigger["Message Trigger"]
-        A[Assistant message saved to DB] --> B["triggerMemoryExtraction()<br/><i>memory-trigger.service.ts</i><br/>Fire-and-forget async"]
+    subgraph Trigger["Units of work"]
+        A[Turn closes / autonomous speaker finishes] --> B["triggerTurnMemoryExtraction()<br/><i>memory-trigger.service.ts</i>"]
+        B --> E["enqueueMemoryExtraction()<br/>MEMORY_EXTRACTION pass: 'turn'"]
+        CA[Carina answer posted] --> CE["CARINA_MEMORY_EXTRACTION"]
+        FO[Context summary folds] --> FX["generateContextSummary()<br/><i>context-summary.ts</i>"]
+        SW[Daily sweep / regenerate] --> CU["MEMORY_EXTRACTION pass: 'other-fold' / 'episode-fold'<br/><i>maintenance/fold-catchup.ts</i>"]
     end
 
-    subgraph Queue["Two Processing Paths"]
-        B --> C{"Source?"}
-        C -->|Real-time chat| D["processMessageForMemoryAsync()<br/><i>memory-processor.ts</i><br/>Direct async, no queue"]
-        C -->|Import / batch| E["enqueueMemoryExtraction()<br/><i>queue-service.ts</i><br/>MEMORY_EXTRACTION job"]
-        E --> F["Job Processor<br/><i>processor.ts</i><br/>Poll every 2s, 3min timeout"]
-        F --> G["Memory extraction handler<br/><i>handlers/memory-extraction.ts</i>"]
-        G --> D2["processMessageForMemory()"]
-        D --> D2
+    subgraph Context["One context per unit of work"]
+        E --> CTX["buildExtractionContext()<br/><i>extraction/context.ts</i><br/>cast, project, route, clock, settings,<br/>rate limiter, cursors — read once"]
+        CE --> CTX
+        FX --> CTX
+        CU --> CTX
     end
 
-    subgraph Extract["Parallel LLM Extraction"]
-        D2 --> EX1["extractMemoryFromMessage()<br/><i>User memories</i><br/>'What did the USER reveal?'"]
-        D2 --> EX2["extractCharacterMemoryFromMessage()<br/><i>Character memories</i><br/>'What did the CHARACTER reveal?'"]
-        D2 --> EX3{"Multi-char<br/>chat?"}
-        EX3 -->|Yes| EX4["extractInterCharacterMemoryFromMessage()<br/><i>What did observer learn about subject?</i>"]
-        EX3 -->|No| PARSE
-
-        EX1 --> PARSE[Parse JSON response<br/>Filter to significant: true only]
-        EX2 --> PARSE
-        EX4 --> PARSE
+    subgraph Extract["Passes (runPass, extraction/run.ts)"]
+        CTX --> P1["self-turn<br/>one call per slice"]
+        CTX --> P2["other-turn<br/>one call per observer<br/>(mode turn / hybrid)"]
+        CTX --> P3["other-fold<br/>per observer per 60-message slice<br/>cursor advanced per slice"]
+        CTX --> P4["episode-fold<br/>per slice, for every present character"]
+        P1 --> PARSE["parse → cap (passCap + event slot)<br/>→ hybrid / rate-limit floor<br/><i>extraction/parse.ts, rate-limit.ts</i>"]
+        P2 --> PARSE
+        P3 --> PARSE
+        P4 --> PARSE
     end
 
     subgraph Gate["Admission (admitCandidate)"]
@@ -572,7 +572,7 @@ flowchart TD
 | System | Key Files |
 |--------|-----------|
 | **System Prompt** | `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/context-builder.service.ts`, `lib/services/chat-message/orchestrator.service.ts` |
-| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/admission/`, `lib/memory/scoring/` |
+| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/extraction/`, `lib/memory/admission/`, `lib/memory/scoring/` |
 | **Memory Storage** | `lib/memory/admission/`, `lib/memory/index-store/`, `lib/memory/retire.ts`, `lib/memory/memory-service.ts` (search), `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
 | **Context Summary** | `lib/chat/context-summary.ts`, `lib/background-jobs/handlers/context-summary.ts`, `lib/memory/cheap-llm-tasks/chat-tasks.ts` |
 | **Scene State** | `lib/background-jobs/handlers/scene-state-tracking.ts`, `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` |

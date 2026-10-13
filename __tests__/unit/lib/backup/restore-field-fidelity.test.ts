@@ -108,6 +108,14 @@ const NEW_CHAT_FIELDS = {
   commonplaceRecallHistory: { turns: [['mem-1']] },
   timelineMode: 'narrative',
   turnSkippingEnabled: true,
+}
+
+/**
+ * The fold passes' cursors: carried on the archived chat under their pre-4.10
+ * column names, restored into `memory_extraction_cursors` (memory refactor
+ * Phase D), never onto the chat row.
+ */
+const BUNDLED_CURSOR_FIELDS = {
   otherExtractionWatermarkMessageId: 'msg-1',
   episodeExtractionWatermarkMessageId: 'msg-1',
 }
@@ -216,6 +224,7 @@ function buildRepoMocks() {
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
   )
   const chatSettingsCreate = jest.fn().mockResolvedValue({})
+  const setCursor = jest.fn().mockResolvedValue(undefined)
   const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
   )
@@ -236,6 +245,7 @@ function buildRepoMocks() {
   const globalRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
       if (prop === 'chatSettings') return repoStub({ create: chatSettingsCreate })
+      if (prop === 'memoryExtractionCursors') return repoStub({ setCursor })
       // Memories restore through the global repository, owner checked by a raw
       // character read (bug 185: the user-scoped read goes through the vault
       // overlay, which throws for a vault not yet restored).
@@ -256,6 +266,7 @@ function buildRepoMocks() {
     chatsUpdate,
     memoriesCreate,
     chatSettingsCreate,
+    setCursor,
     connectionsCreate,
     imageProfilesCreate,
   }
@@ -575,7 +586,7 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
   })
 
   it('carries every new chats and chat_messages column through restore', async () => {
-    const { chatsCreate, addMessage } = buildRepoMocks()
+    const { chatsCreate, addMessage, setCursor } = buildRepoMocks()
     primeArchive(
       makeBackupData({
         chats: [
@@ -588,6 +599,7 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
             participants: [],
             tags: [],
             ...NEW_CHAT_FIELDS,
+            ...BUNDLED_CURSOR_FIELDS,
             messages: [
               { id: 'msg-1', type: 'message', role: 'assistant', content: 'hello', ...NEW_MESSAGE_FIELDS },
             ],
@@ -602,6 +614,11 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     expect(chatsCreate.mock.calls[0][0]).toMatchObject(NEW_CHAT_FIELDS)
     // The chat id must survive so messages/memories keep pointing at it.
     expect(chatsCreate.mock.calls[0][1]).toEqual({ id: 'chat-1' })
+    // The bundled cursors leave the chat row and land in their own table.
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('otherExtractionWatermarkMessageId')
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('episodeExtractionWatermarkMessageId')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'other-fold', 'msg-1')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'episode-fold', 'msg-1')
 
     expect(addMessage).toHaveBeenCalledTimes(1)
     expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_MESSAGE_FIELDS)

@@ -6,56 +6,29 @@
  * A Carina answer is posted as a `systemSender: 'carina'` message, which the
  * per-turn transcript builder deliberately skips (every systemSender message is
  * excluded) — and the answerer is frequently not even a participant in the
- * chat. So the ordinary MEMORY_EXTRACTION path can never see it. This handler
- * is the dedicated route: it loads the posted carina message, reconstructs a
- * one-slice TurnTranscript (the question as the turn opener, the answer as the
- * answerer's sole contribution), and runs the standard per-turn extractor.
- *
- * With no user-controlled character in the synthetic transcript, the OTHER pass
- * finds no subjects and self-skips, so only SELF memories form — the answerer
- * remembers what it was asked and what it answered, nothing about the asker.
+ * chat. So the ordinary MEMORY_EXTRACTION path never sees it. This handler is
+ * the dedicated route: one extraction context (the answerer hydrated beside the
+ * chat's cast, the chat's project and summary as background, bug 222) and the
+ * `self-turn` pass over the answer's own one-slice transcript
+ * (`runCarinaExtraction`), with the `carina` provenance. Only SELF memories
+ * form — the answerer remembers what it was asked and what it answered,
+ * nothing about the asker.
  */
 
-import { BackgroundJob } from '@/lib/schemas/types';
-import { getRepositories } from '@/lib/repositories/factory';
-import { processTurnForMemory } from '@/lib/memory/memory-processor';
-import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
-import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript';
-import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
-import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
-import { getMemoryExtractionLimits } from '@/lib/instance-settings';
-import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
-import type { Character, MessageEvent } from '@/lib/schemas/types';
+import { BackgroundJob, type MessageEvent } from '@/lib/schemas/types';
+import { runCarinaExtraction } from '@/lib/memory/extraction';
 import { logger } from '@/lib/logger';
 import type { CarinaMemoryExtractionPayload } from '../queue-service';
+import { extractionContextForJob, finishExtractionJob } from './memory-extraction';
 
 export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as CarinaMemoryExtractionPayload;
-  const repos = getRepositories();
+  const ctx = await extractionContextForJob(job, payload.chatId, payload.connectionProfileId, {
+    extraCharacterIds: [payload.answererId],
+  });
+  if (!ctx) return;
 
-  const connectionProfile = await repos.connections.findById(payload.connectionProfileId);
-  if (!connectionProfile) {
-    throw new Error(`Connection profile not found: ${payload.connectionProfileId}`);
-  }
-
-  const chatSettings = await repos.chatSettings.findByUserId(job.userId);
-  if (!chatSettings) {
-    throw new Error(`Chat settings not found for user: ${job.userId}`);
-  }
-
-  const chat = await repos.chats.findById(payload.chatId);
-  if (!chat) {
-    logger.warn('[CarinaMemoryExtraction] Chat not found at job execution; skipping', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
-    return;
-  }
-
-  const answerer: Character | null = await repos.characters.findById(payload.answererId);
-  if (!answerer) {
+  if (!ctx.cast.has(payload.answererId)) {
     logger.warn('[CarinaMemoryExtraction] Answerer character not found; skipping', {
       jobId: job.id,
       chatId: payload.chatId,
@@ -64,14 +37,7 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     return;
   }
 
-  // Locate the posted carina message: its content is the answer, its
-  // carinaMeta.question the prompt that was put to the answerer.
-  const allRawMessages = await repos.chats.getMessages(payload.chatId);
-  const carinaMessage = allRawMessages.find(
-    (m): m is MessageEvent =>
-      m.type === 'message' && m.id === payload.carinaMessageId,
-  ) as MessageEvent | undefined;
-
+  const carinaMessage = (await ctx.messages()).find((m): m is MessageEvent => m.id === payload.carinaMessageId);
   if (!carinaMessage) {
     logger.warn('[CarinaMemoryExtraction] Carina message not found; skipping', {
       jobId: job.id,
@@ -81,9 +47,8 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     return;
   }
 
-  const question = carinaMessage.carinaMeta?.question?.trim() ?? '';
-  const answer = carinaMessage.content?.trim() ?? '';
-  if (!answer) {
+  const result = await runCarinaExtraction(ctx, carinaMessage, payload.answererId);
+  if (!result) {
     logger.info('[CarinaMemoryExtraction] Carina message has no answer text; skipping', {
       jobId: job.id,
       chatId: payload.chatId,
@@ -92,153 +57,18 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     return;
   }
 
-  // Synthetic one-slice transcript: the question opens the turn, the answer is
-  // the answerer's only contribution. No user-controlled character, so the
-  // OTHER pass finds no subjects and only SELF memories form.
-  const transcript: TurnTranscript = {
-    turnOpenerMessageId: null,
-    userMessage: question.length > 0 ? question : null,
-    userCharacterId: undefined,
-    userCharacterName: undefined,
-    userCharacterPronouns: null,
-    characterSlices: [
-      {
-        characterId: answerer.id,
-        characterName: answerer.name,
-        characterPronouns: answerer.pronouns ?? null,
-        text: answer,
-        contributingMessageIds: [carinaMessage.id],
-        lastMessageCreatedAt: carinaMessage.createdAt ?? null,
-      },
-    ],
-    latestAssistantMessageId: carinaMessage.id,
-    turnTimestamp: carinaMessage.createdAt ?? null,
-  };
-
-  const participantCharacters = new Map<string, Character>([[answerer.id, answerer]]);
-
-  const availableProfiles = await repos.connections.findByUserId(job.userId);
-  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
-  const memoryExtractionLimits = await getMemoryExtractionLimits();
-
-  // Anchor derived memories to the carina message's own timestamp rather than
-  // "now" — mirrors handleMemoryExtraction's chronology handling.
-  const sourceMessageTimestamp = carinaMessage.createdAt ?? chat.createdAt;
-
-  // The chat's project and running summary ride along exactly as they do for
-  // an ordinary turn (memory-extraction.ts): the project id is stamped on every
-  // memory so `scope: narrow` recall can scope it, and the description and
-  // summary are the extractor's background for judging scope (bug 222).
-  const projectId = chat.projectId ?? null;
-  const projectDescription = await loadExtractionProjectDescription(projectId, {
+  logger.info('[CarinaMemoryExtraction] Reference answer processed', {
     jobId: job.id,
     chatId: payload.chatId,
+    carinaMessageId: carinaMessage.id,
+    answererId: payload.answererId,
+    projectId: ctx.project.id,
+    created: result.createdIds.length,
+    reinforced: result.reinforcedIds.length,
   });
-  const chatContextSummary = chat.contextSummary ?? null;
-  logger.debug('[CarinaMemoryExtraction] Extraction context resolved', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    answererId: answerer.id,
-    projectId,
-    hasProjectDescription: projectDescription !== null,
-    hasContextSummary: chatContextSummary !== null,
+  // The debug lines go on the carina message itself.
+  await finishExtractionJob(job, ctx, result, {
+    taskLabel: 'carina-memory-extraction',
+    debugMessageId: result.sourceMessageId,
   });
-
-  const result = await processTurnForMemory({
-    transcript,
-    participantCharacters,
-    chatId: payload.chatId,
-    projectId,
-    projectDescription,
-    chatContextSummary,
-    userId: job.userId,
-    connectionProfile,
-    cheapLLMSettings: chatSettings.cheapLLMSettings,
-    availableProfiles,
-    conciergePolicy,
-    isDangerousChat: shouldUseUncensoredRoute(chat),
-    memoryExtractionLimits,
-    sourceMessageTimestamp,
-    // Episodic spine: which clock the chat's story runs on.
-    timelineMode: chat.timelineMode ?? 'realtime',
-    // A Carina answerer in an autonomous room earns the same user-absence
-    // provenance as any other extraction there.
-    inAutonomousRoom: chat.chatType === 'autonomous',
-  });
-
-  // A pass lost to a timeout is work that never happened, and nothing
-  // downstream re-queues it. Fail the job rather than let it report a clean
-  // finish over the hole (bug 107): the child's writes are only applied on
-  // success, so the backed-off retry re-runs the whole turn from the state
-  // this attempt started in, and the extraction stays atomic. A refusal or an
-  // unparseable answer would fail identically on every retry and keeps the old
-  // log-and-move-on behaviour.
-  if (result.passesLostToTimeout > 0) {
-    logger.error('[CarinaMemoryExtraction] Extraction passes lost to a cheap-LLM timeout; failing the job for retry', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      passesLostToTimeout: result.passesLostToTimeout,
-      error: result.error,
-    });
-    throw new CheapLLMTaskLostError('carina-memory-extraction', result.error);
-  }
-
-  if (!result.success) {
-    logger.warn('[CarinaMemoryExtraction] Processing did not succeed', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      error: result.error,
-    });
-  } else {
-    logger.info('[CarinaMemoryExtraction] Reference answer processed', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      carinaMessageId: carinaMessage.id,
-      answererId: answerer.id,
-      created: result.memoriesCreatedCount,
-      reinforced: result.memoriesReinforcedCount,
-    });
-  }
-
-  // Persist debug logs onto the carina message so the operator can pop the
-  // debug panel and see what the extraction pass did.
-  if (result.debugLogs.length > 0 && result.sourceMessageId) {
-    try {
-      await repos.chats.updateMessage(
-        payload.chatId,
-        result.sourceMessageId,
-        { debugMemoryLogs: result.debugLogs },
-      );
-    } catch (e) {
-      logger.warn('[CarinaMemoryExtraction] Failed to store debug logs', {
-        jobId: job.id,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
-
-  // Token-tracking event mirroring the per-turn extractor.
-  if (result.usage.promptTokens || result.usage.completionTokens) {
-    try {
-      const costResult = await estimateMessageCost(
-        connectionProfile.provider,
-        connectionProfile.modelName,
-        result.usage.promptTokens,
-        result.usage.completionTokens,
-        job.userId,
-      );
-      await createMemoryExtractionEvent(
-        payload.chatId,
-        result.usage,
-        connectionProfile.provider,
-        connectionProfile.modelName,
-        costResult.cost,
-      );
-    } catch (e) {
-      logger.warn('[CarinaMemoryExtraction] Failed to emit token tracking event', {
-        jobId: job.id,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
 }

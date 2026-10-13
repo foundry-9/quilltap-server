@@ -8,6 +8,7 @@
  * @module backup/restore/restore
  */
 
+import { takeBundleCursors, restoreBundleCursors } from '@/lib/memory/extraction/cursor-bundle';
 import fs from 'fs';
 import path from 'path';
 import { logger } from '@/lib/logger';
@@ -258,7 +259,10 @@ export async function restore(
     let messagesRestored = 0;
     for (const chat of data.chats) {
       try {
-        const { userId, createdAt, updatedAt, messages, ...chatData } = chat;
+        const { userId, createdAt, updatedAt, messages, ...bundledChat } = chat;
+        // Cursors travel on the chat under their legacy names; they are written
+        // to memory_extraction_cursors once the chat exists.
+        const { chat: chatData, cursors } = takeBundleCursors(bundledChat);
         // A backup taken before bug 158 holds the chat's scenario in
         // `contextSummary` as well as `scenarioText`. Restoring the instance
         // exactly would restore the defect with it, and the migration that
@@ -267,6 +271,7 @@ export async function restore(
         // A backup from before the three Concierge states carries only the
         // legacy pair; derive the state so the restored chat keeps its behaviour.
         const createdChat = await repos.chats.create(withConciergeModeFromLegacy(stripScenarioSeededSummary(chatData)), { id: chat.id });
+        await restoreBundleCursors(createdChat.id, cursors);
 
         // Add messages to the chat
         for (const message of messages) {

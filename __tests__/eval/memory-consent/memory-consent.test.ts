@@ -4,7 +4,8 @@
  *
  * Skipped unless MEMORY_CONSENT_EVAL_MODEL is set, so it never runs in CI.
  * It sends the real SELF and OTHER extraction prompts, built by the real
- * extractor over the §10.2 fixtures, to an OpenAI-compatible chat-completions
+ * prompt builders (`lib/memory/extraction/prompts/`) over the §10.2 fixtures
+ * and parsed by the real extraction parsers, to an OpenAI-compatible chat-completions
  * endpoint (OpenAI, OpenRouter, Ollama's /v1, LM Studio, …) and asserts on
  * what comes back. See README.md for the environment variables.
  *
@@ -41,12 +42,18 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
   ),
 }))
 
+import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
+import { buildSelfTurnMessages } from '@/lib/memory/extraction/prompts/self'
+import { buildOtherTurnMessages, type OtherSubjectInput } from '@/lib/memory/extraction/prompts/other'
 import {
-  extractOtherMemoriesFromTurn,
-  extractSelfMemoriesFromTurn,
-} from '@/lib/memory/cheap-llm-tasks/memory-tasks'
+  HARD_CANDIDATE_CAP,
+  parseOtherDraftsBySubject,
+  parseSelfDrafts,
+  passCap,
+} from '@/lib/memory/extraction/parse'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { CheapLLMTaskResult, MemoryDraft } from '@/lib/memory/cheap-llm-tasks/types'
+import type { MemoryDraft } from '@/lib/memory/cheap-llm-tasks/types'
+import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 import {
   AMY_ID,
   FRIDAY_ID,
@@ -68,11 +75,42 @@ const ATTRIBUTED = /\b(proposed|asked|set a condition|demanded|insisted|stated a
 
 const describeIfConfigured = MODEL ? describe : describe.skip
 
-async function otherAbout(observerId: string, transcript: ReturnType<typeof buildProposalNoReplyTranscript>, subjects: typeof fridaySubjects) {
-  const res = (await extractOtherMemoriesFromTurn(
-    transcript, observerId, subjects, SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-  )) as CheapLLMTaskResult<Map<string, MemoryDraft[]>>
+/** The per-turn cap the turn passes derive for a 16000-token output budget. */
+const CAP = passCap(HARD_CANDIDATE_CAP, 16000)
+
+/** The observer's own slice in the turn (its display name and pronouns). */
+function sliceOf(transcript: TurnTranscript, characterId: string) {
+  const slice = transcript.characterSlices.find((s) => s.characterId === characterId)
+  if (!slice) throw new Error(`fixture has no slice for ${characterId}`)
+  return slice
+}
+
+async function otherAbout(observerId: string, transcript: TurnTranscript, subjects: OtherSubjectInput[]) {
+  const observer = sliceOf(transcript, observerId)
+  const messages = buildOtherTurnMessages({
+    transcript,
+    observer: { name: observer.characterName, pronouns: observer.characterPronouns ?? null },
+    subjects,
+    cap: CAP,
+    inAutonomousRoom: false,
+  })
+  const res = await executeCheapLLMTask(
+    SELECTION, messages, 'eval-user',
+    (raw: string) => parseOtherDraftsBySubject(raw, subjects.map((s) => s.id), CAP),
+    'memory-extraction-other', 'eval-chat', undefined, undefined, 16000, observerId,
+  )
   return res.result ?? new Map<string, MemoryDraft[]>()
+}
+
+async function selfOf(holderId: string, transcript: TurnTranscript, canonBlock: string): Promise<MemoryDraft[]> {
+  const messages = buildSelfTurnMessages({ transcript, holderId, canonBlock, cap: CAP, inAutonomousRoom: false })
+  if (!messages) return []
+  const res = await executeCheapLLMTask(
+    SELECTION, messages, 'eval-user',
+    (raw: string) => parseSelfDrafts(raw, CAP),
+    'memory-extraction-self', 'eval-chat', undefined, undefined, 16000, holderId,
+  )
+  return res.result ?? []
 }
 
 describeIfConfigured('memory consent eval (live model)', () => {
@@ -85,9 +123,7 @@ describeIfConfigured('memory consent eval (live model)', () => {
 
     for (let i = 0; i < REPETITIONS; i++) {
       const transcript = buildProposalNoReplyTranscript()
-      const selfRes = (await extractSelfMemoriesFromTurn(
-        transcript, OWEN_ID, 'ALREADY ESTABLISHED about Owen\n[IDENTITY] Runs the farm.', SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-      )) as CheapLLMTaskResult<MemoryDraft[]>
+      const ownSelf = await selfOf(OWEN_ID, transcript, 'ALREADY ESTABLISHED about Owen\n[IDENTITY] Runs the farm.')
       const fromFriday = await otherAbout(FRIDAY_ID, transcript, fridaySubjects)
       const fromAmy = await otherAbout(AMY_ID, transcript, [
         fridaySubjects[1],
@@ -95,7 +131,7 @@ describeIfConfigured('memory consent eval (live model)', () => {
       ])
 
       const aboutOwen = [
-        ...(selfRes.result ?? []),
+        ...ownSelf,
         ...(fromFriday.get(OWEN_ID) ?? []),
         ...(fromAmy.get(OWEN_ID) ?? []),
       ].map((c) => c.content)
@@ -124,10 +160,8 @@ describeIfConfigured('memory consent eval (live model)', () => {
     const failures: string[] = []
     for (let i = 0; i < REPETITIONS; i++) {
       const fromAmyAboutOwen = await otherAbout(AMY_ID, buildCustodyTranscript(), amySubjects)
-      const amySelf = (await extractSelfMemoriesFromTurn(
-        buildCustodyTranscript(), AMY_ID, 'ALREADY ESTABLISHED about Amy\n[IDENTITY] Owen\'s wife.', SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-      )) as CheapLLMTaskResult<MemoryDraft[]>
-      const all = [...(fromAmyAboutOwen.get(OWEN_ID) ?? []), ...(amySelf.result ?? [])].map((c) => c.content)
+      const amySelf = await selfOf(AMY_ID, buildCustodyTranscript(), 'ALREADY ESTABLISHED about Amy\n[IDENTITY] Owen\'s wife.')
+      const all = [...(fromAmyAboutOwen.get(OWEN_ID) ?? []), ...amySelf].map((c) => c.content)
       const keys = all.filter((c) => /\bkeys?\b/i.test(c))
       if (keys.length > 0 && keys.some((c) => /breakfast/i.test(c))) passes++
       else failures.push(`run ${i + 1}: ${all.join(' | ') || '(nothing extracted)'}`)

@@ -6,7 +6,6 @@
 
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { handleMemoryExtraction } from './memory-extraction';
-import { handleInterCharacterMemory } from './inter-character-memory';
 import { handleContextSummary } from './context-summary';
 import { handleTitleUpdate } from './title-update';
 import { handleLLMLogCleanup } from './llm-log-cleanup';
@@ -41,7 +40,6 @@ export type JobHandler = (job: import('@/lib/schemas/types').BackgroundJob) => P
  */
 const handlers: Record<BackgroundJobType, JobHandler> = {
   MEMORY_EXTRACTION: handleMemoryExtraction,
-  INTER_CHARACTER_MEMORY: handleInterCharacterMemory,
   CONTEXT_SUMMARY: handleContextSummary,
   TITLE_UPDATE: handleTitleUpdate,
   LLM_LOG_CLEANUP: handleLLMLogCleanup,
@@ -80,7 +78,6 @@ export function getHandler(type: BackgroundJobType): JobHandler {
 
 // Re-export handlers
 export { handleMemoryExtraction };
-export { handleInterCharacterMemory };
 export { handleContextSummary };
 export { handleTitleUpdate };
 export { handleLLMLogCleanup };

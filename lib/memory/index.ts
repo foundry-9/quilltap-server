@@ -8,13 +8,10 @@
 
 // Cheap LLM Tasks
 export {
-  extractSelfMemoriesFromTurn,
-  extractOtherMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
   describeAttachment,
-  batchExtractMemories,
   considerTitleUpdate,
   deriveSceneContext,
   renderSelfCanonBlock,
@@ -34,14 +31,28 @@ export {
   type SelfCanon,
 } from './cheap-llm-tasks'
 
-// Memory Processor (per-turn extraction)
+// Extraction: one context, four passes, cursors (memory refactor §3.7)
 export {
-  processTurnForMemory,
-  type TurnMemoryExtractionContext,
-  type TurnMemoryProcessingResult,
-  type TurnTranscript,
-  type TurnCharacterSlice,
-} from './memory-processor'
+  buildExtractionContext,
+  runPass,
+  runTurnExtraction,
+  runCarinaExtraction,
+  runFoldPass,
+  runFoldCatchup,
+  runExtractionDryRun,
+  selfTurnPass,
+  otherTurnPass,
+  otherFoldPass,
+  episodeFoldPass,
+  type ExtractionContext,
+  type ExtractionPass,
+  type ExtractionPassName,
+  type PassResult,
+  type TurnExtractionResult,
+  type FoldResult,
+  type ExtractedCandidate,
+} from './extraction'
+export type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 
 // Format Utilities
 export { formatNameWithPronouns } from './format-utils'

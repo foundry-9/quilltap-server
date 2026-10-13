@@ -1,7 +1,7 @@
 /**
  * Recall-side targeting-tag reading.
  *
- * The memory extractor (`lib/memory/cheap-llm-tasks/memory-tasks.ts`) materializes
+ * The memory extractor (`lib/memory/extraction/`) materializes
  * three controlled targeting tags into every memory's `keywords` array:
  *   - temporal : bare word  — past | moment | present | future
  *   - scope    : `scope: narrow` | `scope: wide`
@@ -24,7 +24,7 @@
  * and safe to import from the forked job child.
  */
 
-import type { MemorySearchExtraction } from './cheap-llm-tasks/memory-tasks'
+import type { MemorySearchExtraction } from './recall/query'
 import { recentlyWhisperedIdSet } from './recall-history'
 // Type-only: recall-tuning reads this module's constants at load time, so a
 // value import back from it would be a circular-initialisation trap.

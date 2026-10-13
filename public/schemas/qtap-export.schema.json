@@ -566,11 +566,11 @@
         },
         "otherExtractionWatermarkMessageId": {
           "type": ["string", "null"],
-          "description": "Message id up to which the other-subject (fold) extraction pass has covered this chat. Absent/null = never. A message-id reference, remapped with the messages."
+          "description": "The other-fold extraction pass's cursor: the message id it has read this chat up to. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
         },
         "episodeExtractionWatermarkMessageId": {
           "type": ["string", "null"],
-          "description": "Message id up to which the fold-time episode extraction pass has read this chat. Absent/null = never. A message-id reference, remapped with the messages."
+          "description": "The episode-fold extraction pass's cursor: the message id it has read this chat up to. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
         },
         "timelineMode": {
           "type": ["string", "null"],

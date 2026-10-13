@@ -19,7 +19,6 @@ import {
 
 export const BackgroundJobTypeEnum = z.enum([
   'MEMORY_EXTRACTION',
-  'INTER_CHARACTER_MEMORY',
   'CONTEXT_SUMMARY',
   'TITLE_UPDATE',
   'LLM_LOG_CLEANUP',

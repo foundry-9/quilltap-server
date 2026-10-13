@@ -76,7 +76,6 @@ export function topicsForCompletedJob(
       return [{ topic: 'chats', id: str(payload, 'chatId') }];
 
     case 'MEMORY_EXTRACTION':
-    case 'INTER_CHARACTER_MEMORY':
     case 'CARINA_MEMORY_EXTRACTION':
     case 'MEMORY_REGENERATE_CHAT':
       // Every one of these carries `chatId` on its payload, which is what the

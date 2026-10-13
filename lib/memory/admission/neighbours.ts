@@ -63,20 +63,30 @@ async function resolveDigest(memory: Memory): Promise<{ memory: Memory; via?: st
  * The candidate's neighbours, best first, each row once (several members of
  * one cluster collapse onto their digest at the best cosine).
  */
-export async function gatherNeighbours(characterId: string, embedding: Float32Array): Promise<GatheredNeighbours> {
+export async function gatherNeighbours(
+  characterId: string,
+  embedding: Float32Array,
+  opts: { exclude?: ReadonlySet<string> } = {},
+): Promise<GatheredNeighbours> {
   const repos = getRepositories()
+  const exclude = opts.exclude
+  // `exclude` (the dry run's rows a regenerate would retire) is searched past,
+  // as if those rows were already gone.
+  const search = async (limit: number) => {
+    const found = await memoryIndex.search(characterId, embedding, { limit, hotOnly: false })
+    return { exhausted: found.length < limit, hits: exclude ? found.filter((h) => !exclude.has(h.id)) : found }
+  }
   let k = ADMISSION_TOP_K
-  let hits = await memoryIndex.search(characterId, embedding, { limit: k, hotOnly: false })
+  let { hits, exhausted } = await search(k)
   let rows = new Map<string, Memory>()
   for (;;) {
     const ids = hits.map((h) => h.id)
     const found = ids.length > 0 ? await repos.memories.findByIds(ids) : []
     rows = new Map(found.map((m) => [m.id, m]))
     const live = hits.filter((h) => rows.has(h.id)).length
-    const exhausted = hits.length < k
     if (live >= ADMISSION_TOP_K || exhausted || k >= ADMISSION_MAX_SEARCH_K) break
     k = Math.min(ADMISSION_MAX_SEARCH_K, k + (ADMISSION_TOP_K - live))
-    hits = await memoryIndex.search(characterId, embedding, { limit: k, hotOnly: false })
+    ;({ hits, exhausted } = await search(k))
   }
 
   const orphanIds = hits.filter((h) => !rows.has(h.id)).map((h) => h.id)

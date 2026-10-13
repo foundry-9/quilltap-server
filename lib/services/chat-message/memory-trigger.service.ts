@@ -24,17 +24,19 @@ import {
   enqueueConversationRender,
   enqueueMemoryExtraction,
 } from '@/lib/background-jobs/queue-service'
-import { findTurnOpenerMessageId } from './turn-transcript'
+import { findAutonomousTurnAnchorMessageId, findTurnOpenerMessageId } from './turn-transcript'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
-import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('MemoryTriggerService')
 
+/**
+ * What the post-turn triggers need from the user's settings. Each job that
+ * runs resolves the chat's Concierge state for itself (the extraction context
+ * does it once per unit of work), so nothing Concierge-shaped rides here.
+ */
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
-  conciergePolicy?: ResolvedConciergePolicy
-  isDangerousChat?: boolean
 }
 
 /**
@@ -74,19 +76,8 @@ export async function triggerTurnMemoryExtraction(
 
     const turnOpenerMessageId = findTurnOpenerMessageId(messageEvents)
 
-    let extractionAnchorMessageId: string | null = null
-    if (turnOpenerMessageId === null) {
-      for (let i = messageEvents.length - 1; i >= 0; i--) {
-        const m = messageEvents[i]
-        if (m.type !== 'message') continue
-        if (m.role !== 'ASSISTANT') continue
-        if (m.systemSender) continue
-        if (m.isSilentMessage) continue
-        if (!m.participantId) continue
-        extractionAnchorMessageId = m.id
-        break
-      }
-    }
+    const extractionAnchorMessageId =
+      turnOpenerMessageId === null ? findAutonomousTurnAnchorMessageId(messageEvents) : null
 
     await enqueueMemoryExtraction(options.userId, {
       chatId: options.chatId,

@@ -61,6 +61,17 @@ export interface TurnTranscript {
 }
 
 /**
+ * A chat's message rows (`type: 'message'`), chronological — the one read of
+ * a transcript every extraction path starts from.
+ */
+export async function loadChatMessageEvents(chatId: string): Promise<MessageEvent[]> {
+  const { getRepositories } = await import('@/lib/repositories/factory')
+  return (await getRepositories().chats.getMessages(chatId)).filter(
+    (m) => m.type === 'message',
+  ) as unknown as MessageEvent[]
+}
+
+/**
  * Find the most recent non-system USER message in chat history.
  * Returns null if no qualifying user message exists (fresh chat, greeting-only).
  */
@@ -73,6 +84,55 @@ export function findTurnOpenerMessageId(messages: MessageEvent[]): string | null
     return m.id
   }
   return null
+}
+
+/**
+ * The latest message that closes an autonomous-room turn: a non-staff,
+ * non-silent ASSISTANT line from a seat. Null when there is none.
+ */
+export function findAutonomousTurnAnchorMessageId(messages: MessageEvent[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isAutonomousTurnAnchor(messages[i])) return messages[i].id
+  }
+  return null
+}
+
+function isAutonomousTurnAnchor(m: MessageEvent): boolean {
+  return m.type === 'message' && m.role === 'ASSISTANT' && !m.systemSender && !m.isSilentMessage && !!m.participantId
+}
+
+/** How a turn is addressed for extraction: its USER opener, and (autonomous rooms) the message that closes it. */
+export interface ExtractionTurnLocator {
+  turnOpenerMessageId: string | null
+  extractionAnchorMessageId?: string | null
+}
+
+/**
+ * Every turn of a chat, as extraction addresses them — the one scan the
+ * queue-memories action, the dry run, the regenerate and the SillyTavern
+ * import share.
+ *
+ *  - An ordinary chat: one null-opener turn for the greeting when any
+ *    character line comes before the first user message (the live trigger
+ *    enqueues it when the greeting finalizes), then one turn per non-staff
+ *    USER message (each opens a turn). A chat with no user message and some
+ *    character line is just the greeting turn; with neither, no turns.
+ *  - An autonomous room: no USER opener ever, so one turn per closing
+ *    ASSISTANT line, each anchored on it (the live trigger's shape).
+ */
+export function listExtractionTurns(
+  messages: MessageEvent[],
+  chatType: string | null | undefined,
+): ExtractionTurnLocator[] {
+  if (chatType === 'autonomous') {
+    return messages.filter(isAutonomousTurnAnchor).map(m => ({ turnOpenerMessageId: null, extractionAnchorMessageId: m.id }))
+  }
+  const isOpener = (m: MessageEvent) => m.type === 'message' && m.role === 'USER' && !m.systemSender
+  const firstOpener = messages.findIndex(isOpener)
+  const beforeFirstOpener = firstOpener === -1 ? messages : messages.slice(0, firstOpener)
+  const turns: ExtractionTurnLocator[] = beforeFirstOpener.some(isAutonomousTurnAnchor) ? [{ turnOpenerMessageId: null }] : []
+  for (const m of messages) if (isOpener(m)) turns.push({ turnOpenerMessageId: m.id })
+  return turns
 }
 
 /**

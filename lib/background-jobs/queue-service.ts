@@ -45,7 +45,7 @@ export interface EnqueueJobOptions {
  * The handler rebuilds the TurnTranscript from chat state at execution time
  * (the chat is the source of truth — pre-serialising the transcript into
  * the job would just stale faster than the job drains). Dedup is keyed on
- * (chatId, turnOpenerMessageId, extractionAnchorMessageId): the first
+ * (chatId, turnOpenerMessageId, extractionAnchorMessageId, pass, cursor): the first
  * response of a turn enqueues the job; subsequent responses in the same
  * turn no-op against the existing pending job. The anchor field lets
  * autonomous chats (no USER openers) key each character's turn distinctly
@@ -74,27 +74,45 @@ export interface MemoryExtractionPayload {
   extractionAnchorMessageId?: string | null;
   connectionProfileId: string;
   /**
-   * When true this is not a per-turn extraction but the idle catch-up for the
-   * fold-grain OTHER pass: the handler runs `runFoldOtherCatchup` over the
-   * chat's messages past `otherExtractionWatermarkMessageId`. Enqueued by the
-   * daily maintenance sweep; `extractionAnchorMessageId` carries the chat's
-   * last message id so each catch-up dedupes on its own tail.
+   * The grain (memory refactor §3.7): `'turn'` (the default) runs the turn
+   * passes over the turn the opener/anchor locate; `'other-fold'` and
+   * `'episode-fold'` are a fold pass's catch-up over the chat's backlog past
+   * that pass's cursor (enqueued by the daily maintenance sweep, a regenerate,
+   * or a catch-up job that left slices unread).
    */
+  pass?: MemoryExtractionPass;
+  /**
+   * Catch-ups: the cursor position the job was enqueued at — part of its
+   * dedupe key, so a continuation never collapses into the job that enqueued
+   * it. The job always reads the live cursor.
+   */
+  cursor?: string | null;
+  /** Catch-ups: run even if the chat is not idle (a regenerate wants it now). */
+  ignoreIdle?: boolean;
+  /**
+   * A rebuild of history (regenerate, queue-memories, SillyTavern import), not
+   * live conversation: the extraction rate limit does not apply to it, and its
+   * inserts do not count towards it. Without this a 100-turn regenerate would
+   * hit the hourly cap after a handful of turns and lose every later turn.
+   */
+  backfill?: boolean;
+  /** @deprecated Rows queued before Phase D: `pass: 'other-fold'`. Read by {@link memoryExtractionPassOf} only. */
   foldOtherCatchup?: boolean;
-  /**
-   * With `foldOtherCatchup`: run even if the chat is not idle. Set by the
-   * chat memory regenerate, which has just reset the watermark and wants the
-   * fold-grain observations rebuilt now rather than at the next daily sweep.
-   */
+  /** @deprecated Rows queued before Phase D: `ignoreIdle`. */
   foldOtherIgnoreIdle?: boolean;
-  /**
-   * When true this is the idle catch-up for the fold episode pass: the handler
-   * runs `runFoldEpisodeCatchup` over the chat's folded history past
-   * `episodeExtractionWatermarkMessageId` (bug 232). Enqueued by the daily
-   * maintenance sweep; `extractionAnchorMessageId` carries the fold boundary,
-   * or `continue-episode:<watermark>` for a follow-up job.
-   */
+  /** @deprecated Rows queued before Phase D: `pass: 'episode-fold'`. */
   foldEpisodeCatchup?: boolean;
+}
+
+/** The grain a MEMORY_EXTRACTION job runs at. */
+export type MemoryExtractionPass = 'turn' | 'other-fold' | 'episode-fold';
+
+/** A payload's grain, reading the pre-Phase-D flags of rows still in the queue. */
+export function memoryExtractionPassOf(payload: MemoryExtractionPayload): MemoryExtractionPass {
+  if (payload.pass) return payload.pass;
+  if (payload.foldEpisodeCatchup) return 'episode-fold';
+  if (payload.foldOtherCatchup) return 'other-fold';
+  return 'turn';
 }
 
 /**
@@ -516,8 +534,8 @@ export async function enqueueJob(
  * Enqueue a per-turn memory extraction job.
  *
  * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
- * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId)
- * triple, this is a no-op that returns the existing job ID. The first
+ * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId,
+ * pass, cursor) key, this is a no-op that returns the existing job ID. The first
  * character to finalize in a multi-character turn creates the job; later
  * characters' finalize calls fall through to dedup. Greeting / continue
  * turns (where turnOpenerMessageId is null and no anchor is set) dedupe
@@ -548,8 +566,8 @@ export async function enqueueMemoryExtraction(
       return existingPayload.chatId === payload.chatId
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
         && existingAnchor === incomingAnchor
-        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false)
-        && (existingPayload.foldEpisodeCatchup ?? false) === (payload.foldEpisodeCatchup ?? false);
+        && memoryExtractionPassOf(existingPayload) === memoryExtractionPassOf(payload)
+        && (existingPayload.cursor ?? null) === (payload.cursor ?? null);
     });
     if (existing) {
       return existing.id;
@@ -1341,6 +1359,8 @@ export async function enqueueMemoryExtractionBatch(
         turnOpenerMessageId,
         extractionAnchorMessageId,
         connectionProfileId,
+        // Every batch rebuilds history (queue-memories, SillyTavern import).
+        backfill: true,
       },
       priority: options?.priority ?? 0,
       attempts: 0,

@@ -361,6 +361,8 @@ quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
 
 Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
 
+The dry run is the live pipeline with nothing written: every turn, then both fold passes (`other-fold`, `episode-fold`) over the history a regenerate would rebuild, autonomous rooms included. Each re-extracted candidate records `extractionPass` and `decision` — what admission would do with it (`insert`, `reinforce`, `absorb`, …). Admission embeds each candidate to decide, so a dry run makes embedding calls.
+
 ## Recall Replay
 
 `quilltap recall-replay <chatId>` replays a turn's memory recall against the running server and prints the candidate table twice — the pre-overhaul ranking vs. the episodic (retrospective / time-window / entity-anchored) ranking — with cosine, blend, every multiplier fired, and head selection per row. Read-only; used to tune the recall constants against real "the character forgot" turns.

@@ -1,30 +1,27 @@
 /**
  * Unit tests for the Carina memory-extraction job handler.
  *
- * jest.setup.ts already globally mocks `@/lib/repositories/factory`
- * (getRepositories) and `@/lib/database/manager`. We configure the repo proxy
- * per-test via jest.mocked in beforeEach and assert on the synthetic transcript
- * handed to processTurnForMemory — the one-slice shape that yields SELF-only
- * memories for the answerer.
+ * The handler builds one extraction context (the answerer hydrated beside the
+ * chat's cast), finds the carina message, and hands both to
+ * `runCarinaExtraction`. The pipeline is mocked here except `carinaTranscript`,
+ * the pure builder of the one-slice transcript that yields SELF-only memories
+ * for the answerer, which is exercised directly.
  */
 
-// ── Subject ───────────────────────────────────────────────────────────────────
-import { handleCarinaMemoryExtraction } from '../carina-memory-extraction';
-
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-import { getRepositories } from '@/lib/repositories/factory';
 
-jest.mock('@/lib/memory/memory-processor', () => ({
-  processTurnForMemory: jest.fn(),
-}));
-
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveConciergeSettings: jest.fn(),
-}));
-
-jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  shouldUseUncensoredRoute: jest.fn(),
-}));
+jest.mock('@/lib/memory/extraction', () => {
+  const actualContext = jest.requireActual('@/lib/memory/extraction/context');
+  const actualTurn = jest.requireActual('@/lib/memory/extraction/turn');
+  return {
+    ExtractionContextError: actualContext.ExtractionContextError,
+    carinaTranscript: actualTurn.carinaTranscript,
+    buildExtractionContext: jest.fn(),
+    runCarinaExtraction: jest.fn(),
+    runTurnExtraction: jest.fn(),
+    runFoldCatchup: jest.fn(),
+  };
+});
 
 jest.mock('@/lib/services/system-events.service', () => ({
   createMemoryExtractionEvent: jest.fn(),
@@ -34,22 +31,21 @@ jest.mock('@/lib/services/cost-estimation.service', () => ({
   estimateMessageCost: jest.fn(),
 }));
 
-jest.mock('@/lib/instance-settings', () => ({
-  getMemoryExtractionLimits: jest.fn(),
-}));
-
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
-import { processTurnForMemory } from '@/lib/memory/memory-processor';
-import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
-import { getMemoryExtractionLimits } from '@/lib/instance-settings';
-import type { BackgroundJob } from '@/lib/schemas/types';
+import { handleCarinaMemoryExtraction } from '../carina-memory-extraction';
+import { getRepositories } from '@/lib/repositories/factory';
+import {
+  buildExtractionContext,
+  carinaTranscript,
+  ExtractionContextError,
+  runCarinaExtraction,
+  type ExtractionContext,
+} from '@/lib/memory/extraction';
+import type { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const MOCK_PROFILE = { id: 'conn-1', provider: 'anthropic', modelName: 'claude-3-haiku' };
-const MOCK_SETTINGS = { cheapLLMSettings: { strategy: 'auto' } };
-const MOCK_CHAT = { id: 'chat-1', chatType: 'standard', createdAt: '2026-06-01T00:00:00.000Z' };
 const MOCK_ANSWERER = { id: 'char-1', name: 'Aria', pronouns: { subject: 'she' } };
 
 const MOCK_CARINA_MESSAGE = {
@@ -61,7 +57,7 @@ const MOCK_CARINA_MESSAGE = {
   systemKind: 'carina-response',
   createdAt: '2026-06-07T00:00:00.000Z',
   carinaMeta: { answererId: 'char-1', question: 'What is the capital of France?' },
-};
+} as unknown as MessageEvent;
 
 const JOB = {
   id: 'job-1',
@@ -75,157 +71,153 @@ const JOB = {
   },
 } as unknown as BackgroundJob;
 
-function makeMockRepos(overrides: Record<string, unknown> = {}) {
+function makeCtx(overrides: { messages?: MessageEvent[]; cast?: Map<string, unknown> } = {}): ExtractionContext {
+  const cast = overrides.cast ?? new Map([
+    ['char-1', {
+      characterId: 'char-1',
+      participantId: null,
+      name: 'Aria',
+      pronouns: MOCK_ANSWERER.pronouns,
+      isUser: false,
+      present: false,
+      character: MOCK_ANSWERER,
+    }],
+  ]);
   return {
-    connections: {
-      findById: jest.fn().mockResolvedValue(MOCK_PROFILE),
-      findByUserId: jest.fn().mockResolvedValue([MOCK_PROFILE]),
-    },
-    chatSettings: {
-      findByUserId: jest.fn().mockResolvedValue(MOCK_SETTINGS),
-    },
-    chats: {
-      findById: jest.fn().mockResolvedValue(MOCK_CHAT),
-      getMessages: jest.fn().mockResolvedValue([MOCK_CARINA_MESSAGE]),
-      updateMessage: jest.fn().mockResolvedValue(undefined),
-    },
-    characters: {
-      findById: jest.fn().mockResolvedValue(MOCK_ANSWERER),
-    },
-    ...overrides,
-  };
+    chat: { id: 'chat-1' },
+    project: { id: null, description: null },
+    route: { connectionProfile: MOCK_PROFILE },
+    cast,
+    userCharacter: null,
+    messages: jest.fn(async () => overrides.messages ?? [MOCK_CARINA_MESSAGE]),
+  } as unknown as ExtractionContext;
 }
+
+let repos: { connections: { findById: jest.Mock }; chats: { updateMessage: jest.Mock } };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(getRepositories).mockReturnValue(makeMockRepos() as never);
-  jest.mocked(resolveConciergeSettings).mockReturnValue({ onDuty: false, routeDirect: false, failoverAllowed: false, source: 'off-duty' } as never);
-  jest.mocked(shouldUseUncensoredRoute).mockReturnValue(false);
-  jest.mocked(getMemoryExtractionLimits).mockResolvedValue({ enabled: false } as never);
-  jest.mocked(processTurnForMemory).mockResolvedValue({
-    success: true,
-    memoriesCreatedCount: 1,
-    memoriesReinforcedCount: 0,
-    createdMemoryIds: ['mem-1'],
-    reinforcedMemoryIds: [],
+  repos = {
+    connections: { findById: jest.fn().mockResolvedValue(MOCK_PROFILE) },
+    chats: { updateMessage: jest.fn().mockResolvedValue(undefined) },
+  };
+  jest.mocked(getRepositories).mockReturnValue(repos as never);
+  jest.mocked(buildExtractionContext).mockResolvedValue(makeCtx());
+  jest.mocked(runCarinaExtraction).mockResolvedValue({
+    pass: 'self-turn',
+    rateDeferred: false,
+    calls: 1,
+    timedOut: 0,
+    failed: 0,
+    admitted: [],
+    createdIds: ['mem-1'],
+    reinforcedIds: [],
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    debugLogs: ['[Memory] created'],
     sourceMessageId: 'carina-msg-1',
-    debugLogs: [],
-  } as never);
+    hadContributions: true,
+  });
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('handleCarinaMemoryExtraction', () => {
-  it('builds a one-slice SELF transcript from the question and answer', async () => {
+  it('hydrates the answerer into the one context and extracts from the carina message', async () => {
     await handleCarinaMemoryExtraction(JOB);
 
-    expect(processTurnForMemory).toHaveBeenCalledTimes(1);
-    const ctx = jest.mocked(processTurnForMemory).mock.calls[0][0];
+    expect(buildExtractionContext).toHaveBeenCalledTimes(1);
+    expect(buildExtractionContext).toHaveBeenCalledWith('chat-1', 'user-1', {
+      connectionProfile: MOCK_PROFILE,
+      extraCharacterIds: ['char-1'],
+    });
+    expect(runCarinaExtraction).toHaveBeenCalledTimes(1);
+    const [ctx, message, answererId] = jest.mocked(runCarinaExtraction).mock.calls[0];
+    expect(ctx.chat.id).toBe('chat-1');
+    expect(message).toBe(MOCK_CARINA_MESSAGE);
+    expect(answererId).toBe('char-1');
+  });
 
-    // The question opens the (synthetic) turn; no user character → OTHER pass
-    // self-skips, leaving SELF-only extraction for the answerer.
-    expect(ctx.transcript.userMessage).toBe('What is the capital of France?');
-    expect(ctx.transcript.userCharacterId).toBeUndefined();
-    expect(ctx.transcript.characterSlices).toHaveLength(1);
-    expect(ctx.transcript.characterSlices[0]).toMatchObject({
+  it('keeps the debug lines on the carina message itself', async () => {
+    await handleCarinaMemoryExtraction(JOB);
+    expect(repos.chats.updateMessage).toHaveBeenCalledWith('chat-1', 'carina-msg-1', {
+      debugMemoryLogs: ['[Memory] created'],
+    });
+  });
+
+  it('skips when the carina message is missing', async () => {
+    jest.mocked(buildExtractionContext).mockResolvedValue(makeCtx({ messages: [] }));
+    await handleCarinaMemoryExtraction(JOB);
+    expect(runCarinaExtraction).not.toHaveBeenCalled();
+  });
+
+  it('skips when the answerer character is gone', async () => {
+    jest.mocked(buildExtractionContext).mockResolvedValue(makeCtx({ cast: new Map() }));
+    await handleCarinaMemoryExtraction(JOB);
+    expect(runCarinaExtraction).not.toHaveBeenCalled();
+  });
+
+  it('records nothing when the answer has no text', async () => {
+    jest.mocked(runCarinaExtraction).mockResolvedValue(null);
+    await handleCarinaMemoryExtraction(JOB);
+    expect(repos.chats.updateMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns quietly when the chat is gone', async () => {
+    jest.mocked(buildExtractionContext).mockRejectedValue(new ExtractionContextError('no-chat', 'Chat not found: chat-1'));
+    await expect(handleCarinaMemoryExtraction(JOB)).resolves.toBeUndefined();
+    expect(runCarinaExtraction).not.toHaveBeenCalled();
+  });
+
+  it('throws when the connection profile is missing (so the job retries)', async () => {
+    repos.connections.findById.mockResolvedValue(null);
+    await expect(handleCarinaMemoryExtraction(JOB)).rejects.toThrow('Connection profile not found');
+    expect(buildExtractionContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('carinaTranscript', () => {
+  it('builds a one-slice SELF transcript from the question and answer', () => {
+    const transcript = carinaTranscript(makeCtx(), MOCK_CARINA_MESSAGE, 'char-1');
+
+    // The question opens the (synthetic) turn; no user character → the OTHER
+    // pass has no subject, leaving SELF-only extraction for the answerer.
+    expect(transcript).not.toBeNull();
+    expect(transcript!.userMessage).toBe('What is the capital of France?');
+    expect(transcript!.userCharacterId).toBeUndefined();
+    expect(transcript!.characterSlices).toHaveLength(1);
+    expect(transcript!.characterSlices[0]).toMatchObject({
       characterId: 'char-1',
       characterName: 'Aria',
       text: 'Paris is the capital of France.',
       contributingMessageIds: ['carina-msg-1'],
     });
-    expect(ctx.transcript.latestAssistantMessageId).toBe('carina-msg-1');
-    expect(ctx.participantCharacters.get('char-1')).toBe(MOCK_ANSWERER);
+    expect(transcript!.latestAssistantMessageId).toBe('carina-msg-1');
   });
 
-  it('anchors derived memories to the carina message timestamp', async () => {
-    await handleCarinaMemoryExtraction(JOB);
-    const ctx = jest.mocked(processTurnForMemory).mock.calls[0][0];
-    expect(ctx.sourceMessageTimestamp).toBe('2026-06-07T00:00:00.000Z');
+  it('anchors derived memories to the carina message timestamp', () => {
+    const transcript = carinaTranscript(makeCtx(), MOCK_CARINA_MESSAGE, 'char-1');
+    expect(transcript!.turnTimestamp).toBe('2026-06-07T00:00:00.000Z');
+    expect(transcript!.characterSlices[0].lastMessageCreatedAt).toBe('2026-06-07T00:00:00.000Z');
   });
 
-  it('marks autonomous-room provenance when the chat is autonomous', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        chats: {
-          findById: jest.fn().mockResolvedValue({ ...MOCK_CHAT, chatType: 'autonomous' }),
-          getMessages: jest.fn().mockResolvedValue([MOCK_CARINA_MESSAGE]),
-          updateMessage: jest.fn().mockResolvedValue(undefined),
-        },
-      }) as never,
-    );
-    await handleCarinaMemoryExtraction(JOB);
-    const ctx = jest.mocked(processTurnForMemory).mock.calls[0][0];
-    expect(ctx.inAutonomousRoom).toBe(true);
+  it('is null when the answer text is empty', () => {
+    const blank = { ...MOCK_CARINA_MESSAGE, content: '   ' } as MessageEvent;
+    expect(carinaTranscript(makeCtx(), blank, 'char-1')).toBeNull();
   });
 
-  it('skips when the carina message is missing', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        chats: {
-          findById: jest.fn().mockResolvedValue(MOCK_CHAT),
-          getMessages: jest.fn().mockResolvedValue([]),
-          updateMessage: jest.fn().mockResolvedValue(undefined),
-        },
-      }) as never,
-    );
-    await handleCarinaMemoryExtraction(JOB);
-    expect(processTurnForMemory).not.toHaveBeenCalled();
+  it('is null when the answerer is not in the cast', () => {
+    expect(carinaTranscript(makeCtx({ cast: new Map() }), MOCK_CARINA_MESSAGE, 'char-1')).toBeNull();
   });
 
-  it('skips when the answer text is empty', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        chats: {
-          findById: jest.fn().mockResolvedValue(MOCK_CHAT),
-          getMessages: jest.fn().mockResolvedValue([{ ...MOCK_CARINA_MESSAGE, content: '   ' }]),
-          updateMessage: jest.fn().mockResolvedValue(undefined),
-        },
-      }) as never,
-    );
-    await handleCarinaMemoryExtraction(JOB);
-    expect(processTurnForMemory).not.toHaveBeenCalled();
-  });
-
-  it('skips when the answerer character is gone', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        characters: { findById: jest.fn().mockResolvedValue(null) },
-      }) as never,
-    );
-    await handleCarinaMemoryExtraction(JOB);
-    expect(processTurnForMemory).not.toHaveBeenCalled();
-  });
-
-  it('still extracts when the question is absent (answer-only memory)', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        chats: {
-          findById: jest.fn().mockResolvedValue(MOCK_CHAT),
-          getMessages: jest.fn().mockResolvedValue([
-            { ...MOCK_CARINA_MESSAGE, carinaMeta: { answererId: 'char-1', question: '' } },
-          ]),
-          updateMessage: jest.fn().mockResolvedValue(undefined),
-        },
-      }) as never,
-    );
-    await handleCarinaMemoryExtraction(JOB);
-    const ctx = jest.mocked(processTurnForMemory).mock.calls[0][0];
-    expect(ctx.transcript.userMessage).toBeNull();
-    expect(ctx.transcript.characterSlices).toHaveLength(1);
-  });
-
-  it('throws when the connection profile is missing (so the job retries)', async () => {
-    jest.mocked(getRepositories).mockReturnValue(
-      makeMockRepos({
-        connections: {
-          findById: jest.fn().mockResolvedValue(null),
-          findByUserId: jest.fn().mockResolvedValue([]),
-        },
-      }) as never,
-    );
-    await expect(handleCarinaMemoryExtraction(JOB)).rejects.toThrow('Connection profile not found');
+  it('still extracts when the question is absent (answer-only memory)', () => {
+    const answerOnly = {
+      ...MOCK_CARINA_MESSAGE,
+      carinaMeta: { answererId: 'char-1', question: '' },
+    } as unknown as MessageEvent;
+    const transcript = carinaTranscript(makeCtx(), answerOnly, 'char-1');
+    expect(transcript!.userMessage).toBeNull();
+    expect(transcript!.characterSlices).toHaveLength(1);
   });
 });

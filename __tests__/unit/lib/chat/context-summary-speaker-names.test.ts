@@ -71,12 +71,11 @@ jest.mock('@/lib/services/commonplace-notifications/relevant-conversations-refre
   refreshRelevantConversationsOnFold: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/fold-other-pass', () => ({
-  runFoldOtherPass: jest.fn(async () => ({})),
-}))
-
-jest.mock('@/lib/memory/fold-episode-pass', () => ({
-  runFoldEpisodePass: jest.fn(),
+jest.mock('@/lib/memory/extraction', () => ({
+  buildExtractionContext: jest.fn(async (_chatId: string, _userId: string, opts: { messages?: unknown[] }) => ({
+    messagesHandedIn: opts.messages,
+  })),
+  runFoldPass: jest.fn(async () => ({})),
 }))
 
 import { generateContextSummary } from '@/lib/chat/context-summary'

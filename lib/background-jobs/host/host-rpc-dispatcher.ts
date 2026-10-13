@@ -131,6 +131,10 @@ async function runMethod(
       const request = args[0] as Parameters<typeof admitPrepared>[0];
       return admitPrepared(request);
     }
+    case 'countRecentAdmissions': {
+      const { countRecentAdmissionsLocal } = await import('@/lib/memory/admission/rate-ledger');
+      return countRecentAdmissionsLocal(args[0] as string, args[1] as number);
+    }
     default: {
       const exhaustive: never = method;
       throw new Error(`Unknown host-rpc method: ${String(exhaustive)}`);
