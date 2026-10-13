@@ -1,5 +1,5 @@
 /**
- * Unit tests for the recall-side targeting-tag reading (lib/memory/recall-tags.ts).
+ * Unit tests for the recall-side targeting-tag reading (lib/memory/recall/tags.ts).
  *
  * Pure module — no mocks. Covers: tag parsing round-trips (valid / invalid /
  * missing, matching the extraction-side defaults), each multiplier in isolation,
@@ -24,7 +24,7 @@ import {
   DEFAULT_CONTEXT,
   type RecallContext,
   type TargetingTags,
-} from '../recall-tags'
+} from '../recall/tags'
 
 const PROJ_A = 'project-aaaa'
 const PROJ_B = 'project-bbbb'

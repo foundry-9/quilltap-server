@@ -4,7 +4,7 @@
  * Per-turn retrieval of relevant files from the three Knowledge/ scopes
  * available to the responding character: their own vault, the active
  * chat-project's linked mounts, and the instance-wide Quilltap General
- * mount. Parallels `memory-injector.ts` but operates on the document-chunk
+ * mount. Parallels the memory recall renderer (`lib/memory/recall/render.ts`) but operates on the document-chunk
  * index (the same index that powers the unified search tool's `documents`
  * and `knowledge` sources).
  *

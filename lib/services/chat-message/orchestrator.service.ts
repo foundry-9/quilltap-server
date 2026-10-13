@@ -1166,9 +1166,7 @@ async function processMessage(
 
   const {
     cachedCompressionResponse,
-    preSearchedMemories,
-    recallSignals,
-    preSearchedQueryEmbedding,
+    preRecall,
     stopKeepAlive,
   } = await runPreContextPreCompute({
     chatId,
@@ -1244,9 +1242,7 @@ async function processMessage(
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
-      preSearchedMemories,
-      recallSignals,
-      preSearchedQueryEmbedding,
+      preRecall,
       // Memory recap: uncensored fallback for Unmoderated chats. The policy
       // routes direct only when the Concierge is on duty and the chat is
       // Unmoderated, so off-duty and exempt chats never engage it.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals'
-import { formatDigestProvenance } from '@/lib/chat/context/memory-injector'
+import { formatDigestProvenance } from '@/lib/memory/recall/render'
 
 describe('formatDigestProvenance', () => {
   it('describes a digest by its source count', () => {

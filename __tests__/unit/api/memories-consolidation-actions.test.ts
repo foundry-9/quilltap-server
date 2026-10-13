@@ -62,7 +62,8 @@ jest.mock('@/lib/instance-settings', () => ({
   setMemoryExtractionModeSettings: jest.fn(async (patch: any) => { storedMode = { ...storedMode, ...patch } }),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({}))
+jest.mock('@/lib/memory/recall/search', () => ({}))
+jest.mock('@/lib/memory/index-store/backfill', () => ({}))
 jest.mock('@/lib/memory/housekeeping', () => ({}))
 jest.mock('@/lib/memory/anchor-gate-probe', () => ({}))
 jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({}))

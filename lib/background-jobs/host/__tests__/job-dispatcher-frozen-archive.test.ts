@@ -12,7 +12,7 @@ jest.mock('../processor-host', () => ({ sendToChild: jest.fn(() => true), notify
 
 const invalidateFrozenArchive = jest.fn();
 const invalidateAllFrozenArchives = jest.fn();
-jest.mock('@/lib/memory/frozen-archive-cache', () => ({
+jest.mock('@/lib/memory/recall/archive', () => ({
   invalidateFrozenArchive: (...args: unknown[]) => invalidateFrozenArchive(...args),
   invalidateAllFrozenArchives: (...args: unknown[]) => invalidateAllFrozenArchives(...args),
 }));

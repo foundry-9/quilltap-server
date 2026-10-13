@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7); Phases E–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7); Phases F–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -1046,6 +1046,55 @@ departures:
   `memory-diff` on an autonomous chat, regenerate coverage). The new tests cover the same paths
   with mocked models: `run-pass-invariants.test.ts`, `admission-dry-run.test.ts`,
   `fold-cursor-slicing.test.ts`, `context-and-carina.test.ts` and the migration's integration test.
+
+**Amendment (2026-10-13, Phase E).** Phase E landed as §3.8 describes, with these departures:
+
+- **Stage boundaries.** The floor and the window staging sit in `score`, not `select`: whether the
+  window is hard or soft decides which multipliers apply, so it must precede `rankForRecall`.
+  `select` is expansion, R6 and the cut. Expansion's neighbour read is `hydrateNeighbours` (in
+  `hydrate.ts`, the pipeline's one other read), so `score` and `select` stay pure. The text
+  strategy never expands and never reserves (as before). `searchRecall` drives gather → select and
+  falls back to the text strategy on a vector failure or an empty index, as the old search did.
+- **No digest redirect in `hydrate`.** Every prompt path reads hot rows only, and the tool and the
+  Memories API deliberately return cold rows labelled, so there is never a hit to redirect.
+- **Precedence across pools** is archive → recap → head → inter-character. The recap narrative is
+  built without the rows the archive rendered (it reads that many more per tier so its tiers stay
+  full); the head and the inter-character section skip the recap's rows on the turn it runs. The
+  inter-character section dedups against what the earlier pools *rendered*, so a row the archive
+  held but its budget cut stays eligible (bug 224's rule).
+- **One embedding per turn, with one exception.** The query stage embeds the query once (plus a
+  retrospective turn's ≤ 2 probes); the head, the inter-character relevance half, the recap's
+  relevant list, the per-turn list and the retrospective mini-recap reuse it. The mini-recap and the
+  recap's list therefore search with the turn's query rather than their own text (`paraphrase —
+  entities`; the newest message). Knowledge retrieval still embeds the recent-window prose on its
+  own: it is not memory recall and was left alone. When the proactive pass built a query but found
+  nothing, the turn reuses that query instead of distilling and embedding a second time.
+- **The archive's token budget is the ordinary one on every turn**; a retrospective head borrows
+  from what the archive leaves, never below the ordinary head budget.
+- **Delivery** decides survival by text: a rendered line is delivered when its body is in the
+  request's recall text verbatim, or when one compressed line holds at least 60% of its
+  significant words (three or more). The ring is written whenever the head delivered something,
+  whether or not the whisper posted. The recap's rows are stamped when its narrative was delivered
+  (they were never stamped before). The debug record rides on the reply: `BuiltContext.recallDebugLog`,
+  written to the assistant message's `debugMemoryLogs` by the finalizer; memory extraction now
+  appends after it (`withRecallLines`) instead of overwriting. Its `[Recall:ring]` line is what the
+  replay reads back.
+- **The replay keeps its two candidate tables** (old path inert, new path live) for the CLI and the
+  probe-set runbook, and adds the text fallback's table, the stage trace (query, the new path's
+  search stages, `assemble` over the new path's pool, archive uncached) and the rendered pools. The
+  ring as of the turn comes from earlier replies' records; a chat older than those records ranks
+  under its current ring and says so (`ringSource: 'chat'`).
+- **`searchMemoriesSemantic` and `markMemoriesAccessed` are gone, not kept as names**: every caller
+  moved to `searchRecall` / `searchMemories` and `stampAccessed`, and a grep-test holds that. The
+  `lib/memory` barrel exports the recall stages.
+- **The probe fixture is synthetic.** Friday's corpus is not in this environment, so
+  `__tests__/fixtures/recall-probes/` is a nine-turn stand-in named after the probe-set slots,
+  captured from the pre-Phase-E search under `cap14` before any recall code moved; the stages
+  reproduce every row (order, relevance, salience, labels, blend) and its gold-at-head total. The
+  real `cap14` replay on Friday and the V4test walkthrough (continue-turn request body, the stage
+  trace in `debugMemoryLogs`, inter-character never repeating an archive row) were not run here;
+  `assemble-deliver.test.ts` and the continue-turn test in `context-management.test.ts` cover the
+  same paths with mocked providers.
 
 ## 8. Risks
 

@@ -1,8 +1,8 @@
 /**
  * Episodic-spine helpers (episodic recall overhaul).
  *
- * Small, pure utilities shared by the write path (memory-service, memory-gate,
- * extraction) and the read path (injector, tools):
+ * Small, pure utilities shared by the write path (admission,
+ * extraction) and the read path (recall render, tools):
  *
  *  - {@link buildMemoryAnchorLine}: the `(when: 2026-07-14 · place: Lighthouse
  *    Point)` anchor line appended to a memory's embedded text (built by

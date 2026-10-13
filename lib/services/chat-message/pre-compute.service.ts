@@ -27,14 +27,12 @@ import {
   invalidateCompressionCache,
   type CachedCompressionResponse,
 } from './compression-cache.service'
-import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
-import {
-  searchMemoriesSemantic,
-  type SemanticSearchResult,
-  type SearchQueryEmbedding,
-} from '@/lib/memory/memory-service'
-import { buildRetrospectiveProbes, buildTurnRecallContext } from '@/lib/memory/recall-tags'
-import { DYNAMIC_HEAD_MAX_SIZE, FROZEN_ARCHIVE_MAX_SIZE } from '@/lib/chat/context/memory-injector'
+import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
+import { buildRecallQuery } from '@/lib/memory/recall/query'
+import { searchRecall } from '@/lib/memory/recall/search'
+import { buildTurnRecallContext } from '@/lib/memory/recall/tags'
+import { PROACTIVE_RECALL_POOL_SIZE, type PreRecall } from '@/lib/memory/recall/assemble'
+import type { RecallTrace } from '@/lib/memory/recall/types'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
@@ -45,8 +43,7 @@ import type { ChatEvent } from '@/lib/schemas/chat.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
-/** Archive overlap (≤ FROZEN_ARCHIVE_MAX_SIZE) plus the largest retrospective head. */
-export const PROACTIVE_RECALL_POOL_SIZE = FROZEN_ARCHIVE_MAX_SIZE + DYNAMIC_HEAD_MAX_SIZE * 2
+export { PROACTIVE_RECALL_POOL_SIZE }
 
 const logger = createServiceLogger('PreContextPreCompute')
 
@@ -84,23 +81,13 @@ export interface RunPreContextPreComputeOptions {
 
 export interface PreContextPreComputeResult {
   cachedCompressionResponse: CachedCompressionResponse | undefined
-  preSearchedMemories: SemanticSearchResult[] | undefined
   /**
-   * The query text and vector the proactive memory search embedded. Threaded
-   * into buildContext so the per-turn conversation-summary list (when the
-   * instance-wide `memoryRecall.perTurnConversationSummaries` setting is on)
-   * rides the same vector instead of paying for a second embedding call.
-   * Undefined when the proactive path didn't run or its embedding failed.
+   * The proactive recall: the query it distilled and embedded (once) and what
+   * that query found. Threaded into buildContext, whose recall reuses both —
+   * the head, the inter-character pool and the conversation lists all ride
+   * this one embedding. Undefined when the proactive path didn't run.
    */
-  preSearchedQueryEmbedding: SearchQueryEmbedding | undefined
-  /**
-   * The turn-level recall signals the proactive keyword distillation emitted
-   * (retrospective / timeRange / entities / paraphrase). Threaded into
-   * buildContext so the retrospective cadence (enlarged head + mini-recap)
-   * fires without re-running the distillation. Undefined when the proactive
-   * path didn't run or its extraction failed.
-   */
-  recallSignals: MemorySearchExtraction | undefined
+  preRecall: PreRecall | undefined
   /** Caller MUST invoke after buildMessageContext returns (or on error)
    * to release the keep-alive interval. Idempotent. */
   stopKeepAlive: () => void
@@ -113,9 +100,6 @@ export async function runPreContextPreCompute(
     compressionTask(opts),
     proactiveRecallTask(opts),
   ])
-  const preSearchedMemories = recallOutcome?.memories
-  const recallSignals = recallOutcome?.signals
-  const preSearchedQueryEmbedding = recallOutcome?.queryEmbedding
 
   // Keep-alive pings during the upcoming buildMessageContext (especially long
   // when compression is regenerating). Only armed when compression is enabled
@@ -135,9 +119,7 @@ export async function runPreContextPreCompute(
 
   return {
     cachedCompressionResponse,
-    preSearchedMemories,
-    recallSignals,
-    preSearchedQueryEmbedding,
+    preRecall: recallOutcome,
     stopKeepAlive: () => {
       if (keepAliveInterval) {
         clearInterval(keepAliveInterval)
@@ -187,16 +169,9 @@ async function compressionTask(
   return undefined
 }
 
-interface ProactiveRecallOutcome {
-  memories: SemanticSearchResult[] | undefined
-  signals: MemorySearchExtraction | undefined
-  /** The vector this task embedded for `searchQuery`, for downstream reuse. */
-  queryEmbedding: SearchQueryEmbedding | undefined
-}
-
 async function proactiveRecallTask(
   opts: RunPreContextPreComputeOptions
-): Promise<ProactiveRecallOutcome | undefined> {
+): Promise<PreRecall | undefined> {
   const {
     chatId, userId, chat, character, characterParticipant,
     presentAboutCharacterIds, presentParticipantNames, isContinueMode, content, existingMessages,
@@ -296,77 +271,47 @@ async function proactiveRecallTask(
     characterId: character.id,
   }))
 
-  // Prefer the natural-language paraphrase as the embedding query (item 3); a
-  // keyword bag throws away the sentence structure the embedding model is
-  // trained on. Fall back to the keyword join when the model omits a paraphrase.
-  const searchQuery = keywordResult.result.paraphrase || keywordResult.result.keywords.join(' ')
-  // Same per-turn recall context the dynamic head uses, so the proactive path
-  // gets identical scope gating, temporal down-weighting, context steering,
-  // participant boost, anti-repetition, and fresh-event boost (see
-  // lib/memory/recall-tags.ts). The turn's temporal/context guess and the
-  // present-character set drive items 3–4.
+  // The turn's one query: the paraphrase (else the keyword join), embedded
+  // once here and reused by every recall pool in buildContext.
+  const trace: RecallTrace = []
+  const query = await buildRecallQuery({
+    userId,
+    text: signals.keywords.join(' '),
+    signals,
+  }, trace)
+
+  // The same per-turn recall context the fallback head builds (see
+  // lib/memory/recall/tags.ts): scope gating, temporal weighting, context
+  // steering, participant boost, anti-repetition and the fresh-event boost.
   const recallSettings = await getMemoryRecallSettings()
-  const retrospective = signals.retrospective === true
   const recallContext = buildTurnRecallContext({
     chat,
     recallSettings,
     turnContext: signals.context ?? null,
     turnTemporal: signals.temporal ?? null,
-    turnRetrospective: retrospective,
+    turnRetrospective: query.retrospective,
     presentAboutCharacterIds,
     presentParticipantNames,
     nowMs: Date.now(),
   })
 
-  // Retrospective turns: multi-probe (entity string; paraphrase + resolved
-  // date phrase) so a "remember Lighthouse Point last week?" turn probes the
-  // vector space from every angle the reference offers.
-  const extraProbes = buildRetrospectiveProbes(signals, retrospective)
-
-  // Captured by `searchMemoriesSemantic` the moment it embeds `searchQuery`.
-  let queryEmbedding: SearchQueryEmbedding | undefined
-
   try {
-    const memoryResults = await searchMemoriesSemantic(
-      character.id,
-      searchQuery,
-      {
-        userId,
-        // The context builder drops every candidate already in the frozen
-        // archive, then fills the head from what is left — and does not search
-        // again. Pull enough that a full archive overlap still leaves the
-        // largest head it can ask for (a retrospective turn: 2 × max).
-        limit: PROACTIVE_RECALL_POOL_SIZE,
-        captureQueryEmbedding: captured => {
-          queryEmbedding = captured
-        },
-        minImportance: RECALL_MIN_IMPORTANCE,
-        recallContext,
-        // Episodic recall: entity anchoring always (a verbatim place name
-        // cannot be sliced off by the cosine floor); window + probes only on
-        // retrospective turns.
-        entityAnchors: signals.entities,
-        // A resolved window is useful whether or not the turn reads as
-        // retrospective — the classifier misses same-day references, and
-        // `searchMemoriesSemantic`'s two-stage semantics (hard filter only when
-        // enough hits survive, else the bounded soft boost) make it
-        // starvation-safe. The retrospective flag still gates the temporal
-        // flip, anti-repetition suspension, and the multi-probe block below.
-        occurredWithin: signals.timeRange ?? null,
-        extraProbes,
-      }
-    )
-
-    if (memoryResults.length > 0) {
-      return { memories: memoryResults, signals, queryEmbedding }
-    }
+    const result = await searchRecall(character.id, query, {
+      // The context builder drops every candidate already in the frozen
+      // archive, then fills the head from what is left — and does not search
+      // again. Pull enough that a full archive overlap still leaves the
+      // largest head it can ask for (a retrospective turn: 2 × max).
+      limit: PROACTIVE_RECALL_POOL_SIZE,
+      minImportance: RECALL_MIN_IMPORTANCE,
+      recallContext,
+    }, trace, 'head')
+    return { query, candidates: result.candidates, trace }
   } catch (error) {
-    logger.warn('Proactive memory recall: memory search failed, falling back to default', {
+    logger.warn('Proactive memory recall: memory search failed; the turn recalls with the query alone', {
       chatId,
       characterId: character.id,
       error: error instanceof Error ? error.message : String(error),
     })
+    return { query, candidates: [], trace }
   }
-
-  return { memories: undefined, signals, queryEmbedding }
 }

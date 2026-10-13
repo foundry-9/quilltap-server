@@ -11,14 +11,14 @@
  *
  * This module is the one place that turns a pool of memories into the
  * {@link MemorySubjectContext} those formatters need. It lives here rather
- * than in `memory-injector.ts` so that module stays pure formatting with no
+ * than in `render.ts` so that module stays pure formatting with no
  * repository reach.
  */
 
 import type { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import type { MemorySubjectContext } from '@/lib/chat/context/memory-injector'
+import type { MemorySubjectContext } from './render'
 
 /**
  * Resolve the display names of every other character a pool of memories is

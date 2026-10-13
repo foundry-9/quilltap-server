@@ -193,7 +193,7 @@ These describe the memory's frame; they do not change its content.
 
 /**
  * Closed vocabularies for the three targeting axes live in
- * `lib/memory/recall-tags.ts` (the single source of truth; the parser normalises against them through
+ * `lib/memory/recall/tags.ts` (the single source of truth; the parser normalises against them through
  * `normaliseTargeting` in `lib/memory/candidate.ts`) so
  * the extraction (write) and recall (read) sides can never drift.
  */

@@ -1,43 +1,46 @@
 /**
- * Recall replay harness (episodic recall overhaul, §3 — built as step 0 of
- * the retrieval workstream so the new multipliers/boosts can be tuned against
- * real chats instead of blind).
+ * Recall replay harness (episodic recall overhaul §3; memory refactor §3.8).
  *
- * Given a chat (and optionally a turn index), reconstruct the per-turn recall
- * distillation (retrospective / timeRange / entities / paraphrase) and run the
- * memory search TWICE — once with the episodic signals inert (the pre-overhaul
- * path) and once with them live — returning the full candidate table for each:
- * cosine, salience, blendedBefore, every multiplier that fired,
- * blendedAfter, and whether the entry made the head. Nothing is persisted;
- * the recall-history ring buffer is read but never written.
+ * Given a chat (and optionally a turn index), rebuild the turn's recall query
+ * (`buildRecallQuery`, distilling or reusing pinned signals), run the search
+ * stages TWICE — once with the episodic signals inert (the pre-overhaul path)
+ * and once with them live — and then the turn's `assemble` over the live
+ * path's pool, against the turn's own clock, its pinned participants and the
+ * anti-repetition ring as it stood at that turn (read back from the chat's
+ * per-message recall records). Returns both candidate tables (cosine,
+ * salience, blend, every multiplier that fired, the head cut), the stage trace
+ * (what the archive removed, what the budget cut, what the inter-character
+ * section took), and what the text fallback would have returned. Nothing is
+ * persisted; nothing is stamped.
  *
- * Three harness knobs (R7 of the recall multiplier retuning) make runs
- * comparable: `tuning` applies retuning constants to the new path only;
- * `signals` reuses a saved distillation instead of calling the cheap LLM again
- * (the distillation is not deterministic, so two runs of one turn otherwise
- * embed different queries); `asOf` drops memories created after the replayed
- * turn's opening message, so an old turn is searched against the corpus as it
- * stood then.
+ * Harness knobs (R7 of the recall multiplier retuning): `tuning` applies to
+ * the new path only; `signals` reuses a saved distillation (the distillation is
+ * not deterministic); `asOf` drops memories created after the turn opened, so
+ * an old turn searches the corpus as it stood then.
  *
  * Consumed by POST /api/v1/chats/[id]?action=recall-replay, which the
  * `quilltap recall-replay` CLI wraps.
  *
- * @module memory/recall-replay
+ * @module memory/recall/replay
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { extractMemorySearchKeywords, stripToolArtifacts, type MemorySearchExtraction } from './cheap-llm-tasks'
-import { searchMemoriesSemantic, type SemanticSearchResult } from './memory-service'
+import { extractMemorySearchKeywords, stripToolArtifacts } from '../cheap-llm-tasks'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { partitionMessagesIntoTurns } from '@/lib/chat/context-summary'
-import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE, sizeMemoryPools } from '@/lib/chat/context/memory-injector'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { buildRetrospectiveProbes, buildTurnRecallContext } from './recall-tags'
-import { describeRecallTuning, resolveRecallTuning, type RecallTuningInput } from './recall-tuning'
 import type { MessageEvent } from '@/lib/schemas/types'
 import type { EmbeddingResult } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { RECALL_MIN_IMPORTANCE } from './scoring'
+import { RECALL_MIN_IMPORTANCE } from '../scoring'
+import { assembleRecall, DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE, sizeMemoryPools } from './assemble'
+import { ringFromDebugLog } from './deliver'
+import { RECALL_HISTORY_TURNS } from './history'
+import { buildRecallQuery, type MemorySearchExtraction, type RecallQuery } from './query'
+import { searchRecall } from './search'
+import { buildTurnRecallContext } from './tags'
+import { describeRecallTuning, resolveRecallTuning, type RecallTuningInput } from './tuning'
+import type { RecallCandidate, RecallTrace } from './types'
 
 const logger = createServiceLogger('RecallReplay')
 
@@ -89,7 +92,7 @@ export interface RecallReplayResult {
   totalTurns: number
   /** The distilled turn signals driving the new path. */
   signals: MemorySearchExtraction | null
-  /** The query both paths embedded. */
+  /** The query both paths embedded (once). */
   query: string
   /** Clock the distillation resolved against (the replayed turn's timestamp). */
   clockIso: string
@@ -109,6 +112,16 @@ export interface RecallReplayResult {
   asOf: string | null
   /** How many memories the `asOf` cutoff left out. */
   excludedAfterAsOf: number
+  /** What the text fallback would have returned for the new path's question. */
+  fallbackPath: RecallReplayRow[]
+  /** The anti-repetition ring the replay ranked under. */
+  ring: string[]
+  /** Where the ring came from: the turn's recall records, or (an older chat) its current ring. */
+  ringSource: 'debug-log' | 'chat'
+  /** What each pool of the turn's assemble rendered (ids). */
+  pools: { archive: string[]; head: string[]; interCharacter: string[]; recap: string[] }
+  /** The stage trace: query, the new path's search stages, then assemble. */
+  trace: RecallTrace
 }
 
 export interface RunRecallReplayInput {
@@ -136,7 +149,7 @@ export interface RunRecallReplayInput {
   asOf?: boolean
 }
 
-function toRows(results: SemanticSearchResult[], headSize: number): RecallReplayRow[] {
+function toRows(results: RecallCandidate[], headSize: number): RecallReplayRow[] {
   return results.map((r, index) => ({
     memoryId: r.memory.id,
     summary: r.memory.summary,
@@ -155,9 +168,31 @@ function toRows(results: SemanticSearchResult[], headSize: number): RecallReplay
   }))
 }
 
+/** The memory budget the assemble step sizes its pools by when none is given (the floor). */
+const REPLAY_DEFAULT_MEMORY_BUDGET = 2000
+
 /**
- * Run the replay. Read-only against the chat and memory corpus — search does
- * not stamp `lastAccessedAt`; only consumers that deliver memories do.
+ * The anti-repetition ring as it stood when `beforeMessageId` was written: the
+ * head ids of the last few recall records before it. Null when the chat has no
+ * recall records that early (it predates them).
+ */
+export function ringAsOf(messages: readonly MessageEvent[], beforeMessageId: string): string[][] | null {
+  const cutoff = messages.findIndex(m => m.id === beforeMessageId)
+  const before = cutoff >= 0 ? messages.slice(0, cutoff) : messages
+  const turns: string[][] = []
+  let sawRecord = false
+  for (const m of before) {
+    const ring = ringFromDebugLog(m.debugMemoryLogs)
+    if (ring === null) continue
+    sawRecord = true
+    if (ring.length > 0) turns.push(ring)
+  }
+  return sawRecord ? turns.slice(-RECALL_HISTORY_TURNS) : null
+}
+
+/**
+ * Run the replay. Read-only against the chat and memory corpus — no stage
+ * before `deliver` writes, and the replay never delivers.
  */
 export async function runRecallReplay(input: RunRecallReplayInput): Promise<RecallReplayResult> {
   const repos = getRepositories()
@@ -220,36 +255,38 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     signals = distill.success ? distill.result ?? null : null
   }
 
-  const query =
-    signals?.paraphrase ||
-    (signals?.keywords?.length ? signals.keywords.join(' ') : '') ||
-    window[window.length - 1]?.content ||
-    ''
-  if (!query.trim()) {
+  const fallbackText = window[window.length - 1]?.content || ''
+  const embeddingMemo = boundedMemo()
+  const trace: RecallTrace = []
+  const query = await buildRecallQuery({
+    userId: input.userId,
+    text: fallbackText,
+    signals: signals ?? undefined,
+    embeddingMemo,
+  }, trace)
+  if (!query.text.trim()) {
     throw new Error('Could not derive a recall query for this turn')
   }
 
   const recallSettings = await getMemoryRecallSettings()
   const presentParticipants = chat.participants.filter(p => p.status !== 'removed' && p.characterId)
   const presentAboutCharacterIds = presentParticipants.map(p => p.characterId)
+  const presentCharacters = await Promise.all(presentParticipants.map(p => repos.characters.findByIdRaw(p.characterId)))
 
-  const embeddingMemo = boundedMemo()
   const tuning = resolveRecallTuning(input.tuning)
   const tuningSummary = describeRecallTuning(tuning)
   // R4 drops entities that only name someone in the room; it needs their names.
   const presentParticipantNames = tuning.specificAnchors
-    ? (await Promise.all(presentParticipants.map(p => repos.characters.findByIdRaw(p.characterId))))
-        .flatMap(c => (c?.name ? [c.name] : []))
+    ? presentCharacters.flatMap(c => (c?.name ? [c.name] : []))
     : undefined
 
   // asOf — the corpus as it stood when the turn opened: leave out every memory
-  // created at or after the turn's opening (user) message, and decay weights
-  // against the turn's clock rather than today's. (Reinforcement a memory
-  // received after the turn can't be undone; its importance is read as it is now.)
+  // created at or after the turn's opening (user) message, and decay salience
+  // against the turn's clock rather than today's.
   const replayedTurn = turns[turnIndex - 1]
   const openingMessage = replayedTurn.messages.find(m => m.role === 'USER') ?? replayedTurn.messages[0]
   const asOfIso = input.asOf ? openingMessage?.createdAt ?? null : null
-  const weightClockMs = asOfIso ? Date.parse(clockIso) : undefined
+  const nowMs = asOfIso ? Date.parse(clockIso) : undefined
   let excludeMemoryIds: Set<string> | undefined
   if (asOfIso) {
     const newer = await repos.memories.countCreatedSince(character.id, asOfIso)
@@ -258,7 +295,14 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     logger.debug('Recall replay corpus cutoff', { chatId: input.chatId, asOfIso, excluded: excludeMemoryIds.size })
   }
 
-  const retrospective = signals?.retrospective === true
+  // The anti-repetition ring as it stood at this turn, from the recall records
+  // on the messages before it; a chat older than those records falls back to
+  // its current ring.
+  const messageEvents = allMessages.filter((m): m is MessageEvent => m.type === 'message')
+  const reconstructed = openingMessage ? ringAsOf(messageEvents, openingMessage.id) : null
+  const ringSource: 'debug-log' | 'chat' = reconstructed ? 'debug-log' : 'chat'
+
+  const retrospective = query.retrospective
   const newHeadSize =
     typeof input.memoryBudget === 'number' && input.memoryBudget > 0
       ? sizeMemoryPools(input.memoryBudget, retrospective).headEntries
@@ -266,67 +310,73 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   // Wide enough to show where the larger head ends.
   const limit = input.limit ?? Math.max(25, newHeadSize + 10)
 
-  // Same assembly as the two live consumers (see lib/memory/recall-tags.ts).
-  // The OLD path leaves the retrospective flag off entirely so its episodic
-  // signals stay inert.
+  // The same context assembly as the live paths (lib/memory/recall/tags.ts).
+  // The OLD path leaves the retrospective flag off entirely.
   const baseCtx = buildTurnRecallContext({
-    chat,
+    chat: reconstructed ? { ...chat, commonplaceRecallHistory: { turns: reconstructed } } : chat,
     recallSettings,
     turnContext: signals?.context ?? null,
     turnTemporal: signals?.temporal ?? null,
     presentAboutCharacterIds,
-    // Fresh-event boost against the REPLAYED TURN's clock, not wall-clock now —
-    // replaying an old turn must reproduce what recall would have done then.
+    // Fresh-event boost against the REPLAYED TURN's clock.
     nowMs: Date.parse(clockIso),
   })
 
-  // OLD path — episodic signals inert (byte-identical to pre-overhaul recall).
-  // The reference: tuning never reaches it, but the asOf cutoff does.
-  const oldResults = await searchMemoriesSemantic(character.id, query, {
-    userId: input.userId,
+  // OLD path — episodic signals inert: no probes, anchors or window.
+  const oldQuery: RecallQuery = { ...query, probes: [], anchors: [], window: null }
+  const oldResults = await searchRecall(character.id, oldQuery, {
     limit,
     minImportance: RECALL_MIN_IMPORTANCE,
     recallContext: baseCtx,
-    excludeMemoryIds,
-    weightClockMs,
-    embeddingMemo,
-  })
+    excludeIds: excludeMemoryIds,
+    nowMs,
+  }, [], 'old')
 
-  // NEW path — retrospective flip + window + entity anchors + multi-probe,
-  // under the requested tuning.
-  const extraProbes = buildRetrospectiveProbes(signals, retrospective)
-  const newResults = await searchMemoriesSemantic(character.id, query, {
+  // NEW path — the live path under the requested tuning.
+  const newCtx = {
+    ...baseCtx,
+    turnRetrospective: retrospective,
+    ...(input.tuning ? { tuning } : {}),
+    ...(presentParticipantNames ? { presentParticipantNames } : {}),
+  }
+  const newSearch = { limit, minImportance: RECALL_MIN_IMPORTANCE, recallContext: newCtx, excludeIds: excludeMemoryIds, headSize: newHeadSize, nowMs }
+  const newResults = await searchRecall(character.id, query, newSearch, trace, 'head')
+  // What the text fallback would have done with the same question.
+  const fallbackResults = await searchRecall(character.id, query, { ...newSearch, forceText: true }, [], 'fallback')
+
+  // The turn's assemble over the live pool: what each pool took and cut.
+  const others = presentCharacters
+    .filter((c): c is NonNullable<typeof c> => !!c && c.id !== character.id)
+    .map(c => ({ id: c.id, name: c.name }))
+  const bundle = await assembleRecall({
     userId: input.userId,
-    limit,
+    character: { id: character.id, name: character.name },
+    chat: reconstructed ? { ...chat, commonplaceRecallHistory: { turns: reconstructed } } : chat,
+    memoryBudget: input.memoryBudget ?? REPLAY_DEFAULT_MEMORY_BUDGET,
     minImportance: RECALL_MIN_IMPORTANCE,
-    recallContext: {
-      ...baseCtx,
-      turnRetrospective: retrospective,
-      ...(input.tuning ? { tuning } : {}),
-      ...(presentParticipantNames ? { presentParticipantNames } : {}),
-    },
-    entityAnchors: signals?.entities,
-    // Ungated from the retrospective flag, exactly as the two live consumers
-    // are — the replay is only useful while it mirrors production.
-    occurredWithin: signals?.timeRange ?? null,
-    extraProbes,
-    excludeMemoryIds,
-    headSize: newHeadSize,
-    weightClockMs,
-    embeddingMemo,
+    skipMemories: false,
+    present: [{ id: character.id, name: character.name }, ...others],
+    interCharacterSubjects: others,
+    currentStateTokens: 0,
+    recallSettings,
+    recentWindow: fallbackText,
+    preRecall: { query, candidates: newResults.candidates },
+    replay: { excludeIds: excludeMemoryIds ?? new Set(), nowMs, ring: newCtx.recentlyWhisperedIds },
   })
+  trace.push(...bundle.trace)
 
   logger.info('Recall replay complete', {
     chatId: input.chatId,
     characterId: character.id,
     turnIndex,
     retrospective,
-    oldCandidates: oldResults.length,
-    newCandidates: newResults.length,
+    oldCandidates: oldResults.candidates.length,
+    newCandidates: newResults.candidates.length,
     newHeadSize,
     tuning: tuningSummary,
     signalsPinned: !!input.signals,
     asOfIso,
+    ringSource,
   })
 
   return {
@@ -336,15 +386,20 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     turnIndex,
     totalTurns: turns.length,
     signals,
-    query,
+    query: query.text,
     clockIso,
-    oldPath: toRows(oldResults, DYNAMIC_HEAD_DEFAULT_SIZE),
-    newPath: toRows(newResults, newHeadSize),
+    oldPath: toRows(oldResults.candidates, DYNAMIC_HEAD_DEFAULT_SIZE),
+    newPath: toRows(newResults.candidates, newHeadSize),
+    fallbackPath: toRows(fallbackResults.candidates, newHeadSize),
     oldHeadSize: DYNAMIC_HEAD_DEFAULT_SIZE,
     newHeadSize,
     tuning: tuningSummary,
     signalsPinned: !!input.signals,
     asOf: asOfIso,
     excludedAfterAsOf: excludeMemoryIds?.size ?? 0,
+    ring: [...(newCtx.recentlyWhisperedIds ?? [])],
+    ringSource,
+    pools: bundle.pools,
+    trace,
   }
 }

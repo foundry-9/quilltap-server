@@ -1,5 +1,5 @@
 /**
- * Bug 214 — when embedding fails, searchMemoriesSemantic falls back to text
+ * Bug 214 — when embedding fails, searchMemories falls back to text
  * search. The fallback used to read only limit / minImportance / source /
  * aboutCharacterId / includeCold; it now honours occurredWithin,
  * excludeMemoryIds, recallContext, extraProbes, entityAnchors and
@@ -88,13 +88,13 @@ function makeMemory(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 
-describe('searchMemoriesSemantic — text-search fallback honours recall options (bug 214)', () => {
+describe('searchMemories — text-search fallback honours recall options (bug 214)', () => {
   let mockMemoriesRepo: {
     findByIds: jest.Mock
     searchByContent: jest.Mock
     updateAccessTimeBulk: jest.Mock
   }
-  let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
+  let searchMemories: typeof import('@/lib/memory/recall/search').searchMemories
   let salience: typeof import('@/lib/memory/scoring').salience
 
   const inside = makeMemory({ id: 'in-window', content: 'We walked to the harbour', summary: 'harbour walk', occurredAt: '2026-04-10T12:00:00.000Z' })
@@ -120,7 +120,7 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
     embeddingMock.generateEmbeddingForUser.mockRejectedValue(new Error('provider down'))
 
     jest.isolateModules(() => {
-      searchMemoriesSemantic = require('@/lib/memory/memory-service').searchMemoriesSemantic
+      searchMemories = require('@/lib/memory/recall/search').searchMemories
       salience = require('@/lib/memory/scoring').salience
     })
   })
@@ -128,25 +128,25 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
   const window = { from: '2026-04-09T00:00:00.000Z', to: '2026-04-12T00:00:00.000Z' }
 
   it('hard-filters to occurredWithin on the tool path (no recallContext)', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'harbour', { userId: 'u', occurredWithin: window })
+    const results = await searchMemories('char-1', 'harbour', { userId: 'u', window: window })
     expect(results.map(r => r.usedEmbedding)).not.toContain(true)
     expect(results.map(r => r.memory.id).sort()).toEqual(['anchor', 'in-window', 'later'])
   })
 
   it('drops excludeMemoryIds', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'harbour', {
+    const results = await searchMemories('char-1', 'harbour', {
       userId: 'u',
-      excludeMemoryIds: new Set(['later', 'outside-not-present']),
+      excludeIds: new Set(['later', 'outside-not-present']),
     })
     expect(results.map(r => r.memory.id)).not.toContain('later')
     expect(results.map(r => r.memory.id)).toContain('in-window')
   })
 
   it('applies the recall multipliers, with the window as a bounded boost when the hard filter would starve', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'harbour', {
+    const results = await searchMemories('char-1', 'harbour', {
       userId: 'u',
       limit: 10,
-      occurredWithin: window,
+      window: window,
       recallContext: { currentProjectId: null, scopePolicy: 'down-weight' },
     })
     // Out-of-window row survives (only 3 in-window < limit) but is not boosted.
@@ -158,25 +158,25 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
 
   it('weights by weightClockMs instead of the wall clock', async () => {
     const clockMs = Date.parse('2026-04-12T00:00:00.000Z')
-    const results = await searchMemoriesSemantic('char-1', 'harbour walk', { userId: 'u', weightClockMs: clockMs })
+    const results = await searchMemories('char-1', 'harbour walk', { userId: 'u', nowMs: clockMs })
     const hit = results.find(r => r.memory.id === 'in-window')!
     const expected = salience(hit.memory, { nowMs: clockMs })
     expect(hit.salience).toBeCloseTo(expected.salience, 10)
   })
 
   it('unions extra probes and entity anchors into the candidate pool', async () => {
-    await searchMemoriesSemantic('char-1', 'nothing matches this', {
+    await searchMemories('char-1', 'nothing matches this', {
       userId: 'u',
-      extraProbes: ['dusk lights'],
-      entityAnchors: ['Saltmarsh'],
+      probes: ['dusk lights'],
+      anchors: ['Saltmarsh'],
     })
     const phrases = mockMemoriesRepo.searchByContent.mock.calls.map(c => c[1])
     expect(phrases).toContain('dusk lights')
     expect(phrases).toContain('Saltmarsh')
 
-    const results = await searchMemoriesSemantic('char-1', 'nothing matches this', {
+    const results = await searchMemories('char-1', 'nothing matches this', {
       userId: 'u',
-      extraProbes: ['dusk lights'],
+      probes: ['dusk lights'],
     })
     expect(results.map(r => r.memory.id)).toEqual(['later'])
   })

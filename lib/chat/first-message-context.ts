@@ -6,7 +6,8 @@
  */
 
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory'
-import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
+import { searchMemories } from '@/lib/memory/recall/search'
+import { stampAccessed } from '@/lib/memory/recall/deliver'
 import { salience } from '@/lib/memory/scoring'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBaseInput } from '@/lib/schemas/chat.types'
@@ -147,7 +148,7 @@ async function loadMemoriesForParticipant(
   let semanticSearchWorked = false
 
   try {
-    const semanticResults = await searchMemoriesSemantic(
+    const semanticResults = await searchMemories(
       speakingCharacterId,
       searchQuery,
       {
@@ -224,7 +225,7 @@ async function loadMemoriesForParticipant(
     .slice(0, limit)
 
   // The greeting is composed from exactly these — they count as accessed.
-  markMemoriesAccessed(speakingCharacterId, selected.map(([id]) => id))
+  stampAccessed(speakingCharacterId, selected.map(([id]) => id))
 
   return selected.map(([, memory]) => memory)
 }

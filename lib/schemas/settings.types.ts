@@ -174,7 +174,7 @@ export type MemoryMaintenanceSettings = z.infer<typeof MemoryMaintenanceSettings
 /**
  * Recall-time relevance controls for the Commonplace Book. These shape which
  * stored memories surface in a chat by reading the targeting tags the extractor
- * already writes into each memory's `keywords` (see lib/memory/recall-tags.ts).
+ * already writes into each memory's `keywords` (see lib/memory/recall/tags.ts).
  *
  * Stored instance-wide in `instance_settings['memoryRecall']` (single-user
  * model — same class as `memoryExtractionLimits`), NOT on the column-per-field

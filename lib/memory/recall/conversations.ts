@@ -13,7 +13,7 @@
  * reusable entry point. Shared by the memory recap's "relevant conversations"
  * list (Workstream B) and the fold-triggered relevance refresh (Workstream D).
  *
- * @module memory/conversation-summary-search
+ * @module memory/recall/conversations
  */
 
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge'
@@ -23,7 +23,7 @@ import { searchDocumentChunks } from '@/lib/mount-index/document-search'
 import { readDatabaseDocument } from '@/lib/mount-index/database-store'
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser'
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { RECALL_MULTIPLIERS } from './recall-tags'
+import { RECALL_MULTIPLIERS } from './tags'
 
 const logger = createServiceLogger('ConversationSummarySearch')
 
@@ -54,8 +54,8 @@ export interface SearchVaultConversationSummariesOptions {
   embeddingProfileId?: string | null
   /**
    * Vector already embedded for `query` by an earlier step of the same turn
-   * (the memory search — see `captureQueryEmbedding` in
-   * `lib/memory/memory-service.ts`). When supplied, this search reuses it
+   * (the turn's recall query — `buildRecallQuery` in
+   * `lib/memory/recall/query.ts`). When supplied, this search reuses it
    * verbatim instead of paying a second embedding call, which is what makes
    * the per-turn cadence affordable. MUST be the vector for this exact query
    * text, from the same embedding profile the corpus was indexed with —

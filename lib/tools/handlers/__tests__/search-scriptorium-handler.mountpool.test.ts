@@ -21,9 +21,11 @@ import { executeSearchScriptoriumTool } from '../search-scriptorium-handler'
 // ── Mocks ─────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory'
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn(),
-  markMemoriesAccessed: jest.fn(),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: jest.fn(),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: jest.fn(),
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -47,7 +49,7 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => {
 })
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemories } from '@/lib/memory/recall/search'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks } from '@/lib/mount-index/document-search'
@@ -143,7 +145,7 @@ describe('executeSearchScriptoriumTool — Scenario Builder mount pool', () => {
     )
 
     expect(result.success).toBe(true)
-    expect(searchMemoriesSemantic).not.toHaveBeenCalled()
+    expect(searchMemories).not.toHaveBeenCalled()
     expect(searchConversationChunks).not.toHaveBeenCalled()
     // documents still ran, so the exclusion above isn't just "handler threw".
     expect(searchDocumentChunks).toHaveBeenCalled()

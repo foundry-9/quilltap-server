@@ -19,7 +19,7 @@ jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({ getRawMo
 jest.mock('@/lib/database/backends/sqlite/llm-logs-client', () => ({ getRawLLMLogsDatabase: jest.fn() }));
 jest.mock('../processor-host', () => ({ sendToChild: jest.fn(() => true), notifyChild: jest.fn() }));
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }));
-jest.mock('@/lib/memory/frozen-archive-cache', () => ({
+jest.mock('@/lib/memory/recall/archive', () => ({
   invalidateFrozenArchive: jest.fn(),
   invalidateAllFrozenArchives: jest.fn(),
 }));

@@ -52,7 +52,7 @@ jest.mock('@/lib/chat/first-message-context', () => ({
   }),
 }))
 
-jest.mock('@/lib/memory/memory-recap', () => ({
+jest.mock('@/lib/memory/recall/recap', () => ({
   buildRecentConversationsBlock: jest.fn().mockResolvedValue(''),
   calculateRecentConversationsLimit: jest.fn().mockReturnValue(0),
 }))

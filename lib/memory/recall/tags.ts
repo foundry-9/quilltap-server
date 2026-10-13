@@ -24,11 +24,11 @@
  * and safe to import from the forked job child.
  */
 
-import type { MemorySearchExtraction } from './recall/query'
-import { recentlyWhisperedIdSet } from './recall-history'
+import type { MemorySearchExtraction } from './query'
+import { recentlyWhisperedIdSet } from './history'
 // Type-only: recall-tuning reads this module's constants at load time, so a
 // value import back from it would be a circular-initialisation trap.
-import type { RecallMultiplierTable, ResolvedRecallTuning } from './recall-tuning'
+import type { RecallMultiplierTable, ResolvedRecallTuning } from './tuning'
 
 export type TemporalTag = 'past' | 'moment' | 'present' | 'future'
 export type ScopeTag = 'narrow' | 'wide'
@@ -79,7 +79,7 @@ export type ScopePolicy = 'down-weight' | 'exclude'
 
 /**
  * Per-turn recall context threaded from the chat/turn into
- * `searchMemoriesSemantic`. Absent → recall behaves byte-identically to its
+ * `searchRecall`. Absent → recall behaves byte-identically to its
  * historical (pre-targeting) form.
  *
  * Phase 1 wires `currentProjectId` + `scopePolicy` (items 1–2). Phase 2 adds the
@@ -127,13 +127,13 @@ export interface RecallContext {
    * {from, to} ISO). Memories whose event time (occurredAt ?? createdAt)
    * falls inside get a bounded boost ({@link RECALL_MULTIPLIERS}
    * `occurredWithinWindow`). The hard-filter stage lives in
-   * `searchMemoriesSemantic`; this multiplier is the soft fallback when the
+   * the score stage (`recall/score.ts`); this multiplier is the soft fallback when the
    * filtered pool was too small. Null/absent → no window adjustment.
    */
   occurredWithin?: { from: string; to: string } | null
   /**
    * When true, one-hop related-memory expansion runs inside
-   * `searchMemoriesSemantic` after the top hits are ranked (item 5). Capped by
+   * the select stage after the top hits are ranked (item 5). Capped by
    * {@link RELATED_EXPANSION}.
    */
   expandRelated?: boolean
@@ -149,7 +149,7 @@ export interface RecallContext {
   /** Reference clock for the fresh-event boost, ms since epoch. Absent → boost disabled. */
   nowMs?: number
   /**
-   * Retuning knobs (R1–R6, `lib/memory/recall-tuning.ts`). Absent → today's
+   * Retuning knobs (R1–R6, `lib/memory/recall/tuning.ts`). Absent → today's
    * constants, byte-identical ranking. Set by the recall-replay harness.
    */
   tuning?: ResolvedRecallTuning
@@ -201,7 +201,7 @@ export const RECALL_MULTIPLIERS = {
   temporalMomentRetrospective: 1.0,
   /**
    * Event time falls inside the turn's resolved time window (soft fallback
-   * when the window-filtered pool was too small — see `searchMemoriesSemantic`).
+   * when the window-filtered pool was too small — see `recall/score.ts`).
    */
   occurredWithinWindow: 1.3,
   /**
@@ -286,7 +286,7 @@ export const RECALL_TUNING_DEFAULTS = {
 
 /**
  * The shipped tuning, assembled once: the multiplier table plus the knob
- * defaults above. `recall-tuning.ts` re-exports it and resolves overrides
+ * defaults above. `recall/tuning.ts` re-exports it and resolves overrides
  * against it; there is no second copy.
  */
 export const DEFAULT_RECALL_TUNING: ResolvedRecallTuning = Object.freeze({
@@ -441,7 +441,7 @@ function eventTimeMs(memory: MemoryTagView): number {
 /**
  * Time-window boost — the memory's event time (occurredAt ?? createdAt) falls
  * inside the turn's resolved retrospective window. Soft fallback companion to
- * the hard filter in `searchMemoriesSemantic`. No window, or no parsable
+ * the hard filter in the score stage. No window, or no parsable
  * event time → pass through.
  */
 export function occurredWithinMultiplier(
@@ -736,7 +736,7 @@ export function buildTurnRecallContext(input: TurnRecallContextInput): RecallCon
  *
  * Returns `undefined` (never an empty array) when the turn is not
  * retrospective, has no signals, or offers nothing to probe, so the result
- * passes straight through as `searchMemoriesSemantic`'s `extraProbes` option.
+ * passes straight through to `buildRecallQuery`, which embeds them once.
  */
 export function buildRetrospectiveProbes(
   signals: Pick<MemorySearchExtraction, 'entities' | 'paraphrase' | 'timeRange'> | null | undefined,

@@ -44,7 +44,7 @@ jest.mock('@/lib/memory/admission', () => ({
   applyFold: jest.fn(async (survivor: { characterId: string }) => ({ characterId: survivor.characterId, relatedMemoryIds: [] })),
 }))
 
-jest.mock('@/lib/memory/frozen-archive-cache', () => ({
+jest.mock('@/lib/memory/recall/archive', () => ({
   invalidateFrozenArchive: jest.fn(),
 }))
 

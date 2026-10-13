@@ -287,6 +287,20 @@ export async function finalizeMessageResponse({
     routeTrail
   )
 
+  // The turn's recall record (stage trace, delivered pools, the ring line the
+  // replay reads back) rides on the message it shaped.
+  if (builtContext.recallDebugLog && builtContext.recallDebugLog.length > 0) {
+    try {
+      await repos.chats.updateMessage(chatId, assistantMessageId, { debugMemoryLogs: builtContext.recallDebugLog })
+    } catch (error) {
+      logger.warn('Failed to store the recall record on the assistant message', {
+        chatId,
+        messageId: assistantMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   // Consume this turn's informs. Tied to the *persisted* assistant message,
   // never to context building: a provider failure that saved nothing must
   // leave the rows pending for the seat's next attempt, and a turn-skip

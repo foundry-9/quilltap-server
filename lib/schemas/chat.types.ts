@@ -1077,7 +1077,7 @@ export const ChatMetadataSchema = z.object({
    *   { [targetKey]: { [characterId]: { actionHash, clothingHash, emittedAt } } }
    * where `targetKey` is the recipient participant ID (or the sentinel
    * `"__public__"` for untargeted whispers in single-character chats).
-   * `formatCurrentSceneState` consults this map per target before emitting
+   * `formatCurrentSceneState` (`lib/chat/context/scene-state.ts`) consults this map per target before emitting
    * the `Current State` block; when a character's action+clothing hash
    * matches what was last sent to the same target, the character's section
    * collapses to a single `### Name — _unchanged_` line so the LLM (or the
@@ -1094,7 +1094,7 @@ export const ChatMetadataSchema = z.object({
    *   string[][]  — one inner array of whispered memory IDs per recent turn,
    *   most recent last, capped to the last few turns. The recall path unions
    *   these IDs into a "recently whispered" set and applies a bounded
-   *   penalty (see lib/memory/recall-tags.ts `recentlyWhispered`) so the same
+   *   penalty (see lib/memory/recall/tags.ts `recentlyWhispered`) so the same
    *   memory doesn't get whispered turn after turn. Ephemeral per-chat UX
    *   state — NOT part of .qtap export. Null until the first whisper.
    */

@@ -43,7 +43,8 @@ jest.mock('@/lib/api/responses', () => ({
 }))
 
 const mockAdmit = jest.fn()
-jest.mock('@/lib/memory/memory-service', () => ({}))
+jest.mock('@/lib/memory/recall/search', () => ({}))
+jest.mock('@/lib/memory/index-store/backfill', () => ({}))
 jest.mock('@/lib/memory/admission', () => ({
   admitCandidate: (...args: unknown[]) => mockAdmit(...args),
   admissionInserted: (o: { action: { kind: string } }) => o.action.kind === 'insert' || o.action.kind === 'insert-linked',

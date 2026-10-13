@@ -71,7 +71,7 @@ const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { gen
 
 const retire = require('@/lib/memory/retire') as typeof import('@/lib/memory/retire')
 const outcomeCache = require('@/lib/memory/housekeeping-outcome-cache') as typeof import('@/lib/memory/housekeeping-outcome-cache')
-const injector = require('@/lib/chat/context/memory-injector') as typeof import('@/lib/chat/context/memory-injector')
+const injector = require('@/lib/memory/recall/assemble') as typeof import('@/lib/memory/recall/assemble')
 
 const EMBEDDING = new Float32Array([0.6, 0.8])
 

@@ -1,5 +1,5 @@
 /**
- * Tier-aware reads in searchMemoriesSemantic (consolidation spec B2):
+ * Tier-aware reads in searchMemories (consolidation spec B2):
  * recall is hot-only by default; `includeCold` (the `search` tool, the UI)
  * reads both tiers.
  */
@@ -53,8 +53,8 @@ function makeMemory(id: string, tier: 'hot' | 'cold') {
   }
 }
 
-describe('searchMemoriesSemantic — hot/cold tiers', () => {
-  let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
+describe('searchMemories — hot/cold tiers', () => {
+  let searchMemories: typeof import('@/lib/memory/recall/search').searchMemories
   const hot = makeMemory('hot-1', 'hot')
   const cold = makeMemory('cold-1', 'cold')
 
@@ -81,25 +81,25 @@ describe('searchMemoriesSemantic — hot/cold tiers', () => {
     indexMock.memoryIndex.shape.mockResolvedValue({ size: 2, dominantDimensions: 3, matching: 2 } as never)
     embeddingMock.generateEmbeddingForUser.mockResolvedValue({ embedding: new Float32Array([1, 0, 0]), model: 'test' })
     jest.isolateModules(() => {
-      searchMemoriesSemantic = require('@/lib/memory/memory-service').searchMemoriesSemantic
+      searchMemories = require('@/lib/memory/recall/search').searchMemories
     })
   })
 
   it('asks the index for the hot tier only by default', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'anything at all', { userId: 'u1', limit: 10 })
+    const results = await searchMemories('char-1', 'anything at all', { userId: 'u1', limit: 10 })
     expect(indexMock.memoryIndex.search.mock.calls[0][2]).toMatchObject({ hotOnly: true })
     expect(results.map(r => r.memory.id)).toEqual(['hot-1'])
   })
 
   it('drops cold rows even when a literal text hit surfaces them', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'covenant wall', {
-      userId: 'u1', limit: 10, applyLiteralPhraseBoost: true,
+    const results = await searchMemories('char-1', 'covenant wall', {
+      userId: 'u1', limit: 10, literalPhrase: true,
     })
     expect(results.map(r => r.memory.id)).not.toContain('cold-1')
   })
 
   it('includeCold returns both tiers', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'anything at all', {
+    const results = await searchMemories('char-1', 'anything at all', {
       userId: 'u1', limit: 10, includeCold: true,
     })
     expect(indexMock.memoryIndex.search.mock.calls[0][2]).toMatchObject({ hotOnly: false })
@@ -107,8 +107,8 @@ describe('searchMemoriesSemantic — hot/cold tiers', () => {
   })
 
   it('combines the hot filter with excludeMemoryIds', async () => {
-    const results = await searchMemoriesSemantic('char-1', 'anything at all', {
-      userId: 'u1', limit: 10, excludeMemoryIds: new Set(['hot-1']),
+    const results = await searchMemories('char-1', 'anything at all', {
+      userId: 'u1', limit: 10, excludeIds: new Set(['hot-1']),
     })
     expect(results).toHaveLength(0)
   })

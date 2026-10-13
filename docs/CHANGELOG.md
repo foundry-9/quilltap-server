@@ -4,6 +4,25 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase E: recall as a pipeline; delivery
+
+Structural Phase E of `docs/developer/features/memory-system-refactor.md`. No migrations.
+
+- Recall: new stages under `lib/memory/recall/` — `buildRecallQuery` (distil, choose the text, embed once; retrospective probes embedded beside it) → `gather` (vector top-K + probes + anchors, or the text strategy) → `hydrate` (rows and filters) → `score` (floor, salience, window, `rankForRecall`) → `select` (related expansion, R6, cut) → `assembleRecall` → `render` → `deliverRecall`. `searchRecall` runs the search stages; `searchMemories` is the one-shot form. `rankForRecall`, `rankByBlend` and `reserveBackgroundSlots` moved to `lib/memory/scoring/rank.ts`.
+- `lib/memory/memory-service.ts` deleted: search moved to `recall/`; `generateMissingEmbeddings` and `rebuildVectorIndex` to `index-store/backfill.ts`; `markMemoriesAccessed` became `stampAccessed` in `recall/deliver.ts`. `lib/chat/context/memory-injector.ts` deleted: memory formatters to `recall/render.ts`, pool sizing to `recall/assemble.ts`, `formatCurrentSceneState` and `formatSummaryForContext` to `lib/chat/context/scene-state.ts`.
+- Moved under `lib/memory/recall/`: `recall-tags.ts` → `tags.ts`, `recall-tuning.ts` → `tuning.ts`, `recall-history.ts` → `history.ts`, `memory-subject.ts` → `subject.ts`, `frozen-archive-cache.ts` → `archive.ts`, `conversation-summary-search.ts` → `conversations.ts`, `memory-recap.ts` → `recap.ts`, `recall-replay.ts` → `replay.ts`.
+- `buildContext`'s recall block is `assembleRecall(plan)` before compression and `deliverRecall(bundle, …)` after the request body is built. The proactive pass hands its query and pool to `buildContext` as `preRecall` (replaces `preSearchedMemories`, `preSearchedQueryEmbedding`, `recallSignals`).
+- Behaviour changes:
+  - One embedding per turn. The head, the inter-character relevance half, the recap's relevant-conversations list, the per-turn conversation list and the retrospective mini-recap all use the turn's query vector. The inter-character relevance half filters the turn's pool by `aboutCharacterId` (five per character) instead of running a search per present character. The mini-recap searches with the turn's query, not `paraphrase — entities`. The recap's list uses the turn's query when the turn has one.
+  - Cross-pool dedup: a row appears in at most one of archive / recap / head / inter-character. The recap narrative is built without the rows the archive rendered (it reads that many more per tier), and the head and the inter-character section skip the recap's rows.
+  - When the proactive pass built a query but found nothing, the turn reuses that query instead of distilling and embedding again.
+  - Debug labels left the model's text: no `[m_xxxx]` id tags, no `importance` / `relevance` / `weight` numbers, no `recall:` multiplier labels, no targeting tags in the keywords (`past`, `scope: narrow`, `history`, …). Lines carry age, subject prefix, words, digest provenance and human keywords. The numbers remain in `debugMemories`.
+  - Delivery: rows are stamped `lastAccessedAt` and the head is added to the anti-repetition ring only for lines still present in the request body after Phase-2 memory compression (verbatim, or 60% of a line's significant words in one compressed line). The ring is written whether or not the Commonplace whisper posted. The recap's rows are stamped when its narrative is delivered (they were never stamped before). Carina, the voice rehearsals, the greeting and the search tool stamp what they deliver; the Memories API search stamps nothing.
+  - Each reply's `debugMemoryLogs` now opens with the turn's recall record: the stage trace, delivered counts per pool, and a `[Recall:ring]` line. Memory extraction appends its lines after the record instead of overwriting the field.
+- Recall replay (`?action=recall-replay`, `quilltap recall-replay`): runs on the stages, adds `fallbackPath` (the text strategy), `trace` (query, search stages, assemble), `pools`, `ring` and `ringSource`. The ring is rebuilt as of the turn from earlier replies' `[Recall:ring]` lines, else the chat's current ring. The CLI prints the fallback table and the stage trace.
+- Tests: probe fixture (`__tests__/fixtures/recall-probes/`, captured from the pre-Phase-E search under `cap14`; `probe-fixture.test.ts` reproduces every row), stage tables (`recall-stages.test.ts`), `assemble-deliver.test.ts` (one embedding per turn, cross-pool dedup, delivery after compression), `build-recall-query.test.ts`, renderer goldens without debug labels (`render.test.ts`), a continue-turn delivery test, and grep-tests for the access stamp and the retired modules. Search suites ported to `searchMemories`.
+- `quilltap` CLI 4.10.0-dev.165.
+
 #### Fix bugs 235–241: memory refactor dogfood on V4test
 
 Found dogfooding the memory refactor (Phases A–D) on `V4test`. No migrations.

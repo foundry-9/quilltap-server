@@ -1,5 +1,5 @@
 /**
- * Recall tuning (lib/memory/recall-tuning.ts) — the R1–R6 knobs of the recall
+ * Recall tuning (lib/memory/recall/tuning.ts) — the R1–R6 knobs of the recall
  * multiplier retuning, and the R1/R2 arithmetic in combineRecallMultipliers.
  *
  * The load-bearing claim is the first describe block: with no tuning, or the
@@ -13,7 +13,7 @@ import {
   describeRecallTuning,
   resolveRecallTuning,
   selectSpecificAnchors,
-} from '../recall-tuning'
+} from '../recall/tuning'
 import {
   RECALL_MULTIPLIERS,
   RECALL_TUNING_DEFAULTS,
@@ -22,7 +22,7 @@ import {
   boostGateThreshold,
   combineRecallMultipliers,
   type RecallContext,
-} from '../recall-tags'
+} from '../recall/tags'
 
 const NOW = Date.parse('2026-10-08T12:00:00.000Z')
 const HOUR = 60 * 60 * 1000

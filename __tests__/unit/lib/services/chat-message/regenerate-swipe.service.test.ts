@@ -24,10 +24,6 @@ jest.mock('@/lib/llm', () => ({
   createLLMProvider: jest.fn(async () => ({ streamMessage })),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  deleteMemoriesBySourceMessageWithVectors: jest.fn(),
-}))
-
 jest.mock('@/lib/services/chat-message/participant-resolver.service', () => ({
   resolveRespondingParticipant: jest.fn(async () => ({
     characterParticipant: { id: 'p-abigail', status: 'active' },

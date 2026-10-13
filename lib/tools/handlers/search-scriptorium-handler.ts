@@ -6,7 +6,8 @@
  * merging and ranking results by relevance.
  */
 
-import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
+import { searchMemories as searchCharacterMemories } from '@/lib/memory/recall/search'
+import { stampAccessed } from '@/lib/memory/recall/deliver'
 import { filterImportance, importanceBand, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
 import { zonedDayBoundsIso } from '@/lib/memory/time/calendar'
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
@@ -267,7 +268,7 @@ export async function executeSearchScriptoriumTool(
 
           const memoryResults = aboutCharacterUnresolved
             ? []
-            : await searchMemoriesSemantic(
+            : await searchCharacterMemories(
                 characterId,
                 query,
                 {
@@ -275,12 +276,12 @@ export async function executeSearchScriptoriumTool(
                   embeddingProfileId: context.embeddingProfileId,
                   limit,
                   minImportance,
-                  applyLiteralPhraseBoost: true,
+                  literalPhrase: true,
                   aboutCharacterId,
                   // Tool path: a plain hard filter on event time (no
                   // recallContext, so no soft fallback — the caller asked
                   // for a window).
-                  occurredWithin: timeWindow,
+                  window: timeWindow,
                   // The drill-down tool sees the archive too: cold shards are
                   // returned labelled, so a character can find what a digest
                   // replaced.
@@ -542,7 +543,7 @@ export async function executeSearchScriptoriumTool(
         .filter(r => r.sourceType === 'memory')
         .map(r => r.metadata.memoryId)
         .filter((id): id is string => typeof id === 'string')
-      markMemoriesAccessed(context.characterId, returnedMemoryIds)
+      stampAccessed(context.characterId, returnedMemoryIds)
     }
 
     logger.info('Search scriptorium completed', {

@@ -5,7 +5,7 @@
  * Retrieval ranks by one blended key, `0.75 × relevance + 0.25 × salience`:
  * relevance is the primary key, salience a decaying tie-breaker with no floor.
  * Recall-tag and anti-repetition multipliers are applied to the blend
- * afterwards (`lib/memory/recall-tags.ts`).
+ * afterwards (`lib/memory/recall/tags.ts`).
  *
  * @module memory/scoring/relevance
  */

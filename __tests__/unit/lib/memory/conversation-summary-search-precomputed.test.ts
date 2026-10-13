@@ -53,7 +53,7 @@ jest.mock('@/lib/logging/create-logger', () => ({
 
 const {
   searchVaultConversationSummaries,
-} = require('@/lib/memory/conversation-summary-search') as typeof import('@/lib/memory/conversation-summary-search')
+} = require('@/lib/memory/recall/conversations') as typeof import('@/lib/memory/recall/conversations')
 
 const baseOptions = {
   characterId: 'char-1',

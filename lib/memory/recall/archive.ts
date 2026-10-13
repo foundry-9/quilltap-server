@@ -35,7 +35,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import type { Memory } from '@/lib/schemas/types'
-import { sortBySalience } from './scoring'
+import { sortBySalience } from '../scoring'
 import { processSingleton } from '@/lib/utils/process-singleton'
 
 /** Default size of the frozen archive (callers normally pass a budget-sized one). */
@@ -85,6 +85,11 @@ export async function getOrComputeFrozenArchive(
     size?: number
     /** Characters present this turn (the responder is ignored if listed). */
     presentCharacterIds?: readonly string[]
+    /**
+     * Rows to leave out, and compute without touching the cache — the replay's
+     * `asOf` corpus. A live turn never passes it.
+     */
+    exclude?: ReadonlySet<string>
   } = {},
 ): Promise<Memory[]> {
   const size = options.size ?? FROZEN_ARCHIVE_SIZE
@@ -92,6 +97,9 @@ export async function getOrComputeFrozenArchive(
     .filter(id => id && id !== characterId)
     .sort()
   const presence = present.join(',')
+  if (options.exclude) {
+    return computeFrozenArchive(characterId, size, present, options.exclude)
+  }
   const key = cacheKey(characterId, chatId)
   const cached = cache.get(key)
 
@@ -159,6 +167,7 @@ async function computeFrozenArchive(
   characterId: string,
   size: number,
   presentCharacterIds: readonly string[],
+  exclude?: ReadonlySet<string>,
 ): Promise<Memory[]> {
   const repos = getRepositories()
   const poolSize = Math.max(size, size * FROZEN_ARCHIVE_POOL_FACTOR)
@@ -170,7 +179,7 @@ async function computeFrozenArchive(
   const take = (memories: Memory[]) => {
     for (const m of memories) {
       if (chosen.size >= size) return
-      if (!chosen.has(m.id)) chosen.set(m.id, m)
+      if (!chosen.has(m.id) && !exclude?.has(m.id)) chosen.set(m.id, m)
     }
   }
   for (const otherId of presentCharacterIds) {

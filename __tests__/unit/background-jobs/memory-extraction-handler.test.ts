@@ -92,6 +92,11 @@ const ctx = {
   chat: { id: 'chat-1' },
   route: { connectionProfile: PROFILE },
   project: { id: null, description: null },
+  // The finalizer's recall record is already on the message; an earlier
+  // extraction's line is replaced.
+  messages: async () => [
+    { id: 'assistant-msg-1', debugMemoryLogs: ['[Recall] deliver: head 2', '[Recall:ring] mem-a mem-b', '[Memory] an earlier run'] },
+  ],
 };
 
 function passResult(overrides: Record<string, unknown> = {}) {
@@ -158,7 +163,7 @@ describe('handleMemoryExtraction (per-turn)', () => {
     });
   });
 
-  it('persists debug logs onto the latest assistant message of the turn', async () => {
+  it('persists debug logs onto the latest assistant message of the turn, keeping its recall record', async () => {
     mockRunTurn.mockResolvedValue(passResult({
       createdIds: ['mem-9'],
       debugLogs: ['log entry'],
@@ -167,7 +172,7 @@ describe('handleMemoryExtraction (per-turn)', () => {
     await handleMemoryExtraction(buildJob() as any);
 
     expect(repositories.chats.updateMessage).toHaveBeenCalledWith('chat-1', 'assistant-msg-1', {
-      debugMemoryLogs: ['log entry'],
+      debugMemoryLogs: ['[Recall] deliver: head 2', '[Recall:ring] mem-a mem-b', 'log entry'],
     });
   });
 

@@ -92,17 +92,14 @@ flowchart TD
     SP17 -->|No| SP18
     SP17a --> SP18["18. Identity reinforcement<br/><i>'Respond only as {char}...'</i>"]
 
-    SP18 --> MEM[Inject memories]
+    SP18 --> MEM["assembleRecall()<br/><i>lib/memory/recall/assemble.ts</i>"]
 
-    MEM --> MEM1["generateMemoryRecap()<br/><i>memory-recap.ts</i><br/>Tiered: high/medium/low importance"]
-    MEM1 --> MEM2[Cheap LLM summarizes into<br/>'What You Remember' narrative]
-    MEM2 --> MEM3["searchMemoriesSemantic()<br/>Cosine similarity + effective weight"]
-    MEM3 --> MEM4["formatMemoriesForContext()<br/><i>memory-injector.ts</i><br/>With age labels"]
-
-    MEM4 --> MULTI{"Multi-char<br/>memories?"}
-    MULTI -->|Yes| MULTI1["formatInterCharacterMemoriesForContext()<br/>Grouped by character"]
-    MULTI -->|No| FMT
-    MULTI1 --> FMT
+    MEM --> MEM1["buildRecallQuery()<br/>distil + embed ONCE"]
+    MEM1 --> MEM2["searchRecall()<br/>gather → hydrate → score → select"]
+    MEM2 --> MEM3["frozen archive → recap (chat start) → head → inter-character<br/>a row in at most one pool"]
+    MEM3 --> MEM4["render.ts<br/>age · subject · words · keywords — no debug labels"]
+    MEM4 --> DELIVER["deliverRecall()<br/>after compression + request assembly:<br/>stamp delivered lines, append ring, debug record"]
+    DELIVER --> FMT
 
     FMT["formatMessagesForProvider()<br/>Provider-specific formatting"]
     FMT --> STREAM["streamMessage()<br/><i>streaming.service.ts</i><br/>Call LLM API"]
@@ -573,7 +570,7 @@ flowchart TD
 |--------|-----------|
 | **System Prompt** | `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/context-builder.service.ts`, `lib/services/chat-message/orchestrator.service.ts` |
 | **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/extraction/`, `lib/memory/admission/`, `lib/memory/scoring/` |
-| **Memory Storage** | `lib/memory/admission/`, `lib/memory/index-store/`, `lib/memory/retire.ts`, `lib/memory/memory-service.ts` (search), `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
+| **Memory Storage** | `lib/memory/admission/`, `lib/memory/index-store/`, `lib/memory/retire.ts`, `lib/memory/recall/` (search, assemble, deliver), `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
 | **Context Summary** | `lib/chat/context-summary.ts`, `lib/background-jobs/handlers/context-summary.ts`, `lib/memory/cheap-llm-tasks/chat-tasks.ts` |
 | **Scene State** | `lib/background-jobs/handlers/scene-state-tracking.ts`, `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` |
 | **Story Backgrounds** | `lib/background-jobs/handlers/story-background.ts`, `lib/background-jobs/handlers/title-update.ts`, `lib/image-gen/appearance-resolution.ts` |

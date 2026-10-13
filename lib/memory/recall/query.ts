@@ -2,7 +2,11 @@
  * The recall query distiller: search keywords, a paraphrase, the turn's
  * temporal/context guess and its episodic signals, from the recent messages.
  * Moved unchanged from the retired `cheap-llm-tasks/memory-tasks.ts` (memory
- * refactor Phase D); the rest of the recall pipeline joins it in Phase E.
+ * refactor Phase D).
+ *
+ * Also the first recall stage, {@link buildRecallQuery}: the turn's query text,
+ * its signals and its ONE embedding (plus the retrospective probes'), which
+ * every later stage and every pool of the turn reuses.
  *
  * @module memory/recall/query
  */
@@ -12,9 +16,10 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
   TEMPORAL_VALUES,
   CONTEXT_VALUES,
+  buildRetrospectiveProbes,
   type TemporalTag,
   type ContextTag,
-} from '@/lib/memory/recall-tags'
+} from './tags'
 import { normaliseTimeRange, resolveReferenceWindow, type DayReferenceResolution } from '@/lib/memory/time/clock'
 import { zonedDateStamp, zonedParts } from '@/lib/memory/time/calendar'
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
@@ -23,6 +28,8 @@ import type { ChatMessage, CheapLLMTaskResult } from '../cheap-llm-tasks/types'
 import type { ExtractionClock } from '../extraction/prompts/shared'
 import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/llm/llm-json'
+import { generateEmbeddingForUser, type EmbeddingResult } from '@/lib/embedding/embedding-service'
+import { traceStage, type RecallTrace } from './types'
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -31,7 +38,7 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
  * one-word guess at the current turn's dominant temporal frame and subject.
  *
  * The turn-level `temporal`/`context` guess feeds the recall-side targeting-tag
- * adjustments (see lib/memory/recall-tags.ts): `context` steers recall toward
+ * adjustments (see lib/memory/recall/tags.ts): `context` steers recall toward
  * memories whose own `context` tag matches the turn. Both are best-effort — the
  * parser validates them against the closed vocabularies and drops anything
  * unrecognized, so an omitted or garbled guess simply disables that adjustment.
@@ -168,7 +175,7 @@ function mergeDayReference(
  *
  * Used for proactive memory recall: analyzes messages since the character last
  * spoke to find keywords for searching the character's memory store. The turn
- * guess feeds the recall-side targeting-tag adjustments (lib/memory/recall-tags.ts).
+ * guess feeds the recall-side targeting-tag adjustments (lib/memory/recall/tags.ts).
  *
  * @param recentMessages - Messages since the character last spoke
  * @param characterName - The name of the character whose memories will be searched
@@ -328,4 +335,191 @@ export async function extractMemorySearchKeywords(
     characterId,
     { latency }
   )
+}
+
+// ============================================================================
+// Stage 1 — the turn's recall query, embedded once
+// ============================================================================
+
+/** A text and the vector embedded for it (null when embedding failed). */
+export interface EmbeddedText {
+  text: string
+  embedding: EmbeddingResult | null
+}
+
+/**
+ * Everything the later stages need to know about the question being asked:
+ * the text, its one embedding, the distilled signals and what they imply.
+ */
+export interface RecallQuery {
+  /** The text searched and embedded. Empty → there is nothing to search. */
+  text: string
+  /** The main query's embedding, or null (no profile, a failed call) — the text fallback then runs. */
+  embedding: EmbeddingResult | null
+  /** Retrospective probes (≤ 2), each embedded once here. */
+  probes: EmbeddedText[]
+  /** The turn's distilled signals, when a distillation ran. */
+  signals: MemorySearchExtraction | null
+  /** Entity anchors (the signals' entities). */
+  anchors: string[]
+  /** The resolved event-time window, ungated from the retrospective flag. */
+  window: { from: string; to: string } | null
+  retrospective: boolean
+  /** Why `embedding` is null, when it is. */
+  embeddingError?: string
+}
+
+/** Inputs to {@link buildRecallQuery}. */
+export interface BuildRecallQueryInput {
+  userId: string
+  embeddingProfileId?: string
+  /** The fallback text: the recent-window prose, the tool's query, the draft. */
+  text: string
+  /** Signals already distilled (the proactive pass, a pinned replay). */
+  signals?: MemorySearchExtraction | null
+  /**
+   * Distil the signals here when none were handed in. Absent → no
+   * distillation; the query is `text` as given.
+   */
+  distill?: {
+    messages: ChatMessage[]
+    characterName: string
+    selection: CheapLLMSelection
+    chatId?: string
+    characterId?: string
+    clock?: ExtractionClock
+    latency?: CheapLLMLatencyClass
+  }
+  /**
+   * Reuse embeddings by text across calls. The provider's vectors for one text
+   * drift slightly from call to call; the replay harness passes one memo so the
+   * runs it compares embed the same vectors. Live recall leaves it off.
+   */
+  embeddingMemo?: Map<string, EmbeddingResult>
+  /** Leave the query unembedded (the text fallback is all that will run). */
+  skipEmbedding?: boolean
+  /** Probes to embed beside the query, instead of the ones the signals imply. */
+  probes?: readonly string[]
+}
+
+/** The text the query searches: the paraphrase, else the keywords, else the given text. */
+export function recallQueryText(signals: MemorySearchExtraction | null | undefined, fallback: string): string {
+  if (signals?.paraphrase) return signals.paraphrase
+  if (signals && signals.keywords.length > 0) return signals.keywords.join(' ')
+  return fallback
+}
+
+/**
+ * Build the turn's recall query: distil (when asked and not already done),
+ * choose the text, and embed it — once. The retrospective probes are embedded
+ * here too, so nothing downstream ever embeds again. Never throws: a failed
+ * distillation falls back to the given text, a failed embedding leaves
+ * `embedding` null and the text fallback runs.
+ */
+export async function buildRecallQuery(
+  input: BuildRecallQueryInput,
+  trace: RecallTrace = [],
+): Promise<RecallQuery> {
+  let signals = input.signals ?? null
+  let distilled: 'given' | 'ran' | 'failed' | 'none' = signals ? 'given' : 'none'
+  if (!signals && input.distill && input.text.trim()) {
+    const d = input.distill
+    try {
+      const result = await extractMemorySearchKeywords(
+        d.messages,
+        d.characterName,
+        d.selection,
+        input.userId,
+        d.chatId,
+        d.characterId,
+        d.clock,
+        d.latency,
+      )
+      if (result.success && result.result) {
+        signals = result.result
+        distilled = 'ran'
+      } else {
+        distilled = 'failed'
+      }
+    } catch (error) {
+      distilled = 'failed'
+      logger.debug('[Recall] Query distillation failed; using the recent-window text', {
+        characterId: d.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const text = recallQueryText(signals, input.text).trim()
+  const retrospective = signals?.retrospective === true
+  const probeTexts = (input.probes ?? buildRetrospectiveProbes(signals, retrospective) ?? [])
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .slice(0, 2)
+
+  const embed = async (value: string): Promise<EmbeddingResult> => {
+    const key = `${input.embeddingProfileId ?? 'default'}|${value}`
+    const cached = input.embeddingMemo?.get(key)
+    if (cached) return cached
+    const result = await generateEmbeddingForUser(value, input.userId, input.embeddingProfileId)
+    input.embeddingMemo?.set(key, result)
+    return result
+  }
+
+  let embedding: EmbeddingResult | null = null
+  let embeddingError: string | undefined
+  const probes: EmbeddedText[] = []
+  if (text && !input.skipEmbedding) {
+    try {
+      embedding = await embed(text)
+    } catch (error) {
+      embeddingError = error instanceof Error ? error.message : String(error)
+      logger.warn('[Recall] Query embedding failed; recall falls back to text search', {
+        userId: input.userId,
+        query: text.substring(0, 100),
+        error: embeddingError,
+      })
+    }
+    if (embedding) {
+      for (const probe of probeTexts) {
+        try {
+          probes.push({ text: probe, embedding: await embed(probe) })
+        } catch (probeError) {
+          probes.push({ text: probe, embedding: null })
+          logger.debug('[Recall] Probe embedding failed; skipping probe', {
+            probe: probe.substring(0, 80),
+            error: probeError instanceof Error ? probeError.message : String(probeError),
+          })
+        }
+      }
+    }
+  }
+  if (!embedding) {
+    // The text fallback still reads the probes' words.
+    for (const probe of probeTexts) {
+      if (!probes.some(p => p.text === probe)) probes.push({ text: probe, embedding: null })
+    }
+  }
+
+  const query: RecallQuery = {
+    text,
+    embedding,
+    probes,
+    signals,
+    anchors: (signals?.entities ?? []).map(e => e.trim()).filter(e => e.length > 0),
+    window: signals?.timeRange ?? null,
+    retrospective,
+    ...(embeddingError ? { embeddingError } : {}),
+  }
+  traceStage(trace, 'query', {
+    distilled,
+    textLength: text.length,
+    embedded: !!embedding,
+    embeddingCalls: embedding ? 1 + probes.filter(p => p.embedding).length : 0,
+    probes: probes.length,
+    anchors: query.anchors.length,
+    window: query.window,
+    retrospective,
+  })
+  return query
 }

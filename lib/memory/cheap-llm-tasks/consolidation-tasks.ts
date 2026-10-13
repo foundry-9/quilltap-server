@@ -52,7 +52,7 @@ export const ConsolidationDigestSchema = z.object({
   content: z.string().trim().min(1),
   /** ≤ 12 words, lowercase, extractor style. */
   summary: z.string().trim().min(1),
-  /** Free keywords plus the three targeting tags (recall-tags.ts vocabulary). */
+  /** Free keywords plus the three targeting tags (recall/tags.ts vocabulary). */
   keywords: z.array(z.string()).default([]),
   /** 0.2–1.0 by the prompt; clamped by the caller. */
   importance: z.number().min(0).max(1),

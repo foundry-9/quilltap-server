@@ -1,10 +1,14 @@
 /**
- * Memory Recap Service
+ * Memory Recap — the fetch half (the narrative itself is the cheap-LLM task in
+ * `recap-summary.ts`).
  *
  * Generates a narrative summary of a character's recent memories to inject
  * at the start of a conversation. Gathers memories by importance tier
  * (high/medium/low), sends them to the cheap LLM for summarization,
- * and returns formatted content for prompt injection.
+ * and returns formatted content for prompt injection. It is one of the turn's
+ * recall pools (`assemble.ts`): it leaves out the rows the frozen archive
+ * already carries, and its relevant-conversations list rides the turn's one
+ * query embedding when there is one.
  *
  * Triggered on:
  * - First message of a new chat (for every character participant)
@@ -23,7 +27,7 @@ import {
   RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
   RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
   type VaultConversationMatch,
-} from '@/lib/memory/conversation-summary-search'
+} from '@/lib/memory/recall/conversations'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
@@ -124,6 +128,8 @@ export interface ConversationRecallListsParams {
   embeddingProfileId?: string | null
   /** Free-text describing the current moment, drives the relevant list. */
   relevanceQuery: string
+  /** The vector already embedded for `relevanceQuery` (the turn's query), reused verbatim. */
+  relevanceEmbedding?: Float32Array | null
   /** Connection profile maxContext, scales both list sizes (3→10 over 4K→32K). */
   maxContext?: number | null
 }
@@ -144,7 +150,7 @@ export interface ConversationRecallListsParams {
 export async function buildConversationRecallLists(
   params: ConversationRecallListsParams,
 ): Promise<string> {
-  const { characterId, currentChatId, userId, embeddingProfileId, relevanceQuery, maxContext } = params
+  const { characterId, currentChatId, userId, embeddingProfileId, relevanceQuery, relevanceEmbedding, maxContext } = params
   const recentLimit = rampLimit(
     maxContext,
     RELEVANT_CONVERSATIONS_MIN,
@@ -173,6 +179,7 @@ export async function buildConversationRecallLists(
         query: trimmedQuery,
         userId,
         embeddingProfileId,
+        precomputedEmbedding: relevanceEmbedding ?? null,
         limit: relevantLimit,
         excludeConversationId: currentChatId,
       })
@@ -236,6 +243,8 @@ export interface MemoryRecapResult {
   content: string
   /** Number of memories that were summarized */
   memoriesUsed: number
+  /** The rows the narrative was built from (empty when no narrative was produced). */
+  memoryIds: string[]
   /** Token usage from the cheap LLM call */
   usage?: {
     promptTokens: number
@@ -254,40 +263,41 @@ export function digestsFirst(memories: Memory[]): Memory[] {
   return [...digests, ...memories.filter(m => m.source !== 'CONSOLIDATED')]
 }
 
+/** What {@link generateMemoryRecap} needs. */
+export interface MemoryRecapRequest {
+  characterId: string
+  characterName: string
+  /** Cheap LLM selection for the narrative. */
+  selection: CheapLLMSelection
+  userId: string
+  /** The chat, excluded from both conversation lists. */
+  chatId?: string
+  /** The uncensored understudy for dangerous chats. */
+  uncensoredFallback?: UncensoredFallbackOptions
+  /** Connection profile maxContext; scales each conversation list (3 at 4K → 10 at 32K). */
+  maxContext?: number | null
+  /** Free text describing the moment; drives the relevant list. Empty skips it. */
+  relevanceQuery?: string
+  /** The vector already embedded for `relevanceQuery` — reused, never re-embedded. */
+  relevanceEmbedding?: Float32Array | null
+  embeddingProfileId?: string | null
+  /** Rows another pool already delivers (the frozen archive); the narrative is built without them. */
+  excludeIds?: ReadonlySet<string>
+}
+
+/** The tier sizes the recap reads (the repository's defaults). */
+const RECAP_TIER_LIMITS = { high: 20, medium: 10, low: 5 } as const
+
 /**
  * Generate a memory recap for a character at the start of a conversation.
  *
- * Fetches recent memories across importance tiers (limits defined in
- * findRecentByImportanceTier), sends them to the cheap LLM for narrative summarization, and returns
- * formatted content ready for injection into the system prompt.
- *
- * For dangerous chats or when the cheap LLM refuses to process the memories,
- * the uncensored fallback provider is used automatically.
- *
- * @param characterId - The character whose memories to recap
- * @param characterName - The character's display name
- * @param selection - Cheap LLM selection for summarization
- * @param userId - User ID for API key access
- * @param chatId - Optional chat ID for logging (also excluded from both conversation lists)
- * @param uncensoredFallback - Optional uncensored provider fallback for dangerous content
- * @param maxContext - Connection profile's maxContext in tokens, used to scale how many
- *   conversation entries each list (recent + relevant) includes (ramp 4K→3, 32K→10)
- * @param relevanceQuery - Free-text describing the current moment; drives the
- *   relevant-conversations semantic search. Empty/omitted skips the relevant list.
- * @param embeddingProfileId - Embedding profile for the relevant-conversations search
- * @returns MemoryRecapResult with the formatted recap content
+ * Fetches recent memories across importance tiers, leaves out `excludeIds`
+ * (reading that many more per tier so the tiers stay full), sends them to the
+ * cheap LLM for a narrative, and returns it with the conversation lists. For
+ * dangerous chats or a refusal the uncensored understudy is used.
  */
-export async function generateMemoryRecap(
-  characterId: string,
-  characterName: string,
-  selection: CheapLLMSelection,
-  userId: string,
-  chatId?: string,
-  uncensoredFallback?: UncensoredFallbackOptions,
-  maxContext?: number | null,
-  relevanceQuery?: string,
-  embeddingProfileId?: string | null,
-): Promise<MemoryRecapResult> {
+export async function generateMemoryRecap(req: MemoryRecapRequest): Promise<MemoryRecapResult> {
+  const { characterId, characterName, selection, userId, chatId, uncensoredFallback, maxContext, relevanceQuery, embeddingProfileId } = req
   const startTime = Date.now()
 
   recapLogger.debug('Generating memory recap', {
@@ -300,8 +310,21 @@ export async function generateMemoryRecap(
   try {
     const repos = getRepositories()
 
-    // Fetch memories across all three importance tiers
-    const fetched = await repos.memories.findRecentByImportanceTier(characterId)
+    // Fetch memories across all three importance tiers, past what another
+    // pool already carries.
+    const exclude = req.excludeIds ?? new Set<string>()
+    const extra = exclude.size
+    const raw = await repos.memories.findRecentByImportanceTier(characterId, {
+      high: RECAP_TIER_LIMITS.high + extra,
+      medium: RECAP_TIER_LIMITS.medium + extra,
+      low: RECAP_TIER_LIMITS.low + extra,
+    })
+    const keep = (rows: Memory[], limit: number) => rows.filter(m => !exclude.has(m.id)).slice(0, limit)
+    const fetched = {
+      high: keep(raw.high, RECAP_TIER_LIMITS.high),
+      medium: keep(raw.medium, RECAP_TIER_LIMITS.medium),
+      low: keep(raw.low, RECAP_TIER_LIMITS.low),
+    }
     // Hot rows only (the repo guarantees it); digests lead the high bucket so
     // the narrative is built on consolidated knowledge before loose shards.
     const tiered = { ...fetched, high: digestsFirst(fetched.high) }
@@ -324,6 +347,7 @@ export async function generateMemoryRecap(
       userId,
       embeddingProfileId,
       relevanceQuery: relevanceQuery ?? '',
+      relevanceEmbedding: req.relevanceEmbedding,
       maxContext,
     })
 
@@ -371,7 +395,7 @@ export async function generateMemoryRecap(
 
     if (!narrative && !conversationsBlock) {
       recapLogger.debug('No memories or conversation lists found for recap, skipping', { characterId })
-      return { content: '', memoriesUsed: 0 }
+      return { content: '', memoriesUsed: 0, memoryIds: [] }
     }
 
     const intro = `## What You Remember\nAs ${characterName}, here is what you recall from your experiences and past conversations:`
@@ -395,6 +419,7 @@ export async function generateMemoryRecap(
     return {
       content: formattedContent,
       memoriesUsed: totalCount,
+      memoryIds: narrative ? [...tiered.high, ...tiered.medium, ...tiered.low].map(m => m.id) : [],
       usage,
     }
   } catch (error) {
@@ -405,6 +430,6 @@ export async function generateMemoryRecap(
       elapsed,
     }, error instanceof Error ? error : undefined)
 
-    return { content: '', memoriesUsed: 0 }
+    return { content: '', memoriesUsed: 0, memoryIds: [] }
   }
 }

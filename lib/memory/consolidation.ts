@@ -69,7 +69,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { memoryIndex, embeddingTextFor } from './index-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
-import { invalidateFrozenArchive } from './frozen-archive-cache'
+import { invalidateFrozenArchive } from './recall/archive'
 import {
   clusterBucket,
   selectClusters,

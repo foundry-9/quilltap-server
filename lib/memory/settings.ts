@@ -29,8 +29,8 @@ import type {
 } from '@/lib/schemas/settings.types'
 import { logger } from '@/lib/logger'
 import { ADMISSION_THRESHOLDS, MEMORY_SETTING_DEFAULTS, type AdmissionThresholds } from './settings-defaults'
-import { DEFAULT_RECALL_TUNING } from './recall-tags'
-import type { ResolvedRecallTuning } from './recall-tuning'
+import { DEFAULT_RECALL_TUNING } from './recall/tags'
+import type { ResolvedRecallTuning } from './recall/tuning'
 import { DEFAULT_MIN_COSINE_NEURAL, DEFAULT_MIN_COSINE_TFIDF } from './scoring'
 
 export { ADMISSION_THRESHOLDS, MEMORY_SETTING_DEFAULTS, MEMORY_CAP_BOUNDS } from './settings-defaults'
