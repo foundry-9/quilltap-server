@@ -43,6 +43,11 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
+// The restore drops the memory-index cache once the rows are in.
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
+}))
+
 jest.mock('@/lib/file-storage/manager', () => ({
   fileStorageManager: { listUserFiles: jest.fn(), uploadFile: jest.fn() },
 }))
@@ -85,7 +90,7 @@ const EMPTY_COLLECTIONS = [
   'groups', 'llmLogs', 'pluginConfigs', 'folders', 'wardrobeItems',
   'characterPluginData', 'conversationAnnotations', 'chatDocuments',
   'instanceSettings', 'embeddingStatus', 'conversationChunks', 'tfidfVocabularies',
-  'vectorIndexMetas', 'textReplacementRules', 'docMountPoints', 'docMountFiles',
+  'textReplacementRules', 'docMountPoints', 'docMountFiles',
   'docMountDocuments', 'docMountChunks', 'docMountFileLinks', 'docMountFolders',
   'docMountBlobs', 'projectDocMountLinks', 'groupDocMountLinks',
   'groupCharacterMembers', 'vectorEntries',
@@ -797,6 +802,49 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     expect(memoriesCreate).toHaveBeenCalledTimes(1)
     expect(memoriesCreate.mock.calls[0][0].embedding).toEqual([0.25, -0.5])
     expect(summary.memories).toBe(1)
+  })
+
+  it('adopts the legacy vector-entries vector for a memory that arrived without one, and keeps its own otherwise', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    const { memoryIndex } = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: { reloadAll: jest.Mock } }
+    memoryIndex.reloadAll.mockClear()
+    const row = (id: string, embedding: number[] | null) => ({
+      id,
+      characterId: 'char-1',
+      content: id,
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+      embedding,
+    })
+    const legacy = (id: string, embedding: number[]) => ({
+      id,
+      characterId: 'char-1',
+      embedding,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    })
+    // A pre-Phase-B archive: the mirror rides beside the rows.
+    primeArchive(
+      makeBackupData({
+        memories: [row('mem-bare', null), row('mem-own', [0.5, 0.5]), row('mem-no-mirror', null)],
+        vectorEntries: [legacy('mem-bare', [0.1, 0.9]), legacy('mem-own', [0.9, 0.1]), legacy('mem-orphan', [1, 0])],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    const byId = new Map(memoriesCreate.mock.calls.map((c) => [(c[1] as { id: string }).id, c[0] as Record<string, unknown>]))
+    expect(byId.get('mem-bare')!.embedding).toEqual([0.1, 0.9])
+    expect(byId.get('mem-own')!.embedding).toEqual([0.5, 0.5])
+    expect(byId.get('mem-no-mirror')!.embedding ?? null).toBeNull()
+    // The orphan mirror entry creates nothing.
+    expect(memoriesCreate).toHaveBeenCalledTimes(3)
+    expect(summary.memories).toBe(3)
+    expect(summary.legacyVectorsAdopted).toBe(1)
+    // The cache is dropped once the rows are in, so the next search reads them.
+    expect(memoryIndex.reloadAll).toHaveBeenCalledTimes(1)
   })
 
   it('counts restored memories from the rows written, not the archive', async () => {

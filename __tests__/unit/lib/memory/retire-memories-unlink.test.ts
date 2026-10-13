@@ -11,8 +11,6 @@
  * `deleteMemoriesWithUnlinkBatch`, which `retireMemories` replaced.)
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
@@ -36,7 +34,7 @@ jest.mock('@/lib/embedding/vector-store', () => ({
 }))
 
 jest.mock('@/lib/realtime/bus', () => ({
-  publishRealtime: jest.fn(() => { process.stderr.write('PUBLISH CALLED\n') }),
+  publishRealtime: jest.fn(),
 }))
 
 jest.mock('@/lib/memory/frozen-archive-cache', () => ({
@@ -49,17 +47,15 @@ jest.mock('@/lib/memory/commonplace-mirror', () => ({
 
 jest.mock('@/lib/logger', () => {
   const make = (): Record<string, unknown> => ({
-    debug: jest.fn((m: string) => process.stderr.write('LOG ' + m + '\n')), info: jest.fn(), warn: jest.fn((m: string) => process.stderr.write('WARN ' + m + '\n')), error: jest.fn(),
+    debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
     child: jest.fn(() => make()),
   })
   return { logger: make() }
 })
 
 import { retireMemories } from '@/lib/memory/retire'
-const { publishRealtime } = jest.requireMock('@/lib/realtime/bus') as { publishRealtime: jest.Mock }
-const { invalidateFrozenArchive } = jest.requireMock('@/lib/memory/frozen-archive-cache') as {
-  invalidateFrozenArchive: jest.Mock
-}
+import { publishRealtime } from '@/lib/realtime/bus'
+import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
 const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock }
@@ -188,7 +184,6 @@ describe('retireMemories — one id', () => {
       { characterId: 'char-1', memoryId: 'C', relatedMemoryIds: [] },
     ])
     expect(bulkDeleted).toEqual([{ characterId: 'char-1', ids: ['B'] }])
-    process.stderr.write('ENV ' + JSON.stringify([process.env.QUILLTAP_JOB_CHILD, report, require('@/lib/realtime/bus').publishRealtime === publishRealtime, String(require('@/lib/realtime/bus').publishRealtime)]) + '\n')
     expect(invalidateFrozenArchive).toHaveBeenCalledWith('char-1')
     expect(publishRealtime).toHaveBeenCalledWith('memories')
   })

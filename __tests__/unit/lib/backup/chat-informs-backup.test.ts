@@ -38,6 +38,11 @@ jest.mock('@/lib/repositories/factory', () => ({
   getUserRepositories: jest.fn(),
 }));
 
+// The restore drops the memory-index cache once the rows are in.
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
+}));
+
 jest.mock('@/lib/file-storage/manager', () => ({
   fileStorageManager: { downloadFile: jest.fn(), listUserFiles: jest.fn(), uploadFile: jest.fn() },
 }));
@@ -190,11 +195,6 @@ describe('createBackup — chat informs', () => {
     const globalRepos = repoStub({
       chatSettings: methodStub({ findByUserId: jest.fn().mockResolvedValue(null) }),
       chatInforms: methodStub({ findByChatId: findInformsByChatId }),
-      vectorIndices: methodStub({
-        getAllCharacterIds: jest.fn().mockResolvedValue([]),
-        findMetaByCharacterId: jest.fn().mockResolvedValue(null),
-        findEntriesByCharacterId: jest.fn().mockResolvedValue([]),
-      }),
       textReplacementRules: methodStub({ list: jest.fn().mockResolvedValue([]) }),
     });
 
@@ -246,7 +246,7 @@ describe('restore — chat informs', () => {
     'groups', 'llmLogs', 'pluginConfigs', 'folders', 'wardrobeItems',
     'characterPluginData', 'conversationAnnotations', 'chatDocuments',
     'instanceSettings', 'embeddingStatus', 'conversationChunks', 'tfidfVocabularies',
-    'vectorIndexMetas', 'textReplacementRules', 'docMountPoints', 'docMountFiles',
+    'textReplacementRules', 'docMountPoints', 'docMountFiles',
     'docMountDocuments', 'docMountChunks', 'docMountFileLinks', 'docMountFolders',
     'docMountBlobs', 'projectDocMountLinks', 'groupDocMountLinks',
     'groupCharacterMembers', 'vectorEntries',

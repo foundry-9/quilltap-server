@@ -59,8 +59,8 @@ const mockUploadRaw = jest.fn();
 const mockResolveArchivePassphrase = jest.fn();
 const mockEncryptArchive = jest.fn();
 const mockDecryptArchive = jest.fn();
-const mockDeleteMemoriesWithUnlinkBatch = jest.fn();
-const mockDeleteVectorStore = jest.fn();
+const mockRetireMemories = jest.fn();
+const mockMemoryIndexReload = jest.fn();
 const mockDocsByMountPoint = jest.fn();
 const mockBlobsByMountPoint = jest.fn();
 const mockLinksByMountPoint = jest.fn();
@@ -155,14 +155,14 @@ function installMocks() {
     enqueueEmbeddingJobsForMountPoint: mockEnqueueEmbeddingJobs,
   }));
 
-  jest.doMock('@/lib/memory/memory-gate', () => ({
+  jest.doMock('@/lib/memory/retire', () => ({
     __esModule: true,
-    deleteMemoriesWithUnlinkBatch: mockDeleteMemoriesWithUnlinkBatch,
+    retireMemories: mockRetireMemories,
   }));
 
-  jest.doMock('@/lib/embedding/vector-store', () => ({
+  jest.doMock('@/lib/memory/index-store', () => ({
     __esModule: true,
-    getVectorStoreManager: () => ({ deleteStore: mockDeleteVectorStore }),
+    memoryIndex: { reload: mockMemoryIndexReload },
   }));
 
   jest.doMock('@/lib/characters/archive-crypto', () => ({
@@ -370,8 +370,8 @@ function createDefaultMocks(mockGetUserRepositories: jest.Mock, mockGetRepositor
   mockDecryptArchive.mockImplementation((data: unknown) =>
     (data as Buffer).subarray(ENC_PREFIX.length)
   );
-  mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue(undefined as never);
-  mockDeleteVectorStore.mockResolvedValue(undefined as never);
+  mockRetireMemories.mockImplementation(async (ids: unknown) => ({ retired: (ids as string[]).length }));
+  mockMemoryIndexReload.mockReset();
 
   // Rehydrate fixtures: an encrypted bundle on the shelf whose decrypted
   // plaintext matches the file row's recorded digest.
@@ -597,13 +597,13 @@ describe('archiveCharacter — the prune', () => {
     expect(liveLinks.map((link) => link.id).sort()).toEqual(KEPT_LINK_IDS.slice().sort());
   });
 
-  it('deletes the character-owned memories through the gate', async () => {
+  it('retires the character-owned memories through the chokepoint and drops the cached index', async () => {
     const { archiveCharacter } = setup();
 
     await archiveCharacter('user-1', CHARACTER_ID);
 
-    expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledWith(['memory-1']);
-    expect(mockDeleteVectorStore).toHaveBeenCalledWith(CHARACTER_ID);
+    expect(mockRetireMemories).toHaveBeenCalledWith(['memory-1'], { reason: 'character-archive' });
+    expect(mockMemoryIndexReload).toHaveBeenCalledWith(CHARACTER_ID);
   });
 
   it('sweeps the embedding_status rows of what it deleted, and nothing else', async () => {
@@ -654,7 +654,7 @@ describe('archiveCharacter — the prune', () => {
 
   it('reports pruneComplete: false when memory deletion fails, without aborting the vault prune', async () => {
     const { archiveCharacter } = setup();
-    mockDeleteMemoriesWithUnlinkBatch.mockRejectedValue(new Error('gate refused') as never);
+    mockRetireMemories.mockRejectedValue(new Error('retirement refused') as never);
 
     const result = await archiveCharacter('user-1', CHARACTER_ID);
 
@@ -663,9 +663,11 @@ describe('archiveCharacter — the prune', () => {
     expect(mockDeleteWithGC).toHaveBeenCalledWith('link-mail');
   });
 
-  it('reports pruneComplete: false when the vector store will not drop', async () => {
+  it('reports pruneComplete: false when the memory index cache will not drop', async () => {
     const { archiveCharacter } = setup();
-    mockDeleteVectorStore.mockRejectedValue(new Error('no such store') as never);
+    mockMemoryIndexReload.mockImplementation(() => {
+      throw new Error('no such store');
+    });
 
     const result = await archiveCharacter('user-1', CHARACTER_ID);
 
@@ -701,7 +703,7 @@ describe('archiveCharacter — re-running after a failed prune', () => {
 
     expect(result.pruneComplete).toBe(true);
     expect(mockDeleteWithGC).not.toHaveBeenCalled();
-    expect(mockDeleteMemoriesWithUnlinkBatch).not.toHaveBeenCalled();
+    expect(mockRetireMemories).not.toHaveBeenCalled();
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
