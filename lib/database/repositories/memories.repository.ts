@@ -1375,36 +1375,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Ids of a character's superseded, cold, non-MANUAL memories superseded
-   * before `olderThan` — the only rows `coldRetentionDays` may delete.
-   *
-   * Aged by `supersededAt`, not `updatedAt`: link rewrites (consolidation,
-   * the delete chokepoint's neighbour scrub) reset `updatedAt`, so a member
-   * that kept being re-linked never aged out (bug 225). A row superseded
-   * before the column existed and missed by the backfill falls back to
-   * `updatedAt`.
-   */
-  async findExpiredColdIds(characterId: string, olderThan: string): Promise<string[]> {
-    return this.safeQuery(
-      async () => {
-        const rows = await rawQuery<Array<{ id: string }>>(
-          `SELECT id FROM memories
-            WHERE characterId = ?
-              AND tier = 'cold'
-              AND supersededById IS NOT NULL
-              AND source != 'MANUAL'
-              AND COALESCE(supersededAt, updatedAt) < ?`,
-          [characterId, olderThan],
-        );
-        return rows.map((r) => r.id);
-      },
-      'Error finding expired cold memories',
-      { characterId, olderThan },
-      [],
-    );
-  }
-
-  /**
    * Count memories created for a character at or after the given ISO timestamp.
    * Used by the extraction rate-limiter.
    * @param characterId The character ID

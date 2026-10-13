@@ -23,16 +23,28 @@ A memory housekeeping archived is not forgotten in a drawer, either. The next co
 
 ## What Housekeeping Does
 
-When enabled, housekeeping runs in two ways:
+Housekeeping is one round of a single errand the house runs for each character in turn: the *memory maintenance* job. The errand always goes in the same order, and any step that is switched off is simply skipped:
 
-- **Reactively**, whenever a character approaches 90% of their per-character cap after a new memory is written. The check is cheap; the sweep runs as a background job so it never blocks a chat turn.
+1. **Fold near-duplicates.** Extracted memories that say the same thing about the same person on the same occasion — very nearly word for word, by the house's reckoning — are folded into the sturdiest of them, any stray detail kept as a footnote. No model is consulted; it is plain arithmetic. Hand-written memories, digests and archived memories are never folded.
+2. **Consolidate** — [Memory Consolidation](memory-consolidation.md), when it is switched on.
+3. **Archive the excess** — the cap, described below.
+4. **Retire** archived memories a digest has long since replaced, when the Consolidation card's cold-retention setting asks for it.
+5. **Refresh the vault copies** of any digests the round changed.
+
+Because consolidation comes first, the cap only ever measures what is left after the clerk has combined what can be combined, and anything the cap sends to the archive is waiting for the clerk's next visit.
+
+When enabled, the errand runs in two ways:
+
+- **Reactively**, whenever a character reaches 90% of their per-character cap after a new memory is written. The check is cheap, and it is made in the server's own head, which also remembers when it last ran: it will not send the housekeeper round again for at least fifteen minutes, nor for an hour after a round that could barely make a dent. The work itself runs as a background job, so it never blocks a chat turn.
 - **On a schedule**, once a day, as a safety net for characters whose counts crept up while no one was chatting with them.
+
+Only one round is ever under way for a character at a time: a reactive round, the daily round and a button-press all queue behind the one already waiting, which simply takes on whatever extra steps the newcomer asked for.
 
 You can also run it on demand with the **Run housekeeping now** button — handy after importing a large archive or after flipping the feature on for the first time.
 
 ## What Housekeeping Protects
 
-Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never archived or deleted, no matter what, and neither is a digest written by [Memory Consolidation](memory-consolidation.md). Neither counts against the cap, either: the cap measures only the memories housekeeping is actually permitted to move, so a character rich in hand-written notes and digests is never declared "over the limit" on their account, and the housekeeper is never sent off on a sweep it could not possibly finish. Everything else is weighed by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold is spared by the slow retention sweep. When a character is over the cap, the cap-enforcement sweep archives just enough memories to come back inside it, starting from the lowest score — so the well-reinforced, well-connected, recently recalled memories are the last to go.
+Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never archived or deleted, no matter what, and neither is a digest written by [Memory Consolidation](memory-consolidation.md). Neither counts against the cap, either: the cap measures only the memories housekeeping is actually permitted to move, so a character rich in hand-written notes and digests is never declared "over the limit" on their account, and the housekeeper is never sent off on a sweep it could not possibly finish. Everything else is weighed by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. When a character is over the cap, the housekeeper archives just enough memories to come back inside it, starting from the lowest score — so the well-reinforced, well-connected, recently recalled memories are the last to go.
 
 The scoring stream worth dwelling on is the content component. The LLM's importance rating is time-decayed with a **thirty-day half-life**, and — crucially — its contribution to the protection score is **capped** so that importance alone can never make a memory permanent. A fresh fact the LLM rated 0.9 contributes the same 0.40 to its protection score as a fresh fact the LLM rated 0.4; to cross the protection threshold, the memory must also earn some evidence of use. At least one reinforcement, one related-memory link, or one recent access, combined with the capped content contribution and the small default reinforcement bonus, is typically enough. Without those signals, the LLM's one-shot importance rating is simply insufficient evidence for permanent protection — which is the whole point of the blend. The reference clock is reset every time the memory is reinforced with new details, so a fact that remains relevant — revisited, reinforced, linked, accessed — stays protected, while one the chats have genuinely moved on from becomes eligible for the cap-enforcement sweep. This replaces the earlier rule in which any memory rated 0.7 or higher was immortal regardless of age or usage, which — in practice — turned the housekeeper into a doorman who waved almost everyone through.
 
@@ -40,9 +52,9 @@ A re-observation counts as reinforcement however faithfully it restates the orig
 
 Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days — "read" meaning the memory actually reached a character (whispered into a turn, returned by a search the character ran), not merely that a search glanced at it on the way past, nor that you opened it to have a look in the Commonplace Book or through the API. All four signals combine into a single number used by the protection gate.
 
-The conservative first-pass retention rule still applies: a memory is *also* only eligible for the slow sweep when it is old (more than 6 months), low-importance (below 0.3 after reinforcement), and either never accessed or inactive for 6+ months. The blended score changes what the cap-enforcement sweep can touch; it does not change the first pass.
+Age and neglect are already in that score — the content component fades with time, and an unread memory earns no access bonus — so there is no separate "old and unimportant" rule any longer, and the age, inactivity and importance knobs the cleanup dialog once offered have been retired with it.
 
-Both sweeps *archive* rather than delete. Once the retention-policy sweep is complete, if the character still has more automatic memories on the active shelf than their cap, housekeeping archives the lowest-scoring of them until the count is back inside the cap — exactly as many as the excess, and not one more. The score is the same blended protection score described above, so the thing that decides whether a memory may go also decides which goes first.
+The cap *archives* rather than deletes. If the character has more automatic memories on the active shelf than their cap, housekeeping archives the lowest-scoring of them until the count is back inside the cap — exactly as many as the excess, and not one more. The score is the blended protection score described above, so the thing that decides whether a memory may go also decides which goes first.
 
 ## Settings
 
@@ -56,9 +68,11 @@ The number of **automatic** memories a character may keep on the active shelf be
 
 If you want a different cap for a particular character, open **Per-character overrides** beneath the cap. Each character is listed with two figures: how many memories are *counted* against the cap, and how many are *protected* (hand-written and digests) and so exempt. The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one. The **Memory Cleanup** dialog on a character's own memory page opens on that character's cap — override and all — so a one-off cleanup measures against the same figure the automatic sweep would; type a different number only if you mean to.
 
-### Merging similar memories (retired)
+### Merging similar memories
 
-Earlier versions offered a tick-box to merge near-identical memories during the sweep. That job now belongs to [Memory Consolidation](memory-consolidation.md), which combines whole clusters of related memories into digests and keeps the originals in the archive. The old setting has been cleared out of saved configuration altogether, along with its threshold. **Memory Deduplication**, further down this tab, still merges pairs on demand.
+Earlier versions offered a tick-box to merge near-identical memories during the sweep. Its work is now done two ways: the round's first step folds true near-duplicates on its own, and [Memory Consolidation](memory-consolidation.md) combines whole clusters of related memories into digests. The old setting has been cleared out of saved configuration altogether, along with its threshold. **Near-Duplicate Folding**, further down this tab, runs the first step by itself, with a preview, for every character at once.
+
+Each of the round's own steps — folding, archiving the excess, retiring — can be switched off on its own through the maintenance settings (`phases` on `?action=maintenance-config`); a round you start by naming its steps runs them regardless.
 
 ### Deleting archived memories
 
@@ -66,13 +80,13 @@ Nothing is ever deleted by policy unless you ask for it. The Consolidation card'
 
 ## Running Housekeeping on Demand
 
-The **Run housekeeping now** button enqueues one MEMORY_HOUSEKEEPING background job for each character owned by your user. Each uses whatever cap you have currently configured for that character. A character already being swept — by the daily round, by the reactive trigger, or by an earlier press of the button — is not swept twice at once; the job already under way covers it. The jobs run in the background; each successful sweep appears in the server log as `[Housekeeping] Job complete`.
+The **Run housekeeping now** button enqueues one MEMORY_MAINTENANCE background job for each character owned by your user, asking for the archive and retire steps. Each uses whatever cap you have currently configured for that character. A character already being seen to — by the daily round, by the reactive trigger, or by an earlier press of the button — is not visited twice at once; the job already waiting takes on the request. The jobs run in the background; each finished round appears in the server log as `Maintenance job complete`, and `quilltap memories status` shows when each step last ran for every character.
 
 ## A Note on Trust
 
-Housekeeping will never touch memories that are (a) manually created or (b) consolidation digests; the slow retention sweep also spares anything (c) important, (d) recent, or (e) stably reinforced and still useful, and the cap sweep takes those last of all — and what it does touch goes to the archive, not the bin. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
+Housekeeping will never touch memories that are (a) manually created or (b) consolidation digests; the cap takes (c) important, (d) recent, and (e) stably reinforced and still useful memories last of all — and what it does touch goes to the archive, not the bin. That said — before you turn it on for the first time on an instance with a long chat history, it is worth previewing **Near-Duplicate Folding** first, to see how many of the worst repetitions (the old, lax gate let more of them through) the first step would fold. That card is in the same tab, right below this one.
 
-If your instance was created before Quilltap 4.3, it is also worth running **Repair Missing Embeddings** first. Older gate fallbacks were known to write memories without embeddings when the embedding provider was briefly unavailable; those memories are invisible to the deduplication gate and to semantic search, and the deduplication tool can't see them either. The repair card is the second entry in this tab.
+If your instance was created before Quilltap 4.3, it is also worth running **Repair Missing Embeddings** first. Older gate fallbacks were known to write memories without embeddings when the embedding provider was briefly unavailable; those memories are invisible to the gate and to semantic search, and near-duplicate folding cannot see them either. The repair card is the second entry in this tab.
 
 ## A Related Knob: Extraction Rate Limits
 

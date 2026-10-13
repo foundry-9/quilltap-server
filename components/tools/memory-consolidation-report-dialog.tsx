@@ -10,8 +10,6 @@ interface MemoryConsolidationReportDialogProps {
 }
 
 const SKIPPED_TEXT: Record<NonNullable<ConsolidationReport['skippedReason']>, string> = {
-  'character-not-found': 'The house has no record of that character.',
-  archived: 'That character has been archived, and the archive is not to be disturbed.',
   'no-llm': 'No model is available to do the consolidating. Name a connection profile above, or configure the cheap LLM.',
 }
 

@@ -55,10 +55,9 @@ jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({
   handleEntityDeletion: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/consolidation', () => ({}))
 jest.mock('@/lib/background-jobs/queue-service', () => ({}))
 jest.mock('@/lib/instance-settings', () => ({}))
-jest.mock('@/lib/memory/housekeeping', () => ({}))
+jest.mock('@/lib/memory/maintenance', () => ({ MAINTENANCE_PHASES: ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'] }))
 jest.mock('@/lib/memory/anchor-gate-probe', () => ({}))
 jest.mock('@/lib/embedding/embedding-service', () => ({}))
 jest.mock('@/lib/background-jobs/processor', () => ({}))

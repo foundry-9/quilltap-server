@@ -846,8 +846,9 @@ export async function register() {
         const { scheduleCleanup } = await import('./lib/background-jobs/scheduled-cleanup');
         scheduleCleanup();
 
-        const { scheduleHousekeeping } = await import('./lib/background-jobs/scheduled-housekeeping');
-        scheduleHousekeeping();
+        // Memory maintenance: one MEMORY_MAINTENANCE job per character, daily.
+        const { scheduleMemoryMaintenance } = await import('./lib/memory/maintenance/scheduler');
+        scheduleMemoryMaintenance();
 
         const { scheduleMaintenance } = await import('./lib/background-jobs/scheduled-maintenance');
         scheduleMaintenance();

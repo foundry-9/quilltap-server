@@ -44,9 +44,10 @@ describe('topicsForCompletedJob', () => {
       ]);
     });
 
-    it('sweeps the namespace for character-scoped housekeeping', () => {
-      expect(topicsForCompletedJob('MEMORY_HOUSEKEEPING', { characterId: 'char-1' })).toEqual([
+    it('sweeps the namespace (and the vault mirror) for character-scoped maintenance', () => {
+      expect(topicsForCompletedJob('MEMORY_MAINTENANCE', { characterId: 'char-1' })).toEqual([
         { topic: 'memories' },
+        { topic: 'mountPoints' },
       ]);
     });
   });

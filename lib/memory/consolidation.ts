@@ -7,15 +7,15 @@
  * cold tier, superseded by the digest that replaced them
  * (docs/developer/features/memory-consolidation-and-tiers.md §4).
  *
- * One run, per character:
+ * This module is the planner and the model route; the maintenance job's
+ * `consolidate` phase (`maintenance/consolidate.ts`) feeds it and announces
+ * what it wrote. One call of {@link consolidate}, per character:
  *
- *   1. **Load** (paged, yielding between pages): every row feeds the link
- *      index; AUTO rows older than `matureAfterDays` with an embedding are
- *      candidates — hot rows, and cold rows housekeeping demoted with no
- *      successor (`supersededById` null, bug 211) — bucketed by subject
- *      (self / another character / no subject);
- *      each bucket's existing hot digests come along as cluster seeds. MANUAL
- *      rows are never candidates — nothing sends a hand-written row cold.
+ *   1. **Buckets** arrive from the phase's loader: candidates are AUTO rows
+ *      older than `matureAfterDays` with an embedding — hot rows, and cold rows
+ *      demoted by the cap with no successor (`supersededById` null, bug 211) —
+ *      bucketed by subject (self / another character / no subject), each with
+ *      its hot digests as cluster seeds. MANUAL rows are never candidates.
  *   2. **Cluster** each bucket (`consolidation-clustering.ts`, pure) and pick
  *      the qualifying clusters by total `reinforcedImportance`, up to
  *      `maxClustersPerRun`. Clusters below the size floor have their
@@ -27,21 +27,14 @@
  *      that fails, times out, or answers out of schema skips its cluster —
  *      nothing is written for it, and its rows stay unconsidered so the next
  *      run retries them.
- *   4. **Plan, then write** (`consolidation-plan.ts`, pure). The job runs in
- *      the forked child, whose reads never see its own buffered writes, so the
- *      whole batch is computed before a single write is issued. Digests are
- *      inserted directly with their embedding — never through the memory gate,
- *      which would absorb a digest into its own members.
- *   5. **Mirror** each touched bucket's digests into the holder's vault
- *      (`Commonplace/<Subject>.md`, `Commonplace/Self.md`), where the
- *      extractor's canon loaders read them back. The mirror is written from
- *      committed rows only (`commonplace-mirror.ts`, bug 208): in-process runs
- *      write it after their writes land; job runs leave it to the parent's
- *      commit hook, so a batch that fails to commit leaves the vault alone.
+ *   4. **Plan, then write** (`consolidation-plan.ts`, pure). The whole batch is
+ *      computed before a single write is issued. Digests are inserted directly
+ *      with their embedding — never through admission, which would absorb a
+ *      digest into its own members.
  *
- * A dry run does steps 1–3 and plans step 4, writes nothing, and returns the
- * report. {@link runConsolidation} is callable in-process (CLI, API) as well
- * as from the MEMORY_CONSOLIDATION job handler.
+ * It announces nothing: the frozen-archive invalidation, the realtime hint and
+ * the `Commonplace/` mirror are the maintenance run's effects, after commit.
+ * A dry run does steps 1–3 and plans step 4, and writes nothing.
  *
  * Concierge: consolidation reads across chats, so it inherits the posture of
  * the chats its members came from. A Locked member chat wins (no reroute, no
@@ -67,10 +60,8 @@ import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resol
 import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from './index-store'
-import { publishRealtime } from '@/lib/realtime/bus'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { resolveClusterThreshold } from './settings-defaults'
-import { invalidateFrozenArchive } from './recall/archive'
 import {
   clusterBucket,
   selectClusters,
@@ -91,24 +82,13 @@ import {
 } from './cheap-llm-tasks/consolidation-tasks'
 import {
   loadCanonForObserverAboutSubject,
-  loadCanonForSelf,
+  loadCanonForSelfWithCommonplace,
   renderOtherCanonBlock,
   renderSelfCanonBlock,
 } from './cheap-llm-tasks/canon'
 import type { UncensoredFallbackOptions } from './cheap-llm-tasks/types'
-import { mirrorCommonplaceForSubjects } from './commonplace-mirror'
 
 const log = logger.child({ module: 'memory:consolidation' })
-
-/** Rows per page when loading a character's corpus. */
-export const CONSOLIDATION_LOAD_PAGE_SIZE = 250
-
-/**
- * Most candidate rows clustered per subject bucket in one run. Clustering is
- * O(n²) in memory and time; a bucket past this keeps its never-considered rows
- * first, then the weightiest, and the rest wait for the next run.
- */
-export const CONSOLIDATION_MAX_BUCKET_ROWS = 2000
 
 const DAY_MS = 86_400_000
 
@@ -190,7 +170,6 @@ export interface ConsolidationStats {
   contradictionsApplied: number
   rowsMarkedConsidered: number
   linksRewired: number
-  mirrorFilesWritten: number
   /** True when the run stopped issuing calls because its time budget ran out. */
   budgetExhausted: boolean
   durationMs: number
@@ -208,7 +187,7 @@ export interface ConsolidationReport {
   clusters: ConsolidationClusterReport[]
   stats: ConsolidationStats
   /** Set when the run did nothing at all, and why. */
-  skippedReason?: 'character-not-found' | 'archived' | 'no-llm'
+  skippedReason?: 'no-llm'
 }
 
 export interface RunConsolidationOptions {
@@ -236,7 +215,8 @@ export interface RunConsolidationOptions {
 // Internals
 // ============================================================================
 
-interface Bucket {
+/** One subject bucket: its candidate rows and the hot digests that seed its clusters. */
+export interface ConsolidationBucket {
   key: string
   ref: ConsolidationBucketRef
   /** `aboutCharacterId` digests in this bucket carry. */
@@ -247,7 +227,7 @@ interface Bucket {
 
 type TaggedCluster = Cluster & { bucketKey: string }
 
-function emptyStats(): ConsolidationStats {
+export function createConsolidationStats(): ConsolidationStats {
   return {
     rowsLoaded: 0,
     candidates: 0,
@@ -273,7 +253,6 @@ function emptyStats(): ConsolidationStats {
     contradictionsApplied: 0,
     rowsMarkedConsidered: 0,
     linksRewired: 0,
-    mirrorFilesWritten: 0,
     budgetExhausted: false,
     durationMs: 0,
   }
@@ -283,18 +262,11 @@ function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
 }
 
-function bucketKeyOf(memory: Memory, holderId: string): string {
-  const about = memory.aboutCharacterId ?? null
-  if (!about) return 'none'
-  if (about === holderId) return 'self'
-  return `other:${about}`
-}
-
-function hasEmbedding(memory: Memory): memory is Memory & { embedding: Float32Array } {
+export function hasEmbedding(memory: Memory): memory is Memory & { embedding: Float32Array } {
   return memory.embedding instanceof Float32Array && memory.embedding.length > 0
 }
 
-function eventTimeMs(memory: Memory): number | null {
+export function eventTimeMs(memory: Memory): number | null {
   const iso = memory.occurredAt ?? memory.createdAt
   const ms = Date.parse(iso)
   return Number.isFinite(ms) ? ms : null
@@ -313,94 +285,6 @@ function toClusterItem(memory: Memory & { embedding: Float32Array }): ClusterIte
     consideredAtMs: Number.isFinite(considered) ? considered : null,
     weight: memory.reinforcedImportance ?? memory.importance ?? 0.5,
   }
-}
-
-/** Load the corpus: the full link index plus per-bucket candidates and digests. */
-async function loadCorpus(
-  characterId: string,
-  matureCutoffMs: number,
-  stats: ConsolidationStats,
-): Promise<{ rowIndex: Map<string, LinkIndexRow>; buckets: Map<string, Bucket> }> {
-  const repos = getRepositories()
-  const rowIndex = new Map<string, LinkIndexRow>()
-  const buckets = new Map<string, Bucket>()
-
-  const bucketFor = (memory: Memory): Bucket => {
-    const key = bucketKeyOf(memory, characterId)
-    let bucket = buckets.get(key)
-    if (!bucket) {
-      const about = memory.aboutCharacterId ?? null
-      bucket = {
-        key,
-        ref: {
-          kind: key === 'self' ? 'self' : key === 'none' ? 'none' : 'other',
-          subjectCharacterId: key === 'none' ? null : about,
-          subjectName: '',
-        },
-        aboutCharacterId: key === 'none' ? null : about,
-        rows: [],
-        digests: [],
-      }
-      buckets.set(key, bucket)
-    }
-    return bucket
-  }
-
-  for await (const page of repos.memories.findByCharacterIdInBatches(characterId, CONSOLIDATION_LOAD_PAGE_SIZE)) {
-    for (const memory of page) {
-      stats.rowsLoaded++
-      rowIndex.set(memory.id, { id: memory.id, relatedMemoryIds: memory.relatedMemoryIds ?? [] })
-      const isHot = (memory.tier ?? 'hot') === 'hot'
-
-      if (memory.source === 'CONSOLIDATED') {
-        if (!isHot) continue
-        if (!hasEmbedding(memory)) {
-          stats.noEmbeddingSkipped++
-          continue
-        }
-        bucketFor(memory).digests.push(memory)
-        stats.digestsLoaded++
-        continue
-      }
-      // Hand-written rows are never sent cold by policy (spec §B4).
-      if (memory.source !== 'AUTO') continue
-      // Cold rows a digest superseded belong to it. Cold rows with no
-      // successor were demoted by housekeeping's cap; they re-enter here so
-      // their gist reaches a digest and they can retire like any other
-      // superseded row, instead of sitting cold forever (bug 211).
-      if (!isHot) {
-        if (memory.supersededById) continue
-        stats.demotedCandidates++
-      }
-      const created = Date.parse(memory.createdAt)
-      if (!Number.isFinite(created) || created > matureCutoffMs) {
-        stats.immatureSkipped++
-        continue
-      }
-      if (!hasEmbedding(memory)) {
-        stats.noEmbeddingSkipped++
-        continue
-      }
-      bucketFor(memory).rows.push(memory)
-      stats.candidates++
-    }
-    await yieldToEventLoop()
-  }
-
-  return { rowIndex, buckets }
-}
-
-/** Cap a bucket's candidate rows: never-considered first, then weightiest. */
-function capBucketRows(rows: Memory[]): Memory[] {
-  if (rows.length <= CONSOLIDATION_MAX_BUCKET_ROWS) return rows
-  return [...rows]
-    .sort((a, b) => {
-      const ac = a.consolidatedAt ? 1 : 0
-      const bc = b.consolidatedAt ? 1 : 0
-      if (ac !== bc) return ac - bc
-      return (b.reinforcedImportance ?? 0) - (a.reinforcedImportance ?? 0)
-    })
-    .slice(0, CONSOLIDATION_MAX_BUCKET_ROWS)
 }
 
 interface ModelRoute {
@@ -478,7 +362,7 @@ async function routeForCluster(
 /** Fill in subject names and canon blocks for the buckets that will be consolidated. */
 async function describeBuckets(
   holder: Character,
-  buckets: Map<string, Bucket>,
+  buckets: Map<string, ConsolidationBucket>,
   keys: ReadonlySet<string>,
 ): Promise<Map<string, string | null>> {
   const repos = getRepositories()
@@ -487,16 +371,18 @@ async function describeBuckets(
     if (!keys.has(bucket.key)) continue
     if (bucket.ref.kind === 'self') {
       bucket.ref.subjectName = holder.name
+      // The card fields plus `Commonplace/Self.md`, as the extractor reads them.
       canon.set(
         bucket.key,
         renderSelfCanonBlock(
-          loadCanonForSelf({
+          await loadCanonForSelfWithCommonplace({
             id: holder.id,
             name: holder.name,
             manifesto: holder.manifesto ?? null,
             personality: holder.personality ?? null,
             description: holder.description ?? null,
             identity: holder.identity ?? null,
+            mountPointId: holder.characterDocumentMountPointId ?? null,
           }),
         ),
       )
@@ -626,7 +512,7 @@ async function executePlan(
  * run changes. The no-subject bucket has no mirror and is left out.
  */
 function touchedSubjects(
-  buckets: Map<string, Bucket>,
+  buckets: Map<string, ConsolidationBucket>,
   plan: ConsolidationWritePlan,
   bucketKeyByOutcome: readonly string[],
 ): string[] {
@@ -642,15 +528,37 @@ function touchedSubjects(
 // Entry point
 // ============================================================================
 
+/** What {@link consolidate} is handed: the holder and its bucketed corpus. */
+export interface ConsolidationInput {
+  /** The holder, with its vault overlay when it could be read. */
+  holder: Character
+  /** Every row the holder has (links only), for the link rewrites. */
+  rowIndex: Map<string, LinkIndexRow>
+  buckets: Map<string, ConsolidationBucket>
+  /** Stats seeded by the loader (rows, candidates, skips). */
+  stats: ConsolidationStats
+}
+
+export interface ConsolidationRun {
+  report: ConsolidationReport
+  /** The writes the run issued, or would have issued in a dry run. */
+  plan: ConsolidationWritePlan
+  /** Rows of clusters too small to fold, stamped considered with the plan. */
+  belowMinConsidered: string[]
+  /** Digest subjects whose Commonplace files the run changes. */
+  touchedSubjects: string[]
+}
+
 /**
- * Run consolidation for one character. See the module docs for the stages.
- * Never throws for an ordinary failure (a bad call, a missing vault); throws
- * only when the corpus itself cannot be read.
+ * Consolidate one character's bucketed candidates: cluster, call the model per
+ * cluster, plan, embed the digests, and (unless a dry run) issue the writes.
+ * It announces nothing — the maintenance run does that after the writes
+ * commit. Never throws for an ordinary failure (a bad call, a missing vault).
  */
-export async function runConsolidation(
-  characterId: string,
+export async function consolidate(
+  input: ConsolidationInput,
   opts: RunConsolidationOptions = {},
-): Promise<ConsolidationReport> {
+): Promise<ConsolidationRun> {
   const startedMs = Date.now()
   const now = opts.now ?? new Date()
   const nowMs = now.getTime()
@@ -662,14 +570,16 @@ export async function runConsolidation(
     ...(opts.settings ?? {}),
   }
   const maxClusters = opts.maxClustersPerRun ?? settings.maxClustersPerRun
-  const stats = emptyStats()
+  const { holder, rowIndex, buckets, stats } = input
+  const characterId = holder.id
   const clusterReports: ConsolidationClusterReport[] = []
+  const userId = opts.userId ?? holder.userId
 
-  const finish = (extra: Partial<ConsolidationReport> = {}, characterName: string | null = null): ConsolidationReport => {
+  const finish = (extra: Partial<ConsolidationReport> = {}): ConsolidationReport => {
     stats.durationMs = Date.now() - startedMs
     return {
       characterId,
-      characterName,
+      characterName: holder.name,
       dryRun,
       trigger,
       startedAt: nowIso,
@@ -681,30 +591,10 @@ export async function runConsolidation(
     }
   }
 
-  const repos = getRepositories()
-  // Raw read on purpose: the archived-character tombstone lives on the row,
-  // and a broken vault must not hide a character that still holds memories.
-  const holderRaw = await repos.characters.findByIdRaw(characterId)
-  if (!holderRaw) {
-    log.info('Consolidation skipped: character not found', { characterId, trigger })
-    return finish({ skippedReason: 'character-not-found' })
-  }
-  if (holderRaw.archivedAt) {
-    log.info('Consolidation skipped: character is archived', { characterId, trigger })
-    return finish({ skippedReason: 'archived' }, holderRaw.name)
-  }
-  let holder: Character = holderRaw
-  try {
-    holder = (await repos.characters.findById(characterId)) ?? holderRaw
-  } catch {
-    holder = holderRaw
-  }
-  const userId = opts.userId ?? holderRaw.userId
-
   // The clustered vectors are the default profile's; cluster on its scale.
   let embeddingProvider: string | null = null
   try {
-    embeddingProvider = (await repos.embeddingProfiles.findDefault(userId))?.provider ?? null
+    embeddingProvider = (await getRepositories().embeddingProfiles.findDefault(userId))?.provider ?? null
   } catch (error) {
     log.debug('Could not read the default embedding profile; clustering on the neural scale', {
       characterId,
@@ -726,16 +616,10 @@ export async function runConsolidation(
     timeBudgetMs: opts.timeBudgetMs ?? null,
   })
 
-  // ── 1. Load ───────────────────────────────────────────────────────────────
-  const matureCutoffMs = nowMs - settings.matureAfterDays * DAY_MS
-  const { rowIndex, buckets } = await loadCorpus(characterId, matureCutoffMs, stats)
   const rowsById = new Map<string, Memory>()
   const digestsById = new Map<string, Memory>()
   for (const bucket of buckets.values()) {
-    const capped = capBucketRows(bucket.rows)
-    stats.bucketRowsCapped += bucket.rows.length - capped.length
-    bucket.rows = capped
-    for (const row of capped) rowsById.set(row.id, row)
+    for (const row of bucket.rows) rowsById.set(row.id, row)
     for (const digest of bucket.digests) digestsById.set(digest.id, digest)
   }
 
@@ -987,28 +871,10 @@ export async function runConsolidation(
 
   if (!dryRun) {
     await executePlan(characterId, plan, belowMinConsidered, nowIso)
-    if (plan.creates.length + plan.updates.length + plan.tierMoves.length > 0) {
-      // In-process runs (CLI, API) commit here, so announce here. In the job
-      // child both calls are harmless no-ops; the dispatcher's commit hooks
-      // cover the frozen archive and the realtime hint for job runs.
-      invalidateFrozenArchive(characterId)
-      publishRealtime('memories')
-      const subjects = touchedSubjects(buckets, plan, finalBucketKey)
-      if (process.env.QUILLTAP_JOB_CHILD === '1') {
-        // The child's writes are only buffered: the batch may yet fail to
-        // commit. The vault mirror waits for the parent's commit hook, which
-        // writes it from the committed rows (bug 208).
-        log.debug('Commonplace mirror deferred to the parent commit hook', {
-          characterId,
-          subjects: subjects.length,
-        })
-      } else {
-        stats.mirrorFilesWritten = await mirrorCommonplaceForSubjects(characterId, subjects, nowIso)
-      }
-    }
   }
+  const touched = touchedSubjects(buckets, plan, finalBucketKey)
 
-  const report = finish(route || selection.selected.length === 0 ? {} : { skippedReason: 'no-llm' }, holder.name)
+  const report = finish(route || selection.selected.length === 0 ? {} : { skippedReason: 'no-llm' })
   log.info('Consolidation run complete', {
     characterId,
     characterName: holder.name,
@@ -1027,9 +893,8 @@ export async function runConsolidation(
     membersSuperseded: stats.membersSuperseded,
     rowsMarkedConsidered: stats.rowsMarkedConsidered,
     linksRewired: stats.linksRewired,
-    mirrorFilesWritten: stats.mirrorFilesWritten,
     budgetExhausted: stats.budgetExhausted,
     durationMs: stats.durationMs,
   })
-  return report
+  return { report, plan, belowMinConsidered, touchedSubjects: touched }
 }

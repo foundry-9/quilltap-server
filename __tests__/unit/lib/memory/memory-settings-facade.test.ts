@@ -46,7 +46,12 @@ describe('MEMORY_SETTING_DEFAULTS', () => {
     expect(MEMORY_SETTING_DEFAULTS.recall).toEqual(MemoryRecallSettingsSchema.parse({}))
     expect(MEMORY_SETTING_DEFAULTS.extractionMode).toEqual(MemoryExtractionModeSettingsSchema.parse({}))
     expect(MEMORY_SETTING_DEFAULTS.extractionLimits).toEqual(MemoryExtractionLimitsSchema.parse({}))
-    expect(MEMORY_SETTING_DEFAULTS.maintenance).toEqual({ enabled: false, perCharacterCap: 2000, perCharacterCapOverrides: {} })
+    expect(MEMORY_SETTING_DEFAULTS.maintenance).toEqual({
+      enabled: false,
+      perCharacterCap: 2000,
+      perCharacterCapOverrides: {},
+      phases: { foldNearDuplicates: true, demote: true, retire: true },
+    })
   })
 
   it('the admission thresholds live in the façade alone', () => {

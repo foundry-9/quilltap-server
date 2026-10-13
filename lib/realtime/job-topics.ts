@@ -82,17 +82,11 @@ export function topicsForCompletedJob(
       // Salon sidebar's count is scoped by.
       return [{ topic: 'memories', id: str(payload, 'chatId') }];
 
-    case 'MEMORY_HOUSEKEEPING':
-      // Character-scoped: prunes across every chat that character was in, so
-      // the hint is collection-wide by necessity.
-      return [{ topic: 'memories' }];
-
-    case 'MEMORY_CONSOLIDATION':
-      // Character-scoped like housekeeping: digests replace rows across every
-      // chat the character was in. The Commonplace/ mirror files land in the
-      // character's vault, which the Scriptorium watches. A dry run changed
-      // nothing.
-      if (payload?.dryRun === true) return [];
+    case 'MEMORY_MAINTENANCE':
+      // Character-scoped: folds, digests, demotions and retirements reach
+      // across every chat that character was in, so the hint is
+      // collection-wide by necessity. The Commonplace/ mirror files land in the
+      // character's vault, which the Scriptorium watches.
       return [{ topic: 'memories' }, { topic: 'mountPoints' }];
 
     case 'CONVERSATION_RENDER':

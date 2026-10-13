@@ -439,6 +439,8 @@ import { retireMemoryVectorEntriesMigration } from './retire-memory-vector-entri
 import { addMemoryExtractionCursorsMigration } from './add-memory-extraction-cursors-v1';
 import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-memory-jobs-v1';
 import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-version-v1';
+// Memory: MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION folded into MEMORY_MAINTENANCE (refactor phase F)
+import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
 
 /**
  * All available migrations.
@@ -897,6 +899,8 @@ export const migrations: Migration[] = [
   dropInterCharacterMemoryJobsMigration,
   // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
   addTfidfTextShapeVersionMigration,
+  // Memory: the retired MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION job rows (Phase F)
+  dropHousekeepingConsolidationJobsMigration,
 ];
 
 export {
@@ -1333,5 +1337,6 @@ export {
   dropInterCharacterMemoryJobsMigration,
   // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
   addTfidfTextShapeVersionMigration,
+  dropHousekeepingConsolidationJobsMigration,
 };
 

@@ -26,6 +26,9 @@
  * character's rows, decides, and writes the new row, reinforcement or link at
  * once, so the next candidate of the same job sees it (bug 209). The child
  * extracts and embeds; the parent does the rest (`admitPrepared`).
+ * `foldNearDuplicates` is the same rule for maintenance's near-duplicate fold:
+ * it writes under admission's per-character lock, so a fold and an admission
+ * never interleave on one row.
  *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
@@ -130,6 +133,10 @@ async function runMethod(
       const { admitPrepared } = await import('@/lib/memory/admission/admit');
       const request = args[0] as Parameters<typeof admitPrepared>[0];
       return admitPrepared(request);
+    }
+    case 'foldNearDuplicates': {
+      const { applyNearDuplicateFolds } = await import('@/lib/memory/maintenance/fold-near-duplicates');
+      return applyNearDuplicateFolds(args[0] as Parameters<typeof applyNearDuplicateFolds>[0]);
     }
     case 'countRecentAdmissions': {
       const { countRecentAdmissionsLocal } = await import('@/lib/memory/admission/rate-ledger');

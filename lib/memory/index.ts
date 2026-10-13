@@ -57,15 +57,6 @@ export type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-mes
 // Format Utilities
 export { formatNameWithPronouns } from './format-utils'
 
-// Housekeeping (Sprint 6: Memory Cleanup)
-export {
-  runHousekeeping,
-  getHousekeepingPreview,
-  type HousekeepingOptions,
-  type HousekeepingResult,
-  type HousekeepingDetail,
-} from './housekeeping'
-
 // Recall: a pipeline with a trace (refactor §3.8)
 //   query → gather → hydrate → score → select → assemble → render → deliver
 export {
@@ -86,11 +77,21 @@ export {
   type MemoryRecapResult,
 } from './recall'
 
-// Memory Consolidation (digests + hot/cold tiers)
+// Maintenance: one job, ordered phases, parent-side ledger (refactor §3.9)
+//   fold near-duplicates → consolidate → demote → retire → mirror
 export {
-  runConsolidation,
-  CONSOLIDATION_LOAD_PAGE_SIZE,
-  CONSOLIDATION_MAX_BUCKET_ROWS,
+  runMaintenance,
+  summarizeMaintenance,
+  getMaintenanceLedgerStatus,
+  maybeEnqueueMaintenance,
+  MAINTENANCE_PHASES,
+  type MaintenancePhase,
+  type MaintenanceReason,
+  type MaintenanceRequest,
+  type MaintenanceReport,
+  type MaintenanceSummary,
+} from './maintenance'
+export {
   type RunConsolidationOptions,
   type ConsolidationReport,
   type ConsolidationClusterReport,
@@ -98,11 +99,6 @@ export {
   type ConsolidationBucketRef,
   type ConsolidationStats,
 } from './consolidation'
-export {
-  maybeEnqueueConsolidationForCharacters,
-  maybeEnqueueConsolidationAfterCommit,
-  runScheduledConsolidation,
-} from './consolidation-triggers'
 
 // The memory candidate: the one shape producers emit (refactor §3.2)
 export {

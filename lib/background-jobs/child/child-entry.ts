@@ -18,7 +18,7 @@
 import { installChildLoggerTransport, logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getHandler } from '../handlers';
-import { runWithJobScope, flushPendingWrites, getChildRepositoriesProxy } from './child-repositories-proxy';
+import { runWithJobScope, flushPendingWrites, takeJobResult, getChildRepositoriesProxy } from './child-repositories-proxy';
 import {
   ParentToChildMessage,
   ChildJobResultMessage,
@@ -183,7 +183,7 @@ async function runJob(job: BackgroundJob): Promise<void> {
       // and mirrors up to the parent.
       await runAttributedToJob(activityKindForJobType(job.type), () => handler(job));
       const writes = flushPendingWrites();
-      sendJobResult(job.id, true, writes);
+      sendJobResult(job.id, true, writes, undefined, undefined, takeJobResult());
     });
     state.completedSinceLastStatus++;
   } catch (err) {
@@ -200,12 +200,20 @@ async function runJob(job: BackgroundJob): Promise<void> {
   }
 }
 
-function sendJobResult(jobId: string, ok: boolean, writes: ReturnType<typeof flushPendingWrites>, errorMessage?: string, stack?: string): void {
+function sendJobResult(
+  jobId: string,
+  ok: boolean,
+  writes: ReturnType<typeof flushPendingWrites>,
+  errorMessage?: string,
+  stack?: string,
+  result?: unknown,
+): void {
   const msg: ChildJobResultMessage = {
     type: 'job-result',
     jobId,
     ok,
     writes,
+    ...(result !== undefined ? { result } : {}),
     ...(errorMessage ? { error: { message: errorMessage, stack } } : {}),
   };
   trySend(msg);

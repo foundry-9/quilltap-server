@@ -1,15 +1,15 @@
 /**
- * Memory maintenance enqueue rules:
- *   - bug 221: housekeeping dedupes per character whatever the reason; a
- *     user-wide sweep fans out into one job per character, so a scheduled
- *     sweep and a watermark sweep collide on the same character.
- *   - bug 223: a consolidation job carries the requested `clusterThreshold`.
+ * Memory maintenance enqueue rules (memory refactor §3.9):
+ *   - bug 221: one MEMORY_MAINTENANCE job per character whatever the reason;
+ *     a user-wide run fans out into one job per character, so a scheduled run
+ *     and a watermark run collide on the same character.
+ *   - a waiting job widens to the phases asked for; a running one is left.
+ *   - bug 223: a manual run carries the requested `clusterThreshold`.
  */
 
 import {
-  enqueueMemoryConsolidation,
-  enqueueMemoryHousekeeping,
-  enqueueMemoryHousekeepingSweep,
+  enqueueMemoryMaintenance,
+  enqueueMemoryMaintenanceForUser,
 } from '@/lib/background-jobs/queue-service';
 import { getRepositories } from '@/lib/repositories/factory';
 
@@ -44,7 +44,7 @@ beforeEach(() => {
   nextId = 1;
   repos = {
     characters: {
-      findByUserId: jest.fn(async () => [{ id: 'char-a' }, { id: 'char-b' }]),
+      findByUserId: jest.fn(async () => [{ id: 'char-a' }, { id: 'char-b' }, { id: 'char-gone', archivedAt: '2026-01-01' }]),
     },
     backgroundJobs: {
       findByUserId: jest.fn(async (_userId: string, status: string) => jobs.filter((j) => j.status === status)),
@@ -63,98 +63,68 @@ beforeEach(() => {
   jest.mocked(getRepositories).mockReturnValue(repos);
 });
 
-describe('housekeeping dedupe per character (bug 221)', () => {
-  it('a user-wide sweep fans out into one job per character', async () => {
-    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
+describe('one maintenance job per character (bug 221)', () => {
+  it('a user-wide run fans out into one job per live character', async () => {
+    const ids = await enqueueMemoryMaintenanceForUser('user-1', { reason: 'scheduled' });
     expect(ids).toHaveLength(2);
-    expect(jobs.map((j) => j.payload)).toEqual([
-      { reason: 'scheduled', characterId: 'char-a' },
-      { reason: 'scheduled', characterId: 'char-b' },
+    expect(jobs.map((j) => [j.type, j.payload])).toEqual([
+      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-a' }],
+      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-b' }],
     ]);
   });
 
-  it('a watermark job collides with the scheduled sweep for the same character', async () => {
-    const sweepIds = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
-    const watermarkId = await enqueueMemoryHousekeeping('user-1', { characterId: 'char-b', reason: 'watermark' });
-    expect(watermarkId).toBe(sweepIds[1]);
+  it('a watermark run collides with the scheduled run for the same character', async () => {
+    await enqueueMemoryMaintenanceForUser('user-1', { reason: 'scheduled' });
+    const id = await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
+    expect(id).toBe('job-1');
     expect(jobs).toHaveLength(2);
   });
 
-  it('a scheduled sweep reuses an in-flight watermark job for that character', async () => {
-    const watermarkId = await enqueueMemoryHousekeeping('user-1', { characterId: 'char-a', reason: 'watermark' });
-    jobs[0].status = 'PROCESSING';
-    const sweepIds = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
-    expect(sweepIds[0]).toBe(watermarkId);
-    expect(jobs).toHaveLength(2); // only char-b got a new job
-    expect(jobs[1].payload.characterId).toBe('char-b');
+  it('a different character gets its own job', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-b', reason: 'watermark', phases: ['demote'] });
+    expect(jobs).toHaveLength(2);
   });
 
-  it('enqueueMemoryHousekeeping with no character fans out too, returning the first id', async () => {
-    const id = await enqueueMemoryHousekeeping('user-1', { reason: 'manual' });
-    expect(id).toBe('job-1');
-    expect(jobs.every((j) => typeof j.payload.characterId === 'string')).toBe(true);
-  });
-
-  it('a legacy user-wide job still in flight absorbs a per-character enqueue', async () => {
-    jobs.push({ id: 'legacy', type: 'MEMORY_HOUSEKEEPING', status: 'PROCESSING', payload: { reason: 'scheduled' } });
-    const id = await enqueueMemoryHousekeeping('user-1', { characterId: 'char-a', reason: 'watermark' });
-    expect(id).toBe('legacy');
-    expect(repos.backgroundJobs.create).not.toHaveBeenCalled();
-  });
-});
-
-describe('housekeeping sweep reads the in-flight jobs once', () => {
-  beforeEach(() => {
-    repos.characters.findByUserId.mockResolvedValue(
-      Array.from({ length: 5 }, (_, i) => ({ id: `char-${i}` }))
-    );
-  });
-
-  it('loads PENDING and PROCESSING once for the whole sweep, not per character', async () => {
-    jobs.push({ id: 'busy', type: 'MEMORY_HOUSEKEEPING', status: 'PENDING', payload: { characterId: 'char-2' } });
-    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
-
-    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(2);
-    expect(repos.backgroundJobs.findByUserId.mock.calls.map((c: unknown[]) => c[1]).sort()).toEqual(['PENDING', 'PROCESSING']);
-    expect(ids).toHaveLength(5);
-    expect(ids[2]).toBe('busy');
-    expect(repos.backgroundJobs.create).toHaveBeenCalledTimes(4);
-  });
-
-  it('a legacy user-wide job in flight covers every character', async () => {
-    jobs.push({ id: 'legacy', type: 'MEMORY_HOUSEKEEPING', status: 'PROCESSING', payload: { reason: 'scheduled' } });
-    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
-    expect(ids).toEqual(['legacy']);
-    expect(repos.backgroundJobs.create).not.toHaveBeenCalled();
-  });
-
-  it('still enqueues every character when the lookup fails', async () => {
-    repos.backgroundJobs.findByUserId.mockRejectedValue(new Error('db busy'));
-    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
-    expect(ids).toHaveLength(5);
-    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('consolidation carries clusterThreshold (bug 223)', () => {
-  it('puts the threshold on the job payload', async () => {
-    await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', clusterThreshold: 0.65, trigger: 'manual' });
-    expect(jobs[0].payload).toEqual({ characterId: 'char-a', clusterThreshold: 0.65, trigger: 'manual' });
-  });
-
-  it('a pending job for the character adopts the requested threshold', async () => {
-    const first = await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', trigger: 'scheduled' });
-    const second = await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', clusterThreshold: 0.65, trigger: 'manual' });
-    expect(second).toBe(first);
+  it('a waiting job widens to the phases asked for, and a manual ask makes it manual', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
+    await enqueueMemoryMaintenance('user-1', {
+      characterId: 'char-a',
+      reason: 'manual',
+      phases: ['consolidate', 'mirror'],
+      settings: { consolidation: { clusterThreshold: 0.65 } },
+    });
     expect(jobs).toHaveLength(1);
-    expect(jobs[0].payload.clusterThreshold).toBe(0.65);
+    expect(jobs[0].payload).toEqual({
+      characterId: 'char-a',
+      reason: 'manual',
+      phases: ['demote', 'consolidate', 'mirror'],
+      settings: { consolidation: { clusterThreshold: 0.65 } },
+    });
   });
 
-  it('leaves a running job alone', async () => {
-    await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', trigger: 'scheduled' });
+  it('a waiting job that runs every phase stays unscoped', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'scheduled' });
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
+    expect(jobs[0].payload).toEqual({ characterId: 'char-a', reason: 'scheduled' });
+  });
+
+  it('a running job is left alone', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
     jobs[0].status = 'PROCESSING';
-    await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', clusterThreshold: 0.65, trigger: 'manual' });
+    const id = await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'manual', phases: ['consolidate'] });
+    expect(id).toBe('job-1');
+    expect(jobs[0].payload.phases).toEqual(['demote']);
     expect(repos.backgroundJobs.update).not.toHaveBeenCalled();
-    expect(jobs[0].payload.clusterThreshold).toBeUndefined();
+  });
+
+  it('bug 223: a manual run carries the requested cluster threshold', async () => {
+    await enqueueMemoryMaintenance('user-1', {
+      characterId: 'char-a',
+      reason: 'manual',
+      phases: ['consolidate'],
+      settings: { consolidation: { clusterThreshold: 0.6 } },
+    });
+    expect(jobs[0].payload.settings).toEqual({ consolidation: { clusterThreshold: 0.6 } });
   });
 });

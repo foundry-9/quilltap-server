@@ -41,8 +41,6 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   // character's configured cap (its override, else the global cap), and the
   // preview reports which (`capUsed`).
   const [maxMemories, setMaxMemories] = useState<number | null>(null)
-  const [maxAgeMonths, setMaxAgeMonths] = useState(6)
-  const [minImportance, setMinImportance] = useState(0.3)
 
   // Fetch preview when options change
   useEffect(() => {
@@ -50,10 +48,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
       setLoading(true)
       setError(null)
       try {
-        const params = new URLSearchParams({
-          maxAgeMonths: maxAgeMonths.toString(),
-          minImportance: minImportance.toString(),
-        })
+        const params = new URLSearchParams()
         if (maxMemories !== null) params.set('maxMemories', maxMemories.toString())
 
         const res = await fetch(`/api/v1/memories?characterId=${characterId}&action=housekeep&${params}`)
@@ -70,7 +65,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
 
     const debounce = setTimeout(fetchPreview, 300)
     return () => clearTimeout(debounce)
-  }, [characterId, maxMemories, maxAgeMonths, minImportance])
+  }, [characterId, maxMemories])
 
   const handleRun = async () => {
     setRunning(true)
@@ -82,8 +77,6 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           characterId,
           // Omitted when untouched, so the run uses the same configured cap the preview showed.
           ...(maxMemories !== null ? { maxMemories } : {}),
-          maxAgeMonths,
-          minImportance,
           dryRun: false,
         }),
       })
@@ -130,7 +123,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             </button>
           </div>
           <p className="qt-dialog-description">
-            Old and low-importance memories are retired to the archive, never destroyed. They stay searchable by the gate and can return should the world ask for them again.
+            When a character holds more extracted memories than the cap allows, the least protected are retired to the archive, never destroyed. They stay searchable by the gate and can return should the world ask for them again.
           </p>
         </div>
 
@@ -152,52 +145,11 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 max={MEMORY_CAP_BOUNDS.max}
                 className="qt-input"
               />
-              <div className="mt-1 qt-text-xs space-y-0.5">
-                <p>Never archiving memories that are:</p>
-                <ul className="list-disc pl-4">
-                  <li>Importance &ge; 70%</li>
-                  <li>Reinforced 5+ times</li>
-                  <li>Manually created</li>
-                  <li>Accessed within last 3 months</li>
-                </ul>
-              </div>
-            </div>
-
-            <div>
-              <label className="qt-label mb-1">
-                Max Age (months)
-              </label>
-              <input
-                type="number"
-                value={maxAgeMonths}
-                onChange={(e) => setMaxAgeMonths(parseInt(e.target.value) || 6)}
-                min={1}
-                max={120}
-                className="qt-input"
-              />
               <p className="mt-1 qt-text-xs">
-                Archive old low-importance memories
+                Extracted memories only. Hand-written entries and digests are never archived and
+                never counted; past the cap, the least protected memories (the old, unreinforced,
+                unlinked and unconsulted) go to the archive first.
               </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="qt-label mb-1">
-              Min Importance: {(minImportance * 100).toFixed(0)}%
-            </label>
-            <input
-              type="range"
-              value={minImportance}
-              onChange={(e) => setMinImportance(parseFloat(e.target.value))}
-              min={0}
-              max={0.7}
-              step={0.1}
-              className="qt-range w-full"
-            />
-            <div className="flex justify-between qt-text-xs mt-1">
-              <span>0%</span>
-              <span>Threshold for archiving</span>
-              <span>70%</span>
             </div>
           </div>
         </div>

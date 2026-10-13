@@ -2,16 +2,39 @@
  * Consolidation clusters on the default embedding profile's scale: the
  * TF-IDF threshold for a Built-in profile, the neural one otherwise, and an
  * explicit per-run threshold on either (builtin-tfidf-memory-tuning §5).
+ * Driven through the maintenance run's consolidate phase (memory refactor
+ * Phase F), which must pass only the run's own overrides.
  */
 
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/instance-settings', () => ({
-  getMemoryConsolidationSettings: jest.fn(async () =>
-    jest.requireActual('@/lib/schemas/settings.types').MemoryConsolidationSettingsSchema.parse({}),
-  ),
-}))
+jest.mock('@/lib/instance-settings', () => {
+  const schemas = jest.requireActual('@/lib/schemas/settings.types')
+  return {
+    getMemoryConsolidationSettings: jest.fn(async () => schemas.MemoryConsolidationSettingsSchema.parse({})),
+    getMemoryMaintenanceSettings: jest.fn(async () => schemas.MemoryMaintenanceSettingsSchema.parse({})),
+    getMemoryExtractionLimits: jest.fn(async () => ({})),
+    getMemoryExtractionModeSettings: jest.fn(async () => ({})),
+    getMemoryRecallSettings: jest.fn(async () => ({})),
+  }
+})
 
-import { runConsolidation } from '@/lib/memory/consolidation'
+import { runMaintenance } from '@/lib/memory/maintenance/run'
+import type { ConsolidationReport } from '@/lib/memory/consolidation'
+
+/** The consolidate phase alone, dry. */
+async function runConsolidation(
+  characterId: string,
+  opts: { dryRun: true; settings?: { clusterThreshold: number } },
+): Promise<ConsolidationReport> {
+  const run = await runMaintenance({
+    characterId,
+    reason: 'manual',
+    dryRun: opts.dryRun,
+    phases: ['consolidate'],
+    ...(opts.settings ? { settings: { consolidation: opts.settings } } : {}),
+  })
+  return run.consolidation as ConsolidationReport
+}
 import { getRepositories } from '@/lib/repositories/factory'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -32,7 +55,7 @@ function withProvider(provider: string | null) {
   } as never)
 }
 
-describe('runConsolidation cluster threshold by provider', () => {
+describe('consolidate phase: cluster threshold by provider', () => {
   it('uses the TF-IDF threshold when the default profile is Built-in', async () => {
     withProvider('BUILTIN')
     const report = await runConsolidation('c-1', { dryRun: true })

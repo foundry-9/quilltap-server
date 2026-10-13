@@ -70,8 +70,8 @@ Where aesthetics meet functionality, and both are treated with the respect they 
 The library wing --- quiet, orderly, and possessed of an uncanny ability to recall precisely the passage you need.
 
 - **Embedding Profiles** --- Configure text embedding services for semantic memory search
-- **Memory Housekeeping** --- Automatically prune stale, low-importance memories as each character approaches its cap (off by default)
-- **Memory Deduplication** --- Find and merge duplicate memories across characters
+- **Memory Housekeeping** --- Archive the least-protected extracted memories as each character passes its cap (off by default)
+- **Near-Duplicate Folding** --- Fold repeated memories into one, with a preview across every character
 
 > See [Embedding Provider Profiles](embedding-profiles.md) and [System Tools](system-tools.md) for full details
 

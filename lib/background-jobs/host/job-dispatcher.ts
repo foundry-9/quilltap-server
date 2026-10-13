@@ -255,9 +255,12 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
       publishRealtime(hint.topic, hint.id);
     }
     void invalidateFrozenArchivesForCompletedJob(job);
-    // Consolidation watermark (memory-consolidation-and-tiers.md §C1): the
-    // count must see the rows this batch just committed, so it runs here.
-    void checkConsolidationWatermarkAfterCommit(job, msg.writes);
+    // Maintenance watermark: the counts must see the rows this batch just
+    // committed, so it runs here.
+    void checkMaintenanceWatermarkAfterCommit(job, msg.writes);
+    // A maintenance run's outcome goes into the parent's ledger only once its
+    // writes have landed.
+    void recordMaintenanceAfterCommit(job, msg.result);
     // The Commonplace vault mirror describes committed digests only, so it is
     // written here, after the batch lands — never from the child (bug 208).
     void mirrorCommonplaceAfterCommit(job, msg.writes);
@@ -657,23 +660,42 @@ async function applyFolderCreateIdempotent(
  * invalidate — that would rebuild the archive every turn and defeat the
  * prefix cache it exists for.
  */
-const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_HOUSEKEEPING', 'MEMORY_CONSOLIDATION']);
+const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_MAINTENANCE']);
 
 /**
- * After a batch commits, let the consolidation watermark look at every
- * character the batch wrote memories for. Best-effort and off the result path:
- * the helper reads one setting and returns at once when consolidation is off.
+ * After a batch commits, let the maintenance watermark look at every character
+ * the batch created memories for. Best-effort and off the result path: the
+ * helper reads the settings and returns at once when maintenance and
+ * consolidation are both off.
  */
-async function checkConsolidationWatermarkAfterCommit(
+async function checkMaintenanceWatermarkAfterCommit(
   job: BackgroundJob | undefined,
   writes: ChildWritePayload[],
 ): Promise<void> {
   try {
-    const mod = await import('@/lib/memory/consolidation-triggers');
-    await mod.maybeEnqueueConsolidationAfterCommit(job?.type, writes);
+    const mod = await import('@/lib/memory/maintenance/triggers');
+    await mod.maybeEnqueueMaintenanceAfterCommit(job?.type, writes);
   } catch (err) {
-    log.debug('Consolidation watermark check skipped after job', {
+    log.debug('Maintenance watermark check skipped after job', {
       jobId: job?.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/**
+ * After a MEMORY_MAINTENANCE batch commits, record the summary its handler
+ * handed back in the parent's ledger (the archive invalidation, the realtime
+ * hints and the mirror have their own hooks). Best-effort.
+ */
+async function recordMaintenanceAfterCommit(job: BackgroundJob | undefined, result: unknown): Promise<void> {
+  if (job?.type !== 'MEMORY_MAINTENANCE' || !result || typeof result !== 'object') return;
+  try {
+    const mod = await import('@/lib/memory/maintenance/ledger');
+    mod.recordMaintenanceOutcome(result as Parameters<typeof mod.recordMaintenanceOutcome>[0]);
+  } catch (err) {
+    log.debug('Maintenance outcome not recorded after job', {
+      jobId: job.id,
       error: getErrorMessage(err),
     });
   }
@@ -742,16 +764,12 @@ export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob
   try {
     const mod = await import('@/lib/memory/recall/archive');
     const characterId = typeof payload?.characterId === 'string' ? payload.characterId : null;
-    if (characterId) {
-      mod.invalidateFrozenArchive(characterId);
-    } else {
-      // A user-wide sweep touched every character.
-      mod.invalidateAllFrozenArchives();
-    }
+    if (!characterId) return;
+    mod.invalidateFrozenArchive(characterId);
     log.debug('Invalidated frozen memory archives after job', {
       jobId: job.id,
       type: job.type,
-      characterId: characterId ?? 'all',
+      characterId,
     });
   } catch (err) {
     log.warn('Failed to invalidate frozen memory archives after job', {

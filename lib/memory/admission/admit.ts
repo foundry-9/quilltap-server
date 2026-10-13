@@ -53,7 +53,6 @@ import { bookNeighbours, recordBookInsert, type DryRunBook } from './dry-run-boo
 import { applyEpisodicFallbackAnchors, applyNamePresenceCheck } from './prepare'
 import { applyFold, insertRow, raiseImportance, withoutEmbedding } from './apply'
 import { linkBothWays } from './links'
-import { maybeEnqueueHousekeeping } from './after-insert'
 import { admissionInserted } from './outcome'
 import { recordAdmissionInsert } from './rate-ledger'
 import type { AdmissionAction, AdmissionOutcome, AdmissionRow, AdmissionTrace } from './types'
@@ -237,10 +236,6 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
       outcome = await admitPrepared(request)
     }
 
-    if (admissionInserted(outcome) && !opts.dryRun) {
-      // Fire-and-forget; never blocks the write that just landed.
-      void maybeEnqueueHousekeeping(prepared.characterId, opts.userId)
-    }
     return outcome
   })
 }
@@ -252,7 +247,11 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
 /** Tail of each character's admission chain. */
 const characterLocks = processSingleton('memory.admission.characterLocks', () => new Map<string, Promise<void>>())
 
-/** Run `fn` after every earlier admission for this character has finished. */
+/**
+ * Run `fn` after every earlier admission for this character has finished.
+ * Exported as {@link withAdmissionLock} for the other parent-side writer that
+ * folds rows together (maintenance's near-duplicate fold).
+ */
 async function withCharacterLock<T>(characterId: string, fn: () => Promise<T>): Promise<T> {
   const prior = characterLocks.get(characterId) ?? Promise.resolve()
   let release!: () => void
@@ -267,6 +266,8 @@ async function withCharacterLock<T>(characterId: string, fn: () => Promise<T>): 
     if (characterLocks.get(characterId) === tail) characterLocks.delete(characterId)
   }
 }
+
+export const withAdmissionLock = withCharacterLock
 
 /** Outcomes of keyed admissions, oldest first (Map keeps insertion order). */
 const admissionLedger = processSingleton('memory.admission.ledger', () => new Map<string, { outcome: AdmissionOutcome; at: number }>())
@@ -403,11 +404,11 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     if (admissionInserted(outcome) && row.source === 'AUTO' && !request.backfill) recordAdmissionInsert(characterId)
     void patchChildIndex(characterId, applied!.indexEntries)
     if (admissionInserted(outcome)) {
-      // The consolidation watermark counts the row just written (it used to run
-      // from the job dispatcher's commit hook, when admission buffered its rows).
-      void import('../consolidation-triggers')
-        .then((mod) => mod.maybeEnqueueConsolidationForCharacters([characterId]))
-        .catch((error) => log.debug('Consolidation watermark check skipped after admission', { characterId, error: String(error) }))
+      // The maintenance watermarks (the cap and consolidation's backlog) count
+      // the row just written; the ledger they consult lives here in the parent.
+      void import('../maintenance/triggers')
+        .then((mod) => mod.maybeEnqueueMaintenance([characterId]))
+        .catch((error) => log.debug('Maintenance watermark check skipped after admission', { characterId, error: String(error) }))
     }
     if (idempotencyKey) recordAdmission(idempotencyKey, outcome, now)
 

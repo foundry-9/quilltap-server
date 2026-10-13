@@ -4283,30 +4283,64 @@ Search memories (uses embeddings if available, falls back to keyword).
 }
 ```
 
+#### `POST /api/v1/memories?action=maintain`
+
+Memory maintenance (memory refactor §3.9): one `MEMORY_MAINTENANCE` run per character, its phases
+always in this order — `fold-near-duplicates` → `consolidate` → `demote` → `retire` → `mirror`.
+Manual runs ignore the `memoryMaintenance.enabled` / `memoryConsolidation.enabled` switches; an
+unscoped run (no `phases`) still respects the per-phase toggles, and `retire` needs
+`coldRetentionDays`.
+
+**Request Body**: `{ characterId?, phases?, dryRun?, settings? }`. `phases` is a non-empty list of
+the five names; `settings` is `{ consolidation?: Partial<MemoryConsolidationSettings>,
+maxClustersPerRun?, cap? }` (`cap` an integer 100–100,000; otherwise the character's own).
+
+- `dryRun: true` runs **in-process**, writes nothing, and is bounded like the consolidate dry run
+  (`maxClustersPerRun` default 10, at most 40; 120 s budget). With `characterId`: `{ success,
+  dryRun: true, report }`, a `MaintenanceReport` — `phases[]` (`{ phase, status: 'ran' | 'skipped',
+  skippedBecause?, durationMs }`), `fold` (`eligible`, `deferred` (rows past the 2,000-per-bucket comparison bound), `groups[]` of `{ survivorId, absorbedIds,
+  minCosine }`, `folded`), `consolidation` (a `ConsolidationReport`), `demote` (`cap`, `hotTotal`,
+  `demotable`, `protected`, `excess`, `demoted`, `demotedIds`), `retire` (`retentionDays`,
+  `retired`, `retiredIds`), `mirror` (`subjects`, `filesWritten`, `deferredToCommit`). Without
+  `characterId` a dry run is allowed only for phases that never call a model (no `consolidate`) and
+  returns `{ success, dryRun: true, reports: MaintenanceReport[] }`, one per live character.
+- otherwise one job is enqueued for the character — or one per character the user owns — each
+  deduped per character (a waiting job widens to the phases asked for). **Response**: `{ success,
+  dryRun: false, jobId, jobIds }`.
+
+`404` for an unknown character; `400` for a malformed body or a user-wide dry run that would
+consolidate.
+
+#### `GET /api/v1/memories?action=maintenance-status`
+
+The parent's maintenance ledger. **Query Parameters**: `characterId` (optional; omitted, every
+character the ledger knows). **Response**: `{ success, ledger: [{ characterId, lastRun: { [phase]:
+{ at, reason } }, lastSummary, lastDemotion: { at, demoted, excess, effective } | null }] }`. The
+ledger lives in server memory and is seeded once per process from recent `MEMORY_MAINTENANCE` job
+rows.
+
 #### `GET /api/v1/memories?action=housekeep`
 
-Preview housekeeping actions (dry run).
+Preview the `demote` and `retire` phases for one character (a dry run of `maintain`).
 
 **Query Parameters**:
-- `characterId` (required) - Character to preview housekeeping for
+- `characterId` (required) - Character to preview
 - `maxMemories` - Cap on demotable memories, an integer 100–100,000 (default: the character's cap from the `memoryMaintenance` instance setting, `capFor(characterId)`)
-- `maxAgeMonths` - Maximum age in months
-- `minImportance` - Minimum (reinforced) importance threshold
+
+The old `maxAgeMonths` / `minImportance` knobs were dropped in 4.10 (age and inactivity live in
+the protection score).
 
 #### `POST /api/v1/memories?action=housekeep`
 
-Run housekeeping (cap demotion and cold retention) on one character's memories. Merging similar memories is not part of housekeeping; that is the consolidation pass.
-
-**Query Parameters**:
-- `characterId` (required) - Character to housekeep memories for
+Run the `demote` and `retire` phases on one character, synchronously, in the server process.
 
 **Request Body**:
 
 ```json
 {
+  "characterId": "char-uuid",
   "maxMemories": 2000,
-  "maxAgeMonths": 6,
-  "minImportance": 0.3
+  "dryRun": false
 }
 ```
 
@@ -4318,7 +4352,7 @@ given, else the character's configured cap.
 totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds,
 details? } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
 MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,
-the excess is demoted lowest protection score first.
+exactly the excess is demoted, lowest protection score first.
 
 #### `POST /api/v1/memories?action=embeddings`
 
@@ -4368,10 +4402,10 @@ crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`. Each row carries `a
 
 #### `POST /api/v1/memories?action=housekeep-sweep`
 
-Enqueue a manual housekeeping sweep of every character this user owns (`reason: 'manual'`)
-rather than running it inline. Takes no body. The sweep fans out to one `MEMORY_HOUSEKEEPING` job
-per character, each deduped per character against any in-flight job (watermark, scheduled or
-manual), so two sweeps never work on one character at once.
+Enqueue the `demote` and `retire` phases for every character this user owns (`reason: 'manual'`)
+rather than running them inline. Takes no body. One `MEMORY_MAINTENANCE` job per character, each
+deduped per character against any in-flight maintenance job (watermark, scheduled or manual), so
+two runs never work on one character at once.
 
 **Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" | null, "jobIds": ["job-uuid", …] }`
 (`jobId` is the first of `jobIds`, kept for older callers).
@@ -4383,8 +4417,10 @@ setting). `POST` merges the fields you send over the stored ones; both return `{
 `?action=housekeeping-config` is the old name and still answers.
 
 **Settings**: `enabled` (default false), `perCharacterCap` (default 2000),
-`perCharacterCapOverrides` (`{ [characterId]: cap }`). Every cap is an integer 100–100,000
-(`MemoryMaintenanceCapSchema`). The retired `mergeSimilar` / `autoMergeSimilarThreshold` are gone.
+`perCharacterCapOverrides` (`{ [characterId]: cap }`), `phases` (`{ foldNearDuplicates, demote,
+retire }`, each default true; a partial object merges over the stored toggles). Every cap is an
+integer 100–100,000 (`MemoryMaintenanceCapSchema`). The retired `mergeSimilar` /
+`autoMergeSimilarThreshold` are gone.
 
 #### `GET` / `POST /api/v1/memories?action=extraction-limits-config`
 
@@ -4404,7 +4440,8 @@ vector the turn's memory search already embedded).
 
 #### `POST /api/v1/memories?action=consolidate`
 
-Fold clusters of one character's hot memories into digest rows and send the originals cold (see
+The `consolidate` phase of `maintain` on its own: fold clusters of one character's hot memories
+into digest rows and send the originals cold (see
 `docs/developer/features/memory-consolidation-and-tiers.md`). Manual runs ignore the
 `memoryConsolidation.enabled` master switch.
 
@@ -4417,10 +4454,10 @@ is a UUID; `clusterThreshold` is 0–1 and overrides the stored threshold for th
   120 s time budget. **Response**: `200 OK` — `{ success, dryRun: true, report }`, where `report` is a
   `ConsolidationReport` (`clusters[]` with `bucket`, `memberIds`, `memberContents`, `digests`,
   `keepStandalone`, `contradictions`, `status`; plus `stats`, `settings`, `skippedReason`).
-- otherwise a `MEMORY_CONSOLIDATION` job is enqueued (deduped per character while in flight).
-  **Response**: `200 OK` — `{ success, dryRun: false, jobId }`.
+- otherwise a `MEMORY_MAINTENANCE` job with phases `consolidate` and `mirror` is enqueued (deduped
+  per character while in flight). **Response**: `200 OK` — `{ success, dryRun: false, jobId }`.
 
-`404` for an unknown character; `400` for a malformed body.
+`404` for an unknown character; `400` for a malformed body, or a dry run on an archived character.
 
 #### `GET` / `POST /api/v1/memories?action=consolidation-config`
 

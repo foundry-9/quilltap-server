@@ -115,14 +115,14 @@ describe('mirrorCommonplaceAfterCommit', () => {
     { method: 'memories.create', args: [{ characterId: HOLDER, aboutCharacterId: LAURA, source: 'CONSOLIDATED' }] },
   ]
 
-  it('mirrors a committed consolidation batch', async () => {
-    await mirrorCommonplaceAfterCommit('MEMORY_CONSOLIDATION', { characterId: HOLDER }, writes)
+  it('mirrors a committed maintenance batch', async () => {
+    await mirrorCommonplaceAfterCommit('MEMORY_MAINTENANCE', { characterId: HOLDER }, writes)
     expect(writeCommonplaceDigestsToVault).toHaveBeenCalledTimes(1)
   })
 
   it('ignores other job types and dry runs', async () => {
     await mirrorCommonplaceAfterCommit('MEMORY_EXTRACTION', { characterId: HOLDER }, writes)
-    await mirrorCommonplaceAfterCommit('MEMORY_CONSOLIDATION', { characterId: HOLDER, dryRun: true }, writes)
+    await mirrorCommonplaceAfterCommit('MEMORY_MAINTENANCE', { characterId: HOLDER, dryRun: true }, writes)
     await mirrorCommonplaceAfterCommit(undefined, undefined, writes)
     expect(writeCommonplaceDigestsToVault).not.toHaveBeenCalled()
   })

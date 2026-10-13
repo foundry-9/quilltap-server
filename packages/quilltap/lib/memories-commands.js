@@ -1099,9 +1099,19 @@ async function cmdStatus(flags) {
       `).all();
     }
 
+    // The parent's maintenance ledger (last run per phase, last demotion's
+    // effectiveness) lives in the running server; ask it, briefly. Without a
+    // server the job rows still say when maintenance last ran.
+    const ledger = await fetchMaintenanceLedger(flags.port || 3000);
+
     const report = [];
     for (const holder of holderRows) {
       const stats = computeHolderStats(db, holder.id);
+      stats.maintenance = {
+        recentJobs: recentMaintenanceJobs(db, holder.id),
+        ledger: ledger ? ledger.find((e) => e.characterId === holder.id) || null : null,
+        ledgerReachable: !!ledger,
+      };
       report.push({ holder, stats });
     }
 
@@ -1131,6 +1141,41 @@ async function cmdStatus(flags) {
     }
   } finally {
     db.close();
+  }
+}
+
+/** The server's maintenance ledger, or null when the server cannot be reached. */
+async function fetchMaintenanceLedger(port) {
+  try {
+    const res = await fetch(`http://localhost:${port}/api/v1/memories?action=maintenance-status`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return null;
+    const payload = await res.json();
+    return Array.isArray(payload && payload.ledger) ? payload.ledger : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The character's most recent MEMORY_MAINTENANCE job rows, newest first. */
+function recentMaintenanceJobs(db, characterId) {
+  try {
+    return db.prepare(`
+      SELECT id, status, updatedAt, lastError,
+             json_extract(payload, '$.reason') AS reason,
+             json_extract(payload, '$.phases') AS phases
+      FROM background_jobs
+      WHERE type = 'MEMORY_MAINTENANCE'
+        AND json_extract(payload, '$.characterId') = ?
+      ORDER BY updatedAt DESC
+      LIMIT 3
+    `).all(characterId).map((row) => ({
+      ...row,
+      phases: row.phases ? JSON.parse(row.phases) : null,
+    }));
+  } catch {
+    return [];
   }
 }
 
@@ -1224,12 +1269,38 @@ function renderStatusBlock(holder, stats) {
   console.log(`    max degree:          ${stats.graph.maxDegree}`);
   const danglingSuffix = stats.graph.danglingEdges > 0 ? '   ⚠ JSON UUIDs that no longer resolve' : '';
   console.log(`    dangling edges:      ${stats.graph.danglingEdges}${danglingSuffix}`);
+  if (stats.maintenance) renderMaintenance(stats.maintenance);
   if (stats.top.length) {
     console.log(`  Top by reinforcedImportance:`);
     for (const t of stats.top) {
       const imp = t.reinforcedImportance != null ? Number(t.reinforcedImportance).toFixed(2) : '?';
       console.log(`    ${shortId(t.id)}  (imp ${imp})  "${truncate(t.summary || '', 80)}"`);
     }
+  }
+}
+
+function renderMaintenance(m) {
+  console.log(`  Maintenance:`);
+  if (m.ledger) {
+    const phases = ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'];
+    for (const phase of phases) {
+      const run = m.ledger.lastRun && m.ledger.lastRun[phase];
+      console.log(`    ${(phase + ':').padEnd(22)}${run ? `${run.at} (${run.reason})` : 'never (this session)'}`);
+    }
+    const d = m.ledger.lastDemotion;
+    if (d) {
+      console.log(`    last demotion:       ${d.demoted} of ${d.excess} over the cap${d.effective ? '' : '   ⚠ ineffective; watermark backing off'}`);
+    }
+  } else if (!m.ledgerReachable) {
+    console.log(`    ledger:              (server not reachable; job history only)`);
+  }
+  if (m.recentJobs.length === 0) {
+    console.log(`    jobs:                none recorded`);
+  }
+  for (const job of m.recentJobs) {
+    const phases = Array.isArray(job.phases) ? job.phases.join(',') : 'all';
+    const err = job.lastError ? `  ⚠ ${truncate(job.lastError, 60)}` : '';
+    console.log(`    job ${shortId(job.id)}  ${job.status.padEnd(10)} ${job.updatedAt}  ${job.reason || '?'}  [${phases}]${err}`);
   }
 }
 
@@ -1339,7 +1410,7 @@ Subcommands:
   tree     <id|prefix> [--depth N] [--max-nodes N] [--json]
                                              ASCII walk of the
                                              related-memory graph.
-  status   [--character <name|id>] [--json]  Per-holder rollup + dangling-
+  status   [--character <name|id>] [--json] [--port <n>]  Per-holder rollup, maintenance ledger + dangling-
                                              edge check.
   validate [--character <name|id>] [--list]  Read-only memory-graph health
                                   [--json]   check. Exits 1 if any

@@ -86,6 +86,11 @@ interface JobScope {
    * the keys the failed attempt already admitted.
    */
   admissionOccurrences: Map<string, number>;
+  /**
+   * What the handler hands back to the parent beside its writes (see
+   * {@link setJobResult}). Structured-clone safe; undefined for most jobs.
+   */
+  result?: unknown;
 }
 
 /** One memory row's buffered changes this job (see {@link JobScope.memories}). */
@@ -151,6 +156,22 @@ export function nextAdmissionKey(contentKey: string): string | null {
   const n = scope.admissionOccurrences.get(contentKey) ?? 0;
   scope.admissionOccurrences.set(contentKey, n + 1);
   return `${scope.jobId}:${contentKey}:${n}`;
+}
+
+/**
+ * Hand the parent a result for the running job, delivered with its writes in
+ * the `job-result` message and read by the dispatcher's commit hooks once the
+ * batch has landed. A no-op outside a job scope. The value must be
+ * structured-clone safe; the last call wins.
+ */
+export function setJobResult(value: unknown): void {
+  const scope = jobScopeStore.getStore();
+  if (scope) scope.result = value;
+}
+
+/** The running job's result (see {@link setJobResult}). */
+export function takeJobResult(): unknown {
+  return jobScopeStore.getStore()?.result;
 }
 
 export function flushPendingWrites(): ChildWritePayload[] {

@@ -1,11 +1,11 @@
 /**
  * Bug 225 — cold retention ages by `supersededAt`, and deletes scrub digest links.
  *
- * - `findExpiredColdIds` used `updatedAt < cutoff`, and every link rewrite
- *   resets `updatedAt`, so a superseded member that kept being re-linked never
- *   aged out. It now ages by `supersededAt` (falling back to `updatedAt` only
- *   for a row with no stamp), which `updateTierBulk` sets and clears with
- *   `supersededById`.
+ * - Retention used `updatedAt < cutoff`, and every link rewrite resets
+ *   `updatedAt`, so a superseded member that kept being re-linked never aged
+ *   out. It now ages by `supersededAt` (falling back to `updatedAt` only for a
+ *   row with no stamp), which `updateTierBulk` sets and clears with
+ *   `supersededById` — in maintenance's retire planner (`planRetention`).
  * - The delete chokepoint (now `retireMemories`) scrubbed `relatedMemoryIds` only, leaving surviving
  *   digests' `consolidatedFrom` naming deleted members and surviving members
  *   of a deleted digest pointing `supersededById` at nothing.
@@ -58,6 +58,8 @@ import { rawQuery } from '@/lib/database/manager'
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getRepositories } from '@/lib/repositories/factory'
 import { retireMemories } from '@/lib/memory/retire'
+import { planRetention } from '@/lib/memory/maintenance/demote'
+import type { Memory } from '@/lib/schemas/types'
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository'
 
 // Real binding by absolute root path — a bare require resolves to the suite-wide mock.
@@ -135,9 +137,9 @@ afterEach(() => {
   db.close()
 })
 
-describe('bug 225 — findExpiredColdIds ages by supersededAt', () => {
-  it('expires a superseded member whose links were rewritten after it went cold', async () => {
-    seed([
+describe('bug 225 — retention ages by supersededAt', () => {
+  it('expires a superseded member whose links were rewritten after it went cold', () => {
+    const rows = [
       // Superseded in February; a link rewrite in September reset updatedAt.
       { id: 'relinked', tier: 'cold', supersededById: 'digest', supersededAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
       // Superseded recently: not yet expired.
@@ -147,10 +149,13 @@ describe('bug 225 — findExpiredColdIds ages by supersededAt', () => {
       // Cap-demoted, MANUAL, and hot rows are never retention's to delete.
       { id: 'demoted', tier: 'cold', updatedAt: '2026-01-01T00:00:00.000Z' },
       { id: 'manual', tier: 'cold', source: 'MANUAL', supersededById: 'digest', supersededAt: '2026-01-01T00:00:00.000Z' },
-    ])
+      // A superseded digest is not AUTO either.
+      { id: 'old-digest', tier: 'cold', source: 'CONSOLIDATED', supersededById: 'digest', supersededAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'hot', tier: 'hot', supersededById: null, updatedAt: '2026-01-01T00:00:00.000Z' },
+    ].map((r) => ({ source: 'AUTO', supersededAt: null, updatedAt: '2026-01-01T00:00:00.000Z', ...r })) as unknown as Memory[]
 
-    const repo = new MemoriesRepository()
-    const ids = await repo.findExpiredColdIds(CHAR, '2026-06-01T00:00:00.000Z')
+    // A 120-day window ending 2026-10-01 has its cutoff at 2026-06-03.
+    const ids = planRetention(rows, 120, Date.parse('2026-10-01T00:00:00.000Z'))
 
     expect(ids.sort()).toEqual(['legacy', 'relinked'])
   })

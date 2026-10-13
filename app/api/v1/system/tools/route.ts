@@ -21,8 +21,6 @@
  * The `capabilities-report-*` action names are deliberately unchanged: The
  * Almanack is the feature's name, not the route's, and renaming the actions
  * would break saved links and bookmarks to buy nothing.
- * GET /api/v1/system/tools?action=memory-dedup-preview - Preview memory deduplication
- * POST /api/v1/system/tools?action=memory-dedup - Execute memory deduplication
  * POST /api/v1/system/tools?action=ai-import-stream - AI character import from source material (SSE)
  */
 
@@ -50,7 +48,6 @@ import { assembleExportFromStream } from '@/lib/import/quilltap-import-stream';
 import { generateAndSaveAlmanack } from '@/lib/tools/almanack';
 import type { CoreProgressEvent } from '@/lib/progress/operation-progress';
 import { operationProgressSseResponse } from '@/lib/progress/operation-progress-sse';
-import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
 import { runAIImportStreaming } from '@/lib/services/ai-import.service';
 import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-import.service';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -1084,75 +1081,6 @@ async function handleCapabilitiesReportDelete(req: NextRequest, context: any) {
   }
 }
 
-async function handleMemoryDedupPreview(req: NextRequest, context: any) {
-  const { user } = context;
-
-  try {
-    const { searchParams } = req.nextUrl;
-    const thresholdParam = searchParams.get('threshold');
-    const threshold = thresholdParam ? parseFloat(thresholdParam) : 0.80;
-
-    if (isNaN(threshold) || threshold < 0.5 || threshold > 1.0) {
-      return badRequest('Invalid threshold. Must be a number between 0.5 and 1.0');
-    }
-
-    logger.info('[System Tools v1] Memory dedup preview', { userId: user.id, threshold });
-
-    const result = await deduplicateAllMemories(user.id, threshold, true);
-
-    logger.info('[System Tools v1] Memory dedup preview complete', {
-      userId: user.id,
-      totalOriginal: result.totalOriginal,
-      totalRemoved: result.totalRemoved,
-      totalMergedDetails: result.totalMergedDetails,
-    });
-
-    return NextResponse.json({ success: true, result });
-  } catch (error) {
-    logger.error(
-      '[System Tools v1] Memory dedup preview failed',
-      { userId: user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to preview memory deduplication');
-  }
-}
-
-async function handleMemoryDedup(req: NextRequest, context: any) {
-  const { user } = context;
-
-  try {
-    const body = await req.json();
-    const { threshold: thresholdParam } = body;
-    const threshold = typeof thresholdParam === 'number' ? thresholdParam : 0.80;
-
-    if (isNaN(threshold) || threshold < 0.5 || threshold > 1.0) {
-      return badRequest('Invalid threshold. Must be a number between 0.5 and 1.0');
-    }
-
-    logger.info('[System Tools v1] Starting memory deduplication', { userId: user.id, threshold });
-
-    const result = await deduplicateAllMemories(user.id, threshold, false);
-
-    logger.info('[System Tools v1] Memory deduplication complete', {
-      userId: user.id,
-      totalOriginal: result.totalOriginal,
-      totalRemoved: result.totalRemoved,
-      totalMergedDetails: result.totalMergedDetails,
-      totalFinal: result.totalFinal,
-    });
-
-    return NextResponse.json({ success: true, result });
-  } catch (error) {
-    logger.error(
-      '[System Tools v1] Memory deduplication failed',
-      { userId: user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to deduplicate memories');
-  }
-}
-
 async function handleAIImportStream(req: NextRequest, context: any) {
   const { user, repos } = context;
 
@@ -1239,7 +1167,6 @@ export const GET = createContextHandler(async (req: NextRequest, context) =>
     'capabilities-report-list': () => handleCapabilitiesReportList(req, context),
     'capabilities-report-progress': () => handleCapabilitiesReportProgress(req, context),
     'capabilities-report-get': () => handleCapabilitiesReportGet(req, context),
-    'memory-dedup-preview': () => handleMemoryDedupPreview(req, context),
   })
 );
 
@@ -1253,7 +1180,6 @@ export const POST = createContextHandler(async (req: NextRequest, context) =>
     'import-execute': () => handleImportExecute(req, context),
     'capabilities-report-generate': () => handleCapabilitiesReportGenerate(req, context),
     'capabilities-report-delete': () => handleCapabilitiesReportDelete(req, context),
-    'memory-dedup': () => handleMemoryDedup(req, context),
     'ai-import-stream': () => handleAIImportStream(req, context),
   })
 );

@@ -7,6 +7,11 @@
  *  - a real consolidate carries clusterThreshold into the job (bug 223)
  *  - GET ?action=character-memory-counts reports the cap breakdown (bug 210)
  *  - POST ?action=housekeep-sweep fans out per character (bug 221)
+ *  - POST ?action=maintain (dry run in-process; real runs enqueue per character)
+ *  - GET ?action=maintenance-status reads the parent's ledger
+ *
+ * Since Phase F every one of these runs through `runMaintenance` / the one
+ * MEMORY_MAINTENANCE job.
  */
 
 let mockCtx: any
@@ -33,17 +38,20 @@ jest.mock('@/lib/api/responses', () => ({
   successResponse: (data: any) => ({ status: 200, body: data }),
 }))
 
-const mockRunConsolidation = jest.fn()
-jest.mock('@/lib/memory/consolidation', () => ({
-  runConsolidation: (...args: unknown[]) => mockRunConsolidation(...args),
+const mockRunMaintenance = jest.fn()
+const mockLedger = jest.fn()
+jest.mock('@/lib/memory/maintenance', () => ({
+  runMaintenance: (...args: unknown[]) => mockRunMaintenance(...args),
+  getMaintenanceLedgerStatus: (...args: unknown[]) => mockLedger(...args),
+  MAINTENANCE_PHASES: ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'],
 }))
 
 const mockEnqueue = jest.fn()
 const mockSweep = jest.fn()
 jest.mock('@/lib/background-jobs/queue-service', () => ({
-  enqueueMemoryConsolidation: (...args: unknown[]) => mockEnqueue(...args),
+  enqueueMemoryMaintenance: (...args: unknown[]) => mockEnqueue(...args),
   enqueueEmbeddingGenerate: jest.fn(),
-  enqueueMemoryHousekeepingSweep: (...args: unknown[]) => mockSweep(...args),
+  enqueueMemoryMaintenanceForUser: (...args: unknown[]) => mockSweep(...args),
   enqueueMemoryRegenerateAll: jest.fn(),
 }))
 
@@ -64,7 +72,6 @@ jest.mock('@/lib/instance-settings', () => ({
 
 jest.mock('@/lib/memory/recall/search', () => ({}))
 jest.mock('@/lib/memory/index-store/backfill', () => ({}))
-jest.mock('@/lib/memory/housekeeping', () => ({}))
 jest.mock('@/lib/memory/anchor-gate-probe', () => ({}))
 jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({}))
 jest.mock('@/lib/embedding/embedding-service', () => ({}))
@@ -102,27 +109,33 @@ beforeEach(() => {
 describe('POST ?action=consolidate', () => {
   it('dry run runs in-process with a bounded cluster count and returns the report', async () => {
     mockAction = 'consolidate'
-    mockRunConsolidation.mockResolvedValue({ clusters: [], dryRun: true })
+    mockRunMaintenance.mockResolvedValue({ consolidation: { clusters: [], dryRun: true } })
     const res: any = await POST(req({ characterId: CHAR_ID, dryRun: true, clusterThreshold: 0.8 }))
     expect(res.body).toEqual({ success: true, dryRun: true, report: { clusters: [], dryRun: true } })
     expect(mockEnqueue).not.toHaveBeenCalled()
-    const [id, opts] = mockRunConsolidation.mock.calls[0]
-    expect(id).toBe(CHAR_ID)
-    expect(opts).toMatchObject({
+    const [request, ctx] = mockRunMaintenance.mock.calls[0]
+    expect(request).toEqual({
+      characterId: CHAR_ID,
+      reason: 'manual',
       dryRun: true,
-      maxClustersPerRun: 10,
-      userId: 'user-1',
-      timeBudgetMs: 120000,
-      trigger: 'manual',
-      settings: { clusterThreshold: 0.8 },
+      phases: ['consolidate'],
+      settings: { maxClustersPerRun: 10, consolidation: { clusterThreshold: 0.8 } },
     })
+    expect(ctx).toEqual({ userId: 'user-1', timeBudgetMs: 120000 })
   })
 
   it('caps a dry run at 40 clusters', async () => {
     mockAction = 'consolidate'
-    mockRunConsolidation.mockResolvedValue({ clusters: [] })
+    mockRunMaintenance.mockResolvedValue({ consolidation: { clusters: [] } })
     await POST(req({ characterId: CHAR_ID, dryRun: true, maxClustersPerRun: 500 }))
-    expect(mockRunConsolidation.mock.calls[0][1].maxClustersPerRun).toBe(40)
+    expect(mockRunMaintenance.mock.calls[0][0].settings.maxClustersPerRun).toBe(40)
+  })
+
+  it('a dry run that never reached the phase (archived character) is a 400, not a null report', async () => {
+    mockAction = 'consolidate'
+    mockRunMaintenance.mockResolvedValue({ skippedReason: 'archived' })
+    const res: any = await POST(req({ characterId: CHAR_ID, dryRun: true }))
+    expect(res.status).toBe(400)
   })
 
   it('a real run enqueues a job and returns its id', async () => {
@@ -130,8 +143,13 @@ describe('POST ?action=consolidate', () => {
     mockEnqueue.mockResolvedValue('job-9')
     const res: any = await POST(req({ characterId: CHAR_ID, maxClustersPerRun: 100 }))
     expect(res.body).toEqual({ success: true, dryRun: false, jobId: 'job-9' })
-    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: CHAR_ID, maxClustersPerRun: 100, trigger: 'manual' })
-    expect(mockRunConsolidation).not.toHaveBeenCalled()
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
+      characterId: CHAR_ID,
+      reason: 'manual',
+      phases: ['consolidate', 'mirror'],
+      settings: { maxClustersPerRun: 100 },
+    })
+    expect(mockRunMaintenance).not.toHaveBeenCalled()
   })
 
   it('bug 223: a real run carries the requested clusterThreshold into the job', async () => {
@@ -140,9 +158,9 @@ describe('POST ?action=consolidate', () => {
     await POST(req({ characterId: CHAR_ID, clusterThreshold: 0.65 }))
     expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
       characterId: CHAR_ID,
-      maxClustersPerRun: undefined,
-      clusterThreshold: 0.65,
-      trigger: 'manual',
+      reason: 'manual',
+      phases: ['consolidate', 'mirror'],
+      settings: { consolidation: { clusterThreshold: 0.65 } },
     })
   })
 
@@ -153,7 +171,7 @@ describe('POST ?action=consolidate', () => {
     const res2: any = await POST(req({ characterId: CHAR_ID, clusterThreshold: 3 }))
     expect(res2.status).toBe(400)
     expect(mockEnqueue).not.toHaveBeenCalled()
-    expect(mockRunConsolidation).not.toHaveBeenCalled()
+    expect(mockRunMaintenance).not.toHaveBeenCalled()
   })
 
   it('404s an unknown character', async () => {
@@ -236,7 +254,94 @@ describe('POST ?action=housekeep-sweep (bug 221)', () => {
     mockSweep.mockResolvedValue(['job-a', 'job-b'])
     const res: any = await POST(req({}))
     const body = res.body ?? (await res.json())
-    expect(mockSweep).toHaveBeenCalledWith('user-1', { reason: 'manual' })
+    expect(mockSweep).toHaveBeenCalledWith('user-1', { reason: 'manual', phases: ['demote', 'retire'] })
     expect(body).toEqual({ success: true, jobId: 'job-a', jobIds: ['job-a', 'job-b'] })
+  })
+})
+
+describe('POST ?action=housekeep (the demote and retire phases)', () => {
+  it('runs demote + retire in-process at the requested cap and reports in the old shape', async () => {
+    mockAction = 'housekeep'
+    mockCtx.repos.memories.countCapBreakdown = jest.fn(async () => ({ hotTotal: 7, demotable: 5, protected: 2, cold: 4 }))
+    mockRunMaintenance.mockResolvedValue({
+      demote: { cap: 3, hotTotal: 7, demotable: 5, protected: 2, excess: 2, demoted: 2, demotedIds: ['x', 'y'], highestScoreDemoted: 0.2 },
+      retire: { retentionDays: 30, retired: 1, retiredIds: ['z'] },
+    })
+    const res: any = await POST(req({ characterId: CHAR_ID, maxMemories: 100, dryRun: true, maxAgeMonths: 6 }))
+    const body = res.body ?? (await res.json())
+    expect(mockRunMaintenance.mock.calls[0][0]).toEqual({
+      characterId: CHAR_ID,
+      reason: 'manual',
+      dryRun: true,
+      phases: ['demote', 'retire'],
+      settings: { cap: 100 },
+    })
+    expect(body.result).toMatchObject({
+      demoted: 2,
+      deleted: 1,
+      kept: 5,
+      hotTotal: 7,
+      demotable: 5,
+      protected: 2,
+      capUsed: 3,
+      coldCount: 4,
+      demotedIds: ['x', 'y'],
+      deletedIds: ['z'],
+    })
+    expect(body.result.details).toHaveLength(3)
+  })
+})
+
+describe('POST ?action=maintain', () => {
+  it('a dry run for one character runs in-process and returns the report', async () => {
+    mockAction = 'maintain'
+    mockRunMaintenance.mockResolvedValue({ characterId: CHAR_ID, phases: [] })
+    const res: any = await POST(req({ characterId: CHAR_ID, dryRun: true, phases: ['demote'] }))
+    const body = res.body ?? (await res.json())
+    expect(body).toEqual({ success: true, dryRun: true, report: { characterId: CHAR_ID, phases: [] } })
+    expect(mockRunMaintenance.mock.calls[0][0]).toMatchObject({ characterId: CHAR_ID, dryRun: true, phases: ['demote'], reason: 'manual' })
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('a user-wide dry run is allowed for LLM-free phases and refused when it would consolidate', async () => {
+    mockAction = 'maintain'
+    mockCtx.repos.characters.findByUserId = jest.fn(async () => [{ id: 'a' }, { id: 'b', archivedAt: '2026-01-01' }, { id: 'c' }])
+    mockRunMaintenance.mockImplementation(async (r: { characterId: string }) => ({ characterId: r.characterId }))
+    const ok: any = await POST(req({ dryRun: true, phases: ['fold-near-duplicates'] }))
+    const body = ok.body ?? (await ok.json())
+    expect(body.reports.map((r: { characterId: string }) => r.characterId)).toEqual(['a', 'c'])
+
+    const refused: any = await POST(req({ dryRun: true }))
+    expect(refused.status).toBe(400)
+  })
+
+  it('a real run enqueues one job, or one per character when none is named', async () => {
+    mockAction = 'maintain'
+    mockEnqueue.mockResolvedValue('job-1')
+    const one: any = await POST(req({ characterId: CHAR_ID, phases: ['consolidate'] }))
+    expect((one.body ?? (await one.json())).jobIds).toEqual(['job-1'])
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: CHAR_ID, reason: 'manual', phases: ['consolidate'] })
+
+    mockSweep.mockResolvedValue(['j-a', 'j-b'])
+    const all: any = await POST(req({}))
+    expect((all.body ?? (await all.json())).jobIds).toEqual(['j-a', 'j-b'])
+    expect(mockSweep).toHaveBeenCalledWith('user-1', { reason: 'manual' })
+  })
+
+  it('rejects an unknown phase', async () => {
+    mockAction = 'maintain'
+    const res: any = await POST(req({ characterId: CHAR_ID, phases: ['tidy-up'] }))
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('GET ?action=maintenance-status', () => {
+  it('returns the ledger, for one character or all', async () => {
+    mockAction = 'maintenance-status'
+    mockLedger.mockResolvedValue([{ characterId: CHAR_ID, lastRun: {} }])
+    const res: any = await GET(req(undefined, `action=maintenance-status&characterId=${CHAR_ID}`))
+    const body = res.body ?? (await res.json())
+    expect(mockLedger).toHaveBeenCalledWith(CHAR_ID)
+    expect(body).toEqual({ success: true, ledger: [{ characterId: CHAR_ID, lastRun: {} }] })
   })
 })
