@@ -9,12 +9,13 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueEmbeddingRefit } from '@/lib/background-jobs/queue-service';
 import type { EmbeddableEntityType } from '@/lib/schemas/types';
+import { processSingleton } from '@/lib/utils/process-singleton';
 
 /**
  * Debounce state for refit scheduling
  * Key: `${userId}:${profileId}`
  */
-const refitDebounceTimers = new Map<string, NodeJS.Timeout>();
+const refitDebounceTimers = processSingleton('embedding.refitDebounceTimers', () => new Map<string, NodeJS.Timeout>());
 
 /**
  * Default debounce delay for refit scheduling (5 seconds)

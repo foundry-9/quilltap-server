@@ -19,6 +19,9 @@
  * daily sweep still runs regardless — this cache only gates the
  * post-extraction watermark path.
  */
+
+import { processSingleton } from '@/lib/utils/process-singleton'
+
 const INEFFECTIVE_BACKOFF_MS = 60 * 60 * 1000 // 1 hour
 
 /** A sweep counts as "effective" when it demoted (or deleted) at least this many rows.
@@ -40,7 +43,7 @@ interface SweepOutcome {
   cap: number
 }
 
-const outcomes = new Map<string, SweepOutcome>()
+const outcomes = processSingleton('memory.housekeepingOutcomes', () => new Map<string, SweepOutcome>())
 
 export function recordHousekeepingOutcome(
   characterId: string,

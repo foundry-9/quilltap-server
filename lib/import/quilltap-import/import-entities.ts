@@ -484,6 +484,24 @@ export async function importMemories(
   }
   const remapMemoryRef = (ref: string): string => memoryIdMap.get(ref) ?? ref;
 
+  // Characters the bundle does not carry resolve to the instance's own row of
+  // that id when one exists and is not an archived tombstone (bug 240).
+  const localCharacters = new Map<string, string | null>();
+  const resolveMemoryCharacter = async (id: string): Promise<string | null> => {
+    const mapped = idMaps.characters.get(id);
+    if (mapped) return mapped;
+    if (!localCharacters.has(id)) {
+      // Raw read: a character whose vault is unreadable still owns its memories.
+      const local = await getRepositories().characters.findByIdRaw(id);
+      const usable = local && !local.archivedAt ? local.id : null;
+      if (local && !usable) {
+        moduleLogger.debug('Memory names an archived local character; not reviving it', { characterId: id });
+      }
+      localCharacters.set(id, usable);
+    }
+    return localCharacters.get(id) ?? null;
+  };
+
   for (const memory of memories) {
     try {
       // Skip-if-present rehydrate (spec §6/F4): the memory is already back —
@@ -493,8 +511,10 @@ export async function importMemories(
         continue;
       }
 
-      // Remap character ID
-      const newCharacterId = idMaps.characters.get(memory.characterId);
+      // Remap character ID: a character in the bundle, else one this instance
+      // already holds (a chats-only export carries its memories but not its
+      // cast — bug 240).
+      const newCharacterId = await resolveMemoryCharacter(memory.characterId);
       if (!newCharacterId) {
         warnings.push(
           `Memory references non-existent character ${memory.characterId}`
@@ -507,7 +527,7 @@ export async function importMemories(
       let newAboutCharacterId = memory.aboutCharacterId;
       if (memory.aboutCharacterId) {
         // Try to map as a character first
-        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) || null;
+        newAboutCharacterId = (await resolveMemoryCharacter(memory.aboutCharacterId)) || null;
       }
 
       // Remap chat ID if present

@@ -1,5 +1,7 @@
 'use strict';
 
+const { resolveServerPort } = require('./lock-helpers');
+
 /**
  * `quilltap anchor-probe <characterId>` — measure whether the episodic anchor
  * line embedded with each memory suppresses reinforcement at admission.
@@ -32,8 +34,12 @@ near-duplicates.
 Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
 
 Options:
+  -d, --data-dir <path>      Instance root; used to find the server's port
+  -i, --instance <name>      Registered instance whose server to call (see 'quilltap instances')
+      --passphrase <pass>    Accepted and ignored (this tool never opens the database)
       --limit <number>       Recent memories to sample (default: 50, max: 200)
-      --port <number>        Server port for API calls (default: 3000)
+      --port <number>        Server port for API calls. Default: the port recorded in the
+                             --instance/--data-dir server's lock file, else 3000
       --json                 Print the raw JSON result instead of tables
   -h, --help                 Show this help
 
@@ -45,7 +51,7 @@ Examples:
 }
 
 function parseFlags(args) {
-  const flags = { limit: undefined, port: 3000, json: false, help: false };
+  const flags = { limit: undefined, port: undefined, dataDir: '', instance: '', json: false, help: false };
   const positional = [];
   let i = 0;
   while (i < args.length) {
@@ -60,6 +66,19 @@ function parseFlags(args) {
         flags.limit = n;
         break;
       }
+      case '-d':
+      case '--data-dir':
+        flags.dataDir = args[++i];
+        break;
+      case '-i':
+      case '--instance':
+        flags.instance = args[++i];
+        break;
+      case '--passphrase':
+        // Accepted so universal flags never error; these tools talk to the
+        // running server and never open the database themselves.
+        i++;
+        break;
       case '--port': {
         const p = parseInt(args[++i], 10);
         if (isNaN(p) || p < 1 || p > 65535) {
@@ -136,7 +155,17 @@ async function anchorProbeCommand(args) {
   }
   const characterId = positional[0];
 
-  const url = `http://localhost:${flags.port}/api/v1/memories?action=anchor-gate-probe`;
+  let target;
+  try {
+    target = resolveServerPort({ port: flags.port, instance: flags.instance, dataDir: flags.dataDir });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const port = target.port;
+  if (target.note) process.stderr.write(`${DIM}${target.note}${RESET}\n`);
+
+  const url = `http://localhost:${port}/api/v1/memories?action=anchor-gate-probe`;
   const body = { characterId };
   if (flags.limit !== undefined) body.limit = flags.limit;
 
@@ -150,8 +179,8 @@ async function anchorProbeCommand(args) {
       body: JSON.stringify(body),
     });
   } catch (err) {
-    console.error(`${RED}Could not reach Quilltap server at http://localhost:${flags.port}: ${err.message}${RESET}`);
-    console.error('Start the server (npm run dev) or pass --port to match a non-default port.');
+    console.error(`${RED}Could not reach Quilltap server at http://localhost:${port}: ${err.message}${RESET}`);
+    console.error(target.hint);
     process.exit(1);
   }
 
@@ -189,4 +218,4 @@ async function anchorProbeCommand(args) {
   console.log('');
 }
 
-module.exports = { anchorProbeCommand, printAnchorProbeHelp };
+module.exports = { anchorProbeCommand, printAnchorProbeHelp, parseFlags };

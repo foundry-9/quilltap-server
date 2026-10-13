@@ -10,6 +10,7 @@ import type { Message, MessageAttachment, Chat, PendingToolResult } from '../typ
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
+import { splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
 
 export interface PendingToolCall {
   id: string
@@ -55,6 +56,14 @@ interface SSEEvent {
   status?: ResponseStatus
   error?: string
   details?: string
+  /**
+   * Error frame only: whether the user's message row was saved before the
+   * failure. Absent from older servers, in which case the client treats the
+   * question as open and asks the post-error read instead (bug 241).
+   */
+  userMessagePersisted?: boolean
+  /** Error frame only: whether the staged tool results were saved as rows. */
+  pendingToolResultsPersisted?: boolean
   done?: boolean
   messageId?: string
   emptyResponse?: boolean
@@ -171,6 +180,58 @@ export function buildFailedAttachmentWarning(
   const subject = failed.length === 1 ? 'An attachment was' : `${failed.length} attachments were`
   return `${subject} not sent to the model${more}: ${first}`
 }
+
+/**
+ * A send that failed with a server-side error frame (or an HTTP refusal before
+ * any stream opened). Carries what the server said about whether the user's
+ * submission reached the database, so the send path can decide whether to hand
+ * the typed text back to the composer (bug 241). `undefined` means the server
+ * did not say.
+ */
+export class SalonSendError extends Error {
+  readonly userMessagePersisted: boolean | undefined
+  readonly pendingToolResultsPersisted: boolean | undefined
+
+  constructor(
+    message: string,
+    persisted: { userMessagePersisted?: boolean; pendingToolResultsPersisted?: boolean } = {},
+  ) {
+    super(message)
+    this.name = 'SalonSendError'
+    this.userMessagePersisted = persisted.userMessagePersisted
+    this.pendingToolResultsPersisted = persisted.pendingToolResultsPersisted
+  }
+}
+
+/** The toast text for a stream that ended without a done, chainComplete or error. */
+export const STREAM_CLOSED_EARLY_MESSAGE = 'The connection closed before the reply was finished. Please try again.'
+
+/**
+ * The stream ended without any terminal event. Every server path closes a turn
+ * with `done`, `chainComplete` or an error frame, so a bare EOF is a dropped
+ * connection — once read as a quiet success (bug 241). Whether the user's
+ * message was saved is unknown here.
+ */
+export class StreamClosedEarlyError extends Error {
+  constructor() {
+    super(STREAM_CLOSED_EARLY_MESSAGE)
+    this.name = 'StreamClosedEarlyError'
+  }
+}
+
+/** Appended to the failure toast when the typed text was put back in the composer. */
+export const SUBMISSION_RESTORED_NOTE = 'Your message is back in the composer.'
+
+/** The failure toast's text, with the restored note as its own sentence. */
+export function sendFailureToastText(message: string, restored: boolean): string {
+  if (!restored) return message
+  const trimmed = message.trimEnd()
+  const sentence = /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`
+  return `${sentence} ${SUBMISSION_RESTORED_NOTE}`
+}
+
+/** How long a failed-send toast stays up — long enough to actually read it. */
+export const SEND_FAILURE_TOAST_MS = 8000
 
 /**
  * Parse a raw SSE data string into a structured event, or null if it should be skipped.
@@ -582,152 +643,180 @@ export function useSSEStreaming({
     // update-depth limit. Reset on turnStart so each chained turn transitions
     // cleanly.
     let hasStartedStreaming = false
+    // Whether the turn has been closed by a terminal event. `done` and
+    // `chainComplete` close it; a chained `turnStart` reopens it, because a
+    // connection lost mid-way through the next speaker's turn is just as
+    // truncated as one lost before the first.
+    let turnClosed = false
 
+    const handleLine = async (line: string): Promise<void> => {
+      if (!line.startsWith('data: ')) return
+      const rawData = line.slice(6)
+      const data = parseSSEData(rawData)
+      if (!data) return
+
+      // Handle status updates
+      if (data.status) {
+        setResponseStatus(data.status)
+        // Show a warning toast when the turn is being rescued: `retrying`
+        // is the same provider having another go after an empty response,
+        // `failing-over` is an understudy from the profile's fallback chain
+        // taking the turn. Both are moments where the reply the user gets is
+        // not the one they configured, so both are worth saying out loud.
+        if (data.status.stage === 'retrying' || data.status.stage === 'failing-over') {
+          showWarningToast(data.status.message)
+        }
+      }
+
+      // Handle content chunks
+      if (data.content) {
+        fullContent += data.content
+        if (!hasStartedStreaming) {
+          setWaitingForResponse(false)
+          setStreaming(true)
+          hasStartedStreaming = true
+        }
+        scheduleStreamingContent(fullContent)
+      }
+
+      // Handle live reasoning ("thinking") — cumulative, so replace the buffer.
+      // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
+      // the chat's thinking-visibility is on.
+      if (typeof data.reasoning === 'string') {
+        scheduleStreamingReasoning(data.reasoning)
+      }
+
+      // Handle errors
+      if (data.error) {
+        setResponseStatus(null)
+        const errorMsg = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error
+        throw new SalonSendError(errorMsg, {
+          userMessagePersisted: typeof data.userMessagePersisted === 'boolean' ? data.userMessagePersisted : undefined,
+          pendingToolResultsPersisted: typeof data.pendingToolResultsPersisted === 'boolean' ? data.pendingToolResultsPersisted : undefined,
+        })
+      }
+
+      // Handle tool detection. `fullContent` is the prose streamed so far —
+      // the offset at which this batch was invoked.
+      if (data.toolsDetected && opts.onToolsDetected) {
+        opts.onToolsDetected(data, fullContent.length)
+      }
+
+      // Handle tool results
+      if (data.toolResult && opts.onToolResult) {
+        opts.onToolResult(data)
+      }
+
+      // Messages surfaced mid-turn — a Carina reference answer, a Host
+      // announcement (turn-pass note), a Pascal custom-tool outcome — are
+      // inserted into the flow immediately (deduped by id) rather than
+      // waiting for the post-turn fetchChat().
+      if (opts.onSurfacedMessage) {
+        for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
+          if (surfaced) opts.onSurfacedMessage(surfaced)
+        }
+      }
+
+      // Handle an answer-confirmation result — update the badge and, on a
+      // revision, swap in the corrected bubble text (a deliberate, visible
+      // transparency swap).
+      if (data.confirmationResult && opts.onConfirmationResult) {
+        opts.onConfirmationResult(data.confirmationResult)
+      }
+
+      // Handle completion
+      if (data.done) {
+        turnClosed = true
+        setResponseStatus(null)
+
+        // Attachments the provider plugin could not put on the wire (bug 94).
+        const attachmentWarning = buildFailedAttachmentWarning(data.attachmentResults?.failed)
+        if (attachmentWarning) showWarningToast(attachmentWarning)
+
+        if (inChain && opts.onIntermediateDone) {
+          // Intermediate done during a chain — lighter cleanup, no state reset
+          await opts.onIntermediateDone(fullContent, data)
+        } else {
+          await opts.onDone(fullContent, data)
+        }
+      }
+
+      // The Courier: server placed a placeholder for a manual / clipboard
+      // turn. Refetch so the bubble appears with the Markdown blob + paste
+      // textarea. The accompanying `done` event closes the stream.
+      if (data.pendingExternalTurn) {
+        await fetchChat()
+      }
+
+      // Handle turn start (chained character about to respond)
+      // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
+      if (data.turnStart) {
+        inChain = true
+        turnClosed = false
+        fullContent = ''
+        hasStartedStreaming = false
+        resetStreamingContent()
+        setStreaming(false)
+        setWaitingForResponse(true)
+        if (data.participantId) {
+          opts.onTurnStart?.({
+            participantId: data.participantId,
+            characterName: data.characterName || 'Unknown',
+            chainDepth: data.chainDepth || 0,
+          })
+        }
+      }
+
+      // Handle turn complete (chained character finished)
+      // Server sends flat: { turnComplete: true, participantId, messageId, chainDepth }
+      if (data.turnComplete) {
+        await opts.onTurnComplete?.({
+          participantId: data.participantId!,
+          messageId: data.messageId || '',
+          chainDepth: data.chainDepth || 0,
+        })
+      }
+
+      // Handle chain complete (all chained turns done)
+      // Server sends flat: { chainComplete: true, reason, nextSpeakerId, chainDepth }
+      if (data.chainComplete) {
+        inChain = false
+        turnClosed = true
+        await opts.onChainComplete?.({
+          reason: data.reason || 'no_next_speaker',
+          nextSpeakerId: data.nextSpeakerId ?? null,
+          chainDepth: data.chainDepth || 0,
+          paused: data.paused === true,
+          heldUserTurn: data.heldUserTurn === true,
+        })
+      }
+    }
+
+    // Lines are carried across reads: a frame split between two chunks used to
+    // be cut in half, fail to parse, and vanish — taking an error frame with it.
+    let buffer = ''
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
-      const chunk = decoder.decode(value)
-      const lines = chunk.split('\n')
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const rawData = line.slice(6)
-        const data = parseSSEData(rawData)
-        if (!data) continue
-
-        // Handle status updates
-        if (data.status) {
-          setResponseStatus(data.status)
-          // Show a warning toast when the turn is being rescued: `retrying`
-          // is the same provider having another go after an empty response,
-          // `failing-over` is an understudy from the profile's fallback chain
-          // taking the turn. Both are moments where the reply the user gets is
-          // not the one they configured, so both are worth saying out loud.
-          if (data.status.stage === 'retrying' || data.status.stage === 'failing-over') {
-            showWarningToast(data.status.message)
-          }
-        }
-
-        // Handle content chunks
-        if (data.content) {
-          fullContent += data.content
-          if (!hasStartedStreaming) {
-            setWaitingForResponse(false)
-            setStreaming(true)
-            hasStartedStreaming = true
-          }
-          scheduleStreamingContent(fullContent)
-        }
-
-        // Handle live reasoning ("thinking") — cumulative, so replace the buffer.
-        // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
-        // the chat's thinking-visibility is on.
-        if (typeof data.reasoning === 'string') {
-          scheduleStreamingReasoning(data.reasoning)
-        }
-
-        // Handle errors
-        if (data.error) {
-          setResponseStatus(null)
-          const errorMsg = data.details
-            ? `${data.error}: ${data.details}`
-            : data.error
-          throw new Error(errorMsg)
-        }
-
-        // Handle tool detection. `fullContent` is the prose streamed so far —
-        // the offset at which this batch was invoked.
-        if (data.toolsDetected && opts.onToolsDetected) {
-          opts.onToolsDetected(data, fullContent.length)
-        }
-
-        // Handle tool results
-        if (data.toolResult && opts.onToolResult) {
-          opts.onToolResult(data)
-        }
-
-        // Messages surfaced mid-turn — a Carina reference answer, a Host
-        // announcement (turn-pass note), a Pascal custom-tool outcome — are
-        // inserted into the flow immediately (deduped by id) rather than
-        // waiting for the post-turn fetchChat().
-        if (opts.onSurfacedMessage) {
-          for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
-            if (surfaced) opts.onSurfacedMessage(surfaced)
-          }
-        }
-
-        // Handle an answer-confirmation result — update the badge and, on a
-        // revision, swap in the corrected bubble text (a deliberate, visible
-        // transparency swap).
-        if (data.confirmationResult && opts.onConfirmationResult) {
-          opts.onConfirmationResult(data.confirmationResult)
-        }
-
-        // Handle completion
-        if (data.done) {
-          setResponseStatus(null)
-
-          // Attachments the provider plugin could not put on the wire (bug 94).
-          const attachmentWarning = buildFailedAttachmentWarning(data.attachmentResults?.failed)
-          if (attachmentWarning) showWarningToast(attachmentWarning)
-
-          if (inChain && opts.onIntermediateDone) {
-            // Intermediate done during a chain — lighter cleanup, no state reset
-            await opts.onIntermediateDone(fullContent, data)
-          } else {
-            await opts.onDone(fullContent, data)
-          }
-        }
-
-        // The Courier: server placed a placeholder for a manual / clipboard
-        // turn. Refetch so the bubble appears with the Markdown blob + paste
-        // textarea. The accompanying `done` event closes the stream.
-        if (data.pendingExternalTurn) {
-          await fetchChat()
-        }
-
-        // Handle turn start (chained character about to respond)
-        // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
-        if (data.turnStart) {
-          inChain = true
-          fullContent = ''
-          hasStartedStreaming = false
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(true)
-          if (data.participantId) {
-            opts.onTurnStart?.({
-              participantId: data.participantId,
-              characterName: data.characterName || 'Unknown',
-              chainDepth: data.chainDepth || 0,
-            })
-          }
-        }
-
-        // Handle turn complete (chained character finished)
-        // Server sends flat: { turnComplete: true, participantId, messageId, chainDepth }
-        if (data.turnComplete) {
-          await opts.onTurnComplete?.({
-            participantId: data.participantId!,
-            messageId: data.messageId || '',
-            chainDepth: data.chainDepth || 0,
-          })
-        }
-
-        // Handle chain complete (all chained turns done)
-        // Server sends flat: { chainComplete: true, reason, nextSpeakerId, chainDepth }
-        if (data.chainComplete) {
-          inChain = false
-          await opts.onChainComplete?.({
-            reason: data.reason || 'no_next_speaker',
-            nextSpeakerId: data.nextSpeakerId ?? null,
-            chainDepth: data.chainDepth || 0,
-            paused: data.paused === true,
-            heldUserTurn: data.heldUserTurn === true,
-          })
-        }
+      const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
+      buffer = split.rest
+      for (const line of split.lines) {
+        await handleLine(line)
       }
+    }
+
+    // Whatever the decoder and the buffer still hold is the stream's last line.
+    const tail = buffer + decoder.decode()
+    for (const line of tail.split('\n')) {
+      await handleLine(line)
+    }
+
+    if (!turnClosed) {
+      setResponseStatus(null)
+      throw new StreamClosedEarlyError()
     }
 
     return fullContent
@@ -748,6 +837,77 @@ export function useSSEStreaming({
   }, [])
 
   /**
+   * After a failed send, put back whatever of the submission the server never
+   * saved (bug 241). Returns true when the typed text or attachments went back
+   * into the composer.
+   *
+   * What was saved is taken from the error frame when it says; otherwise it is
+   * read off the transcript as it stands after the post-error `fetchChat()` —
+   * reconciliation retires a temp bubble the moment the read carries its row,
+   * so one still standing has no row behind it. A composer the operator has
+   * already started typing into again is left alone, so a restore never
+   * clobbers new words.
+   */
+  const restoreUnpersistedSubmission = useCallback((args: {
+    err: unknown
+    input: string
+    setInput: (v: string) => void
+    attachedFiles: Array<{ id: string; filename: string; filepath: string; mimeType: string }>
+    toolResultsToSend: PendingToolResult[]
+    setPendingToolResults: (results: PendingToolResult[]) => void
+    persistDraft?: (text: string) => void
+    tempUserMessageId: string
+    tempToolMessageIds: string[]
+  }): boolean => {
+    const { err, input, setInput, attachedFiles, toolResultsToSend, setPendingToolResults, persistDraft } = args
+
+    // Peek at the live transcript. The page's setter resolves updaters against
+    // its own ref synchronously, and handing back the same array is a no-op.
+    let current: Message[] = []
+    setMessages((prev) => {
+      current = prev
+      return prev
+    })
+    const stillShowing = (id: string) => current.some((m) => m.id === id)
+
+    const said = err instanceof SalonSendError ? err : null
+    const userRowMissing = said?.userMessagePersisted !== undefined
+      ? !said.userMessagePersisted
+      : stillShowing(args.tempUserMessageId)
+    const toolRowsMissing = toolResultsToSend.length > 0 && (
+      said?.pendingToolResultsPersisted !== undefined
+        ? !said.pendingToolResultsPersisted
+        : args.tempToolMessageIds.some(stillShowing)
+    )
+
+    if (!userRowMissing && !toolRowsMissing) return false
+
+    const composerNow = inputRef.current?.getMarkdown() ?? ''
+    if (composerNow.trim()) return false
+
+    let restored = false
+    if (userRowMissing) {
+      if (input.trim()) {
+        setInput(input)
+        // The page's value → editor sync only fires on a change of value; push
+        // the text in directly too, so the editor shows it whatever React batched.
+        inputRef.current?.setMarkdown(input)
+        persistDraft?.(input)
+        restored = true
+      }
+      if (attachedFiles.length > 0) {
+        setAttachedFiles(attachedFiles)
+        restored = true
+      }
+    }
+    if (toolRowsMissing) {
+      setPendingToolResults(toolResultsToSend)
+      restored = true
+    }
+    return restored
+  }, [setMessages, setAttachedFiles, inputRef])
+
+  /**
    * Main send message function. Creates the user message, sends request, and streams response.
    */
   const sendMessage = useCallback(async (
@@ -761,6 +921,11 @@ export function useSSEStreaming({
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
+    /**
+     * Re-saves the composer draft when a failed send hands the text back, so
+     * the restored words survive a reload exactly as they did before Send.
+     */
+    persistDraft?: (text: string) => void,
   ) => {
     e?.preventDefault()
     // Two refusals, deliberately told apart (bug 136). An empty composer is
@@ -816,6 +981,7 @@ export function useSSEStreaming({
       createdAt: result.createdAt,
     }))
 
+    const tempToolMessageIds = toolMessages.map((m) => m.id)
     const tempUserMessageId = `temp-user-${Date.now()}`
     // Attribute the optimistic bubble to the seat the *server* will resolve this
     // message onto — `findActiveUserParticipant`, which honours the impersonation
@@ -874,7 +1040,9 @@ export function useSSEStreaming({
         } catch {
           errorMessage = res.statusText || errorMessage
         }
-        throw new Error(errorMessage)
+        // Refused before any stream opened: the orchestrator never ran, so
+        // nothing of this submission was written.
+        throw new SalonSendError(errorMessage, { userMessagePersisted: false, pendingToolResultsPersisted: false })
       }
 
       const reader = res.body?.getReader()
@@ -1017,16 +1185,41 @@ export function useSSEStreaming({
         const displayMessage = errorMessage === 'Unknown error' || errorMessage === 'TypeError'
           ? 'Connection lost. Please try again.'
           : errorMessage
-        showErrorToast(displayMessage || 'Failed to send message')
 
-        // Don't remove the user message — the backend already saved it.
-        // Re-fetch the chat to replace the temp message with the real one.
+        // The failure may have come before or after the server saved the
+        // user's message. Re-fetch so a persisted row replaces the temp
+        // bubble; one that never landed is swept in `finally`.
         resetStreamingContent()
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
         setResponseStatus(null)
         await fetchChat()
+
+        // Bug 241: a send that died before its row was written used to take
+        // the operator's words with it — composer, draft and attachments were
+        // all cleared up front and nothing put them back. Hand back whatever
+        // has no row behind it. The error frame says so outright; when it
+        // can't (a dropped connection, an older server) the read above
+        // answers instead: a temp bubble still standing after it was not
+        // reconciled to any persisted row.
+        const restored = restoreUnpersistedSubmission({
+          err,
+          input,
+          setInput,
+          attachedFiles,
+          toolResultsToSend,
+          setPendingToolResults,
+          persistDraft,
+          tempUserMessageId,
+          tempToolMessageIds,
+        })
+
+        const toastMessage = displayMessage || 'Failed to send message'
+        showErrorToast(
+          sendFailureToastText(toastMessage, restored),
+          SEND_FAILURE_TOAST_MS,
+        )
       }
     } finally {
       setSending(false)
@@ -1040,7 +1233,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, sending, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, restoreUnpersistedSubmission, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.

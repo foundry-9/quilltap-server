@@ -359,7 +359,7 @@ quilltap memory-diff <chatId> --instance Friday          # Report to the current
 quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
 ```
 
-Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+Needs a running server to reach the extraction pipeline: pass `--port`, or name the server's instance with `--instance`/`--data-dir` and the port is read from its lock file (see [Finding the server](#finding-the-server)); otherwise 3000. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
 
 The dry run is the live pipeline with nothing written: every turn, then both fold passes (`other-fold`, `episode-fold`) over the history a regenerate would rebuild, autonomous rooms included. Each re-extracted candidate records `extractionPass` and `decision` — what admission would do with it (`insert`, `reinforce`, `absorb`, …). Admission embeds each candidate to decide, so a dry run makes embedding calls.
 
@@ -377,7 +377,7 @@ quilltap recall-replay <chatId> --turn 42 --signals-from t42.json --as-of \
   --tuning '{"boostGateAbs":0.45,"boostGateMargin":0.15,"boostGateRamp":0.1}'
 ```
 
-Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default: the larger of 25 and the new path's head size + 10), `--memory-budget <tokens>` (positive integer; the new path's selected rows then follow the budget-sized dynamic head, which scales with the model's memory budget, while the old path keeps the historical fixed 5-entry head; each path header prints its head size), `--port <n>` (default 3000), `--json`.
+Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default: the larger of 25 and the new path's head size + 10), `--memory-budget <tokens>` (positive integer; the new path's selected rows then follow the budget-sized dynamic head, which scales with the model's memory budget, while the old path keeps the historical fixed 5-entry head; each path header prints its head size), `--instance <name>` / `--data-dir <path>` (find the server's port, see [Finding the server](#finding-the-server)), `--port <n>` (default: from the instance lock, else 3000), `--json`.
 
 Tuning and comparable runs:
 
@@ -397,7 +397,11 @@ quilltap anchor-probe <characterId> --limit 20  # Smaller, cheaper sample
 quilltap anchor-probe <characterId> --json      # Raw JSON for scripting
 ```
 
-Flags: `--limit <n>` (1–200, default 50), `--port <n>` (default 3000), `--json`.
+Flags: `--limit <n>` (1–200, default 50), `--instance <name>` / `--data-dir <path>` (find the server's port, see [Finding the server](#finding-the-server)), `--port <n>` (default: from the instance lock, else 3000), `--json`.
+
+### Finding the server
+
+`memory-diff`, `recall-replay` and `anchor-probe` call a running server over HTTP. The server records the port it listens on in its instance lock (`<dataDir>/data/quilltap.lock`, field `port`; shown by `quilltap db --lock-status`). Resolution order: an explicit `--port` wins; otherwise, if `--instance` or `--data-dir` is given and that lock is live and records a port, that port is used (a dim note says so); otherwise 3000. Giving both `--instance` and `--data-dir` is an error. `--passphrase` is accepted by all three for uniformity; `recall-replay` and `anchor-probe` ignore it. Locks written before this field existed carry no port, so restart the server once to record it.
 
 ## Maintenance & Cleanup
 

@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Fix bugs 235–241: memory refactor dogfood on V4test
+
+Found dogfooding the memory refactor (Phases A–D) on `V4test`. No migrations.
+
+- 235: Process-wide state lives on `globalThis` through new `processSingleton` (`lib/utils/process-singleton.ts`). Next.js evaluates a module once per bundle, so the parent held one memory-vector cache for the instrumentation bundle (refreshed by the job dispatcher's post-commit `memoryIndex.reload`) and another per route bundle (searched by chat recall and the memories API); after a reindex, recall kept stale vectors and fell back to text search. Converted: the vector store manager, the frozen-archive cache, admission's per-character locks and idempotency ledger, the rate ledger, the housekeeping outcome cache, the refit debounce timers and the interactive-embedding counter.
+- 236: `POST /api/v1/memories` and `PUT /api/v1/memories/[id]` trim `content` and `summary` and reject blank text with 400. Create maps an admission refusal by reason: `empty` 400, `embedding-failed` 502 (was 500 "Failed to generate embedding" for both).
+- 237: Admission sees rows whose stored vectors are another length. `gatherNeighbours` reloads a mismatched cache once; if rows still differ, it word-matches them against the candidate's text and scores the top `ADMISSION_TOP_K` by re-embedding their stored text with the candidate's profile (`NeighbourProbe`). Before, every candidate inserted during a re-embed.
+- 238: The fold OTHER pass dates an undated draft at the observer's last line in the stretch (its `createdAt` and source message), not the stretch end.
+- 239: The instance lock records the server's HTTP `port`. `anchor-probe`, `recall-replay` and `memory-diff` accept `-i/--instance`, `-d/--data-dir` and `--passphrase` anywhere and take their port from `--port`, else the instance's live lock, else 3000 (`resolveServerPort` in `packages/quilltap/lib/lock-helpers.js`). `quilltap db --lock-status` shows the port.
+- 240: Importing a chats-only export with memories attaches them to the instance's existing characters (raw read, once per character; archived characters skipped). Before, every memory was skipped as naming a non-existent character.
+- 241: A Salon send that fails before the user message is saved restores the composer text, draft, attachments and staged tool results, and shows an 8-second error toast. The error frame carries `userMessagePersisted` / `pendingToolResultsPersisted` (orchestrator `SubmissionLedger`); the stream reader buffers split frames (`splitSseBuffer`) and treats a stream that ends without `done` / `chainComplete` as an error.
+- Help: `help/embedding-profiles.md` (duplicates still caught mid-re-embed), `help/system-import-export.md` (chats-only exports' memories), `help/chats.md` (a failed send returns the message). API.md, DDL.md (lock `port`) and the CLI README updated.
+- Filed bug 242 (open): a single-character turn's `done` runs the Salon's chain-intermediate callback because every first turn now sends a depth-0 `turnStart`, so the end-of-turn refetch, queue notification and empty-response toast are skipped.
+- Tests: `vector-store-process-singleton.test.ts`, `admission-neighbours.test.ts` (unindexed rows), `memories-manual-create.test.ts`, `other-fold-pass.test.ts`, `import-memories-local-characters.test.ts`, `server-port-resolution.test.js`, `instance-lock.test.ts`, `useSSEStreaming-send-failure.test.tsx`, `streaming.service.test.ts`.
+
 #### PR 94 review: 9 findings on Phase D
 
 - A fold slice whose calls the rate limit would all skip is deferred, not read: the cursor stays before it and the next fold or catch-up reads it (`runPass({ deferOnRateLimit })`, `skippedReason: 'rate-limited'`, no follow-up job). Before, the cursor moved past it and the stretch was never read.

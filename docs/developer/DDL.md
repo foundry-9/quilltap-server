@@ -18,7 +18,7 @@ All three databases live in `<data-dir>/data/`. Alongside them:
 ├── quilltap.dbkey            # Encryption key file — one per instance, all three DBs
 ├── quilltap-llm-logs.db
 ├── quilltap-mount-index.db
-├── quilltap.lock             # Instance lock (prevents dual-instance corruption)
+├── quilltap.lock             # Instance lock (prevents dual-instance corruption); JSON incl. pid, heartbeat and the server's HTTP `port`
 └── backups/                  # Physical backups
 ```
 

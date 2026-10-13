@@ -1750,6 +1750,7 @@ export function SalonView({ chatId }: SalonViewProps) {
               setInput: clearComposerInput,
               setPendingToolResults,
               clearDraft,
+              persistDraft,
             }
             // In Their Own Words takes the submit over when it is armed; it has
             // already called preventDefault and nothing has been cleared.
@@ -1775,6 +1776,7 @@ export function SalonView({ chatId }: SalonViewProps) {
               pendingToolResults,
               sendArgs.setPendingToolResults,
               sendArgs.clearDraft,
+              sendArgs.persistDraft,
             )
           }}
           onFileSelect={handleFileSelect}

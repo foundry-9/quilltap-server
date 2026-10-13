@@ -74,7 +74,7 @@ import { MemoryConsolidationSettingsSchema, MemoryExtractionModeSettingsSchema }
 import { MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError, successResponse, errorResponse } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 
@@ -84,8 +84,9 @@ import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver
 
 const createMemorySchema = z.object({
   characterId: z.uuid('Character ID is required'),
-  content: z.string().min(1, 'Memory content is required'),
-  summary: z.string().min(1, 'Memory summary is required'),
+  // Trimmed: blank text is the client's 400, never an admission reject (bug 236).
+  content: z.string().trim().min(1, 'Memory content is required'),
+  summary: z.string().trim().min(1, 'Memory summary is required'),
   keywords: z.array(z.string()).prefault([]),
   tags: z.array(z.uuid()).prefault([]),
   importance: z.number().min(0).max(1).prefault(0.5),
@@ -591,10 +592,25 @@ async function handleCreateMemory(
 
   const memory = outcome.memory;
   if (!memory) {
-    // Embedding generation failed after retry; no row was written because a
-    // memory without an embedding would be invisible to every future
-    // admission. Surface this to the client so the UI can show the real reason.
-    return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
+    // Nothing was written. Say why: only an embedding failure is the
+    // provider's fault (bug 236).
+    const reason = outcome.action.kind === 'reject' ? outcome.action.reason : 'unknown';
+    logger.debug('[Memories API] Manual memory not admitted', {
+      characterId: validatedData.characterId,
+      reason,
+    });
+    if (reason === 'empty') {
+      return badRequest('Memory content and summary must not be blank.');
+    }
+    if (reason === 'embedding-failed') {
+      // A memory without an embedding would be invisible to every future
+      // admission, so none was kept. The edit route answers the same way.
+      return errorResponse(
+        'The memory was not saved because its text could not be embedded. Check the configured embedding profile.',
+        502
+      );
+    }
+    return serverError('The memory was not saved.');
   }
 
   const inserted = admissionInserted(outcome);

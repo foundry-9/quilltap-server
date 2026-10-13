@@ -48,7 +48,7 @@ import { ADMISSION_THRESHOLDS } from '../settings-defaults'
 import { toAdmissionRow, type MemoryCandidate, type ResolvedCandidateTime } from '../candidate'
 import { decideAdmission } from './decide'
 import { foldInto, FOLD_CAPS } from './fold'
-import { ADMISSION_TOP_K, gatherNeighbours } from './neighbours'
+import { ADMISSION_TOP_K, gatherNeighbours, type NeighbourProbe } from './neighbours'
 import { bookNeighbours, recordBookInsert, type DryRunBook } from './dry-run-book'
 import { applyEpisodicFallbackAnchors, applyNamePresenceCheck } from './prepare'
 import { applyFold, insertRow, raiseImportance, withoutEmbedding } from './apply'
@@ -57,6 +57,7 @@ import { maybeEnqueueHousekeeping } from './after-insert'
 import { admissionInserted } from './outcome'
 import { recordAdmissionInsert } from './rate-ledger'
 import type { AdmissionAction, AdmissionOutcome, AdmissionRow, AdmissionTrace } from './types'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 const log = logger.child({ module: 'memory:admission' })
 
@@ -101,6 +102,11 @@ export interface AdmitPreparedRequest {
   dryRun?: boolean
   /** Not counted towards the rate limit; see {@link AdmitOptions.backfill}. */
   backfill?: boolean
+}
+
+/** The candidate's text, for neighbours the index cannot compare (bug 237). */
+function neighbourProbe(row: AdmissionRow, userId: string): NeighbourProbe {
+  return { text: `${row.summary}\n${row.content}`, userId }
 }
 
 function isJobChild(): boolean {
@@ -237,7 +243,7 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
 // ---------------------------------------------------------------------------
 
 /** Tail of each character's admission chain. */
-const characterLocks = new Map<string, Promise<void>>()
+const characterLocks = processSingleton('memory.admission.characterLocks', () => new Map<string, Promise<void>>())
 
 /** Run `fn` after every earlier admission for this character has finished. */
 async function withCharacterLock<T>(characterId: string, fn: () => Promise<T>): Promise<T> {
@@ -256,7 +262,7 @@ async function withCharacterLock<T>(characterId: string, fn: () => Promise<T>): 
 }
 
 /** Outcomes of keyed admissions, oldest first (Map keeps insertion order). */
-const admissionLedger = new Map<string, { outcome: AdmissionOutcome; at: number }>()
+const admissionLedger = processSingleton('memory.admission.ledger', () => new Map<string, { outcome: AdmissionOutcome; at: number }>())
 
 function recallAdmission(key: string, now: number): AdmissionOutcome | null {
   const entry = admissionLedger.get(key)
@@ -340,7 +346,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     let bestCosine: number | null = null
 
     for (let attempt = 0; attempt < 2 && !applied; attempt++) {
-      const gathered = await gatherNeighbours(characterId, embedding)
+      const gathered = await gatherNeighbours(characterId, embedding, { probe: neighbourProbe(row, userId) })
       const decision = decideAdmission({
         candidate: {
           holderId: characterId,
@@ -418,7 +424,10 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
  */
 async function decideOnly(request: AdmitPreparedRequest, book?: DryRunBook): Promise<AdmissionOutcome> {
   const { row, embedding } = request
-  const gathered = await gatherNeighbours(row.characterId, embedding, book ? { exclude: book.retiring } : {})
+  const gathered = await gatherNeighbours(row.characterId, embedding, {
+    ...(book ? { exclude: book.retiring } : {}),
+    probe: neighbourProbe(row, request.userId),
+  })
   if (book) {
     gathered.neighbours = [...gathered.neighbours, ...bookNeighbours(book, row.characterId, embedding)]
       .sort((a, b) => b.cosine - a.cosine)

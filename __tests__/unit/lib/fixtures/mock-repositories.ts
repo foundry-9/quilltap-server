@@ -201,6 +201,8 @@ export interface MockGlobalRepositories {
   docMountFiles: MockDocMountLookupRepository;
   docMountFileLinks: MockDocMountLookupRepository;
   docMountBlobs: MockDocMountLookupRepository;
+  /** Raw character reads (import resolves memories to local characters, bug 240). */
+  characters: { findByIdRaw: jest.Mock };
 }
 
 // ============================================================================
@@ -483,6 +485,7 @@ export function createMockGlobalRepositories(): MockGlobalRepositories {
     docMountFiles: createMockDocMountLookupRepository(),
     docMountFileLinks: createMockDocMountLookupRepository(),
     docMountBlobs: createMockDocMountLookupRepository(),
+    characters: { findByIdRaw: jest.fn().mockResolvedValue(null) },
   };
 }
 

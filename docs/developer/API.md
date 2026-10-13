@@ -4206,8 +4206,9 @@ Create a memory by hand. The row always goes through the memory gate, is always 
 }
 ```
 
-`characterId`, `content` and `summary` are required. `projectId`, when omitted, is taken from
-`chatId`'s chat if it belongs to a project. An unknown `projectId` or `chatId` returns `404`.
+`characterId`, `content` and `summary` are required and are trimmed; blank text is a `400`
+before admission runs. `projectId`, when omitted, is taken from `chatId`'s chat if it belongs to
+a project. An unknown `projectId` or `chatId` returns `404`.
 
 **Response**: `201 Created` with `{ memory, action }` when a row was inserted (`action` is
 `insert` or `insert-linked`); `200 OK` with `{ memory, action }` carrying the *existing* row
@@ -4216,7 +4217,11 @@ The write goes through `admitCandidate` (`lib/memory/admission`) like every extr
 with one rule of its own: a hand-written memory never folds into an extracted (`AUTO`) row — it
 is inserted and linked to it instead. Folded into a `MANUAL` row or a digest, it raises that
 row's `importance` to the requested one when higher (`reinforcedImportance` recomputed); the
-row keeps its source. `500` when the embedding could not be generated (no row is written).
+row keeps its source. When admission writes nothing the response says why: `400` when the text
+was blank, `502` when the embedding could not be generated (the edit route answers the same
+way). While a re-embed is part way through, rows whose stored vectors cannot be compared with the
+new one are still checked for duplicates: admission finds likely matches among them by word and
+scores those few by re-embedding their text.
 
 #### `GET /api/v1/memories/[id]`
 
@@ -4225,7 +4230,8 @@ model counts as an access.
 
 #### `PUT /api/v1/memories/[id]`
 
-Update a memory. Goes through `editMemory` (`lib/memory/memory-edit.ts`): a change to `content` or
+Update a memory. `content` and `summary` are trimmed; a blank value is a `400`. Goes through
+`updateMemory` (`lib/memory/admission/update-memory.ts`): a change to `content` or
 `summary` re-embeds the row and updates its vector; an `importance` change recomputes
 `reinforcedImportance`; `relatedMemoryIds` must name existing memories of the same character
 (otherwise `400`) and is written on both sides of each link; the character's frozen archive is

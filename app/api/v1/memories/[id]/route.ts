@@ -17,8 +17,9 @@ import { updateMemory } from '@/lib/memory/admission';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
-  content: z.string().min(1).optional(),
-  summary: z.string().min(1).optional(),
+  // Trimmed: a blank edit is a 400 (bug 236).
+  content: z.string().trim().min(1).optional(),
+  summary: z.string().trim().min(1).optional(),
   keywords: z.array(z.string()).optional(),
   tags: z.array(z.uuid()).optional(),
   importance: z.number().min(0).max(1).optional(),

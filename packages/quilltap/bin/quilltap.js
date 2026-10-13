@@ -592,6 +592,9 @@ function handleLockCommand(dataDir, opts) {
     console.log(`  Environment:  ${lock.environment || 'unknown'}`);
     console.log(`  Process:      ${lock.processTitle || 'unknown'}`);
     console.log(`  Started:      ${lock.startedAt || 'unknown'}`);
+    if (Number.isInteger(lock.port)) {
+      console.log(`  Port:         ${lock.port}`);
+    }
 
     // Show heartbeat age if available
     if (lock.lastHeartbeat) {

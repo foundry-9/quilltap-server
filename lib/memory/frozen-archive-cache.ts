@@ -36,6 +36,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import type { Memory } from '@/lib/schemas/types'
 import { sortBySalience } from './scoring'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /** Default size of the frozen archive (callers normally pass a budget-sized one). */
 export const FROZEN_ARCHIVE_SIZE = 25
@@ -64,7 +65,7 @@ interface CacheEntry {
 }
 
 /** Insertion-ordered: the first key is the least recently used. */
-const cache = new Map<string, CacheEntry>()
+const cache = processSingleton('memory.frozenArchiveCache', () => new Map<string, CacheEntry>())
 
 function cacheKey(characterId: string, chatId: string): string {
   return `${characterId}\u0000${chatId}`

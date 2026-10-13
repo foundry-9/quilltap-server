@@ -152,6 +152,24 @@ describe("runFoldPass('other-fold')", () => {
     await runFoldPass(ctxFor(allMessages), 'other-fold', { windowMessages: allMessages })
     expect(new Set(rows().map(r => r.sourceMessageId))).toEqual(new Set(['m3', 'm4']))
   })
+
+  it('dates an undated draft at its source line, never after it (bug 238)', async () => {
+    const at = (min: number) => `2026-10-01T10:0${min}:00.000Z`
+    allMessages = [
+      msg('m1', AMY, { createdAt: at(1) }),
+      msg('m2', BEA, { createdAt: at(2) }),
+      msg('m3', AMY, { createdAt: at(3) }),
+      msg('m4', BEA, { createdAt: at(4) }),
+    ]
+    await runFoldPass(ctxFor(allMessages), 'other-fold', { windowMessages: allMessages })
+    const amy = rows().filter(r => r.characterId === 'c-amy')
+    expect(amy.length).toBeGreaterThan(0)
+    for (const row of amy) {
+      expect(row.sourceMessageId).toBe('m3')
+      // Amy's last line is m3; the stretch ends at m4.
+      expect(row.occurredAt).toBe(at(3))
+    }
+  })
 })
 
 describe("runFoldPass('other-fold') — wide windows are read in slices (bug 206)", () => {

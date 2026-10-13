@@ -1,5 +1,7 @@
 'use strict';
 
+const { resolveServerPort } = require('./lock-helpers');
+
 /**
  * `quilltap recall-replay <chatId>` — replay a turn's memory recall against
  * the running server and print the candidate table, old path (episodic
@@ -30,6 +32,9 @@ ranking and the episodic (retrospective/time-window/entity) ranking — so the
 recall constants can be tuned against real "the character forgot" turns.
 
 Options:
+  -d, --data-dir <path>      Instance root; used to find the server's port
+  -i, --instance <name>      Registered instance whose server to call (see 'quilltap instances')
+      --passphrase <pass>    Accepted and ignored (this tool never opens the database)
       --turn <number>        1-based interchange to replay at (default: last)
       --char <characterId>   Character whose memories are searched
                              (default: first LLM-controlled participant)
@@ -57,7 +62,8 @@ Options:
                              fresh (non-deterministic) distillation
       --as-of                Search only memories created before the turn's
                              opening message (the corpus as it stood then)
-      --port <number>        Server port for API calls (default: 3000)
+      --port <number>        Server port for API calls. Default: the port recorded in the
+                             --instance/--data-dir server's lock file, else 3000
       --json                 Print the raw JSON result instead of tables
   -h, --help                 Show this help
 
@@ -75,7 +81,7 @@ function parseFlags(args) {
   const flags = {
     turn: undefined, char: undefined, limit: undefined, memoryBudget: undefined,
     tuning: undefined, tuningFile: undefined, signalsFrom: undefined, asOf: false,
-    port: 3000, json: false, help: false,
+    port: undefined, dataDir: '', instance: '', json: false, help: false,
   };
   const positional = [];
   let i = 0;
@@ -123,6 +129,19 @@ function parseFlags(args) {
         break;
       case '--as-of':
         flags.asOf = true;
+        break;
+      case '-d':
+      case '--data-dir':
+        flags.dataDir = args[++i];
+        break;
+      case '-i':
+      case '--instance':
+        flags.instance = args[++i];
+        break;
+      case '--passphrase':
+        // Accepted so universal flags never error; these tools talk to the
+        // running server and never open the database themselves.
+        i++;
         break;
       case '--port': {
         const p = parseInt(args[++i], 10);
@@ -246,7 +265,17 @@ async function recallReplayCommand(args) {
   }
   const chatId = positional[0];
 
-  const url = `http://localhost:${flags.port}/api/v1/chats/${encodeURIComponent(chatId)}?action=recall-replay`;
+  let target;
+  try {
+    target = resolveServerPort({ port: flags.port, instance: flags.instance, dataDir: flags.dataDir });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const port = target.port;
+  if (target.note) process.stderr.write(`${DIM}${target.note}${RESET}\n`);
+
+  const url = `http://localhost:${port}/api/v1/chats/${encodeURIComponent(chatId)}?action=recall-replay`;
   const body = {};
   if (flags.turn !== undefined) body.turnIndex = flags.turn;
   if (flags.char) body.characterId = flags.char;
@@ -267,8 +296,8 @@ async function recallReplayCommand(args) {
       body: JSON.stringify(body),
     });
   } catch (err) {
-    console.error(`${RED}Could not reach Quilltap server at http://localhost:${flags.port}: ${err.message}${RESET}`);
-    console.error('Start the server (npm run dev) or pass --port to match a non-default port.');
+    console.error(`${RED}Could not reach Quilltap server at http://localhost:${port}: ${err.message}${RESET}`);
+    console.error(target.hint);
     process.exit(1);
   }
 
@@ -321,4 +350,4 @@ async function recallReplayCommand(args) {
   console.log('');
 }
 
-module.exports = { recallReplayCommand };
+module.exports = { recallReplayCommand, parseFlags };

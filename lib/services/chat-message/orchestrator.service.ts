@@ -186,6 +186,18 @@ export const continueMessageSchema = z.object({
 })
 
 /**
+ * What of the operator's submission has reached the database during one send
+ * request. Flipped by `processMessage` right after each write succeeds and read
+ * by `handleStreamError`, so the error frame can tell the Salon whether the
+ * typed text has a row to fall back on or exists only in the client (bug 241).
+ * Chained turns run in continue mode and never flip it.
+ */
+interface SubmissionLedger {
+  userMessagePersisted: boolean
+  pendingToolResultsPersisted: boolean
+}
+
+/**
  * Handle sending a message and streaming the response
  */
 export async function handleSendMessage(
@@ -195,11 +207,12 @@ export async function handleSendMessage(
   options: SendMessageOptions
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder()
+  const ledger: SubmissionLedger = { userMessagePersisted: false, pendingToolResultsPersisted: false }
 
   return new ReadableStream({
     async start(controller) {
       try {
-        const result = await processMessage(repos, chatId, userId, options, controller, encoder)
+        const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
 
         await executeTurnChain({
           repos,
@@ -222,7 +235,8 @@ export async function handleSendMessage(
               autonomousContextCap: options.autonomousContextCap,
             },
             controller,
-            encoder
+            encoder,
+            ledger
           ),
           neverPauseForUser: options.neverPauseForUser === true,
           singleTurn: options.singleTurn === true,
@@ -260,7 +274,7 @@ export async function handleSendMessage(
 
         safeClose(controller)
       } catch (error) {
-        handleStreamError(error, controller, encoder)
+        handleStreamError(error, controller, encoder, { chatId, ledger })
       }
     },
   })
@@ -275,7 +289,8 @@ async function processMessage(
   userId: string,
   options: SendMessageOptions,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  ledger: SubmissionLedger
 ): Promise<ProcessMessageResult> {
   const isContinueMode = options.continueMode === true
 
@@ -359,7 +374,12 @@ async function processMessage(
       controller,
       encoder,
     )
-    if (pauseResult) return pauseResult
+    if (pauseResult) {
+      // The fairness pause returns only after it has saved the user's message.
+      ledger.userMessagePersisted = true
+      logger.debug('[Orchestrator] User message persisted (fair-rotation pause)', { chatId })
+      return pauseResult
+    }
   }
 
   const participantResult = await resolveRespondingParticipant(
@@ -729,6 +749,11 @@ async function processMessage(
       // (existingMessages was loaded before this save operation)
       existingMessages.push(toolMessage)
     }
+    ledger.pendingToolResultsPersisted = true
+    logger.debug('[Orchestrator] Pending tool results persisted', {
+      chatId,
+      count: options.pendingToolResults.length,
+    })
   }
 
   // ============================================================================
@@ -800,6 +825,8 @@ async function processMessage(
     }
 
     await repos.chats.addMessage(chatId, userMessage)
+    ledger.userMessagePersisted = true
+    logger.debug('[Orchestrator] User message persisted', { chatId, userMessageId })
 
     // Link file attachments
     for (const file of fileProcessing.attachedFiles) {
@@ -2157,9 +2184,15 @@ async function handleTurnSkip(params: {
 function handleStreamError(
   error: unknown,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  context: { chatId: string; ledger: SubmissionLedger }
 ): void {
-  logger.error('Streaming error', {}, error as Error)
+  const { chatId, ledger } = context
+  logger.error('Streaming error', {
+    chatId,
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  }, error as Error)
 
   let errorMessage = 'Unknown error'
   let errorType = 'unknown'
@@ -2177,6 +2210,15 @@ function handleStreamError(
   }
 
   // Use safe methods to prevent crash if stream is already closed
-  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
+  logger.debug('[Orchestrator] Emitting error frame', {
+    chatId,
+    errorType,
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  })
+  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage, {
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  }))
   safeClose(controller)
 }

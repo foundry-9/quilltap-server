@@ -138,6 +138,18 @@ export function fakeMemoryIndex(store: FakeMemoryStore) {
         .map((m) => ({ id: m.id, score: cosine(vector, m.embedding as Float32Array), metadata: { memoryId: m.id, characterId } }))
         .sort((a, b) => b.score - a.score)
         .slice(0, opts.limit),
+    shape: async (characterId: string, queryDimensions: number) => {
+      const own = Array.from(store.rows.values()).filter((m) => m.characterId === characterId && m.embedding)
+      return {
+        size: own.length,
+        dominantDimensions: own[0]?.embedding?.length ?? null,
+        matching: own.filter((m) => (m.embedding as Float32Array).length === queryDimensions).length,
+      }
+    },
+    entries: async (characterId: string) =>
+      Array.from(store.rows.values())
+        .filter((m) => m.characterId === characterId && m.embedding)
+        .map((m) => ({ id: m.id, embedding: m.embedding as Float32Array, metadata: { memoryId: m.id, characterId } })),
     upsert: async (_c: string, entries: Array<{ id: string; embedding: Float32Array }>) => {
       store.writes.push('index.upsert')
       return entries.map((e) => {

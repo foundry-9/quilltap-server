@@ -5,6 +5,8 @@
  *    through `admitCandidate`, and returns 201 only on insert — 200 with the
  *    existing row when admission reinforced / absorbed.
  *  - GET /memories/[id] does not stamp lastAccessedAt.
+ *  - A refusal says why (bug 236): blank text is a 400 before admission, an
+ *    embedding failure a 502, never a 500 blaming the embedding profile.
  */
 
 let mockCtx: any
@@ -35,6 +37,7 @@ jest.mock('@/lib/api/responses', () => ({
   notFound: (what: string) => ({ status: 404, body: { error: `${what} not found` } }),
   badRequest: (msg: string) => ({ status: 400, body: { error: msg } }),
   serverError: (msg: string) => ({ status: 500, body: { error: msg } }),
+  errorResponse: (msg: string, status = 500) => ({ status, body: { error: msg } }),
   validationError: (err: unknown) => ({ status: 400, body: { error: 'Validation error', err } }),
   successResponse: (data: any) => ({ status: 200, body: data }),
 }))
@@ -161,10 +164,32 @@ describe('POST /api/v1/memories (manual create, bug 218)', () => {
     expect(res.body).toEqual({ memory: { id: 'existing-row' }, action: kind })
   })
 
-  it('500s when the embedding failed and nothing was written', async () => {
+  it('502s when the embedding failed and nothing was written (bug 236)', async () => {
     mockAdmit.mockResolvedValue({ memory: null, action: { kind: 'reject', reason: 'embedding-failed' } })
     const res: any = await POST(req(baseBody))
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(502)
+    expect(res.body.error).toMatch(/could not be embedded/)
+  })
+
+  it.each([
+    ['content', { content: '   ' }],
+    ['summary', { summary: '\n\t ' }],
+  ])('400s blank %s without asking admission (bug 236)', async (_field, patch) => {
+    const res: any = await POST(req({ ...baseBody, ...patch }))
+    expect(res.status).toBe(400)
+    expect(mockAdmit).not.toHaveBeenCalled()
+  })
+
+  it('400s an admission refusal for empty text, never blaming the embedding (bug 236)', async () => {
+    mockAdmit.mockResolvedValue({ memory: null, action: { kind: 'reject', reason: 'empty' } })
+    const res: any = await POST(req(baseBody))
+    expect(res.status).toBe(400)
+    expect(res.body.error).not.toMatch(/embed/i)
+  })
+
+  it('trims surrounding whitespace before admission', async () => {
+    await POST(req({ ...baseBody, content: '  Alice likes tea \n', summary: ' Tea ' }))
+    expect(admittedRow()).toMatchObject({ content: 'Alice likes tea', summary: 'Tea' })
   })
 
   it('400s a malformed body', async () => {

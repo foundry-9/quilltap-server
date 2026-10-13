@@ -13,12 +13,13 @@
  */
 
 import { logger } from '@/lib/logger'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /** How far back the ledger keeps insert times. */
 export const RATE_LEDGER_WINDOW_MS = 60 * 60 * 1000
 
 /** characterId → insert times (ms), oldest first. */
-const inserts = new Map<string, number[]>()
+const inserts = processSingleton('memory.admission.rateLedger', () => new Map<string, number[]>())
 
 function isJobChild(): boolean {
   return process.env.QUILLTAP_JOB_CHILD === '1'

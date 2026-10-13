@@ -71,6 +71,7 @@ interface LockFileContent {
   environment: string;
   processTitle: string;
   processArgv0: string;
+  port?: number;
   history: Array<{ event: string; pid: number; hostname: string; timestamp: string; detail?: string }>;
 }
 
@@ -282,6 +283,48 @@ describe('Instance Lock Manager', () => {
       );
       expect(mockFs.writeSync).toHaveBeenCalled();
       expect(mockFs.closeSync).toHaveBeenCalledWith(42);
+    });
+
+    describe('listening port', () => {
+      const acquireFresh = (): Record<string, unknown> => {
+        const enoent = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoent.code = 'ENOENT';
+        (mockFs.readFileSync as jest.Mock).mockImplementation(() => { throw enoent; });
+        (mockFs.openSync as jest.Mock).mockReturnValue(42);
+        instanceLock.acquireInstanceLock(LOCK_PATH);
+        return JSON.parse((mockFs.writeSync as jest.Mock).mock.calls[0][1] as string);
+      };
+
+      it('records PORT in a freshly written lock', () => {
+        process.env.PORT = '3005';
+        expect(acquireFresh().port).toBe(3005);
+      });
+
+      it('records 3000 when PORT is unset', () => {
+        delete process.env.PORT;
+        expect(acquireFresh().port).toBe(3000);
+      });
+
+      it('omits the port when PORT is not a valid port', () => {
+        process.env.PORT = 'banana';
+        expect(acquireFresh()).not.toHaveProperty('port');
+      });
+
+      it('replaces a stale holder\'s port when claiming its lock', () => {
+        process.env.PORT = '3007';
+        const content = createMockLockContent({ pid: 99999, hostname: 'test-host', port: 3001 });
+        (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+        process.kill = jest.fn().mockImplementation(() => {
+          const err = new Error('ESRCH') as NodeJS.ErrnoException;
+          err.code = 'ESRCH';
+          throw err;
+        }) as unknown as typeof process.kill;
+
+        instanceLock.acquireInstanceLock(LOCK_PATH);
+
+        const written = JSON.parse((mockFs.writeFileSync as jest.Mock).mock.calls[0][1] as string);
+        expect(written.port).toBe(3007);
+      });
     });
 
     it('should re-acquire lock for same PID (re-entrant HMR)', () => {

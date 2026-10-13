@@ -16,6 +16,7 @@
 import { cosineSimilarity } from './embedding-service'
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /**
  * Metadata associated with a vector entry
@@ -468,17 +469,18 @@ export class VectorStoreManager {
   }
 }
 
-// Singleton instance
-let vectorStoreManager: VectorStoreManager | null = null
-
 /**
- * Get the global vector store manager instance
+ * The process's one vector store manager (bug 235).
+ *
+ * Next.js can evaluate this module more than once in one process — the
+ * instrumentation bundle (where the job dispatcher's post-commit
+ * `memoryIndex.reload` runs) and each route bundle (chat recall, the memories
+ * API) get their own copy. A module-level singleton gave each copy its own
+ * cache, so a reload reached only the dispatcher's while recall kept serving
+ * vectors from before a reindex. One process, one cache.
  */
 export function getVectorStoreManager(): VectorStoreManager {
-  if (!vectorStoreManager) {
-    vectorStoreManager = new VectorStoreManager()
-  }
-  return vectorStoreManager
+  return processSingleton('embedding.vectorStoreManager', () => new VectorStoreManager())
 }
 
 /**

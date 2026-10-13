@@ -107,6 +107,8 @@ export interface SendMessageArgs {
   setInput: (v: string) => void
   setPendingToolResults: (results: PendingToolResult[]) => void
   clearDraft: () => void
+  /** Re-saves the draft when a failed send hands the text back (bug 241). */
+  persistDraft?: (text: string) => void
 }
 
 export interface UseImpersonationVoiceOptions {
@@ -120,6 +122,7 @@ export interface UseImpersonationVoiceOptions {
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
+    persistDraft?: (text: string) => void,
   ) => void | Promise<void>
   /** Put the cursor back in the composer when the operator returns to it. */
   focusComposer: () => void
@@ -300,6 +303,7 @@ export function useImpersonationVoice({
         stash.pendingToolResults,
         sendArgs.setPendingToolResults,
         sendArgs.clearDraft,
+        sendArgs.persistDraft,
       )
       close()
     },

@@ -13,6 +13,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /**
  * Result of an embedding operation.
@@ -88,10 +89,11 @@ export const EMBEDDING_MAX_CHARS = 128 * 1024
  */
 export type EmbeddingPriority = 'interactive' | 'background'
 
-let interactivePending = 0
+/** Interactive embeddings in flight, process-wide so every bundle copy of this module agrees (bug 235). */
+const interactive = processSingleton('embedding.interactivePending', () => ({ pending: 0 }))
 
 async function waitForInteractiveQuiet(): Promise<void> {
-  while (interactivePending > 0) {
+  while (interactive.pending > 0) {
     await new Promise<void>(resolve => setTimeout(resolve, 50))
   }
 }
@@ -303,7 +305,7 @@ async function runEmbeddingForUser(
   if (priority === 'background') {
     await waitForInteractiveQuiet()
   } else {
-    interactivePending++
+    interactive.pending++
   }
 
   try {
@@ -329,7 +331,7 @@ async function runEmbeddingForUser(
     return await generateEmbedding(text, profile, userId)
   } finally {
     if (priority === 'interactive') {
-      interactivePending--
+      interactive.pending--
     }
   }
 }

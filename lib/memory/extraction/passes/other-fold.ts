@@ -76,7 +76,9 @@ export function otherFoldPass(): ExtractionPass {
               about: s.member,
               drafts: bySubject.get(s.member.characterId) ?? [],
               source: { messageId: last?.id ?? null, createdAt: sourceTime },
-              anchors: { referenceIso: sourceTime ?? window.nowIso, fallbackIso: window.nowIso },
+              // An undated draft happened by the observer's last line here, the
+              // time its row is stamped with — not the stretch's end (bug 238).
+              anchors: { referenceIso: sourceTime ?? window.nowIso, fallbackIso: sourceTime ?? window.nowIso },
             }))
           },
         })

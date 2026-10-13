@@ -222,6 +222,16 @@ a second press once the reply has landed sends them on their way. The **Nudge**,
 composer, by contrast, is met with a dignified silence — there is nothing to send, and you knew that
 already.)
 
+**Should a send come to grief before it reaches the record** — a connection profile with no API key
+on file, say, or a line that goes dead halfway through the reply — the Salon tells you so in a red
+notice that lingers long enough to be read, rather than letting your bubble flicker and vanish. If
+your message never made it into the transcript, it is handed straight back: the words return to the
+composer (and to your saved draft), with any attachments and staged tool results restored beside
+them, so that you may mend whatever was amiss and press Return again. If the server *did* record
+your message before the trouble began, it stays in the transcript where it belongs and the composer
+is left empty — use **Resend** on it rather than typing it twice. And should you have begun a fresh
+remark in the meantime, the Salon will not trample it.
+
 ## Message Actions
 
 Each message has actions you can perform:

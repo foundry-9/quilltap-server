@@ -63,6 +63,12 @@ export interface LockFileContent {
   environment: EnvironmentType;
   processTitle: string;
   processArgv0: string;
+  /**
+   * HTTP port the server is listening on (from `PORT`, default 3000). Lets CLI
+   * tools that talk to the running server find it from an instance name.
+   * Absent in locks written by older versions and by the CLI's own claims.
+   */
+  port?: number;
   history: LockHistoryEntry[];
 }
 
@@ -315,10 +321,38 @@ export function detectEnvironmentType(): EnvironmentType {
 const MAX_HISTORY_ENTRIES = 50;
 
 /**
+ * The HTTP port this process listens on, mirroring `server.ts`
+ * (`Number(process.env.PORT ?? 3000)`). Undefined when `PORT` is set to
+ * something that is not a valid port, rather than recording a wrong one.
+ */
+export function resolveListeningPort(): number | undefined {
+  const raw = process.env.PORT;
+  if (raw === undefined || raw === '') return 3000;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : undefined;
+}
+
+/**
+ * Record this process's port on a lock being taken over, dropping any port the
+ * previous holder left behind.
+ */
+function applyListeningPort(content: LockFileContent): void {
+  const port = resolveListeningPort();
+  if (port !== undefined) {
+    content.port = port;
+  } else {
+    delete content.port;
+  }
+  moduleLogger.debug('Recorded listening port on instance lock', { port });
+}
+
+/**
  * Build a fresh lock content object for the current process.
  */
 function buildLockContent(): LockFileContent {
   const now = new Date().toISOString();
+  const port = resolveListeningPort();
+  moduleLogger.debug('Building instance lock content', { pid: process.pid, port });
   return {
     pid: process.pid,
     hostname: os.hostname(),
@@ -327,6 +361,7 @@ function buildLockContent(): LockFileContent {
     environment: detectEnvironmentType(),
     processTitle: process.title,
     processArgv0: process.argv[0] || '',
+    ...(port !== undefined ? { port } : {}),
     history: [],
   };
 }
@@ -534,6 +569,7 @@ function claimStaleLock(lockPath: string, existing: LockFileContent, reason: str
   content.environment = detectEnvironmentType();
   content.processTitle = process.title;
   content.processArgv0 = process.argv[0] || '';
+  applyListeningPort(content);
   content = addHistoryEntry(content, 'stale-claimed', `Claimed by PID ${process.pid}`);
 
   writeLockFile(lockPath, content);
@@ -825,6 +861,7 @@ export function overrideInstanceLock(lockPath: string): void {
   content.environment = detectEnvironmentType();
   content.processTitle = process.title;
   content.processArgv0 = process.argv[0] || '';
+  applyListeningPort(content);
 
   writeLockFile(lockPath, content);
   rememberLockOwner(content);

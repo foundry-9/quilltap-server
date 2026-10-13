@@ -702,15 +702,34 @@ export function encodeDoneEvent(
 }
 
 /**
+ * Extra fields an error frame may carry beside `error` / `errorType` /
+ * `details`. Optional and additive, so older clients that read only the three
+ * base fields are unaffected.
+ */
+export interface ErrorEventExtras {
+  /**
+   * Whether the user's message row was saved before the failure. The Salon
+   * reads it to decide whether to hand the operator's text back to the
+   * composer: a send that died before the row landed (a missing API key, a
+   * profile that will not resolve) has nothing on the server to fall back on
+   * (bug 241).
+   */
+  userMessagePersisted?: boolean
+  /** Whether the staged tool results were saved as TOOL rows before the failure. */
+  pendingToolResultsPersisted?: boolean
+}
+
+/**
  * Encode an error event
  */
 export function encodeErrorEvent(
   encoder: TextEncoder,
   error: string,
   errorType: string,
-  details: string
+  details: string,
+  extras?: ErrorEventExtras
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ error, errorType, details })}\n\n`)
+  return encoder.encode(`data: ${JSON.stringify({ error, errorType, details, ...extras })}\n\n`)
 }
 
 /**

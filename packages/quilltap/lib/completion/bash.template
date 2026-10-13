@@ -339,11 +339,11 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
       ;;
     recall-replay)
-      local rr_flags="--turn --char --limit --memory-budget --tuning --tuning-file --signals-from --as-of --port --json --help"
+      local rr_flags="--instance --data-dir --passphrase --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --as-of --port --json --help"
       COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
       ;;
     anchor-probe)
-      local ap_flags="--limit --port --json --help"
+      local ap_flags="--instance --data-dir --passphrase --limit --port --json --help"
       COMPREPLY=($(compgen -W "$ap_flags" -- "$cur"))
       ;;
     logs)

@@ -232,6 +232,8 @@ When you import data, Quilltap automatically preserves and updates relationships
 - Associated project
 - Tags assigned to the memory
 
+A chats-only export brings its memories but not its cast. That is perfectly in order: on import, each memory finds its way home to the character of the same identity already living in your Quilltap. Only a memory whose character is nowhere to be found — or has been archived, and so is not receiving visitors — is set aside, with a note in the import summary.
+
 **Profile relationships:**
 
 - Tags assigned to connection, image, and embedding profiles

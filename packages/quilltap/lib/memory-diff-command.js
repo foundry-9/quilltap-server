@@ -1,5 +1,7 @@
 'use strict';
 
+const { resolveServerPort } = require('./lock-helpers');
+
 /**
  * `quilltap memory-diff <chatId>` — dump existing memories for a chat and
  * stream a dry-run re-extraction from the running server, writing both to
@@ -45,7 +47,8 @@ Options:
   -d, --data-dir <path>      Override data directory (instance root)
   -i, --instance <name>      Use a registered instance (see 'quilltap instances')
       --passphrase <pass>    Decrypt .dbkey if peppered
-      --port <number>        Server port for API calls (default: 3000)
+      --port <number>        Server port for API calls. Default: the port recorded in the
+                             --instance/--data-dir server's lock file, else 3000
       --out <dir>            Output directory (default: cwd)
       --concurrency <number> Parallel turns to process (default: 4, max: 32).
                              Cloud cheap-LLMs can handle 8–16; keep this low
@@ -65,7 +68,7 @@ function parseFlags(args) {
     dataDir: '',
     instance: '',
     passphrase: '',
-    port: 3000,
+    port: undefined,
     out: process.cwd(),
     concurrency: 4,
     help: false,
@@ -256,6 +259,16 @@ async function memoryDiffCommand(args) {
 
   const chatId = positional[0];
 
+  let target;
+  try {
+    target = resolveServerPort({ port: flags.port, instance: flags.instance, dataDir: flags.dataDir });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const port = target.port;
+  if (target.note) process.stderr.write(`${DIM}${target.note}${RESET}\n`);
+
   if (!fs.existsSync(flags.out)) {
     try {
       fs.mkdirSync(flags.out, { recursive: true });
@@ -276,7 +289,7 @@ async function memoryDiffCommand(args) {
 
   // -------- 2. Stream dry-run re-extraction from the server ----------------
   const url =
-    `http://localhost:${flags.port}/api/v1/chats/${encodeURIComponent(chatId)}` +
+    `http://localhost:${port}/api/v1/chats/${encodeURIComponent(chatId)}` +
     `?action=extract-memories-dry-run&concurrency=${flags.concurrency}`;
   process.stderr.write(
     `${BOLD}Streaming re-extraction${RESET} (concurrency ${CYAN}${flags.concurrency}${RESET}) from ${DIM}${url}${RESET}\n`
@@ -286,8 +299,8 @@ async function memoryDiffCommand(args) {
   try {
     res = await fetch(url, { method: 'POST' });
   } catch (err) {
-    console.error(`${RED}Could not reach Quilltap server at http://localhost:${flags.port}: ${err.message}${RESET}`);
-    console.error('Start the server (npm run dev) or pass --port to match a non-default port.');
+    console.error(`${RED}Could not reach Quilltap server at http://localhost:${port}: ${err.message}${RESET}`);
+    console.error(target.hint);
     process.exit(1);
   }
 
@@ -377,4 +390,4 @@ async function memoryDiffCommand(args) {
   if (fatal) process.exit(2);
 }
 
-module.exports = { memoryDiffCommand };
+module.exports = { memoryDiffCommand, parseFlags };
