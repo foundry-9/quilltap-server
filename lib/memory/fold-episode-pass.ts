@@ -41,8 +41,8 @@ import {
   type FoldEpisodeMessage,
   type UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
-import { createMemoryWithGate } from './memory-service'
-import { MemoryCandidateSchema, anchorTimeMsFrom, toCreateMemoryOptions, type TargetingTags } from './candidate'
+import { admitCandidate, admissionInserted } from './admission'
+import { MemoryCandidateSchema, anchorTimeMsFrom, type TargetingTags } from './candidate'
 import { resolveEpisodicAnchors } from './time/anchors'
 import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
@@ -331,23 +331,24 @@ async function runSlice(
             pass: 'episode-fold',
           },
         })
-        const outcome = await createMemoryWithGate(
-          toCreateMemoryOptions(candidate, { occurredAt, narrativeTime, sourceMessageTimestamp: occurredAt ?? undefined }),
+        const outcome = await admitCandidate(
+          candidate,
+          { occurredAt, narrativeTime, sourceMessageTimestamp: occurredAt ?? undefined },
           { userId },
         )
 
         const memory = outcome.memory
         if (!memory) continue
         writtenEpisodeIds.add(memory.id)
-        if (outcome.action === 'INSERT' || outcome.action === 'INSERT_RELATED' || outcome.action === 'SKIP_GATE') {
+        if (admissionInserted(outcome)) {
           result.memoriesWritten++
         }
 
         // Link the character's per-turn fragment memories from the same
         // slice so one-hop expansion can pull them when the episode
         // surfaces. Union-preserving on both sides (never clobber links the
-        // gate already made) — this relies on `createMemoryWithGate` returning
-        // the POST-LINK row for INSERT_RELATED, so `memory.relatedMemoryIds`
+        // admission already made) — this relies on `admitCandidate` returning
+        // the POST-LINK row for insert-linked, so `memory.relatedMemoryIds`
         // below already carries the gate's links (Bug 26). An episode this
         // run wrote shares the slice's source message (and the job child's
         // overlay surfaces it), but it is a sibling, not a fragment: linking it

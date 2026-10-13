@@ -66,12 +66,11 @@ interface JobScope {
    */
   equippedOutfits: Map<string, EquippedSlots>;
   /**
-   * Read-your-writes overlay for memory rows, keyed by memory id. The memory
-   * gate decides each candidate from the rows it reads, so a second candidate
-   * in one job must see the first's buffered insert, links, footnotes and
-   * count — otherwise it inserts a duplicate, and its absolute
-   * `relatedMemoryIds` / `content` patch, built from the stale snapshot,
-   * replaces the first's when the parent replays the batch (bug 209).
+   * Read-your-writes overlay for memory rows, keyed by memory id. A later step
+   * of a job must see the job's own buffered inserts, links, footnotes, counts,
+   * tier moves and deletes (bug 209). Admission no longer writes from here —
+   * it runs in the parent over host-RPC (`admitMemory`) — but consolidation,
+   * housekeeping, the fold passes and `retireMemories` still do.
    */
   memories: Map<string, MemoryOverlayEntry>;
   /**
@@ -270,8 +269,9 @@ function asId(value: unknown): string | null {
 
 /**
  * Record what a buffered memory write will leave behind, so later reads in the
- * same job see it. Covers every memories write the gate, the fold passes and
- * the delete chokepoint issue; the parent's replay is unchanged.
+ * same job see it. Covers every memories write consolidation, housekeeping,
+ * the fold passes and the delete chokepoint issue; the parent's replay is
+ * unchanged.
  */
 function recordBufferedMemoryWrite(
   scope: JobScope,
@@ -906,7 +906,7 @@ export function getChildRepositoriesProxy(): RepositoryContainer {
   // Build a wrapping object whose own keys mirror the real container, but
   // whose values are repo-Proxy wrappers. We can't Proxy the container
   // itself because property access patterns inside Quilltap include
-  // `repos.memories.create(...)` — and we want the inner Proxy to be
+  // `repos.memories.create` called directly — and we want the inner Proxy to be
   // returned synchronously.
   const wrapped: Record<string, unknown> = {};
   for (const key of Object.keys(real) as Array<keyof RepositoryContainer>) {

@@ -17,9 +17,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   extractEpisodesFromFold: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  createMemoryWithGate: jest.fn(),
-}))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 
 jest.mock('@/lib/memory/time/clock', () => ({
   resolveWhenPhrase: jest.fn(() => null),
@@ -28,12 +26,12 @@ jest.mock('@/lib/memory/time/clock', () => ({
 import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractEpisodesFromFold } from '@/lib/memory/cheap-llm-tasks'
-import { createMemoryWithGate } from '@/lib/memory/memory-service'
+import { mockAdmitRow, admissionOutcome } from '../../../helpers/admission-mock'
 import { resolveWhenPhrase } from '@/lib/memory/time/clock'
 
 const mockRepos = getRepositories as jest.Mock
 const mockExtract = extractEpisodesFromFold as jest.Mock
-const mockGate = createMemoryWithGate as jest.Mock
+const mockAdmit = mockAdmitRow
 const mockResolveWhen = resolveWhenPhrase as jest.Mock
 
 type AnyRecord = Record<string, unknown>
@@ -130,10 +128,7 @@ beforeEach(() => {
   primeRepos()
   mockResolveWhen.mockReturnValue(null)
   mockExtract.mockResolvedValue({ success: true, result: [episode()] })
-  mockGate.mockResolvedValue({
-    action: 'INSERT',
-    memory: { id: 'mem-ep', relatedMemoryIds: [] },
-  })
+  mockAdmit.mockResolvedValue(admissionOutcome('insert', { id: 'mem-ep', relatedMemoryIds: [] }))
 })
 
 describe('runFoldEpisodePass — bail-outs never throw', () => {
@@ -183,7 +178,7 @@ describe('runFoldEpisodePass — bail-outs never throw', () => {
     const result = await runFoldEpisodePass(input())
 
     expect(result.episodesExtracted).toBe(0)
-    expect(mockGate).not.toHaveBeenCalled()
+    expect(mockAdmit).not.toHaveBeenCalled()
   })
 
   it('swallows an outright throw from the repositories', async () => {
@@ -208,15 +203,15 @@ describe('runFoldEpisodePass — bail-outs never throw', () => {
         ],
       },
     })
-    mockGate.mockImplementation(async (payload: AnyRecord) => {
+    mockAdmit.mockImplementation(async (payload: AnyRecord) => {
       if (payload.characterId === 'char-a') throw new Error('gate exploded')
-      return { action: 'INSERT', memory: { id: 'mem-b', relatedMemoryIds: [] } }
+      return admissionOutcome('insert', { id: 'mem-b', relatedMemoryIds: [] })
     })
 
     const result = await runFoldEpisodePass(input())
 
     expect(result.memoriesWritten).toBe(1)
-    expect(mockGate).toHaveBeenCalledTimes(2)
+    expect(mockAdmit).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -235,7 +230,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
     const result = await runFoldEpisodePass(input())
 
     expect(result).toMatchObject({ episodesExtracted: 1, memoriesWritten: 2 })
-    expect(mockGate.mock.calls.map((c) => (c[0] as AnyRecord).characterId)).toEqual([
+    expect(mockAdmit.mock.calls.map((c) => (c[0] as AnyRecord).characterId)).toEqual([
       'char-a',
       'char-b',
     ])
@@ -244,7 +239,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
   it('tags the memory as episodic with the retrieval keywords the recall path expects', async () => {
     await runFoldEpisodePass(input())
 
-    const [payload] = mockGate.mock.calls[0]
+    const [payload] = mockAdmit.mock.calls[0]
     expect(payload).toMatchObject({
       kind: 'episodic',
       source: 'AUTO',
@@ -268,7 +263,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
   it('marks an autonomous-room fold as such', async () => {
     await runFoldEpisodePass(input({ inAutonomousRoom: true }))
 
-    expect((mockGate.mock.calls[0][0] as AnyRecord).witnessedContext).toBe('autonomous_room')
+    expect((mockAdmit.mock.calls[0][0] as AnyRecord).witnessedContext).toBe('autonomous_room')
   })
 
   it('anchors the clock to the newest stamped message, not to now', async () => {
@@ -285,7 +280,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
 
     await runFoldEpisodePass(input())
 
-    expect((mockGate.mock.calls[0][0] as AnyRecord).occurredAt).toBe('2026-07-20T09:00:00.000Z')
+    expect((mockAdmit.mock.calls[0][0] as AnyRecord).occurredAt).toBe('2026-07-20T09:00:00.000Z')
   })
 
   it('prefers a resolved when-phrase over the window start', async () => {
@@ -297,7 +292,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
     // Resolved in the same zone the extractor's clock was rendered in.
     const [, clock] = mockExtract.mock.calls[0] as [unknown, { timeZone: string }]
     expect(mockResolveWhen).toHaveBeenCalledWith('last Tuesday', '2026-07-20T09:05:00.000Z', clock.timeZone)
-    expect((mockGate.mock.calls[0][0] as AnyRecord).occurredAt).toBe('2026-07-14T00:00:00.000Z')
+    expect((mockAdmit.mock.calls[0][0] as AnyRecord).occurredAt).toBe('2026-07-14T00:00:00.000Z')
   })
 
   it('falls back to the when-phrase for narrativeTime only in narrative mode', async () => {
@@ -307,7 +302,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
     })
 
     await runFoldEpisodePass(input({ timelineMode: 'narrative' }))
-    expect((mockGate.mock.calls[0][0] as AnyRecord).narrativeTime).toBe('the second evening')
+    expect((mockAdmit.mock.calls[0][0] as AnyRecord).narrativeTime).toBe('the second evening')
 
     jest.clearAllMocks()
     primeRepos()
@@ -315,10 +310,10 @@ describe('runFoldEpisodePass — the episode memory', () => {
       success: true,
       result: [episode({ when: 'the second evening', narrativeTime: null })],
     })
-    mockGate.mockResolvedValue({ action: 'INSERT', memory: { id: 'm', relatedMemoryIds: [] } })
+    mockAdmit.mockResolvedValue(admissionOutcome('insert', { id: 'm', relatedMemoryIds: [] }))
 
     await runFoldEpisodePass(input({ timelineMode: 'realtime' }))
-    expect((mockGate.mock.calls[0][0] as AnyRecord).narrativeTime).toBeNull()
+    expect((mockAdmit.mock.calls[0][0] as AnyRecord).narrativeTime).toBeNull()
   })
 
   it('renders each message under its speaker name, falling back to a role label', async () => {
@@ -332,21 +327,21 @@ describe('runFoldEpisodePass — the episode memory', () => {
   })
 
   it.each([
-    ['INSERT', 1],
-    ['INSERT_RELATED', 1],
-    ['SKIP_GATE', 1],
-    ['MERGE', 0],
-    ['SKIP_DUPLICATE', 0],
-  ])('counts a %s gate outcome as %i written', async (action, expected) => {
-    mockGate.mockResolvedValue({ action, memory: { id: 'mem-ep', relatedMemoryIds: [] } })
+    ['insert', 1],
+    ['insert-linked', 1],
+    ['reinforce', 0],
+    ['absorb', 0],
+    ['promote-and-reinforce', 0],
+  ] as const)('counts a %s admission as %i written', async (kind, expected) => {
+    mockAdmit.mockResolvedValue(admissionOutcome(kind, { id: 'mem-ep', relatedMemoryIds: [] }))
 
     const result = await runFoldEpisodePass(input())
 
     expect(result.memoriesWritten).toBe(expected)
   })
 
-  it('skips linking when the gate returns no memory at all', async () => {
-    mockGate.mockResolvedValue({ action: 'SKIP_DUPLICATE', memory: null })
+  it('skips linking when admission returns no memory at all', async () => {
+    mockAdmit.mockResolvedValue(admissionOutcome('reject', null))
 
     const result = await runFoldEpisodePass(input())
 
@@ -357,10 +352,7 @@ describe('runFoldEpisodePass — the episode memory', () => {
 
 describe('runFoldEpisodePass — fragment linking', () => {
   it('links the window fragments both ways without clobbering existing links', async () => {
-    mockGate.mockResolvedValue({
-      action: 'INSERT',
-      memory: { id: 'mem-ep', relatedMemoryIds: ['pre-existing'] },
-    })
+    mockAdmit.mockResolvedValue(admissionOutcome('insert', { id: 'mem-ep', relatedMemoryIds: ['pre-existing'] }))
     findFragments.mockResolvedValue([
       { id: 'frag-1', relatedMemoryIds: ['other'] },
       { id: 'frag-2', relatedMemoryIds: [] },
@@ -389,10 +381,7 @@ describe('runFoldEpisodePass — fragment linking', () => {
   })
 
   it('skips the episode-side write when every fragment is already linked', async () => {
-    mockGate.mockResolvedValue({
-      action: 'INSERT',
-      memory: { id: 'mem-ep', relatedMemoryIds: ['frag-1'] },
-    })
+    mockAdmit.mockResolvedValue(admissionOutcome('insert', { id: 'mem-ep', relatedMemoryIds: ['frag-1'] }))
     findFragments.mockResolvedValue([{ id: 'frag-1', relatedMemoryIds: ['mem-ep'] }])
 
     const result = await runFoldEpisodePass(input())
@@ -632,10 +621,10 @@ describe('runFoldEpisodePass — review findings 4, 7, 10, 13', () => {
       result: [episode({ summary: 'first' }), episode({ summary: 'second' })],
     })
     const created: AnyRecord[] = []
-    mockGate.mockImplementation(async () => {
+    mockAdmit.mockImplementation(async () => {
       const memory = { id: `mem-ep${created.length + 1}`, relatedMemoryIds: [], kind: 'episodic', sourceMessageId: 'm2' }
       created.push(memory)
-      return { action: 'INSERT', memory }
+      return admissionOutcome('insert', memory)
     })
     // The child overlay surfaces buffered creates: earlier episodes share the slice's source message.
     findFragments.mockImplementation(async () => [

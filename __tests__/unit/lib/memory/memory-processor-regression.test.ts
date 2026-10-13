@@ -64,9 +64,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   renderOtherCanonBlock: jest.fn(() => 'CANON'),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  createMemoryWithGate: jest.fn(),
-}))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 
 const { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } = jest.requireMock('@/lib/llm/cheap-llm') as {
   getCheapLLMProvider: jest.Mock
@@ -83,9 +81,7 @@ const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
   renderSelfCanonBlock: jest.Mock
   renderOtherCanonBlock: jest.Mock
 }
-const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
-  createMemoryWithGate: jest.Mock
-}
+const { mockAdmitRow: admitRow, admissionOutcome } = require('../../../helpers/admission-mock') as typeof import('../../../helpers/admission-mock')
 
 /** Build the Map shape returned by extractOtherMemoriesFromTurn (multi-subject). */
 function otherResult(byId: Record<string, Array<{ content: string; summary: string; keywords?: string[]; importance?: number }>>) {
@@ -204,10 +200,7 @@ describe('processTurnForMemory regressions', () => {
       result: new Map(),
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
-    createMemoryWithGate.mockResolvedValue({
-      action: 'INSERT',
-      memory: { id: 'mem-default' },
-    } as any)
+    admitRow.mockResolvedValue(admissionOutcome('insert', { id: 'mem-default' }))
 
     ;({ processTurnForMemory } = await import('@/lib/memory/memory-processor'))
   })
@@ -231,15 +224,15 @@ describe('processTurnForMemory regressions', () => {
       usage: { promptTokens: 9, completionTokens: 3, totalTokens: 12 },
     } as any)
 
-    createMemoryWithGate
-      .mockResolvedValueOnce({ action: 'INSERT', memory: { id: 'mem-1' } } as any)
-      .mockResolvedValueOnce({ action: 'INSERT_RELATED', memory: { id: 'mem-2' }, relatedMemoryIds: ['mem-1'] } as any)
-      .mockResolvedValueOnce({ action: 'REINFORCE', memory: { id: 'mem-3', reinforcementCount: 2 } } as any)
+    admitRow
+      .mockResolvedValueOnce(admissionOutcome('insert', { id: 'mem-1' }))
+      .mockResolvedValueOnce(admissionOutcome('insert-linked', { id: 'mem-2' }, { linkTo: ['mem-1'] }))
+      .mockResolvedValueOnce(admissionOutcome('reinforce', { id: 'mem-3', reinforcementCount: 2 }))
 
     const result = await processTurnForMemory(makeTranscript())
 
     // SELF pass writes 1 candidate, OTHER pass (1 char + 1 user subject) writes 2 candidates.
-    expect(createMemoryWithGate).toHaveBeenCalledTimes(3)
+    expect(admitRow).toHaveBeenCalledTimes(3)
     expect(result.success).toBe(true)
     expect(result.createdMemoryIds).toEqual(['mem-1', 'mem-2'])
     expect(result.reinforcedMemoryIds).toEqual(['mem-3'])
@@ -257,7 +250,7 @@ describe('processTurnForMemory regressions', () => {
 
     await processTurnForMemory(makeTranscript())
 
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
       }),
@@ -276,7 +269,7 @@ describe('processTurnForMemory regressions', () => {
 
     await processTurnForMemory({ ...makeTranscript(), projectId: 'proj-9' })
 
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: 'proj-9' }),
       { userId: 'user-1' },
     )
@@ -293,7 +286,7 @@ describe('processTurnForMemory regressions', () => {
 
     await processTurnForMemory(makeTranscript())
 
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: null }),
       { userId: 'user-1' },
     )
@@ -307,12 +300,8 @@ describe('processTurnForMemory regressions', () => {
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
-    createMemoryWithGate.mockReset()
-    createMemoryWithGate.mockResolvedValueOnce({
-      action: 'SKIP_NEAR_DUPLICATE',
-      memory: { id: 'mem-existing', reinforcementCount: 5 },
-      similarity: 0.95,
-    } as any)
+    admitRow.mockReset()
+    admitRow.mockResolvedValueOnce(admissionOutcome('absorb', { id: 'mem-existing', reinforcementCount: 5 }))
     // OTHER pass (user as subject) returns nothing — skip is only on SELF.
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
@@ -336,12 +325,8 @@ describe('processTurnForMemory regressions', () => {
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
-    createMemoryWithGate.mockReset()
-    createMemoryWithGate.mockResolvedValueOnce({
-      action: 'SKIP_EMBEDDING_FAILED',
-      memory: null,
-      reason: 'Embedding failed after retry: ECONNREFUSED',
-    } as any)
+    admitRow.mockReset()
+    admitRow.mockResolvedValueOnce(admissionOutcome('reject', null))
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: new Map(),
@@ -441,7 +426,7 @@ describe('processTurnForMemory regressions', () => {
     expect(tasks.extractSelfMemoriesFromTurn).toHaveBeenCalledTimes(1)
     // No other characters and no user — OTHER pass dispatches zero calls.
     expect(tasks.extractOtherMemoriesFromTurn).not.toHaveBeenCalled()
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
         aboutCharacterId: 'char-1',
@@ -481,7 +466,7 @@ describe('processTurnForMemory regressions', () => {
       { projectDescription: null, chatContextSummary: null }, // orienting context
       expect.objectContaining({ timelineMode: 'realtime' }),  // extraction clock (episodic spine)
     )
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
         aboutCharacterId: 'user-char-1',
@@ -515,20 +500,20 @@ describe('processTurnForMemory regressions', () => {
     // so the gate still fires 2 × 2 = 4 times for the OTHER pass.
     expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(2)
     // Char-to-char pairings.
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'char-2' }),
       { userId: 'user-1' },
     )
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'char-1' }),
       { userId: 'user-1' },
     )
     // Both characters also extract memories about the user.
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'user-char-1' }),
       { userId: 'user-1' },
     )
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'user-char-1' }),
       { userId: 'user-1' },
     )
@@ -582,7 +567,7 @@ describe('processTurnForMemory regressions', () => {
         'user-1', undefined, 'chat-1', expect.anything(), false, expect.anything(),
         expect.anything(), // extraction clock (episodic spine)
       )
-      expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect(admitRow).toHaveBeenCalledWith(
         expect.objectContaining({ characterId: 'user-char-1', aboutCharacterId: 'user-char-1' }),
         { userId: 'user-1' },
       )
@@ -592,12 +577,12 @@ describe('processTurnForMemory regressions', () => {
       await processTurnForMemory(userHolderCtx())
 
       // Bob (user-controlled) observes Avery.
-      expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect(admitRow).toHaveBeenCalledWith(
         expect.objectContaining({ characterId: 'user-char-1', aboutCharacterId: 'char-1' }),
         { userId: 'user-1' },
       )
       // Avery still observes Bob.
-      expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect(admitRow).toHaveBeenCalledWith(
         expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'user-char-1' }),
         { userId: 'user-1' },
       )

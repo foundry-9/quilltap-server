@@ -17,6 +17,8 @@
 
 **FIXED in v4 (2026-10-12).** Targeted fix ahead of Phase A. `calculateReinforcedImportance` is now `min(1, importance + log2(count) × 0.05)` (locked decision 6), with a count below 1 treated as 1, so count 1 equals importance. It was already the one function every recompute uses — the repository's atomic `incrementReinforcement`, the gate's child-local `countReinforcement`, `planMemoryMerge` and consolidation digests — and the two fresh-row writers (`memoryRowFromOptions`, the AI import service) now call it at count 1 instead of copying `importance`. Migration `recompute-reinforced-importance-v1` rewrites `memories.reinforcedImportance` for every row from `importance` and `reinforcementCount` (NULLs read as 0.5 and 1), in transactions of 500 with `reportProgress` per batch, writing only rows whose value changes; it has a loading-screen label. Recall weighting (`memory-weighting.ts`'s own reinforcement coefficient) is untouched (decision 14). Tests: `memory-gate.test.ts` (count 1 equals importance across a table of `i`; one step per doubling; count < 1), `__tests__/unit/lib/database/migration/recompute-reinforced-importance-v1.test.ts` (real SQLite, 605 rows across two batches, idempotent second pass, label present).
 
+**Memory refactor Phase C (2026-10-13).** The create path's row builder moved to `insertRow` in `lib/memory/admission/apply.ts`; the formula itself is `lib/memory/scoring/reinforced-importance.ts`.
+
 ## Symptom
 
 A new memory with importance 0.60 is stored with `reinforcementCount: 1` and

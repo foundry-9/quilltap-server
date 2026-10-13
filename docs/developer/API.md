@@ -4213,12 +4213,13 @@ Create a memory by hand. The row always goes through the memory gate, is always 
 `chatId`'s chat if it belongs to a project. An unknown `projectId` or `chatId` returns `404`.
 
 **Response**: `201 Created` with `{ memory, action }` when a row was inserted (`action` is
-`INSERT` or `INSERT_RELATED`); `200 OK` with `{ memory, action }` carrying the *existing* row
-when the gate folded the write into it (`REINFORCE` or `SKIP_NEAR_DUPLICATE`). The route passes
-`promoteOnMatch`, so that existing row is promoted: an `AUTO` row becomes `MANUAL`, and its
-`importance` becomes the higher of its own and the requested one (`reinforcedImportance`
-recomputed); a digest keeps `CONSOLIDATED`. `500` when the
-embedding could not be generated (no row is written).
+`insert` or `insert-linked`); `200 OK` with `{ memory, action }` carrying the *existing* row
+when admission folded the write into it (`reinforce`, `absorb` or `promote-and-reinforce`).
+The write goes through `admitCandidate` (`lib/memory/admission`) like every extracted memory,
+with one rule of its own: a hand-written memory never folds into an extracted (`AUTO`) row — it
+is inserted and linked to it instead. Folded into a `MANUAL` row or a digest, it raises that
+row's `importance` to the requested one when higher (`reinforcedImportance` recomputed); the
+row keeps its source. `500` when the embedding could not be generated (no row is written).
 
 #### `GET /api/v1/memories/[id]`
 
@@ -4348,14 +4349,18 @@ without `?action=embeddings` is a `400`.
 
 Measurement-only developer tool (wrapped by `quilltap anchor-probe`). Re-embeds a character's most
 recent memories with and without the episodic anchor line, scores each against older rows both
-ways, and reports how many would reach the Memory Gate's reinforce (0.85) and near-duplicate (0.90)
-thresholds. Writes nothing; costs roughly up to 7 embedding calls per sampled row.
+ways, and asks admission's decider (`decideAdmission`, thresholds from `resolveMemorySettings`)
+what it would do each way. `reinforce` counts rows that would fold into an older one (reinforce,
+absorb or promote); `nearDuplicate` counts rows that would be absorbed. Writes nothing; costs
+roughly up to 7 embedding calls per sampled row.
 
 **Request Body**: `{ "characterId": "char-uuid", "limit": 50 }` (`limit` 1–200, default 50)
 
 **Response**: `200 OK` — `{ success, data: { characterId, sampled, anchoredRows, thresholds,
 anchored: { reinforce, nearDuplicate }, anchorFree: { reinforce, nearDuplicate },
-crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`
+crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`. Each row carries `anchoredBest` /
+`anchorFreeBest` (best cosine) and `anchoredAction` / `anchorFreeAction` (admission's action kind);
+`crossedOnlyWithoutAnchors` counts rows that fold only anchor-free.
 
 #### `POST /api/v1/memories?action=housekeep-sweep`
 

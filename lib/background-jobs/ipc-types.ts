@@ -140,6 +140,8 @@ export interface ChildShutdownAckMessage {
  *     participant character's vault
  *   - `removeConversationSummariesFromVaults` — sweep a deleted conversation's
  *     summary out of every participant vault
+ *   - `admitMemory` — memory admission (`admitPrepared`): the child extracts and
+ *     embeds, the parent searches, decides and writes against the real rows
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -161,7 +163,8 @@ export interface ChildHostRpcRequestMessage {
     | 'writeWardrobeItemImage'
     | 'writeConversationSummaryToVaults'
     | 'removeConversationSummariesFromVaults'
-    | 'startScheduledAutonomousRun';
+    | 'startScheduledAutonomousRun'
+    | 'admitMemory';
   args: unknown[];
 }
 

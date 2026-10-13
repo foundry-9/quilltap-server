@@ -50,7 +50,7 @@ jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/database/manager', () => ({ rawQuery: jest.fn() }))
 
 import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embedding-generate'
-import { reembedMemory } from '@/lib/memory/memory-gate'
+import { reembedRow } from '@/lib/memory/admission/apply'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/time/calendar'
@@ -121,8 +121,8 @@ describe('memory anchor line on a cold timezone cache', () => {
     expect(embeddedText()).toContain('when: 2026-07-14')
   })
 
-  it('reembedMemory embeds the instance-zone date', async () => {
-    await reembedMemory(tokyoMemory, 'user-1', 'p-1')
+  it('reembedRow (admission\'s re-embed after a fold) embeds the instance-zone date', async () => {
+    await reembedRow(tokyoMemory, 'user-1', 'p-1')
     expect(embeddedText()).toContain('when: 2026-07-14')
   })
 })

@@ -446,8 +446,8 @@ export async function importChats(
 /**
  * Insert imported memories, remapping every FK through the id maps.
  *
- * Deliberately uses the raw repository rather than `createMemoryWithGate`:
- * the gate can silently skip near-duplicates, reinforce an existing row
+ * Deliberately uses the raw repository rather than admission (`admitCandidate`):
+ * admission can silently absorb near-duplicates, reinforce an existing row
  * instead of inserting, or lose rows entirely when the embedding provider is
  * down — none of which is acceptable for an import, where the user asked for
  * exactly these rows.

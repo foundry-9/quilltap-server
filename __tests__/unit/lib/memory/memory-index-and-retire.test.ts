@@ -442,4 +442,26 @@ describe('chokepoint grep-tests', () => {
     expect(filesMatching(/\.bulkDeleteUnsafe\(/)).toEqual(['lib/memory/retire.ts'])
     expect(filesMatching(/memories\.(delete|deleteForCharacter|deleteBySourceMessageId|deleteByChatId|bulkDelete)\(/)).toEqual([])
   })
+
+  it('admission, import, restore and consolidation are the only inserts (invariant 4)', () => {
+    expect(filesMatching(/memories\.create\(/)).toEqual([
+      'lib/backup/restore/restore.ts',
+      'lib/import/quilltap-import/import-entities.ts',
+      'lib/memory/admission/apply.ts',
+      'lib/memory/consolidation.ts',
+    ])
+  })
+
+  it('only admission counts reinforcement and appends footnotes', () => {
+    expect(filesMatching(/\.incrementReinforcement\(|\.appendReinforcementFootnotes\(/)).toEqual([
+      'lib/memory/admission/admit.ts',
+      'lib/memory/admission/apply.ts',
+    ])
+  })
+
+  it('the old gate, merge and direct-create paths are gone', () => {
+    expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-gate.ts'))).toBe(false)
+    expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-merge.ts'))).toBe(false)
+    expect(filesMatching(/\b(createMemoryWithGate|createMemoryDirect|patchMemory|countReinforcement|absorbNearDuplicate|reinforceMemory|linkRelatedMemories|planMemoryMerge|applyMemoryMerge)\b/)).toEqual([])
+  })
 })

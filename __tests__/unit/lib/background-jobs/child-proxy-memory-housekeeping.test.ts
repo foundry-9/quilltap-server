@@ -84,9 +84,9 @@ import { rawQuery } from '@/lib/database/manager';
 import {
   runWithJobScope,
   flushPendingWrites,
+  getChildRepositoriesProxy,
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
-import { absorbNearDuplicate } from '@/lib/memory/memory-gate';
 import { retireMemories } from '@/lib/memory/retire';
 import type { Memory } from '@/lib/schemas/types';
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository';
@@ -99,6 +99,20 @@ const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite
 
 const mockedRepoSource = mockedRealRepositories as jest.MockedFunction<typeof mockedRealRepositories>;
 const mockedRawQuery = rawQuery as jest.MockedFunction<typeof rawQuery>;
+
+/**
+ * Count one more observation of a row from the job child, as any child-side
+ * writer (consolidation, the fold passes) does: a buffered delta, never an
+ * absolute count. Admission itself counts in the parent since Phase C.
+ */
+async function countObservation(memory: Memory) {
+  return getChildRepositoriesProxy().memories.incrementReinforcement(
+    memory.characterId,
+    memory.id,
+    new Date().toISOString(),
+    1,
+  );
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -146,7 +160,7 @@ describe('child proxy — memory housekeeping writes', () => {
     expect(bulk[0].args).toEqual(['char-1', ['m-1', 'm-2']]);
   });
 
-  it('F1 / bug 182: absorbing a near-duplicate buffers one atomic increment and returns the local view', async () => {
+  it('bug 182: a reinforcement in the child buffers one atomic increment, never an absolute count', async () => {
     const realUpdate = jest.fn();
     const realIncrement = jest.fn();
     mockedRepoSource.mockReturnValue({
@@ -162,15 +176,13 @@ describe('child proxy — memory housekeeping writes', () => {
       reinforcementCount: 2,
     } as unknown as Memory;
 
-    let absorbed: Memory | null = null;
     const writes = await runWithJobScope('job-extract', async () => {
-      absorbed = await absorbNearDuplicate(existing);
+      await countObservation(existing);
       return flushPendingWrites();
     });
 
     expect(realUpdate).not.toHaveBeenCalled();
     expect(realIncrement).not.toHaveBeenCalled();
-    expect(absorbed!.reinforcementCount).toBe(3);
     // The buffered payload says "increment", not "set to 3": the parent counts
     // against the committed row, so two jobs' absorbs both land (bug 182).
     expect(writes.filter(w => w.method === 'memories.updateForCharacter')).toHaveLength(0);
@@ -182,7 +194,7 @@ describe('child proxy — memory housekeeping writes', () => {
     expect(increments[0].args[3]).toBe(1);
   });
 
-  it('bug 182: two jobs absorbing one row from the same snapshot both count after the parent replays them', async () => {
+  it('bug 182: two jobs reinforcing one row from the same snapshot both count after the parent replays them', async () => {
     const db = new Database(':memory:');
     db.exec(`CREATE TABLE "memories" (
       "id" TEXT PRIMARY KEY, "characterId" TEXT NOT NULL, "importance" REAL DEFAULT 0.5,
@@ -199,11 +211,11 @@ describe('child proxy — memory housekeeping writes', () => {
       summary: 'Ledger', importance: 0.5, reinforcementCount: 2,
     } as unknown as Memory;
     const jobA = await runWithJobScope('job-a', async () => {
-      await absorbNearDuplicate(snapshot);
+      await countObservation(snapshot);
       return flushPendingWrites();
     });
     const jobB = await runWithJobScope('job-b', async () => {
-      await absorbNearDuplicate(snapshot);
+      await countObservation(snapshot);
       return flushPendingWrites();
     });
 

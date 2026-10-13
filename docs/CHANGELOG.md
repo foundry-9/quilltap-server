@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase C: admission in the parent; one combine
+
+Structural Phase C of `docs/developer/features/memory-system-refactor.md`. No migrations.
+
+- Admission: new `lib/memory/admission/` replaces `lib/memory/memory-gate.ts` and the create half of `memory-service.ts`. `admitCandidate(candidate, resolved, opts)` is the one way a memory is created or reinforced: the calling process runs the name-presence and episodic-anchor safety nets and embeds (one retry; a failed embed rejects and writes nothing); `admitPrepared` searches both tiers, decides and writes in the parent. From the job child it is one host-RPC call (`admitMemory`), so every candidate reads and writes the real rows: two near-identical candidates in one job now make one row with count 2 (bug 209, structurally).
+- `decideAdmission` is pure and table-tested. Actions: `insert`, `insert-linked`, `reinforce`, `absorb`, `promote-and-reinforce`, `reject`. New rules: a neighbour at or above 0.85 about a different subject or of a different kind is linked, never folded into; a MANUAL candidate never folds into an AUTO row (it is inserted and linked); the date guard checks every close neighbour, not only the closest. Superseded cold members are replaced by their digest when neighbours are gathered (`gatherNeighbours`).
+- `foldInto` / `applyFold` are the one combine, used by admission's reinforce and the dedup tool: footnotes capped at 8, counts as a delta (`incrementReinforcement(by)`), links unioned minus the group, earliest `occurredAt`, filled `narrativeTime`, entities unioned to 12, re-embed only when the embedded text changed and the row is under the footnote cap. `lib/memory/memory-merge.ts` deleted.
+- Removed: `createMemoryWithGate`, `createMemoryWithEmbedding`, `createMemoryDirect`, `CreateMemoryOptions`, `MemoryGateOutcome`, `runMemoryGate`, `reinforceMemory`, `absorbNearDuplicate`, `countReinforcement`, `patchMemory`, `linkRelatedMemories`, `promoteMatchedMemory`, `reembedMemory`, the exported threshold constants (read `ADMISSION_THRESHOLDS`), and `skipGate` / `skipEmbedding` / `promoteOnMatch` on `MemoryServiceOptions`. `toCreateMemoryOptions` is now `toAdmissionRow`.
+- Manual create (`POST /api/v1/memories`): goes through `admitCandidate`. A hand-written memory folded into a MANUAL row or a digest raises that row's importance when higher; it no longer re-files an AUTO row as MANUAL (it is inserted and linked instead). The response's `action` is the action kind (`insert`, `reinforce`, …).
+- Anchor gate probe (`?action=anchor-gate-probe`, `quilltap anchor-probe`): reads thresholds from `resolveMemorySettings` and reports `decideAdmission`'s decision per row (`anchoredAction`, `anchorFreeAction`); the band counts are rows that would fold / be absorbed.
+- The consolidation watermark is checked by admission in the parent (extraction batches no longer carry `memories.create`); the housekeeping watermark still runs where the housekeeping outcome cache lives. A parent-side admission tells the job child to drop that character's vector cache.
+- Extraction debug lines come from the admission trace (`describeAdmission`): action, target, count, and each neighbour's cosine and verdict.
+- Help: `help/characters.md` (hand-written memories), `help/episodic-memory.md` (date guard over every match; subject and kind kept apart). CLI README and API.md updated.
+- Tests: `admission-decide.test.ts`, `admission-neighbours.test.ts`, `admission-fold.test.ts`, `admission-admit.test.ts`, `admission-host-rpc.test.ts` (child → host-RPC → parent), grep-tests for the insert and reinforcement chokepoints. Gate, merge and manual-promote tests removed or ported; the overlay test is renamed `child-proxy-memory-overlay.test.ts`.
+
 #### Memory refactor Phase B: the index gets an owner; one deletion
 
 Structural Phase B of `docs/developer/features/memory-system-refactor.md`. One migration. No open bugs were in the catalogue.

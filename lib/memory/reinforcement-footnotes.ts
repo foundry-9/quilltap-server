@@ -32,19 +32,21 @@ export function countReinforcementFootnotes(content: string): number {
 
 /**
  * Append novel details to `content` as `[+]` footnotes, stopping at
- * {@link MAX_REINFORCEMENT_FOOTNOTES}. A detail whose footnote line the content
- * already carries is skipped, so applying the same details twice (a replay, or
- * two jobs that found the same detail) appends them once. Returns the new
- * content and the details actually appended (in order, possibly empty).
+ * {@link MAX_REINFORCEMENT_FOOTNOTES} (or `cap`). A detail whose footnote line
+ * the content already carries is skipped, so applying the same details twice
+ * (a replay, or two jobs that found the same detail) appends them once.
+ * Returns the new content and the details actually appended (in order,
+ * possibly empty).
  */
 export function appendCappedFootnotes(
   content: string,
   details: readonly string[],
+  cap: number = MAX_REINFORCEMENT_FOOTNOTES,
 ): { content: string; appended: string[] } {
   const present = new Set(
     content.split('\n').filter(line => line.startsWith(FOOTNOTE_PREFIX)),
   )
-  const room = Math.max(0, MAX_REINFORCEMENT_FOOTNOTES - countReinforcementFootnotes(content))
+  const room = Math.max(0, cap - countReinforcementFootnotes(content))
   const appended: string[] = []
   for (const detail of details) {
     if (appended.length >= room) break

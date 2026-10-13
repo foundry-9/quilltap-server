@@ -15,7 +15,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   renderSelfCanonBlock: jest.fn(() => ''),
   renderOtherCanonBlock: jest.fn(() => ''),
 }))
-jest.mock('@/lib/memory/memory-service', () => ({ createMemoryWithGate: jest.fn() }))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 jest.mock('@/lib/instance-settings', () => ({ getMemoryExtractionModeSettings: jest.fn() }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(() => ({ provider: 'x', modelName: 'y' })),
@@ -28,12 +28,12 @@ jest.mock('@/lib/logger', () => ({
 
 import { processTurnForMemory } from '@/lib/memory/memory-processor'
 import { extractSelfMemoriesFromTurn, extractOtherMemoriesFromTurn } from '@/lib/memory/cheap-llm-tasks'
-import { createMemoryWithGate } from '@/lib/memory/memory-service'
+import { mockAdmitRow, admissionOutcome } from '../../../helpers/admission-mock'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 
 const mockSelf = extractSelfMemoriesFromTurn as jest.Mock
 const mockOther = extractOtherMemoriesFromTurn as jest.Mock
-const mockGate = createMemoryWithGate as jest.Mock
+const mockAdmit = mockAdmitRow
 const mockMode = getMemoryExtractionModeSettings as jest.Mock
 
 const cand = (summary: string, importance: number) => ({
@@ -70,10 +70,10 @@ beforeEach(() => {
     success: true,
     result: new Map(subjects.map(s => [s.id, [cand('hinge', 0.9), cand('trait', 0.5)]])),
   }))
-  mockGate.mockResolvedValue({ action: 'INSERT', memory: { id: 'new' } })
+  mockAdmit.mockResolvedValue(admissionOutcome('insert', { id: 'new' }))
 })
 
-const otherWrites = () => mockGate.mock.calls.map(c => c[0]).filter(i => i.aboutCharacterId !== i.characterId)
+const otherWrites = () => mockAdmit.mock.calls.map(c => c[0]).filter(i => i.aboutCharacterId !== i.characterId)
 
 describe('processTurnForMemory — otherPass mode', () => {
   it("'turn' keeps every per-turn OTHER candidate", async () => {

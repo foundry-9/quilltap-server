@@ -1,20 +1,14 @@
 /**
- * Bug 209 — in a background job the memory gate sees its own earlier writes.
+ * The job child's memory read-your-writes overlay (bug 209).
  *
  * In the forked child every repository read hits a readonly snapshot and every
- * write is buffered for the parent. Before the per-job memory overlay in
- * `child-repositories-proxy.ts`, a second candidate in the same job could not
- * see the first's buffered row, links or footnotes:
- *
- *   1. two near-identical candidates inserted two rows;
- *   2. two band candidates each wrote the neighbour's `relatedMemoryIds` from
- *      the same snapshot, and the replay kept only the second;
- *   3. two reinforcements each wrote `content` from the same snapshot, and the
- *      replay kept only the second's footnotes.
- *
- * These tests run the real gate (`createMemoryWithGate`) through the real proxy
- * in one job scope, then replay the buffered batch the way the parent does to
- * read the rows as they will stand after commit.
+ * write is buffered for the parent. Admission no longer writes from the child
+ * (it runs in the parent over host-RPC since memory refactor Phase C — see
+ * admission-host-rpc.test.ts), but consolidation, housekeeping, the fold passes
+ * and `retireMemories` still buffer memory writes there, and a later read in
+ * the same job must see them. These tests drive the real proxy in one job
+ * scope, then replay the buffered batch the way the parent does to read the
+ * rows as they will stand after commit.
  */
 
 jest.mock('@/lib/database/repositories', () => ({
@@ -75,7 +69,6 @@ import {
   getChildRepositoriesProxy,
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
-import { createMemoryWithGate } from '@/lib/memory/memory-service';
 import { retireMemories } from '@/lib/memory/retire';
 import { rawQuery } from '@/lib/database/manager';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
@@ -173,24 +166,6 @@ function installSnapshot(rows: Memory[]) {
 }
 
 /**
- * A vector store whose search answers from a per-call script: each gate
- * search takes the next entry. The scripted ids may name rows this job
- * created, which only the overlay can hydrate.
- */
-function installVectorStore(script: Array<(created: string[]) => Array<{ id: string; score: number }>>) {
-  const created: string[] = [];
-  const store = {
-    search: jest.fn(() => (script.shift() ?? (() => []))(created)),
-    addVector: jest.fn(async (id: string) => { created.push(id); }),
-    hasVector: jest.fn(() => true),
-    removeVector: jest.fn(async () => true),
-    tierOf: jest.fn(() => 'hot'),
-  };
-  installStore(store);
-  return store;
-}
-
-/**
  * Replay a buffered batch the way the parent does — in order, against a
  * read-write store — and return the rows as committed.
  */
@@ -239,8 +214,6 @@ function replay(snapshot: Memory[], writes: ChildWritePayload[]): Map<string, Re
   return table;
 }
 
-const OPTIONS = { userId: 'user-1' };
-
 function candidate(content: string, extra: Record<string, unknown> = {}) {
   return {
     characterId: CHAR,
@@ -264,81 +237,7 @@ afterAll(() => {
   delete process.env.QUILLTAP_JOB_CHILD;
 });
 
-describe('bug 209 — the gate sees its own buffered writes inside one job', () => {
-  it('two near-identical candidates make one row with reinforcement count 2', async () => {
-    installSnapshot([]);
-    installVectorStore([
-      () => [],
-      // The second candidate's search finds the first's freshly added vector.
-      created => created.map(id => ({ id, score: 0.97 })),
-    ]);
-
-    const outcomes: string[] = [];
-    const writes = await runWithJobScope('job-dup', async () => {
-      for (const text of ['Friday keeps the ledger.', 'Friday keeps the ledger!']) {
-        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
-        outcomes.push(outcome.action);
-      }
-      return flushPendingWrites();
-    });
-
-    expect(outcomes).toEqual(['INSERT', 'SKIP_NEAR_DUPLICATE']);
-    const creates = writes.filter(w => w.method === 'memories.create');
-    expect(creates).toHaveLength(1);
-    const table = replay([], writes);
-    expect(table.size).toBe(1);
-    const [only] = Array.from(table.values());
-    expect(only.reinforcementCount).toBe(2);
-  });
-
-  it('two band candidates against one neighbour leave both links after replay', async () => {
-    const neighbour = row({ id: NEIGHBOUR, content: 'Friday keeps the harbour ledger.' });
-    installSnapshot([neighbour]);
-    installVectorStore([
-      () => [{ id: NEIGHBOUR, score: 0.78 }],
-      () => [{ id: NEIGHBOUR, score: 0.76 }],
-    ]);
-
-    const newIds: string[] = [];
-    const writes = await runWithJobScope('job-band', async () => {
-      for (const text of ['Friday audits the ledger at dawn.', 'Friday locks the ledger at dusk.']) {
-        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
-        expect(outcome.action).toBe('INSERT_RELATED');
-        newIds.push(outcome.memory!.id);
-      }
-      // A later read in the same job sees both links.
-      const [seen] = await getChildRepositoriesProxy().memories.findByIds([NEIGHBOUR]);
-      expect(seen.relatedMemoryIds).toEqual(newIds);
-      return flushPendingWrites();
-    });
-
-    const table = replay([neighbour], writes);
-    expect(table.get(NEIGHBOUR)!.relatedMemoryIds).toEqual(newIds);
-  });
-
-  it('two reinforcements of one row keep both candidates\' footnotes after replay', async () => {
-    const existing = row({ id: EXISTING, content: 'Friday keeps the ledger.' });
-    installSnapshot([existing]);
-    installVectorStore([
-      () => [{ id: EXISTING, score: 0.87 }],
-      () => [{ id: EXISTING, score: 0.86 }],
-    ]);
-
-    const writes = await runWithJobScope('job-reinforce', async () => {
-      for (const text of ['Friday keeps the ledger for Marguerite.', 'Friday keeps the ledger in Valparaiso.']) {
-        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
-        expect(outcome.action).toBe('REINFORCE');
-      }
-      return flushPendingWrites();
-    });
-
-    const table = replay([existing], writes);
-    const committed = table.get(EXISTING)!;
-    expect(committed.content).toContain('[+] Marguerite');
-    expect(committed.content).toContain('[+] Valparaiso');
-    expect(committed.reinforcementCount).toBe(3);
-  });
-
+describe('bug 209 — a job sees its own buffered memory writes', () => {
   it('applies buffered increments, patches and deletes to later reads', async () => {
     const existing = row({ id: EXISTING, reinforcementCount: 2, importance: 0.6 });
     const neighbour = row({ id: NEIGHBOUR });
@@ -375,59 +274,6 @@ describe('bug 209 — the gate sees its own buffered writes inside one job', () 
       expect(await repos.memories.findByCharacterAndSourceMessageIds(CHAR, ['msg-2'])).toEqual([]);
       flushPendingWrites();
     });
-  });
-});
-
-describe('bug 231 — two overlapping jobs keep each other\'s links and footnotes', () => {
-  it('two jobs each linking a new memory to one neighbour leave both links', async () => {
-    const neighbour = row({ id: NEIGHBOUR, content: 'Friday keeps the harbour ledger.' });
-
-    const newIds: string[] = [];
-    const batches: ChildWritePayload[][] = [];
-    for (const [jobId, text, score] of [
-      ['job-a', 'Friday audits the ledger at dawn.', 0.78],
-      ['job-b', 'Friday locks the ledger at dusk.', 0.76],
-    ] as const) {
-      // Both jobs read the same committed snapshot: neither sees the other.
-      installSnapshot([neighbour]);
-      installVectorStore([() => [{ id: NEIGHBOUR, score }]]);
-      batches.push(await runWithJobScope(jobId, async () => {
-        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
-        expect(outcome.action).toBe('INSERT_RELATED');
-        newIds.push(outcome.memory!.id);
-        return flushPendingWrites();
-      }));
-    }
-
-    // The parent commits the two batches one after the other.
-    const table = replay([neighbour], [...batches[0], ...batches[1]]);
-    expect(table.get(NEIGHBOUR)!.relatedMemoryIds).toEqual(newIds);
-    expect(table.get(newIds[0])!.relatedMemoryIds).toEqual([NEIGHBOUR]);
-    expect(table.get(newIds[1])!.relatedMemoryIds).toEqual([NEIGHBOUR]);
-  });
-
-  it('two jobs each reinforcing one row leave both footnotes', async () => {
-    const existing = row({ id: EXISTING, content: 'Friday keeps the ledger.' });
-
-    const batches: ChildWritePayload[][] = [];
-    for (const [jobId, text] of [
-      ['job-a', 'Friday keeps the ledger for Marguerite.'],
-      ['job-b', 'Friday keeps the ledger in Valparaiso.'],
-    ] as const) {
-      installSnapshot([existing]);
-      installVectorStore([() => [{ id: EXISTING, score: 0.87 }]]);
-      batches.push(await runWithJobScope(jobId, async () => {
-        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
-        expect(outcome.action).toBe('REINFORCE');
-        return flushPendingWrites();
-      }));
-    }
-
-    const table = replay([existing], [...batches[0], ...batches[1]]);
-    const committed = table.get(EXISTING)!;
-    expect(committed.content).toContain('[+] Marguerite');
-    expect(committed.content).toContain('[+] Valparaiso');
-    expect(committed.reinforcementCount).toBe(3);
   });
 });
 

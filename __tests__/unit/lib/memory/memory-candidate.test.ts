@@ -5,13 +5,13 @@
  * exactly as `parseTargetingTags` reads them back.
  */
 
-jest.mock('@/lib/memory/memory-service', () => ({ createMemoryWithGate: jest.fn() }))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 
 import {
   MemoryCandidateSchema,
   candidateFromDraft,
-  toCreateMemoryOptions,
+  toAdmissionRow,
   normaliseTargeting,
   splitTargetingKeywords,
   targetingKeywords,
@@ -23,7 +23,7 @@ import {
 import { parseTargetingTags } from '@/lib/memory/recall-tags'
 import { normalizeDigestKeywords } from '@/lib/memory/consolidation-plan'
 import { writeCandidate } from '@/lib/memory/memory-processor'
-import { createMemoryWithGate } from '@/lib/memory/memory-service'
+import { mockAdmitRow, admissionOutcome } from '../../../helpers/admission-mock'
 
 const HOLDER = 'char-holder'
 const OTHER = 'char-other'
@@ -41,7 +41,7 @@ const provenance = (pass: MemoryCandidate['provenance']['pass'], source: 'AUTO' 
 function roundTrip(candidate: MemoryCandidate) {
   // Parsing a parsed candidate changes nothing.
   expect(MemoryCandidateSchema.parse(candidate)).toEqual(candidate)
-  const row = toCreateMemoryOptions(candidate, { occurredAt: null, narrativeTime: null })
+  const row = toAdmissionRow(candidate, { occurredAt: null, narrativeTime: null })
   expect(row.characterId).toBe(candidate.subject.holderId)
   expect(row.aboutCharacterId).toBe(candidate.subject.aboutId)
   expect(row.source).toBe(candidate.provenance.source)
@@ -86,8 +86,8 @@ describe('importance: the parser default is the only default', () => {
 describe('producers', () => {
   beforeEach(() => jest.clearAllMocks())
 
-  it('per-turn SELF/OTHER: the draft becomes the gate input, a model 0 stays 0', async () => {
-    ;(createMemoryWithGate as jest.Mock).mockResolvedValue({ action: 'INSERT', memory: { id: 'm1' } })
+  it('per-turn SELF/OTHER: the draft becomes the admitted row, a model 0 stays 0', async () => {
+    mockAdmitRow.mockResolvedValue(admissionOutcome('insert', { id: 'm1' }))
     const draft = {
       content: 'Amy is afraid of the dark.',
       summary: 'Amy fears the dark',
@@ -113,7 +113,7 @@ describe('producers', () => {
       reinforcedIds: [],
       collected: [],
     })
-    const input = (createMemoryWithGate as jest.Mock).mock.calls[0][0]
+    const input = mockAdmitRow.mock.calls[0][0]
     expect(input).toMatchObject({
       characterId: HOLDER,
       aboutCharacterId: OTHER,
@@ -146,7 +146,7 @@ describe('producers', () => {
       reinforcedIds: [],
       collected: collected as never,
     })
-    expect(createMemoryWithGate).not.toHaveBeenCalled()
+    expect(mockAdmitRow).not.toHaveBeenCalled()
     expect(collected[0]).toMatchObject({ keywords: ['oath', 'present', 'scope: wide', 'information'], importance: 0 })
   })
 
@@ -238,7 +238,7 @@ describe('producers', () => {
       }),
     ).resolves.toBeUndefined()
     expect(collected).toHaveLength(0)
-    expect(createMemoryWithGate).not.toHaveBeenCalled()
+    expect(mockAdmitRow).not.toHaveBeenCalled()
   })
 
   it('an empty or malformed source timestamp falls through to the next anchor', async () => {
