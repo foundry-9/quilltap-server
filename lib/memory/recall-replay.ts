@@ -7,7 +7,7 @@
  * distillation (retrospective / timeRange / entities / paraphrase) and run the
  * memory search TWICE — once with the episodic signals inert (the pre-overhaul
  * path) and once with them live — returning the full candidate table for each:
- * cosine, rawWeight, blendedBefore, every multiplier that fired,
+ * cosine, salience, blendedBefore, every multiplier that fired,
  * blendedAfter, and whether the entry made the head. Nothing is persisted;
  * the recall-history ring buffer is read but never written.
  *
@@ -37,6 +37,7 @@ import { describeRecallTuning, resolveRecallTuning, type RecallTuningInput } fro
 import type { MessageEvent } from '@/lib/schemas/types'
 import type { EmbeddingResult } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { RECALL_MIN_IMPORTANCE } from './scoring'
 
 const logger = createServiceLogger('RecallReplay')
 
@@ -71,7 +72,7 @@ export interface RecallReplayRow {
   createdAt: string
   keywords: string[]
   cosine: number
-  rawWeight: number | null
+  salience: number | null
   blendedBefore: number | null
   multiplier: number | null
   fired: string[]
@@ -145,7 +146,7 @@ function toRows(results: SemanticSearchResult[], headSize: number): RecallReplay
     createdAt: r.memory.createdAt,
     keywords: r.memory.keywords ?? [],
     cosine: r.score,
-    rawWeight: r.rawWeight ?? null,
+    salience: r.salience ?? null,
     blendedBefore: r.recallAdjustment?.blendedBefore ?? null,
     multiplier: r.recallAdjustment?.multiplier ?? null,
     fired: r.recallAdjustment?.fired ?? [],
@@ -284,7 +285,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   const oldResults = await searchMemoriesSemantic(character.id, query, {
     userId: input.userId,
     limit,
-    minImportance: 0.3,
+    minImportance: RECALL_MIN_IMPORTANCE,
     recallContext: baseCtx,
     excludeMemoryIds,
     weightClockMs,
@@ -297,7 +298,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   const newResults = await searchMemoriesSemantic(character.id, query, {
     userId: input.userId,
     limit,
-    minImportance: 0.3,
+    minImportance: RECALL_MIN_IMPORTANCE,
     recallContext: {
       ...baseCtx,
       turnRetrospective: retrospective,

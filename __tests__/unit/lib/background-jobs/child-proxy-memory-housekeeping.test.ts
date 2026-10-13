@@ -84,7 +84,7 @@ import {
 import { deleteMemoriesWithUnlinkBatch, absorbNearDuplicate } from '@/lib/memory/memory-gate';
 import type { Memory } from '@/lib/schemas/types';
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import path from 'path';
 
 const { getRawDatabase } = jest.requireMock('@/lib/database/backends/sqlite/client') as { getRawDatabase: jest.Mock };
@@ -111,13 +111,13 @@ describe('child proxy — memory housekeeping writes', () => {
       memories: {
         bulkDelete: realBulkDelete,
         updateForCharacter: jest.fn(),
+        removeRelatedMemoryIdsEverywhere: jest.fn(),
         // The digest scrub's reads: nothing to scrub.
         findDigestsContainingMembers: jest.fn(async () => []),
         findIdsSupersededByAny: jest.fn(async () => []),
       },
     } as never);
     mockedRawQuery.mockImplementation((async (sql: string) => {
-      if (sql.includes('relatedMemoryIds IS NOT NULL')) return [];
       return [
         { id: 'm-1', characterId: 'char-1' },
         { id: 'm-2', characterId: 'char-1' },

@@ -7,7 +7,7 @@
 
 // Types
 export type {
-  MemoryCandidate,
+  MemoryDraft,
   ChatMessage,
   Attachment,
   CheapLLMTaskResult,

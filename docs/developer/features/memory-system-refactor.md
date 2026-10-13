@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). Phases A–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3); Phases B–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -172,14 +172,14 @@ phases and must not be lost:
 | Phase | Item | Recorded in |
 |---|---|---|
 | B | A digest whose `consolidatedFrom` empties is left in place; `retireMemories` retires it with its last member. Existing dangling `consolidatedFrom` ids are not repaired (`memories validate --repair`). | [bug 225](../bugs/fixed/bug-225-retention-clock-links.md) |
-| C | Two overlapping jobs can still overwrite each other's links and footnotes. | [bug 231](../bugs/bug-231-cross-job-link-race.md) (open) |
+| C | Links and footnotes are now deltas against the live row (bug 231, fixed 2026-10-12: `addRelatedMemoryIds` / `removeRelatedMemoryIds` / `appendReinforcementFootnotes`). `foldInto` should keep writing them that way. | [bug 231](../bugs/fixed/bug-231-cross-job-link-race.md) |
 | C | The per-job memory overlay in `child-repositories-proxy.ts` (bug 209's fix) is deleted once admission runs in the parent. | [bug 209](../bugs/fixed/bug-209-child-gate-blind-writes.md) |
-| D | The dry run omits project id, project description and context summary, along with the rest of smell A.6 #27. | [bug 230](../bugs/bug-230-dry-run-no-project.md) (open) |
+| D | The dry run now passes project id, description and summary (bug 230, fixed 2026-10-12); the rest of smell A.6 #27 (profile, timestamps, fold passes, autonomous chats) remains. | [bug 230](../bugs/fixed/bug-230-dry-run-no-project.md) |
 | D | `chats.episodeExtractionWatermarkMessageId` (bug 207) and `otherExtractionWatermarkMessageId` fold into `memory_extraction_cursors`. | [bug 207](../bugs/fixed/bug-207-episode-pass-no-watermark.md) |
 | E | The text-search fallback still ignores `minScore` and filters raw `importance`, and has no related-memory expansion or R6 background reserve. | [bug 214](../bugs/fixed/bug-214-text-fallback-drops-options.md) |
 | E | The inter-character section is deduped against the archive by id but not backfilled; rows cut from the archive by its token budget can still appear there. | [bug 224](../bugs/fixed/bug-224-recall-sections-overlap.md) |
-| B | The `relatedMemoryIds` scrub in the delete chokepoints still writes whole lists from a committed snapshot; the digest scrub became a removal delta in the PR 90 review. | [bug 234](../bugs/bug-234-related-scrub-lost-update.md) (open) |
-| D | The fold episode pass has no idle catch-up; with the 4-slice-per-run cap a long backlog advances only as the chat folds. | [bug 232](../bugs/bug-232-episode-no-idle-catchup.md) (open) |
+| B | Both scrubs are now SQL removal deltas (`removeConsolidatedMembers`, and `removeRelatedMemoryIdsEverywhere` for bug 234, fixed 2026-10-12); `retireMemories` keeps them. A digest created and member-deleted in the same job is still not scrubbed. | [bug 234](../bugs/fixed/bug-234-related-scrub-lost-update.md) |
+| D | The episode pass's idle catch-up (bug 232, fixed 2026-10-12: `foldEpisodeCatchup`, `lib/memory/fold-episode-catchup.ts`, shared rules in `fold-catchup.ts`) folds into the cursor table and single sweep. | [bug 232](../bugs/fixed/bug-232-episode-no-idle-catchup.md) |
 | F | Housekeeping may now demote protected AUTO rows, last, when over the cap (decision 3). Review on Friday's first maintenance dry run. | [bug 210](../bugs/fixed/bug-210-cap-counts-protected-rows.md) |
 
 ---
@@ -859,6 +859,32 @@ is itself a UTC midnight. No re-embed is needed: legacy
 vectors carry the UTC date, which is the date the re-stamped value reads. Every path that builds
 embedding text or an extraction prompt now resolves the zone first (`refreshMemoryTimeZone`) and
 passes it explicitly, so the parent and a cold job child render the same date.
+
+**Amendment (2026-10-12, Phase A).** Phase A landed as §3.1–3.4 describe, with these departures:
+
+- `MemoryCandidate.targeting` is **nullable**. A hand-written memory carries `null`, stores no tag
+  keywords and reads as the defaults (present / wide / information), as manual rows always have.
+  Every extractor's candidate carries tags.
+- `rankForRecall` is not built in Phase A; recall keeps its blend (`computeRankingBlend`, now in
+  `scoring/relevance.ts`) and the search tool keeps its cross-source sort. Both move with Phase E.
+  The dedup pass's `scoreMemory` is left for Phase F.
+- The clock's day windows are **closed**: `to` is the next boundary minus 1 ms, so adjacent
+  windows never share an instant. A write-side "today" phrase is stamped at the **start** of its
+  window (local midnight), not at the anchor, so the read side's "today" window contains it.
+  `rules.ts` holds the one table (`DAY_REFERENCE_TABLE`, out to fourteen days ago); write-only
+  phrases (weekdays, "last month", ISO dates) stay in `clock.ts`.
+- `?action=housekeeping-config` stays as an alias of the new `?action=maintenance-config`.
+  `?action=extraction-concurrency` and the housekeep result's `merged` / `mergedIds` /
+  `wouldMerge` are removed. `move-memory-maintenance-settings-v1` also drops the three dead
+  `chat_settings` columns (`autoHousekeepingSettings`, `memoryExtractionLimits`,
+  `memoryExtractionConcurrency`) and the `memoryExtractionConcurrency` instance key; a restore of an
+  older backup derives `memoryMaintenance` through `withMemoryMaintenanceFromLegacy`.
+- The Carina pass is still labelled `self-turn` in its candidate provenance (`carina` exists in
+  the enum for Phase D's pass split).
+- The `cap14` replay acceptance and the V4test housekeeping preview were not run in this
+  environment (no V4test instance). The probe-set ordering is unchanged by construction (the
+  blend already read reinforced importance); the protection formula moved file but not value,
+  and `protection-and-age.test.ts` pins it.
 
 ## 8. Risks
 

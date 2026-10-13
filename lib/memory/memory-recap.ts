@@ -12,12 +12,16 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { formatRelativeAge } from '@/lib/memory/memory-weighting'
+import { formatMemoryAge } from '@/lib/memory/time'
 import { summarizeMemoryRecap, type UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import {
   searchVaultConversationSummaries,
   renderRelevantConversationsBlock,
   READ_CONVERSATION_CALL_NOTE,
+  RELEVANT_CONVERSATIONS_MIN,
+  RELEVANT_CONVERSATIONS_MAX,
+  RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+  RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
   type VaultConversationMatch,
 } from '@/lib/memory/conversation-summary-search'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -51,10 +55,9 @@ const RECENT_CONVERSATIONS_MAX = 20
 const RECENT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
 const RECENT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
 
-// Recap conversation lists (recent + relevant): each ramps 3→10 over 4K→32K,
-// independently. Combined 6–20 entries before dedup.
-const RECAP_CONVERSATIONS_MIN = 3
-const RECAP_CONVERSATIONS_MAX = 10
+// Recap conversation lists (recent + relevant): each ramps on the shared
+// relevant-conversations curve (3→10 over 4K→32K), independently. Combined
+// 6–20 entries before dedup.
 
 export function calculateRecentConversationsLimit(maxContext?: number | null): number {
   return rampLimit(
@@ -144,17 +147,17 @@ export async function buildConversationRecallLists(
   const { characterId, currentChatId, userId, embeddingProfileId, relevanceQuery, maxContext } = params
   const recentLimit = rampLimit(
     maxContext,
-    RECAP_CONVERSATIONS_MIN,
-    RECAP_CONVERSATIONS_MAX,
-    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
-    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
+    RELEVANT_CONVERSATIONS_MIN,
+    RELEVANT_CONVERSATIONS_MAX,
+    RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
   )
   const relevantLimit = rampLimit(
     maxContext,
-    RECAP_CONVERSATIONS_MIN,
-    RECAP_CONVERSATIONS_MAX,
-    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
-    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
+    RELEVANT_CONVERSATIONS_MIN,
+    RELEVANT_CONVERSATIONS_MAX,
+    RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
   )
   if (recentLimit <= 0 && relevantLimit <= 0) return ''
 
@@ -333,7 +336,7 @@ export async function generateMemoryRecap(
       const formatTier = (memories: Memory[]) =>
         memories.map(m => ({
           summary: m.summary,
-          age: formatRelativeAge(m, now),
+          age: formatMemoryAge(m, now),
         }))
 
       const tieredWithAge = {

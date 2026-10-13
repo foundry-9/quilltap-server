@@ -60,8 +60,8 @@ export const CONTEXT_VALUES: ReadonlySet<string> = new Set<ContextTag>([
 ])
 
 /**
- * Defaults MUST match the extraction-side defaults in `applyTargetingTags`
- * (memory-tasks.ts). A legacy/untagged memory therefore reads as
+ * The extraction side defaults to these too (`normaliseTargeting`,
+ * `lib/memory/candidate.ts`). A legacy/untagged memory therefore reads as
  * present / wide / information and is never penalized for missing data.
  */
 export const DEFAULT_TEMPORAL: TemporalTag = 'present'
@@ -284,9 +284,19 @@ export const RECALL_TUNING_DEFAULTS = {
   backgroundReserve: 0,
 }
 
-/** The tuning a recall context runs under: its own, else the defaults above. */
+/**
+ * The shipped tuning, assembled once: the multiplier table plus the knob
+ * defaults above. `recall-tuning.ts` re-exports it and resolves overrides
+ * against it; there is no second copy.
+ */
+export const DEFAULT_RECALL_TUNING: ResolvedRecallTuning = Object.freeze({
+  multipliers: Object.freeze({ ...RECALL_MULTIPLIERS }) as RecallMultiplierTable,
+  ...RECALL_TUNING_DEFAULTS,
+})
+
+/** The tuning a recall context runs under: its own, else {@link DEFAULT_RECALL_TUNING}. */
 export function recallTuningOf(ctx: RecallContext): ResolvedRecallTuning {
-  return ctx.tuning ?? { multipliers: RECALL_MULTIPLIERS, ...RECALL_TUNING_DEFAULTS }
+  return ctx.tuning ?? DEFAULT_RECALL_TUNING
 }
 
 /** Result of a single adjustment: its multiplier plus a short debug label list. */

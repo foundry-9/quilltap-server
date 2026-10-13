@@ -29,7 +29,8 @@ import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
 import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
+import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
 const log = logger.child({ module: 'jobs:child:proxy' });
 
@@ -73,6 +74,12 @@ interface JobScope {
    * replaces the first's when the parent replays the batch (bug 209).
    */
   memories: Map<string, MemoryOverlayEntry>;
+  /**
+   * Ids buffered `removeRelatedMemoryIdsEverywhere` calls scrub from every
+   * row. Applied to every memories row a later read returns, whether or not
+   * the job touched that row otherwise (bug 234).
+   */
+  memoryRelatedScrubs: Set<string>;
 }
 
 /** One memory row's buffered changes this job (see {@link JobScope.memories}). */
@@ -90,6 +97,19 @@ interface MemoryOverlayEntry {
    * delta applied to whatever list the row reads with.
    */
   consolidatedFromRemoved?: Set<string>;
+  /**
+   * Ids buffered `addRelatedMemoryIds` / `removeRelatedMemoryIds` calls add to
+   * or take out of the row's `relatedMemoryIds` since its last absolute
+   * `relatedMemoryIds` patch — deltas applied to whatever list the row reads
+   * with (bug 231).
+   */
+  relatedAdded?: string[];
+  relatedRemoved?: Set<string>;
+  /**
+   * Details buffered `appendReinforcementFootnotes` calls append, in order,
+   * since the row's last absolute `content` patch (bug 231).
+   */
+  footnotes?: string[];
   deleted: boolean;
 }
 
@@ -104,6 +124,7 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     sanitizedArgs: 0,
     equippedOutfits: new Map(),
     memories: new Map(),
+    memoryRelatedScrubs: new Set(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
@@ -281,8 +302,50 @@ function recordBufferedMemoryWrite(
       if (!id || !patch || typeof patch !== 'object') return;
       const entry = memoryOverlayEntry(scope, id);
       Object.assign(entry.patch, patch);
-      // An absolute list replaces any removal deltas buffered before it.
+      // An absolute list replaces any deltas buffered before it.
       if ('consolidatedFrom' in patch) entry.consolidatedFromRemoved = undefined;
+      if ('relatedMemoryIds' in patch) {
+        entry.relatedAdded = undefined;
+        entry.relatedRemoved = undefined;
+      }
+      if ('content' in patch) entry.footnotes = undefined;
+      break;
+    }
+    case 'addRelatedMemoryIds':
+    case 'removeRelatedMemoryIds': {
+      const id = asId(args[1]);
+      const ids = Array.isArray(args[2]) ? args[2].filter((m): m is string => typeof m === 'string') : [];
+      if (!id || ids.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      const added = entry.relatedAdded ?? [];
+      const removed = entry.relatedRemoved ?? new Set<string>();
+      if (methodName === 'addRelatedMemoryIds') {
+        for (const m of ids) {
+          removed.delete(m);
+          if (m !== id && !added.includes(m)) added.push(m);
+        }
+      } else {
+        for (const m of ids) {
+          removed.add(m);
+          const at = added.indexOf(m);
+          if (at !== -1) added.splice(at, 1);
+        }
+      }
+      entry.relatedAdded = added;
+      entry.relatedRemoved = removed;
+      break;
+    }
+    case 'removeRelatedMemoryIdsEverywhere': {
+      const ids = Array.isArray(args[0]) ? args[0].filter((m): m is string => typeof m === 'string') : [];
+      for (const m of ids) scope.memoryRelatedScrubs.add(m);
+      break;
+    }
+    case 'appendReinforcementFootnotes': {
+      const id = asId(args[1]);
+      const details = Array.isArray(args[2]) ? args[2].filter((d): d is string => typeof d === 'string') : [];
+      if (!id || details.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      entry.footnotes = [...(entry.footnotes ?? []), ...details];
       break;
     }
     case 'removeConsolidatedMembers': {
@@ -340,12 +403,41 @@ function recordBufferedMemoryWrite(
 }
 
 /** A row as this job will leave it, or null when the job deleted it. */
+function readIdList(value: unknown): unknown[] | null {
+  let list: unknown = value;
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list); } catch { list = []; }
+  }
+  if (list === null || list === undefined) return [];
+  return Array.isArray(list) ? list : null;
+}
+
+/** Apply the job's buffered link scrubs to a row read this job (bug 234). */
+function scrubRelatedLinks(scope: JobScope, row: Record<string, unknown>): Record<string, unknown> {
+  const scrubbed = scope.memoryRelatedScrubs;
+  if (scrubbed.size === 0) return row;
+  const list = readIdList(row.relatedMemoryIds);
+  if (!list || !list.some((m) => scrubbed.has(m as string))) return row;
+  return { ...row, relatedMemoryIds: list.filter((m) => !scrubbed.has(m as string)) };
+}
+
 function overlayMemoryRow(
   base: Record<string, unknown>,
-  entry: MemoryOverlayEntry,
+  entry: MemoryOverlayEntry | undefined,
+  scope: JobScope,
 ): Record<string, unknown> | null {
+  if (!entry) return scrubRelatedLinks(scope, base);
   if (entry.deleted) return null;
   const row: Record<string, unknown> = { ...base, ...entry.patch };
+  if (entry.relatedAdded?.length || entry.relatedRemoved?.size) {
+    const removed = entry.relatedRemoved ?? new Set<string>();
+    const list = (readIdList(row.relatedMemoryIds) ?? []).filter((m) => !removed.has(m as string));
+    for (const m of entry.relatedAdded ?? []) if (!list.includes(m)) list.push(m);
+    row.relatedMemoryIds = list;
+  }
+  if (entry.footnotes?.length && typeof row.content === 'string') {
+    row.content = appendCappedFootnotes(row.content, entry.footnotes).content;
+  }
   if (entry.consolidatedFromRemoved && entry.consolidatedFromRemoved.size > 0) {
     const removed = entry.consolidatedFromRemoved;
     let list: unknown = row.consolidatedFrom;
@@ -365,7 +457,7 @@ function overlayMemoryRow(
       row.lastReinforcedAt = entry.lastReinforcedAt;
     }
   }
-  return row;
+  return scrubRelatedLinks(scope, row);
 }
 
 /**
@@ -429,17 +521,13 @@ function applyMemoryOverlay(scope: JobScope, methodName: string, args: unknown[]
       }
       seen.add(item.id as string);
       const entry = scope.memories.get(item.id as string);
-      if (!entry) {
-        out.push(item);
-        continue;
-      }
-      const row = overlayMemoryRow(entry.created ?? item, entry);
+      const row = overlayMemoryRow(entry?.created ?? item, entry, scope);
       if (row) out.push(row);
     }
     if (adds) {
       for (const created of createdRowsFor(scope, methodName, args)) {
         if (seen.has(created.id as string)) continue;
-        const row = overlayMemoryRow(created, scope.memories.get(created.id as string)!);
+        const row = overlayMemoryRow(created, scope.memories.get(created.id as string), scope);
         if (row) out.push(row);
       }
     }
@@ -447,11 +535,11 @@ function applyMemoryOverlay(scope: JobScope, methodName: string, args: unknown[]
   }
   if (looksLikeRow(result)) {
     const entry = scope.memories.get(result.id as string);
-    return entry ? overlayMemoryRow(entry.created ?? result, entry) : result;
+    return overlayMemoryRow(entry?.created ?? result, entry, scope);
   }
   if ((result === null || result === undefined) && adds) {
     const [created] = createdRowsFor(scope, methodName, args);
-    if (created) return overlayMemoryRow(created, scope.memories.get(created.id as string)!);
+    if (created) return overlayMemoryRow(created, scope.memories.get(created.id as string), scope);
   }
   return result;
 }
@@ -489,6 +577,8 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'folders.ensureByPath': 'write',
   // memories
   'memories.updateForCharacter': 'write',
+  // Footnote delta applied against the live row at commit (bug 231).
+  'memories.appendReinforcementFootnotes': 'write',
   // chats
   'chats.updateMessage': 'write',
   // The transcript counter's bump and its realtime hint. A write, so the parent
@@ -742,7 +832,8 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           // so the read-your-writes warning below would be a false alarm for
           // them; other memories reads still warn (a buffered create cannot
           // join a filtered query) but have the rows they return patched.
-          const overlaid = repoKey === 'memories' && !!scope && scope.memories.size > 0;
+          const overlaid = repoKey === 'memories' && !!scope
+            && (scope.memories.size > 0 || scope.memoryRelatedScrubs.size > 0);
           if (scope && scope.recentlyWrittenKeys.size > 0 && !(overlaid && MEMORY_OVERLAY_READS.has(key))) {
             const readKey = `${repoKey}.${key}`;
             if (!scope.warnedReads.has(readKey)) {

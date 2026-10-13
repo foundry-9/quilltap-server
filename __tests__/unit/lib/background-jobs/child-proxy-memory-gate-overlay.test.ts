@@ -75,7 +75,9 @@ import {
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
 import { createMemoryWithGate } from '@/lib/memory/memory-service';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
+import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import type { Memory } from '@/lib/schemas/types';
 import type { ChildWritePayload } from '@/lib/background-jobs/ipc-types';
 
@@ -125,6 +127,15 @@ function installSnapshot(rows: Memory[]) {
     updateForCharacter: jest.fn(),
     incrementReinforcement: jest.fn(),
     bulkDelete: jest.fn(),
+    delete: jest.fn(),
+    addRelatedMemoryIds: jest.fn(),
+    removeRelatedMemoryIds: jest.fn(),
+    removeRelatedMemoryIdsEverywhere: jest.fn(),
+    appendReinforcementFootnotes: jest.fn(),
+    removeConsolidatedMembers: jest.fn(),
+    updateTierBulk: jest.fn(),
+    findDigestsContainingMembers: jest.fn(async () => []),
+    findIdsSupersededByAny: jest.fn(async () => []),
   };
   mockedRepoSource.mockReturnValue({
     memories,
@@ -172,6 +183,32 @@ function replay(snapshot: Memory[], writes: ChildWritePayload[]): Map<string, Re
       if (target) {
         target.reinforcementCount = ((target.reinforcementCount as number) ?? 1) + ((a[3] as number) ?? 1);
       }
+    } else if (method === 'addRelatedMemoryIds') {
+      // The repository's delta: union against the row as it stands now.
+      const target = table.get(a[1] as string);
+      if (target) {
+        const list = [...((target.relatedMemoryIds as string[]) ?? [])];
+        for (const id of a[2] as string[]) if (id !== a[1] && !list.includes(id)) list.push(id);
+        target.relatedMemoryIds = list;
+      }
+    } else if (method === 'removeRelatedMemoryIds') {
+      const target = table.get(a[1] as string);
+      if (target) {
+        const removing = new Set(a[2] as string[]);
+        target.relatedMemoryIds = ((target.relatedMemoryIds as string[]) ?? []).filter(id => !removing.has(id));
+      }
+    } else if (method === 'removeRelatedMemoryIdsEverywhere') {
+      const removing = new Set(a[0] as string[]);
+      for (const target of table.values()) {
+        target.relatedMemoryIds = ((target.relatedMemoryIds as string[]) ?? []).filter(id => !removing.has(id));
+      }
+    } else if (method === 'appendReinforcementFootnotes') {
+      const target = table.get(a[1] as string);
+      if (target) target.content = appendCappedFootnotes(target.content as string, a[2] as string[]).content;
+    } else if (method === 'bulkDelete') {
+      for (const id of a[1] as string[]) table.delete(id);
+    } else if (method === 'delete') {
+      table.delete(a[0] as string);
     }
   }
   return table;
@@ -313,5 +350,92 @@ describe('bug 209 — the gate sees its own buffered writes inside one job', () 
       expect(await repos.memories.findByCharacterAndSourceMessageIds(CHAR, ['msg-2'])).toEqual([]);
       flushPendingWrites();
     });
+  });
+});
+
+describe('bug 231 — two overlapping jobs keep each other\'s links and footnotes', () => {
+  it('two jobs each linking a new memory to one neighbour leave both links', async () => {
+    const neighbour = row({ id: NEIGHBOUR, content: 'Friday keeps the harbour ledger.' });
+
+    const newIds: string[] = [];
+    const batches: ChildWritePayload[][] = [];
+    for (const [jobId, text, score] of [
+      ['job-a', 'Friday audits the ledger at dawn.', 0.78],
+      ['job-b', 'Friday locks the ledger at dusk.', 0.76],
+    ] as const) {
+      // Both jobs read the same committed snapshot: neither sees the other.
+      installSnapshot([neighbour]);
+      installVectorStore([() => [{ id: NEIGHBOUR, score }]]);
+      batches.push(await runWithJobScope(jobId, async () => {
+        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
+        expect(outcome.action).toBe('INSERT_RELATED');
+        newIds.push(outcome.memory!.id);
+        return flushPendingWrites();
+      }));
+    }
+
+    // The parent commits the two batches one after the other.
+    const table = replay([neighbour], [...batches[0], ...batches[1]]);
+    expect(table.get(NEIGHBOUR)!.relatedMemoryIds).toEqual(newIds);
+    expect(table.get(newIds[0])!.relatedMemoryIds).toEqual([NEIGHBOUR]);
+    expect(table.get(newIds[1])!.relatedMemoryIds).toEqual([NEIGHBOUR]);
+  });
+
+  it('two jobs each reinforcing one row leave both footnotes', async () => {
+    const existing = row({ id: EXISTING, content: 'Friday keeps the ledger.' });
+
+    const batches: ChildWritePayload[][] = [];
+    for (const [jobId, text] of [
+      ['job-a', 'Friday keeps the ledger for Marguerite.'],
+      ['job-b', 'Friday keeps the ledger in Valparaiso.'],
+    ] as const) {
+      installSnapshot([existing]);
+      installVectorStore([() => [{ id: EXISTING, score: 0.87 }]]);
+      batches.push(await runWithJobScope(jobId, async () => {
+        const outcome = await createMemoryWithGate(candidate(text), OPTIONS);
+        expect(outcome.action).toBe('REINFORCE');
+        return flushPendingWrites();
+      }));
+    }
+
+    const table = replay([existing], [...batches[0], ...batches[1]]);
+    const committed = table.get(EXISTING)!;
+    expect(committed.content).toContain('[+] Marguerite');
+    expect(committed.content).toContain('[+] Valparaiso');
+    expect(committed.reinforcementCount).toBe(3);
+  });
+});
+
+describe('bug 234 — two deletes in one job scrub a shared neighbour of both', () => {
+  const A = '44444444-4444-4444-8444-444444444444';
+  const B = '55555555-5555-4555-8555-555555555555';
+
+  it('the neighbour lists neither deleted id after replay, and a later read agrees', async () => {
+    const neighbour = row({ id: NEIGHBOUR, relatedMemoryIds: [A, B, EXISTING] });
+    const a = row({ id: A, relatedMemoryIds: [NEIGHBOUR] });
+    const b = row({ id: B, relatedMemoryIds: [NEIGHBOUR] });
+    const kept = row({ id: EXISTING, relatedMemoryIds: [NEIGHBOUR] });
+    installSnapshot([neighbour, a, b, kept]);
+    vectorMock.getCharacterVectorStore.mockResolvedValue({
+      removeVector: jest.fn(async () => true),
+      save: jest.fn(async () => undefined),
+    });
+
+    const writes = await runWithJobScope('job-delete', async () => {
+      // In the child the delete is buffered; the replay below is the commit.
+      await deleteMemoryWithUnlink(A);
+      await deleteMemoryWithUnlink(B);
+      const [seen] = await getChildRepositoriesProxy().memories.findByIds([NEIGHBOUR]);
+      expect(seen.relatedMemoryIds).toEqual([EXISTING]);
+      return flushPendingWrites();
+    });
+
+    // No whole-list write of the neighbour: only deltas.
+    expect(writes.some(w => w.method === 'memories.updateForCharacter'
+      && (w.args[1] === NEIGHBOUR))).toBe(false);
+    const table = replay([neighbour, a, b, kept], writes);
+    expect(table.has(A)).toBe(false);
+    expect(table.has(B)).toBe(false);
+    expect(table.get(NEIGHBOUR)!.relatedMemoryIds).toEqual([EXISTING]);
   });
 });

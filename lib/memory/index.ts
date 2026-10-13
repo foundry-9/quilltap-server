@@ -25,7 +25,7 @@ export {
   loadCommonplaceCanon,
   NO_CANON_FALLBACK,
   CANON_BLOCK_TOKEN_CAP,
-  type MemoryCandidate,
+  type MemoryDraft,
   type ChatMessage,
   type Attachment,
   type CheapLLMTaskResult,
@@ -50,7 +50,6 @@ export { formatNameWithPronouns } from './format-utils'
 export {
   runHousekeeping,
   getHousekeepingPreview,
-  needsHousekeeping,
   type HousekeepingOptions,
   type HousekeepingResult,
   type HousekeepingDetail,
@@ -94,3 +93,48 @@ export {
   maybeEnqueueConsolidationAfterCommit,
   runScheduledConsolidation,
 } from './consolidation-triggers'
+
+// The memory candidate: the one shape producers emit (refactor §3.2)
+export {
+  MemoryCandidateSchema,
+  TargetingTagsSchema,
+  DEFAULT_TARGETING,
+  normaliseTargeting,
+  targetingKeywords,
+  splitTargetingKeywords,
+  coerceImportance,
+  candidateFromDraft,
+  toCreateMemoryOptions,
+  type MemoryCandidate,
+  type TargetingTags,
+  type CandidatePass,
+} from './candidate'
+
+// The three numbers: relevance · salience · protection (refactor §3.4)
+export {
+  relevance,
+  salience,
+  protection,
+  reinforcedImportance,
+  importanceBand,
+  RECALL_MIN_IMPORTANCE,
+  TOOL_MIN_IMPORTANCE,
+} from './scoring'
+
+// One memory clock (refactor §3.3)
+export {
+  clockFor,
+  resolveEventTime,
+  resolveReferenceWindow,
+  DAY_REFERENCE_TABLE,
+  type MemoryClock,
+  type TimeWindow,
+} from './time'
+
+// One read of every memory knob (refactor §3.1)
+export {
+  resolveMemorySettings,
+  MEMORY_SETTING_DEFAULTS,
+  ADMISSION_THRESHOLDS,
+  type MemorySettings,
+} from './settings'

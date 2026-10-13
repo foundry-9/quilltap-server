@@ -23,7 +23,7 @@ import {
   updateContextSummary,
   describeAttachment,
   batchExtractMemories,
-  type MemoryCandidate,
+  type MemoryDraft,
   type ChatMessage,
   type OtherSubjectInput,
 } from '@/lib/memory/cheap-llm-tasks'
@@ -168,12 +168,13 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([{
         content: 'User mentioned they have a cat named Whiskers',
         summary: 'User has a cat named Whiskers',
         // Free keywords, then the three defaulted targeting tags (no tags in input).
-        keywords: ['cat', 'pet', 'Whiskers', 'present', 'scope: wide', 'information'],
+        keywords: ['cat', 'pet', 'Whiskers'],
+        targeting: { temporal: 'present', scope: 'wide', context: 'information' },
         importance: 0.7,
         // Episodic spine defaults (no EVENT fields in input).
         kind: 'semantic',
@@ -216,7 +217,7 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')?.[0]?.content).toBe('About John')
       expect(map.get('char-2')?.[0]?.content).toBe('About Beatrice')
     })
@@ -240,12 +241,13 @@ describe('Cheap LLM Tasks Service', () => {
 
       const result = await callExtract(transcript)
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([
         {
           content: 'ok',
           summary: 'c',
-          keywords: ['present', 'scope: wide', 'information'],
+          keywords: [],
+          targeting: { temporal: 'present', scope: 'wide', context: 'information' },
           importance: 0.6,
           kind: 'semantic',
           when: undefined,
@@ -270,7 +272,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([])
     })
 
@@ -290,7 +292,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toHaveLength(1)
       expect(map.get('user-char-id')?.[0]?.content).toBe('Test')
     })
@@ -311,7 +313,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([])
     })
 
@@ -367,7 +369,7 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([])
       expect(mockSendMessage).not.toHaveBeenCalled()
     })
@@ -389,7 +391,7 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect((result.result as Map<string, MemoryCandidate[]>).size).toBe(0)
+      expect((result.result as Map<string, MemoryDraft[]>).size).toBe(0)
       expect(mockSendMessage).not.toHaveBeenCalled()
     })
 
@@ -428,7 +430,7 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toHaveLength(2)
     })
 
@@ -674,7 +676,7 @@ describe('Cheap LLM Tasks Service', () => {
         },
       ]
 
-      const batchResponse: MemoryCandidate[] = [
+      const batchResponse: MemoryDraft[] = [
         {
           content: 'User favorite color is blue',
           summary: 'Favorite color: blue',

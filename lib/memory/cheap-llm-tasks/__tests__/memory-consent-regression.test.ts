@@ -33,7 +33,7 @@ jest.mock('@/lib/logger', () => {
 
 import { executeCheapLLMTask } from '../core-execution';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
-import type { CheapLLMTaskResult, MemoryCandidate } from '../types';
+import type { CheapLLMTaskResult, MemoryDraft } from '../types';
 import {
   buildProposalNoReplyTranscript,
   fridaySubjects,
@@ -97,7 +97,7 @@ describe('proposal-no-reply fixture', () => {
     nextResponse = INVENTED_ASSENT_RESPONSE;
     const res = (await extractOtherMemoriesFromTurn(
       buildProposalNoReplyTranscript(), FRIDAY_ID, fridaySubjects, SELECTION, 'user-1', undefined, 'chat-1', 16000,
-    )) as CheapLLMTaskResult<Map<string, MemoryCandidate[]>>;
+    )) as CheapLLMTaskResult<Map<string, MemoryDraft[]>>;
     const aboutOwen = res.result!.get(OWEN_ID) ?? [];
     expect(aboutOwen.map((c) => c.content)).toEqual([
       'Owen agreed that nothing fires without the household hearing it first',

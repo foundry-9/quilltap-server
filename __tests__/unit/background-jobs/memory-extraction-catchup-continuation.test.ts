@@ -14,6 +14,7 @@ jest.mock('@/lib/logger', () => {
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/memory/memory-processor', () => ({ processTurnForMemory: jest.fn() }))
 jest.mock('@/lib/memory/fold-other-pass', () => ({ runFoldOtherCatchup: jest.fn() }))
+jest.mock('@/lib/memory/fold-episode-catchup', () => ({ runFoldEpisodeCatchup: jest.fn() }))
 jest.mock('@/lib/background-jobs/queue-service', () => ({ enqueueMemoryExtraction: jest.fn(async () => 'job-next') }))
 jest.mock('@/lib/services/system-events.service', () => ({ createMemoryExtractionEvent: jest.fn() }))
 jest.mock('@/lib/services/cost-estimation.service', () => ({ estimateMessageCost: jest.fn() }))
@@ -22,6 +23,7 @@ import { handleMemoryExtraction } from '@/lib/background-jobs/handlers/memory-ex
 import { getRepositories } from '@/lib/repositories/factory'
 import { runFoldOtherCatchup } from '@/lib/memory/fold-other-pass'
 import { enqueueMemoryExtraction } from '@/lib/background-jobs/queue-service'
+import { runFoldEpisodeCatchup } from '@/lib/memory/fold-episode-catchup'
 
 const mockCatchup = runFoldOtherCatchup as jest.Mock
 const mockEnqueue = enqueueMemoryExtraction as jest.Mock
@@ -78,4 +80,39 @@ it('enqueues nothing (and fails for retry) when a pass timed out', async () => {
   mockCatchup.mockResolvedValue(result({ slicesDeferred: 6, passesLostToTimeout: 1 }))
   await expect(handleMemoryExtraction(job())).rejects.toThrow()
   expect(mockEnqueue).not.toHaveBeenCalled()
+})
+
+describe('fold episode catch-up (bug 232)', () => {
+  const mockEpisode = runFoldEpisodeCatchup as jest.Mock
+  const episodeResult = (over: Record<string, unknown> = {}) => ({
+    episodesExtracted: 0, memoriesWritten: 0, fragmentsLinked: 0, slices: 4,
+    slicesDeferred: 0, timedOut: false, watermarkAdvancedTo: 'h240',
+    ...over,
+  })
+  const episodeJob = () => job({ foldOtherCatchup: undefined, foldEpisodeCatchup: true })
+
+  it('runs the episode catch-up, not the OTHER one, and continues from the advanced watermark', async () => {
+    mockEpisode.mockResolvedValue(episodeResult({ slicesDeferred: 3 }))
+    await handleMemoryExtraction(episodeJob())
+    expect(mockCatchup).not.toHaveBeenCalled()
+    expect(mockEnqueue).toHaveBeenCalledWith('u1', {
+      chatId: 'chat-1',
+      turnOpenerMessageId: null,
+      extractionAnchorMessageId: 'continue-episode:h240',
+      connectionProfileId: 'prof-1',
+      foldEpisodeCatchup: true,
+    })
+  })
+
+  it('enqueues nothing when the backlog is done', async () => {
+    mockEpisode.mockResolvedValue(episodeResult())
+    await handleMemoryExtraction(episodeJob())
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('fails for retry when a slice timed out', async () => {
+    mockEpisode.mockResolvedValue(episodeResult({ slicesDeferred: 3, timedOut: true }))
+    await expect(handleMemoryExtraction(episodeJob())).rejects.toThrow()
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
 })

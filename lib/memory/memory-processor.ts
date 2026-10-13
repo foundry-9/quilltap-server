@@ -30,7 +30,7 @@ import {
   loadCanonForObserverAboutSubject,
   renderSelfCanonBlock,
   renderOtherCanonBlock,
-  MemoryCandidate,
+  MemoryDraft,
   UncensoredFallbackOptions,
   type OrientingContext,
   type ExtractionClock,
@@ -44,11 +44,12 @@ import type { MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
-import { resolveEpisodicAnchors } from './episodic-anchors'
+import { resolveEpisodicAnchors } from './time/anchors'
+import { anchorTimeMsFrom, candidateFromDraft, toCreateMemoryOptions, type CandidatePass } from './candidate'
 import type { MemoryGateOutcome } from './memory-gate'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
 
 export type RateLimitDecision =
   | { mode: 'allow' }
@@ -91,7 +92,7 @@ export async function resolveExtractionRateLimit(
   return { mode: 'allow' }
 }
 
-export function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): MemoryCandidate[] {
+export function applyImportanceFloor(candidates: MemoryDraft[], floor: number): MemoryDraft[] {
   return candidates.filter(c => (c.importance ?? 0.5) >= floor)
 }
 
@@ -246,7 +247,9 @@ export interface WriteOptions {
   aboutCharacterId: string
   aboutCharacterName: string
   pass: 'SELF' | 'OTHER'
-  candidate: MemoryCandidate
+  /** The candidate's provenance pass; defaults from `pass` (`self-turn` / `other-turn`). */
+  candidatePass?: CandidatePass
+  candidate: MemoryDraft
   passLabel: string
   ctx: CandidateWriteContext
   sourceMessageId: string | null
@@ -267,11 +270,18 @@ export interface WriteOptions {
 
 export async function writeCandidate(opts: WriteOptions): Promise<void> {
   const timelineMode = opts.ctx.timelineMode ?? 'realtime'
+  // The first parseable of the source message's time, the turn's, then now:
+  // an empty or malformed timestamp falls through rather than poisoning the
+  // anchor (a NaN the candidate schema refuses).
+  const anchorCandidates = [
+    opts.sourceMessageCreatedAt,
+    opts.ctx.sourceMessageTimestamp,
+    opts.ctx.transcript?.turnTimestamp,
+  ]
+  const anchorTimeMs = anchorTimeMsFrom(anchorCandidates)
   const anchorIso =
-    opts.sourceMessageCreatedAt ??
-    opts.ctx.sourceMessageTimestamp ??
-    opts.ctx.transcript?.turnTimestamp ??
-    new Date().toISOString()
+    anchorCandidates.find((iso): iso is string => !!iso && Number.isFinite(Date.parse(iso))) ??
+    new Date(anchorTimeMs).toISOString()
   // Episodic spine: `occurredAt` defaults to the source message timestamp
   // (authoritative from the transcript — never asked of the model); a retold
   // EVENT's `when` phrase resolves against that same anchor and overrides it.
@@ -287,6 +297,41 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
     timeZone,
   })
 
+  // One candidate for the dry run and the live write alike, so the preview
+  // reports exactly what the gate would be handed.
+  const candidate = candidateFromDraft(
+    opts.candidate,
+    { holderId: opts.characterId, aboutId: opts.aboutCharacterId },
+    {
+      source: 'AUTO',
+      // 4.6 Private Character Rooms: autonomous rooms get explicit
+      // attribution; ordinary chats get 'user_present' (the extractor only
+      // runs in chats with content, and a user opener is implicit there).
+      witnessedContext: opts.ctx.inAutonomousRoom ? 'autonomous_room' : 'user_present',
+      chatId: opts.ctx.chatId,
+      projectId: opts.ctx.projectId ?? null,
+      sourceMessageId: opts.sourceMessageId,
+      anchorTimeMs,
+      pass: opts.candidatePass ?? (opts.pass === 'SELF' ? 'self-turn' : 'other-turn'),
+    },
+  )
+  if (!candidate) {
+    // A draft the parser kept but that cannot be a memory (blank text): skip
+    // it alone, never the turn's other candidates.
+    logger.debug('[Memory] Skipping a draft that is not a valid candidate', {
+      chatId: opts.ctx.chatId,
+      characterId: opts.characterId,
+      pass: opts.pass,
+    })
+    opts.debugLogs.push(`[Memory] ${opts.passLabel} — skipped a draft with no usable text`)
+    return
+  }
+  const createOptions = toCreateMemoryOptions(candidate, {
+    occurredAt,
+    narrativeTime,
+    sourceMessageTimestamp: opts.ctx.sourceMessageTimestamp,
+  })
+
   if (opts.ctx.dryRun) {
     opts.collected.push({
       pass: opts.pass,
@@ -295,15 +340,15 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
       aboutCharacterId: opts.aboutCharacterId,
       aboutCharacterName: opts.aboutCharacterName,
       sourceMessageId: opts.sourceMessageId,
-      content: opts.candidate.content || '',
-      summary: opts.candidate.summary || '',
-      keywords: opts.candidate.keywords || [],
-      importance: opts.candidate.importance ?? 0.5,
-      kind: opts.candidate.kind === 'episodic' ? 'episodic' : 'semantic',
-      when: opts.candidate.when ?? null,
+      content: createOptions.content,
+      summary: createOptions.summary,
+      keywords: createOptions.keywords ?? [],
+      importance: candidate.importance,
+      kind: candidate.kind,
+      when: candidate.when,
       occurredAt,
       narrativeTime,
-      entities: opts.candidate.entities ?? [],
+      entities: candidate.entities,
     })
     opts.debugLogs.push(
       `[Memory] DRY-RUN ${opts.passLabel} — would write: ${opts.candidate.summary}`
@@ -312,30 +357,7 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
   }
 
   const outcome: MemoryGateOutcome = await createMemoryWithGate(
-    {
-      characterId: opts.characterId,
-      aboutCharacterId: opts.aboutCharacterId,
-      chatId: opts.ctx.chatId,
-      projectId: opts.ctx.projectId ?? null,
-      content: opts.candidate.content || '',
-      summary: opts.candidate.summary || '',
-      keywords: opts.candidate.keywords || [],
-      importance: opts.candidate.importance || 0.5,
-      source: 'AUTO',
-      sourceMessageId: opts.sourceMessageId ?? undefined,
-      sourceMessageTimestamp: opts.ctx.sourceMessageTimestamp,
-      tags: [],
-      // 4.6 Private Character Rooms: provenance for auto-extracted memories.
-      // Autonomous rooms get explicit attribution; ordinary chats get
-      // 'user_present' (the extractor only runs in chats with content, and
-      // a user opener is implicit on non-autonomous chats).
-      witnessedContext: opts.ctx.inAutonomousRoom ? 'autonomous_room' : 'user_present',
-      // Episodic spine: event time + anchors, resolved above.
-      occurredAt,
-      narrativeTime,
-      entities: opts.candidate.entities ?? [],
-      kind: opts.candidate.kind === 'episodic' ? 'episodic' : 'semantic',
-    },
+    createOptions,
     { userId: opts.ctx.userId }
   )
 
@@ -726,7 +748,7 @@ export async function processTurnForMemory(
         continue
       }
 
-      const candidatesBySubject = otherResult.result ?? new Map<string, MemoryCandidate[]>()
+      const candidatesBySubject = otherResult.result ?? new Map<string, MemoryDraft[]>()
       for (const subject of resolvedSubjects) {
         const rawCandidates = candidatesBySubject.get(subject.id) ?? []
         let flooredCandidates = rawCandidates

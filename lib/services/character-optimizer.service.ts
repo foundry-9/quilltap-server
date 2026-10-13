@@ -17,7 +17,7 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
-import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
+import { sortBySalience } from '@/lib/memory/scoring';
 import { parseLLMJson, stripCodeFences } from '@/lib/llm/llm-json';
 import {
   FIELD_SEMANTICS_PREAMBLE,
@@ -772,8 +772,8 @@ export async function runCharacterOptimizer(
       candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
     }
 
-    // Rank by weight and filter by reinforcement
-    const ranked = rankMemoriesByWeight(candidateMemories);
+    // Rank by salience (reinforced importance × time decay) and filter by reinforcement
+    const ranked = sortBySalience(candidateMemories).map(memory => ({ memory }));
     const reinforced = ranked.filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES);
     const filteredCount = reinforced.length;
     const qualifyingMemories = reinforced.slice(0, maxMemories);

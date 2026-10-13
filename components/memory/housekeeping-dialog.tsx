@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { MEMORY_CAP_BOUNDS } from '@/lib/memory/settings-defaults'
 
 interface HousekeepingDetail {
   memoryId: string
-  action: 'deleted' | 'demoted' | 'merged' | 'kept'
+  action: 'deleted' | 'demoted' | 'kept'
   reason: string
   summary?: string
 }
@@ -18,6 +19,8 @@ interface HousekeepingPreview {
   wouldKeep: number
   totalBefore: number
   totalAfter: number
+  /** The cap the preview applied: the one asked for, else the character's configured cap. */
+  capUsed?: number
   details: HousekeepingDetail[]
 }
 
@@ -34,7 +37,10 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   const [error, setError] = useState<string | null>(null)
 
   // Options state
-  const [maxMemories, setMaxMemories] = useState(1000)
+  // Null until the operator types one: the server then applies this
+  // character's configured cap (its override, else the global cap), and the
+  // preview reports which (`capUsed`).
+  const [maxMemories, setMaxMemories] = useState<number | null>(null)
   const [maxAgeMonths, setMaxAgeMonths] = useState(6)
   const [minImportance, setMinImportance] = useState(0.3)
 
@@ -45,10 +51,10 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
       setError(null)
       try {
         const params = new URLSearchParams({
-          maxMemories: maxMemories.toString(),
           maxAgeMonths: maxAgeMonths.toString(),
           minImportance: minImportance.toString(),
         })
+        if (maxMemories !== null) params.set('maxMemories', maxMemories.toString())
 
         const res = await fetch(`/api/v1/memories?characterId=${characterId}&action=housekeep&${params}`)
         if (!res.ok) throw new Error('Failed to fetch preview')
@@ -74,7 +80,8 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           characterId,
-          maxMemories,
+          // Omitted when untouched, so the run uses the same configured cap the preview showed.
+          ...(maxMemories !== null ? { maxMemories } : {}),
           maxAgeMonths,
           minImportance,
           dryRun: false,
@@ -136,10 +143,13 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               </label>
               <input
                 type="number"
-                value={maxMemories}
-                onChange={(e) => setMaxMemories(parseInt(e.target.value) || 1000)}
-                min={10}
-                max={10000}
+                value={maxMemories ?? preview?.capUsed ?? ''}
+                onChange={(e) => {
+                  const typed = parseInt(e.target.value, 10)
+                  setMaxMemories(Number.isFinite(typed) ? typed : null)
+                }}
+                min={MEMORY_CAP_BOUNDS.min}
+                max={MEMORY_CAP_BOUNDS.max}
                 className="qt-input"
               />
               <div className="mt-1 qt-text-xs space-y-0.5">

@@ -28,7 +28,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { calculateReinforcedImportance } from './reinforced-importance'
+import { calculateReinforcedImportance } from './scoring'
 import { MemoryReembedError, updateMemoryWithEmbedding } from './memory-service'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 import { mirrorCommonplaceForSubjects } from './commonplace-mirror'
@@ -131,23 +131,13 @@ export async function editMemory(
   }
   if (!memory) return { ok: false, reason: 'not-found' }
 
+  // Neighbour links are deltas against the rows at write time, so an
+  // extraction job linking the same neighbour keeps its link (bug 231).
   for (const id of added) {
-    const neighbour = await repos.memories.findByIdForCharacter(characterId, id)
-    if (!neighbour) continue
-    const links = neighbour.relatedMemoryIds ?? []
-    if (!links.includes(memoryId)) {
-      await repos.memories.updateForCharacter(characterId, id, { relatedMemoryIds: [...links, memoryId] })
-    }
+    await repos.memories.addRelatedMemoryIds(characterId, id, [memoryId])
   }
   for (const id of removed) {
-    const neighbour = await repos.memories.findByIdForCharacter(characterId, id)
-    if (!neighbour) continue
-    const links = neighbour.relatedMemoryIds ?? []
-    if (links.includes(memoryId)) {
-      await repos.memories.updateForCharacter(characterId, id, {
-        relatedMemoryIds: links.filter((l) => l !== memoryId),
-      })
-    }
+    await repos.memories.removeRelatedMemoryIds(characterId, id, [memoryId])
   }
   if (added.length > 0 || removed.length > 0) {
     log.debug('Mirrored edited memory links onto neighbours', { characterId, memoryId, added, removed })

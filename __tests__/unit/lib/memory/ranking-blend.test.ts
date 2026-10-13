@@ -20,7 +20,7 @@ import {
   defaultMinCosineForProvider,
   DEFAULT_MIN_COSINE_NEURAL,
   DEFAULT_MIN_COSINE_TFIDF,
-} from '@/lib/memory/memory-weighting'
+} from '@/lib/memory/scoring'
 import {
   combineRecallMultipliers,
   recentlyWhisperedMultiplier,

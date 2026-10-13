@@ -36,7 +36,7 @@ import {
   type GeneratedWardrobeItem,
 } from '@/lib/wardrobe/generated-items';
 import { logger } from '@/lib/logger';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';

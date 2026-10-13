@@ -15,7 +15,8 @@ import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
 import { getRawDatabase } from '../backends/sqlite/client';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
+import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
 /**
  * Input to {@link MemoriesRepository.create}. The tier fields are optional
@@ -31,6 +32,17 @@ export type MemoryCreateInput = Omit<Memory, 'id' | 'createdAt' | 'updatedAt' | 
  * hot, never cold.
  */
 const HOT_TIER_SQL = `COALESCE(tier, 'hot') = 'hot'`;
+
+/** A JSON id-list column as stored, read leniently (malformed reads as empty). */
+function parseJsonIdList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -206,7 +218,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           (filter as any).source = source;
         }
         if (minImportance !== undefined) {
-          (filter as any).importance = { $gte: minImportance };
+          (filter as any).reinforcedImportance = { $gte: minImportance };
         }
         if (tier) {
           (filter as any).tier = tier;
@@ -273,7 +285,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Find memories with importance >= minImportance threshold
+   * Find memories whose reinforced importance is >= minImportance (the value every importance filter reads)
    * @param characterId The character ID
    * @param minImportance Minimum importance value (0-1)
    * @returns Promise<Memory[]> Array of memories meeting importance threshold
@@ -288,7 +300,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
         const memories = await this.findByFilter({
           characterId,
-          importance: { $gte: minImportance },
+          reinforcedImportance: { $gte: minImportance },
         });
         return memories;
       },
@@ -609,6 +621,202 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         return result;
       },
       'Error reinforcing memory',
+      { characterId, memoryId }
+    );
+  }
+
+  /**
+   * Add `ids` to one memory's `relatedMemoryIds`, against the row as it stands
+   * at write time. A delta, not a whole-array write: two jobs that each link a
+   * new memory to the same neighbour both land their link when the parent
+   * replays their batches, where an absolute list built from each job's
+   * snapshot let the later one drop the earlier one's (bug 231). Ids already
+   * present, and the row's own id, are skipped. Returns the list as written,
+   * or null when the row is missing (`undefined` in the job child, where the
+   * write is buffered).
+   */
+  async addRelatedMemoryIds(
+    characterId: string,
+    memoryId: string,
+    ids: readonly string[],
+  ): Promise<string[] | null> {
+    return this.updateRelatedMemoryIdsAtomically(characterId, memoryId, 'add', ids);
+  }
+
+  /**
+   * Remove `ids` from one memory's `relatedMemoryIds`, against the row as it
+   * stands at write time (the delta twin of {@link addRelatedMemoryIds}).
+   */
+  async removeRelatedMemoryIds(
+    characterId: string,
+    memoryId: string,
+    ids: readonly string[],
+  ): Promise<string[] | null> {
+    return this.updateRelatedMemoryIdsAtomically(characterId, memoryId, 'remove', ids);
+  }
+
+  private async updateRelatedMemoryIdsAtomically(
+    characterId: string,
+    memoryId: string,
+    op: 'add' | 'remove',
+    ids: readonly string[],
+  ): Promise<string[] | null> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Memory link update: the main database is not initialized');
+        }
+        const delta = Array.from(new Set(ids.filter((id) => typeof id === 'string' && id.length > 0)));
+        const now = this.getCurrentTimestamp();
+        const result = db.transaction(() => {
+          const row = db
+            .prepare('SELECT "relatedMemoryIds" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
+            .get(memoryId, characterId) as { relatedMemoryIds: string | null } | undefined;
+          if (!row) return null;
+          const current = parseJsonIdList(row.relatedMemoryIds);
+          let next: string[];
+          if (op === 'add') {
+            const present = new Set(current);
+            next = [...current];
+            for (const id of delta) {
+              if (id === memoryId || present.has(id)) continue;
+              present.add(id);
+              next.push(id);
+            }
+          } else {
+            const removing = new Set(delta);
+            next = current.filter((id) => !removing.has(id));
+          }
+          if (next.length === current.length && next.every((id, i) => id === current[i])) {
+            return { list: current, changed: false };
+          }
+          db.prepare('UPDATE "memories" SET "relatedMemoryIds" = ?, "updatedAt" = ? WHERE "id" = ?')
+            .run(JSON.stringify(next), now, memoryId);
+          return { list: next, changed: true };
+        })();
+
+        if (!result) {
+          logger.warn('Memory not found for link update', { memoryId, characterId, op });
+          return null;
+        }
+        logger.debug('Memory links updated', {
+          memoryId,
+          characterId,
+          op,
+          requested: delta.length,
+          changed: result.changed,
+          size: result.list.length,
+        });
+        return result.list;
+      },
+      'Error updating memory links',
+      { characterId, memoryId, op }
+    );
+  }
+
+  /**
+   * Remove `ids` from the `relatedMemoryIds` of every row, whichever character
+   * holds it, that names any of them — the delete chokepoints' neighbour
+   * scrub. One SQL removal delta per chunk, applied against the rows as they
+   * stand at write time, so two deletes in one job (or in two jobs) each
+   * remove only their own id and the replay applies both (bug 234).
+   * Instance-wide on purpose: the gate links only within a holder, but an
+   * import, a restore or legacy data can cross characters, and an id whose row
+   * is already gone still has to leave its neighbours. Returns rows changed (0
+   * in the job child, where the write is buffered).
+   */
+  async removeRelatedMemoryIdsEverywhere(ids: readonly string[]): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const removing = Array.from(new Set(ids));
+        if (removing.length === 0) return 0;
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Memory link scrub: the main database is not initialized');
+        }
+        const now = this.getCurrentTimestamp();
+        let changed = 0;
+        // Each chunk binds its ids twice (the filter and the EXISTS), plus updatedAt.
+        const chunkSize = Math.max(1, Math.floor((SQLITE_VARIABLE_CHUNK_SIZE - 1) / 2));
+        for (const chunk of chunkArray(removing, chunkSize)) {
+          const placeholders = chunk.map(() => '?').join(',');
+          const result = db
+            .prepare(
+              `UPDATE memories
+                  SET relatedMemoryIds = (
+                        SELECT COALESCE(json_group_array(value), '[]')
+                          FROM json_each(memories.relatedMemoryIds)
+                         WHERE value NOT IN (${placeholders})
+                      ),
+                      updatedAt = ?
+                WHERE relatedMemoryIds IS NOT NULL
+                  AND relatedMemoryIds <> '[]'
+                  AND json_valid(relatedMemoryIds)
+                  AND EXISTS (
+                        SELECT 1 FROM json_each(memories.relatedMemoryIds)
+                         WHERE value IN (${placeholders})
+                      )`,
+            )
+            .run(...chunk, now, ...chunk);
+          changed += result.changes;
+        }
+        logger.debug('Scrubbed deleted ids from related links', { ids: removing.length, changed });
+        return changed;
+      },
+      'Error scrubbing related memory links',
+      { count: ids.length },
+      0,
+    );
+  }
+
+  /**
+   * Append reinforcement footnotes to one memory's content, against the row as
+   * it stands at write time: the cap and the "already there" check read the
+   * live content inside the write transaction, so two jobs reinforcing one
+   * memory both land their footnotes, where a whole-content write built from
+   * each job's snapshot let the later one drop the earlier one's (bug 231).
+   * Returns the content as written and the details appended, or null when the
+   * row is missing (`undefined` in the job child, where the write is buffered).
+   */
+  async appendReinforcementFootnotes(
+    characterId: string,
+    memoryId: string,
+    details: readonly string[],
+  ): Promise<{ content: string; appended: string[] } | null> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Memory footnotes: the main database is not initialized');
+        }
+        const now = this.getCurrentTimestamp();
+        const result = db.transaction(() => {
+          const row = db
+            .prepare('SELECT "content" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
+            .get(memoryId, characterId) as { content: string } | undefined;
+          if (!row) return null;
+          const next = appendCappedFootnotes(row.content ?? '', details);
+          if (next.appended.length > 0) {
+            db.prepare('UPDATE "memories" SET "content" = ?, "updatedAt" = ? WHERE "id" = ?')
+              .run(next.content, now, memoryId);
+          }
+          return next;
+        })();
+
+        if (!result) {
+          logger.warn('Memory not found for reinforcement footnotes', { memoryId, characterId });
+          return null;
+        }
+        logger.debug('Reinforcement footnotes appended', {
+          memoryId,
+          characterId,
+          offered: details.length,
+          appended: result.appended.length,
+        });
+        return result;
+      },
+      'Error appending reinforcement footnotes',
       { characterId, memoryId }
     );
   }
@@ -1246,7 +1454,8 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter(
           { characterId, aboutCharacterId },
           {
-            sort: { importance: -1, createdAt: -1 },
+            // reinforcedImportance, the value every importance filter reads.
+            sort: { reinforcedImportance: -1, createdAt: -1 },
           }
         );
         return memories;
@@ -1262,13 +1471,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * capped per about-character via a window function so SQLite ranks and
    * truncates each partition before returning rows.
    *
-   * Sort key approximates {@link calculateEffectiveWeight}: raw importance
-   * dominates, with `lastReinforcedAt` (falling back to `createdAt`) breaking
-   * ties so a recently-reinforced memory beats a stale one of equal score.
+   * Sort key approximates salience (`lib/memory/scoring`): reinforced
+   * importance dominates, with `lastReinforcedAt` (falling back to
+   * `createdAt`) breaking ties so a recently-reinforced memory beats a stale
+   * one of equal score.
    *
    * The caller (context-manager) sizes `limitPerCharacter` from the
    * inter-character whisper budget plus a buffer; any further re-ranking by
-   * effective weight happens in JS over this much smaller set.
+   * salience happens in JS over this much smaller set.
    */
   async findByCharacterAboutCharacters(
     characterId: string,
@@ -1287,7 +1497,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
             SELECT *,
               ROW_NUMBER() OVER (
                 PARTITION BY aboutCharacterId
-                ORDER BY importance DESC,
+                ORDER BY COALESCE(reinforcedImportance, importance) DESC,
                          COALESCE(lastReinforcedAt, createdAt) DESC
               ) AS rn
             FROM memories
@@ -1624,83 +1834,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding memories with text',
       { characterId, chatId },
       []
-    );
-  }
-
-  /**
-   * Replace text in memory content, summary, and keywords for specific memories
-   * @param memoryIds Array of memory IDs to update
-   * @param searchText Text to find
-   * @param replaceText Text to replace with
-   * @returns Array of updated memories (for embedding regeneration)
-   */
-  async replaceInMemories(
-    memoryIds: string[],
-    searchText: string,
-    replaceText: string
-  ): Promise<Memory[]> {
-    return this.safeQuery(
-      async () => {
-        if (memoryIds.length === 0) {
-          return [];
-        }
-
-        const updatedMemories: Memory[] = [];
-
-        for (const memoryId of memoryIds) {
-          const memory = await this.findById(memoryId);
-          if (!memory) {
-            logger.warn('Memory not found for replacement', { memoryId });
-            continue;
-          }
-
-          let contentChanged = false;
-          let newContent = memory.content;
-          let newSummary = memory.summary;
-          let newKeywords = memory.keywords;
-
-          // Replace in content
-          if (memory.content.includes(searchText)) {
-            newContent = memory.content.split(searchText).join(replaceText);
-            contentChanged = true;
-          }
-
-          // Replace in summary
-          if (memory.summary.includes(searchText)) {
-            newSummary = memory.summary.split(searchText).join(replaceText);
-            contentChanged = true;
-          }
-
-          // Replace in keywords array
-          if (memory.keywords && memory.keywords.length > 0) {
-            const updatedKeywords = memory.keywords.map(keyword => {
-              if (keyword.includes(searchText)) {
-                contentChanged = true;
-                return keyword.split(searchText).join(replaceText);
-              }
-              return keyword;
-            });
-            newKeywords = updatedKeywords;
-          }
-
-          if (contentChanged) {
-            const updated = await this.update(memoryId, {
-              content: newContent,
-              summary: newSummary,
-              keywords: newKeywords,
-            });
-
-            if (updated) {
-              updatedMemories.push(updated);
-            }
-          }
-        }
-
-        logger.info('Replaced text in memories', { updatedCount: updatedMemories.length });
-        return updatedMemories;
-      },
-      'Error replacing text in memories',
-      { memoryCount: memoryIds.length }
     );
   }
 

@@ -39,6 +39,7 @@ import type {
   TimestampConfig,
 } from '@/lib/schemas/types'
 import type { AttachedFile } from './types'
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 const logger = createServiceLogger('ContextBuilderService')
 
@@ -1087,7 +1088,7 @@ export async function buildMessageContext(
     roleplayTemplate,
     embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
-    minMemoryImportance: 0.5,
+    minMemoryImportance: RECALL_MIN_IMPORTANCE,
     // Multi-character context building options
     // Phase H: pass the responding participant in both single- and multi-
     // character chats so the system-prompt compiler cache can hit on

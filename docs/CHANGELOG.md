@@ -4,6 +4,41 @@
 
 ### 4.10-dev
 
+#### PR 91 review: 9 findings on Phase A
+
+- A candidate that fails validation no longer throws. `candidateFromDraft` returns null for a draft with no usable text (whitespace-only content and summary); `writeCandidate` skips that draft and the rest of the turn's extraction continues. A blank `content` falls back to the summary.
+- An empty or malformed source timestamp no longer produces a NaN anchor: new `anchorTimeMsFrom` takes the first parseable of the source message time, the turn time, then now. Used by the per-turn writer and the fold episode pass.
+- Manual memory create (`POST /api/v1/memories`) caps `entities` at 12 in the request schema and returns 400, not 500, when the candidate schema refuses the input.
+- The housekeeping dialog no longer sends a fixed cap of 2000. It omits `maxMemories` until the user types one, so the server applies the character's configured cap; the preview response now includes `capUsed`, which the dialog displays.
+- The housekeep, preview and job paths read only the `memoryMaintenance` setting (`resolveMemoryMaintenance`) instead of all five memory settings.
+- The neighbour scrub on delete is instance-wide again: `removeRelatedMemoryIdsForCharacter(characterId, ids)` is replaced by `removeRelatedMemoryIdsEverywhere(ids)`, which scrubs every requested id (including ids whose rows are already gone) from every row, still as one SQL removal delta. The job child's scrub set is job-wide.
+- The episode catch-up sweep skips a chat that already has an episode catch-up job queued or running, whatever its anchor, so a `continue-episode:` chain and a new sweep job never read the same slices.
+- The episode catch-up sweep reads no transcripts: it tests the backlog against `summaryAnchorMessageIds` (`isEpisodeBacklogBehindByAnchors`); the job keeps the exact transcript check. Both catch-up sweeps share one `chats.findAll()`.
+- `FOLD_EPISODE_PROMPT` no longer asks for `participants`, which the parser stopped reading.
+
+#### Memory refactor Phase A: scoring, clock, settings, candidate
+
+Structural Phase A of `docs/developer/features/memory-system-refactor.md`. One migration.
+
+- Scoring: new `lib/memory/scoring/` holds the three numbers. `relevance` (cosine and the recall blend), `salience` (reinforced importance with a 30-day half-life, no floor) and `protection` (the housekeeping score, unchanged). `calculateEffectiveWeight`, `rankMemoriesByWeight`, `lib/memory/memory-weighting.ts` and `lib/memory/reinforced-importance.ts` removed. Search results, the memory tools and debug info report `salience` instead of `effectiveWeight` / `rawWeight`.
+- Every `minImportance` filter reads reinforced importance through `filterImportance`. Prompt paths use `RECALL_MIN_IMPORTANCE` (0.3); the memory search tool and API search default to `TOOL_MIN_IMPORTANCE` (0). UI importance bands come from `importanceBand`.
+- Time: new `lib/memory/time/` (`calendar`, `calendar-refresh`, `anchors`, `rules`, `clock`, `age-label`). One `DAY_REFERENCE_TABLE` drives both the extraction-side `when` resolver and the search-side day windows. Windows are closed (`to` is the next boundary minus 1 ms). A "today" phrase is stamped at local midnight. Day counts go out to fourteen days. `lib/memory/day-references.ts` removed.
+- Settings: `lib/memory/settings.ts` (`resolveMemorySettings`) is the one read of every memory setting; `lib/memory/settings-defaults.ts` holds the defaults (from the Zod schemas) and the gate's admission thresholds. New instance setting `memoryMaintenance` `{enabled, perCharacterCap, perCharacterCapOverrides}`, caps 100–100,000, replaces `chat_settings.autoHousekeepingSettings`. `mergeSimilar` / `autoMergeSimilarThreshold` removed.
+- Migration `move-memory-maintenance-settings-v1`: copies housekeeping settings into `memoryMaintenance`, deletes the `memoryExtractionConcurrency` instance key, drops `chat_settings.autoHousekeepingSettings`, `memoryExtractionLimits` and `memoryExtractionConcurrency`. Restore of an older backup derives `memoryMaintenance` the same way.
+- API: `?action=maintenance-config` (old `housekeeping-config` still answers). `?action=extraction-concurrency` removed. Housekeep results drop `merged` / `mergedIds` / `wouldMerge`; `maxMemories` is validated to 100–100,000 and defaults to the character's configured cap.
+- Candidate: new `lib/memory/candidate.ts` with `MemoryCandidateSchema`, the one shape every producer builds (per-turn passes, fold OTHER, fold episode, manual API, consolidation). Targeting tags ride on the candidate and are written into keywords only by `toCreateMemoryOptions`. The parser's `coerceImportance` is the only importance default, so a model's 0 stays 0. The cheap-LLM `MemoryCandidate` type is renamed `MemoryDraft`.
+- Almanack reports `instanceSettings.memoryMaintenance` instead of the chat-settings housekeeping block.
+
+#### Fix bugs 230–234: the remaining open memory bugs
+
+Targeted fixes ahead of the memory refactor phases that were to close them. No migrations.
+
+- 230: The memory dry run (`?action=extract-memories-dry-run`) passes the chat's `projectId`, project description and context summary to the extractor, as the per-turn and Carina handlers do.
+- 231: Related links and reinforcement footnotes are written as deltas against the live row: new `MemoriesRepository.addRelatedMemoryIds`, `removeRelatedMemoryIds` and `appendReinforcementFootnotes` (read and write in one SQLite transaction). The gate, the fold episode pass's fragment links and the memory editor use them, so two jobs touching one memory both keep their links and footnotes. The job child's overlay applies the same deltas. Footnote helpers moved to `lib/memory/reinforcement-footnotes.ts`; `appendCappedFootnotes` now skips a footnote the content already has.
+- 232: The fold episode pass has an idle catch-up. The daily maintenance sweep enqueues a `foldEpisodeCatchup` MEMORY_EXTRACTION job for each chat idle over two hours whose episode watermark is behind its fold boundary (last `summaryAnchorMessageIds` entry); each job reads up to 4 slices and enqueues its successor (`continue-episode:<watermark>`). Shared catch-up rules moved to `lib/memory/fold-catchup.ts`.
+- 233: Search and replace writes each memory through `editMemory`, which re-embeds the new text in the same write; a memory whose text cannot be embedded is left unchanged and listed in `errors`. `MemoriesRepository.replaceInMemories` removed.
+- 234: The delete chokepoints scrub `relatedMemoryIds` with one SQL removal delta per holder (`removeRelatedMemoryIdsForCharacter`) instead of reading neighbours and writing whole lists; the instance-wide neighbour scan and `DeleteBatchOptions.currentLinks` are gone.
+
 #### Document Commonplace cleanup on character deletion
 
 - Deleting a character (not archiving) removes its `Commonplace/` digest files along with its digests. Confirmed as intended; documented in `help/memory-consolidation.md` and bug 208.

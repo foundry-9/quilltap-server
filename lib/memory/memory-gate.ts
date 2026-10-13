@@ -27,8 +27,14 @@ import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
-import { calculateReinforcedImportance } from './reinforced-importance'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
+import { calculateReinforcedImportance } from './scoring'
+import {
+  MAX_REINFORCEMENT_FOOTNOTES,
+  appendCappedFootnotes,
+  countReinforcementFootnotes,
+} from './reinforcement-footnotes'
+import { ADMISSION_THRESHOLDS } from './settings-defaults'
 
 // =============================================================================
 // Constants
@@ -42,21 +48,19 @@ import { calculateReinforcedImportance } from './reinforced-importance'
  * the facts restated most faithfully are not the ones that never accrue
  * reinforcement.
  */
-export const NEAR_DUPLICATE_THRESHOLD = 0.90
+export const NEAR_DUPLICATE_THRESHOLD = ADMISSION_THRESHOLDS.nearDuplicate
 
 /** Duplicate-enough threshold — memories above this are reinforced, not duplicated. */
-export const MERGE_THRESHOLD = 0.85
+export const MERGE_THRESHOLD = ADMISSION_THRESHOLDS.reinforce
 
 /** Related-but-distinct threshold — memories in this band get linked. */
-export const RELATED_THRESHOLD = 0.70
+export const RELATED_THRESHOLD = ADMISSION_THRESHOLDS.related
 
-/**
- * Most `[+]` footnote lines a memory may carry. Past this, reinforcement still
- * bumps count/importance and unions entities, but appends no more prose and
- * skips the re-embed — an unbounded tail drifts the row's vector toward a bag
- * of proper nouns.
- */
-export const MAX_REINFORCEMENT_FOOTNOTES = 8
+export {
+  MAX_REINFORCEMENT_FOOTNOTES,
+  appendCappedFootnotes,
+  countReinforcementFootnotes,
+} from './reinforcement-footnotes'
 
 /** Top-K results to fetch from vector store during gate check */
 const GATE_TOP_K = 5
@@ -71,7 +75,7 @@ const EMBEDDING_RETRY_DELAY_MS = 500
  * days, SKIP_NEAR_DUPLICATE / REINFORCE downgrade to INSERT_RELATED so
  * distinct occasions of the same activity both persist as rows.
  */
-export const DATE_GUARD_DAYS = 7
+export const DATE_GUARD_DAYS = ADMISSION_THRESHOLDS.dateGuardDays
 
 /** True when both timestamps parse and sit more than {@link DATE_GUARD_DAYS} apart. */
 export function occasionsAreDistinct(
@@ -453,30 +457,6 @@ async function runMemoryGateInner(
 // Reinforcement
 // =============================================================================
 
-/** Number of `[+]` footnote lines already appended to a memory's content. */
-export function countReinforcementFootnotes(content: string): number {
-  let count = 0
-  for (const line of content.split('\n')) {
-    if (line.startsWith('[+] ')) count++
-  }
-  return count
-}
-
-/**
- * Append novel details to `content` as `[+]` footnotes, stopping at
- * {@link MAX_REINFORCEMENT_FOOTNOTES}. Returns the new content and the details
- * actually appended (a prefix of `details`, possibly empty).
- */
-export function appendCappedFootnotes(
-  content: string,
-  details: string[],
-): { content: string; appended: string[] } {
-  const room = Math.max(0, MAX_REINFORCEMENT_FOOTNOTES - countReinforcementFootnotes(content))
-  const appended = details.slice(0, room)
-  if (appended.length === 0) return { content, appended }
-  return { content: `${content}\n${appended.map(d => `[+] ${d}`).join('\n')}`, appended }
-}
-
 /**
  * Persist a patch to a memory and return the row as it now stands.
  *
@@ -687,15 +667,12 @@ export async function reinforceMemory(
     })
   }
 
-  const contentChanged = newContent !== existingMemory.content
-
   // The count, lastReinforcedAt and reinforcedImportance are NOT in this
-  // patch: they move only through countReinforcement's atomic increment.
+  // patch: they move only through countReinforcement's atomic increment. The
+  // footnotes are not in it either: they are appended as a delta against the
+  // row at commit (appendReinforcementFootnotes), so a second job reinforcing
+  // the same row keeps both jobs' footnotes (bug 231).
   const updateData: Partial<Memory> = {}
-
-  if (contentChanged) {
-    updateData.content = newContent
-  }
 
   // Anchor upgrades: a retelling that supplies when/where the original capture
   // lacked should improve the row — today only footnote prose accumulates.
@@ -739,6 +716,21 @@ export async function reinforceMemory(
   }
 
   let updatedMemory: Memory = { ...existingMemory, ...counted }
+  let contentChanged = false
+  if (novelDetails.length > 0) {
+    const written = await getRepositories().memories.appendReinforcementFootnotes(
+      existingMemory.characterId,
+      existingMemory.id,
+      novelDetails,
+    )
+    // In the job child the append is buffered: the local view is the
+    // snapshot's content with the same footnotes appended.
+    const content = written === undefined ? newContent : written?.content
+    if (content !== undefined && content !== updatedMemory.content) {
+      updatedMemory = { ...updatedMemory, content }
+      contentChanged = true
+    }
+  }
   if (Object.keys(updateData).length > 0) {
     const patched = await patchMemory(updatedMemory, updateData)
     if (!patched) {
@@ -767,6 +759,11 @@ export async function reinforceMemory(
 
 /**
  * Bidirectionally link a new memory with related existing memories.
+ *
+ * Both sides are written as deltas (`addRelatedMemoryIds`) against the rows as
+ * they stand at commit, never as a list built from this caller's read: two
+ * extraction jobs that each link a new memory to one neighbour would otherwise
+ * leave the neighbour naming only the later one (bug 231).
  */
 export async function linkRelatedMemories(
   newMemoryId: string,
@@ -777,26 +774,21 @@ export async function linkRelatedMemories(
   const linkedIds: string[] = []
 
   for (const { memory: related } of relatedMemories) {
-    // Add new memory's ID to related memory's relatedMemoryIds
-    const existingRelated = related.relatedMemoryIds ?? []
-    if (!existingRelated.includes(newMemoryId)) {
-      await repos.memories.updateForCharacter(
-        related.characterId,
-        related.id,
-        { relatedMemoryIds: [...existingRelated, newMemoryId] }
-      )
+    if (related.id === newMemoryId) continue
+    if (!(related.relatedMemoryIds ?? []).includes(newMemoryId)) {
+      await repos.memories.addRelatedMemoryIds(related.characterId, related.id, [newMemoryId])
     }
     linkedIds.push(related.id)
   }
 
-  // Set relatedMemoryIds on the new memory
   if (linkedIds.length > 0) {
-    await repos.memories.updateForCharacter(
-      newMemoryCharacterId,
-      newMemoryId,
-      { relatedMemoryIds: linkedIds }
-    )
+    await repos.memories.addRelatedMemoryIds(newMemoryCharacterId, newMemoryId, linkedIds)
   }
+  logger.debug('[MemoryGate] Linked new memory to related memories', {
+    memoryId: newMemoryId,
+    characterId: newMemoryCharacterId,
+    linked: linkedIds.length,
+  })
 
   return linkedIds
 }
@@ -817,22 +809,6 @@ const SINGLE_DELETE_NEIGHBOUR_WARN = 20
  * outstrips even those.
  */
 const BATCH_DELETE_NEIGHBOUR_WARN = 200
-
-interface NeighbourRow {
-  id: string
-  characterId: string
-  relatedMemoryIds: string | null
-}
-
-function parseRelatedIds(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-  } catch {
-    return []
-  }
-}
 
 /**
  * Remove deleted memories' vectors from their characters' indexes. Part of the
@@ -977,8 +953,8 @@ async function mirrorBucketsAfterDigestDelete(buckets: DeletedDigestBuckets): Pr
  * already gone, returns false without touching neighbours.
  *
  * Callers that need to cascade many memories at once should use
- * {@link deleteMemoriesWithUnlinkBatch} — it scans neighbours in a single
- * pass instead of repeating the LIKE filter per ID.
+ * {@link deleteMemoriesWithUnlinkBatch} — it scrubs neighbours with one
+ * statement per holder instead of one per ID.
  */
 export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean> {
   const startedAt = Date.now()
@@ -989,24 +965,10 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
     return false
   }
 
-  // LIKE pre-filter narrows the scan; the quoted UUID inside the pattern
-  // prevents partial-UUID collisions across the JSON column.
-  const likeParam = `%"${memoryId}"%`
-  const neighbours = await rawQuery<NeighbourRow[]>(
-    'SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds LIKE ? AND id != ?',
-    [likeParam, memoryId]
-  )
-
-  const charactersAffected = new Set<string>()
-  for (const neighbour of neighbours) {
-    const current = parseRelatedIds(neighbour.relatedMemoryIds)
-    if (!current.includes(memoryId)) continue
-    const filtered = current.filter(id => id !== memoryId)
-    await repos.memories.updateForCharacter(neighbour.characterId, neighbour.id, {
-      relatedMemoryIds: filtered,
-    })
-    charactersAffected.add(neighbour.characterId)
-  }
+  // A removal delta in SQL across every holder: applied against the rows at
+  // commit, so two deletes in one job, or two jobs, each remove their own id
+  // (bug 234).
+  const neighboursTouched = await repos.memories.removeRelatedMemoryIdsEverywhere([memoryId])
   const digestLinksScrubbed = await scrubDigestLinks(new Set([memoryId]), [target.characterId])
 
   const deleted = await repos.memories.delete(memoryId)
@@ -1018,11 +980,10 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
     memoryId,
     vectorsRemoved,
     digestLinksScrubbed,
-    neighbourCount: neighbours.length,
-    charactersAffected: charactersAffected.size,
+    neighboursTouched: neighboursTouched ?? 0,
     durationMs: Date.now() - startedAt,
   }
-  if (neighbours.length >= SINGLE_DELETE_NEIGHBOUR_WARN) {
+  if ((neighboursTouched ?? 0) >= SINGLE_DELETE_NEIGHBOUR_WARN) {
     logger.warn('[MemoryGate] deleteMemoryWithUnlink touched an unusually large neighbour set', logFields)
   }
   logger.debug('[MemoryGate] deleteMemoryWithUnlink complete', logFields)
@@ -1041,34 +1002,19 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
 }
 
 /**
- * Batch version of {@link deleteMemoryWithUnlink}. Scans neighbours once
- * against the full doomed set, scrubs every doomed ID from each neighbour's
- * `relatedMemoryIds` in one update per neighbour, deletes the batch, then
- * removes the deleted rows' vectors.
+ * Batch version of {@link deleteMemoryWithUnlink}. Scrubs every requested ID —
+ * found or already gone — from every row's `relatedMemoryIds` with one SQL
+ * removal delta, deletes the batch, then removes the deleted rows' vectors.
  *
  * Use this for cascades: character deletion, chat-wipe, swipe-group cleanup,
  * housekeeping retention sweeps. Calling the single-ID helper in a loop is
  * correct but wastes a full table scan per ID.
  *
- * Returns the number of memory rows actually deleted (the LIKE-filtered
- * neighbour count is logged, not returned).
+ * Returns the number of memory rows actually deleted (the neighbour count is
+ * logged, not returned).
  */
-export async function deleteMemoriesWithUnlinkBatch(
-  memoryIds: string[],
-  options: DeleteBatchOptions = {},
-): Promise<number> {
-  return (await deleteMemoriesWithUnlinkBatchReport(memoryIds, options)).deleted
-}
-
-export interface DeleteBatchOptions {
-  /**
-   * Rows whose links the caller has just rewritten in this same operation
-   * (a merge survivor), keyed by id. The scrub reads these lists instead of
-   * the database row: in the job child the database still holds the
-   * pre-write row, and scrubbing from it would overwrite the caller's
-   * fresher list.
-   */
-  currentLinks?: ReadonlyMap<string, { characterId: string; relatedMemoryIds: string[] }>
+export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promise<number> {
+  return (await deleteMemoriesWithUnlinkBatchReport(memoryIds)).deleted
 }
 
 /**
@@ -1077,45 +1023,12 @@ export interface DeleteBatchOptions {
  */
 export async function deleteMemoriesWithUnlinkBatchReport(
   memoryIds: string[],
-  options: DeleteBatchOptions = {},
 ): Promise<{ deleted: number; vectorsRemoved: number }> {
   if (memoryIds.length === 0) return { deleted: 0, vectorsRemoved: 0 }
 
   const startedAt = Date.now()
   const repos = getRepositories()
   const doomedSet = new Set(memoryIds)
-
-  // One-pass scan of every row with a non-empty links array. The OR-of-LIKEs
-  // approach grows ugly past ~50 IDs and the in-JS filter keeps the query
-  // shape stable regardless of batch size.
-  const dbCandidates = await rawQuery<NeighbourRow[]>(
-    "SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds IS NOT NULL AND relatedMemoryIds != '[]'",
-    []
-  )
-  const overrides = options.currentLinks
-  const candidates: Array<{ id: string; characterId: string; links: string[] }> = dbCandidates
-    .filter(row => !overrides?.has(row.id))
-    .map(row => ({ id: row.id, characterId: row.characterId, links: parseRelatedIds(row.relatedMemoryIds) }))
-  if (overrides) {
-    for (const [id, entry] of overrides) {
-      candidates.push({ id, characterId: entry.characterId, links: entry.relatedMemoryIds })
-    }
-  }
-
-  const charactersAffected = new Set<string>()
-  let neighboursTouched = 0
-  for (const candidate of candidates) {
-    if (doomedSet.has(candidate.id)) continue
-    const current = candidate.links
-    if (current.length === 0) continue
-    const filtered = current.filter(id => !doomedSet.has(id))
-    if (filtered.length === current.length) continue
-    await repos.memories.updateForCharacter(candidate.characterId, candidate.id, {
-      relatedMemoryIds: filtered,
-    })
-    charactersAffected.add(candidate.characterId)
-    neighboursTouched++
-  }
 
   // Group by character so each deletion call carries its proper scope. The
   // by-character split also means we never touch unrelated rows — the
@@ -1138,6 +1051,13 @@ export async function deleteMemoriesWithUnlinkBatchReport(
       addDigestBucket(deletedDigestBuckets, row)
     }
   }
+  // The neighbour scrub: one SQL removal delta across every holder, applied
+  // against the rows at commit (bug 234). It takes every requested id, not
+  // only those still found as rows, so an id already gone leaves its
+  // neighbours too. A row the caller has just rewritten in this operation (a
+  // merge survivor) is reached by the same delta after its own write, so no
+  // override list is needed.
+  const neighboursTouched = (await repos.memories.removeRelatedMemoryIdsEverywhere([...doomedSet])) ?? 0
   const digestLinksScrubbed = await scrubDigestLinks(doomedSet, idsByCharacter.keys())
 
   // In the job child, `bulkDelete` is a buffered write and returns nothing —
@@ -1166,7 +1086,7 @@ export async function deleteMemoriesWithUnlinkBatchReport(
     countSource,
     neighboursTouched,
     digestLinksScrubbed,
-    charactersAffected: charactersAffected.size,
+    charactersAffected: idsByCharacter.size,
     durationMs: Date.now() - startedAt,
   }
   if (neighboursTouched >= BATCH_DELETE_NEIGHBOUR_WARN) {

@@ -9,13 +9,13 @@
  * resolved against the window's newest message but falls back to its oldest).
  * Pure: no I/O, no clock — callers supply every timestamp.
  *
- * Kept apart from `episodic.ts` so it reaches `resolveWhenPhrase` through the
+ * Kept apart from `clock.ts` so it reaches `resolveWhenPhrase` through the
  * module boundary (the fold-pass suite substitutes that parser).
  *
- * @module memory/episodic-anchors
+ * @module memory/time/anchors
  */
 
-import { resolveWhenPhrase } from './episodic'
+import { resolveWhenPhrase } from './clock'
 
 export interface EpisodicAnchorInput<F extends string | null = string | null> {
   /** The model's free-text time phrase; empty/absent means "not stated". */

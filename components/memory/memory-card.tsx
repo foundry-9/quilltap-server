@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { formatDate } from '@/lib/format-time'
+import { importanceBand } from '@/lib/memory/scoring/importance'
 
 interface Tag {
   id: string
@@ -48,17 +49,14 @@ interface MemoryCardProps {
 export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onViewDigest, isDeleting = false }: MemoryCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const importanceColor = memory.importance >= 0.7
+  const band = importanceBand(memory.importance)
+  const importanceColor = band === 'high'
     ? 'qt-text-destructive'
-    : memory.importance >= 0.4
+    : band === 'medium'
       ? 'qt-text-warning'
       : 'qt-text-secondary'
 
-  const importanceLabel = memory.importance >= 0.7
-    ? 'High'
-    : memory.importance >= 0.4
-      ? 'Medium'
-      : 'Low'
+  const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
 
   const archived = memory.tier === 'cold'
   const digestSize = memory.source === 'CONSOLIDATED' ? memory.consolidatedFrom?.length ?? 0 : 0

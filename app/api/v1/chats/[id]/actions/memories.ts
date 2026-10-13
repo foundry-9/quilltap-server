@@ -24,6 +24,7 @@ import {
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
+import { loadExtractionProjectDescription } from '@/lib/memory/extraction-route';
 import type { RequestContext } from '@/lib/api/middleware';
 import type {
   Character,
@@ -240,10 +241,23 @@ export async function handleExtractMemoriesDryRun(
   const isDangerousChat = shouldUseUncensoredRoute(chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
+  // The live per-turn handler and the Carina handler both hand the extractor
+  // the chat's project and running summary; the preview must send the same
+  // prompt or it previews a different extraction (bug 230).
+  const projectId = chat.projectId ?? null;
+  const projectDescription = await loadExtractionProjectDescription(projectId, {
+    chatId,
+    context: 'dry-run',
+  });
+  const chatContextSummary = chat.contextSummary ?? null;
+
   logger.info('[Chats v1] Streaming dry-run memory extraction', {
     chatId,
     turnCount: turnOpenerIds.length,
     concurrency,
+    projectId,
+    hasProjectDescription: projectDescription !== null,
+    hasContextSummary: chatContextSummary !== null,
   });
 
   const encoder = new TextEncoder();
@@ -322,6 +336,9 @@ export async function handleExtractMemoriesDryRun(
               isDangerousChat,
               memoryExtractionLimits,
               timelineMode: chat.timelineMode ?? 'realtime',
+              projectId,
+              projectDescription,
+              chatContextSummary,
               dryRun: true,
             });
 

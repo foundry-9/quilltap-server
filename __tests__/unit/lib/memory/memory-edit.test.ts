@@ -30,7 +30,7 @@ import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance'
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance'
 
 type Row = Record<string, any>
 
@@ -46,6 +46,21 @@ function setup(rows: Row[]) {
       if (!row) return null
       Object.assign(row, patch)
       return { ...row }
+    }),
+    // The link deltas (bug 231): applied to the row as it stands.
+    addRelatedMemoryIds: jest.fn(async (_c: string, id: string, ids: string[]) => {
+      const row = byId.get(id)
+      if (!row) return null
+      const list = [...(row.relatedMemoryIds ?? [])]
+      for (const add of ids) if (add !== id && !list.includes(add)) list.push(add)
+      row.relatedMemoryIds = list
+      return list
+    }),
+    removeRelatedMemoryIds: jest.fn(async (_c: string, id: string, ids: string[]) => {
+      const row = byId.get(id)
+      if (!row) return null
+      row.relatedMemoryIds = (row.relatedMemoryIds ?? []).filter((l: string) => !ids.includes(l))
+      return row.relatedMemoryIds
     }),
     findByCharacterId: jest.fn(async (characterId: string) =>
       Array.from(byId.values()).filter((r) => r.characterId === characterId)

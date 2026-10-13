@@ -35,7 +35,7 @@ jest.mock('@/lib/logger', () => {
 import { executeCheapLLMTask } from '../core-execution';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript';
-import type { MemoryCandidate, CheapLLMTaskResult } from '../types';
+import type { MemoryDraft, CheapLLMTaskResult } from '../types';
 import type { OtherSubjectInput } from '../memory-tasks';
 
 const SELECTION: CheapLLMSelection = {
@@ -78,27 +78,28 @@ function lastSystemMessage(): string {
   return messages.find((m) => m.role === 'system')!.content;
 }
 
-async function runSelf(opts?: OrientingContext): Promise<MemoryCandidate[]> {
+async function runSelf(opts?: OrientingContext): Promise<MemoryDraft[]> {
   const res = (await extractSelfMemoriesFromTurn(
     TRANSCRIPT, 'obs', 'CANON', SELECTION, 'user-1', undefined, 'chat-1', 8000, false, opts,
-  )) as CheapLLMTaskResult<MemoryCandidate[]>;
+  )) as CheapLLMTaskResult<MemoryDraft[]>;
   return res.result ?? [];
 }
 
-async function runOther(opts?: OrientingContext): Promise<Map<string, MemoryCandidate[]>> {
+async function runOther(opts?: OrientingContext): Promise<Map<string, MemoryDraft[]>> {
   const res = (await extractOtherMemoriesFromTurn(
     TRANSCRIPT, 'obs', SUBJECTS, SELECTION, 'user-1', undefined, 'chat-1', 8000, false, opts,
-  )) as CheapLLMTaskResult<Map<string, MemoryCandidate[]>>;
+  )) as CheapLLMTaskResult<Map<string, MemoryDraft[]>>;
   return res.result ?? new Map();
 }
 
-describe('SELF tag normalization → keywords', () => {
-  it('passes valid tags through and materializes them after the free keywords', async () => {
+describe('SELF tag normalization → targeting (never keywords)', () => {
+  it('passes valid tags through onto targeting, leaving the free keywords alone', async () => {
     nextResponse = JSON.stringify([
       { content: 'I committed to X.', summary: 'committed to x', keywords: ['alpha', 'beta'], importance: 0.8, temporal: 'future', scope: 'narrow', context: 'philosophy' },
     ]);
     const [candidate] = await runSelf();
-    expect(candidate.keywords).toEqual(['alpha', 'beta', 'future', 'scope: narrow', 'philosophy']);
+    expect(candidate.keywords).toEqual(['alpha', 'beta']);
+    expect(candidate.targeting).toEqual({ temporal: 'future', scope: 'narrow', context: 'philosophy' });
   });
 
   it('defaults invalid values to present / wide / information', async () => {
@@ -106,7 +107,8 @@ describe('SELF tag normalization → keywords', () => {
       { content: 'I did Y.', summary: 'did y', keywords: ['alpha'], importance: 0.5, temporal: 'someday', scope: 'galaxy', context: 'gossip' },
     ]);
     const [candidate] = await runSelf();
-    expect(candidate.keywords).toEqual(['alpha', 'present', 'scope: wide', 'information']);
+    expect(candidate.keywords).toEqual(['alpha']);
+    expect(candidate.targeting).toEqual({ temporal: 'present', scope: 'wide', context: 'information' });
   });
 
   it('defaults missing tags (and missing keywords) to the fallbacks', async () => {
@@ -114,7 +116,8 @@ describe('SELF tag normalization → keywords', () => {
       { content: 'I did Z.', summary: 'did z', importance: 0.5 },
     ]);
     const [candidate] = await runSelf();
-    expect(candidate.keywords).toEqual(['present', 'scope: wide', 'information']);
+    expect(candidate.keywords).toEqual([]);
+    expect(candidate.targeting).toEqual({ temporal: 'present', scope: 'wide', context: 'information' });
   });
 
   it('lowercases valid-but-uppercased tags', async () => {
@@ -122,18 +125,20 @@ describe('SELF tag normalization → keywords', () => {
       { content: 'I changed.', summary: 'changed', keywords: [], importance: 0.5, temporal: 'PAST', scope: 'WIDE', context: 'History' },
     ]);
     const [candidate] = await runSelf();
-    expect(candidate.keywords).toEqual(['past', 'scope: wide', 'history']);
+    expect(candidate.keywords).toEqual([]);
+    expect(candidate.targeting).toEqual({ temporal: 'past', scope: 'wide', context: 'history' });
   });
 });
 
-describe('OTHER tag normalization → keywords (routed by subjectIndex)', () => {
+describe('OTHER tag normalization → targeting (routed by subjectIndex)', () => {
   it('passes valid tags through for the addressed subject', async () => {
     nextResponse = JSON.stringify([
       { subjectIndex: 1, content: 'Amy proposed a layout.', summary: 'proposed layout', keywords: ['cache'], importance: 0.7, temporal: 'moment', scope: 'narrow', context: 'philosophy' },
     ]);
     const result = await runOther();
     const amy = result.get('s1') ?? [];
-    expect(amy[0].keywords).toEqual(['cache', 'moment', 'scope: narrow', 'philosophy']);
+    expect(amy[0].keywords).toEqual(['cache']);
+    expect(amy[0].targeting).toEqual({ temporal: 'moment', scope: 'narrow', context: 'philosophy' });
   });
 
   it('defaults invalid/missing tags', async () => {
@@ -142,7 +147,8 @@ describe('OTHER tag normalization → keywords (routed by subjectIndex)', () => 
     ]);
     const result = await runOther();
     const amy = result.get('s1') ?? [];
-    expect(amy[0].keywords).toEqual(['x', 'present', 'scope: wide', 'information']);
+    expect(amy[0].keywords).toEqual(['x']);
+    expect(amy[0].targeting).toEqual({ temporal: 'present', scope: 'wide', context: 'information' });
   });
 });
 

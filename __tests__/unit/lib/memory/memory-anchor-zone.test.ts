@@ -58,7 +58,7 @@ import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embeddin
 import { reembedMemory } from '@/lib/memory/memory-gate'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/memory-calendar'
+import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/time/calendar'
 import type { BackgroundJob, Memory } from '@/lib/schemas/types'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>

@@ -35,7 +35,7 @@ const vectorMock = jest.requireMock('@/lib/embedding/vector-store') as { getChar
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock<any> }
 
 const service = require('@/lib/memory/memory-service') as typeof import('@/lib/memory/memory-service')
-const { calculateReinforcedImportance } = require('@/lib/memory/reinforced-importance') as typeof import('@/lib/memory/reinforced-importance')
+const { calculateReinforcedImportance } = require('@/lib/memory/scoring/reinforced-importance') as typeof import('@/lib/memory/scoring/reinforced-importance')
 
 function makeMemory(overrides: Partial<Memory> = {}): Memory {
   return {

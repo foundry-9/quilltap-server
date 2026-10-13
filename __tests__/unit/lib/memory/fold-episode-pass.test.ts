@@ -21,7 +21,7 @@ jest.mock('@/lib/memory/memory-service', () => ({
   createMemoryWithGate: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/episodic', () => ({
+jest.mock('@/lib/memory/time/clock', () => ({
   resolveWhenPhrase: jest.fn(() => null),
 }))
 
@@ -29,7 +29,7 @@ import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractEpisodesFromFold } from '@/lib/memory/cheap-llm-tasks'
 import { createMemoryWithGate } from '@/lib/memory/memory-service'
-import { resolveWhenPhrase } from '@/lib/memory/episodic'
+import { resolveWhenPhrase } from '@/lib/memory/time/clock'
 
 const mockRepos = getRepositories as jest.Mock
 const mockExtract = extractEpisodesFromFold as jest.Mock
@@ -74,12 +74,14 @@ function episode(over: AnyRecord = {}) {
 }
 
 let updateForCharacter: jest.Mock
+let addRelatedMemoryIds: jest.Mock
 let findFragments: jest.Mock
 let chatUpdate: jest.Mock
 let chatMessages: unknown[]
 
 function primeRepos(over: { chat?: AnyRecord | null } = {}) {
   updateForCharacter = jest.fn(async () => undefined)
+  addRelatedMemoryIds = jest.fn(async () => undefined)
   findFragments = jest.fn(async () => [])
   chatUpdate = jest.fn(async () => ({}))
   chatMessages = WINDOW
@@ -105,6 +107,7 @@ function primeRepos(over: { chat?: AnyRecord | null } = {}) {
     memories: {
       findByCharacterAndSourceMessageIds: findFragments,
       updateForCharacter,
+      addRelatedMemoryIds,
     },
   })
 }
@@ -366,17 +369,13 @@ describe('runFoldEpisodePass — fragment linking', () => {
     const result = await runFoldEpisodePass(input())
 
     expect(findFragments).toHaveBeenCalledWith('char-1', ['m1', 'm2'])
-    // Episode side: prior link preserved, both fragments added.
-    expect(updateForCharacter).toHaveBeenCalledWith('char-1', 'mem-ep', {
-      relatedMemoryIds: ['pre-existing', 'frag-1', 'frag-2'],
-    })
-    // Fragment side: each keeps its own prior links.
-    expect(updateForCharacter).toHaveBeenCalledWith('char-1', 'frag-1', {
-      relatedMemoryIds: ['other', 'mem-ep'],
-    })
-    expect(updateForCharacter).toHaveBeenCalledWith('char-1', 'frag-2', {
-      relatedMemoryIds: ['mem-ep'],
-    })
+    // Links are deltas against the rows at commit (bug 231): the episode
+    // gains both fragments, each fragment gains the episode, and no whole
+    // list is ever written, so prior links survive however they changed.
+    expect(addRelatedMemoryIds).toHaveBeenCalledWith('char-1', 'mem-ep', ['frag-1', 'frag-2'])
+    expect(addRelatedMemoryIds).toHaveBeenCalledWith('char-1', 'frag-1', ['mem-ep'])
+    expect(addRelatedMemoryIds).toHaveBeenCalledWith('char-1', 'frag-2', ['mem-ep'])
+    expect(updateForCharacter).not.toHaveBeenCalled()
     expect(result.fragmentsLinked).toBe(2)
   })
 
@@ -386,7 +385,7 @@ describe('runFoldEpisodePass — fragment linking', () => {
     const result = await runFoldEpisodePass(input())
 
     expect(result.fragmentsLinked).toBe(0)
-    expect(updateForCharacter).not.toHaveBeenCalled()
+    expect(addRelatedMemoryIds).not.toHaveBeenCalled()
   })
 
   it('skips the episode-side write when every fragment is already linked', async () => {
@@ -398,7 +397,7 @@ describe('runFoldEpisodePass — fragment linking', () => {
 
     const result = await runFoldEpisodePass(input())
 
-    expect(updateForCharacter).not.toHaveBeenCalled()
+    expect(addRelatedMemoryIds).not.toHaveBeenCalled()
     expect(result.fragmentsLinked).toBe(0)
   })
 
@@ -409,8 +408,8 @@ describe('runFoldEpisodePass — fragment linking', () => {
 
     const result = await runFoldEpisodePass(input())
 
-    const episodeWrite = updateForCharacter.mock.calls.find((c) => c[1] === 'mem-ep')
-    expect((episodeWrite![2] as AnyRecord).relatedMemoryIds).toHaveLength(8)
+    const episodeWrite = addRelatedMemoryIds.mock.calls.find((c) => c[1] === 'mem-ep')
+    expect(episodeWrite![2] as string[]).toHaveLength(8)
     expect(result.fragmentsLinked).toBe(8)
   })
 
@@ -419,7 +418,7 @@ describe('runFoldEpisodePass — fragment linking', () => {
 
     const result = await runFoldEpisodePass(input())
 
-    expect(updateForCharacter).not.toHaveBeenCalled()
+    expect(addRelatedMemoryIds).not.toHaveBeenCalled()
     expect(result.fragmentsLinked).toBe(0)
   })
 })
@@ -646,9 +645,9 @@ describe('runFoldEpisodePass — review findings 4, 7, 10, 13', () => {
 
     const result = await runFoldEpisodePass(input())
 
-    const ep2Write = updateForCharacter.mock.calls.find((c) => c[1] === 'mem-ep2')
-    expect((ep2Write![2] as AnyRecord).relatedMemoryIds).toEqual(['frag-1'])
-    expect(updateForCharacter.mock.calls.find((c) => c[1] === 'mem-ep1' && ((c[2] as AnyRecord).relatedMemoryIds as string[]).includes('mem-ep2'))).toBeUndefined()
+    const ep2Write = addRelatedMemoryIds.mock.calls.find((c) => c[1] === 'mem-ep2')
+    expect(ep2Write![2]).toEqual(['frag-1'])
+    expect(addRelatedMemoryIds.mock.calls.find((c) => c[1] === 'mem-ep1' && (c[2] as string[]).includes('mem-ep2'))).toBeUndefined()
     expect(result.fragmentsLinked).toBe(2)
   })
 

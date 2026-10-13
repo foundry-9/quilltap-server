@@ -28,14 +28,18 @@ import {
   extractNovelDetails,
 } from './memory-gate'
 import {
-  calculateEffectiveWeight,
   computeRankingBlend,
   defaultMinCosineForProvider,
-} from './memory-weighting'
+  filterImportance,
+  salience,
+} from './scoring'
 import { boostGateThreshold, combineRecallMultipliers, recallTuningOf, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { selectSpecificAnchors } from './recall-tuning'
-import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } from './episodic'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
+import { resolveWhenPhrase } from './time/clock'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
+import { getMemoryMaintenanceSettings } from '@/lib/instance-settings'
+import { resolveMemoryCap } from './settings'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -55,7 +59,7 @@ const HOUSEKEEPING_WATERMARK = 0.9
 const WATERMARK_SWEEP_THROTTLE_MS = 15 * 60 * 1000 // 15 minutes
 
 /**
- * If auto-housekeeping is enabled for this user and the character has reached
+ * If memory maintenance is enabled and the character has reached
  * the watermark fraction of its cap, enqueue a housekeeping job for that
  * character. The enqueue helper dedupes against in-flight jobs, so calling
  * this after every insert is safe even during high-frequency extraction.
@@ -66,16 +70,12 @@ const WATERMARK_SWEEP_THROTTLE_MS = 15 * 60 * 1000 // 15 minutes
 async function maybeEnqueueHousekeeping(characterId: string, userId: string): Promise<void> {
   try {
     const repos = getRepositories()
-    const chatSettings = await repos.chatSettings.findByUserId(userId)
-    const autoSettings = chatSettings?.autoHousekeepingSettings
-    if (!autoSettings?.enabled) {
+    const maintenance = await getMemoryMaintenanceSettings()
+    if (!maintenance.enabled) {
       return
     }
 
-    const cap =
-      autoSettings.perCharacterCapOverrides?.[characterId] ??
-      autoSettings.perCharacterCap ??
-      2000
+    const cap = resolveMemoryCap(maintenance, characterId)
 
     // The cap measures demotable rows only — hot AUTO (bug 210). MANUAL rows,
     // digests and the cold archive never count against it.
@@ -97,8 +97,8 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     // Durable post-restart throttle. The in-memory cache above lives in the
     // job child (the extraction job reads it, the housekeeping job writes it,
     // and the host keeps one child), but it is wiped whenever that child or
-    // the server restarts. The result is a storm of redundant (often expensive, because
-    // mergeSimilar compares embeddings) sweeps when a room sits right at its
+    // the server restarts. The result is a storm of redundant (and expensive)
+    // sweeps when a room sits right at its
     // cap. Back it with a DB floor: if a sweep for this character already
     // completed or is running within the throttle window, don't pile on
     // another. The daily scheduled sweep still handles deep cleaning.
@@ -330,13 +330,10 @@ export interface SemanticSearchResult {
   score: number
   /** Whether embedding was used for search */
   usedEmbedding: boolean
-  /** Effective weight combining importance with time decay (0-1), floored for
-   * housekeeping protection. Used for diagnostics, NOT for ranking. */
-  effectiveWeight?: number
-  /** No-floor ranking weight (baseImportance × time decay). This is what the
-   * retrieval blend uses so a stale "important" memory decays out of recall —
-   * see {@link computeRankingBlend}. */
-  rawWeight?: number
+  /** Salience (reinforcedImportance × time decay, no floor) — the worth the
+   * retrieval blend uses, so a stale "important" memory decays out of recall.
+   * See {@link computeRankingBlend} and `lib/memory/scoring`. */
+  salience?: number
   /**
    * Recall-context adjustment record — present only when a `recallContext` was
    * supplied to `searchMemoriesSemantic`. Lets the injector show *why* a memory
@@ -1029,7 +1026,7 @@ export async function searchMemoriesSemantic(
       logger.debug('[Memory] TF-IDF embeddings: recall boost gate off', { characterId })
     }
     const tuning = recallContext ? recallTuningOf(recallContext) : undefined
-    const weightClock = options.weightClockMs !== undefined ? new Date(options.weightClockMs) : undefined
+    const weightClockMs = options.weightClockMs
 
     // Search vectors
     let vectorResults = vectorStore.search(
@@ -1183,13 +1180,11 @@ export async function searchMemoriesSemantic(
               containsLiteralPhrase(memory.summary, literalPhrase)
             : false
           const cosineScore = literalHit ? applyLiteralBoost(vr.score) : vr.score
-          const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
           return {
             memory,
             score: cosineScore,
             usedEmbedding: true,
-            effectiveWeight,
-            rawWeight,
+            salience: salience(memory, { nowMs: weightClockMs }).salience,
           } as SemanticSearchResult
         })
         .filter((r): r is SemanticSearchResult => r !== null)
@@ -1197,7 +1192,7 @@ export async function searchMemoriesSemantic(
 
       // Apply additional filters
       if (options.minImportance !== undefined) {
-        results = results.filter(r => r.memory.importance >= options.minImportance!)
+        results = results.filter(r => filterImportance(r.memory) >= options.minImportance!)
       }
       if (options.source) {
         results = results.filter(r => r.memory.source === options.source)
@@ -1246,7 +1241,7 @@ export async function searchMemoriesSemantic(
       }
 
       // Blended ranking key (see computeRankingBlend: RELEVANCE·cosine +
-      // PRIORITY·rawWeight). The blend itself is never modified — when a
+      // PRIORITY·salience). The blend itself is never modified — when a
       // recallContext is supplied, the targeting-tag adjustments are bounded,
       // clamped multipliers applied to this blended score *after* it is
       // computed (see lib/memory/recall-tags.ts), so semantic relevance and
@@ -1258,7 +1253,7 @@ export async function searchMemoriesSemantic(
         const adjust = (pool: SemanticSearchResult[], extraFired: string[] = []): SemanticSearchResult[] => {
           const out: SemanticSearchResult[] = []
           for (const r of pool) {
-            const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
+            const blendedBefore = computeRankingBlend(r.score, r.salience ?? 0)
             const adj = combineRecallMultipliers(r.memory, recallContext, relevanceOf(r))
             if (adj.exclude) {
               continue
@@ -1288,7 +1283,7 @@ export async function searchMemoriesSemantic(
             { minImportance: options.minImportance, source: options.source, excludeMemoryIds: excluded, includeCold },
             characterId,
             bestCosine,
-            weightClock,
+            weightClockMs,
           )
           results = expanded
         } else {
@@ -1316,8 +1311,8 @@ export async function searchMemoriesSemantic(
         }
       } else {
         results.sort((a, b) => {
-          const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
-          const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
+          const finalScoreA = computeRankingBlend(a.score, a.salience ?? 0)
+          const finalScoreB = computeRankingBlend(b.score, b.salience ?? 0)
           return finalScoreB - finalScoreA
         })
       }
@@ -1359,7 +1354,7 @@ async function expandRelatedMemories(
   filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'; excludeMemoryIds?: ReadonlySet<string>; includeCold?: boolean },
   characterId: string,
   bestCosine: number,
-  weightClock?: Date,
+  weightClockMs?: number,
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
   const inPool = new Set(ranked.map(r => r.memory.id))
@@ -1391,13 +1386,13 @@ async function expandRelatedMemories(
     // Character-scope + filter guards mirror the main pool.
     if (memory.characterId !== characterId) continue
     if (!filters.includeCold && memory.tier === 'cold') continue
-    if (filters.minImportance !== undefined && memory.importance < filters.minImportance) continue
+    if (filters.minImportance !== undefined && filterImportance(memory) < filters.minImportance) continue
     if (filters.source && memory.source !== filters.source) continue
     if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
 
     const cosineScore = cosineSimilarity(queryEmbedding, memory.embedding)
-    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
-    const blendedBefore = computeRankingBlend(cosineScore, rawWeight ?? 0)
+    const memorySalience = salience(memory, { nowMs: weightClockMs }).salience
+    const blendedBefore = computeRankingBlend(cosineScore, memorySalience)
     // Gated on its own cosine like any candidate (R1): association may earn a
     // neighbour its place in the pool, but not a boost past better matches.
     const adj = combineRecallMultipliers(memory, recallContext, { cosine: cosineScore, bestCosine })
@@ -1407,8 +1402,7 @@ async function expandRelatedMemories(
       memory,
       score: cosineScore,
       usedEmbedding: true,
-      effectiveWeight,
-      rawWeight,
+      salience: memorySalience,
       recallAdjustment: { multiplier: adj.multiplier, fired: [...adj.fired, 'related↗'], blendedBefore, blendedAfter },
     })
   }
@@ -1465,7 +1459,7 @@ async function searchMemoriesText(
   const limit = options.limit || 20
   const excluded = options.excludeMemoryIds
   const includeCold = options.includeCold === true
-  const weightClock = options.weightClockMs !== undefined ? new Date(options.weightClockMs) : undefined
+  const weightClockMs = options.weightClockMs
 
   // Bug 214: the fallback honours the same candidate options as the vector
   // path — exclusions, extra probes, entity anchors, the event-time window,
@@ -1513,7 +1507,7 @@ async function searchMemoriesText(
     memories = memories.filter(m => m.tier !== 'cold')
   }
   if (options.minImportance !== undefined) {
-    memories = memories.filter(m => m.importance >= options.minImportance!)
+    memories = memories.filter(m => filterImportance(m) >= options.minImportance!)
   }
   if (options.source) {
     memories = memories.filter(m => m.source === options.source)
@@ -1526,13 +1520,11 @@ async function searchMemoriesText(
   let results: SemanticSearchResult[] = memories
     .map(memory => {
       const score = Math.max(...probes.map(probe => scoreTextMatch(memory, probe)))
-      const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
       return {
         memory,
         score: Math.min(score, 1.0),
         usedEmbedding: false,
-        effectiveWeight,
-        rawWeight,
+        salience: salience(memory, { nowMs: weightClockMs }).salience,
       } as SemanticSearchResult
     })
     // Filter out zero-score results (no words matched at all)
@@ -1569,7 +1561,7 @@ async function searchMemoriesText(
     const bestScore = results.reduce((best, r) => Math.max(best, r.score), 0)
     const adjusted: SemanticSearchResult[] = []
     for (const r of results) {
-      const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
+      const blendedBefore = computeRankingBlend(r.score, r.salience ?? 0)
       const adj = combineRecallMultipliers(r.memory, recallContext, { cosine: r.score, bestCosine: bestScore })
       if (adj.exclude) continue
       const blendedAfter = blendedBefore * adj.multiplier
@@ -1580,8 +1572,8 @@ async function searchMemoriesText(
   } else {
     // Combine text score with the decaying ranking weight for final ordering.
     results.sort((a, b) => {
-      const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
-      const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
+      const finalScoreA = computeRankingBlend(a.score, a.salience ?? 0)
+      const finalScoreB = computeRankingBlend(b.score, b.salience ?? 0)
       return finalScoreB - finalScoreA
     })
   }
@@ -1595,7 +1587,7 @@ async function searchMemoriesText(
     excluded: excluded?.size ?? 0,
     windowed: !!options.occurredWithin,
     recallContext: !!options.recallContext,
-    pinnedClock: weightClock !== undefined,
+    pinnedClock: weightClockMs !== undefined,
   })
 
   return results.slice(0, limit)

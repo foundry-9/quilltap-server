@@ -189,13 +189,6 @@ describe('housekeeping demotion', () => {
     expect(setTier).not.toHaveBeenCalled()
   })
 
-  it('mergeSimilar is accepted and ignored', async () => {
-    memories = [makeMemory({ importance: 0.8, reinforcedImportance: 0.8, createdAt: new Date().toISOString() })]
-    const result = await runHousekeeping('char-1', { mergeSimilar: true })
-    expect(result.merged).toBe(0)
-    expect(result.demoted).toBe(0)
-  })
-
   it('never looks for expired cold rows when retention is unset', async () => {
     memories = [makeMemory({ importance: 0.8, reinforcedImportance: 0.8 })]
     await runHousekeeping('char-1')

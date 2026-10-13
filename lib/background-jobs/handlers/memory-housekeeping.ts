@@ -3,9 +3,9 @@
  *
  * Runs the retention-policy housekeeping sweep for a single character or —
  * when no characterId is provided — every character owned by the user.
- * Settings are pulled from the user's `autoHousekeepingSettings` and can be
- * overridden per-job via the payload (used by the "Run now" / preview API
- * paths so UI-configured dry-runs don't need a settings round-trip).
+ * Settings come from `instance_settings.memoryMaintenance` through
+ * `resolveMemoryMaintenance` (whose `capFor` is the one cap resolver), and the
+ * cap can be overridden per job via the payload.
  */
 
 import type { BackgroundJob } from '@/lib/schemas/types';
@@ -13,19 +13,19 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { runHousekeeping } from '@/lib/memory/housekeeping';
 import { recordHousekeepingOutcome } from '@/lib/memory/housekeeping-outcome-cache';
 import { logger } from '@/lib/logger';
+import { resolveMemoryMaintenance } from '@/lib/memory/settings';
 import type { MemoryHousekeepingPayload } from '../queue-service';
 
 export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryHousekeepingPayload;
   const repos = getRepositories();
 
-  const chatSettings = await repos.chatSettings.findByUserId(job.userId);
-  const autoSettings = chatSettings?.autoHousekeepingSettings;
+  const maintenance = await resolveMemoryMaintenance();
 
-  if (!autoSettings || !autoSettings.enabled) {
+  if (!maintenance.enabled) {
     // Manual / one-shot jobs (e.g. from the "Run now" button) may still run
-    // even when auto-housekeeping is disabled at the user level. Only the
-    // automatic triggers (watermark + scheduled) should bail here.
+    // even when automatic maintenance is off. Only the automatic triggers
+    // (watermark + scheduled) should bail here.
     if (payload.reason && payload.reason !== 'manual') {
       return;
     }
@@ -50,28 +50,16 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
     }
   }
 
-  // Resolve per-call options. Payload overrides win over user settings, which
-  // win over housekeeping.ts defaults.
-  const mergeThreshold =
-    payload.mergeThreshold ?? autoSettings?.autoMergeSimilarThreshold;
-  const mergeSimilar = payload.mergeSimilar ?? autoSettings?.mergeSimilar;
-
   let totalDemoted = 0;
   let totalDeleted = 0;
-  let totalMerged = 0;
 
   for (const characterId of targetCharacterIds) {
-    const perCharacterCap =
-      payload.maxMemories ??
-      autoSettings?.perCharacterCapOverrides?.[characterId] ??
-      autoSettings?.perCharacterCap;
+    // A payload cap wins; otherwise the character's override, then the global cap.
+    const perCharacterCap = payload.maxMemories ?? maintenance.capFor(characterId);
 
     try {
       const result = await runHousekeeping(characterId, {
-        userId: job.userId,
-        ...(perCharacterCap !== undefined && { maxMemories: perCharacterCap }),
-        ...(mergeThreshold !== undefined && { mergeThreshold }),
-        ...(mergeSimilar !== undefined && { mergeSimilar }),
+        maxMemories: perCharacterCap,
         ...(payload.dryRun !== undefined && { dryRun: payload.dryRun }),
       });
 
@@ -91,7 +79,6 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
 
       totalDemoted += result.demoted;
       totalDeleted += result.deleted;
-      totalMerged += result.merged;
 
       // Record outcome so watermark-triggered enqueues can back off when
       // the last sweep was practically ineffective (deleted 0 — or a
@@ -122,7 +109,6 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
         demoted: result.demoted,
         deleted: result.deleted,
         cold: result.coldCount,
-        merged: result.merged,
         kept: result.kept,
       });
     } catch (error) {
@@ -142,7 +128,6 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
     charactersSwept: targetCharacterIds.length,
     totalDemoted,
     totalDeleted,
-    totalMerged,
     reason: payload.reason ?? 'unknown',
   });
 }

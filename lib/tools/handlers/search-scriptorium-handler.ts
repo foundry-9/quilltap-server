@@ -7,6 +7,9 @@
  */
 
 import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
+import { filterImportance, importanceBand, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
+import { zonedDayBoundsIso } from '@/lib/memory/time/calendar'
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
@@ -89,17 +92,23 @@ export async function executeSearchScriptoriumTool(
       sources = ['memories', 'conversations', 'documents', 'knowledge'],
       scope = 'all',
       limit = 10,
-      minImportance = 0,
+      minImportance = TOOL_MIN_IMPORTANCE,
       since,
       until,
       aboutCharacter,
     } = parsed
 
-    // Time filters (episodic recall): normalize date-only bounds to full-day
-    // coverage. Applied to memories via occurredAt ?? createdAt and to
-    // conversation hits via the source chat's timestamps.
-    const sinceIso = since ? (since.length === 10 ? `${since}T00:00:00.000Z` : since) : null
-    const untilIso = until ? (until.length === 10 ? `${until}T23:59:59.999Z` : until) : null
+    // Time filters (episodic recall): date-only bounds widen to full LOCAL
+    // days on the memory calendar (bug 212), the calendar memories are dated
+    // on — never UTC days. Applied to memories via occurredAt ?? createdAt
+    // and to conversation hits via the source chat's timestamps.
+    const memoryTimeZone = since || until ? await refreshMemoryTimeZone() : null
+    const sinceIso = since
+      ? (since.length === 10 ? zonedDayBoundsIso(since, memoryTimeZone!)?.from ?? `${since}T00:00:00.000Z` : since)
+      : null
+    const untilIso = until
+      ? (until.length === 10 ? zonedDayBoundsIso(until, memoryTimeZone!)?.to ?? `${until}T23:59:59.999Z` : until)
+      : null
     const timeWindow =
       sinceIso || untilIso
         ? {
@@ -287,8 +296,8 @@ export async function executeSearchScriptoriumTool(
               metadata: {
                 memoryId: mr.memory.id,
                 summary: mr.memory.summary,
-                importance: mr.memory.importance,
-                effectiveWeight: mr.effectiveWeight,
+                importance: filterImportance(mr.memory),
+                salience: mr.salience,
                 createdAt: mr.memory.createdAt,
                 source: mr.memory.source,
                 archivedLabel: memoryArchivedLabel(mr.memory),
@@ -598,8 +607,8 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
 
   const formatted = results.map((result, index) => {
     if (result.sourceType === 'memory') {
-      const importanceLabel = (result.metadata.importance ?? 0) >= 0.7 ? 'High' :
-        (result.metadata.importance ?? 0) >= 0.4 ? 'Medium' : 'Low'
+      const band = importanceBand(result.metadata.importance ?? 0)
+      const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
 
       // Episodic spine: surface event time + source conversation so the model
       // can confirm "when" and drill into the transcript.

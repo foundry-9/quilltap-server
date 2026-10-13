@@ -52,7 +52,7 @@ import {
   getMemoryTimeZone,
   isValidTimeZone,
   zonedDayBoundsIso,
-} from '@/lib/memory/memory-calendar';
+} from '@/lib/memory/time/calendar';
 
 const MIGRATION_ID = 'rezone-legacy-memory-occurred-at-v1';
 const LOG_CONTEXT = `migration.${MIGRATION_ID}`;

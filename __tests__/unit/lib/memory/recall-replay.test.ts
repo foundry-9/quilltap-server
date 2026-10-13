@@ -70,7 +70,7 @@ function hit(id: string, over: AnyRecord = {}) {
       keywords: ['k'],
     },
     score: 0.5,
-    rawWeight: 0.4,
+    salience: 0.4,
     recallAdjustment: null,
     ...over,
   }
@@ -341,7 +341,7 @@ describe('runRecallReplay — query derivation and rows', () => {
     mockSearch.mockResolvedValue([
       hit('mem-1', {
         score: 0.81,
-        rawWeight: 0.62,
+        salience: 0.62,
         recallAdjustment: {
           blendedBefore: 0.5,
           multiplier: 1.4,
@@ -349,7 +349,7 @@ describe('runRecallReplay — query derivation and rows', () => {
           blendedAfter: 0.7,
         },
       }),
-      hit('mem-2', { rawWeight: undefined, recallAdjustment: null }),
+      hit('mem-2', { salience: undefined, recallAdjustment: null }),
     ])
 
     const { newPath } = await runRecallReplay(baseInput())
@@ -357,7 +357,7 @@ describe('runRecallReplay — query derivation and rows', () => {
     expect(newPath[0]).toMatchObject({
       memoryId: 'mem-1',
       cosine: 0.81,
-      rawWeight: 0.62,
+      salience: 0.62,
       blendedBefore: 0.5,
       multiplier: 1.4,
       fired: ['retrospective'],
@@ -365,7 +365,7 @@ describe('runRecallReplay — query derivation and rows', () => {
       selected: true,
     })
     expect(newPath[1]).toMatchObject({
-      rawWeight: null,
+      salience: null,
       blendedBefore: null,
       multiplier: null,
       fired: [],

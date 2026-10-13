@@ -33,7 +33,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildMemoryEmbeddingText } from './episodic'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { MERGE_THRESHOLD, NEAR_DUPLICATE_THRESHOLD } from './memory-gate'
 
 const logger = createServiceLogger('AnchorGateProbe')

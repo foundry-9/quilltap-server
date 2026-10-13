@@ -13,7 +13,7 @@ import {
   isMemoryTimeZoneStale,
   isValidTimeZone,
   setCachedInstanceTimeZone,
-} from './memory-calendar'
+} from './calendar'
 
 /**
  * Re-read the instance timezone (`ChatSettings.timezone`) when the cached copy

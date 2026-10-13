@@ -14,7 +14,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
-import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh';
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingRefitPayload } from '../queue-service';
 import { enqueueEmbeddingReindexAll } from '../queue-service';
 

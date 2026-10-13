@@ -87,6 +87,14 @@ export interface MemoryExtractionPayload {
    * fold-grain observations rebuilt now rather than at the next daily sweep.
    */
   foldOtherIgnoreIdle?: boolean;
+  /**
+   * When true this is the idle catch-up for the fold episode pass: the handler
+   * runs `runFoldEpisodeCatchup` over the chat's folded history past
+   * `episodeExtractionWatermarkMessageId` (bug 232). Enqueued by the daily
+   * maintenance sweep; `extractionAnchorMessageId` carries the fold boundary,
+   * or `continue-episode:<watermark>` for a follow-up job.
+   */
+  foldEpisodeCatchup?: boolean;
 }
 
 /**
@@ -291,7 +299,7 @@ export interface ConversationRenderEnqueueResult {
 
 /**
  * Payload for memory-housekeeping job.
- * Leave every field undefined to fall back to the per-user autoHousekeepingSettings.
+ * Leave every field undefined to fall back to `instance_settings.memoryMaintenance`.
  */
 export interface MemoryHousekeepingPayload {
   /**
@@ -300,12 +308,8 @@ export interface MemoryHousekeepingPayload {
    * before that change — still sweeps every character owned by userId.
    */
   characterId?: string;
-  /** Override the per-character cap (otherwise uses the user's autoHousekeepingSettings). */
+  /** Override the per-character cap (otherwise `resolveMemorySettings().maintenance.capFor`). */
   maxMemories?: number;
-  /** Override the merge-similar threshold. */
-  mergeThreshold?: number;
-  /** Override whether to merge semantically similar memories. */
-  mergeSimilar?: boolean;
   /** Dry run — preview deletions without applying. Default false. */
   dryRun?: boolean;
   /** Why the job was enqueued (for debug logs). */
@@ -544,7 +548,8 @@ export async function enqueueMemoryExtraction(
       return existingPayload.chatId === payload.chatId
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
         && existingAnchor === incomingAnchor
-        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false);
+        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false)
+        && (existingPayload.foldEpisodeCatchup ?? false) === (payload.foldEpisodeCatchup ?? false);
     });
     if (existing) {
       return existing.id;

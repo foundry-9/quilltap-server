@@ -66,7 +66,7 @@ function memory(
 }
 
 function searchResult(m: Memory, score: number = 0.8, weight: number = 0.7): SemanticSearchResult {
-  return { memory: m, score, usedEmbedding: true, effectiveWeight: weight }
+  return { memory: m, score, usedEmbedding: true, salience: weight }
 }
 
 /** The owning character in these fixtures — `memory()` stamps this as `characterId`. */
@@ -444,7 +444,7 @@ describe('memory-injector: metadata tag on delivered memories', () => {
       keywords: ['titles', 'load-bearing'],
     })
     const r = formatMemoriesForContext(
-      [{ memory: m, score: 0.87, usedEmbedding: true, effectiveWeight: 0.92 }],
+      [{ memory: m, score: 0.87, usedEmbedding: true, salience: 0.92 }],
       1000,
       provider,
       SELF_SUBJECT,
@@ -548,7 +548,7 @@ describe('memory-injector: metadata tag on delivered memories', () => {
       keywords: ['recall', 'turn'],
     })
     const r = formatDynamicMemoryHead(
-      [{ memory: m, score: 0.88, usedEmbedding: true, effectiveWeight: 0.83 }],
+      [{ memory: m, score: 0.88, usedEmbedding: true, salience: 0.83 }],
       provider,
       SELF_SUBJECT,
     )

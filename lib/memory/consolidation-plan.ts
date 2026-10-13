@@ -35,16 +35,9 @@
 import type { Memory } from '@/lib/schemas/types'
 import type { MemoryCreateInput } from '@/lib/database/repositories/memories.repository'
 import { calculateReinforcedImportance } from './memory-gate'
-import {
-  CONTEXT_VALUES,
-  SCOPE_VALUES,
-  TEMPORAL_VALUES,
-  parseTargetingTags,
-  type ContextTag,
-  type ScopeTag,
-  type TemporalTag,
-} from './recall-tags'
+import { parseTargetingTags } from './recall-tags'
 import type { ConsolidationContradiction, ConsolidationDigestOutput } from './cheap-llm-tasks/consolidation-tasks'
+import { DEFAULT_TARGETING, normaliseTargeting, splitTargetingKeywords, targetingKeywords } from './candidate'
 
 /** Ceiling on a digest's `reinforcementCount`. */
 export const DIGEST_REINFORCEMENT_CAP = 50
@@ -209,37 +202,22 @@ export function normalizeDigestKeywords(
   memberKeywords: ReadonlyArray<readonly string[]>,
   kind: 'semantic' | 'episodic',
 ): string[] {
-  let temporal: TemporalTag | null = null
-  let scope: ScopeTag | null = null
-  let context: ContextTag | null = null
+  // The one targeting split / normaliser (`lib/memory/candidate.ts`).
+  const split = splitTargetingKeywords(modelKeywords)
   const free: string[] = []
-  for (const raw of modelKeywords) {
-    if (typeof raw !== 'string') continue
-    const kw = raw.trim().toLowerCase()
-    if (!kw) continue
-    if (kw.startsWith('scope:')) {
-      const value = kw.slice('scope:'.length).trim()
-      if (SCOPE_VALUES.has(value)) scope = value as ScopeTag
-      continue
-    }
-    if (TEMPORAL_VALUES.has(kw)) {
-      temporal = kw as TemporalTag
-      continue
-    }
-    if (CONTEXT_VALUES.has(kw)) {
-      context = kw as ContextTag
-      continue
-    }
+  for (const word of split.free) {
+    const kw = word.toLowerCase()
     if (!free.includes(kw)) free.push(kw)
   }
 
   const memberTags = memberKeywords.map((k) => parseTargetingTags(k))
-  const finalTemporal =
-    temporal ?? (kind === 'episodic' ? 'past' : majority(memberTags.map((t) => t.temporal), 'present'))
-  const finalScope = scope ?? majority(memberTags.map((t) => t.scope), 'wide')
-  const finalContext = context ?? majority(memberTags.map((t) => t.context), 'information')
+  const targeting = normaliseTargeting(split.targeting, {
+    temporal: kind === 'episodic' ? 'past' : majority(memberTags.map((t) => t.temporal), DEFAULT_TARGETING.temporal),
+    scope: majority(memberTags.map((t) => t.scope), DEFAULT_TARGETING.scope),
+    context: majority(memberTags.map((t) => t.context), DEFAULT_TARGETING.context),
+  })
 
-  return [...free.slice(0, MAX_FREE_KEYWORDS), finalTemporal, `scope: ${finalScope}`, finalContext]
+  return [...free.slice(0, MAX_FREE_KEYWORDS), ...targetingKeywords(targeting)]
 }
 
 function union(lists: ReadonlyArray<readonly string[] | null | undefined>, cap?: number): string[] {

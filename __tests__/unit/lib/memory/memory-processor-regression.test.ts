@@ -5,7 +5,7 @@
  *   - SELF pass: one call per allowed character, aboutCharacterId = self
  *   - OTHER pass: one MULTI-SUBJECT call per observer, covering every other
  *     allowed character + the user-controlled character (if any). The call's
- *     return is a Map<subjectId, MemoryCandidate[]> so the dispatcher can
+ *     return is a Map<subjectId, MemoryDraft[]> so the dispatcher can
  *     route each candidate's aboutCharacterId. The user is NOT special-cased.
  *
  * Also exercises:

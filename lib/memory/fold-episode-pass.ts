@@ -42,14 +42,18 @@ import {
   type UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
-import { resolveEpisodicAnchors } from './episodic-anchors'
+import { MemoryCandidateSchema, anchorTimeMsFrom, toCreateMemoryOptions, type TargetingTags } from './candidate'
+import { resolveEpisodicAnchors } from './time/anchors'
 import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
+
+/** The targeting every episode carries: a past, narrow piece of history. */
+const EPISODE_TARGETING: TargetingTags = { temporal: 'past', scope: 'narrow', context: 'history' }
 
 /** Cap on fragment links attached to one episode (per character). */
 const MAX_FRAGMENT_LINKS = 8
@@ -305,25 +309,30 @@ async function runSlice(
     for (const participant of presentParticipants) {
       const characterId = participant.characterId as string
       try {
-        const outcome = await createMemoryWithGate(
-          {
-            characterId,
-            content: episode.narrative,
-            summary: episode.summary,
-            keywords: [...episode.entities.map(e => e.toLowerCase()), 'past', 'scope: narrow', 'history'],
-            importance: episode.importance,
+        // An episode is a past, narrow piece of history: its targeting is a
+        // value on the candidate, written into the row's keywords with the rest.
+        const candidate = MemoryCandidateSchema.parse({
+          content: episode.narrative,
+          summary: episode.summary,
+          keywords: episode.entities.map(e => e.toLowerCase()),
+          targeting: EPISODE_TARGETING,
+          importance: episode.importance,
+          kind: 'episodic',
+          when: episode.when ?? null,
+          entities: episode.entities.slice(0, 12),
+          subject: { holderId: characterId, aboutId: null },
+          provenance: {
+            source: 'AUTO',
+            witnessedContext: input.inAutonomousRoom ? 'autonomous_room' : 'user_present',
             chatId,
             projectId: input.projectId ?? null,
-            source: 'AUTO',
             sourceMessageId,
-            sourceMessageTimestamp: occurredAt,
-            witnessedContext: input.inAutonomousRoom ? 'autonomous_room' : 'user_present',
-            occurredAt,
-            narrativeTime,
-            entities: episode.entities,
-            kind: 'episodic',
-            tags: [],
+            anchorTimeMs: anchorTimeMsFrom([clock.nowIso, windowStartIso]),
+            pass: 'episode-fold',
           },
+        })
+        const outcome = await createMemoryWithGate(
+          toCreateMemoryOptions(candidate, { occurredAt, narrativeTime, sourceMessageTimestamp: occurredAt ?? undefined }),
           { userId },
         )
 
@@ -362,27 +371,18 @@ async function runSlice(
           .slice(0, MAX_FRAGMENT_LINKS)
         if (fragmentIds.length === 0) continue
 
-        const episodeLinks = new Set(memory.relatedMemoryIds ?? [])
-        let episodeLinksChanged = false
-        for (const fragmentId of fragmentIds) {
-          if (!episodeLinks.has(fragmentId)) {
-            episodeLinks.add(fragmentId)
-            episodeLinksChanged = true
-          }
-        }
-        if (episodeLinksChanged) {
-          await repos.memories.updateForCharacter(characterId, memory.id, {
-            relatedMemoryIds: [...episodeLinks],
-          })
+        // Links are deltas against the rows at commit, never lists built from
+        // this read: another job linking the same rows keeps its links (bug 231).
+        const existingEpisodeLinks = new Set(memory.relatedMemoryIds ?? [])
+        const newEpisodeLinks = fragmentIds.filter(id => !existingEpisodeLinks.has(id))
+        if (newEpisodeLinks.length > 0) {
+          await repos.memories.addRelatedMemoryIds(characterId, memory.id, newEpisodeLinks)
         }
         for (const fragment of fragments) {
           if (fragment.id === memory.id) continue
           if (!fragmentIds.includes(fragment.id)) continue
-          const links = fragment.relatedMemoryIds ?? []
-          if (links.includes(memory.id)) continue
-          await repos.memories.updateForCharacter(characterId, fragment.id, {
-            relatedMemoryIds: [...links, memory.id],
-          })
+          if ((fragment.relatedMemoryIds ?? []).includes(memory.id)) continue
+          await repos.memories.addRelatedMemoryIds(characterId, fragment.id, [memory.id])
           result.fragmentsLinked++
         }
       } catch (perCharacterError) {

@@ -38,13 +38,13 @@
  * @module memory/fold-other-pass
  */
 
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { getRepositories } from '@/lib/repositories/factory'
 import {
   extractOtherMemoriesFromFold,
   loadCanonForObserverAboutSubject,
   renderOtherCanonBlock,
-  MemoryCandidate,
+  MemoryDraft,
   type UncensoredFallbackOptions,
   type OrientingContext,
   type ExtractionClock,
@@ -63,15 +63,21 @@ import {
   foldPassRange,
   sliceFoldWindow,
 } from './fold-window'
-import { buildExtractionUncensoredFallback, loadExtractionProjectDescription } from './extraction-route'
+import { loadExtractionProjectDescription } from './extraction-route'
+import {
+  FOLD_CATCHUP_IDLE_MS,
+  FOLD_CATCHUP_LOOKBACK_MS,
+  FOLD_CATCHUP_MAX_CHATS,
+  idleChatsForCatchup,
+  isChatActiveForCatchup,
+  pickCatchupConnectionProfileId,
+  resolveFoldCatchupRoute,
+} from './fold-catchup'
 import { resolveSpeakerNames, speakerLabel } from '@/lib/chat/speaker-names'
 import { resolveUserCharacterParticipant } from '@/lib/services/chat-message/turn-transcript'
 import { getMemoryExtractionModeSettings, getMemoryExtractionLimits } from '@/lib/instance-settings'
-import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
-import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { isHelpLikeChatType } from '@/lib/schemas/chat.types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import type {
   Character,
@@ -89,13 +95,13 @@ export const FOLD_OTHER_MAX_WINDOW_MESSAGES = 60
 export const FOLD_OTHER_MAX_SLICES_PER_JOB = 4
 
 /** A chat must have been quiet this long before the sweep treats its tail as uncovered. */
-export const FOLD_OTHER_CATCHUP_IDLE_MS = 2 * 60 * 60 * 1000
+export const FOLD_OTHER_CATCHUP_IDLE_MS = FOLD_CATCHUP_IDLE_MS
 
 /** Chats whose last message is older than this are not swept (an old backlog is a backfill, not a catch-up). */
-export const FOLD_OTHER_CATCHUP_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000
+export const FOLD_OTHER_CATCHUP_LOOKBACK_MS = FOLD_CATCHUP_LOOKBACK_MS
 
 /** Most catch-up jobs one sweep will enqueue; the rest wait for tomorrow. */
-export const FOLD_OTHER_CATCHUP_MAX_CHATS = 50
+export const FOLD_OTHER_CATCHUP_MAX_CHATS = FOLD_CATCHUP_MAX_CHATS
 
 export interface RunFoldOtherPassInput {
   chatId: string
@@ -410,7 +416,7 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
           continue
         }
 
-        const bySubject = extraction.result ?? new Map<string, MemoryCandidate[]>()
+        const bySubject = extraction.result ?? new Map<string, MemoryDraft[]>()
         const lastMessage = lastMessageByCharacter.get(observer.id) ?? sliceMessages[sliceMessages.length - 1]
         for (const subject of resolved) {
           // The parser allows one extra slot for an anchored event; the fold
@@ -433,6 +439,7 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
               aboutCharacterId: subject.id,
               aboutCharacterName: subject.name,
               pass: 'OTHER',
+              candidatePass: 'other-fold',
               candidate,
               passLabel: `fold OTHER memory ${observer.name} about ${subject.name}`,
               ctx: writeCtx,
@@ -541,7 +548,7 @@ export interface FoldOtherCatchupSelection {
  * 'turn' selects nothing. Most recently active first, bounded by `limit`.
  */
 export async function findFoldOtherCatchupCandidates(
-  options: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number; chats?: readonly ChatMetadata[] } = {},
 ): Promise<FoldOtherCatchupSelection> {
   const now = options.now ?? Date.now()
   const limit = options.limit ?? FOLD_OTHER_CATCHUP_MAX_CHATS
@@ -553,18 +560,13 @@ export async function findFoldOtherCatchupCandidates(
   }
 
   const repos = getRepositories()
-  const chats = await repos.chats.findAll()
-  const prefiltered = chats
-    .filter(c => !isHelpLikeChatType(c.chatType))
-    .filter(c => (c.messageCount ?? 0) >= 2)
-    .map(c => ({ chat: c, last: c.lastMessageAt ? Date.parse(c.lastMessageAt) : NaN }))
-    .filter(x => Number.isFinite(x.last))
-    .filter(x => now - x.last > FOLD_OTHER_CATCHUP_IDLE_MS && now - x.last < FOLD_OTHER_CATCHUP_LOOKBACK_MS)
-    .sort((a, b) => b.last - a.last)
+  // The maintenance sweep reads the chat list once for both catch-ups.
+  const chats = options.chats ?? await repos.chats.findAll()
+  const prefiltered = idleChatsForCatchup(chats, now)
 
   const candidates: FoldOtherCatchupCandidate[] = []
   let deferred = 0
-  for (const { chat } of prefiltered) {
+  for (const chat of prefiltered) {
     if (candidates.length >= limit) {
       // Counted without reading their messages; some may turn out covered.
       deferred++
@@ -577,7 +579,7 @@ export async function findFoldOtherCatchupCandidates(
       const last = messages[messages.length - 1]
       if (!last) continue
       if (chat.otherExtractionWatermarkMessageId === last.id) continue
-      const profileId = pickConnectionProfileId(chat)
+      const profileId = pickCatchupConnectionProfileId(chat)
       if (!profileId) {
         logger.debug('[FoldOtherCatchup] No connection profile on any seat; skipping chat', { chatId: chat.id })
         continue
@@ -605,14 +607,6 @@ export async function findFoldOtherCatchupCandidates(
   return { candidates, deferred }
 }
 
-function pickConnectionProfileId(chat: ChatMetadata): string | null {
-  const llmSeat = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.connectionProfileId,
-  )
-  const anySeat = llmSeat ?? chat.participants.find(p => p.connectionProfileId)
-  return anySeat?.connectionProfileId ?? null
-}
-
 export interface RunFoldOtherCatchupInput {
   chatId: string
   userId: string
@@ -636,8 +630,7 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
   if (!chat) return emptyResult('no-chat')
 
   const now = input.now ?? Date.now()
-  const lastAt = chat.lastMessageAt ? Date.parse(chat.lastMessageAt) : NaN
-  if (!input.ignoreIdle && Number.isFinite(lastAt) && now - lastAt <= FOLD_OTHER_CATCHUP_IDLE_MS) {
+  if (!input.ignoreIdle && isChatActiveForCatchup(chat, now)) {
     logger.debug('[FoldOtherCatchup] Chat active again since the sweep; leaving it to the fold', { chatId })
     return emptyResult('not-idle')
   }
@@ -648,24 +641,7 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
   const window = messagesPastWatermark(messages, chat.otherExtractionWatermarkMessageId)
   if (window.length === 0) return emptyResult('behind-watermark')
 
-  let cheapLLM: CheapLLMSelection = getCheapLLMProvider(
-    input.connectionProfile,
-    {
-      strategy: input.cheapLLMSettings.strategy,
-      userDefinedProfileId: input.cheapLLMSettings.userDefinedProfileId ?? undefined,
-      fallbackToLocal: input.cheapLLMSettings.fallbackToLocal,
-    },
-    input.availableProfiles,
-    false,
-  )
-  const chatSettings = await repos.chatSettings.findByUserId(userId)
-  const conciergePolicy = resolveConciergeSettings(chatSettings, chat)
-  cheapLLM = resolveUncensoredCheapLLMSelection(
-    cheapLLM,
-    shouldUseUncensoredRoute(chat),
-    conciergePolicy,
-    input.availableProfiles,
-  )
+  const route = await resolveFoldCatchupRoute(chat, { ...input, userId })
 
   const projectDescription = await loadExtractionProjectDescription(chat.projectId, { chatId })
 
@@ -679,9 +655,9 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
     userId,
     windowMessages: window,
     chatMessages: messages,
-    cheapLLM,
+    cheapLLM: route.cheapLLM,
     cheapMaxTokens: resolveMaxTokens(input.connectionProfile),
-    uncensoredFallback: buildExtractionUncensoredFallback(chat, conciergePolicy, input.availableProfiles),
+    uncensoredFallback: route.uncensoredFallback,
     timelineMode: chat.timelineMode ?? 'realtime',
     projectId: chat.projectId ?? null,
     inAutonomousRoom: chat.chatType === 'autonomous',

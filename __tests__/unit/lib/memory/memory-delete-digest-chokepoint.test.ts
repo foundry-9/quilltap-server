@@ -151,6 +151,7 @@ function installRepos() {
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
     findDigestSubjectsByIds: jest.fn((ids: string[]) => real.findDigestSubjectsByIds(ids)),
     removeConsolidatedMembers: jest.fn((c: string, d: string, m: string[]) => real.removeConsolidatedMembers(c, d, m)),
+    removeRelatedMemoryIdsEverywhere: jest.fn((ids: string[]) => real.removeRelatedMemoryIdsEverywhere(ids)),
     findHotDigests: jest.fn(async (holder: string, subject: string) =>
       db.prepare(`SELECT * FROM memories WHERE characterId = ? AND source = 'CONSOLIDATED'
                     AND COALESCE(tier, 'hot') = 'hot' AND aboutCharacterId = ?

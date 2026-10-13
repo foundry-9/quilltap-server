@@ -6,9 +6,9 @@
 import {
   buildMemoryAnchorLine,
   buildMemoryEmbeddingText,
-  resolveWhenPhrase,
   eventReferenceTimeMs,
 } from '../episodic'
+import { resolveWhenPhrase } from '../time/clock'
 
 describe('buildMemoryAnchorLine', () => {
   it('renders when + place from anchors', () => {
@@ -96,9 +96,10 @@ describe('resolveWhenPhrase', () => {
     expect(resolveWhenPhrase('last Tuesday', anchor)).toBe('2026-07-14T00:00:00.000Z')
   })
 
-  it('maps the anchor moment phrases to the anchor', () => {
-    expect(resolveWhenPhrase('today', anchor)).toBe(anchor)
-    expect(resolveWhenPhrase('this morning', anchor)).toBe(anchor)
+  it('stamps today-phrases at the start of the window the read side asks for (local midnight)', () => {
+    expect(resolveWhenPhrase('today', anchor)).toBe('2026-07-21T00:00:00.000Z')
+    expect(resolveWhenPhrase('this morning', anchor)).toBe('2026-07-21T00:00:00.000Z')
+    expect(resolveWhenPhrase('just now', anchor)).toBe(anchor)
   })
 
   it('returns null for unresolvable or in-story phrases', () => {

@@ -35,7 +35,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import type { Memory } from '@/lib/schemas/types'
-import { calculateEffectiveWeight } from './memory-weighting'
+import { sortBySalience } from './scoring'
 
 /** Default size of the frozen archive (callers normally pass a budget-sized one). */
 export const FROZEN_ARCHIVE_SIZE = 25
@@ -179,17 +179,10 @@ async function computeFrozenArchive(
   const digestCount = chosen.size
 
   // 3: fill with the cheap top-by-reinforced-importance pull, re-ranked by
-  // effective weight (importance x time decay), skipping what is already in.
+  // salience (reinforced importance x time decay), skipping what is already in.
   if (chosen.size < size) {
     const candidates = await repos.memories.findMostImportant(characterId, poolSize)
-    const ranked = candidates
-      .filter(memory => !chosen.has(memory.id))
-      .map(memory => ({
-        memory,
-        effectiveWeight: calculateEffectiveWeight(memory).effectiveWeight,
-      }))
-      .sort((a, b) => b.effectiveWeight - a.effectiveWeight)
-      .map(({ memory }) => memory)
+    const ranked = sortBySalience(candidates.filter(memory => !chosen.has(memory.id)))
     take(ranked)
   }
 

@@ -2,18 +2,32 @@
 
 | | |
 |---|---|
-| **Status** | Open — closed by Phase C of the [memory system refactor](../features/memory-system-refactor.md) (admission in the parent; `foldInto`) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase C of the [memory system refactor](../../features/memory-system-refactor.md); admission in the parent remains the structural work) |
 | **Found** | 2026-10-12, while fixing bug 209 |
-| **Fixed** | — |
+| **Fixed** | 2026-10-12 |
 | **Severity** | Low — needs two jobs touching the same existing memory at once; the loss is one link or one reinforcement's footnotes, never a row or a count |
 | **Who it bites** | busy chats and multi-character rooms where two extraction jobs (per-turn, fold, Carina, catch-up) run at the same time for the same character |
 | **Provenance** | Original to v4. The cross-job half of bug 209; bug 209's fix closed only the same-job half |
 | **Defect site** | `lib/memory/memory-gate.ts:733-739` (`linkRelatedMemories` writes `[...existingRelated, newMemoryId]` as an absolute list); `reinforceMemory` (absolute content patch built from the snapshot it read); the job runner's global cap of 4 concurrent jobs (`lib/background-jobs/processor.ts`) |
-| **Fix site** | — |
+| **Fix site** | `lib/database/repositories/memories.repository.ts` (new `addRelatedMemoryIds`, `removeRelatedMemoryIds`, `appendReinforcementFootnotes`), `lib/memory/reinforcement-footnotes.ts` (new), `lib/memory/memory-gate.ts` (`linkRelatedMemories`, `reinforceMemory`), `lib/memory/fold-episode-pass.ts`, `lib/memory/memory-edit.ts`, `lib/background-jobs/child/child-repositories-proxy.ts` (overlay deltas) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-12).** Related links and reinforcement footnotes are written as deltas
+against the row as it stands at write time, never as whole values built from a job's snapshot.
+`MemoriesRepository.addRelatedMemoryIds` / `removeRelatedMemoryIds` read and rewrite one row's
+`relatedMemoryIds` inside a single SQLite transaction, and `appendReinforcementFootnotes` re-reads the
+content there and applies the `[+]` cap and an "already there" check against it (the footnote helpers
+moved to the pure `lib/memory/reinforcement-footnotes.ts` so the repository can share them). The
+gate's `linkRelatedMemories`, `reinforceMemory`'s footnotes, the fold episode pass's fragment links
+and the memory editor's neighbour links all write through them. In the job child they are buffered
+like any write and replayed by the parent against the live row, so two jobs touching one memory
+both land; the per-job overlay applies the same deltas to later reads in the job. Tests:
+`__tests__/unit/lib/database/repositories/memories-link-deltas.test.ts` (real SQL) and the bug 231
+block in `__tests__/unit/lib/background-jobs/child-proxy-memory-gate-overlay.test.ts` (two jobs over
+one snapshot, replayed in turn).
 
 ## Symptom
 

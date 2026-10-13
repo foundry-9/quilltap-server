@@ -336,6 +336,8 @@ Find and replace text across all messages:
 - Update character names
 - Fix terminology across conversation
 
+When memories are included, each altered memory is re-read by the Commonplace Book on the spot, so that a memory of "Lauren" is thereafter recalled as Lauren and not as the "Laura" it once was. Should the embedding provider be indisposed at that moment, the memory in question is left precisely as it was and named in the list of errors, rather than wearing new words over an old understanding.
+
 ### Bulk Character Replace
 
 Reassign messages between characters:

@@ -2,18 +2,26 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed 2026-10-12 |
 | **Found** | 2026-10-12, fixing review finding #9 on PR 90 |
-| **Fixed** | — |
+| **Fixed** | 2026-10-12 |
 | **Severity** | Low — recall and the gate match a replaced memory against its old wording until something else re-embeds it |
 | **Who it bites** | anyone who runs search and replace with memories in scope |
 | **Provenance** | Original to v4 |
 | **Defect site** | `lib/search-replace/search-replace-service.ts:184-206` (rewrites the rows, then calls `updateMemoryWithEmbedding` with the already-written text); `lib/memory/memory-service.ts:703-715` (re-embeds only when the text differs from the stored row) |
-| **Fix site** | — |
+| **Fix site** | `lib/search-replace/search-replace-service.ts` (new pure `planMemoryReplacement`; each row through `editMemory`); `MemoriesRepository.replaceInMemories` removed |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-12).** Search and replace no longer rewrites memory rows first. For each
+matching memory it computes the replaced content, summary and keywords from the row as read
+(`planMemoryReplacement`) and writes them through `editMemory`, which embeds the new text before it
+writes and stores text and vector together, then invalidates the frozen archive, publishes
+`memories` and re-mirrors a digest. A row whose new text cannot be embedded is left unchanged and
+named in the result's `errors`. The repository's `replaceInMemories` (its only caller) is gone.
+Test: `__tests__/unit/lib/search-replace/search-replace-memories.test.ts`.
 
 ## Symptom
 
