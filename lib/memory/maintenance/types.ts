@@ -16,6 +16,17 @@ export const MAINTENANCE_PHASES = ['fold-near-duplicates', 'consolidate', 'demot
 
 export type MaintenancePhase = (typeof MAINTENANCE_PHASES)[number]
 
+/**
+ * A hand-asked phase list with what it implies: the Commonplace mirror always
+ * follows consolidation, so naming `consolidate` brings `mirror` with it.
+ * Returned in {@link MAINTENANCE_PHASES} order.
+ */
+export function withImpliedPhases(phases: readonly MaintenancePhase[]): MaintenancePhase[] {
+  const asked = new Set(phases)
+  if (asked.has('consolidate')) asked.add('mirror')
+  return MAINTENANCE_PHASES.filter((phase) => asked.has(phase))
+}
+
 /** Why a run was asked for (for the ledger and logs; exemption is per phase, `exemptPhases`). */
 export type MaintenanceReason = 'scheduled' | 'watermark' | 'manual'
 

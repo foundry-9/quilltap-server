@@ -27,6 +27,21 @@ import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 export type MemoryCreateInput = Omit<Memory, 'id' | 'createdAt' | 'updatedAt' | 'tier' | 'consolidatedFrom'> &
   Partial<Pick<Memory, 'tier' | 'consolidatedFrom'>>;
 
+/** One dangling link: row `id` (held by `characterId`) names `target`, which no longer exists. */
+export interface DanglingMemoryLink {
+  id: string;
+  characterId: string;
+  target: string;
+}
+
+/** {@link MemoriesRepository.findDanglingLinks}: dangling links by column. */
+export interface DanglingMemoryLinks {
+  related: DanglingMemoryLink[];
+  consolidatedFrom: DanglingMemoryLink[];
+  /** A member whose digest is gone; `tier` is the member's own. */
+  supersededBy: Array<DanglingMemoryLink & { tier: MemoryTier }>;
+}
+
 /**
  * SQL predicate for "this row is in the hot tier". A NULL tier (a row written
  * before `add-memory-tiers-v1`, or by a path that bypassed `create`) reads as
@@ -1261,6 +1276,62 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding digests containing members',
       { characters: characterIds.length, members: memberIds.length },
       [],
+    );
+  }
+
+  /**
+   * Links that name a memory row which no longer exists — the graph repair's
+   * scan (`lib/memory/repair.ts`, `quilltap memories validate --repair`). One
+   * pass per link column, each a `NOT EXISTS` against the whole table, since a
+   * link may legitimately cross holders. Optionally scoped to the given
+   * holders' rows. Read-only.
+   */
+  async findDanglingLinks(characterIds?: readonly string[]): Promise<DanglingMemoryLinks> {
+    return this.safeQuery(
+      async () => {
+        const scoped = characterIds ? Array.from(new Set(characterIds)) : null;
+        const out: DanglingMemoryLinks = { related: [], consolidatedFrom: [], supersededBy: [] };
+        if (scoped && scoped.length === 0) return out;
+        const chunks = scoped ? chunkArray(scoped, SQLITE_VARIABLE_CHUNK_SIZE) : [null];
+        for (const chunk of chunks) {
+          const holder = chunk ? `AND m.characterId IN (${chunk.map(() => '?').join(',')})` : '';
+          const params = chunk ?? [];
+          for (const column of ['relatedMemoryIds', 'consolidatedFrom'] as const) {
+            const rows = await rawQuery<Array<{ id: string; characterId: string; target: string }>>(
+              `SELECT m.id AS id, m.characterId AS characterId, j.value AS target
+                 FROM memories m, json_each(m.${column}) j
+                WHERE m.${column} IS NOT NULL
+                  AND m.${column} <> '[]'
+                  AND json_valid(m.${column})
+                  ${holder}
+                  AND NOT EXISTS (SELECT 1 FROM memories t WHERE t.id = j.value)`,
+              params,
+            );
+            (column === 'relatedMemoryIds' ? out.related : out.consolidatedFrom).push(...rows);
+          }
+          const superseded = await rawQuery<Array<{ id: string; characterId: string; target: string; tier: string | null }>>(
+            `SELECT m.id AS id, m.characterId AS characterId, m.supersededById AS target, m.tier AS tier
+               FROM memories m
+              WHERE m.supersededById IS NOT NULL
+                ${holder}
+                AND NOT EXISTS (SELECT 1 FROM memories t WHERE t.id = m.supersededById)`,
+            params,
+          );
+          out.supersededBy.push(
+            ...superseded.map((r) => ({ ...r, tier: (r.tier === 'cold' ? 'cold' : 'hot') as MemoryTier })),
+          );
+        }
+        logger.debug('Scanned for dangling memory links', {
+          holders: scoped ? scoped.length : 'all',
+          related: out.related.length,
+          consolidatedFrom: out.consolidatedFrom.length,
+          supersededBy: out.supersededBy.length,
+        });
+        return out;
+      },
+      'Error scanning for dangling memory links',
+      { characters: characterIds?.length ?? 'all' },
+      { related: [], consolidatedFrom: [], supersededBy: [] },
     );
   }
 

@@ -34,6 +34,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
+import type { DanglingMemoryLinks } from '@/lib/database/repositories/memories.repository'
 import { rawQuery } from '@/lib/database/manager'
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
@@ -445,6 +446,66 @@ export async function retireMemories(ids: readonly string[], opts: RetireOptions
   if (report.retired > 0) {
     await announceRetirement(idsByCharacter.keys(), doomed.values())
   }
+  return report
+}
+
+/** {@link scrubDanglingMemoryLinks}: rows rewritten per link column. */
+export interface DanglingScrubReport {
+  relatedRowsTouched: number
+  digestsTouched: number
+  membersCut: number
+  charactersAffected: number
+}
+
+/**
+ * Scrub links that name rows already gone — the graph repair
+ * (`lib/memory/repair.ts`). A retirement scrubs as it deletes; this is for
+ * links a deletion from before the chokepoint (or a hand edit, an import, a
+ * crash mid-write) left behind. The same removal deltas the retirement uses:
+ * the targets leave every `relatedMemoryIds`, each digest loses its missing
+ * members, and a member whose digest is gone keeps its tier and loses its
+ * `supersededById` (through `memoryIndex.setTier`), so consolidation may fold
+ * it again. Announces like a retirement.
+ */
+export async function scrubDanglingMemoryLinks(links: DanglingMemoryLinks): Promise<DanglingScrubReport> {
+  const repos = getRepositories()
+  const report: DanglingScrubReport = { relatedRowsTouched: 0, digestsTouched: 0, membersCut: 0, charactersAffected: 0 }
+  const characters = new Set<string>()
+
+  const relatedTargets = [...new Set(links.related.map((l) => l.target))]
+  if (relatedTargets.length > 0) {
+    report.relatedRowsTouched = (await repos.memories.removeRelatedMemoryIdsEverywhere(relatedTargets)) ?? 0
+    for (const l of links.related) characters.add(l.characterId)
+  }
+
+  const membersByDigest = new Map<string, { characterId: string; targets: Set<string> }>()
+  for (const l of links.consolidatedFrom) {
+    const entry = membersByDigest.get(l.id) ?? { characterId: l.characterId, targets: new Set<string>() }
+    entry.targets.add(l.target)
+    membersByDigest.set(l.id, entry)
+  }
+  for (const [digestId, { characterId, targets }] of membersByDigest) {
+    await repos.memories.removeConsolidatedMembers(characterId, digestId, [...targets])
+    report.digestsTouched++
+    characters.add(characterId)
+  }
+
+  const membersByHolderTier = new Map<string, { characterId: string; tier: DanglingMemoryLinks['supersededBy'][number]['tier']; ids: string[] }>()
+  for (const l of links.supersededBy) {
+    const key = `${l.characterId}:${l.tier}`
+    const entry = membersByHolderTier.get(key) ?? { characterId: l.characterId, tier: l.tier, ids: [] }
+    entry.ids.push(l.id)
+    membersByHolderTier.set(key, entry)
+  }
+  for (const { characterId, tier, ids } of membersByHolderTier.values()) {
+    await memoryIndex.setTier(characterId, ids, tier, { supersededById: null })
+    report.membersCut += ids.length
+    characters.add(characterId)
+  }
+
+  report.charactersAffected = characters.size
+  log.debug('Scrubbed dangling memory links', { ...report })
+  if (characters.size > 0) await announceRetirement(characters, [])
   return report
 }
 

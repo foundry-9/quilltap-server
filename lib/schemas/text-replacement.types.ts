@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { UUIDSchema, TimestampSchema } from './common.types';
+import { patchSchemaOf } from './patch-schema';
 
 // ============================================================================
 // DATABASE SCHEMA
@@ -66,6 +67,6 @@ export type TextReplacementRuleInput = z.infer<typeof TextReplacementRuleInputSc
  * Shape accepted by `PATCH /api/v1/settings/text-replacements/[id]`. All
  * fields optional; only the supplied ones are written.
  */
-export const TextReplacementRulePatchSchema = TextReplacementRuleInputSchema.partial();
+export const TextReplacementRulePatchSchema = patchSchemaOf(TextReplacementRuleInputSchema);
 
 export type TextReplacementRulePatch = z.infer<typeof TextReplacementRulePatchSchema>;

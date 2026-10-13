@@ -316,7 +316,7 @@ export const MemoryExtractionLimitsSchema = z.object({
   /** When true, the rate limiter is active. Off by default. */
   enabled: z.boolean().default(false),
   /** Maximum memories a single character may accrue per hour before the limiter engages. */
-  maxPerHour: z.number().int().positive().default(20),
+  maxPerHour: z.number().int().positive().max(10_000).default(20),
   /** Fraction of maxPerHour at which the graduated floor begins to apply (0–1). */
   softStartFraction: z.number().min(0).max(1).default(0.7),
   /** Importance floor applied to new candidates while in the graduated band. */
