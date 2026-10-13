@@ -11,7 +11,7 @@ import { HARD_CANDIDATE_CAP, parseSelfDrafts, passCap } from '../parse'
 import { buildSelfTurnMessages } from '../prompts/self'
 import { clockAt, type ExtractionContext } from '../context'
 import type { ExtractionPass, PassCall } from '../run'
-import type { TranscriptWindow } from '../window'
+import { firstValidIso, type TranscriptWindow } from '../window'
 
 export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'): ExtractionPass {
   return {
@@ -39,7 +39,7 @@ export function selfTurnPass(candidatePass: 'self-turn' | 'carina' = 'self-turn'
         if (!messages) continue
         const sourceMessageId =
           slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? transcript.latestAssistantMessageId
-        const sourceTime = slice.lastMessageCreatedAt ?? transcript.turnTimestamp ?? null
+        const sourceTime = firstValidIso(slice.lastMessageCreatedAt, transcript.turnTimestamp)
         calls.push({
           label: `SELF memory for ${holder.name}${slice.isUserControlled ? ' (user-controlled)' : ''}`,
           holders: [holder],

@@ -272,7 +272,7 @@ describe('producers', () => {
   // An empty-string slice time is not nullish, so `??` in the turn passes keeps
   // it instead of falling to the turn timestamp; the anchor then defaults to
   // the wall clock. Flip to `it` when self-turn/other-turn use a validity check.
-  it.failing('an empty slice source time still anchors on the turn timestamp', async () => {
+  it('an empty slice source time still anchors on the turn timestamp', async () => {
     mockAdmitRow.mockResolvedValue(admissionOutcome('insert', { id: 'm1' }))
     modelAnswers([{ content: 'I promised.', summary: 'promised', importance: 0.5 }])
     const result = await runPass(selfTurnPass(), ctxFor({ dryRun: true }), turnWindow(transcript('')))

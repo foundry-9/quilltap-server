@@ -14,7 +14,7 @@ import { HARD_CANDIDATE_CAP, parseOtherDraftsBySubject, passCap } from '../parse
 import { buildOtherTurnMessages } from '../prompts/other'
 import { clockAt, type CastMember, type ExtractionContext } from '../context'
 import type { ExtractionPass, PassCall } from '../run'
-import type { TranscriptWindow } from '../window'
+import { firstValidIso, type TranscriptWindow } from '../window'
 import { subjectInputsFor, subjectPool } from './subjects'
 
 export function otherTurnPass(): ExtractionPass {
@@ -45,7 +45,7 @@ export function otherTurnPass(): ExtractionPass {
         if (subjects.length === 0) continue
         const sourceMessageId =
           slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? transcript.latestAssistantMessageId
-        const sourceTime = slice.lastMessageCreatedAt ?? transcript.turnTimestamp ?? null
+        const sourceTime = firstValidIso(slice.lastMessageCreatedAt, transcript.turnTimestamp)
         calls.push({
           label: `OTHER memory ${observer.name}${slice.isUserControlled ? ' (user-controlled)' : ''} → ${subjects.length} subject(s)`,
           holders: [observer],

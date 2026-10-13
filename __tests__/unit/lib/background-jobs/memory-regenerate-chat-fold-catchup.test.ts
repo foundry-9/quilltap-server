@@ -1,10 +1,11 @@
 /**
- * Chat memory regenerate × fold-grain OTHER pass.
+ * Chat memory regenerate × the extraction pipeline.
  *
- * In `hybrid` / `fold` extraction modes most observations of other characters
- * come from the fold-grain pass, so a regenerate must reset the chat's
- * watermark and enqueue one catch-up (idle check skipped) alongside the
- * per-turn extractions. In `turn` mode it must do neither.
+ * A regenerate wipes the chat's memories (`retireChatMemories`), clears both
+ * fold passes' cursors (their rows went with the wipe, bug 207), enqueues one
+ * turn job per `listExtractionTurns` entry, then the fold catch-ups with the
+ * idle check skipped: `other-fold` only in the `hybrid` / `fold` modes (where
+ * it owns most observations of others), `episode-fold` in every mode.
  */
 
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
@@ -23,88 +24,118 @@ import { enqueueMemoryExtraction } from '@/lib/background-jobs/queue-service'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { retireChatMemories } from '@/lib/memory/retire'
 
-const chatsUpdate = jest.fn()
+const clearForChat = jest.fn(async () => 2)
+const findChat = jest.fn()
+const findProfile = jest.fn()
 
-function setup(otherPass: 'turn' | 'fold' | 'hybrid', watermark: string | null, episodeWatermark: string | null = null) {
+const SALON_MESSAGES = [
+  { id: 'u1', type: 'message', role: 'USER' },
+  { id: 'a1', type: 'message', role: 'ASSISTANT', participantId: 'p-ai' },
+  { id: 'u2', type: 'message', role: 'USER' },
+  { id: 'a2', type: 'message', role: 'ASSISTANT', participantId: 'p-ai' },
+]
+
+function setup(otherPass: 'turn' | 'fold' | 'hybrid', opts: { chatType?: string; messages?: unknown[] } = {}) {
   ;(getMemoryExtractionModeSettings as jest.Mock).mockResolvedValue({
     otherPass,
     perTurnOtherFloor: 0.75,
     foldCandidatesPerSubject: 3,
   })
+  findChat.mockResolvedValue({ id: 'chat-1', chatType: opts.chatType ?? 'salon' })
+  findProfile.mockResolvedValue({ id: 'profile-1' })
   ;(getRepositories as jest.Mock).mockReturnValue({
     chats: {
-      findById: jest.fn(async () => ({
-        id: 'chat-1',
-        otherExtractionWatermarkMessageId: watermark,
-        episodeExtractionWatermarkMessageId: episodeWatermark,
-      })),
-      getMessages: jest.fn(async () => [
-        { id: 'u1', type: 'message', role: 'USER' },
-        { id: 'a1', type: 'message', role: 'ASSISTANT' },
-      ]),
-      update: chatsUpdate,
+      findById: findChat,
+      getMessages: jest.fn(async () => opts.messages ?? SALON_MESSAGES),
     },
-    connections: { findById: jest.fn(async () => ({ id: 'profile-1' })) },
+    connections: { findById: findProfile },
+    memoryExtractionCursors: { clearForChat },
   })
 }
 
 const job = { id: 'job-9', userId: 'user-1', payload: { chatId: 'chat-1', connectionProfileId: 'profile-1' } }
+const payloads = () => (enqueueMemoryExtraction as jest.Mock).mock.calls.map(c => c[1] as Record<string, unknown>)
+const catchups = () => payloads().filter(p => p.pass && p.pass !== 'turn')
 
 beforeEach(() => {
   jest.clearAllMocks()
 })
 
 describe('memory regenerate — the wipe', () => {
-  it('wipes the chat through retireChatMemories', async () => {
-    setup('turn', null)
+  it('wipes the chat through retireChatMemories and clears its cursors', async () => {
+    setup('turn')
     await handleMemoryRegenerateChat(job as never)
     expect(retireChatMemories).toHaveBeenCalledWith('chat-1')
+    expect(clearForChat).toHaveBeenCalledWith('chat-1')
+  })
+
+  it('wipes orphans and enqueues nothing when the chat is gone', async () => {
+    setup('hybrid')
+    findChat.mockResolvedValue(null)
+    await handleMemoryRegenerateChat(job as never)
+    expect(retireChatMemories).toHaveBeenCalledWith('chat-1')
+    expect(clearForChat).not.toHaveBeenCalled()
+    expect(enqueueMemoryExtraction).not.toHaveBeenCalled()
+  })
+
+  it('fails loud, before wiping, when the connection profile is gone', async () => {
+    setup('hybrid')
+    findProfile.mockResolvedValue(null)
+    await expect(handleMemoryRegenerateChat(job as never)).rejects.toThrow('Connection profile not found')
+    expect(retireChatMemories).not.toHaveBeenCalled()
   })
 })
 
-describe('memory regenerate — fold-grain OTHER rebuild', () => {
-  it('resets the watermark and enqueues an idle-skipping catch-up in hybrid mode', async () => {
-    setup('hybrid', 'm-40')
+describe('memory regenerate — turn jobs', () => {
+  it('enqueues one turn job per USER opener, without the dedupe scan', async () => {
+    setup('turn')
     await handleMemoryRegenerateChat(job as never)
-
-    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', { otherExtractionWatermarkMessageId: null })
-    const calls = (enqueueMemoryExtraction as jest.Mock).mock.calls.map((c) => c[1])
-    expect(calls).toContainEqual(
-      expect.objectContaining({ chatId: 'chat-1', foldOtherCatchup: true, foldOtherIgnoreIdle: true }),
-    )
-    expect(calls).toContainEqual(expect.objectContaining({ turnOpenerMessageId: 'u1' }))
+    const turns = payloads().filter(p => !p.pass)
+    expect(turns).toEqual([
+      { chatId: 'chat-1', turnOpenerMessageId: 'u1', extractionAnchorMessageId: null, connectionProfileId: 'profile-1' },
+      { chatId: 'chat-1', turnOpenerMessageId: 'u2', extractionAnchorMessageId: null, connectionProfileId: 'profile-1' },
+    ])
+    expect((enqueueMemoryExtraction as jest.Mock).mock.calls.every(c => c[2]?.skipDedupCheck === true)).toBe(true)
   })
 
-  it('skips the watermark write when there is none, but still enqueues the catch-up', async () => {
-    setup('fold', null)
+  it('gives an autonomous room one anchored turn per closing ASSISTANT line', async () => {
+    setup('turn', {
+      chatType: 'autonomous',
+      messages: [
+        { id: 'a1', type: 'message', role: 'ASSISTANT', participantId: 'p-1', content: 'one' },
+        { id: 'a2', type: 'message', role: 'ASSISTANT', participantId: 'p-2', content: 'two' },
+      ],
+    })
     await handleMemoryRegenerateChat(job as never)
-    expect(chatsUpdate).not.toHaveBeenCalled()
-    const calls = (enqueueMemoryExtraction as jest.Mock).mock.calls.map((c) => c[1])
-    expect(calls.filter((p) => p.foldOtherCatchup)).toHaveLength(1)
-  })
-
-  it('does neither in turn mode', async () => {
-    setup('turn', 'm-40')
-    await handleMemoryRegenerateChat(job as never)
-    expect(chatsUpdate).not.toHaveBeenCalled()
-    const calls = (enqueueMemoryExtraction as jest.Mock).mock.calls.map((c) => c[1])
-    expect(calls.some((p) => p.foldOtherCatchup)).toBe(false)
+    const turns = payloads().filter(p => !p.pass)
+    expect(turns.map(t => [t.turnOpenerMessageId, t.extractionAnchorMessageId])).toEqual([
+      [null, 'a1'],
+      [null, 'a2'],
+    ])
   })
 })
 
-describe('memory regenerate — episode watermark (bug 207)', () => {
-  it('clears the episode watermark, whose episodes the wipe removed, in every mode', async () => {
-    for (const mode of ['turn', 'fold', 'hybrid'] as const) {
-      chatsUpdate.mockClear()
-      setup(mode, null, 'm-30')
-      await handleMemoryRegenerateChat(job as never)
-      expect(chatsUpdate).toHaveBeenCalledWith('chat-1', { episodeExtractionWatermarkMessageId: null })
-    }
+describe('memory regenerate — fold catch-ups', () => {
+  it.each(['hybrid', 'fold'] as const)('enqueues idle-skipping other-fold and episode-fold catch-ups in %s mode', async mode => {
+    setup(mode)
+    await handleMemoryRegenerateChat(job as never)
+    expect(catchups()).toEqual([
+      expect.objectContaining({ chatId: 'chat-1', turnOpenerMessageId: null, pass: 'other-fold', ignoreIdle: true }),
+      expect.objectContaining({ chatId: 'chat-1', turnOpenerMessageId: null, pass: 'episode-fold', ignoreIdle: true }),
+    ])
+    // Keyed on the regenerate job, so a sweep's own catch-up never swallows it.
+    expect(catchups().every(p => p.extractionAnchorMessageId === 'regenerate:job-9')).toBe(true)
   })
 
-  it('leaves a chat with no episode watermark alone', async () => {
-    setup('turn', null, null)
+  it('enqueues only the episode-fold catch-up in turn mode', async () => {
+    setup('turn')
     await handleMemoryRegenerateChat(job as never)
-    expect(chatsUpdate).not.toHaveBeenCalled()
+    expect(catchups().map(p => p.pass)).toEqual(['episode-fold'])
+  })
+
+  it('enqueues the catch-ups after every turn job', async () => {
+    setup('hybrid')
+    await handleMemoryRegenerateChat(job as never)
+    expect(payloads().map(p => p.pass ?? 'turn')).toEqual(['turn', 'turn', 'other-fold', 'episode-fold'])
   })
 })

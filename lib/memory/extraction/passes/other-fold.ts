@@ -15,7 +15,7 @@ import { parseOtherDraftsBySubject, passCap } from '../parse'
 import { buildOtherFoldMessages } from '../prompts/other'
 import { clockAt, type CastMember, type ExtractionContext } from '../context'
 import type { ExtractionPass, PassCall } from '../run'
-import type { TranscriptWindow } from '../window'
+import { firstValidIso, type TranscriptWindow } from '../window'
 import { subjectInputsFor, subjectPool } from './subjects'
 
 /** The characters who spoke in a stretch, in order of first line, and each one's last message. */
@@ -55,7 +55,7 @@ export function otherFoldPass(): ExtractionPass {
         const subjects = await subjectInputsFor(ctx, observer, pool)
         if (subjects.length === 0) continue
         const last = lastMessage.get(observer.characterId) ?? window.messages[window.messages.length - 1]
-        const sourceTime = last?.createdAt ?? null
+        const sourceTime = firstValidIso(last?.createdAt)
         calls.push({
           label: `fold OTHER memory ${observer.name} → ${subjects.length} subject(s)`,
           holders: [observer],

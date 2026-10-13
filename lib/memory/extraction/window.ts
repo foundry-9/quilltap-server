@@ -68,6 +68,11 @@ export type StretchWindow = Extract<TranscriptWindow, { kind: 'stretch' }>
 /** One message is cut at this many characters inside a stretch. */
 export const STRETCH_MESSAGE_CHAR_CAP = 1500
 
+/** The first of `isos` that parses as a time, else null — an empty or malformed stamp falls through. */
+export function firstValidIso(...isos: ReadonlyArray<string | null | undefined>): string | null {
+  return isos.find((iso): iso is string => !!iso && Number.isFinite(Date.parse(iso))) ?? null
+}
+
 /** A stretch window over `messages` (already eligible), labelled with `speakerNames`. */
 export function stretchWindow(
   messages: MessageEvent[],
