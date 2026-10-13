@@ -2963,7 +2963,7 @@ Streams NDJSON: `start`, `candidate` (each with `decision`, `extractionPass`, an
 
 #### `POST /api/v1/chats/[id]?action=recall-replay`
 
-Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstructs the per-turn recall distillation for a turn and runs the memory search twice — episodic signals inert (pre-overhaul path) vs. live (retrospective flip, time window, entity anchors, multi-probe) — returning both candidate tables with cosine, ranking blend, multipliers fired, final score, and head selection per row. Read-only. The distillation clock is anchored to the replayed turn's own timestamp.
+Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Rebuilds the turn's recall query (`buildRecallQuery`, embedded once) and runs the search stages twice — episodic signals inert (pre-overhaul path) vs. live (retrospective flip, time window, entity anchors, multi-probe) — returning both candidate tables with cosine, ranking blend, multipliers fired, final score, and head selection per row; then the text strategy over the same question (`fallbackPath`) and the turn's `assembleRecall` over the live pool, reported as the stage `trace` and the rendered `pools` (`archive` / `head` / `interCharacter` / `recap` ids). The anti-repetition ring is the one in force at the turn, rebuilt from the `[Recall:ring]` lines of earlier replies' `debugMemoryLogs` (`ring`, `ringSource: 'debug-log'`), falling back to the chat's current ring (`'chat'`). Read-only: nothing is stamped or persisted. The distillation clock is anchored to the replayed turn's own timestamp.
 
 **Request Body** (all optional):
 
@@ -2983,7 +2983,7 @@ Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstruc
 
 Harness knobs (recall multiplier retuning, R7):
 
-- `tuning` — retuning constants for the **new path only**; the old path stays the reference. Validated by `RecallTuningInputSchema` (`lib/memory/recall-tuning.ts`), and unknown keys are a 400. Keys: `boostGateAbs` / `boostGateMargin` / `boostGateRamp` (R1 relevance gate; 0 or null turns a term off), `boostCap` (R2), `freshBypassesGate` / `windowBypassesGate` (apply that event-time boost outside the R1 gate), `multipliers` (any `RECALL_MULTIPLIERS` key, fresh-event values included), `specificAnchors` with `anchorMinHits` and `anchorOrder` (`rarest` | `distiller`) (R4), `backgroundReserve` (R6, 0–0.5 of the head). Omitted → today's constants, byte-identical ranking.
+- `tuning` — retuning constants for the **new path only**; the old path stays the reference. Validated by `RecallTuningInputSchema` (`lib/memory/recall/tuning.ts`), and unknown keys are a 400. Keys: `boostGateAbs` / `boostGateMargin` / `boostGateRamp` (R1 relevance gate; 0 or null turns a term off), `boostCap` (R2), `freshBypassesGate` / `windowBypassesGate` (apply that event-time boost outside the R1 gate), `multipliers` (any `RECALL_MULTIPLIERS` key, fresh-event values included), `specificAnchors` with `anchorMinHits` and `anchorOrder` (`rarest` | `distiller`) (R4), `backgroundReserve` (R6, 0–0.5 of the head). Omitted → today's constants, byte-identical ranking.
 - `signals` — a previous replay's `signals`, reused instead of a fresh cheap-LLM distillation (which is not deterministic). Validated by `RecallReplaySignalsSchema`.
 - `asOf` — search only memories created before the turn's opening message, and decay weights against the turn's clock: the corpus as it stood then. Applies to both paths.
 

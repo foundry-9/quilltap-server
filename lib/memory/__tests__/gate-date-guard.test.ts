@@ -9,7 +9,7 @@ import { occasionsAreDistinct as distinct } from '../admission/decide'
 import { ADMISSION_THRESHOLDS } from '../settings-defaults'
 const DATE_GUARD_DAYS = ADMISSION_THRESHOLDS.dateGuardDays
 const occasionsAreDistinct = (a: string | null | undefined, b: string | null | undefined) => distinct(a, b, DATE_GUARD_DAYS)
-import { appendRecallTurn, appendRetroSignature, parseRetroSignatures } from '../recall-history'
+import { appendRecallTurn, appendRetroSignature, parseRetroSignatures } from '../recall/history'
 
 describe('occasionsAreDistinct', () => {
   it('is true when occurredAt differ by more than the guard window', () => {

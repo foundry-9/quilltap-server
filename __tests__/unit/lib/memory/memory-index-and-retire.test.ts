@@ -472,4 +472,19 @@ describe('chokepoint grep-tests', () => {
     expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-merge.ts'))).toBe(false)
     expect(filesMatching(/\b(createMemoryWithGate|createMemoryDirect|patchMemory|countReinforcement|absorbNearDuplicate|reinforceMemory|linkRelatedMemories|planMemoryMerge|applyMemoryMerge)\b/)).toEqual([])
   })
+
+  it('only recall delivery stamps lastAccessedAt (what was shown)', () => {
+    expect(filesMatching(/memories\.updateAccessTimeBulk\(/)).toEqual(['lib/memory/recall/deliver.ts'])
+  })
+
+  it('the memory search runs on the recall stages; the old service and injector are gone', () => {
+    expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-service.ts'))).toBe(false)
+    expect(fs.existsSync(path.join(ROOT, 'lib/chat/context/memory-injector.ts'))).toBe(false)
+    expect(filesMatching(/\b(searchMemoriesSemantic|markMemoriesAccessed|formatDynamicMemoryHead|formatFrozenMemoryArchive|formatMemoryMetadataTag)\b/)).toEqual([])
+  })
+
+  it('the ring is appended only by recall delivery', () => {
+    // history.ts defines it (its doc comment names it); deliver.ts is the one caller.
+    expect(filesMatching(/\bappendRecallTurn\(/)).toEqual(['lib/memory/recall/deliver.ts', 'lib/memory/recall/history.ts'])
+  })
 })

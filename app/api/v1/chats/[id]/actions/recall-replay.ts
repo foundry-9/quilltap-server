@@ -19,8 +19,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, successResponse, errorResponse, validationError } from '@/lib/api/responses';
-import { runRecallReplay } from '@/lib/memory/recall-replay';
-import { RecallReplaySignalsSchema, RecallTuningInputSchema } from '@/lib/memory/recall-tuning';
+import { runRecallReplay } from '@/lib/memory/recall/replay';
+import { RecallReplaySignalsSchema, RecallTuningInputSchema } from '@/lib/memory/recall/tuning';
 import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import type { RequestContext } from '@/lib/api/middleware';

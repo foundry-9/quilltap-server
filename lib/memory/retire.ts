@@ -40,7 +40,7 @@ import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { memoryIndex } from './index-store'
 import { policyProtectionOf, type PolicyProtection } from './policy-protection'
-import { invalidateFrozenArchive } from './frozen-archive-cache'
+import { invalidateFrozenArchive } from './recall/archive'
 
 const log = logger.child({ module: 'memory:retire' })
 

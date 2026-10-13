@@ -66,11 +66,25 @@ export {
   type HousekeepingDetail,
 } from './housekeeping'
 
-// Memory Recap (Chat Start / Character Join)
+// Recall: a pipeline with a trace (refactor §3.8)
+//   query → gather → hydrate → score → select → assemble → render → deliver
 export {
+  buildRecallQuery,
+  searchRecall,
+  searchMemories,
+  assembleRecall,
+  deliverRecall,
+  stampAccessed,
   generateMemoryRecap,
+  type RecallQuery,
+  type RecallCandidate,
+  type RecallTrace,
+  type RecallPlan,
+  type RecallBundle,
+  type RecallDelivery,
+  type PreRecall,
   type MemoryRecapResult,
-} from './memory-recap'
+} from './recall'
 
 // Memory Consolidation (digests + hot/cold tiers)
 export {

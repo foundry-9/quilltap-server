@@ -37,7 +37,7 @@ jest.mock('@/lib/realtime/bus', () => ({
   publishRealtime: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/frozen-archive-cache', () => ({
+jest.mock('@/lib/memory/recall/archive', () => ({
   invalidateFrozenArchive: jest.fn(),
 }))
 
@@ -55,7 +55,7 @@ jest.mock('@/lib/logger', () => {
 
 import { retireMemories } from '@/lib/memory/retire'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
+import { invalidateFrozenArchive } from '@/lib/memory/recall/archive'
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
 const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock }

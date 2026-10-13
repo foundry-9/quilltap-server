@@ -25,7 +25,7 @@ jest.mock('@/lib/memory/index-store', () => ({
   embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
 }))
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
-jest.mock('@/lib/memory/frozen-archive-cache', () => ({ invalidateFrozenArchive: jest.fn() }))
+jest.mock('@/lib/memory/recall/archive', () => ({ invalidateFrozenArchive: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/file-storage/commonplace-digest-vault-bridge', () => ({
   writeCommonplaceDigestsToVault: jest.fn().mockResolvedValue({ written: 1, unchanged: 0, skipped: 0 }),
@@ -35,7 +35,7 @@ import { updateMemory } from '@/lib/memory/admission'
 import { getRepositories } from '@/lib/repositories/factory'
 import { memoryIndex } from '@/lib/memory/index-store'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
+import { invalidateFrozenArchive } from '@/lib/memory/recall/archive'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance'

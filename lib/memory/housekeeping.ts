@@ -16,7 +16,7 @@ import { filterImportance, protection } from './scoring'
 import { MEMORY_SETTING_DEFAULTS } from './settings-defaults'
 import { retireMemories } from './retire'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
-import { invalidateFrozenArchive } from './frozen-archive-cache'
+import { invalidateFrozenArchive } from './recall/archive'
 
 import { logger } from '@/lib/logger'
 

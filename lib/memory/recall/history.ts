@@ -8,7 +8,7 @@
  * `commonplaceSceneCache`, not an auto-detected SQLite "array column".)
  *
  * The recall path unions these IDs into a "recently whispered" set and applies a
- * bounded penalty (see lib/memory/recall-tags.ts `recentlyWhispered`) so the same
+ * bounded penalty (see lib/memory/recall/tags.ts `recentlyWhispered`) so the same
  * memory doesn't get whispered turn after turn and read as a stuck record.
  *
  * Ephemeral UX state — NOT part of .qtap export.

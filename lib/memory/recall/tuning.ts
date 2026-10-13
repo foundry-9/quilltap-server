@@ -3,7 +3,7 @@
  * ranking, resolved into one object the ranking code reads.
  *
  * Every knob defaults to the values the retuning chose
- * ({@link RECALL_TUNING_DEFAULTS} in `recall-tags.ts`, the single source), so
+ * ({@link RECALL_TUNING_DEFAULTS} in `recall/tags.ts`, the single source), so
  * {@link DEFAULT_RECALL_TUNING} and "no tuning at all" rank identically. The
  * pre-retuning ranking is reachable as a tuning input: both gate terms 0,
  * `boostCap` 4, fresh 1.6 / 1.35, `specificAnchors` false.
@@ -14,13 +14,13 @@
  * too, so the route can validate both without loading the replay engine. Design of record:
  * docs/developer/features/recall-multiplier-retuning.md.
  *
- * Pure + I/O-free, like `recall-tags.ts`, so it is safe in the job child.
+ * Pure + I/O-free, like `recall/tags.ts`, so it is safe in the job child.
  */
 
 import { z } from 'zod'
-import { CONTEXT_VALUES, DEFAULT_RECALL_TUNING, RECALL_MULTIPLIERS, TEMPORAL_VALUES, type BoostGate } from './recall-tags'
+import { CONTEXT_VALUES, DEFAULT_RECALL_TUNING, RECALL_MULTIPLIERS, TEMPORAL_VALUES, type BoostGate } from './tags'
 
-export type { BoostGate } from './recall-tags'
+export type { BoostGate } from './tags'
 
 export type RecallMultiplierKey = keyof typeof RECALL_MULTIPLIERS
 export type RecallMultiplierTable = Record<RecallMultiplierKey, number>
@@ -64,7 +64,7 @@ export interface ResolvedRecallTuning {
   backgroundReserve: number
 }
 
-/** The shipped tuning — defined once, in `recall-tags.ts`. */
+/** The shipped tuning — defined once, in `recall/tags.ts`. */
 export { DEFAULT_RECALL_TUNING }
 
 const multiplierOverrideShape = Object.fromEntries(

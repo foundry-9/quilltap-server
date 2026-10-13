@@ -23,9 +23,10 @@ import type { Character, ConnectionProfile } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
-import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
-import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
-import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
+import { searchMemories } from '@/lib/memory/recall/search'
+import { stampAccessed } from '@/lib/memory/recall/deliver'
+import { renderHead } from '@/lib/memory/recall/render'
+import { buildMemorySubjectContext } from '@/lib/memory/recall/subject'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
 
@@ -33,6 +34,8 @@ import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
 const RECALL_LIMIT = 20
 /** How many recalled memories survive into the rendered block. */
 const RECALL_MAX_ENTRIES = 12
+/** Token cap on the rendered block (the head's historical default). */
+const RECALL_HEAD_TOKEN_BUDGET = 200
 
 /** The shape both rehearsals return. Never throws; failure is a field. */
 export interface VoiceRewriteResult {
@@ -65,7 +68,7 @@ export async function recallForSeed(
   logContext: string,
 ): Promise<string> {
   try {
-    const memoryResults = await searchMemoriesSemantic(character.id, seedMarkdown, {
+    const memoryResults = await searchMemories(character.id, seedMarkdown, {
       userId,
       limit: RECALL_LIMIT,
       minImportance: RECALL_MIN_IMPORTANCE,
@@ -80,14 +83,13 @@ export async function recallForSeed(
       character.id,
       memoryResults.map(r => r.memory),
     )
-    const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, subject, {
+    const formatted = renderHead(memoryResults, profile.provider, subject, {
+      maxTokens: RECALL_HEAD_TOKEN_BUDGET,
       maxEntries: RECALL_MAX_ENTRIES,
     })
     if (!formatted.content) return ''
-    markMemoriesAccessed(
-      character.id,
-      formatted.debugMemories.map(d => d.memoryId).filter((id): id is string => !!id),
-    )
+    // The rehearsal carries the block whole: every rendered line is delivered.
+    stampAccessed(character.id, formatted.lines.map(l => l.memoryId))
     return buildCommonplaceLLMContext({ relevant: formatted.content })
   } catch (err) {
     logger.warn(`${logContext} Memory recall failed; proceeding without`, {

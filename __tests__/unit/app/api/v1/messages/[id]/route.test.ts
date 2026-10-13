@@ -80,11 +80,6 @@ jest.mock('@/lib/services/chat-message', () => ({
   streamSwipeRegeneration: jest.requireActual('@/lib/services/chat-message/regenerate-swipe-stream').streamSwipeRegeneration,
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  deleteMemoriesBySourceMessagesWithVectors: jest.fn().mockResolvedValue({ deleted: 0, vectorsRemoved: 0 }),
-  deleteMemoryWithVector: jest.fn(),
-}))
-
 jest.mock('@/lib/chat/context-summary', () => ({
   invalidateContextSummaryIfMessageCovered: jest.fn().mockResolvedValue(undefined),
 }))

@@ -16,9 +16,11 @@ const mockLogger = {
   error: jest.fn(),
 }
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: (...args: unknown[]) => mockSearchMemoriesSemantic(...args),
-  markMemoriesAccessed: (...args: unknown[]) => mockMarkMemoriesAccessed(...args),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: (...args: unknown[]) => mockSearchMemoriesSemantic(...args),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: (...args: unknown[]) => mockMarkMemoriesAccessed(...args),
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -170,7 +172,7 @@ describe('search-scriptorium-handler', () => {
         embeddingProfileId: 'embed-1',
         limit: 5,
         minImportance: 0.4,
-        applyLiteralPhraseBoost: true,
+        literalPhrase: true,
       })
     )
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(

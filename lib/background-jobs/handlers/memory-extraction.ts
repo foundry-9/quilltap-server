@@ -30,6 +30,7 @@ import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import { logger } from '@/lib/logger';
+import { withRecallLines } from '@/lib/memory/recall/deliver';
 import {
   enqueueMemoryExtraction,
   memoryExtractionPassOf,
@@ -60,7 +61,12 @@ export async function finishExtractionJob(
 
   if (opts.debugMessageId && result.debugLogs.length > 0) {
     try {
-      await getRepositories().chats.updateMessage(chatId, opts.debugMessageId, { debugMemoryLogs: result.debugLogs });
+      // The turn's recall record (written by the finalizer) stays; this job's
+      // lines replace any earlier extraction's.
+      const message = (await ctx.messages()).find(m => m.id === opts.debugMessageId);
+      await getRepositories().chats.updateMessage(chatId, opts.debugMessageId, {
+        debugMemoryLogs: withRecallLines(message?.debugMemoryLogs, result.debugLogs),
+      });
     } catch (e) {
       logger.warn('[MemoryExtraction] Failed to store debug logs', {
         jobId: job.id,

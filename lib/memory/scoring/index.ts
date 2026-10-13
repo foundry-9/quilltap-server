@@ -53,3 +53,10 @@ export {
   importanceBand,
   type ImportanceBand,
 } from './importance'
+export {
+  rankForRecall,
+  rankByBlend,
+  reserveBackgroundSlots,
+  byBlendedAfter,
+  type RankInput,
+} from './rank'

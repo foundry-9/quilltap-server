@@ -26,7 +26,7 @@ import {
   MemoryMaintenanceSettingsSchema,
   MemoryRecallSettingsSchema,
 } from '@/lib/schemas/settings.types'
-import { DEFAULT_RECALL_TUNING } from '@/lib/memory/recall-tuning'
+import { DEFAULT_RECALL_TUNING } from '@/lib/memory/recall/tuning'
 import { MAX_REINFORCEMENT_FOOTNOTES } from '@/lib/memory/reinforcement-footnotes'
 
 const mocked = instanceSettings as unknown as Record<string, jest.Mock>

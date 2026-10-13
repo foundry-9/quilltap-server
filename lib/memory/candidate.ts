@@ -35,7 +35,7 @@ import {
   type ContextTag,
   type ScopeTag,
   type TemporalTag,
-} from './recall-tags'
+} from './recall/tags'
 import type { AdmissionRow } from './admission/types'
 
 // ---------------------------------------------------------------------------

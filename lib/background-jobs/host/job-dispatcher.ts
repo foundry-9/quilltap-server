@@ -740,7 +740,7 @@ export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob
   const payload = job.payload as Record<string, unknown> | undefined;
   if (payload?.dryRun === true) return;
   try {
-    const mod = await import('@/lib/memory/frozen-archive-cache');
+    const mod = await import('@/lib/memory/recall/archive');
     const characterId = typeof payload?.characterId === 'string' ? payload.characterId : null;
     if (characterId) {
       mod.invalidateFrozenArchive(characterId);

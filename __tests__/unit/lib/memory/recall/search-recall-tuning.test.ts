@@ -1,5 +1,5 @@
 /**
- * searchMemoriesSemantic — the recall-replay harness knobs (R7) and the
+ * searchMemories — the recall-replay harness knobs (R7) and the
  * retuning paths they reach: `excludeMemoryIds` (asOf), `weightClockMs`,
  * R4's specific entity anchors and R6's background reservation.
  */
@@ -43,9 +43,11 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-import { reserveBackgroundSlots, searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
-import { resolveRecallTuning } from '@/lib/memory/recall-tuning'
-import type { RecallContext } from '@/lib/memory/recall-tags'
+import { searchMemories } from '@/lib/memory/recall/search'
+import { reserveBackgroundSlots } from '@/lib/memory/scoring'
+import type { RecallCandidate } from '@/lib/memory/recall/types'
+import { resolveRecallTuning } from '@/lib/memory/recall/tuning'
+import type { RecallContext } from '@/lib/memory/recall/tags'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { memoryIndex } from '@/lib/memory/index-store'
@@ -125,11 +127,11 @@ describe('excludeMemoryIds', () => {
   it('filters the vector scan, so the top-K is drawn from what remains', async () => {
     prime([memory('old', 0.6), memory('later', 0.9)])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx(),
-      excludeMemoryIds: new Set(['later']),
+      excludeIds: new Set(['later']),
     })
 
     expect(results.map(r => r.memory.id)).toEqual(['old'])
@@ -141,12 +143,12 @@ describe('excludeMemoryIds', () => {
     prime([memory('old', 0.6), later], { Tessarium: [later] })
     vectorSearch.mockReturnValue([{ id: 'old', score: 0.6, metadata: { memoryId: 'old', characterId: 'char-1' } }])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx(),
-      entityAnchors: ['Tessarium'],
-      excludeMemoryIds: new Set(['later-hit']),
+      anchors: ['Tessarium'],
+      excludeIds: new Set(['later-hit']),
     })
 
     expect(results.map(r => r.memory.id)).toEqual(['old'])
@@ -155,7 +157,7 @@ describe('excludeMemoryIds', () => {
   it('asks only for the hot tier when nothing is excluded', async () => {
     prime([memory('a', 0.6)])
 
-    await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
+    await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
     const opts = vectorSearch.mock.calls[0][2] as { hotOnly: boolean; exclude?: ReadonlySet<string> }
     expect(opts.hotOnly).toBe(true)
@@ -167,13 +169,13 @@ describe('weightClockMs', () => {
   it('decays weights against the given clock instead of now', async () => {
     prime([memory('a', 0.6)])
 
-    const [atCreation] = await searchMemoriesSemantic('char-1', 'q', {
+    const [atCreation] = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx(),
-      weightClockMs: Date.parse(T0),
+      nowMs: Date.parse(T0),
     })
-    const [today] = await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
+    const [today] = await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
     expect(atCreation.salience).toBeCloseTo(0.5)
     expect(today.salience!).toBeLessThan(atCreation.salience!)
@@ -187,14 +189,14 @@ describe('R4 — specific entity anchors', () => {
     prime([memory('top', 0.6), tess, ...amy], { Amy: amy, Steinway: [], Tessarium: [tess] })
     vectorSearch.mockReturnValue([{ id: 'top', score: 0.6, metadata: { memoryId: 'top', characterId: 'char-1' } }])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx({
         tuning: resolveRecallTuning({ specificAnchors: true }),
         presentParticipantNames: ['Amy'],
       }),
-      entityAnchors: ['Amy', 'Steinway', 'Tessarium'],
+      anchors: ['Amy', 'Steinway', 'Tessarium'],
     })
 
     expect(results.map(r => r.memory.id).sort()).toEqual(['tess', 'top'])
@@ -205,11 +207,11 @@ describe('R4 — specific entity anchors', () => {
     prime([memory('top', 0.6), amy], { Amy: [amy] })
     vectorSearch.mockReturnValue([{ id: 'top', score: 0.6, metadata: { memoryId: 'top', characterId: 'char-1' } }])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx({ presentParticipantNames: ['Amy'], tuning: resolveRecallTuning({ specificAnchors: false }) }),
-      entityAnchors: ['Amy'],
+      anchors: ['Amy'],
     })
 
     expect(results.map(r => r.memory.id)).toContain('amy-0')
@@ -236,13 +238,13 @@ describe('R6 — background reservation', () => {
   it('gives a third of the head to out-of-window rows that clear the gate', async () => {
     prime(hardWindowCorpus())
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 4,
       recallContext: ctx({
         tuning: resolveRecallTuning({ boostGateAbs: 0.45, boostGateMargin: 0.15, boostGateRamp: 0.1, backgroundReserve: 0.34 }),
       }),
-      occurredWithin: window,
+      window: window,
       headSize: 3,
     })
 
@@ -255,11 +257,11 @@ describe('R6 — background reservation', () => {
   it('leaves the hard window alone without a reserve', async () => {
     prime(hardWindowCorpus())
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 4,
       recallContext: ctx({ tuning: resolveRecallTuning({ boostGateAbs: 0.45, boostGateMargin: 0.15 }) }),
-      occurredWithin: window,
+      window: window,
       headSize: 3,
     })
 
@@ -269,8 +271,8 @@ describe('R6 — background reservation', () => {
 
 describe('reserveBackgroundSlots', () => {
   const row = (id: string, after: number) =>
-    ({ memory: { id }, score: 0, recallAdjustment: { multiplier: 1, fired: [], blendedBefore: after, blendedAfter: after } }) as unknown as SemanticSearchResult
-  const ids = (rs: SemanticSearchResult[]) => rs.map(r => r.memory.id)
+    ({ memory: { id }, score: 0, recallAdjustment: { multiplier: 1, fired: [], blendedBefore: after, blendedAfter: after } }) as unknown as RecallCandidate
+  const ids = (rs: RecallCandidate[]) => rs.map(r => r.memory.id)
 
   it('swaps the weakest head rows for the best background rows, keeping score order', () => {
     const ranked = [row('a', 0.9), row('b', 0.8), row('c', 0.7), row('d', 0.6), row('e', 0.5), row('f', 0.4)]
@@ -292,8 +294,8 @@ describe('embeddingMemo', () => {
     prime([memory('a', 0.6)])
     const memo = new Map()
 
-    await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx(), embeddingMemo: memo, extraProbes: ['p'] })
-    await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx(), embeddingMemo: memo, extraProbes: ['p'] })
+    await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx(), embeddingMemo: memo, probes: ['p'] })
+    await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx(), embeddingMemo: memo, probes: ['p'] })
 
     expect(mockEmbed.mock.calls.map(c => c[0])).toEqual(['q', 'p'])
   })
@@ -301,8 +303,8 @@ describe('embeddingMemo', () => {
   it('embeds afresh without one', async () => {
     prime([memory('a', 0.6)])
 
-    await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
-    await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
+    await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
+    await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
     expect(mockEmbed).toHaveBeenCalledTimes(2)
   })
@@ -321,12 +323,12 @@ describe('R5 — the cosine floor', () => {
     ])
     corpus.push(memory('probe-low', 0.29))
 
-    const results = await searchMemoriesSemantic('char-1', 'q', {
+    const results = await searchMemories('char-1', 'q', {
       userId: 'u1',
       limit: 10,
       recallContext: ctx({ expandRelated: true }),
-      entityAnchors: ['Tessarium'],
-      extraProbes: ['p'],
+      anchors: ['Tessarium'],
+      probes: ['p'],
     })
 
     const ids = results.map(r => r.memory.id)
@@ -337,7 +339,7 @@ describe('R5 — the cosine floor', () => {
   })
 })
 
-describe('the retuned defaults in searchMemoriesSemantic', () => {
+describe('the retuned defaults in searchMemories', () => {
   // A low-cosine row with every boost, beside a strong plain row.
   const NOW = Date.parse('2026-10-08T12:00:00.000Z')
   const stacked = () =>
@@ -360,7 +362,7 @@ describe('the retuned defaults in searchMemoriesSemantic', () => {
   it('gates boosts on relevance with no tuning given (neural embeddings)', async () => {
     prime([memory('strong', 0.6), stacked()])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: liveCtx() })
+    const results = await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: liveCtx() })
 
     const row = results.find(r => r.memory.id === 'stacked')!
     expect(row.recallAdjustment!.multiplier).toBe(1)
@@ -371,7 +373,7 @@ describe('the retuned defaults in searchMemoriesSemantic', () => {
     mockEmbed.mockResolvedValue({ embedding: new Float32Array([1, 0, 0]), provider: 'BUILTIN', model: 'tfidf' })
     prime([memory('strong', 0.6), stacked()])
 
-    const results = await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: liveCtx() })
+    const results = await searchMemories('char-1', 'q', { userId: 'u1', limit: 10, recallContext: liveCtx() })
 
     const row = results.find(r => r.memory.id === 'stacked')!
     expect(row.recallAdjustment!.fired).not.toContain('gate×0.00')

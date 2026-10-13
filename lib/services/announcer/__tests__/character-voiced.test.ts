@@ -15,17 +15,19 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
   executeCheapLLMTask: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn(async () => []),
-  markMemoriesAccessed: jest.fn(),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: jest.fn(async () => []),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-subject', () => ({
+jest.mock('@/lib/memory/recall/subject', () => ({
   buildMemorySubjectContext: jest.fn(async () => ({})),
 }))
 
-jest.mock('@/lib/chat/context/memory-injector', () => ({
-  formatDynamicMemoryHead: jest.fn(() => ({ content: 'REMEMBERED', debugMemories: [] })),
+jest.mock('@/lib/memory/recall/render', () => ({
+  renderHead: jest.fn(() => ({ content: 'REMEMBERED', debugMemories: [], lines: [] })),
 }))
 
 jest.mock('@/lib/services/commonplace-notifications/writer', () => ({
@@ -39,12 +41,12 @@ jest.mock('@/lib/chat/context/system-prompt-builder', () => ({
 import { generateCharacterVoicedAnnouncement } from '@/lib/services/announcer/character-voiced'
 import { getRepositories } from '@/lib/repositories/factory'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemories } from '@/lib/memory/recall/search'
 import { buildSystemPrompt } from '@/lib/chat/context/system-prompt-builder'
 
 const mockRepos = getRepositories as jest.Mock
 const mockExecute = executeCheapLLMTask as jest.Mock
-const mockRecall = searchMemoriesSemantic as jest.Mock
+const mockRecall = searchMemories as jest.Mock
 const mockBuildSystemPrompt = buildSystemPrompt as jest.Mock
 
 const AURORA = { id: 'char-aurora', name: 'Aurora' }

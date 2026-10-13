@@ -7,8 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
-import type { SemanticSearchResult, SearchQueryEmbedding } from '@/lib/memory/memory-service'
-import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
+import type { PreRecall } from '@/lib/memory/recall/assemble'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -76,16 +75,12 @@ export interface BuildMessageContextOptions {
    * Used to calculate dynamic window size when using a fallback cache.
    */
   cachedCompressionMessageCount?: number
-  /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
-  preSearchedMemories?: SemanticSearchResult[]
-  /** Turn-level recall signals from the proactive distillation (retrospective cadence). */
-  recallSignals?: MemorySearchExtraction
   /**
-   * Query text + vector the proactive memory search already embedded. Reused
-   * (never re-embedded) by the per-turn conversation-summary list when the
-   * pre-searched memories are the ones this turn uses.
+   * The proactive recall: its query (distilled and embedded once) and what it
+   * found. buildContext's recall reuses both rather than distilling or
+   * embedding again.
    */
-  preSearchedQueryEmbedding?: SearchQueryEmbedding
+  preRecall?: PreRecall
   /** Whether to generate a memory recap for this character (chat start or character join) */
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
@@ -882,9 +877,7 @@ export async function buildMessageContext(
     bypassCompression,
     cachedCompressionResult,
     cachedCompressionMessageCount,
-    preSearchedMemories,
-    recallSignals,
-    preSearchedQueryEmbedding,
+    preRecall,
     generateMemoryRecap: requestMemoryRecap,
     uncensoredFallbackOptions,
   } = options
@@ -1112,9 +1105,7 @@ export async function buildMessageContext(
     cachedCompressionResult,
     cachedCompressionMessageCount,
     // Proactive memory recall
-    preSearchedMemories,
-    recallSignals,
-    preSearchedQueryEmbedding,
+    preRecall,
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,

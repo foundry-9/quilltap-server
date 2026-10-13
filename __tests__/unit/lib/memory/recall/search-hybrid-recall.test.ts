@@ -1,5 +1,5 @@
 /**
- * Hybrid recall in searchMemoriesSemantic
+ * Hybrid recall in searchMemories
  *
  * Pins the contract added when the unified `search` tool got the
  * literal-phrase boost: when applyLiteralPhraseBoost is on,
@@ -103,7 +103,7 @@ function makeMemory(overrides: Partial<Record<string, unknown>> = {}) {
   }
 }
 
-describe('searchMemoriesSemantic — hybrid recall', () => {
+describe('searchMemories — hybrid recall', () => {
   let mockMemoriesRepo: {
     findByIds: jest.Mock
     searchByContent: jest.Mock
@@ -113,7 +113,7 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
   let mockVectorStore: {
     search: jest.Mock
   }
-  let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
+  let searchMemories: typeof import('@/lib/memory/recall/search').searchMemories
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -137,8 +137,8 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     })
 
     jest.isolateModules(() => {
-      const mod = require('@/lib/memory/memory-service')
-      searchMemoriesSemantic = mod.searchMemoriesSemantic
+      const mod = require('@/lib/memory/recall/search')
+      searchMemories = mod.searchMemories
     })
   })
 
@@ -169,9 +169,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     mockMemoriesRepo.searchByContent.mockResolvedValue([directHit])
     mockMemoriesRepo.findByIds.mockResolvedValue([vectorOnly, directHit])
 
-    const results = await searchMemoriesSemantic('char-1', 'covenant wall', {
+    const results = await searchMemories('char-1', 'covenant wall', {
       userId: 'u1',
-      applyLiteralPhraseBoost: true,
+      literalPhrase: true,
       limit: 10,
     })
 
@@ -209,9 +209,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     mockMemoriesRepo.searchByContent.mockResolvedValue([inPool])
     mockMemoriesRepo.findByIds.mockResolvedValue([inPool])
 
-    const results = await searchMemoriesSemantic('char-1', 'covenant wall', {
+    const results = await searchMemories('char-1', 'covenant wall', {
       userId: 'u1',
-      applyLiteralPhraseBoost: true,
+      literalPhrase: true,
       limit: 10,
     })
 
@@ -220,7 +220,7 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     expect(results[0].score).toBeCloseTo(0.7, 5)
   })
 
-  it('does NOT call searchByContent when applyLiteralPhraseBoost is off (per-turn injector contract)', async () => {
+  it('does NOT call searchByContent when literalPhrase is off (per-turn injector contract)', async () => {
     const memory = makeMemory({
       id: 'm-1',
       content: 'covenant wall mentioned',
@@ -232,7 +232,7 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     ])
     mockMemoriesRepo.findByIds.mockResolvedValue([memory])
 
-    await searchMemoriesSemantic('char-1', 'covenant wall', {
+    await searchMemories('char-1', 'covenant wall', {
       userId: 'u1',
       // applyLiteralPhraseBoost intentionally omitted — per-turn injectors
       // pass through the natural-language query without the literal step.
@@ -254,9 +254,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     ])
     mockMemoriesRepo.findByIds.mockResolvedValue([memory])
 
-    await searchMemoriesSemantic('char-1', 'cat', {
+    await searchMemories('char-1', 'cat', {
       userId: 'u1',
-      applyLiteralPhraseBoost: true,
+      literalPhrase: true,
       limit: 10,
     })
 
@@ -287,9 +287,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     mockMemoriesRepo.searchByContent.mockResolvedValue([stale])
     mockMemoriesRepo.findByIds.mockResolvedValue([inPool])
 
-    const results = await searchMemoriesSemantic('char-1', 'covenant wall', {
+    const results = await searchMemories('char-1', 'covenant wall', {
       userId: 'u1',
-      applyLiteralPhraseBoost: true,
+      literalPhrase: true,
       limit: 10,
     })
 

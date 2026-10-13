@@ -8,6 +8,10 @@ const { resolveServerPort } = require('./lock-helpers');
  * signals inert) vs. new path (retrospective flip + time window + entity
  * anchors + multi-probe) side by side.
  *
+ * Then the text fallback's table and the stage trace (query, gather, hydrate,
+ * score, select, assemble): what the archive removed, what the budget cut, what
+ * the inter-character section took.
+ *
  * Thin wrapper over POST /api/v1/chats/<chatId>?action=recall-replay.
  * Read-only; nothing is persisted server-side.
  */
@@ -30,6 +34,9 @@ Replays the per-turn memory recall for a chat turn against the running
 Quilltap server and prints the full candidate table twice — the pre-overhaul
 ranking and the episodic (retrospective/time-window/entity) ranking — so the
 recall constants can be tuned against real "the character forgot" turns.
+After them: what the text fallback would have returned, and the stage trace
+(query → gather → hydrate → score → select → assemble). The anti-repetition
+ring is the one in force at that turn, read from the chat's recall records.
 
 Options:
   -d, --data-dir <path>      Instance root; used to find the server's port
@@ -198,6 +205,19 @@ function printPath(label, rows, headSize) {
   }
 }
 
+/** The stage trace: one line per stage entry (query → gather → … → assemble). */
+function printTrace(trace) {
+  if (!Array.isArray(trace) || trace.length === 0) return;
+  console.log(`\n${BOLD}STAGE TRACE${RESET}`);
+  for (const entry of trace) {
+    const label = entry.label ? `${DIM}(${entry.label})${RESET} ` : '';
+    const detail = Object.entries(entry.detail || {})
+      .map(([k, v]) => `${k}=${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
+      .join(' ');
+    console.log(`  ${CYAN}${String(entry.stage).padEnd(9)}${RESET}${label}${detail}`);
+  }
+}
+
 function readJson(text, what) {
   try {
     return JSON.parse(text);
@@ -344,9 +364,19 @@ async function recallReplayCommand(args) {
     : `${DIM}whole corpus${RESET}`;
   console.log(`${BOLD}Harness${RESET}   signals ${pinned} · ${asOf}`);
   console.log(`${BOLD}Tuning${RESET}    ${result.tuning === 'defaults' || !result.tuning ? `${DIM}defaults${RESET}` : `${YELLOW}${result.tuning}${RESET}`} ${DIM}(new path only)${RESET}`);
+  if (result.ringSource) {
+    const source = result.ringSource === 'debug-log'
+      ? `${DIM}as of the turn, from its recall records${RESET}`
+      : `${YELLOW}the chat's current ring (no recall records that early)${RESET}`;
+    console.log(`${BOLD}Ring${RESET}      ${(result.ring || []).length} recently whispered · ${source}`);
+  }
 
   printPath('OLD PATH (episodic signals inert)', result.oldPath || [], result.oldHeadSize);
   printPath('NEW PATH (retrospective/window/entities live)', result.newPath || [], result.newHeadSize);
+  if (Array.isArray(result.fallbackPath)) {
+    printPath('TEXT FALLBACK (what the new path returns with no usable vector)', result.fallbackPath, result.newHeadSize);
+  }
+  printTrace(result.trace);
   console.log('');
 }
 

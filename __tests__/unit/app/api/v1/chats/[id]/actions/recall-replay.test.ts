@@ -18,7 +18,7 @@ jest.mock('@/lib/logger', () => {
   return { logger };
 });
 
-jest.mock('@/lib/memory/recall-replay', () => ({
+jest.mock('@/lib/memory/recall/replay', () => ({
   runRecallReplay: jest.fn(),
 }));
 
@@ -27,7 +27,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 }));
 
 import { handleRecallReplay } from '@/app/api/v1/chats/[id]/actions/recall-replay';
-import { runRecallReplay } from '@/lib/memory/recall-replay';
+import { runRecallReplay } from '@/lib/memory/recall/replay';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 
 const runReplay = runRecallReplay as jest.MockedFunction<typeof runRecallReplay>;

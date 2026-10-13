@@ -18,28 +18,41 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   stripToolArtifacts: jest.fn((s: string) => s),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn(),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchRecall: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/recall-history', () => ({
-  recentlyWhisperedIdSet: jest.fn(() => new Set<string>()),
+jest.mock('@/lib/memory/recall/assemble', () => ({
+  ...jest.requireActual('@/lib/memory/recall/assemble'),
+  assembleRecall: jest.fn(),
+}))
+
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  generateEmbeddingForUser: jest.fn(),
 }))
 
 jest.mock('@/lib/instance-settings', () => ({
   getMemoryRecallSettings: jest.fn(),
 }))
 
-import { runRecallReplay } from '@/lib/memory/recall-replay'
+import { runRecallReplay } from '@/lib/memory/recall/replay'
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchRecall } from '@/lib/memory/recall/search'
+import { assembleRecall } from '@/lib/memory/recall/assemble'
+import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
-import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE } from '@/lib/chat/context/memory-injector'
+import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE } from '@/lib/memory/recall/assemble'
 
 const mockRepos = getRepositories as jest.Mock
 const mockDistill = extractMemorySearchKeywords as jest.Mock
-const mockSearch = searchMemoriesSemantic as jest.Mock
+const mockSearch = searchRecall as jest.Mock
+const mockAssemble = assembleRecall as jest.Mock
+const mockEmbed = generateEmbeddingForUser as jest.Mock
+/** A search result as the stages return it. */
+const found = (rows: unknown[]) => ({ candidates: rows, strategy: 'vector', trace: [] })
+/** The query a search call was handed. */
+const queryOf = (n: number) => mockSearch.mock.calls[n][1] as AnyRecord
 const mockRecallSettings = getMemoryRecallSettings as jest.Mock
 
 type AnyRecord = Record<string, unknown>
@@ -125,7 +138,9 @@ beforeEach(() => {
     success: true,
     result: { paraphrase: 'the cellar', keywords: ['cellar'], retrospective: false, entities: [] },
   })
-  mockSearch.mockResolvedValue([hit('mem-1'), hit('mem-2')])
+  mockSearch.mockResolvedValue(found([hit('mem-1'), hit('mem-2')]))
+  mockAssemble.mockResolvedValue({ trace: [{ stage: 'assemble', label: 'head', detail: { rendered: 2 } }], pools: { archive: [], head: ['mem-1'], interCharacter: [], recap: [] } })
+  mockEmbed.mockImplementation(async (text: string) => ({ embedding: new Float32Array([text.length, 1]), provider: 'OPENAI', model: 'm', dimensions: 2 }))
 })
 
 describe('runRecallReplay — resolution and guards', () => {
@@ -239,9 +254,7 @@ describe('runRecallReplay — the two paths', () => {
     await runRecallReplay(baseInput())
 
     const [, , oldOptions] = mockSearch.mock.calls[0]
-    expect(oldOptions).not.toHaveProperty('entityAnchors')
-    expect(oldOptions).not.toHaveProperty('occurredWithin')
-    expect(oldOptions).not.toHaveProperty('extraProbes')
+    expect(queryOf(0)).toMatchObject({ anchors: [], window: null, probes: [] })
     expect((oldOptions as AnyRecord).recallContext).not.toHaveProperty('turnRetrospective')
   })
 
@@ -260,12 +273,12 @@ describe('runRecallReplay — the two paths', () => {
     await runRecallReplay(baseInput())
 
     const [, , newOptions] = mockSearch.mock.calls[1]
-    expect(newOptions).toMatchObject({
-      entityAnchors: ['Wheel', 'Cellar'],
-      occurredWithin: { from: '2026-06-01T00:00:00.000Z', to: '2026-06-30T00:00:00.000Z' },
+    expect(queryOf(1)).toMatchObject({
+      anchors: ['Wheel', 'Cellar'],
+      window: { from: '2026-06-01T00:00:00.000Z', to: '2026-06-30T00:00:00.000Z' },
     })
     expect((newOptions as AnyRecord).recallContext).toMatchObject({ turnRetrospective: true })
-    expect((newOptions as AnyRecord).extraProbes).toEqual([
+    expect((queryOf(1).probes as AnyRecord[]).map(p => p.text)).toEqual([
       'Wheel Cellar',
       'the fair (around 2026-06-01 to 2026-06-30)',
     ])
@@ -285,10 +298,9 @@ describe('runRecallReplay — the two paths', () => {
 
     await runRecallReplay(baseInput())
 
-    const [, , newOptions] = mockSearch.mock.calls[1]
-    expect((newOptions as AnyRecord).extraProbes).toBeUndefined()
+    expect(queryOf(1).probes).toEqual([])
     // The window is ungated from the flag, matching the live consumers.
-    expect((newOptions as AnyRecord).occurredWithin).toEqual({
+    expect(queryOf(1).window).toEqual({
       from: '2026-06-01T00:00:00.000Z',
       to: '2026-06-30T00:00:00.000Z',
     })
@@ -296,7 +308,7 @@ describe('runRecallReplay — the two paths', () => {
 
   it('widens the new path head only when the turn is retrospective', async () => {
     const rows = Array.from({ length: RETRO_HEAD_SIZE + 4 }, (_, i) => hit(`m${i}`))
-    mockSearch.mockResolvedValue(rows)
+    mockSearch.mockResolvedValue(found(rows))
 
     const plain = await runRecallReplay(baseInput())
     expect(plain.newPath.filter((r) => r.selected)).toHaveLength(DYNAMIC_HEAD_DEFAULT_SIZE)
@@ -338,7 +350,7 @@ describe('runRecallReplay — query derivation and rows', () => {
   })
 
   it('flattens a candidate row, including a null recallAdjustment', async () => {
-    mockSearch.mockResolvedValue([
+    mockSearch.mockResolvedValue(found([
       hit('mem-1', {
         score: 0.81,
         salience: 0.62,
@@ -350,7 +362,7 @@ describe('runRecallReplay — query derivation and rows', () => {
         },
       }),
       hit('mem-2', { salience: undefined, recallAdjustment: null }),
-    ])
+    ]))
 
     const { newPath } = await runRecallReplay(baseInput())
 
@@ -462,8 +474,8 @@ describe('runRecallReplay — harness knobs (R7)', () => {
 
     const [, , newOptions] = mockSearch.mock.calls[1]
     expect((newOptions as AnyRecord).recallContext).not.toHaveProperty('tuning')
-    expect((newOptions as AnyRecord).excludeMemoryIds).toBeUndefined()
-    expect((newOptions as AnyRecord).weightClockMs).toBeUndefined()
+    expect((newOptions as AnyRecord).excludeIds).toBeUndefined()
+    expect((newOptions as AnyRecord).nowMs).toBeUndefined()
     expect(result).toMatchObject({ tuning: 'defaults', signalsPinned: false, asOf: null, excludedAfterAsOf: 0 })
   })
 
@@ -487,9 +499,9 @@ describe('runRecallReplay — harness knobs (R7)', () => {
 
     for (const call of mockSearch.mock.calls) {
       const options = call[2] as AnyRecord
-      expect([...(options.excludeMemoryIds as Set<string>)].sort()).toEqual(['at', 'during'])
-      // Weights decay against the replayed turn's clock, not today's.
-      expect(options.weightClockMs).toBe(Date.parse('2026-06-10T12:01:00.000Z'))
+      expect([...(options.excludeIds as Set<string>)].sort()).toEqual(['at', 'during'])
+      // Salience decays against the replayed turn's clock, not today's.
+      expect(options.nowMs).toBe(Date.parse('2026-06-10T12:01:00.000Z'))
     }
     expect(result.asOf).toBe('2026-06-10T12:00:00.000Z')
     expect(result.excludedAfterAsOf).toBe(2)
@@ -502,12 +514,59 @@ describe('runRecallReplay — harness knobs (R7)', () => {
     expect((newOptions as AnyRecord).headSize).toBe(15)
   })
 
-  it('shares one embedding memo between both paths and across runs', async () => {
-    await runRecallReplay(baseInput())
-    await runRecallReplay(baseInput())
+  it('embeds the query once, for both paths and across runs', async () => {
+    // A text no other case embeds: the memo lives for the server process.
+    const signals = { paraphrase: 'a question asked only here', keywords: ['only'], entities: [] }
+    await runRecallReplay(baseInput({ signals }))
+    await runRecallReplay(baseInput({ signals }))
 
-    const memos = mockSearch.mock.calls.map(c => (c[2] as AnyRecord).embeddingMemo)
-    expect(memos[0]).toBeInstanceOf(Map)
-    expect(new Set(memos).size).toBe(1)
+    // One query, embedded once, reused by every path of both runs.
+    expect(mockEmbed).toHaveBeenCalledTimes(1)
+    expect(queryOf(0).embedding).toBe(queryOf(1).embedding)
   })
+
+  it('reports the stage trace, the fallback path and the pools of the turn’s assemble', async () => {
+    const result = await runRecallReplay(baseInput())
+
+    // Old, new, then the text fallback with the same question.
+    expect(mockSearch).toHaveBeenCalledTimes(3)
+    expect(mockSearch.mock.calls[2][2]).toMatchObject({ forceText: true })
+    expect(result.fallbackPath.map(r => r.memoryId)).toEqual(['mem-1', 'mem-2'])
+    // assemble ran over the live pool, writing nothing, its archive uncached.
+    const plan = mockAssemble.mock.calls[0][0] as AnyRecord
+    expect((plan.preRecall as AnyRecord).candidates).toHaveLength(2)
+    expect(plan.recap).toBeUndefined()
+    expect(plan.conversations).toBeUndefined()
+    expect((plan.replay as AnyRecord).excludeIds).toBeInstanceOf(Set)
+    expect(result.pools.head).toEqual(['mem-1'])
+    expect(result.trace.map(t => t.stage)).toEqual(['query', 'assemble'])
+  })
+
+  it('ranks under the ring as it stood at the turn, read from the recall records', async () => {
+    const recallLog = (ids: string) => ['[Recall] deliver: head 1', `[Recall:ring] ${ids}`]
+    primeRepos({
+      messages: [
+        message('m1', 'USER', 'First.', '2026-07-20T09:00:00.000Z'),
+        { ...message('m2', 'ASSISTANT', 'One.', '2026-07-20T09:01:00.000Z'), debugMemoryLogs: recallLog('old-a') },
+        message('m3', 'USER', 'Second.', '2026-07-20T09:02:00.000Z'),
+        { ...message('m4', 'ASSISTANT', 'Two.', '2026-07-20T09:03:00.000Z'), debugMemoryLogs: recallLog('old-b old-c') },
+        message('m5', 'USER', 'Third.', '2026-07-20T09:04:00.000Z'),
+        // Written AFTER the replayed turn opened: not part of its ring.
+        { ...message('m6', 'ASSISTANT', 'Three.', '2026-07-20T09:05:00.000Z'), debugMemoryLogs: recallLog('later') },
+      ],
+    })
+
+    const result = await runRecallReplay(baseInput())
+
+    expect(result.ringSource).toBe('debug-log')
+    expect(result.ring.sort()).toEqual(['old-a', 'old-b', 'old-c'])
+    const ctx = (mockSearch.mock.calls[1][2] as AnyRecord).recallContext as AnyRecord
+    expect([...(ctx.recentlyWhisperedIds as Set<string>)].sort()).toEqual(['old-a', 'old-b', 'old-c'])
+  })
+
+  it("falls back to the chat's current ring when the chat predates recall records", async () => {
+    const result = await runRecallReplay(baseInput())
+    expect(result.ringSource).toBe('chat')
+  })
+
 })

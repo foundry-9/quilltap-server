@@ -26,14 +26,14 @@ import {
   recentlyWhisperedMultiplier,
   RECALL_MULTIPLIERS,
   type RecallContext,
-} from '@/lib/memory/recall-tags'
+} from '@/lib/memory/recall/tags'
 import {
   parseRecallHistory,
   recentlyWhisperedIdSet,
   appendRecallTurn,
   RECALL_HISTORY_TURNS,
-} from '@/lib/memory/recall-history'
-import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
+} from '@/lib/memory/recall/history'
+import { renderHead } from '@/lib/memory/recall/render'
 
 const baseRecallContext: RecallContext = {
   currentProjectId: null,
@@ -85,11 +85,11 @@ describe('F2 — provider-aware cosine floor', () => {
 })
 
 describe('F2 — empty pool yields an empty head', () => {
-  it('formatDynamicMemoryHead([]) emits nothing', () => {
-    const result = formatDynamicMemoryHead([], 'anthropic', {
+  it('renderHead([]) emits nothing', () => {
+    const result = renderHead([], 'anthropic', {
       selfCharacterId: 'char-1',
       characterNames: new Map(),
-    })
+    }, { maxTokens: 200, maxEntries: 5 })
     expect(result.content).toBe('')
     expect(result.memoriesUsed).toBe(0)
   })

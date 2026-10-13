@@ -75,6 +75,20 @@ The weighty shelf is chosen by how firmly a memory has been *established* — it
 
 A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence housekeeping relies on honest.
 
+## One Question, Asked Once
+
+Each turn the Book now frames a single question of the moment and puts it to your embedding provider exactly once. Every bundle it then assembles — the steady shelf, the handful of pertinent memories, what the character recalls of the others present, the list of past conversations, the recap that opens a chat — is drawn by that one question. (A turn that reaches pointedly into the past asks a few small supplementary questions besides, among them one naming the places and people it reaches for; that is the whole of the extravagance.) Where the Book once went back to the well for each person in the room, it now sorts what it has already drawn by whom each memory concerns — reading well past the handful it whispers, so a memory about the woman across the table need not be among the turn's very best to be offered under her name.
+
+It also refuses to say the same thing twice in one breath. A memory is read out in at most one list per turn: the steady shelf has first claim, then the pertinent handful, then what the character recalls of the others. A digest about the woman across the table that already stands on the shelf is not read out a second time under her name. The recap that opens a chat leaves the shelf's memories to the shelf, but it does not keep a memory out of the pertinent handful — a summary may gloss over precisely the particular the moment calls for, so the memory's own words are still offered when they bear on it.
+
+## What Reaches the Character, and What Is Merely Noted
+
+The lines the Book whispers now carry only what a character could sensibly make use of: how long ago the thing happened (and, on a narrative clock, when in the story), whose life it concerns, the memory's own words, a digest's tally of notes, and its plain keywords. The Book's working arithmetic — the little identifiers, the importance and relevance figures, the shorthand for why a memory rose or sank, the filing tags such as *scope: narrow* — has been taken out of the text the model reads. It was clerical marginalia, and a model handed marginalia will sometimes read it aloud.
+
+None of it is lost. The figures still appear in the debug panel, and each reply now keeps a short ledger of how its recollections were gathered: the question asked, how many memories each stage considered, what the shelf held, what the token budget cut, what the others' section took, and which memories were actually delivered.
+
+That last point matters. A memory is now counted as *recently consulted* — the evidence housekeeping relies on, and the record the Book keeps to avoid repeating itself — only once the request is fully built and the line is still in it. If the Book's memories run long enough that a cheaper model is asked to condense them, a recollection that falls out in the condensing is not counted as having been shown. And this holds on every kind of turn, including a continuation where the character picks up where it left off.
+
 ## Digests First, Fragments After
 
 Once [Memory Consolidation](memory-consolidation.md) has been at work, a character's active memories include *digests*: single entries that each stand for a whole cluster of related observations. Recall leans on them. The steady shelf now opens with the best digests about each person present this turn (three apiece) and the best digests about the character themselves (five), and only then fills the rest of its room with the most firmly established single memories. What one character recalls of another starts with digests about that person too, and the recap that opens a chat puts digests first among its weighty memories.

@@ -1,5 +1,5 @@
 /**
- * Unit tests for Memory Service
+ * Unit tests for the memory index backfill (`lib/memory/index-store/backfill.ts`)
  * Tests the vector-index rebuild. (Creation moved to `lib/memory/admission`,
  * tested in admission-admit.test.ts; deletion to `lib/memory/retire.ts`; the
  * hand edit to `updateMemory`, tested in update-memory.test.ts.)
@@ -23,7 +23,7 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   cosineSimilarity: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/index-store', () => ({
+jest.mock('@/lib/memory/index-store/memory-index', () => ({
   memoryIndex: {
     search: jest.fn(),
     shape: jest.fn(),
@@ -35,7 +35,6 @@ jest.mock('@/lib/memory/index-store', () => ({
     reloadAll: jest.fn(),
     entries: jest.fn(),
   },
-  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 
 jest.mock('@/lib/logger', () => {
@@ -65,7 +64,7 @@ const embeddingMock = jest.requireMock('@/lib/embedding/embedding-service') as {
   EmbeddingError: typeof Error
   cosineSimilarity: jest.Mock
 }
-const indexMock = jest.requireMock('@/lib/memory/index-store') as {
+const indexMock = jest.requireMock('@/lib/memory/index-store/memory-index') as {
   memoryIndex: Record<'search' | 'shape' | 'upsert' | 'indexInserted' | 'setTier' | 'reload' | 'entries', jest.Mock<any>>
 }
 const loggerMock = jest.requireMock('@/lib/logger') as {
@@ -82,7 +81,7 @@ const mockGenerateEmbedding = embeddingMock.generateEmbeddingForUser
 const mockIndex = indexMock.memoryIndex
 const mockLogger = loggerMock.logger
 
-describe('Memory Service', () => {
+describe('Memory index backfill', () => {
   let mockMemoriesRepo: {
     create: jest.Mock
     findById: jest.Mock
@@ -96,7 +95,7 @@ describe('Memory Service', () => {
   }
 
   // Import the module functions after mocks are set up
-  let rebuildVectorIndex: typeof import('@/lib/memory/memory-service').rebuildVectorIndex
+  let rebuildVectorIndex: typeof import('@/lib/memory/index-store/backfill').rebuildVectorIndex
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -128,7 +127,7 @@ describe('Memory Service', () => {
 
     // Fresh import for each test
     jest.isolateModules(() => {
-      const serviceModule = require('@/lib/memory/memory-service')
+      const serviceModule = require('@/lib/memory/index-store/backfill')
       rebuildVectorIndex = serviceModule.rebuildVectorIndex
     })
   })

@@ -26,7 +26,7 @@ const {
   resetFrozenArchiveCacheForTests,
   FROZEN_ARCHIVE_SIZE,
   FROZEN_ARCHIVE_CACHE_MAX_ENTRIES,
-} = require('@/lib/memory/frozen-archive-cache') as typeof import('@/lib/memory/frozen-archive-cache')
+} = require('@/lib/memory/recall/archive') as typeof import('@/lib/memory/recall/archive')
 
 import type { Memory } from '@/lib/schemas/types'
 

@@ -21,7 +21,7 @@ import {
   DEFAULT_TARGETING,
   type MemoryCandidate,
 } from '@/lib/memory/candidate'
-import { parseTargetingTags } from '@/lib/memory/recall-tags'
+import { parseTargetingTags } from '@/lib/memory/recall/tags'
 import { normalizeDigestKeywords } from '@/lib/memory/consolidation-plan'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { runPass } from '@/lib/memory/extraction/run'

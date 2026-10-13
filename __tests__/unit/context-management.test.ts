@@ -25,7 +25,6 @@ import {
 import {
   calculateContextBudget,
   buildSystemPrompt,
-  formatMemoriesForContext,
   formatSummaryForContext,
   selectRecentMessages,
   willExceedContextLimit,
@@ -34,14 +33,13 @@ import {
   attributeMessagesForCharacter,
   buildOtherParticipantsInfo,
   buildIdentityReinforcement,
-  formatInterCharacterMemoriesForContext,
   buildContext,
   type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
 import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
-import { resetFrozenArchiveCacheForTests } from '@/lib/memory/frozen-archive-cache'
+import { resetFrozenArchiveCacheForTests } from '@/lib/memory/recall/archive'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchRecall } from '@/lib/memory/recall/search'
 import { getRepositories } from '@/lib/repositories/factory'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
 import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
@@ -57,9 +55,14 @@ jest.mock('@/lib/services/commonplace-notifications/writer', () => {
   return { ...actual, buildCommonplaceLLMContext: jest.fn(actual.buildCommonplaceLLMContext) }
 })
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
-  markMemoriesAccessed: jest.fn(),
+// Recall's search stage stands still (each test says what it finds); the query
+// stage embeds nothing, so the search would take the text strategy.
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchRecall: jest.fn(),
+}))
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  ...jest.requireActual('@/lib/embedding/embedding-service'),
+  generateEmbeddingForUser: jest.fn().mockRejectedValue(new Error('no embedding profile in these tests')),
 }))
 
 jest.mock('@/lib/post-office/mailbox', () => ({
@@ -100,14 +103,20 @@ jest.mock('@/lib/chat/context/user-narration-anchor', () => {
   return { ...actual, buildUserNarrationAnchor: jest.fn(actual.buildUserNarrationAnchor) }
 })
 
-const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>
+const mockedSearchRecall = searchRecall as jest.MockedFunction<typeof searchRecall>
+/** A search that found nothing. */
+const noRecall = { candidates: [], ranked: [], strategy: 'text' as const, trace: [] }
 const mockedCollectUnalertedMail = collectUnalertedMail as jest.MockedFunction<typeof collectUnalertedMail>
 const mockedMarkAlerted = markAlerted as jest.MockedFunction<typeof markAlerted>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 
+beforeEach(() => {
+  mockedSearchRecall.mockResolvedValue(noRecall)
+})
+
 afterEach(() => {
-  mockedSearchMemories.mockReset()
-  mockedSearchMemories.mockResolvedValue([])
+  mockedSearchRecall.mockReset()
+  mockedSearchRecall.mockResolvedValue(noRecall)
   mockedGetRepositories.mockReset()
   mockedCollectUnalertedMail.mockReset()
   mockedCollectUnalertedMail.mockResolvedValue([])
@@ -524,66 +533,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatMemoriesForContext', () => {
-    // These fixtures are the character's own memories (no aboutCharacterId),
-    // so no subject prefix is expected on any line.
-    const selfSubject = { selfCharacterId: 'char1', characterNames: new Map<string, string>() }
-    const mockMemories = [
-      {
-        memory: {
-          id: '1',
-          characterId: 'char1',
-          content: 'User likes coffee',
-          summary: 'User prefers coffee over tea',
-          keywords: ['coffee', 'preferences'],
-          tags: [],
-          importance: 0.8,
-          source: 'AUTO' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        score: 0.9,
-        usedEmbedding: true,
-      },
-      {
-        memory: {
-          id: '2',
-          characterId: 'char1',
-          content: 'User works as developer',
-          summary: 'User is a software developer',
-          keywords: ['developer', 'work'],
-          tags: [],
-          importance: 0.7,
-          source: 'AUTO' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        score: 0.8,
-        usedEmbedding: true,
-      },
-    ]
-
-    it('should format memories with header', () => {
-      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI', selfSubject)
-      expect(content).toContain('## Relevant Memories')
-      // Whisper lines now carry the full memory.content (not summary), so we
-      // assert against the content body — "User likes coffee" — rather than
-      // the summary text.
-      expect(content).toContain('User likes coffee')
-    })
-
-    it('should return empty for no memories', () => {
-      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI', selfSubject)
-      expect(content).toBe('')
-      expect(memoriesUsed).toBe(0)
-    })
-
-    it('should respect token limit', () => {
-      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI', selfSubject)
-      expect(tokenCount).toBeLessThanOrEqual(50)
-    })
-  })
-
   describe('formatSummaryForContext', () => {
     it('should format summary with header', () => {
       const summary = 'This is a conversation summary.'
@@ -846,39 +795,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatInterCharacterMemoriesForContext', () => {
-    const createdAt = new Date().toISOString()
-    const memory: Memory = {
-      id: 'mem-1',
-      characterId: 'char-1',
-      aboutCharacterId: 'char-2',
-      chatId: null,
-      content: 'Detailed note',
-      summary: 'Lyra trusts Iris',
-      keywords: [],
-      tags: [],
-      importance: 0.9,
-      embedding: null,
-      source: 'MANUAL',
-      sourceMessageId: null,
-      lastAccessedAt: null,
-      createdAt,
-      updatedAt: createdAt,
-    }
-
-    it('groups memories by character name and respects token budget', () => {
-      const result = formatInterCharacterMemoriesForContext([memory], new Map([['char-2', 'Iris']]), 1000, 'OPENAI')
-      expect(result.content).toContain('Iris')
-      expect(result.memoriesUsed).toBe(1)
-    })
-
-    it('returns empty payload when no memories fit', () => {
-      const result = formatInterCharacterMemoriesForContext([], new Map(), 10, 'OPENAI')
-      expect(result.content).toBe('')
-      expect(result.memoriesUsed).toBe(0)
-    })
-  })
-
   describe('buildContext multi-character integration', () => {
     const timestamp = new Date().toISOString()
     const participantA: ChatParticipantBase = {
@@ -1009,7 +925,7 @@ describe('Context Manager', () => {
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       const messagesWithParticipants: MessageWithParticipant[] = [
         { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
@@ -1100,7 +1016,7 @@ describe('Context Manager', () => {
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       const result = await buildContext({
         provider: 'OPENAI',
@@ -1273,7 +1189,7 @@ describe('Context Manager', () => {
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       const result = await buildContext({
         provider: 'OPENAI',
@@ -1427,7 +1343,7 @@ describe('Context Manager', () => {
           findConsumedByMessages: jest.fn().mockResolvedValue([]),
         },
       } as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       return buildContext({
         provider: 'OPENAI',
@@ -1809,6 +1725,76 @@ describe('Context Manager', () => {
         // Marked only once the turn is delivered (the finalizer), never here.
         expect(markAlerted).not.toHaveBeenCalled()
         expect(result.mailAlertsOwed).toEqual({ vaultId: 'vault-a', paths: [letter.path] })
+      })
+
+      it('delivers the head on a continue turn: stamped, in the ring, in the debug record', async () => {
+        resetFrozenArchiveCacheForTests()
+        const headMemory: Memory = {
+          ...memory,
+          id: 'mem-head',
+          aboutCharacterId: null,
+          summary: 'Lyra lit the lighthouse lamp at dusk',
+          content: 'Lyra lit the lighthouse lamp at dusk',
+        }
+        const repoMock = {
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+            findMostImportant: jest.fn().mockResolvedValue([]),
+            updateAccessTimeBulk: jest.fn().mockResolvedValue(1),
+          },
+          characters: { findNamesByIds: jest.fn().mockResolvedValue(new Map()) },
+          chats: { update: jest.fn().mockResolvedValue(null), getMessages: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        }
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+        mockedSearchRecall.mockResolvedValue({
+          candidates: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
+          ranked: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
+          strategy: 'text',
+          trace: [],
+        } as any)
+
+        const result = await buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          chat: {
+            id: 'chat-continue',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          isContinueMode: true,
+          skipMemories: false,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [],
+        } as any)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toContain('Lyra lit the lighthouse lamp at dusk')
+        expect(repoMock.memories.updateAccessTimeBulk).toHaveBeenCalledWith('char-a', ['mem-head'])
+        expect(repoMock.chats.update).toHaveBeenCalledWith('chat-continue', { commonplaceRecallHistory: { turns: [['mem-head']] } })
+        expect(result.recallDebugLog).toContain('[Recall:ring] mem-head')
       })
 
       it('rides the new user message, not a second one, when there is one', async () => {

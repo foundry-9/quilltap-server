@@ -29,7 +29,7 @@ import { mayFailOver, type ConciergeState } from '@/lib/services/dangerous-conte
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
-import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
+import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/recall/recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';

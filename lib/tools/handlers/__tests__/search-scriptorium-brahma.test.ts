@@ -12,9 +12,11 @@ import { executeSearchScriptoriumTool } from '../search-scriptorium-handler'
 // ── Mocks ─────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory'
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn(),
-  markMemoriesAccessed: jest.fn(),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: jest.fn(),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: jest.fn(),
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -35,7 +37,7 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
 }))
 
 // ── Imports (after mocks) ───────────────────────────────────────────────────
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemories } from '@/lib/memory/recall/search'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks } from '@/lib/mount-index/document-search'
@@ -61,7 +63,7 @@ describe('executeSearchScriptoriumTool — operator surface (Brahma)', () => {
     )
 
     expect(result.success).toBe(true)
-    expect(searchMemoriesSemantic).not.toHaveBeenCalled()
+    expect(searchMemories).not.toHaveBeenCalled()
     // No per-character tiered pool either — operator surface uses every enabled store.
     expect(resolveTieredMountPool).not.toHaveBeenCalled()
     expect(getRepositories().docMountPoints.findEnabled).toHaveBeenCalled()

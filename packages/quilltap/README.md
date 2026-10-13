@@ -387,6 +387,14 @@ Tuning and comparable runs:
 
 The server memoises the replay's embeddings by text until it restarts, so repeat runs embed identical vectors.
 
+After the two tables the replay prints:
+
+- **TEXT FALLBACK** — what the new path returns with no usable vector (the text strategy over the same question).
+- **STAGE TRACE** — one line per recall stage: `query` (distilled or pinned, embedding calls), `gather` / `hydrate` / `score` / `select` for the head search (pool size, floor, window mode, expansion, the cut), and `assemble` per pool (what the archive held and its budget cut, how many pool rows the archive removed from the head, what the inter-character section took and skipped as already delivered).
+- **Ring** — the anti-repetition ring the replay ranked under: the one in force at that turn, rebuilt from the `[Recall:ring]` lines each reply's `debugMemoryLogs` carries, or the chat's current ring for a chat older than those records.
+
+`--json` adds `fallbackPath`, `trace`, `pools`, `ring` and `ringSource` to the result.
+
 ## Anchor Probe
 
 `quilltap anchor-probe <characterId>` measures whether the episodic anchor line embedded with each memory suppresses reinforcement at admission. It re-embeds the character's most recent memories with and without the anchor line, compares each against older rows, asks admission's own decider (the same subject, kind, source and date-guard rules a new memory meets) what it would do each way, and reports how many rows would fold into an older one and how many would be absorbed as near-duplicates, plus a per-row table (rows that would fold only without anchors are highlighted). Read-only, but it costs embedding calls (roughly up to 7 per sampled row).

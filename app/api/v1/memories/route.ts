@@ -40,7 +40,8 @@ import {
   dispatchAction,
   type RequestContext,
 } from '@/lib/api/middleware';
-import { searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
+import { searchMemories } from '@/lib/memory/recall/search';
+import { generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/index-store/backfill';
 import { admitCandidate, admissionInserted } from '@/lib/memory/admission';
 import { retireChatMemories } from '@/lib/memory/retire';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
@@ -649,7 +650,9 @@ async function handleSearch(
   }
 
   // Semantic search
-  const searchResults = await searchMemoriesSemantic(characterId, query, {
+  // The Memories API search returns rows to a person browsing, not to a model:
+  // it stamps nothing (only `deliver` writes lastAccessedAt).
+  const searchResults = await searchMemories(characterId, query, {
     userId: user.id,
     limit,
     minScore,
@@ -669,9 +672,6 @@ async function handleSearch(
     usedEmbedding: result.usedEmbedding,
     tagDetails: result.memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
   }));
-
-  // Access times are bumped inside searchMemoriesSemantic (single source of
-  // truth for retrieval-time access updates).
 
   return NextResponse.json({
     memories: memoriesWithTags,

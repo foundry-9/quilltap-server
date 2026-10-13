@@ -2,7 +2,7 @@
  * Literal-phrase boost helpers for hybrid (literal + embedding) search.
  *
  * Used by the unified `search` tool's underlying search functions
- * (`searchDocumentChunks`, `searchConversationChunks`, `searchMemoriesSemantic`,
+ * (`searchDocumentChunks`, `searchConversationChunks`, `searchRecall` (via the gather stage),
  * `HelpSearch.search`) to lift items that contain the trimmed query as a
  * verbatim case-insensitive substring, so a literal-text match isn't
  * outranked by a slightly-stronger pure-vector neighbour. Per-turn

@@ -22,7 +22,7 @@ jest.mock('@/lib/memory/time', () => ({
   formatMemoryAge: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/conversation-summary-search', () => ({
+jest.mock('@/lib/memory/recall/conversations', () => ({
   searchVaultConversationSummaries: jest.fn(),
   RELEVANT_CONVERSATIONS_MIN: 3,
   RELEVANT_CONVERSATIONS_MAX: 10,
@@ -64,7 +64,7 @@ const cheapLlmMock = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
 const weightingMock = jest.requireMock('@/lib/memory/time') as {
   formatMemoryAge: jest.Mock
 }
-const conversationSearchMock = jest.requireMock('@/lib/memory/conversation-summary-search') as {
+const conversationSearchMock = jest.requireMock('@/lib/memory/recall/conversations') as {
   searchVaultConversationSummaries: jest.Mock
 }
 
@@ -118,8 +118,8 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 
 describe('Memory Recap Service', () => {
   // Fresh import for each test to ensure mocks are picked up
-  let generateMemoryRecap: typeof import('@/lib/memory/memory-recap').generateMemoryRecap
-  let buildRecentConversationsBlock: typeof import('@/lib/memory/memory-recap').buildRecentConversationsBlock
+  let generateMemoryRecap: typeof import('@/lib/memory/recall/recap').generateMemoryRecap
+  let buildRecentConversationsBlock: typeof import('@/lib/memory/recall/recap').buildRecentConversationsBlock
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -134,7 +134,7 @@ describe('Memory Recap Service', () => {
 
     // Re-import the module under test so it picks up mocked dependencies
     jest.isolateModules(() => {
-      const mod = require('@/lib/memory/memory-recap')
+      const mod = require('@/lib/memory/recall/recap')
       generateMemoryRecap = mod.generateMemoryRecap
       buildRecentConversationsBlock = mod.buildRecentConversationsBlock
     })
@@ -153,7 +153,7 @@ describe('Memory Recap Service', () => {
       })
       mockSummarizeMemoryRecap.mockResolvedValue({ success: true, result: 'Narrative.' })
 
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, testChatId)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       const tiers = mockSummarizeMemoryRecap.mock.calls[0][1] as { high: { summary: string }[] }
       expect(tiers.high.map(m => m.summary)).toEqual(['digest D', 'shard A', 'shard B'])
@@ -166,15 +166,9 @@ describe('Memory Recap Service', () => {
         low: [],
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
       expect(mockSummarizeMemoryRecap).not.toHaveBeenCalled()
     })
 
@@ -195,15 +189,9 @@ describe('Memory Recap Service', () => {
         usage: { promptTokens: 100, completionTokens: 30, totalTokens: 130 },
       })
 
-      await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
-      expect(mockFindRecentByImportanceTier).toHaveBeenCalledWith(testCharacterId)
+      expect(mockFindRecentByImportanceTier).toHaveBeenCalledWith(testCharacterId, { high: 20, medium: 10, low: 5 })
     })
 
     it('should format memories with relative age', async () => {
@@ -224,12 +212,7 @@ describe('Memory Recap Service', () => {
         usage: { promptTokens: 50, completionTokens: 20, totalTokens: 70 },
       })
 
-      await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
       // Verify formatRelativeAge was called for each memory
       expect(mockFormatRelativeAge).toHaveBeenCalledTimes(2)
@@ -270,13 +253,7 @@ describe('Memory Recap Service', () => {
         usage: { promptTokens: 120, completionTokens: 40, totalTokens: 160 },
       })
 
-      await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(mockSummarizeMemoryRecap).toHaveBeenCalledWith(
         testCharacterName,
@@ -314,13 +291,7 @@ describe('Memory Recap Service', () => {
         usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(result.memoriesUsed).toBe(3) // 2 high + 1 medium + 0 low
       expect(result.content).toContain('## What You Remember')
@@ -344,12 +315,7 @@ describe('Memory Recap Service', () => {
         usage: expectedUsage,
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
       expect(result.usage).toEqual(expectedUsage)
     })
@@ -368,15 +334,9 @@ describe('Memory Recap Service', () => {
         error: 'API rate limit exceeded',
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
     })
 
     it('should return empty result when LLM returns empty string', async () => {
@@ -393,14 +353,9 @@ describe('Memory Recap Service', () => {
         result: '',
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
     })
 
     it('should return empty result when LLM returns null result', async () => {
@@ -417,14 +372,9 @@ describe('Memory Recap Service', () => {
         result: undefined,
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
     })
 
     it('should pass uncensored fallback options when provided', async () => {
@@ -453,14 +403,7 @@ describe('Memory Recap Service', () => {
         isDangerousChat: true,
       }
 
-      await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId,
-        uncensoredFallback as any
-      )
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId, uncensoredFallback: uncensoredFallback as any })
 
       expect(mockSummarizeMemoryRecap).toHaveBeenCalledWith(
         testCharacterName,
@@ -478,15 +421,9 @@ describe('Memory Recap Service', () => {
         new Error('Database connection failed')
       )
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
     })
 
     it('should handle summarization throwing an exception', async () => {
@@ -502,14 +439,9 @@ describe('Memory Recap Service', () => {
         new Error('Network timeout')
       )
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
-      expect(result).toEqual({ content: '', memoriesUsed: 0 })
+      expect(result).toEqual({ content: '', memoriesUsed: 0, memoryIds: [] })
     })
 
     it('should append a Recent Conversations block listing summarized prior chats', async () => {
@@ -529,13 +461,7 @@ describe('Memory Recap Service', () => {
         { id: 'chat-B', title: 'A Fateful Carriage Ride', contextSummary: 'A near miss with a horse.' },
       ])
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(result.content).toContain('### Recent Conversations')
       expect(result.content).toContain('#### Tea on the Verandah (`chat-A`)')
@@ -552,13 +478,7 @@ describe('Memory Recap Service', () => {
         { id: 'chat-X', title: 'Old Friends', contextSummary: 'Reunion at the club.' },
       ])
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(mockSummarizeMemoryRecap).not.toHaveBeenCalled()
       expect(result.content).toContain('## What You Remember')
@@ -570,13 +490,7 @@ describe('Memory Recap Service', () => {
       mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
       mockFindRecentSummarizedByCharacter.mockResolvedValue([])
 
-      await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId
-      )
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenCalledWith(
         testCharacterId,
@@ -589,42 +503,42 @@ describe('Memory Recap Service', () => {
       mockFindRecentSummarizedByCharacter.mockResolvedValue([])
 
       // 4K → 3
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 4000)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: 4000 })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 3 })
       )
 
       // 32K → 10
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 32000)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: 32000 })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 10 })
       )
 
       // Midpoint 18K → 3 + 0.5*7 = 6.5 → rounds to 7
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 18000)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: 18000 })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 7 })
       )
 
       // Below 4K clamps to MIN
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 2000)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: 2000 })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 3 })
       )
 
       // Above 32K clamps to MAX
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 200000)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: 200000 })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 10 })
       )
 
       // null/undefined defaults to MAX
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, null)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, maxContext: null })
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
         expect.objectContaining({ limit: 10 })
@@ -638,17 +552,7 @@ describe('Memory Recap Service', () => {
         { conversationId: 'rel-A', conversationTitle: 'The Orchid Wager', relativePath: 'Conversation Summaries/orchid.md', score: 0.9 },
       ])
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId,
-        undefined,
-        32000,
-        'orchids and wagers',
-        'embed-profile-1',
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId, maxContext: 32000, relevanceQuery: 'orchids and wagers', embeddingProfileId: 'embed-profile-1' })
 
       expect(mockSearchVaultConversationSummaries).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -667,7 +571,7 @@ describe('Memory Recap Service', () => {
       mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
       mockFindRecentSummarizedByCharacter.mockResolvedValue([])
 
-      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, testChatId)
+      await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId })
 
       expect(mockSearchVaultConversationSummaries).not.toHaveBeenCalled()
     })
@@ -682,16 +586,7 @@ describe('Memory Recap Service', () => {
         { conversationId: 'dup', conversationTitle: 'Shared Memory', relativePath: 'x.md', score: 0.95 },
       ])
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId,
-        testChatId,
-        undefined,
-        32000,
-        'a fine afternoon',
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId, chatId: testChatId, maxContext: 32000, relevanceQuery: 'a fine afternoon' })
 
       // 'dup' appears once, under Relevant; the Recent list keeps only 'recent-only'.
       expect(result.content).toContain('### Relevant Past Conversations')
@@ -716,12 +611,7 @@ describe('Memory Recap Service', () => {
         usage: { promptTokens: 400, completionTokens: 100, totalTokens: 500 },
       })
 
-      const result = await generateMemoryRecap(
-        testCharacterId,
-        testCharacterName,
-        testSelection,
-        testUserId
-      )
+      const result = await generateMemoryRecap({ characterId: testCharacterId, characterName: testCharacterName, selection: testSelection, userId: testUserId })
 
       expect(result.memoriesUsed).toBe(6) // 3 + 2 + 1
       expect(mockFormatRelativeAge).toHaveBeenCalledTimes(6)
@@ -820,6 +710,64 @@ describe('Memory Recap Service', () => {
         limit: 5,
         excludeChatId: testChatId,
       })
+    })
+  })
+  describe('generateMemoryRecap as a recall pool (Phase E)', () => {
+    it('leaves out the rows another pool delivers, reading that many more per tier', async () => {
+      const archived = makeMemory({ id: 'archived', summary: 'already in the archive', importance: 0.9 })
+      const fresh = makeMemory({ id: 'fresh', summary: 'only the recap says this', importance: 0.9 })
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [archived, fresh], medium: [], low: [] })
+      mockSummarizeMemoryRecap.mockResolvedValue({ success: true, result: 'A narrative.' })
+
+      const result = await generateMemoryRecap({
+        characterId: testCharacterId,
+        characterName: testCharacterName,
+        selection: testSelection,
+        userId: testUserId,
+        excludeIds: new Set(['archived']),
+      })
+
+      expect(mockFindRecentByImportanceTier).toHaveBeenCalledWith(testCharacterId, { high: 21, medium: 11, low: 6 })
+      const tiers = mockSummarizeMemoryRecap.mock.calls[0][1] as { high: Array<{ summary: string }> }
+      expect(tiers.high.map(m => m.summary)).toEqual(['only the recap says this'])
+      expect(result.memoryIds).toEqual(['fresh'])
+    })
+
+    it('reports no rows when no narrative came back', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [makeMemory({ id: 'm1' })], medium: [], low: [] })
+      mockSummarizeMemoryRecap.mockResolvedValue({ success: true, result: '' })
+      mockSearchVaultConversationSummaries.mockResolvedValue([
+        { conversationId: 'c1', conversationTitle: 'Old', relativePath: 'x.md', score: 0.9, firstMessageAt: null, lastMessageAt: null },
+      ])
+
+      const result = await generateMemoryRecap({
+        characterId: testCharacterId,
+        characterName: testCharacterName,
+        selection: testSelection,
+        userId: testUserId,
+        relevanceQuery: 'the moment',
+      })
+
+      expect(result.content).not.toBe('')
+      expect(result.memoryIds).toEqual([])
+    })
+
+    it("searches the relevant list on the turn's own vector", async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      const vector = new Float32Array([0.1, 0.2])
+
+      await generateMemoryRecap({
+        characterId: testCharacterId,
+        characterName: testCharacterName,
+        selection: testSelection,
+        userId: testUserId,
+        relevanceQuery: 'the turn query',
+        relevanceEmbedding: vector,
+      })
+
+      expect(mockSearchVaultConversationSummaries).toHaveBeenCalledWith(
+        expect.objectContaining({ query: 'the turn query', precomputedEmbedding: vector }),
+      )
     })
   })
 })

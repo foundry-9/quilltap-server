@@ -21,17 +21,20 @@
 import { buildContext } from '@/lib/chat/context-manager'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
-  ...jest.requireActual('@/lib/memory/cheap-llm-tasks'),
-  extractMemorySearchKeywords: jest.fn().mockResolvedValue({
-    success: true,
-    result: { keywords: ['the mission'], paraphrase: 'what happened on the mission' },
-  }),
+// The distillation runs inside the recall query stage; the cheap-LLM call it
+// makes is where the latency class lands.
+jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
+  ...jest.requireActual('@/lib/memory/cheap-llm-tasks/core-execution'),
+  executeCheapLLMTask: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
-  markMemoriesAccessed: jest.fn(),
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  ...jest.requireActual('@/lib/embedding/embedding-service'),
+  generateEmbeddingForUser: jest.fn().mockRejectedValue(new Error('no embedding profile in this test')),
+}))
+
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchRecall: jest.fn().mockResolvedValue({ candidates: [], strategy: 'text', trace: [] }),
 }))
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -39,11 +42,13 @@ jest.mock('@/lib/repositories/factory', () => ({
 }))
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
-import { extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
+import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
 
-const mockedDistill = jest.mocked(extractMemorySearchKeywords)
+const mockedTask = jest.mocked(executeCheapLLMTask)
+/** The cheap-LLM calls the keyword distillation made. */
+const distillCalls = () => mockedTask.mock.calls.filter(call => call[4] === 'memory-keyword-extraction')
 
 const timestamp = new Date().toISOString()
 
@@ -80,7 +85,7 @@ const characterA = {
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockedDistill.mockResolvedValue({
+  mockedTask.mockResolvedValue({
     success: true,
     result: { keywords: ['the mission'], paraphrase: 'what happened on the mission' },
   } as never)
@@ -145,8 +150,8 @@ const buildATurn = () =>
 it('asks for the interactive budget — the turn is blocked behind this call', async () => {
   await buildATurn()
 
-  expect(mockedDistill).toHaveBeenCalledTimes(1)
-  // 8th argument. Not `undefined`, which is the background tier by omission and
-  // is what bug 115 was.
-  expect(mockedDistill.mock.calls[0][7]).toBe('interactive')
+  expect(distillCalls()).toHaveLength(1)
+  // The task options. Not `undefined`, which is the background tier by
+  // omission and is what bug 115 was.
+  expect(distillCalls()[0][10]).toEqual({ latency: 'interactive' })
 })

@@ -52,10 +52,11 @@ import {
   type StreamController,
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
-import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service';
+import { searchMemories } from '@/lib/memory/recall/search';
+import { stampAccessed } from '@/lib/memory/recall/deliver';
 import { findCharactersByName } from '@/lib/services/character-resolver';
-import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
-import { buildMemorySubjectContext } from '@/lib/memory/memory-subject';
+import { renderRelevant } from '@/lib/memory/recall/render';
+import { buildMemorySubjectContext } from '@/lib/memory/recall/subject';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
@@ -214,7 +215,7 @@ async function loadCarinaMemoryRecall(
   const trimmed = question.trim();
   if (!trimmed) return null;
   try {
-    const results = await searchMemoriesSemantic(characterId, trimmed, {
+    const results = await searchMemories(characterId, trimmed, {
       userId,
       // Always the default embedding profile, as the per-turn recall does.
       embeddingProfileId: undefined,
@@ -230,18 +231,12 @@ async function loadCarinaMemoryRecall(
       characterId,
       results.map(r => r.memory),
     );
-    const formatted = formatMemoriesForContext(
-      results,
-      CARINA_MEMORY_TOKEN_BUDGET,
-      provider,
-      subject,
-    );
+    const formatted = renderRelevant(results, CARINA_MEMORY_TOKEN_BUDGET, provider, subject);
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
-    markMemoriesAccessed(
-      characterId,
-      formatted.debugMemories.map(d => d.memoryId).filter((id): id is string => !!id),
-    );
+    // The block goes into the answerer's call whole: every rendered line is
+    // delivered.
+    stampAccessed(characterId, formatted.lines.map(l => l.memoryId));
     return buildCommonplaceLLMContext({ relevant: formatted.content });
   } catch (error) {
     logger.warn('[Carina] Memory recall failed; answering without it', {
