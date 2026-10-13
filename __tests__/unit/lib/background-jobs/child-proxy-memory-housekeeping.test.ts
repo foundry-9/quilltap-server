@@ -6,10 +6,11 @@
  * placeholder (`undefined` for anything but create/upsert). Two consequences
  * this test pins through the real proxy:
  *
- * - F8: `deleteMemoriesWithUnlinkBatch` used to sum `bulkDelete`'s return,
- *   so a child sweep reported NaN (`deleted: null` in the log). It now counts
- *   the ids it resolved, and the buffered batch carries exactly those ids for
- *   the parent to apply.
+ * - F8: the batch delete used to sum `bulkDelete`'s return, so a child sweep
+ *   reported NaN (`deleted: null` in the log). `retireMemories` (the one
+ *   deletion since memory refactor Phase B) counts the ids it resolved, and
+ *   the buffered `bulkDeleteUnsafe` carries exactly those ids for the parent
+ *   to apply.
  * - F1: absorbing a near-duplicate buffers one reinforcement patch and hands
  *   the caller the patched row rather than a false "update failed".
  *
@@ -54,8 +55,12 @@ jest.mock('@/lib/logging/create-logger', () => ({
   }),
 }));
 
+// `memoryIndex.remove` touches the cache only when it is loaded; here it is not.
 jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
+  getVectorStoreManager: () => ({
+    getLoadedStore: jest.fn(async () => undefined),
+    unloadStore: jest.fn(),
+  }),
 }));
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -81,7 +86,8 @@ import {
   flushPendingWrites,
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
-import { deleteMemoriesWithUnlinkBatch, absorbNearDuplicate } from '@/lib/memory/memory-gate';
+import { absorbNearDuplicate } from '@/lib/memory/memory-gate';
+import { retireMemories } from '@/lib/memory/retire';
 import type { Memory } from '@/lib/schemas/types';
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
@@ -109,7 +115,7 @@ describe('child proxy — memory housekeeping writes', () => {
     const realBulkDelete = jest.fn();
     mockedRepoSource.mockReturnValue({
       memories: {
-        bulkDelete: realBulkDelete,
+        bulkDeleteUnsafe: realBulkDelete,
         updateForCharacter: jest.fn(),
         removeRelatedMemoryIdsEverywhere: jest.fn(),
         // The digest scrub's reads: nothing to scrub.
@@ -126,14 +132,16 @@ describe('child proxy — memory housekeeping writes', () => {
 
     let deleted = -1;
     const writes = await runWithJobScope('job-sweep', async () => {
-      deleted = await deleteMemoriesWithUnlinkBatch(['m-1', 'm-2', 'already-gone']);
+      const report = await retireMemories(['m-1', 'm-2', 'already-gone'], { reason: 'retention' });
+      deleted = report.retired;
       return flushPendingWrites();
     });
 
     expect(deleted).toBe(2);
+    expect(Number.isNaN(deleted)).toBe(false);
     // The child never touches the real repository — the parent applies it.
     expect(realBulkDelete).not.toHaveBeenCalled();
-    const bulk = writes.filter(w => w.method === 'memories.bulkDelete');
+    const bulk = writes.filter(w => w.method === 'memories.bulkDeleteUnsafe');
     expect(bulk).toHaveLength(1);
     expect(bulk[0].args).toEqual(['char-1', ['m-1', 'm-2']]);
   });

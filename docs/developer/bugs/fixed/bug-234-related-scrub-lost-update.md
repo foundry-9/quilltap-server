@@ -25,7 +25,7 @@ to protect its survivor's fresh list is no longer needed: the delta lands after 
 write. In the job child the overlay applies a buffered character-wide scrub to every memory row a
 later read returns. The digest created and member-deleted in the same job (the "smaller relative")
 is unchanged. Tests: the bug 234 block in `child-proxy-memory-gate-overlay.test.ts`,
-`memories-link-deltas.test.ts`, and the rewritten `memory-gate-delete-with-unlink.test.ts`.
+`memories-link-deltas.test.ts`, and the rewritten `retire-memories-unlink.test.ts`.
 
 **Amended (2026-10-13, review of PR 91).** The first fix scoped the scrub to the deleted rows'
 holders and, in the batch, to the ids still found as rows. That lost two cases the old instance-wide

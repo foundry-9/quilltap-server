@@ -32,7 +32,7 @@
 The first version of this fix patched the item route alone and filtered orphans after a fixed top-K
 search; review of PR 87 moved both into the chokepoint and the gate. Tests:
 `__tests__/unit/lib/memory/memory-gate-orphan-vectors.test.ts`,
-`__tests__/unit/lib/memory/memory-gate-delete-with-unlink.test.ts`.
+`__tests__/unit/lib/memory/retire-memories-unlink.test.ts`.
 
 **The character-archive half of the filing does not reproduce.** `pruneArchivedCharacterState`
 (`lib/characters/archive-service.ts:743`) deletes the memories, then calls
