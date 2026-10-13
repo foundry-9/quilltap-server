@@ -360,7 +360,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     currentStateTokens: 0,
     recallSettings,
     recentWindow: fallbackText,
-    preRecall: { query, candidates: newResults.candidates },
+    preRecall: { query, candidates: newResults.candidates, ranked: newResults.ranked },
     replay: { excludeIds: excludeMemoryIds ?? new Set(), nowMs, ring: newCtx.recentlyWhisperedIds },
   })
   trace.push(...bundle.trace)

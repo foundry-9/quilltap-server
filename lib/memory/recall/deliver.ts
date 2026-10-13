@@ -64,19 +64,28 @@ function normalise(text: string): string {
 export const SURVIVAL_WORD_SHARE = 0.6
 
 /**
- * The rendered lines whose memory reached the model. A line survives when its
- * body is in the delivered text verbatim (whitespace and case aside) — always
- * the case without compression — or, after a compression rewrite, when one
+ * The rendered lines whose memory reached the model. A line survives when the
+ * whole rendered line is in the delivered text verbatim (whitespace and case
+ * aside) — always the case without compression. The whole line, not just the
+ * memory's words: a short body ("likes tea") can turn up in another line or
+ * section and say nothing about this one (review of PR 95). Only when the
+ * section was rewritten by compression (`compressed`) does a line also
+ * survive when one
  * delivered line holds at least {@link SURVIVAL_WORD_SHARE} of its significant
  * words (three or more of them). A line compression dropped is not delivered.
  */
-export function survivingLines(lines: readonly RenderedLine[], deliveredText: string): RenderedLine[] {
+export function survivingLines(
+  lines: readonly RenderedLine[],
+  deliveredText: string,
+  opts: { compressed?: boolean } = {},
+): RenderedLine[] {
   if (!deliveredText) return []
   const whole = normalise(deliveredText)
   const deliveredLines = deliveredText.split('\n').map(l => new Set(significantQueryWords(l.replace(/[^\p{L}\p{N}\s'-]/gu, ' '))))
   return lines.filter(line => {
-    const body = normalise(line.body)
-    if (body.length > 0 && whole.includes(body)) return true
+    const rendered = normalise(line.line)
+    if (rendered.length > 0 && whole.includes(rendered)) return true
+    if (!opts.compressed) return false
     const words = [...new Set(significantQueryWords(line.body.replace(/[^\p{L}\p{N}\s'-]/gu, ' ')))]
     if (words.length < 3) return false
     return deliveredLines.some(set => words.filter(w => set.has(w)).length / words.length >= SURVIVAL_WORD_SHARE)
@@ -116,9 +125,17 @@ export function traceLines(trace: RecallTrace): string[] {
 export async function deliverRecall(bundle: RecallBundle, opts: DeliverOptions): Promise<RecallDelivery> {
   const delivered: Partial<Record<RecallPool, string[]>> = {}
   const lost: string[] = []
+  // A section still in the text verbatim was not compressed: its lines count
+  // only verbatim. A rewritten one is read by word overlap.
+  const untouched = (section: string | undefined) => !!section && opts.deliveredText.includes(section.trim())
+  const compressed: Partial<Record<RecallPool, boolean>> = {
+    archive: !untouched(bundle.sections.relevant),
+    head: !untouched(bundle.sections.relevant),
+    interCharacter: !untouched(bundle.sections.interCharacter),
+  }
   for (const [pool, lines] of Object.entries(bundle.lines) as Array<[RecallPool, RenderedLine[]]>) {
     if (!lines || lines.length === 0) continue
-    const kept = survivingLines(lines, opts.deliveredText)
+    const kept = survivingLines(lines, opts.deliveredText, { compressed: compressed[pool] === true })
     const keptIds = new Set(kept.map(l => l.memoryId))
     delivered[pool] = [...keptIds]
     for (const line of lines) if (!keptIds.has(line.memoryId)) lost.push(line.memoryId)
@@ -130,7 +147,9 @@ export async function deliverRecall(bundle: RecallBundle, opts: DeliverOptions):
   stampAccessed(opts.characterId, Object.values(delivered).flat())
 
   const head = delivered.head ?? []
-  const retroDelivered = !!bundle.sections.retrospective && opts.deliveredText.includes(bundle.sections.retrospective)
+  // The whisper builder trims each section; compare what it actually carries.
+  const retrospective = bundle.sections.retrospective?.trim()
+  const retroDelivered = !!retrospective && opts.deliveredText.includes(retrospective)
   const signature = retroDelivered ? bundle.retroSignature : null
   if (opts.persistRing !== false && (head.length > 0 || signature)) {
     try {

@@ -8,11 +8,13 @@
  * - **One embedding per turn.** The query is embedded once (the proactive pass
  *   hands its query in already embedded); the head, the inter-character
  *   relevance half, the recap's relevant-conversations list, the per-turn
- *   conversation list and the retrospective mini-recap all reuse it. Only a
- *   retrospective turn's probes (≤ 2) are embedded beside it, in the query stage.
+ *   conversation list and (when the turn names no one) the retrospective
+ *   mini-recap all reuse it. Only a retrospective turn embeds more: its probes
+ *   (≤ 2), in the query stage, and a mini-recap query that adds the names the
+ *   turn reaches for.
  * - **The inter-character relevance half is a filter of the turn's one
- *   gathered pool** by `aboutCharacterId` (decision 12), not a search per
- *   present character.
+ *   search** by `aboutCharacterId` (decision 12), not a search per present
+ *   character. It reads the search's ranked rows past the head's cut.
  * - **A row reaches the model in at most one line-rendered pool** (bug 224), in
  *   this order of precedence: archive → head → inter-character. The recap is a
  *   narrative, not lines: it is built without the archive's rows (which the
@@ -145,6 +147,8 @@ export function sizeMemoryPools(memoryBudget: number, retrospective: boolean): M
 export interface PreRecall {
   query: RecallQuery
   candidates: RecallCandidate[]
+  /** The search's ranked rows before its cut (the inter-character relevance half reads these). */
+  ranked?: RecallCandidate[]
   trace?: RecallTrace
 }
 
@@ -202,8 +206,14 @@ export interface RecallPlan {
 export interface RecallBundle {
   query: RecallQuery | null
   path: 'skipped' | 'pre-searched' | 'two-pool'
-  /** The gathered pool the head and the inter-character relevance half draw on. */
+  /** The search's result: the head draws on it. */
   pool: RecallCandidate[]
+  /**
+   * The same search's ranked rows before its cut to the head's pull — what
+   * the inter-character relevance half filters by subject. Reading past the
+   * cut keeps rows about the others that rank below the turn's top handful.
+   */
+  relevancePool: RecallCandidate[]
   sections: {
     recap?: string
     /** Archive + head. */
@@ -231,6 +241,7 @@ export function emptyRecallBundle(): RecallBundle {
     query: null,
     path: 'skipped',
     pool: [],
+    relevancePool: [],
     sections: {},
     tokens: { recap: 0, relevant: 0, interCharacter: 0 },
     lines: {},
@@ -264,9 +275,13 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
   // 1. The query — handed in by the proactive pass, or built here (once).
   if (!plan.skipMemories) {
     try {
-      if (plan.preRecall && plan.preRecall.query.text) {
+      // The proactive pass's result stands only when it found something: an
+      // empty or failed proactive search gets the fallback's own distil and
+      // search, as before (review of PR 95).
+      if (plan.preRecall && plan.preRecall.query.text && plan.preRecall.candidates.length > 0) {
         bundle.query = plan.preRecall.query
         bundle.pool = plan.preRecall.candidates
+        bundle.relevancePool = plan.preRecall.ranked ?? plan.preRecall.candidates
         bundle.path = 'pre-searched'
         trace.push(...(plan.preRecall.trace ?? []))
       } else if (plan.recentWindow) {
@@ -310,6 +325,7 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
           ...(plan.replay?.nowMs !== undefined ? { nowMs } : {}),
         }, trace, 'head')
         bundle.pool = result.candidates
+        bundle.relevancePool = result.ranked ?? result.candidates
       }
     } catch (error) {
       bundle.warnings.push(`Failed to retrieve memories: ${errorText(error)}`)
@@ -404,6 +420,7 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
     const headCandidates = bundle.pool.filter(c => !archiveIds.has(c.memory.id))
     const head = renderHead(headCandidates, plan.provider, subject, {
       maxTokens: headTokenBudget,
+      nowMs,
       maxEntries: turnSizing.headEntries,
     })
     headContent = head.content
@@ -436,7 +453,7 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
   }
 
   // 6. The conversation lists, on the turn's vector.
-  if (plan.conversations && query?.embedding) {
+  if (plan.conversations && query) {
     await assembleConversations(plan, bundle, query)
   }
 
@@ -475,7 +492,7 @@ async function assembleInterCharacter(
 
   // Relevance half: the turn's pool, filtered to rows about each other present.
   const perCharacter = new Map<string, number>()
-  const relevance = bundle.pool.filter(c => {
+  const relevance = bundle.relevancePool.filter(c => {
     const about = c.memory.aboutCharacterId
     if (!about || !otherIds.includes(about)) return false
     if (delivered.has(c.memory.id)) {
@@ -508,13 +525,14 @@ async function assembleInterCharacter(
 
 async function assembleConversations(plan: RecallPlan, bundle: RecallBundle, query: RecallQuery): Promise<void> {
   const conversations = plan.conversations!
-  const embedding = query.embedding!.embedding
+  const embedding = query.embedding?.embedding ?? null
   const characterId = plan.character.id
   const listed = new Set<string>()
 
   // Per-turn list (instance setting, off by default). The recap already lists
   // the shelf on the turn it runs.
-  if (plan.recallSettings.perTurnConversationSummaries && !bundle.sections.recap) {
+  // It rides the turn's vector or sits the turn out — never an embedding of its own.
+  if (embedding && plan.recallSettings.perTurnConversationSummaries && !bundle.sections.recap) {
     try {
       const matches = await searchVaultConversationSummaries({
         characterId,
@@ -560,13 +578,21 @@ async function assembleConversations(plan: RecallPlan, bundle: RecallBundle, que
       traceStage(bundle.trace, 'assemble', { suppressed: true, signature }, 'retrospective')
       return
     }
+    // The mini-recap asks about the paraphrase AND the names it reaches for, so
+    // "remember Lighthouse Point?" finds the conversation that names the place
+    // (review of PR 95). With no entities that is the turn's query and rides
+    // its vector; otherwise it is this retrospective turn's one extra
+    // embedding, beside its probes.
+    const entities = (signals?.entities ?? []).filter(e => e.trim().length > 0)
+    const miniQuery = [query.text, entities.join(', ')].filter(part => part.trim().length > 0).join(' — ')
+    const reuse = miniQuery === query.text && embedding !== null
     try {
       const matches = await searchVaultConversationSummaries({
         characterId,
-        query: query.text,
+        query: miniQuery,
         userId: plan.userId,
         embeddingProfileId: plan.embeddingProfileId,
-        precomputedEmbedding: embedding,
+        precomputedEmbedding: reuse ? embedding : null,
         limit: RETRO_MINI_RECAP_MAX_ENTRIES,
         excludeConversationId: plan.chat.id,
         timeRange: query.window,
@@ -579,7 +605,7 @@ async function assembleConversations(plan: RecallPlan, bundle: RecallBundle, que
         bundle.sections.retrospective = `${renderRelevantConversationsBlock(filtered)}\n\n${READ_CONVERSATION_CALL_NOTE}`
         bundle.retroSignature = signature
       }
-      traceStage(bundle.trace, 'assemble', { matched: matches.length, listed: filtered.length, signature }, 'retrospective')
+      traceStage(bundle.trace, 'assemble', { matched: matches.length, listed: filtered.length, signature, reusedQuery: reuse }, 'retrospective')
     } catch (error) {
       logger.warn('[Recall] Retrospective mini-recap failed (non-fatal)', {
         chatId: plan.chat.id,

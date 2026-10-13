@@ -168,7 +168,12 @@ export function renderHead(
   candidates: readonly RecallCandidate[],
   provider: Provider | undefined,
   subject: MemorySubjectContext,
-  options: { maxTokens: number; maxEntries: number },
+  options: {
+    maxTokens: number
+    maxEntries: number
+    /** The clock the age labels read (the replay pins the replayed turn's). Absent → now. */
+    nowMs?: number
+  },
 ): RenderedSection {
   if (candidates.length === 0) return emptySection()
   const ranked = [...candidates]
@@ -186,7 +191,7 @@ export function renderHead(
   const entries: string[] = []
   let tokens = estimateTokens(`${header}\n`, provider)
   const section = emptySection<DebugMemoryInfo>()
-  const now = new Date()
+  const now = new Date(options.nowMs ?? Date.now())
   for (const { memory, score, salience, recallAdjustment } of ranked) {
     const body = memory.summary?.trim() || memory.content?.trim() || ''
     if (!body) continue

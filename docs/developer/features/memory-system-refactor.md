@@ -1064,18 +1064,25 @@ departures:
   line the chat-start turn needs (review of PR 95). The
   inter-character section dedups against what the earlier pools *rendered*, so a row the archive
   held but its budget cut stays eligible (bug 224's rule).
-- **One embedding per turn, with one exception.** The query stage embeds the query once (plus a
-  retrospective turn's ≤ 2 probes); the head, the inter-character relevance half, the recap's
-  relevant list, the per-turn list and the retrospective mini-recap reuse it. The mini-recap and the
-  recap's list therefore search with the turn's query rather than their own text (`paraphrase —
-  entities`; the newest message). Knowledge retrieval still embeds the recent-window prose on its
-  own: it is not memory recall and was left alone. When the proactive pass built a query but found
-  nothing, the turn reuses that query instead of distilling and embedding a second time.
+- **One embedding per ordinary turn.** The query stage embeds the query once; the head, the
+  inter-character relevance half, the recap's relevant list and the per-turn list reuse it (the
+  recap's list therefore searches with the turn's query rather than the newest message). A
+  retrospective turn embeds more: its ≤ 2 probes, and — when it names anyone — the mini-recap's own
+  `paraphrase — entities` query, kept so "remember Lighthouse Point?" still finds the conversation
+  that names the place (review of PR 95). Knowledge retrieval still embeds the recent-window prose on
+  its own: it is not memory recall and was left alone. The proactive pass's result is used only when
+  it found something; an empty or failed proactive search gets the fallback's distil and search, as
+  before (review of PR 95).
+- **The inter-character relevance half reads the head search past its cut.** Decision 12's "one
+  search" holds, but the head's search is cut to `headEntries × 3`, so the section filters the
+  search's whole ranked list (`RecallSearchResult.ranked`, from the vector top `limit × 3`) by
+  subject, five per character (review of PR 95).
 - **The archive's token budget is the ordinary one on every turn**; a retrospective head borrows
   from what the archive leaves, never below the ordinary head budget.
-- **Delivery** decides survival by text: a rendered line is delivered when its body is in the
-  request's recall text verbatim, or when one compressed line holds at least 60% of its
-  significant words (three or more). The ring is written whenever the head delivered something,
+- **Delivery** decides survival by text: a rendered line is delivered when the whole line is in the
+  request's recall text verbatim (a bare body can turn up elsewhere), or — only in a section that
+  compression rewrote, i.e. no longer present verbatim — when one compressed line holds at least
+  60% of its significant words (three or more). The ring is written whenever the head delivered something,
   whether or not the whisper posted. §3.8's "the recap stamps what it rendered" is read narrowly:
   the recap renders a narrative, not rows, so the rows it summarised are not stamped (as before);
   a recap row the head delivers is stamped as a head line. The debug record rides on the reply: `BuiltContext.recallDebugLog`,

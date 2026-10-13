@@ -38,7 +38,7 @@ jest.mock('@/lib/memory/time/calendar-refresh', () => ({
   refreshMemoryTimeZone: jest.fn(async () => 'UTC'),
 }))
 
-import { assembleRecall, type RecallPlan } from '@/lib/memory/recall/assemble'
+import { assembleRecall, emptyRecallBundle, type RecallPlan } from '@/lib/memory/recall/assemble'
 import { deliverRecall, RECALL_RING_PREFIX } from '@/lib/memory/recall/deliver'
 import { buildRecallQuery } from '@/lib/memory/recall/query'
 import { searchRecall } from '@/lib/memory/recall/search'
@@ -226,7 +226,48 @@ describe('assembleRecall', () => {
     expect(bundle.path).toBe('pre-searched')
     expect(bundle.sections.retrospective).toContain('The Lighthouse')
     expect(bundle.retroSignature).toContain('lighthouse point')
-    for (const call of mockVault.mock.calls) expect(call[0].precomputedEmbedding).toBeInstanceOf(Float32Array)
+    // The mini-recap asks about the paraphrase and the names (review of PR 95):
+    // a text of its own, so the vault search embeds it.
+    expect(mockVault).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'They remember the lighthouse. — Lighthouse Point',
+      precomputedEmbedding: null,
+    }))
+  })
+
+  it('rides the turn’s vector for a mini-recap that names no one', async () => {
+    const query = await buildRecallQuery({
+      userId: 'user-1',
+      text: 'w',
+      signals: { keywords: ['bridge'], paraphrase: 'They remember the bridge.', retrospective: true, entities: [] },
+    })
+    const { candidates } = await searchRecall(LYRA, query, { limit: 30 })
+    await assembleRecall(plan({
+      preRecall: { query, candidates },
+      recallSettings: { scopePolicy: 'down-weight', expandRelated: false, perTurnConversationSummaries: false },
+    }))
+    expect(mockVault).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'They remember the bridge.',
+      precomputedEmbedding: expect.any(Float32Array),
+    }))
+  })
+
+  it('runs the fallback search when the proactive pass found nothing', async () => {
+    const query = await buildRecallQuery({ userId: 'user-1', text: 'nothing matched this' })
+    const bundle = await assembleRecall(plan({ preRecall: { query, candidates: [] } }))
+
+    expect(bundle.path).toBe('two-pool')
+    expect(bundle.pool.length).toBeGreaterThan(0)
+  })
+
+  it('reads the inter-character relevance half past the head’s cut', async () => {
+    const query = await buildRecallQuery({ userId: 'user-1', text: 'w' })
+    const { candidates, ranked } = await searchRecall(LYRA, query, { limit: 30, minImportance: 0.3 })
+    const head = candidates.filter(c => c.memory.id !== 'about-iris').slice(0, 3)
+
+    const bundle = await assembleRecall(plan({ preRecall: { query, candidates: head, ranked } }))
+
+    expect(bundle.pool.map(c => c.memory.id)).not.toContain('about-iris')
+    expect(bundle.pools.interCharacter).toContain('about-iris')
   })
 
   it('writes nothing: no stamp, no ring, until delivery', async () => {
@@ -276,6 +317,16 @@ describe('deliverRecall', () => {
     expect(stamped).not.toContain('narrated')
     // What the head delivered verbatim is stamped, recap row or not.
     expect(stamped).toContain('recap-only')
+  })
+
+  it('counts the mini-recap delivered though the whisper builder trimmed it', async () => {
+    const bundle = emptyRecallBundle()
+    bundle.sections.retrospective = '### Relevant Past Conversations\n\n#### The Lighthouse (`conv-1`)\n'
+    bundle.retroSignature = 'sig'
+    await deliverRecall(bundle, { characterId: LYRA, chat: { id: 'chat-1' }, deliveredText: `before\n\n${bundle.sections.retrospective.trim()}\n\nafter` })
+
+    const ring = (repos.chats.update.mock.calls[0][1] as { commonplaceRecallHistory: { retroSignatures: string[] } }).commonplaceRecallHistory
+    expect(ring.retroSignatures).toEqual(['sig'])
   })
 
   it('stamps nothing when nothing was delivered', async () => {

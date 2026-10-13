@@ -412,3 +412,12 @@ describe('render: no model sees a debug label (decision 5)', () => {
     ])
   })
 })
+
+describe('renderHead — the clock', () => {
+  it('dates entries against the clock it is given, not the wall clock', () => {
+    const occurred = Date.parse('2026-06-01T12:00:00.000Z')
+    const m = memory('11111111-aaaa-bbbb-cccc-000000000001', 'the fair', undefined, { occurredAt: new Date(occurred).toISOString() })
+    const r = renderHead([searchResult(m)], provider, SELF_SUBJECT, { maxTokens: 200, maxEntries: 5, nowMs: occurred + 3 * 86_400_000 })
+    expect(r.content).toContain('[3 days ago] the fair')
+  })
+})

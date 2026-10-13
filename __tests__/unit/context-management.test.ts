@@ -105,7 +105,7 @@ jest.mock('@/lib/chat/context/user-narration-anchor', () => {
 
 const mockedSearchRecall = searchRecall as jest.MockedFunction<typeof searchRecall>
 /** A search that found nothing. */
-const noRecall = { candidates: [], strategy: 'text' as const, trace: [] }
+const noRecall = { candidates: [], ranked: [], strategy: 'text' as const, trace: [] }
 const mockedCollectUnalertedMail = collectUnalertedMail as jest.MockedFunction<typeof collectUnalertedMail>
 const mockedMarkAlerted = markAlerted as jest.MockedFunction<typeof markAlerted>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -1753,6 +1753,7 @@ describe('Context Manager', () => {
         mockedGetRepositories.mockReturnValue(repoMock as any)
         mockedSearchRecall.mockResolvedValue({
           candidates: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
+          ranked: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
           strategy: 'text',
           trace: [],
         } as any)

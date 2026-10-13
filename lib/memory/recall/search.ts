@@ -17,7 +17,7 @@ import { gather, type Gathered } from './gather'
 import { hydrate, hydrateNeighbours, type HydrateFilters } from './hydrate'
 import { buildRecallQuery, type RecallQuery } from './query'
 import { score } from './score'
-import { select, wantsExpansion } from './select'
+import { selectRanked, wantsExpansion } from './select'
 import { recallTuningOf, type RecallContext } from './tags'
 import { traceStage, type RecallCandidate, type RecallTrace } from './types'
 
@@ -48,6 +48,11 @@ export interface RecallSearchOptions {
 
 export interface RecallSearchResult {
   candidates: RecallCandidate[]
+  /**
+   * Every ranked row before the cut to `limit`. The inter-character relevance
+   * half filters this by subject: the same search, read past the head's cut.
+   */
+  ranked: RecallCandidate[]
   strategy: Gathered['strategy']
   trace: RecallTrace
 }
@@ -84,26 +89,26 @@ export async function searchRecall(
   const run = async (forceText: boolean): Promise<RecallSearchResult & { empty: boolean }> => {
     const gathered = await gather(characterId, query, { ...gatherOptions, forceText }, trace, label)
     if (gathered.strategy === 'vector' && gathered.hits.length === 0) {
-      return { candidates: [], strategy: 'vector', trace, empty: true }
+      return { candidates: [], ranked: [], strategy: 'vector', trace, empty: true }
     }
     const hydrated = await hydrate(gathered, filters, trace, label)
     const scored = score(hydrated, gathered, { limit, recallContext: ctx, window: query.window, nowMs }, trace, label)
     const neighbours = wantsExpansion(scored)
       ? await hydrateNeighbours(scored.ranked, limit, characterId, filters)
       : []
-    const candidates = select(scored, neighbours, {
+    const { candidates, ranked } = selectRanked(scored, neighbours, {
       limit,
       headSize: options.headSize,
       queryEmbedding: query.embedding?.embedding ?? null,
       nowMs,
     }, trace, label)
-    return { candidates, strategy: gathered.strategy, trace, empty: false }
+    return { candidates, ranked, strategy: gathered.strategy, trace, empty: false }
   }
 
   if (!options.forceText && query.embedding) {
     try {
       const vector = await run(false)
-      if (!vector.empty) return { candidates: vector.candidates, strategy: vector.strategy, trace }
+      if (!vector.empty) return { candidates: vector.candidates, ranked: vector.ranked, strategy: vector.strategy, trace }
       // An index with nothing to offer (no vectors yet): the text strategy may.
       traceStage(trace, 'gather', { strategy: 'vector', pool: 0, fallback: 'text' }, label)
     } catch (error) {
@@ -115,9 +120,9 @@ export async function searchRecall(
       traceStage(trace, 'gather', { strategy: 'vector', failed: String(error), fallback: 'text' }, label)
     }
   }
-  if (!query.text.trim()) return { candidates: [], strategy: 'text', trace }
+  if (!query.text.trim()) return { candidates: [], ranked: [], strategy: 'text', trace }
   const text = await run(true)
-  return { candidates: text.candidates, strategy: 'text', trace }
+  return { candidates: text.candidates, ranked: text.ranked, strategy: 'text', trace }
 }
 
 /** Options for {@link searchMemories}: the search's, plus the query's own. */

@@ -31,6 +31,13 @@ export function wantsExpansion(scored: Scored): boolean {
   return scored.strategy === 'vector' && scored.context?.expandRelated === true
 }
 
+/** What `select` keeps, and the whole ranked list it cut it from. */
+export interface Selected {
+  candidates: RecallCandidate[]
+  /** Every ranked row before the cut (expansion and R6 applied). */
+  ranked: RecallCandidate[]
+}
+
 export function select(
   scored: Scored,
   neighbours: readonly Memory[],
@@ -38,6 +45,17 @@ export function select(
   trace: RecallTrace = [],
   label?: string,
 ): RecallCandidate[] {
+  return selectRanked(scored, neighbours, opts, trace, label).candidates
+}
+
+/** {@link select}, returning the ranked list before the cut beside the cut. */
+export function selectRanked(
+  scored: Scored,
+  neighbours: readonly Memory[],
+  opts: SelectOptions,
+  trace: RecallTrace = [],
+  label?: string,
+): Selected {
   let results = scored.ranked
   const ctx = scored.context
   let expanded = 0
@@ -80,5 +98,5 @@ export function select(
 
   const out = results.slice(0, opts.limit)
   traceStage(trace, 'select', { expanded, reserved, cut: Math.max(0, results.length - out.length), returned: out.length }, label)
-  return out
+  return { candidates: out, ranked: results }
 }

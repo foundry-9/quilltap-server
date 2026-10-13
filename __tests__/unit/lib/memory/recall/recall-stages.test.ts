@@ -129,17 +129,21 @@ describe('deliver — which lines reached the model', () => {
   ]
 
   it.each([
-    ['verbatim (no compression)', lines.map(l => l.line).join('\n'), ['a', 'b', 'c']],
-    ['whitespace and case aside', '- LYRA crossed   the Shivering Bridge with Iris at dusk', ['a']],
+    ['verbatim (no compression)', lines.map(l => l.line).join('\n'), false, ['a', 'b', 'c']],
+    ['whitespace and case aside', '- LYRA crossed   the Shivering Bridge with Iris at dusk', false, ['a']],
     [
       'a compression rewrite keeps most of a line’s words',
       '- Crossed the Shivering Bridge with Iris (dusk).\n- Ledger: brass cabinet.',
+      true,
       ['a', 'c'],
     ],
-    ['a line compression dropped is not delivered', '- Iris hums when she is nervous', ['b']],
-    ['nothing delivered', '', []],
-  ])('%s', (_label, delivered, expected) => {
-    expect(survivingLines(lines, delivered).map(l => l.memoryId)).toEqual(expected)
+    ['a line compression dropped is not delivered', '- Iris hums when she is nervous', true, ['b']],
+    ['nothing delivered', '', true, []],
+    // An uncompressed section counts verbatim lines only: a body that turns up
+    // inside some other text says nothing about its own line (review of PR 95).
+    ['another text that happens to hold the words', 'Iris hums when she is nervous, Lyra noted.', false, []],
+  ] as const)('%s', (_label, delivered, compressed, expected) => {
+    expect(survivingLines(lines, delivered, { compressed }).map(l => l.memoryId)).toEqual(expected)
   })
 
   it('reads the ring line back, and keeps the recall record beside new lines', () => {

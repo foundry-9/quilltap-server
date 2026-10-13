@@ -305,7 +305,7 @@ async function proactiveRecallTask(
       minImportance: RECALL_MIN_IMPORTANCE,
       recallContext,
     }, trace, 'head')
-    return { query, candidates: result.candidates, trace }
+    return { query, candidates: result.candidates, ranked: result.ranked, trace }
   } catch (error) {
     logger.warn('Proactive memory recall: memory search failed; the turn recalls with the query alone', {
       chatId,
