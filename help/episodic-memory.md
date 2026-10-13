@@ -47,5 +47,5 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [Recall Relevance](memory-recall-relevance.md) — how the Book decides which memories may surface where
-- [Memory Housekeeping](memory-housekeeping.md) — pruning the shelves (episodes now enjoy a measure of protection)
+- [Memory Maintenance](memory-maintenance.md) — pruning the shelves (episodes now enjoy a measure of protection)
 - [Conversation Summaries](conversation-summary-regenerate.md) — the folded summaries whose Timeline the episodes ride in

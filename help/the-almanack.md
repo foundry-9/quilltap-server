@@ -45,7 +45,7 @@ The census of the main database: characters, chats, memories, tags, projects, gr
 - **Autonomous rooms** by run state, how many are scheduled and how many of those are overdue, which budgets are set, and how visibility is distributed.
 - **The Commonplace Book** split by kind (semantic versus episodic), by source, by witnessed context; how many memories carry an event time, a narrative time, extracted entities, an embedding; and the total reinforcement across the whole book.
 - **Characters** — vault-linked or not, NPCs, your own personas, Carina answerers, who may see the Staff, who may dress themselves.
-- **Every feature dial** with its effective value: the Concierge, context compression, Prospero, the Lantern, Aurora's Core whisper, Pascal, timestamps, Saquel Ytzama's auto-lock, memory cascade and housekeeping, Salon behaviour, text replacements.
+- **Every feature dial** with its effective value: the Concierge, context compression, Prospero, the Lantern, Aurora's Core whisper, Pascal, timestamps, Saquel Ytzama's auto-lock, memory cascade and maintenance, Salon behaviour, text replacements.
 - **Instance settings**, including the stale-chat retention window and how many chats the next maintenance sweep would actually touch.
 - **Background jobs** by status and type, with the failures and their most recent errors.
 - **The embedding pipeline** — what is indexed, what failed (a failure being permanent for the current embedding profile), and whether the vectors on disk match the width of the profile that would be used to query them (a mismatch is flagged, because recall against mismatched vectors is simply wrong).

@@ -79,5 +79,5 @@ Characters with help tools enabled can navigate directly to this setting:
 ## Related Settings
 
 - [Chat Settings](chat-settings.md) — The rest of the chat-wide defaults
-- [Memory Housekeeping](memory-housekeeping.md) — The Commonplace Book's own tidying
+- [Memory Maintenance](memory-maintenance.md) — The Commonplace Book's own tidying
 - [The Scriptorium](scriptorium.md) — Semantic search over documents and conversations

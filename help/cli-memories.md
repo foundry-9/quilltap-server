@@ -54,7 +54,7 @@ The same filter flags apply to `ls`, `find`, `grep`, and (where they make sense)
 | --- | --- |
 | `--character <name\|id\|all>` | The *holder* of the memory. Default: `all`. |
 | `--about <name\|id\|self\|none>` | The *subject*. `self` shorthand for self-referential memories; `none` for legacy memories whose `aboutCharacterId` is null. |
-| `--source AUTO\|MANUAL\|CONSOLIDATED` | Auto-extracted, manually entered, or a digest written by [Memory Consolidation](memory-consolidation.md). |
+| `--source AUTO\|MANUAL\|CONSOLIDATED` | Auto-extracted, manually entered, or a digest written by [Memory Maintenance](memory-maintenance.md). |
 | `--tier hot\|cold` | Active (`hot`) memories only, or archived (`cold`) ones. Without it, both. Archived rows are marked with `*` in the `src` column. |
 | `--chat <id\|title\|none>` | The source chat. `none` restricts to manual memories. |
 | `--project <id\|name>` | Project context. |
@@ -234,7 +234,7 @@ The Commonplace Book keeps itself tidy in rounds, and each round has five steps,
 | Phase | What it does |
 | --- | --- |
 | `fold-near-duplicates` | Folds memories that say very nearly the same thing into a single survivor. |
-| `consolidate` | Gathers clusters of related notes and writes a denser digest in their stead, sending the originals to the cold tier. See [Memory Consolidation](memory-consolidation.md). |
+| `consolidate` | Gathers clusters of related notes and writes a denser digest in their stead, sending the originals to the cold tier. See [Memory Maintenance](memory-maintenance.md). |
 | `demote` | Moves the least-protected active memories to the cold tier when a character carries more than the cap. |
 | `retire` | Removes superseded cold memories older than the retention window, if one is set. |
 | `mirror` | Refreshes the character's Commonplace files to match. |

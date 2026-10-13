@@ -42,4 +42,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Regenerate the Commonplace Book](memory-regenerate.md) — The neighbouring lever that wipes and rebuilds chat-derived *memories* (a different thing entirely from these conversation summaries)
 - [Embedding Profiles](embedding-profiles.md) — The filed summaries are chunked and embedded with the active profile, which is what makes them retrievable
-- [Memory Housekeeping](memory-housekeeping.md) — Routine pruning of low-importance memories as characters approach their cap
+- [Memory Maintenance](memory-maintenance.md) — Routine pruning of low-importance memories as characters approach their cap

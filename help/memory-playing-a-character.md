@@ -48,6 +48,6 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [Recall Relevance](memory-recall-relevance.md) — how a character's memories choose their moment to surface
-- [Memory Housekeeping](memory-housekeeping.md) — prunes the shelves once a character's memories grow numerous
+- [Memory Maintenance](memory-maintenance.md) — prunes the shelves once a character's memories grow numerous
 - [Regenerate the Commonplace Book](memory-regenerate.md) — re-form a character's memories from a conversation already had
 - [The Command Line and the Commonplace Book](cli-memories.md) — survey and search the memories themselves

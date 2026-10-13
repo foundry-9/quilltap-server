@@ -73,7 +73,7 @@ Each turn the Commonplace Book hands a character two bundles of recollection: a 
 
 The weighty shelf is chosen by how firmly a memory has been *established* — its importance together with how often it has been observed again — with the most recently re-observed winning any tie, and each conversation keeps its own shelf rather than borrowing whichever one an earlier conversation happened to leave lying about. When a maintenance round tidies a character's memories, every shelf for that character is rebuilt on the next turn.
 
-A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence housekeeping relies on honest.
+A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence maintenance relies on honest.
 
 ## One Question, Asked Once
 
@@ -87,15 +87,15 @@ The lines the Book whispers now carry only what a character could sensibly make 
 
 None of it is lost. The figures still appear in the debug panel, and each reply now keeps a short ledger of how its recollections were gathered: the question asked, how many memories each stage considered, what the shelf held, what the token budget cut, what the others' section took, and which memories were actually delivered.
 
-That last point matters. A memory is now counted as *recently consulted* — the evidence housekeeping relies on, and the record the Book keeps to avoid repeating itself — only once the request is fully built and the line is still in it. If the Book's memories run long enough that a cheaper model is asked to condense them, a recollection that falls out in the condensing is not counted as having been shown. And this holds on every kind of turn, including a continuation where the character picks up where it left off.
+That last point matters. A memory is now counted as *recently consulted* — the evidence maintenance relies on, and the record the Book keeps to avoid repeating itself — only once the request is fully built and the line is still in it. If the Book's memories run long enough that a cheaper model is asked to condense them, a recollection that falls out in the condensing is not counted as having been shown. And this holds on every kind of turn, including a continuation where the character picks up where it left off.
 
 ## Digests First, Fragments After
 
-Once [Memory Consolidation](memory-consolidation.md) has been at work, a character's active memories include *digests*: single entries that each stand for a whole cluster of related observations. Recall leans on them. The steady shelf now opens with the best digests about each person present this turn (three apiece) and the best digests about the character themselves (five), and only then fills the rest of its room with the most firmly established single memories. What one character recalls of another starts with digests about that person too, and the recap that opens a chat puts digests first among its weighty memories.
+Once [Memory Maintenance](memory-maintenance.md) has been at work, a character's active memories include *digests*: single entries that each stand for a whole cluster of related observations. Recall leans on them. The steady shelf now opens with the best digests about each person present this turn (three apiece) and the best digests about the character themselves (five), and only then fills the rest of its room with the most firmly established single memories. What one character recalls of another starts with digests about that person too, and the recap that opens a chat puts digests first among its weighty memories.
 
 A digest whispered into a turn carries a short note of where it came from, such as *(from 14 notes)*, so the character knows it is reading a summary of many observations rather than one remembered moment.
 
-Recall only ever draws on **active** memories. The originals a digest replaced, and anything housekeeping has moved to the archive, are not whispered. They have not been lost: when a character searches its own memory with the `search` tool, archived entries come back too, marked *(archived)* or *(archived — superseded by …)*, so a character digging into the past can still find the details.
+Recall only ever draws on **active** memories. The originals a digest replaced, and anything maintenance has moved to the archive, are not whispered. They have not been lost: when a character searches its own memory with the `search` tool, archived entries come back too, marked *(archived)* or *(archived — superseded by …)*, so a character digging into the past can still find the details.
 
 ## Whose Life Is It, Anyway?
 
@@ -115,7 +115,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [The Book Remembers When and Where](episodic-memory.md) — dated, placed memories and the retrospective turn
 - [When You Take the Reins Yourself](memory-playing-a-character.md) — how a character you play forms its own memories
-- [Memory Consolidation](memory-consolidation.md) — combines clusters of memories into the digests recall prefers
-- [Memory Housekeeping](memory-housekeeping.md) — archives the least-used memories once a character's memories grow numerous
+- [Memory Maintenance](memory-maintenance.md) — combines clusters of memories into the digests recall prefers
+- [Memory Maintenance](memory-maintenance.md) — archives the least-used memories once a character's memories grow numerous
 - [Embedding Profiles](embedding-profiles.md) — the semantic match that recall ranks on top of
 - [The Command Line and the Commonplace Book](cli-memories.md) — survey and search the memories themselves
