@@ -1,68 +1,47 @@
 /**
- * Which characters' in-process vector stores a committed write batch made
- * stale (bug 217).
+ * Which characters' in-process memory-index caches a committed write batch
+ * made stale (bug 217; memory refactor Phase B).
  *
- * Stores are keyed by character id, but the repository writes that change a
- * store do not all name the character the same way: some take it as the first
- * positional argument, some on an object payload, some as an array of entry
- * payloads, and a few take only a memory id. The old hand-kept set paired every
- * method with one id-probing helper (`firstIdArg`), which keyed `memories.delete`
- * and `vectorIndices.updateEntryEmbedding` on the *memory* id (a no-op unload)
- * and omitted `memories.bulkDelete` — the write the child actually issues for
- * deletions — and the batched `vectorIndices.*` entry writes altogether.
+ * `memories.embedding` and `memories.tier` are the index; each character's
+ * in-process store is a cache of them (`lib/memory/index-store/`). A batch from
+ * the job child that wrote either column, or deleted a row, leaves the
+ * parent's cache for that character stale, and the dispatcher drops it after
+ * the commit (and tells the child to drop its own).
  *
- * Here each method states its argument shape once. Memory-id-keyed writes are
- * resolved to their owners by the caller *before* the batch commits, because a
- * deleted row cannot be looked up afterwards.
+ * The repository writes that do so do not all name the character the same
+ * way, so each method states its argument shape once. Memory-id-keyed writes
+ * are resolved to their owners by the caller *before* the batch commits.
  *
  * @module background-jobs/host/vector-store-invalidation
  */
 
 import type { ChildWritePayload } from '../ipc-types';
 
-/** How a write method names the character(s) whose store it touches. */
+/** How a write method names the character whose cache it touches. */
 type CharacterKeyShape =
   /** `method(characterId, ...)` */
   | 'characterArg'
   /** `method({ characterId, ... }, ...)` */
   | 'characterField'
-  /** `method([{ characterId, ... }, ...])` */
-  | 'characterFieldArray'
   /** `method(memoryId, ...)` — owner resolved before commit */
-  | 'memoryIdArg'
-  /** `method([memoryId, ...])` — owners resolved before commit */
-  | 'memoryIdArrayArg';
+  | 'memoryIdArg';
 
 /**
- * Every repository write that changes a character's memory rows or vectors in
- * a way the cached store must see (vector added/removed/changed, row
- * removed, tier moved).
+ * Every repository write that can change what a character's memory-index
+ * cache holds: a vector added or changed, a row removed, a tier moved.
  *
- * `memories.incrementReinforcement` is deliberately absent: it moves only
- * `reinforcementCount` / `reinforcedImportance` / `lastReinforcedAt`, none of
- * which the store caches (its entries carry memoryId, characterId and tier),
- * and listing it unloaded the character's store after nearly every turn.
+ * Link, count and footnote writes (`incrementReinforcement`,
+ * `addRelatedMemoryIds`, `appendReinforcementFootnotes`, …) are deliberately
+ * absent: the cache holds only id, vector and tier, and listing them dropped
+ * the character's cache after nearly every turn.
  */
 export const VECTOR_STORE_WRITE_SHAPES: Readonly<Record<string, CharacterKeyShape>> = {
   'memories.create': 'characterField',
   'memories.upsert': 'characterField',
   'memories.updateForCharacter': 'characterArg',
-  'memories.deleteForCharacter': 'characterArg',
-  'memories.bulkDelete': 'characterArg',
-  // Tier moves change the store's hot-only metadata (stamped at load).
+  'memories.bulkDeleteUnsafe': 'characterArg',
   'memories.updateTierBulk': 'characterArg',
   'memories.update': 'memoryIdArg',
-  'memories.delete': 'memoryIdArg',
-  'vectorIndices.saveMeta': 'characterArg',
-  'vectorIndices.deleteStore': 'characterArg',
-  'vectorIndices.deleteByCharacterId': 'characterArg',
-  'vectorIndices.deleteMetaByCharacterId': 'characterArg',
-  'vectorIndices.removeEntriesByCharacterId': 'characterArg',
-  'vectorIndices.addEntry': 'characterField',
-  'vectorIndices.addEntries': 'characterFieldArray',
-  'vectorIndices.updateEntryEmbedding': 'memoryIdArg',
-  'vectorIndices.removeEntry': 'memoryIdArg',
-  'vectorIndices.removeEntries': 'memoryIdArrayArg',
 };
 
 function nonEmptyString(value: unknown): value is string {
@@ -86,8 +65,6 @@ export function memoryIdsNeedingOwnerLookup(writes: readonly ChildWritePayload[]
     const first = w.args?.[0];
     if (shape === 'memoryIdArg' && nonEmptyString(first)) {
       ids.add(first);
-    } else if (shape === 'memoryIdArrayArg' && Array.isArray(first)) {
-      for (const id of first) if (nonEmptyString(id)) ids.add(id);
     }
   }
   return Array.from(ids);
@@ -116,27 +93,11 @@ export function vectorStoreKeysForWrites(
         if (id) keys.add(id);
         break;
       }
-      case 'characterFieldArray':
-        if (Array.isArray(first)) {
-          for (const entry of first) {
-            const id = characterFieldOf(entry);
-            if (id) keys.add(id);
-          }
-        }
-        break;
       case 'memoryIdArg': {
         const owner = nonEmptyString(first) ? memoryOwners.get(first) : undefined;
         if (owner) keys.add(owner);
         break;
       }
-      case 'memoryIdArrayArg':
-        if (Array.isArray(first)) {
-          for (const id of first) {
-            const owner = nonEmptyString(id) ? memoryOwners.get(id) : undefined;
-            if (owner) keys.add(owner);
-          }
-        }
-        break;
     }
   }
   return keys;

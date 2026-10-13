@@ -1,6 +1,8 @@
 /**
  * Unit tests for Memory Service
- * Tests the memory service functions including cascade delete operations.
+ * Tests the create paths and the vector-index rebuild. (Deletion moved to
+ * `lib/memory/retire.ts`; the hand edit to `lib/memory/admission`, tested in
+ * update-memory.test.ts.)
  */
 
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals'
@@ -21,9 +23,19 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   cosineSimilarity: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 
 jest.mock('@/lib/logger', () => {
@@ -44,21 +56,6 @@ jest.mock('@/lib/logger', () => {
   }
 })
 
-// memory-service now routes deletions through the chokepoint helpers in
-// memory-gate. Stub those so this file's tests don't need a real DB; pass the
-// rest of memory-gate through unchanged.
-jest.mock('@/lib/memory/memory-gate', () => {
-  const actual = jest.requireActual<typeof import('@/lib/memory/memory-gate')>(
-    '@/lib/memory/memory-gate'
-  )
-  return {
-    ...actual,
-    deleteMemoryWithUnlink: jest.fn(),
-    deleteMemoriesWithUnlinkBatch: jest.fn(),
-    deleteMemoriesWithUnlinkBatchReport: jest.fn(),
-  }
-})
-
 // Get mocked modules
 const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
   getRepositories: jest.Mock
@@ -68,9 +65,8 @@ const embeddingMock = jest.requireMock('@/lib/embedding/embedding-service') as {
   EmbeddingError: typeof Error
   cosineSimilarity: jest.Mock
 }
-const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as {
-  getCharacterVectorStore: jest.Mock
-  getVectorStoreManager: jest.Mock
+const indexMock = jest.requireMock('@/lib/memory/index-store') as {
+  memoryIndex: Record<'search' | 'shape' | 'upsert' | 'indexInserted' | 'setTier' | 'reload' | 'entries', jest.Mock<any>>
 }
 const loggerMock = jest.requireMock('@/lib/logger') as {
   logger: {
@@ -81,49 +77,10 @@ const loggerMock = jest.requireMock('@/lib/logger') as {
   }
 }
 
-const memoryGateMock = jest.requireMock('@/lib/memory/memory-gate') as {
-  deleteMemoryWithUnlink: jest.Mock
-  deleteMemoriesWithUnlinkBatch: jest.Mock
-  deleteMemoriesWithUnlinkBatchReport: jest.Mock
-}
-
 const mockGetRepositories = repositoriesMock.getRepositories
 const mockGenerateEmbedding = embeddingMock.generateEmbeddingForUser
-const mockGetCharacterVectorStore = vectorStoreMock.getCharacterVectorStore
+const mockIndex = indexMock.memoryIndex
 const mockLogger = loggerMock.logger
-const mockDeleteMemoryWithUnlink = memoryGateMock.deleteMemoryWithUnlink
-const mockDeleteMemoriesWithUnlinkBatch = memoryGateMock.deleteMemoriesWithUnlinkBatchReport
-
-// Mock memories
-const mockMemories = [
-  {
-    id: 'memory-1',
-    characterId: 'char-1',
-    content: 'Test memory 1',
-    summary: 'Summary 1',
-    importance: 0.7,
-    sourceMessageId: 'msg-1',
-    embedding: [0.1, 0.2, 0.3],
-  },
-  {
-    id: 'memory-2',
-    characterId: 'char-2',
-    content: 'Test memory 2',
-    summary: 'Summary 2',
-    importance: 0.5,
-    sourceMessageId: 'msg-1',
-    embedding: [0.4, 0.5, 0.6],
-  },
-  {
-    id: 'memory-3',
-    characterId: 'char-1',
-    content: 'Test memory 3',
-    summary: 'Summary 3',
-    importance: 0.6,
-    sourceMessageId: 'msg-2',
-    embedding: null,
-  },
-]
 
 describe('Memory Service', () => {
   let mockMemoriesRepo: {
@@ -135,24 +92,13 @@ describe('Memory Service', () => {
     deleteForCharacter: jest.Mock
     deleteBySourceMessageId: jest.Mock
     searchByContent: jest.Mock
-  }
-
-  let mockVectorStore: {
-    addVector: jest.Mock
-    updateVector: jest.Mock
-    removeVector: jest.Mock
-    hasVector: jest.Mock
-    search: jest.Mock
-    save: jest.Mock
+    countWithoutEmbedding: jest.Mock
   }
 
   // Import the module functions after mocks are set up
   let createMemoryWithGate: typeof import('@/lib/memory/memory-service').createMemoryWithGate
   let createMemoryWithEmbedding: typeof import('@/lib/memory/memory-service').createMemoryWithEmbedding
-  let updateMemoryWithEmbedding: typeof import('@/lib/memory/memory-service').updateMemoryWithEmbedding
-  let deleteMemoryWithVector: typeof import('@/lib/memory/memory-service').deleteMemoryWithVector
-  let deleteMemoriesBySourceMessageWithVectors: typeof import('@/lib/memory/memory-service').deleteMemoriesBySourceMessageWithVectors
-  let deleteMemoriesBySourceMessagesWithVectors: typeof import('@/lib/memory/memory-service').deleteMemoriesBySourceMessagesWithVectors
+  let rebuildVectorIndex: typeof import('@/lib/memory/memory-service').rebuildVectorIndex
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -168,32 +114,26 @@ describe('Memory Service', () => {
       deleteForCharacter: jest.fn(),
       deleteBySourceMessageId: jest.fn(),
       searchByContent: jest.fn(),
+      countWithoutEmbedding: jest.fn(),
     }
 
     mockGetRepositories.mockReturnValue({
       memories: mockMemoriesRepo,
     } as any)
 
-    // Setup mock vector store
-    mockVectorStore = {
-      addVector: jest.fn(),
-      updateVector: jest.fn(),
-      removeVector: jest.fn(),
-      hasVector: jest.fn(),
-      search: jest.fn(),
-      save: jest.fn(),
-    }
-    mockGetCharacterVectorStore.mockResolvedValue(mockVectorStore)
+    // Setup the mock memory index
+    mockIndex.search.mockResolvedValue([])
+    mockIndex.indexInserted.mockResolvedValue(undefined)
+    mockIndex.upsert.mockResolvedValue([])
+    mockIndex.setTier.mockResolvedValue(0)
+    mockIndex.entries.mockResolvedValue([])
 
     // Fresh import for each test
     jest.isolateModules(() => {
       const serviceModule = require('@/lib/memory/memory-service')
       createMemoryWithGate = serviceModule.createMemoryWithGate
       createMemoryWithEmbedding = serviceModule.createMemoryWithEmbedding
-      updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      deleteMemoryWithVector = serviceModule.deleteMemoryWithVector
-      deleteMemoriesBySourceMessageWithVectors = serviceModule.deleteMemoriesBySourceMessageWithVectors
-      deleteMemoriesBySourceMessagesWithVectors = serviceModule.deleteMemoriesBySourceMessagesWithVectors
+      rebuildVectorIndex = serviceModule.rebuildVectorIndex
     })
   })
 
@@ -235,8 +175,12 @@ describe('Memory Service', () => {
       expect(mockGenerateEmbedding.mock.invocationCallOrder[0]).toBeLessThan(
         mockMemoriesRepo.create.mock.invocationCallOrder[0]
       )
-      expect(mockVectorStore.addVector).toHaveBeenCalled()
-      expect(mockVectorStore.save).toHaveBeenCalled()
+      // The row already carries its vector: the index caches it, no second write.
+      expect(mockIndex.indexInserted).toHaveBeenCalledWith('char-1', [
+        { id: 'new-memory', embedding: [0.1, 0.2, 0.3], tier: 'hot' },
+      ])
+      expect(mockIndex.upsert).not.toHaveBeenCalled()
+      expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
       expect(result!.id).toBe('new-memory')
     })
 
@@ -261,7 +205,7 @@ describe('Memory Service', () => {
 
       expect(mockGenerateEmbedding).toHaveBeenCalledTimes(2)
       expect(mockMemoriesRepo.create).not.toHaveBeenCalled()
-      expect(mockVectorStore.addVector).not.toHaveBeenCalled()
+      expect(mockIndex.indexInserted).not.toHaveBeenCalled()
       expect(outcome.memory).toBeNull()
       expect(outcome.action).toBe('SKIP_EMBEDDING_FAILED')
       expect(mockLogger.warn).toHaveBeenCalled()
@@ -282,38 +226,30 @@ describe('Memory Service', () => {
   })
 
   // ============================================================================
-  // rebuildVectorIndex — tier rides with the vector (bug 205)
+  // rebuildVectorIndex — the rows are the index (bug 205)
   // ============================================================================
   describe('rebuildVectorIndex', () => {
-    it('stamps each rebuilt entry with its row tier so cold rows stay out of hot-only recall', async () => {
-      const manager = {
-        deleteStore: jest.fn(async () => true),
-        getStore: jest.fn(async () => mockVectorStore),
-      }
-      vectorStoreMock.getVectorStoreManager.mockReturnValue(manager)
-      mockMemoriesRepo.findByCharacterId.mockResolvedValue([
-        { id: 'hot-1', characterId: 'char-1', tier: 'hot', embedding: new Float32Array([1, 0]) },
-        { id: 'cold-1', characterId: 'char-1', tier: 'cold', embedding: new Float32Array([0, 1]) },
-        { id: 'legacy', characterId: 'char-1', embedding: new Float32Array([1, 1]) },
-        { id: 'bare', characterId: 'char-1', tier: 'cold', embedding: null },
+    it('drops the cache and reloads it from the rows, so tiers come with the vectors', async () => {
+      mockIndex.entries.mockResolvedValue([
+        { id: 'hot-1', embedding: new Float32Array([1, 0]), metadata: { memoryId: 'hot-1', characterId: 'char-1', tier: 'hot' } },
+        { id: 'cold-1', embedding: new Float32Array([0, 1]), metadata: { memoryId: 'cold-1', characterId: 'char-1', tier: 'cold' } },
+        { id: 'legacy', embedding: new Float32Array([1, 1]), metadata: { memoryId: 'legacy', characterId: 'char-1', tier: 'hot' } },
       ])
+      mockMemoriesRepo.countWithoutEmbedding.mockResolvedValue(1)
 
-      const { rebuildVectorIndex } = require('@/lib/memory/memory-service')
-      const result = await rebuildVectorIndex('char-1', { userId: 'user-123' })
+      const result = await rebuildVectorIndex('char-1')
 
-      expect(manager.deleteStore).toHaveBeenCalledWith('char-1')
-      expect(result).toEqual({ indexed: 3, failed: 0 })
-      const tiers = Object.fromEntries(
-        mockVectorStore.addVector.mock.calls.map((call: any[]) => [call[0], call[2].tier])
+      expect(mockIndex.reload).toHaveBeenCalledWith('char-1')
+      expect(mockIndex.entries).toHaveBeenCalledWith('char-1')
+      // Reload first, so the entries counted are the ones read fresh from the rows.
+      expect(mockIndex.reload.mock.invocationCallOrder[0]).toBeLessThan(
+        mockIndex.entries.mock.invocationCallOrder[0],
       )
-      expect(tiers).toEqual({ 'hot-1': 'hot', 'cold-1': 'cold', legacy: 'hot' })
-
-      const { isHotVector } = jest.requireActual<typeof import('@/lib/embedding/vector-store')>(
-        '@/lib/embedding/vector-store'
-      )
-      const coldMeta = mockVectorStore.addVector.mock.calls.find((c: any[]) => c[0] === 'cold-1')![2]
-      expect(isHotVector(coldMeta as any)).toBe(false)
-      expect(mockVectorStore.save).toHaveBeenCalled()
+      expect(mockMemoriesRepo.countWithoutEmbedding).toHaveBeenCalledWith('char-1')
+      // Nothing is written: the rows already hold every vector and tier.
+      expect(mockIndex.upsert).not.toHaveBeenCalled()
+      expect(mockIndex.indexInserted).not.toHaveBeenCalled()
+      expect(result).toEqual({ indexed: 3, failed: 1 })
     })
   })
 
@@ -336,8 +272,9 @@ describe('Memory Service', () => {
         model: 'test-model',
       })
       // One neighbour in the RELATED band → INSERT_RELATED.
-      mockVectorStore.search.mockReturnValue([{ id: 'related-1', score: 0.75 }])
-      mockVectorStore.hasVector.mockReturnValue(false)
+      mockIndex.search.mockResolvedValue([
+        { id: 'related-1', score: 0.75, metadata: { memoryId: 'related-1', characterId: 'char-1', tier: 'hot' } },
+      ])
       ;(mockMemoriesRepo as any).findByIds = jest.fn<any>().mockResolvedValue([relatedMemory])
 
       // create() persists with relatedMemoryIds: [] (the stale array that used
@@ -392,7 +329,7 @@ describe('Memory Service', () => {
 
     beforeEach(() => {
       mockGenerateEmbedding.mockResolvedValue({ embedding: [0.1, 0.2, 0.3], model: 'test-model' })
-      mockVectorStore.search.mockReturnValue([])
+      mockIndex.search.mockResolvedValue([])
       ;(mockMemoriesRepo as any).findByIds = jest.fn<any>().mockResolvedValue([])
       mockMemoriesRepo.create.mockImplementation(async (row: any) => ({ id: 'new-mem', ...row }))
       mockMemoriesRepo.updateForCharacter.mockImplementation(async (c: any, id: any, patch: any) => ({ id, characterId: c, ...patch }))
@@ -405,269 +342,27 @@ describe('Memory Service', () => {
       expect(mockMemoriesRepo.create).toHaveBeenCalledTimes(1)
       expect(mockMemoriesRepo.create.mock.calls[0][0]).toMatchObject({ embedding: [0.1, 0.2, 0.3] })
       expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
-      expect(mockVectorStore.addVector).toHaveBeenCalledWith('new-mem', [0.1, 0.2, 0.3], {
-        memoryId: 'new-mem',
-        characterId: 'char-1',
-        tier: 'hot',
-      })
+      expect(mockIndex.indexInserted).toHaveBeenCalledWith('char-1', [
+        { id: 'new-mem', embedding: [0.1, 0.2, 0.3], tier: 'hot' },
+      ])
+      expect(mockIndex.upsert).not.toHaveBeenCalled()
       expect(outcome.memory).toMatchObject({ id: 'new-mem', embedding: [0.1, 0.2, 0.3] })
     })
 
     it('the direct (skipGate) path persists exactly as the gate path does', async () => {
       await createMemoryWithGate(data, { userId: 'user-123' })
       const gateCreate = mockMemoriesRepo.create.mock.calls[0]
-      const gateVector = mockVectorStore.addVector.mock.calls[0]
+      const gateVector = mockIndex.indexInserted.mock.calls[0]
       jest.clearAllMocks()
+      mockIndex.indexInserted.mockResolvedValue(undefined)
       mockMemoriesRepo.create.mockImplementation(async (row: any) => ({ id: 'new-mem', ...row }))
       mockGenerateEmbedding.mockResolvedValue({ embedding: [0.1, 0.2, 0.3], model: 'test-model' })
 
       await createMemoryWithGate(data, { userId: 'user-123', skipGate: true })
 
       expect(mockMemoriesRepo.create.mock.calls[0]).toEqual(gateCreate)
-      expect(mockVectorStore.addVector.mock.calls[0]).toEqual(gateVector)
+      expect(mockIndex.indexInserted.mock.calls[0]).toEqual(gateVector)
       expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
-    })
-  })
-
-  // ============================================================================
-  // deleteMemoryWithVector Tests
-  // ============================================================================
-  describe('deleteMemoryWithVector', () => {
-    // Vector removal lives in the chokepoint (bug 200); this wrapper only
-    // confirms ownership and delegates.
-    it('should delete memory through the chokepoint', async () => {
-      mockMemoriesRepo.findById.mockResolvedValue({ id: 'memory-1', characterId: 'char-1' })
-      mockDeleteMemoryWithUnlink.mockResolvedValue(true)
-
-      const result = await deleteMemoryWithVector('char-1', 'memory-1')
-
-      expect(result).toBe(true)
-      expect(mockDeleteMemoryWithUnlink).toHaveBeenCalledWith('memory-1')
-    })
-
-    it('should return false when memory not found', async () => {
-      mockMemoriesRepo.findById.mockResolvedValue(null)
-
-      const result = await deleteMemoryWithVector('char-1', 'nonexistent')
-
-      expect(result).toBe(false)
-      expect(mockDeleteMemoryWithUnlink).not.toHaveBeenCalled()
-    })
-
-    it('should return false when memory belongs to a different character', async () => {
-      mockMemoriesRepo.findById.mockResolvedValue({ id: 'memory-1', characterId: 'char-2' })
-
-      const result = await deleteMemoryWithVector('char-1', 'memory-1')
-
-      expect(result).toBe(false)
-      expect(mockDeleteMemoryWithUnlink).not.toHaveBeenCalled()
-    })
-  })
-
-  // ============================================================================
-  // deleteMemoriesBySourceMessageWithVectors Tests
-  // ============================================================================
-  describe('deleteMemoriesBySourceMessageWithVectors', () => {
-    it('should delete all memories for a source message via the batch chokepoint', async () => {
-      // Memories from two different characters
-      const memoriesForMessage = [mockMemories[0], mockMemories[1]]
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue(memoriesForMessage)
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 2, vectorsRemoved: 2 })
-
-      const result = await deleteMemoriesBySourceMessageWithVectors('msg-1')
-
-      expect(result).toEqual({ deleted: 2, vectorsRemoved: 2 })
-      expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledWith(['memory-1', 'memory-2'])
-      // The chokepoint owns vector removal; the cascade never touches the store.
-      expect(mockVectorStore.removeVector).not.toHaveBeenCalled()
-    })
-
-    it('should return zeros when no memories exist', async () => {
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([])
-
-      const result = await deleteMemoriesBySourceMessageWithVectors('msg-nonexistent')
-
-      expect(result.deleted).toBe(0)
-      expect(result.vectorsRemoved).toBe(0)
-      expect(mockDeleteMemoriesWithUnlinkBatch).not.toHaveBeenCalled()
-    })
-
-    it('should log cascade delete info', async () => {
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 1, vectorsRemoved: 1 })
-
-      await deleteMemoriesBySourceMessageWithVectors('msg-1')
-
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        '[Memory] Cascade deleted memories for source message',
-        expect.objectContaining({
-          sourceMessageId: 'msg-1',
-          deleted: 1,
-          vectorsRemoved: 1,
-        })
-      )
-    })
-  })
-
-  // ============================================================================
-  // deleteMemoriesBySourceMessagesWithVectors Tests
-  // ============================================================================
-  describe('deleteMemoriesBySourceMessagesWithVectors', () => {
-    it('should handle empty array', async () => {
-      const result = await deleteMemoriesBySourceMessagesWithVectors([])
-
-      expect(result.deleted).toBe(0)
-      expect(result.vectorsRemoved).toBe(0)
-      expect(mockMemoriesRepo.findBySourceMessageId).not.toHaveBeenCalled()
-    })
-
-    it('should delete memories for multiple source messages', async () => {
-      mockMemoriesRepo.findBySourceMessageId
-        .mockResolvedValueOnce([mockMemories[0]])
-        .mockResolvedValueOnce([mockMemories[2]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 2, vectorsRemoved: 2 })
-
-      const result = await deleteMemoriesBySourceMessagesWithVectors(['msg-1', 'msg-2'])
-
-      expect(result).toEqual({ deleted: 2, vectorsRemoved: 2 })
-      expect(mockMemoriesRepo.findBySourceMessageId).toHaveBeenCalledTimes(2)
-      // The chokepoint is called once with the full union of doomed IDs so
-      // the neighbour-scan only fires once for the whole swipe group.
-      expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledTimes(1)
-      expect(mockDeleteMemoriesWithUnlinkBatch).toHaveBeenCalledWith(['memory-1', 'memory-3'])
-    })
-
-    it('should log bulk deletion info', async () => {
-      mockMemoriesRepo.findBySourceMessageId.mockResolvedValue([mockMemories[0]])
-      mockDeleteMemoriesWithUnlinkBatch.mockResolvedValue({ deleted: 1, vectorsRemoved: 1 })
-
-      await deleteMemoriesBySourceMessagesWithVectors(['msg-1', 'msg-2'])
-
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        '[Memory] Bulk cascade deleted memories for swipe group',
-        expect.objectContaining({
-          messageCount: 2,
-        })
-      )
-    })
-  })
-
-  // ============================================================================
-  // updateMemoryWithEmbedding Tests
-  // ============================================================================
-  describe('updateMemoryWithEmbedding', () => {
-    const options = { userId: 'user-123' }
-
-    it('should update memory and regenerate embedding when content changes', async () => {
-      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
-      mockMemoriesRepo.updateForCharacter.mockResolvedValue({
-        ...mockMemories[0],
-        content: 'Updated content',
-      })
-      mockGenerateEmbedding.mockResolvedValue({
-        embedding: [0.7, 0.8, 0.9],
-        model: 'test-model',
-      })
-      mockVectorStore.hasVector.mockReturnValue(true)
-
-      // Re-import to get function with mocked findByIdForCharacter
-      jest.isolateModules(() => {
-        const serviceModule = require('@/lib/memory/memory-service')
-        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      })
-
-      const result = await updateMemoryWithEmbedding(
-        'char-1',
-        'memory-1',
-        { content: 'Updated content' },
-        options
-      )
-
-      expect(mockGenerateEmbedding).toHaveBeenCalled()
-      expect(mockVectorStore.updateVector).toHaveBeenCalled()
-      expect(result).toBeDefined()
-    })
-
-    it('embeds before writing: a failed embed throws and leaves the row untouched', async () => {
-      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
-      mockGenerateEmbedding.mockRejectedValue(new Error('provider down'))
-
-      jest.isolateModules(() => {
-        const serviceModule = require('@/lib/memory/memory-service')
-        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      })
-
-      await expect(
-        updateMemoryWithEmbedding('char-1', 'memory-1', { content: 'Updated content' }, options)
-      ).rejects.toMatchObject({ name: 'MemoryReembedError', memoryId: 'memory-1' })
-      expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
-      expect(mockVectorStore.updateVector).not.toHaveBeenCalled()
-    })
-
-    it('writes the new text and its embedding in one update, embedded from the edited text', async () => {
-      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
-      mockMemoriesRepo.updateForCharacter.mockImplementation(async (_c: any, _id: any, patch: any) => ({
-        ...mockMemories[0],
-        ...patch,
-      }))
-      mockGenerateEmbedding.mockResolvedValue({ embedding: [0.7, 0.8, 0.9], model: 'test-model' })
-      mockVectorStore.hasVector.mockReturnValue(true)
-
-      jest.isolateModules(() => {
-        const serviceModule = require('@/lib/memory/memory-service')
-        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      })
-
-      const result = await updateMemoryWithEmbedding('char-1', 'memory-1', { content: 'Updated content' }, options)
-
-      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledTimes(1)
-      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledWith('char-1', 'memory-1', {
-        content: 'Updated content',
-        embedding: [0.7, 0.8, 0.9],
-      })
-      expect(String(mockGenerateEmbedding.mock.calls[0][0])).toContain('Updated content')
-      expect(mockVectorStore.updateVector).toHaveBeenCalledWith('memory-1', [0.7, 0.8, 0.9])
-      expect((result as any).embedding).toEqual([0.7, 0.8, 0.9])
-    })
-
-    it('should return null when memory not found', async () => {
-      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(null)
-
-      jest.isolateModules(() => {
-        const serviceModule = require('@/lib/memory/memory-service')
-        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      })
-
-      const result = await updateMemoryWithEmbedding(
-        'char-1',
-        'nonexistent',
-        { content: 'Updated content' },
-        options
-      )
-
-      expect(result).toBeNull()
-    })
-
-    it('should skip embedding regeneration when content unchanged', async () => {
-      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
-      mockMemoriesRepo.updateForCharacter.mockResolvedValue({
-        ...mockMemories[0],
-        importance: 0.9, // Only importance changed
-      })
-
-      jest.isolateModules(() => {
-        const serviceModule = require('@/lib/memory/memory-service')
-        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
-      })
-
-      await updateMemoryWithEmbedding(
-        'char-1',
-        'memory-1',
-        { importance: 0.9 },
-        options
-      )
-
-      expect(mockGenerateEmbedding).not.toHaveBeenCalled()
     })
   })
 })

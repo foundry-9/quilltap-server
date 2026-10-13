@@ -6,12 +6,12 @@
  *   aged out. It now ages by `supersededAt` (falling back to `updatedAt` only
  *   for a row with no stamp), which `updateTierBulk` sets and clears with
  *   `supersededById`.
- * - The delete chokepoint scrubbed `relatedMemoryIds` only, leaving surviving
+ * - The delete chokepoint (now `retireMemories`) scrubbed `relatedMemoryIds` only, leaving surviving
  *   digests' `consolidatedFrom` naming deleted members and surviving members
  *   of a deleted digest pointing `supersededById` at nothing.
  *
  * The SQL runs against a real in-memory SQLite table; the repository writes
- * the delete helpers issue are applied to the same table.
+ * `retireMemories` issues are applied to the same table.
  */
 
 import path from 'path'
@@ -33,9 +33,9 @@ jest.mock('@/lib/database/backends/sqlite/client', () => ({
   getRawDatabase: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-}))
+// The real cache: `memoryIndex` only touches a loaded store, and none is
+// loaded here.
+jest.unmock('@/lib/embedding/vector-store')
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
@@ -57,8 +57,7 @@ jest.mock('@/lib/logger', () => {
 import { rawQuery } from '@/lib/database/manager'
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { deleteMemoryWithUnlink, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { retireMemories } from '@/lib/memory/retire'
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository'
 
 // Real binding by absolute root path — a bare require resolves to the suite-wide mock.
@@ -84,12 +83,14 @@ function read(id: string) {
   return db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as Record<string, unknown> | undefined
 }
 
-/** Repository writes the delete helpers issue, applied to the real table. */
+/** Repository writes `retireMemories` issues, applied to the real table. */
 function installRepos() {
   const now = '2026-09-01T00:00:00.000Z'
   const real = new MemoriesRepository()
   const memories = {
     findById: jest.fn(async (id: string) => read(id) ?? null),
+    // The retirement's digest-liveness rule reads members by id.
+    findByIds: jest.fn(async (ids: string[]) => ids.map(read).filter((r): r is Record<string, unknown> => !!r)),
     // The digest scrub's reads and its removal delta are the production SQL.
     findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
@@ -109,8 +110,7 @@ function installRepos() {
       }
       return ids.length
     }),
-    delete: jest.fn(async (id: string) => db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes > 0),
-    bulkDelete: jest.fn(async (_c: string, ids: string[]) => {
+    bulkDeleteUnsafe: jest.fn(async (_c: string, ids: string[]) => {
       let n = 0
       for (const id of ids) n += db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes
       return n
@@ -129,10 +129,6 @@ beforeEach(() => {
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) =>
     db.prepare(sql).all(...params))
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)
-  ;(getCharacterVectorStore as jest.Mock).mockResolvedValue({
-    removeVector: jest.fn(async () => true),
-    save: jest.fn(async () => undefined),
-  })
 })
 
 afterEach(() => {
@@ -179,7 +175,7 @@ describe('bug 225 — findExpiredColdIds ages by supersededAt', () => {
   })
 })
 
-describe('bug 225 — the delete chokepoint scrubs digest links', () => {
+describe('bug 225 — retireMemories scrubs digest links', () => {
   it('batch delete drops deleted members from a surviving digest\'s consolidatedFrom', async () => {
     seed([
       { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'm-2', 'm-3']) },
@@ -189,9 +185,9 @@ describe('bug 225 — the delete chokepoint scrubs digest links', () => {
     ])
     installRepos()
 
-    const deleted = await deleteMemoriesWithUnlinkBatch(['m-1', 'm-3'])
+    const report = await retireMemories(['m-1', 'm-3'], { reason: 'item-delete' })
 
-    expect(deleted).toBe(2)
+    expect(report.retired).toBe(2)
     expect(JSON.parse(read('digest')!.consolidatedFrom as string)).toEqual(['m-2'])
     expect(JSON.parse(read('m-2')!.relatedMemoryIds as string)).toEqual([])
     // The surviving member still belongs to the surviving digest.
@@ -206,7 +202,7 @@ describe('bug 225 — the delete chokepoint scrubs digest links', () => {
     ])
     const memories = installRepos()
 
-    expect(await deleteMemoryWithUnlink('digest')).toBe(true)
+    expect((await retireMemories(['digest'], { reason: 'item-delete' })).retired).toBe(1)
 
     expect(read('digest')).toBeUndefined()
     for (const id of ['m-1', 'm-2']) {
@@ -226,7 +222,7 @@ describe('bug 225 — the delete chokepoint scrubs digest links', () => {
     ])
     installRepos()
 
-    expect(await deleteMemoryWithUnlink('m-1')).toBe(true)
+    expect((await retireMemories(['m-1'], { reason: 'item-delete' })).retired).toBe(1)
 
     expect(JSON.parse(read('digest')!.consolidatedFrom as string)).toEqual(['m-2'])
   })

@@ -8,10 +8,19 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
-  isHotVector: jest.fn(() => true),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
@@ -31,7 +40,7 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
 import type { Memory } from '@/lib/schemas/types'
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock<any> }
-const vectorMock = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock<any> }
+const indexMock = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: Record<string, jest.Mock<any>> }
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock<any> }
 
 const service = require('@/lib/memory/memory-service') as typeof import('@/lib/memory/memory-service')
@@ -74,14 +83,11 @@ function setup(existing: Memory, score: number, opts: { buffered?: boolean } = {
     create: jest.fn(),
   }
   factoryMock.getRepositories.mockReturnValue({ memories, chatSettings: { findByUserId: jest.fn(async () => null) } })
-  vectorMock.getCharacterVectorStore.mockResolvedValue({
-    search: jest.fn(() => [{ id: row.id, score }]),
-    hasVector: jest.fn(() => true),
-    updateVector: jest.fn(),
-    addVector: jest.fn(),
-    save: jest.fn(),
-    setTier: jest.fn(),
-  })
+  indexMock.memoryIndex.search.mockResolvedValue([
+    { id: row.id, score, metadata: { memoryId: row.id, characterId: row.characterId, tier: 'hot' } },
+  ])
+  indexMock.memoryIndex.upsert.mockResolvedValue([])
+  indexMock.memoryIndex.setTier.mockResolvedValue(1)
   embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: new Float32Array([1, 0]) })
 }
 

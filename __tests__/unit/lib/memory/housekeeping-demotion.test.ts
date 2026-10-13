@@ -5,9 +5,16 @@
  * sweep of superseded cold AUTO rows.
  */
 
-jest.mock('@/lib/memory/memory-gate', () => ({
+jest.mock('@/lib/memory/retire', () => ({
   __esModule: true,
-  deleteMemoriesWithUnlinkBatch: jest.fn(),
+  retireMemories: jest.fn(),
+}))
+// Demotion goes through the real `memoryIndex.setTier`: the row write, then
+// the loaded cache re-stamped.
+jest.mock('@/lib/embedding/vector-store', () => ({
+  __esModule: true,
+  getVectorStoreManager: jest.fn(),
+  isHotVector: jest.fn(() => true),
 }))
 jest.mock('@/lib/instance-settings', () => ({
   __esModule: true,
@@ -53,9 +60,9 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 
 describe('housekeeping demotion', () => {
   let memories: Memory[]
-  let repo: { findByCharacterIdInBatches: jest.Mock; updateTierBulk: jest.Mock; findExpiredColdIds: jest.Mock; bulkDelete: jest.Mock }
+  let repo: { findByCharacterIdInBatches: jest.Mock; updateTierBulk: jest.Mock; findExpiredColdIds: jest.Mock; bulkDeleteUnsafe: jest.Mock }
   let setTier: jest.Mock
-  let deleteBatch: jest.Mock
+  let retire: jest.Mock
   let retention: number | null
 
   beforeEach(() => {
@@ -67,23 +74,22 @@ describe('housekeeping demotion', () => {
       findByCharacterIdInBatches: jest.fn(),
       updateTierBulk: jest.fn(async (_c: string, ids: string[]) => ids.length),
       findExpiredColdIds: jest.fn(async () => []),
-      bulkDelete: jest.fn(),
+      bulkDeleteUnsafe: jest.fn(),
     }
     repo.findByCharacterIdInBatches.mockImplementation((async function* () {
       if (memories.length) yield memories
     }) as any)
 
     ;(jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }).getRepositories.mockReturnValue({ memories: repo })
-    ;(jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock }).getCharacterVectorStore.mockResolvedValue({
-      setTier,
-      removeVector: jest.fn(),
-      save: jest.fn(),
+    ;(jest.requireMock('@/lib/embedding/vector-store') as { getVectorStoreManager: jest.Mock }).getVectorStoreManager.mockReturnValue({
+      getLoadedStore: jest.fn(async () => ({ setTier, removeVector: jest.fn() })),
+      unloadStore: jest.fn(),
     })
     ;(jest.requireMock('@/lib/instance-settings') as { getMemoryConsolidationSettings: jest.Mock }).getMemoryConsolidationSettings.mockImplementation(
       async () => ({ coldRetentionDays: retention }),
     )
-    deleteBatch = (jest.requireMock('@/lib/memory/memory-gate') as { deleteMemoriesWithUnlinkBatch: jest.Mock }).deleteMemoriesWithUnlinkBatch
-    deleteBatch.mockImplementation((async (ids: string[]) => ids.length) as any)
+    retire = (jest.requireMock('@/lib/memory/retire') as { retireMemories: jest.Mock }).retireMemories
+    retire.mockImplementation((async (ids: string[]) => ({ retired: ids.length, retiredIds: ids })) as any)
 
     jest.isolateModules(() => {
       runHousekeeping = (require('@/lib/memory/housekeeping') as typeof import('@/lib/memory/housekeeping')).runHousekeeping
@@ -96,9 +102,9 @@ describe('housekeeping demotion', () => {
     expect(result.demoted).toBe(1)
     expect(result.demotedIds).toEqual(['stale'])
     expect(result.deleted).toBe(0)
-    expect(repo.updateTierBulk).toHaveBeenCalledWith('char-1', ['stale'], 'cold')
+    expect(repo.updateTierBulk).toHaveBeenCalledWith('char-1', ['stale'], 'cold', {})
     expect(setTier).toHaveBeenCalledWith(['stale'], 'cold')
-    expect(deleteBatch).not.toHaveBeenCalled()
+    expect(retire).not.toHaveBeenCalled()
   })
 
   it('pass 3 demotes the excess over the cap and deletes nothing', async () => {
@@ -110,7 +116,7 @@ describe('housekeeping demotion', () => {
     expect(result.totalBefore).toBe(10)
     expect(result.totalAfter).toBe(3)
     expect(result.deleted).toBe(0)
-    expect(deleteBatch).not.toHaveBeenCalled()
+    expect(retire).not.toHaveBeenCalled()
   })
 
   it('counts only hot rows against the cap', async () => {
@@ -193,7 +199,7 @@ describe('housekeeping demotion', () => {
     memories = [makeMemory({ importance: 0.8, reinforcedImportance: 0.8 })]
     await runHousekeeping('char-1')
     expect(repo.findExpiredColdIds).not.toHaveBeenCalled()
-    expect(deleteBatch).not.toHaveBeenCalled()
+    expect(retire).not.toHaveBeenCalled()
   })
 
   it('deletes only the expired superseded cold rows the repository returns when retention is set', async () => {
@@ -204,7 +210,7 @@ describe('housekeeping demotion', () => {
     expect(repo.findExpiredColdIds).toHaveBeenCalledTimes(1)
     const cutoff = Date.parse(repo.findExpiredColdIds.mock.calls[0][1] as string)
     expect(Math.abs(Date.now() - 90 * DAY - cutoff)).toBeLessThan(60_000)
-    expect(deleteBatch).toHaveBeenCalledWith(['old-cold'])
+    expect(retire).toHaveBeenCalledWith(['old-cold'], { reason: 'retention' })
     expect(result.deleted).toBe(1)
     expect(result.deletedIds).toEqual(['old-cold'])
   })

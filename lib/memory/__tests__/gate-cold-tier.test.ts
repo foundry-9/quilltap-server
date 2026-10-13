@@ -15,8 +15,23 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
   __esModule: true,
   trackActivity: (_kind: string, fn: () => unknown) => fn(),
 }))
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
+}))
 
 import { runMemoryGate } from '../memory-gate'
+import { memoryIndex } from '../index-store'
 import type { Memory } from '@/lib/schemas/types'
 
 function mem(overrides: Partial<Memory>): Memory {
@@ -45,15 +60,19 @@ function mem(overrides: Partial<Memory>): Memory {
 
 describe('runMemoryGate against cold rows', () => {
   let rows: Map<string, Memory>
-  let updateTierBulk: jest.Mock
   let setTier: jest.Mock
+  let search: jest.Mock
   let searchResults: Array<{ id: string; score: number }>
 
   beforeEach(() => {
+    jest.clearAllMocks()
     rows = new Map()
     searchResults = []
-    updateTierBulk = jest.fn(async () => 1)
-    setTier = jest.fn()
+    // Tier moves go through the index, which owns the row's tier and the cache.
+    setTier = jest.mocked(memoryIndex.setTier).mockResolvedValue(1) as unknown as jest.Mock
+    search = jest.mocked(memoryIndex.search).mockImplementation(async () =>
+      searchResults.map(r => ({ ...r, metadata: { memoryId: r.id, characterId: 'char-1' } })),
+    ) as unknown as jest.Mock
 
     const embedding = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock }
     embedding.generateEmbeddingForUser.mockResolvedValue({ embedding: new Float32Array([1, 0]) })
@@ -62,14 +81,7 @@ describe('runMemoryGate against cold rows', () => {
     factory.getRepositories.mockReturnValue({
       memories: {
         findByIds: jest.fn(async (ids: string[]) => ids.map(id => rows.get(id)).filter(Boolean)),
-        updateTierBulk,
       },
-    })
-
-    const store = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock }
-    store.getCharacterVectorStore.mockResolvedValue({
-      search: jest.fn(() => searchResults),
-      setTier,
     })
   })
 
@@ -82,7 +94,9 @@ describe('runMemoryGate against cold rows', () => {
     const { decision } = await run()
     expect(decision.action).toBe('SKIP_NEAR_DUPLICATE')
     expect((decision as { existingMemory: Memory }).existingMemory.id).toBe('digest')
-    expect(updateTierBulk).not.toHaveBeenCalled()
+    expect(setTier).not.toHaveBeenCalled()
+    // The gate searches both tiers.
+    expect(search).toHaveBeenCalledWith('char-1', expect.any(Float32Array), expect.objectContaining({ hotOnly: false }))
   })
 
   it('redirects a REINFORCE-band match to the digest as a count-only absorption (no footnote path)', async () => {
@@ -112,7 +126,7 @@ describe('runMemoryGate against cold rows', () => {
     const { decision } = await run()
     expect(decision.action).toBe('SKIP_NEAR_DUPLICATE')
     expect((decision as { existingMemory: Memory }).existingMemory.id).toBe('cold')
-    expect(updateTierBulk).not.toHaveBeenCalled()
+    expect(setTier).not.toHaveBeenCalled()
   })
 
   it('promotes a non-superseded cold row re-observed at the merge threshold', async () => {
@@ -123,8 +137,7 @@ describe('runMemoryGate against cold rows', () => {
     const target = (decision as { existingMemory: Memory }).existingMemory
     expect(target.id).toBe('cold')
     expect(target.tier).toBe('hot')
-    expect(updateTierBulk).toHaveBeenCalledWith('char-1', ['cold'], 'hot', { supersededById: null })
-    expect(setTier).toHaveBeenCalledWith(['cold'], 'hot')
+    expect(setTier).toHaveBeenCalledWith('char-1', ['cold'], 'hot', { supersededById: null })
   })
 
   it('does not promote a cold row seen only in the related band', async () => {
@@ -132,7 +145,7 @@ describe('runMemoryGate against cold rows', () => {
     searchResults = [{ id: 'cold', score: 0.75 }]
     const { decision } = await run()
     expect(decision.action).toBe('INSERT_RELATED')
-    expect(updateTierBulk).not.toHaveBeenCalled()
+    expect(setTier).not.toHaveBeenCalled()
   })
 
   it('leaves hot matches exactly as before', async () => {
@@ -140,6 +153,6 @@ describe('runMemoryGate against cold rows', () => {
     searchResults = [{ id: 'hot', score: 0.87 }]
     const { decision } = await run()
     expect(decision.action).toBe('REINFORCE')
-    expect(updateTierBulk).not.toHaveBeenCalled()
+    expect(setTier).not.toHaveBeenCalled()
   })
 })

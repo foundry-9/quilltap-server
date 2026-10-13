@@ -1,9 +1,11 @@
 /**
  * Bug 201 — bulk policy paths spare MANUAL rows, digests and cold rows.
  *
- * Covers the predicate, the chat wipe (`deleteMemoriesByChatIdWithVectors`,
- * behind `DELETE /memories?chatId=` and `MEMORY_REGENERATE_CHAT`) and the
- * near-duplicate folding tool (`deduplicateCharacterMemories`).
+ * Covers the predicate, the chat wipe (`retireChatMemories` — `retireMemories`
+ * under `keep: 'manual'`, behind `DELETE /memories?chatId=` and
+ * `MEMORY_REGENERATE_CHAT`) and the near-duplicate folding tool
+ * (`deduplicateCharacterMemories`), both running through the real
+ * `retireMemories` against mocked repositories.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals'
@@ -13,16 +15,28 @@ jest.mock('@/lib/repositories/factory', () => ({
   getUserRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
-  isHotVector: jest.fn(() => true),
+jest.mock('@/lib/database/manager', () => ({
+  __esModule: true,
+  rawQuery: jest.fn(),
+  registerBlobColumns: jest.fn(),
+  getDatabase: jest.fn(),
+  getDatabaseAsync: jest.fn(),
+  initializeDatabase: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-gate', () => ({
-  deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[]) => ids.length),
-  deleteMemoriesWithUnlinkBatchReport: jest.fn(async (ids: string[]) => ({ deleted: ids.length, vectorsRemoved: ids.length })),
-  deleteMemoryWithUnlink: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    remove: jest.fn(async (_c: string, ids: string[]) => ids.length),
+    setTier: jest.fn(async (_c: string, ids: string[]) => ids.length),
+  },
+}))
+
+jest.mock('@/lib/realtime/bus', () => ({
+  publishRealtime: jest.fn(),
+}))
+
+jest.mock('@/lib/memory/commonplace-mirror', () => ({
+  mirrorCommonplaceForSubjects: jest.fn(async () => 0),
 }))
 
 jest.mock('@/lib/memory/memory-merge', () => ({
@@ -45,17 +59,46 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 import { policyProtectionOf, partitionByPolicyProtection } from '@/lib/memory/policy-protection'
-import { deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service'
+import { retireChatMemories } from '@/lib/memory/retire'
 import { deduplicateCharacterMemories } from '@/lib/tools/memory-dedup'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { deleteMemoriesWithUnlinkBatch, deleteMemoriesWithUnlinkBatchReport } from '@/lib/memory/memory-gate'
+import { rawQuery } from '@/lib/database/manager'
 import type { Memory } from '@/lib/schemas/types'
 
 const mockedRepos = getRepositories as jest.MockedFunction<typeof getRepositories>
-const mockedStore = getCharacterVectorStore as jest.MockedFunction<typeof getCharacterVectorStore>
-const mockedDeleteBatch = deleteMemoriesWithUnlinkBatch as jest.MockedFunction<typeof deleteMemoriesWithUnlinkBatch>
-const mockedWipeBatch = deleteMemoriesWithUnlinkBatchReport as jest.MockedFunction<typeof deleteMemoriesWithUnlinkBatchReport>
+const mockedRawQuery = rawQuery as jest.MockedFunction<typeof rawQuery>
+
+/**
+ * Install the repository surface `retireMemories` uses, plus `extra`, over
+ * `table` (every row that exists). The resolve query answers from `table`.
+ * Returns the delete mock.
+ */
+function installRepos(table: Memory[], extra: Record<string, unknown>) {
+  mockedRawQuery.mockImplementation((async (_sql: string, params: unknown[] = []) =>
+    table
+      .filter(m => (params as string[]).includes(m.id))
+      .map(m => ({
+        id: m.id,
+        characterId: m.characterId,
+        source: m.source,
+        tier: m.tier,
+        aboutCharacterId: m.aboutCharacterId ?? null,
+        consolidatedFrom: JSON.stringify(m.consolidatedFrom ?? []),
+        supersededById: m.supersededById ?? null,
+      }))) as never)
+  const bulkDeleteUnsafe = jest.fn(async (_c: string, ids: string[]) => ids.length)
+  mockedRepos.mockReturnValue({
+    memories: {
+      removeRelatedMemoryIdsEverywhere: jest.fn(async () => 0),
+      findDigestsContainingMembers: jest.fn(async () => []),
+      findIdsSupersededByAny: jest.fn(async () => []),
+      removeConsolidatedMembers: jest.fn(async () => 0),
+      bulkDeleteUnsafe,
+      ...extra,
+    },
+  } as never)
+  return bulkDeleteUnsafe
+}
 
 function row(id: string, overrides: Partial<Memory> = {}): Memory {
   return {
@@ -102,7 +145,7 @@ describe('policyProtectionOf', () => {
   })
 })
 
-describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
+describe('retireChatMemories (bug 201)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -115,133 +158,118 @@ describe('deleteMemoriesByChatIdWithVectors (bug 201)', () => {
       member,
       row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['member'] }),
     ]
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByChatId: jest.fn(async () => memories),
-        findByIds: jest.fn(async (ids: string[]) => ids.includes('member') ? [member] : []),
-      },
-    } as never)
+    const bulkDeleteUnsafe = installRepos(memories, {
+      findByChatId: jest.fn(async () => memories),
+      findByIds: jest.fn(async (ids: string[]) => ids.includes('member') ? [member] : []),
+    })
 
-    const result = await deleteMemoriesByChatIdWithVectors('chat-1')
+    const result = await retireChatMemories('chat-1')
 
-    expect(mockedWipeBatch).toHaveBeenCalledWith(['auto'])
-    expect(result).toMatchObject({ deleted: 1, spared: 3 })
+    expect(bulkDeleteUnsafe).toHaveBeenCalledTimes(1)
+    expect(bulkDeleteUnsafe).toHaveBeenCalledWith('char-1', ['auto'])
+    expect(result).toMatchObject({ retired: 1, spared: 3, sparedBy: { manual: 1, digest: 1, cold: 1 } })
   })
 
   it('wipes a digest whose only listed member is being wiped or now belongs elsewhere', async () => {
     // 'hot-member' is hot AUTO in this chat (re-promoted): it dies in this wipe.
     // 'moved' still exists but was re-consolidated into another digest.
     const moved = row('moved', { tier: 'cold', supersededById: 'other-digest', chatId: 'chat-2' })
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByChatId: jest.fn(async () => [
-          row('hot-member'),
-          row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['hot-member', 'moved'] }),
-        ]),
-        findByIds: jest.fn(async (ids: string[]) => (ids.includes('moved') ? [moved] : [])),
-      },
-    } as never)
+    const inChat = [
+      row('hot-member'),
+      row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['hot-member', 'moved'] }),
+    ]
+    const bulkDeleteUnsafe = installRepos([...inChat, moved], {
+      findByChatId: jest.fn(async () => inChat),
+      findByIds: jest.fn(async (ids: string[]) => (ids.includes('moved') ? [moved] : [])),
+    })
 
-    const result = await deleteMemoriesByChatIdWithVectors('chat-1')
+    const result = await retireChatMemories('chat-1')
 
-    expect(mockedWipeBatch).toHaveBeenCalledWith(['hot-member', 'digest'])
-    expect(result).toMatchObject({ deleted: 2, spared: 0 })
+    expect(bulkDeleteUnsafe).toHaveBeenCalledWith('char-1', ['hot-member', 'digest'])
+    expect(result).toMatchObject({ retired: 2, spared: 0 })
   })
 
   it('looks up every spared digest\'s members in one query', async () => {
     const findByIds = jest.fn(async () => [])
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByChatId: jest.fn(async () => [
-          row('d1', { source: 'CONSOLIDATED', consolidatedFrom: ['a', 'b'] }),
-          row('d2', { source: 'CONSOLIDATED', consolidatedFrom: ['b', 'c'] }),
-        ]),
-        findByIds,
-      },
-    } as never)
+    const inChat = [
+      row('d1', { source: 'CONSOLIDATED', consolidatedFrom: ['a', 'b'] }),
+      row('d2', { source: 'CONSOLIDATED', consolidatedFrom: ['b', 'c'] }),
+    ]
+    installRepos(inChat, { findByChatId: jest.fn(async () => inChat), findByIds })
 
-    await deleteMemoriesByChatIdWithVectors('chat-1')
+    await retireChatMemories('chat-1')
 
     expect(findByIds).toHaveBeenCalledTimes(1)
     expect(findByIds).toHaveBeenCalledWith(['a', 'b', 'c'])
   })
 
   it('wipes a digest whose members are all gone', async () => {
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByChatId: jest.fn(async () => [row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['gone'] })]),
-        findByIds: jest.fn(async () => []),
-      },
-    } as never)
+    const inChat = [row('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['gone'] })]
+    const bulkDeleteUnsafe = installRepos(inChat, {
+      findByChatId: jest.fn(async () => inChat),
+      findByIds: jest.fn(async () => []),
+    })
 
-    const result = await deleteMemoriesByChatIdWithVectors('chat-1')
+    const result = await retireChatMemories('chat-1')
 
-    expect(mockedWipeBatch).toHaveBeenCalledWith(['digest'])
-    expect(result).toMatchObject({ deleted: 1, spared: 0 })
+    expect(bulkDeleteUnsafe).toHaveBeenCalledWith('char-1', ['digest'])
+    expect(result).toMatchObject({ retired: 1, spared: 0 })
   })
 
   it('deletes nothing when every row is protected', async () => {
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByChatId: jest.fn(async () => [row('manual', { source: 'MANUAL' })]),
-        findByIds: jest.fn(async () => []),
-      },
-    } as never)
+    const inChat = [row('manual', { source: 'MANUAL' })]
+    const bulkDeleteUnsafe = installRepos(inChat, {
+      findByChatId: jest.fn(async () => inChat),
+      findByIds: jest.fn(async () => []),
+    })
 
-    const result = await deleteMemoriesByChatIdWithVectors('chat-1')
+    const result = await retireChatMemories('chat-1')
 
-    expect(mockedWipeBatch).not.toHaveBeenCalled()
-    expect(result).toEqual({ deleted: 0, vectorsRemoved: 0, characterCount: 0, spared: 1 })
+    expect(bulkDeleteUnsafe).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ retired: 0, vectorsRemoved: 0, charactersAffected: 0, spared: 1 })
   })
 })
 
 describe('deduplicateCharacterMemories (bug 201)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockedStore.mockResolvedValue({ removeVector: jest.fn(), save: jest.fn() } as never)
   })
 
   it('never folds a MANUAL row, a digest or a cold row, however similar', async () => {
     // Identical embeddings: every row is a duplicate of every other.
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByCharacterId: jest.fn(async () => [
-          row('auto-1', { importance: 0.9 }),
-          row('auto-2'),
-          row('manual', { source: 'MANUAL', importance: 1 }),
-          row('digest', { source: 'CONSOLIDATED', importance: 1 }),
-          row('cold', { tier: 'cold', supersededById: 'digest' }),
-        ]),
-      },
-    } as never)
+    const all = [
+      row('auto-1', { importance: 0.9 }),
+      row('auto-2'),
+      row('manual', { source: 'MANUAL', importance: 1 }),
+      row('digest', { source: 'CONSOLIDATED', importance: 1 }),
+      row('cold', { tier: 'cold', supersededById: 'digest' }),
+    ]
+    const bulkDeleteUnsafe = installRepos(all, { findByCharacterId: jest.fn(async () => all) })
 
     const result = await deduplicateCharacterMemories('char-1', 'Friday', 0.8, false)
 
     expect(result.originalCount).toBe(5)
     expect(result.clustersFound).toBe(1)
     expect(result.memoriesInClusters).toBe(2)
-    expect(mockedDeleteBatch).toHaveBeenCalledTimes(1)
-    const [deletedIds] = mockedDeleteBatch.mock.calls[0]
+    expect(bulkDeleteUnsafe).toHaveBeenCalledTimes(1)
+    const [, deletedIds] = bulkDeleteUnsafe.mock.calls[0]
     expect(deletedIds).toHaveLength(1)
     expect(['auto-1', 'auto-2']).toContain(deletedIds[0])
     expect(result.finalCount).toBe(4)
   })
 
   it('finds nothing to fold when fewer than two rows are eligible', async () => {
-    mockedRepos.mockReturnValue({
-      memories: {
-        findByCharacterId: jest.fn(async () => [
-          row('auto-1'),
-          row('manual', { source: 'MANUAL' }),
-          row('digest', { source: 'CONSOLIDATED' }),
-        ]),
-      },
-    } as never)
+    const all = [
+      row('auto-1'),
+      row('manual', { source: 'MANUAL' }),
+      row('digest', { source: 'CONSOLIDATED' }),
+    ]
+    const bulkDeleteUnsafe = installRepos(all, { findByCharacterId: jest.fn(async () => all) })
 
     const result = await deduplicateCharacterMemories('char-1', 'Friday', 0.8, false)
 
     expect(result.clustersFound).toBe(0)
     expect(result.finalCount).toBe(3)
-    expect(mockedDeleteBatch).not.toHaveBeenCalled()
+    expect(bulkDeleteUnsafe).not.toHaveBeenCalled()
   })
 })

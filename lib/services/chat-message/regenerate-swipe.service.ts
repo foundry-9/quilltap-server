@@ -27,7 +27,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
-import { deleteMemoriesBySourceMessageWithVectors } from '@/lib/memory/memory-service'
+import { retireMemories } from '@/lib/memory/retire'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
@@ -342,9 +342,9 @@ export async function regenerateMessageAsSwipe({
     chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES'
   if (cascadeAction !== 'KEEP_MEMORIES') {
     try {
-      const memoryCount = await repos.memories.countBySourceMessageId(targetMessage.id)
-      if (memoryCount > 0) {
-        await deleteMemoriesBySourceMessageWithVectors(targetMessage.id)
+      const memories = await repos.memories.findBySourceMessageId(targetMessage.id)
+      if (memories.length > 0) {
+        await retireMemories(memories.map((m) => m.id), { reason: 'swipe-regenerate' })
       }
     } catch (error) {
       logger.warn('[RegenerateSwipe] Memory cascade failed; swipe kept', {

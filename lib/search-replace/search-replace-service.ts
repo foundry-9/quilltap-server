@@ -6,7 +6,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { editMemory, type MemoryEditPatch } from '@/lib/memory/memory-edit';
+import { updateMemory, type MemoryEditPatch } from '@/lib/memory/admission';
 import { logger } from '@/lib/logger';
 import type { ChatMetadata, Memory } from '@/lib/schemas/types';
 import type {
@@ -20,7 +20,7 @@ import type {
  * The fields of one memory a search and replace would rewrite: content,
  * summary and keywords. Null when the search text appears in none of them.
  * Pure, so the replacement is computed from the row as read and the write can
- * go through `editMemory` with the old row as its baseline (bug 233).
+ * go through `updateMemory` with the old row as its baseline (bug 233).
  */
 export function planMemoryReplacement(
   memory: Pick<Memory, 'content' | 'summary' | 'keywords'>,
@@ -202,7 +202,7 @@ export async function executeSearchReplace(
         memoryQuery.chatId,
         request.searchText
       );
-      // Each row goes through editMemory, which embeds the new text before it
+      // Each row goes through updateMemory, which embeds the new text before it
       // writes and writes text and vector together, then invalidates the
       // archive, publishes `memories` and re-mirrors a digest. Rewriting the
       // rows first and re-embedding afterwards compared the new text with
@@ -215,7 +215,7 @@ export async function executeSearchReplace(
         if (!patch) continue;
 
         try {
-          const outcome = await editMemory(memory.characterId, memory.id, patch, { userId });
+          const outcome = await updateMemory(memory.characterId, memory.id, patch, { userId });
           if (outcome.ok) {
             memoriesUpdated++;
             logger.debug('Replaced text in memory and re-embedded it', {

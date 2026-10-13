@@ -31,7 +31,6 @@ import type {
   BackupData,
   ChatWithMessages,
   InstanceSettingRow,
-  SerializedVectorEntry,
   SerializedConversationChunk,
   SerializedDocMountChunk,
 } from './types';
@@ -260,24 +259,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     updatedAt: chunk.updatedAt,
   }));
 
-  // Per-character vector indices + their entries. Without these the restored
-  // instance would have to re-embed every memory; with them, search keeps
-  // working immediately. Entries' Float32 embeddings ride as number[].
-  const characterIdsWithVectors = await globalRepos.vectorIndices.getAllCharacterIds();
-  const vectorIndexMetas = (
-    await Promise.all(
-      characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findMetaByCharacterId(cid))
-    )
-  ).filter((meta): meta is NonNullable<typeof meta> => meta !== null);
-  const vectorEntriesArrays = await Promise.all(
-    characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findEntriesByCharacterId(cid))
-  );
-  const vectorEntries: SerializedVectorEntry[] = vectorEntriesArrays.flat().map((entry) => ({
-    id: entry.id,
-    characterId: entry.characterId,
-    embedding: Array.from(entry.embedding as Float32Array),
-    createdAt: entry.createdAt,
-  }));
+  // No vector index to dump: a memory's vector rides on its own row
+  // (`memories.embedding`, written above as number[]), and the in-process
+  // index is rebuilt from the rows on first use.
 
   // TF-IDF vocabularies for BUILTIN embedding profiles. Cheap to dump and
   // means BUILTIN search keeps working after restore without a refit.
@@ -392,8 +376,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     embeddingStatus,
     conversationChunks,
     tfidfVocabularies,
-    vectorIndexMetas,
-    vectorEntries,
     docMountPoints,
     docMountFolders,
     docMountFiles,
@@ -496,8 +478,6 @@ function createManifest(
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,
       tfidfVocabularies: data.tfidfVocabularies?.length || 0,
-      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
-      vectorEntries: data.vectorEntries?.length || 0,
       docMountPoints: data.docMountPoints?.length || 0,
       docMountFolders: data.docMountFolders?.length || 0,
       docMountFiles: data.docMountFiles?.length || 0,
@@ -588,8 +568,6 @@ function compactBackupData(
     memories: data.memories.map((memory) => ({ ...memory, embedding: null })),
     // Wholly derived collections — regenerable from the content above.
     conversationChunks: [],
-    vectorEntries: [],
-    vectorIndexMetas: [],
     tfidfVocabularies: [],
     embeddingStatus: [],
     docMountChunks: [],
@@ -643,7 +621,6 @@ export async function createBackup(
       userId,
       memories: data.memories.length,
       droppedConversationChunks: collected.conversationChunks?.length ?? 0,
-      droppedVectorEntries: collected.vectorEntries?.length ?? 0,
       droppedDocMountChunks: collected.docMountChunks?.length ?? 0,
     });
   }
@@ -702,8 +679,6 @@ export async function createBackup(
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-status.json'), data.embeddingStatus || []);
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-chunks.json'), data.conversationChunks || []);
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'tfidf-vocabularies.json'), data.tfidfVocabularies || []);
-      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-index-metas.json'), data.vectorIndexMetas || []);
-      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-entries.json'), data.vectorEntries || []);
     }
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-points.json'), data.docMountPoints || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-folders.json'), data.docMountFolders || []);

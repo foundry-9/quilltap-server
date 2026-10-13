@@ -7,16 +7,19 @@
 
 import { describe, expect, it, jest, beforeEach } from '@jest/globals'
 
-// Note: @/lib/repositories/factory and @/lib/embedding/vector-store are already
-// mocked in jest.setup.ts (setupFilesAfterEnv runs AFTER test-level jest.mock).
+// Note: @/lib/repositories/factory is already mocked in jest.setup.ts (setupFilesAfterEnv runs AFTER test-level jest.mock).
 // We reach into those mocks via jest.requireMock below.
 
-// memory-gate's deleteMemoriesWithUnlinkBatch is the chokepoint that
-// runHousekeeping calls. Stub it to mirror the legacy bulkDelete contract
-// (returns the count of IDs deleted) so we don't need a real DB.
-jest.mock('@/lib/memory/memory-gate', () => ({
+// `retireMemories` is the deletion chokepoint runHousekeeping calls for
+// retention, and `memoryIndex.setTier` its demotion. Stub both so we don't
+// need a real DB (each has its own tests).
+jest.mock('@/lib/memory/retire', () => ({
   __esModule: true,
-  deleteMemoriesWithUnlinkBatch: jest.fn(),
+  retireMemories: jest.fn(),
+}))
+jest.mock('@/lib/memory/index-store', () => ({
+  __esModule: true,
+  memoryIndex: { setTier: jest.fn() },
 }))
 jest.mock('@/lib/instance-settings', () => ({
   __esModule: true,
@@ -62,7 +65,6 @@ describe('housekeeping', () => {
   let mockMemoriesRepo: {
     findByCharacterId: jest.Mock
     findByCharacterIdInBatches: jest.Mock
-    bulkDelete: jest.Mock
     updateTierBulk: jest.Mock
     findExpiredColdIds: jest.Mock
   }
@@ -75,14 +77,10 @@ describe('housekeeping', () => {
     const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
       getRepositories: jest.Mock
     }
-    const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as {
-      getCharacterVectorStore: jest.Mock
-    }
 
     mockMemoriesRepo = {
       findByCharacterId: jest.fn(),
       findByCharacterIdInBatches: jest.fn(),
-      bulkDelete: jest.fn(),
       updateTierBulk: jest.fn(),
       findExpiredColdIds: jest.fn().mockResolvedValue([]),
     }
@@ -99,25 +97,17 @@ describe('housekeeping', () => {
       memories: mockMemoriesRepo,
     })
 
-    vectorStoreMock.getCharacterVectorStore.mockResolvedValue({
-      getAllEntries: jest.fn().mockReturnValue([]),
-      search: jest.fn().mockReturnValue([]),
-      addVector: jest.fn(),
-      updateVector: jest.fn(),
-      removeVector: jest.fn(),
-      setTier: jest.fn(),
-      hasVector: jest.fn().mockReturnValue(false),
-      save: jest.fn(),
-    })
-
-    mockMemoriesRepo.bulkDelete.mockImplementation(((_characterId: string, ids: string[]) =>
-      Promise.resolve(ids.length)) as any)
-
-    const gateMock = jest.requireMock('@/lib/memory/memory-gate') as {
-      deleteMemoriesWithUnlinkBatch: jest.Mock
+    const indexMock = jest.requireMock('@/lib/memory/index-store') as {
+      memoryIndex: { setTier: jest.Mock }
     }
-    gateMock.deleteMemoriesWithUnlinkBatch.mockImplementation(((ids: string[]) =>
+    indexMock.memoryIndex.setTier.mockImplementation(((_characterId: string, ids: string[]) =>
       Promise.resolve(ids.length)) as any)
+
+    const retireMock = jest.requireMock('@/lib/memory/retire') as {
+      retireMemories: jest.Mock
+    }
+    retireMock.retireMemories.mockImplementation(((ids: string[]) =>
+      Promise.resolve({ retired: ids.length, retiredIds: ids })) as any)
 
     jest.isolateModules(() => {
       const mod = require('@/lib/memory/housekeeping') as typeof import('@/lib/memory/housekeeping')

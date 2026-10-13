@@ -19,7 +19,20 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EmbeddingError: class EmbeddingError extends Error {},
   generateEmbeddingForUser: jest.fn(),
 }))
-jest.mock('@/lib/embedding/vector-store', () => ({ getCharacterVectorStore: jest.fn() }))
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
+}))
 jest.mock('@/lib/background-jobs/activity-registry', () => ({
   __esModule: true,
   trackActivity: (_kind: string, fn: () => unknown) => fn(),
@@ -42,7 +55,7 @@ import { runConsolidation } from '../consolidation'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex } from '../index-store'
 import { mirrorCommonplaceForSubjects } from '../commonplace-mirror'
 import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection'
 import { consolidateMemoryCluster, validateConsolidationOutput } from '../cheap-llm-tasks/consolidation-tasks'
@@ -98,18 +111,12 @@ const corpus: Memory[] = [
 ]
 
 let repos: any
-let store: any
 
 beforeEach(() => {
   jest.clearAllMocks()
-  store = {
-    hasVector: jest.fn(() => false),
-    addVector: jest.fn(),
-    updateVector: jest.fn(),
-    setTier: jest.fn(),
-    save: jest.fn(),
-  }
-  ;(getCharacterVectorStore as jest.Mock).mockResolvedValue(store)
+  ;(memoryIndex.indexInserted as jest.Mock).mockResolvedValue(undefined)
+  ;(memoryIndex.upsert as jest.Mock).mockResolvedValue([])
+  ;(memoryIndex.setTier as jest.Mock).mockResolvedValue(0)
   repos = {
     memories: {
       findByCharacterIdInBatches: jest.fn(async function* () {
@@ -205,7 +212,7 @@ describe('runConsolidation', () => {
 
     expect(repos.memories.create).not.toHaveBeenCalled()
     expect(repos.memories.updateForCharacter).not.toHaveBeenCalled()
-    expect(repos.memories.updateTierBulk).not.toHaveBeenCalled()
+    expect(memoryIndex.setTier).not.toHaveBeenCalled()
     expect(repos.memories.markConsidered).not.toHaveBeenCalled()
     expect(generateEmbeddingForUser).not.toHaveBeenCalled()
     expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
@@ -220,22 +227,27 @@ describe('runConsolidation', () => {
     expect(data.aboutCharacterId).toBe(LAURA)
     expect(data.consolidatedFrom).toHaveLength(2)
     expect(opts.id).toBe(report.clusters[0].digests[0].id)
-    expect(repos.memories.updateForCharacter).toHaveBeenCalledWith(HOLDER, opts.id, { embedding: expect.any(Float32Array) })
-    expect(store.addVector).toHaveBeenCalledWith(opts.id, expect.any(Float32Array), expect.objectContaining({ memoryId: opts.id }))
+    // The vector rides in the create itself; the index only caches it — no second write.
+    expect(data.embedding).toEqual(new Float32Array([0, 0, 1]))
+    expect(repos.memories.updateForCharacter).not.toHaveBeenCalledWith(HOLDER, opts.id, expect.objectContaining({ embedding: expect.anything() }))
+    expect(memoryIndex.upsert).not.toHaveBeenCalled()
+    expect(memoryIndex.indexInserted).toHaveBeenCalledWith(HOLDER, [
+      { id: opts.id, embedding: data.embedding, tier: 'hot' },
+    ])
 
-    expect(repos.memories.updateTierBulk).toHaveBeenCalledWith(
+    // Members go cold through the index, which owns the tier column and the cache.
+    expect(memoryIndex.setTier).toHaveBeenCalledWith(
       HOLDER,
       data.consolidatedFrom,
       'cold',
       { supersededById: opts.id, consolidatedAt: NOW.toISOString() },
     )
-    expect(store.setTier).toHaveBeenCalledWith(data.consolidatedFrom, 'cold')
+    expect(repos.memories.updateTierBulk).not.toHaveBeenCalled()
 
     // The Laura standalone, plus the lone self row (a cluster of one).
     const considered = repos.memories.markConsidered.mock.calls[0][1].sort()
     expect(considered).toHaveLength(2)
     expect(considered).toContain('self-1')
-    expect(store.save).toHaveBeenCalled()
 
     // In-process: the writes have landed, so the mirror is written from them.
     expect(mirrorCommonplaceForSubjects).toHaveBeenCalledWith(HOLDER, [LAURA], NOW.toISOString())
@@ -270,7 +282,7 @@ describe('runConsolidation', () => {
     // Folded into the digest and superseded by it — so retention can retire it later.
     const [data, opts] = repos.memories.create.mock.calls[0]
     expect(data.consolidatedFrom).toContain('demoted')
-    expect(repos.memories.updateTierBulk).toHaveBeenCalledWith(
+    expect(memoryIndex.setTier).toHaveBeenCalledWith(
       HOLDER,
       data.consolidatedFrom,
       'cold',
@@ -286,7 +298,7 @@ describe('runConsolidation', () => {
     const report = await runConsolidation(HOLDER, { now: NOW })
     expect(report.clusters[0].status).toBe('invalid')
     expect(repos.memories.create).not.toHaveBeenCalled()
-    expect(repos.memories.updateTierBulk).not.toHaveBeenCalled()
+    expect(memoryIndex.setTier).not.toHaveBeenCalled()
     // The lone self row is still stamped; the failed cluster's rows are not.
     expect(repos.memories.markConsidered.mock.calls[0][1]).toEqual(['self-1'])
   })
@@ -296,7 +308,7 @@ describe('runConsolidation', () => {
     const report = await runConsolidation(HOLDER, { now: NOW })
     expect(report.clusters[0].status).toBe('embedding-failed')
     expect(repos.memories.create).not.toHaveBeenCalled()
-    expect(repos.memories.updateTierBulk).not.toHaveBeenCalled()
+    expect(memoryIndex.setTier).not.toHaveBeenCalled()
   })
 
   it('leaves archived characters alone', async () => {

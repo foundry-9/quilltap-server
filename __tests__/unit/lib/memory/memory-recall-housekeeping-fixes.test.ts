@@ -5,7 +5,7 @@
  * F1 — a near-duplicate re-observation counts as reinforcement
  * F3 — reinforcement footnotes are capped
  * F7 — the dynamic head and archive are sized from the memory budget
- * F8 — the batch delete never reports NaN; the outcome cache never stores it
+ * F8 — retirement never reports NaN; the outcome cache never stores it
  * F9 — housekeeping/dedup merges fold the loser into the survivor
  */
 
@@ -28,8 +28,19 @@ jest.mock('@/lib/database/backends/sqlite/client', () => ({
   getRawDatabase: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -52,10 +63,13 @@ import type { Memory } from '@/lib/schemas/types'
 
 const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock<any> }
 const dbMock = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock<any> }
-const vectorMock = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock<any> }
+const indexMock = jest.requireMock('@/lib/memory/index-store') as {
+  memoryIndex: Record<'upsert' | 'remove' | 'setTier', jest.Mock<any>>
+}
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock<any> }
 
 const gate = require('@/lib/memory/memory-gate') as typeof import('@/lib/memory/memory-gate')
+const retire = require('@/lib/memory/retire') as typeof import('@/lib/memory/retire')
 const merge = require('@/lib/memory/memory-merge') as typeof import('@/lib/memory/memory-merge')
 const outcomeCache = require('@/lib/memory/housekeeping-outcome-cache') as typeof import('@/lib/memory/housekeeping-outcome-cache')
 const injector = require('@/lib/chat/context/memory-injector') as typeof import('@/lib/chat/context/memory-injector')
@@ -85,19 +99,9 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
   } as Memory
 }
 
-function makeVectorStore() {
-  return {
-    hasVector: jest.fn(() => true),
-    updateVector: jest.fn(async () => undefined),
-    addVector: jest.fn(async () => undefined),
-    save: jest.fn(async () => undefined),
-  }
-}
-
 let updateForCharacter: jest.Mock<any>
 let incrementReinforcement: jest.Mock<any>
 let appendReinforcementFootnotes: jest.Mock<any>
-let vectorStore: ReturnType<typeof makeVectorStore>
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -117,8 +121,9 @@ beforeEach(() => {
   factoryMock.getRepositories.mockReturnValue({
     memories: { updateForCharacter, incrementReinforcement, appendReinforcementFootnotes },
   })
-  vectorStore = makeVectorStore()
-  vectorMock.getCharacterVectorStore.mockResolvedValue(vectorStore)
+  indexMock.memoryIndex.upsert.mockResolvedValue([])
+  indexMock.memoryIndex.remove.mockImplementation(async (_c: string, ids: string[]) => ids.length)
+  indexMock.memoryIndex.setTier.mockResolvedValue(0)
   embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: EMBEDDING, model: 'test', dimensions: 2 })
 })
 
@@ -284,7 +289,7 @@ describe('F7 — sizeMemoryPools', () => {
 // F8
 // =============================================================================
 
-/** The delete chokepoint's digest-scrub reads, finding nothing to scrub. */
+/** Retirement's digest-scrub reads, finding nothing to scrub. */
 function noDigestScrub() {
   return {
     findDigestsContainingMembers: jest.fn(async () => []),
@@ -292,37 +297,40 @@ function noDigestScrub() {
   }
 }
 
-describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
+describe('F8 — retireMemories count', () => {
   function setupBatch(bulkDeleteResult: unknown) {
     dbMock.rawQuery.mockImplementation(async () => [
       { id: 'a', characterId: 'char-1' },
       { id: 'b', characterId: 'char-1' },
       { id: 'c', characterId: 'char-2' },
     ])
-    const bulkDelete = jest.fn(async () => bulkDeleteResult)
+    const bulkDeleteUnsafe = jest.fn(async () => bulkDeleteResult)
     factoryMock.getRepositories.mockReturnValue({
-      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsEverywhere: jest.fn(), ...noDigestScrub() },
+      memories: { updateForCharacter, bulkDeleteUnsafe, removeRelatedMemoryIdsEverywhere: jest.fn(), ...noDigestScrub() },
     })
-    return bulkDelete
+    return bulkDeleteUnsafe
   }
 
   it('counts the resolved ids when the buffered delete returns nothing (job child)', async () => {
-    const bulkDelete = setupBatch(undefined)
-    const deleted = await gate.deleteMemoriesWithUnlinkBatch(['a', 'b', 'c', 'gone'])
-    expect(bulkDelete).toHaveBeenCalledTimes(2)
-    expect(deleted).toBe(3)
-    expect(Number.isFinite(deleted)).toBe(true)
+    const bulkDeleteUnsafe = setupBatch(undefined)
+    const { retired } = await retire.retireMemories(['a', 'b', 'c', 'gone'], { reason: 'message-cascade' })
+    expect(bulkDeleteUnsafe).toHaveBeenCalledTimes(2)
+    expect(retired).toBe(3)
+    expect(Number.isFinite(retired)).toBe(true)
+    // The retired rows' vectors leave the index with them.
+    expect(indexMock.memoryIndex.remove).toHaveBeenCalledWith('char-1', ['a', 'b'])
+    expect(indexMock.memoryIndex.remove).toHaveBeenCalledWith('char-2', ['c'])
   })
 
   it('scrubs neighbours (a merge survivor included) with a removal delta, never a stale list', async () => {
     dbMock.rawQuery.mockImplementation(async () => [{ id: 'a', characterId: 'char-1' }])
-    const bulkDelete = jest.fn(async () => 1)
+    const bulkDeleteUnsafe = jest.fn(async () => 1)
     const removeRelatedMemoryIdsEverywhere = jest.fn(async () => 2)
     factoryMock.getRepositories.mockReturnValue({
-      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsEverywhere, ...noDigestScrub() },
+      memories: { updateForCharacter, bulkDeleteUnsafe, removeRelatedMemoryIdsEverywhere, ...noDigestScrub() },
     })
 
-    await gate.deleteMemoriesWithUnlinkBatch(['a'])
+    await retire.retireMemories(['a'], { reason: 'near-duplicate-fold' })
 
     // Applied after the survivor's own link write, the delta removes only the
     // deleted id from whatever list the row then holds (bug 234).
@@ -332,8 +340,8 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
 
   it('trusts the repository count in the parent', async () => {
     setupBatch(1)
-    const deleted = await gate.deleteMemoriesWithUnlinkBatch(['a', 'b', 'c'])
-    expect(deleted).toBe(2)
+    const { retired } = await retire.retireMemories(['a', 'b', 'c'], { reason: 'message-cascade' })
+    expect(retired).toBe(2)
   })
 })
 
@@ -407,7 +415,10 @@ describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
     expect(incrementReinforcement.mock.calls[0]).toEqual(['char-1', 'keep', loser.createdAt, 1])
     expect(updated?.reinforcementCount).toBe(8)
     expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)
-    expect(vectorStore.updateVector).toHaveBeenCalledWith('keep', EMBEDDING)
+    // Row and cache in one index upsert, the survivor's tier kept.
+    expect(indexMock.memoryIndex.upsert).toHaveBeenCalledWith('char-1', [
+      { id: 'keep', embedding: EMBEDDING, tier: 'hot' },
+    ])
   })
 
   it('does not re-embed when only counts change', async () => {

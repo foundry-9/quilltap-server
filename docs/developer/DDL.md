@@ -140,7 +140,7 @@ The **Brahma Console** can also query these databases from inside a running inst
 
 ### Embedding BLOB format (all `embedding` columns)
 
-Every `embedding BLOB` column in every database (`memories`, `vector_entries`,
+Every `embedding BLOB` column in every database (`memories`,
 `conversation_chunks`, `help_docs`, `help_doc_chunks` in the main DB;
 `doc_mount_chunks` in the
 mount index) holds a **self-describing quantized vector** since
@@ -1379,7 +1379,7 @@ CREATE INDEX "idx_memories_supersededById" ON "memories" ("supersededById") WHER
 
 `createMemoryWithGate` (the chokepoint for AUTO writes) applies a name-presence safety net before insert: when `aboutCharacterId` differs from the holder, the about-character's `name + aliases` (plus `user` / `the user` for `controlledBy: 'user'` characters) must appear in `summary + content`; otherwise `aboutCharacterId` is collapsed to the holder. Manual memories bypass the safety net.
 
-Tiers (4.10+): `tier` is `'hot'` (default; eligible for recall) or `'cold'`. A `source = 'CONSOLIDATED'` row is a digest; its `consolidatedFrom` lists the member ids, and each member is `tier = 'cold'` with `supersededById` pointing back at the digest. A cold row with no `supersededById` was demoted by cap pressure. `supersededAt` records when a member went cold under its digest (stamped and cleared by `updateTierBulk` alongside `supersededById`); `coldRetentionDays` ages superseded rows by it rather than by `updatedAt`, which every link rewrite resets. Deleting a memory through the chokepoint (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch`) scrubs it from surviving digests' `consolidatedFrom` and cuts `supersededById` (and `supersededAt`) on the surviving members of a deleted digest, which become cap-demoted cold rows. Export bundles and backups carry all five columns; rows from before tiers read as hot / null / `[]`, and restore/import remap `supersededById` and `consolidatedFrom` with the memory ids (as `relatedMemoryIds`).
+Tiers (4.10+): `tier` is `'hot'` (default; eligible for recall) or `'cold'`. A `source = 'CONSOLIDATED'` row is a digest; its `consolidatedFrom` lists the member ids, and each member is `tier = 'cold'` with `supersededById` pointing back at the digest. A cold row with no `supersededById` was demoted by cap pressure. `supersededAt` records when a member went cold under its digest (stamped and cleared by `updateTierBulk` alongside `supersededById`); `coldRetentionDays` ages superseded rows by it rather than by `updatedAt`, which every link rewrite resets. Deleting a memory through the chokepoint (`retireMemories`, `lib/memory/retire.ts`) scrubs it from every row's `relatedMemoryIds` and surviving digests' `consolidatedFrom`, and cuts `supersededById` (and `supersededAt`) on the surviving members of a deleted digest, which become cap-demoted cold rows; a digest whose `consolidatedFrom` the deletion empties is retired with its last member (except by retention). `embedding` and `tier` are the memory index (4.10, Phase B): written only through `memoryIndex` (`lib/memory/index-store/`), and the in-process search cache loads `id, embedding, tier` from here. Export bundles and backups carry all five columns; rows from before tiers read as hot / null / `[]`, and restore/import remap `supersededById` and `consolidatedFrom` with the memory ids (as `relatedMemoryIds`).
 
 ### prompt_templates
 
@@ -1634,35 +1634,15 @@ CREATE INDEX "idx_tfidf_vocabularies_profileId" ON "tfidf_vocabularies" ("profil
 CREATE INDEX "idx_tfidf_vocabularies_userId" ON "tfidf_vocabularies" ("userId");
 ```
 
-### vector_indices
+### vector_indices / vector_entries (retired)
 
-```sql
-CREATE TABLE "vector_indices" (
-  "id" TEXT PRIMARY KEY,
-  "characterId" TEXT NOT NULL,
-  "version" INTEGER NOT NULL,
-  "dimensions" INTEGER NOT NULL,
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
-);
-
-CREATE INDEX "idx_vector_indices_characterId" ON "vector_indices" ("characterId");
-CREATE INDEX "idx_vector_indices_createdAt" ON "vector_indices" ("createdAt" DESC);
-```
-
-### vector_entries
-
-```sql
-CREATE TABLE "vector_entries" (
-  "id" TEXT PRIMARY KEY,
-  "characterId" TEXT NOT NULL,
-  "embedding" BLOB NOT NULL,
-  "createdAt" TEXT NOT NULL
-);
-
-CREATE INDEX "idx_vector_entries_characterId" ON "vector_entries" ("characterId");
-CREATE INDEX "idx_vector_entries_createdAt" ON "vector_entries" ("createdAt" DESC);
-```
+Dropped in 4.10 by `retire-memory-vector-entries-v1` (memory refactor Phase B). They mirrored
+`memories.embedding` per character; the mirror had no foreign key, so a delete or tier move it
+missed left the index wrong (bugs 200, 205). The migration copies any vector the mirror held that
+its memory row lacked, then drops both tables. A memory's vector and tier now live only on its row
+(`memories.embedding`, `memories.tier`), and the in-process index loads them from there. Backups no
+longer write `vector-entries.json` / `vector-index-metas.json`; a restore of an older archive uses
+`vector-entries.json` only to backfill a memory row that arrived without an embedding.
 
 ### instance_settings
 

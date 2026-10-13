@@ -1,5 +1,5 @@
 /**
- * The delete chokepoint's digest bookkeeping (review of bugs 208 / 225):
+ * `retireMemories`' digest bookkeeping (review of bugs 208 / 225):
  *
  * - **Composes in the job child.** `scrubDigestLinks` used to read
  *   `consolidatedFrom` with a raw query (blind to the job's own buffered
@@ -46,9 +46,9 @@ jest.mock('@/lib/database/backends/sqlite/client', () => ({
   getRawDatabase: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-}))
+// The real cache: `memoryIndex.remove` only touches a loaded store, and none is
+// loaded here.
+jest.unmock('@/lib/embedding/vector-store')
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
@@ -79,9 +79,8 @@ jest.mock('@/lib/logger', () => {
 import { rawQuery } from '@/lib/database/manager'
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getRepositories as realRepositorySource } from '@/lib/database/repositories'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
-import { deleteMemoryWithUnlink, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { retireMemories } from '@/lib/memory/retire'
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository'
 import {
   digestBucketsDeletedByWrites,
@@ -147,6 +146,8 @@ function installRepos() {
   const now = '2026-09-01T00:00:00.000Z'
   const memories = {
     findById: jest.fn(async (id: string) => hydrate(read(id))),
+    // The retirement's digest-liveness rule reads members by id.
+    findByIds: jest.fn(async (ids: string[]) => ids.map((id) => hydrate(read(id))).filter((r) => !!r)),
     findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
     findDigestSubjectsByIds: jest.fn((ids: string[]) => real.findDigestSubjectsByIds(ids)),
@@ -171,8 +172,7 @@ function installRepos() {
       }
       return ids.length
     }),
-    delete: jest.fn(async (id: string) => db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes > 0),
-    bulkDelete: jest.fn(async (_c: string, ids: string[]) => {
+    bulkDeleteUnsafe: jest.fn(async (_c: string, ids: string[]) => {
       let n = 0
       for (const id of ids) n += db.prepare('DELETE FROM memories WHERE id = ?').run(id).changes
       return n
@@ -231,10 +231,6 @@ beforeEach(() => {
     return db.prepare(sql).all(...params)
   })
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)
-  ;(getCharacterVectorStore as jest.Mock).mockResolvedValue({
-    removeVector: jest.fn(async () => true),
-    save: jest.fn(async () => undefined),
-  })
 })
 
 afterEach(() => {
@@ -257,8 +253,8 @@ describe('#2 — digest member removal composes within one child job', () => {
     installRepos()
 
     const { writes } = await inJob(async () => {
-      await deleteMemoryWithUnlink('m-1')
-      await deleteMemoryWithUnlink('m-3')
+      await retireMemories(['m-1'], { reason: 'item-delete' })
+      await retireMemories(['m-3'], { reason: 'item-delete' })
     })
     await replay(writes)
 
@@ -272,8 +268,8 @@ describe('#2 — digest member removal composes within one child job', () => {
     installRepos()
 
     const { writes } = await inJob(async () => {
-      await deleteMemoriesWithUnlinkBatch(['m-1'])
-      await deleteMemoriesWithUnlinkBatch(['m-3'])
+      await retireMemories(['m-1'], { reason: 'item-delete' })
+      await retireMemories(['m-3'], { reason: 'item-delete' })
     })
     await replay(writes)
 
@@ -285,7 +281,7 @@ describe('#2 — digest member removal composes within one child job', () => {
     installRepos()
 
     await inJob(async () => {
-      await deleteMemoryWithUnlink('m-1')
+      await retireMemories(['m-1'], { reason: 'item-delete' })
       const { getRepositories } = require('@/lib/repositories/factory')
       const [digest] = await getRepositories().memories.findDigestsContainingMembers([CHAR], ['m-2'])
       expect(digest.consolidatedFrom).toEqual(['m-2', 'm-3'])
@@ -329,7 +325,7 @@ describe('#12 — the digest scrub is scoped and indexed', () => {
     seed([{ id: 'other-digest', characterId: OTHER, source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['x-1']) }])
     const memories = installRepos()
 
-    await deleteMemoriesWithUnlinkBatch(['m-1', 'digest'])
+    await retireMemories(['m-1', 'digest'], { reason: 'item-delete' })
 
     expect(memories.findDigestsContainingMembers).toHaveBeenCalledWith([CHAR], expect.arrayContaining(['m-1', 'digest']))
     const digestQueries = sqlSeen.filter(sql => /consolidatedFrom|supersededById/.test(sql) && !/^\s*UPDATE/i.test(sql))
@@ -353,10 +349,14 @@ describe('#12 — the digest scrub is scoped and indexed', () => {
 describe('#3 — deleting a digest refreshes the Commonplace mirror', () => {
   function seedTwoDigests() {
     seed([
-      { id: 'digest', source: 'CONSOLIDATED', aboutCharacterId: LAURA, content: 'Laura hoards maps.', reinforcedImportance: 0.9, consolidatedFrom: JSON.stringify(['m-1']) },
-      { id: 'digest-2', source: 'CONSOLIDATED', aboutCharacterId: LAURA, content: 'Laura keeps the charts.', reinforcedImportance: 0.7, consolidatedFrom: JSON.stringify(['m-2']) },
+      { id: 'digest', source: 'CONSOLIDATED', aboutCharacterId: LAURA, content: 'Laura hoards maps.', reinforcedImportance: 0.9, consolidatedFrom: JSON.stringify(['m-1', 'm-1b']) },
+      { id: 'digest-2', source: 'CONSOLIDATED', aboutCharacterId: LAURA, content: 'Laura keeps the charts.', reinforcedImportance: 0.7, consolidatedFrom: JSON.stringify(['m-2', 'm-2b']) },
+      // Two members each, so retiring one member never empties a digest (that
+      // cascade is pinned separately below).
       { id: 'm-1', tier: 'cold', supersededById: 'digest', aboutCharacterId: LAURA },
+      { id: 'm-1b', tier: 'cold', supersededById: 'digest', aboutCharacterId: LAURA },
       { id: 'm-2', tier: 'cold', supersededById: 'digest-2', aboutCharacterId: LAURA },
+      { id: 'm-2b', tier: 'cold', supersededById: 'digest-2', aboutCharacterId: LAURA },
     ])
   }
 
@@ -367,21 +367,21 @@ describe('#3 — deleting a digest refreshes the Commonplace mirror', () => {
     return file.digests.map((d: { content: string }) => d.content)
   }
 
-  it('single delete (the DELETE route\'s chokepoint) re-mirrors the bucket without the digest', async () => {
+  it('single retirement (the DELETE route\'s chokepoint) re-mirrors the bucket without the digest', async () => {
     seedTwoDigests()
     installRepos()
 
-    expect(await deleteMemoryWithUnlink('digest')).toBe(true)
+    expect((await retireMemories(['digest'], { reason: 'item-delete' })).retired).toBe(1)
 
     expect(writeCommonplaceDigestsToVault).toHaveBeenCalledTimes(1)
     expect(mirroredContents()).toEqual(['Laura keeps the charts.'])
   })
 
-  it('batch delete re-mirrors the bucket too', async () => {
+  it('batch retirement re-mirrors the bucket too', async () => {
     seedTwoDigests()
     installRepos()
 
-    expect(await deleteMemoriesWithUnlinkBatch(['digest'])).toBe(1)
+    expect((await retireMemories(['digest'], { reason: 'item-delete' })).retired).toBe(1)
 
     expect(mirroredContents()).toEqual(['Laura keeps the charts.'])
   })
@@ -390,7 +390,7 @@ describe('#3 — deleting a digest refreshes the Commonplace mirror', () => {
     seed([{ id: 'digest', source: 'CONSOLIDATED', aboutCharacterId: LAURA, content: 'Laura hoards maps.' }])
     installRepos()
 
-    await deleteMemoryWithUnlink('digest')
+    await retireMemories(['digest'], { reason: 'item-delete' })
 
     expect(mirroredContents()).toEqual([])
   })
@@ -399,10 +399,21 @@ describe('#3 — deleting a digest refreshes the Commonplace mirror', () => {
     seedTwoDigests()
     installRepos()
 
-    await deleteMemoryWithUnlink('m-1')
-    await deleteMemoriesWithUnlinkBatch(['m-2'])
+    await retireMemories(['m-1'], { reason: 'item-delete' })
+    await retireMemories(['m-2'], { reason: 'item-delete' })
 
     expect(writeCommonplaceDigestsToVault).not.toHaveBeenCalled()
+  })
+
+  it('retiring a digest\'s last member retires the digest and re-mirrors the bucket', async () => {
+    seedTwoDigests()
+    installRepos()
+
+    const report = await retireMemories(['m-1', 'm-1b'], { reason: 'item-delete' })
+
+    expect(report.digestsRetiredWithLastMember).toBe(1)
+    expect(read('digest')).toBeUndefined()
+    expect(mirroredContents()).toEqual(['Laura keeps the charts.'])
   })
 
   it('in the job child nothing is mirrored; the commit hook mirrors after replay', async () => {
@@ -410,7 +421,7 @@ describe('#3 — deleting a digest refreshes the Commonplace mirror', () => {
     installRepos()
 
     const { writes } = await inJob(async () => {
-      await deleteMemoryWithUnlink('digest')
+      await retireMemories(['digest'], { reason: 'item-delete' })
     })
     expect(writeCommonplaceDigestsToVault).not.toHaveBeenCalled()
 

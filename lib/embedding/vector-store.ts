@@ -1,20 +1,19 @@
 /**
- * Vector Store
- * Sprint 4: Vector Database Integration
+ * Vector Store — the in-process cache behind `memoryIndex`
  *
- * In-memory vector store with database persistence for semantic search.
- * Uses cosine similarity for nearest neighbor search.
+ * One `CharacterVectorStore` per character holds that character's memory
+ * vectors in memory for brute-force cosine search. It is a **cache**, never a
+ * copy: `memories.embedding` and `memories.tier` are the only stored truth
+ * (the `vector_entries` mirror was retired in Phase B of the memory
+ * refactor), a store loads them with one query, and nothing here writes the
+ * database.
  *
- * Design decisions:
- * - Per-character vector indices for isolation and efficient loading
- * - In-memory search with persistence (suitable for <1000 memories per character)
- * - Cosine similarity for text embedding comparison
- * - Normalized BLOB storage: each embedding stored as a Float32 BLOB row
- * - Incremental persistence: only changed entries written on save()
+ * Only `lib/memory/index-store/` may import this module (a test greps for any
+ * other importer): every write of an embedding or a tier, and every eviction,
+ * goes through `memoryIndex`, which writes the row and keeps the cache in step.
  */
 
 import { cosineSimilarity } from './embedding-service'
-import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 
@@ -27,9 +26,9 @@ export interface VectorMetadata {
   /** Character ID for filtering */
   characterId: string
   /**
-   * Memory tier. Not persisted with the index: stamped from the memories
-   * table at {@link CharacterVectorStore.load} and kept in step by
-   * {@link CharacterVectorStore.setTier}. Absent reads as hot.
+   * Memory tier, read with the vector from `memories.tier` at
+   * {@link CharacterVectorStore.load} and kept in step by `memoryIndex`.
+   * Absent reads as hot.
    */
   tier?: 'hot' | 'cold'
   /** Additional metadata */
@@ -67,13 +66,18 @@ export interface VectorSearchResult {
  */
 export interface ICharacterVectorStore {
   load(): Promise<void>
-  save(): Promise<void>
+  /** Insert or replace an entry (in memory only). */
   addVector(id: string, embedding: Float32Array, metadata: VectorMetadata): Promise<void>
+  /** Drop an entry (in memory only). */
   removeVector(id: string): Promise<boolean>
-  updateVector(id: string, embedding: Float32Array): Promise<boolean>
   hasVector(id: string): boolean
+  /** The cached tier of an entry, or undefined when it is not in the store. */
+  tierOf(id: string): 'hot' | 'cold' | undefined
   readonly size: number
+  /** The most common vector length in the store, or null when it is empty. */
   getDimensions(): number | null
+  /** How many entries have exactly `dimensions` components. */
+  countWithDimensions(dimensions: number): number
   search(queryEmbedding: Float32Array, limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
   getAllEntries(): VectorEntry[]
   clear(): void
@@ -91,236 +95,113 @@ export function isHotVector(metadata: VectorMetadata): boolean {
 }
 
 /**
- * Database-backed vector store for a single character
- * Uses in-memory storage with incremental database persistence
+ * The in-memory vector cache for a single character, loaded from its memory
+ * rows. Entries of any length are held: a corpus part-way through a re-embed
+ * has two, and search scores only the entries whose length matches the query.
  */
 export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
-  private dimensions: number | null = null
-  private createdAt: string = new Date().toISOString()
-
-  // Granular dirty tracking for incremental persistence
-  private addedIds: Set<string> = new Set()
-  private removedIds: Set<string> = new Set()
-  private updatedIds: Set<string> = new Set()
+  /** Entry count per vector length, so the dominant length is O(distinct lengths). */
+  private lengthCounts: Map<number, number> = new Map()
 
   constructor(private readonly characterId: string) {}
 
   /**
-   * Load the vector index from the database
+   * Load the character's vectors and tiers from `memories` (one query). A
+   * failed read leaves the store empty — search then finds nothing and recall
+   * falls back to text search — rather than throwing into a turn.
    */
   async load(): Promise<void> {
+    this.entries.clear()
+    this.lengthCounts.clear()
     try {
-      const repo = getVectorIndicesRepository()
-      const meta = await repo.findMetaByCharacterId(this.characterId)
-      const entryRows = await repo.findEntriesByCharacterId(this.characterId)
-      const coldIds = await this.loadColdIds()
-
-      this.entries.clear()
-      for (const row of entryRows) {
-        this.entries.set(row.id, {
+      const rows = await getRepositories().memories.findIndexRowsByCharacterId(this.characterId)
+      const loadedAt = new Date().toISOString()
+      let cold = 0
+      for (const row of rows) {
+        this.put({
           id: row.id,
           embedding: row.embedding,
-          metadata: {
-            memoryId: row.id,
-            characterId: row.characterId,
-            tier: coldIds.has(row.id) ? 'cold' : 'hot',
-          },
-          createdAt: row.createdAt,
+          metadata: { memoryId: row.id, characterId: this.characterId, tier: row.tier },
+          createdAt: loadedAt,
         })
+        if (row.tier === 'cold') cold++
       }
-
-      logger.debug('Loaded vector index', {
+      logger.debug('Loaded vector index from memory rows', {
         context: 'CharacterVectorStore.load',
         characterId: this.characterId,
-        entries: entryRows.length,
-        cold: coldIds.size,
+        entries: rows.length,
+        cold,
+        dimensions: this.getDimensions(),
       })
-
-
-      if (meta) {
-        this.dimensions = meta.dimensions
-        this.createdAt = meta.createdAt
-      } else {
-        this.dimensions = entryRows.length > 0 ? entryRows[0].embedding.length : null
-      }
-
-      this.addedIds.clear()
-      this.removedIds.clear()
-      this.updatedIds.clear()
-
     } catch (error) {
-      logger.error('Error loading vector index from database', {
+      logger.error('Error loading vector index from memory rows', {
         context: 'CharacterVectorStore.load',
         characterId: this.characterId,
         error: error instanceof Error ? error.message : String(error),
       })
-      // Start fresh on error
       this.entries.clear()
-      this.dimensions = null
-      this.addedIds.clear()
-      this.removedIds.clear()
-      this.updatedIds.clear()
+      this.lengthCounts.clear()
     }
   }
 
-  /**
-   * Save changed entries to the database (incremental)
-   */
-  async save(): Promise<void> {
-    const hasChanges = this.addedIds.size > 0 || this.removedIds.size > 0 || this.updatedIds.size > 0
-    if (!hasChanges && this.entries.size === 0) {
-      return // Nothing to save
-    }
-
-    try {
-      const repo = getVectorIndicesRepository()
-
-      // Batch insert added entries
-      if (this.addedIds.size > 0) {
-        const newEntries = Array.from(this.addedIds)
-          .map(id => this.entries.get(id))
-          .filter((e): e is VectorEntry => e !== undefined)
-          .map(e => ({
-            id: e.id,
-            characterId: this.characterId,
-            embedding: e.embedding,
-          }))
-
-        if (newEntries.length > 0) {
-          await repo.addEntries(newEntries)
-        }
-      }
-
-      // Batch delete removed entries
-      if (this.removedIds.size > 0) {
-        await repo.removeEntries(Array.from(this.removedIds))
-      }
-
-      // Batch update changed embeddings
-      if (this.updatedIds.size > 0) {
-        for (const id of this.updatedIds) {
-          const entry = this.entries.get(id)
-          if (entry) {
-            await repo.updateEntryEmbedding(id, entry.embedding)
-          }
-        }
-      }
-
-      // Save meta (always update to keep updatedAt current)
-      if (hasChanges) {
-        await repo.saveMeta(this.characterId, this.dimensions || 0)
-      }
-
-      // Clear tracking sets
-      this.addedIds.clear()
-      this.removedIds.clear()
-      this.updatedIds.clear()
-
-    } catch (error) {
-      logger.error('Error saving vector index to database', {
-        context: 'CharacterVectorStore.save',
-        characterId: this.characterId,
-        added: this.addedIds.size,
-        removed: this.removedIds.size,
-        updated: this.updatedIds.size,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      throw error
-    }
+  private put(entry: VectorEntry): void {
+    const previous = this.entries.get(entry.id)
+    if (previous) this.uncount(previous.embedding.length)
+    this.entries.set(entry.id, entry)
+    this.lengthCounts.set(entry.embedding.length, (this.lengthCounts.get(entry.embedding.length) ?? 0) + 1)
   }
 
-  /**
-   * Add a vector to the store
-   */
+  private uncount(length: number): void {
+    const n = (this.lengthCounts.get(length) ?? 0) - 1
+    if (n > 0) this.lengthCounts.set(length, n)
+    else this.lengthCounts.delete(length)
+  }
+
   async addVector(
     id: string,
     embedding: Float32Array,
     metadata: VectorMetadata
   ): Promise<void> {
-    // Validate dimensions
-    if (this.dimensions !== null && embedding.length !== this.dimensions) {
-      throw new Error(
-        `Vector dimension mismatch: expected ${this.dimensions}, got ${embedding.length}`
-      )
-    }
-
-    if (this.dimensions === null) {
-      this.dimensions = embedding.length
-    }
-
-    const entry: VectorEntry = {
-      id,
-      embedding,
-      metadata,
-      createdAt: new Date().toISOString(),
-    }
-
-    this.entries.set(id, entry)
-    this.addedIds.add(id)
-    // If it was previously removed, cancel the removal
-    this.removedIds.delete(id)
+    this.put({ id, embedding, metadata, createdAt: new Date().toISOString() })
   }
 
-  /**
-   * Remove a vector from the store
-   */
   async removeVector(id: string): Promise<boolean> {
-    const deleted = this.entries.delete(id)
-    if (deleted) {
-      // If it was just added (not yet persisted), just un-add it
-      if (this.addedIds.has(id)) {
-        this.addedIds.delete(id)
-      } else {
-        this.removedIds.add(id)
-      }
-      this.updatedIds.delete(id)
-    }
-    return deleted
-  }
-
-  /**
-   * Update a vector's embedding
-   */
-  async updateVector(id: string, embedding: Float32Array): Promise<boolean> {
     const entry = this.entries.get(id)
-    if (!entry) {
-      return false
-    }
-
-    if (embedding.length !== this.dimensions) {
-      throw new Error(
-        `Vector dimension mismatch: expected ${this.dimensions}, got ${embedding.length}`
-      )
-    }
-
-    entry.embedding = embedding
-    // Only track as updated if it was already persisted (not just added)
-    if (!this.addedIds.has(id)) {
-      this.updatedIds.add(id)
-    }
+    if (!entry) return false
+    this.entries.delete(id)
+    this.uncount(entry.embedding.length)
     return true
   }
 
-  /**
-   * Check if a vector exists
-   */
   hasVector(id: string): boolean {
     return this.entries.has(id)
   }
 
-  /**
-   * Get the number of vectors stored
-   */
+  tierOf(id: string): 'hot' | 'cold' | undefined {
+    const entry = this.entries.get(id)
+    if (!entry) return undefined
+    return entry.metadata.tier === 'cold' ? 'cold' : 'hot'
+  }
+
   get size(): number {
     return this.entries.size
   }
 
-  /**
-   * Get the embedding dimensions
-   */
   getDimensions(): number | null {
-    return this.dimensions
+    let best: number | null = null
+    let bestCount = 0
+    for (const [length, count] of this.lengthCounts) {
+      if (count > bestCount) {
+        best = length
+        bestCount = count
+      }
+    }
+    return best
+  }
+
+  countWithDimensions(dimensions: number): number {
+    return this.lengthCounts.get(dimensions) ?? 0
   }
 
   /**
@@ -346,14 +227,15 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       return []
     }
 
-    // Validate query dimensions — log and return empty results instead of crashing.
-    // Mismatches typically mean the search embedding profile differs from the one
-    // used to build the index — the caller should fall back to text search.
-    if (this.dimensions !== null && queryEmbedding.length !== this.dimensions) {
+    // No entry of the query's length — log and return empty results instead
+    // of crashing. This typically means the search embedding profile differs
+    // from the one the corpus was embedded with; the caller should fall back
+    // to text search. Entries of other lengths are skipped below.
+    if (this.countWithDimensions(queryEmbedding.length) === 0) {
       logger.warn('Query vector dimension mismatch — search embedding profile likely differs from index', {
         context: 'CharacterVectorStore.search',
         characterId: this.characterId,
-        storedDimensions: this.dimensions,
+        storedDimensions: this.getDimensions(),
         queryDimensions: queryEmbedding.length,
       })
       return []
@@ -482,27 +364,6 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     return out
   }
 
-  /**
-   * Get all entries (for debugging/export)
-   */
-  /**
-   * Ids of this character's cold memories, for stamping tier metadata. A
-   * failed lookup degrades to "everything hot" — recall then sees archived
-   * rows until the next load — rather than costing the whole index.
-   */
-  private async loadColdIds(): Promise<Set<string>> {
-    try {
-      return new Set(await getRepositories().memories.findColdIdsByCharacterId(this.characterId))
-    } catch (error) {
-      logger.warn('Could not read cold memory ids; treating every vector as hot', {
-        context: 'CharacterVectorStore.load',
-        characterId: this.characterId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return new Set()
-    }
-  }
-
   setTier(ids: readonly string[], tier: 'hot' | 'cold'): void {
     let changed = 0
     for (const id of ids) {
@@ -521,110 +382,85 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     })
   }
 
+  /** Every entry, for read-only walks (consolidation clustering, the optimizer). */
   getAllEntries(): VectorEntry[] {
     return Array.from(this.entries.values())
   }
 
-  /**
-   * Clear all entries
-   */
   clear(): void {
-    // Mark all existing entries as removed (if they were persisted)
-    for (const id of this.entries.keys()) {
-      if (!this.addedIds.has(id)) {
-        this.removedIds.add(id)
-      }
-    }
     this.entries.clear()
-    this.dimensions = null
-    this.addedIds.clear()
-    this.updatedIds.clear()
+    this.lengthCounts.clear()
   }
 }
 
 /**
- * Global vector store manager
- * Handles loading and caching of per-character vector stores
+ * Process-wide cache of per-character stores. Loading is memoised per
+ * character: two first uses at once share one load and one store, rather
+ * than each building its own and the later one silently replacing the
+ * earlier (and any write the earlier had taken in the meantime).
  */
 export class VectorStoreManager {
   private stores: Map<string, ICharacterVectorStore> = new Map()
+  private loading: Map<string, Promise<ICharacterVectorStore>> = new Map()
 
-  constructor() {
+  /** The character's store, loading it from its memory rows on first use. */
+  async getStore(characterId: string): Promise<ICharacterVectorStore> {
+    const loaded = this.stores.get(characterId)
+    if (loaded) return loaded
+    const pending = this.loading.get(characterId)
+    if (pending) return pending
 
+    const load: Promise<ICharacterVectorStore> = this.loadAndKeep(characterId, () => load)
+    this.loading.set(characterId, load)
+    try {
+      return await load
+    } finally {
+      if (this.loading.get(characterId) === load) this.loading.delete(characterId)
+    }
   }
 
   /**
-   * Get or create a vector store for a character
+   * Load a store and keep it, unless an unload landed while the load was in
+   * flight (`current()` is no longer the pending load): that store is handed to
+   * the callers that asked for it, but not kept.
    */
-  async getStore(characterId: string): Promise<ICharacterVectorStore> {
-    let store = this.stores.get(characterId)
-
-    if (!store) {
-      store = new CharacterVectorStore(characterId)
-      await store.load()
+  private async loadAndKeep(
+    characterId: string,
+    current: () => Promise<ICharacterVectorStore>,
+  ): Promise<ICharacterVectorStore> {
+    const store = new CharacterVectorStore(characterId)
+    await store.load()
+    if (this.loading.get(characterId) === current()) {
       this.stores.set(characterId, store)
     }
-
     return store
   }
 
   /**
-   * Save all dirty stores
+   * The character's store if it is loaded or loading (awaiting an in-flight
+   * load, so a write that lands during it is not lost); never starts a load.
    */
-  async saveAll(): Promise<void> {
-    const savePromises: Promise<void>[] = []
-
-    for (const store of this.stores.values()) {
-      savePromises.push(store.save())
-    }
-
-    await Promise.all(savePromises)
+  async getLoadedStore(characterId: string): Promise<ICharacterVectorStore | undefined> {
+    return this.stores.get(characterId) ?? (await this.loading.get(characterId))
   }
 
-  /**
-   * Save a specific character's store
-   */
-  async saveStore(characterId: string): Promise<void> {
-    const store = this.stores.get(characterId)
-    if (store) {
-      await store.save()
-    }
-  }
-
-  /**
-   * Remove a character's store from cache (doesn't delete from storage)
-   */
+  /** Drop a character's cached store; the next use reloads from its rows. */
   unloadStore(characterId: string): boolean {
+    this.loading.delete(characterId)
     return this.stores.delete(characterId)
   }
 
-  /**
-   * Drop every cached store. Used after a corpus-wide rewrite (e.g. a
-   * Matryoshka re-apply) to ensure the next search loads fresh BLOBs.
-   */
+  /** Drop every cached store (after a corpus-wide rewrite such as a Matryoshka re-apply). */
   unloadAll(): void {
+    this.loading.clear()
     this.stores.clear()
   }
 
-  /**
-   * Delete a character's vector index entirely
-   */
-  async deleteStore(characterId: string): Promise<boolean> {
-    this.stores.delete(characterId)
-
-    const repo = getVectorIndicesRepository()
-    return repo.deleteByCharacterId(characterId)
-  }
-
-  /**
-   * Get stats about loaded stores
-   */
   getStats(): { loadedStores: number; totalVectors: number } {
     let totalVectors = 0
     for (const store of this.stores.values()) {
       totalVectors += store.size
     }
-
     return {
       loadedStores: this.stores.size,
       totalVectors,

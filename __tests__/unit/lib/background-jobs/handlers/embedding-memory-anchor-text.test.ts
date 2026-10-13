@@ -1,7 +1,7 @@
 /**
  * Bug 204: the background re-embed (EMBEDDING_GENERATE for a MEMORY) and the
  * BUILTIN vocabulary refit must build a memory's text through
- * `buildMemoryEmbeddingText`, the builder the gate and the create paths use —
+ * `embeddingTextFor`, the builder the gate and the create paths use —
  * anchor line (when / place) included.
  */
 
@@ -25,17 +25,10 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EMBEDDING_MAX_CHARS: 128 * 1024,
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn().mockReturnValue({ unloadStore: jest.fn() }),
-}))
-
-jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
-  getVectorIndicesRepository: jest.fn().mockReturnValue({
-    entryExists: jest.fn().mockResolvedValue(false),
-    addEntry: jest.fn().mockResolvedValue(undefined),
-    updateEntryEmbedding: jest.fn().mockResolvedValue(true),
-    saveMeta: jest.fn().mockResolvedValue(undefined),
-  }),
+// The real text builder; only the index's row/cache write is stubbed.
+jest.mock('@/lib/memory/index-store', () => ({
+  ...jest.requireActual('@/lib/memory/index-store'),
+  memoryIndex: { upsert: jest.fn().mockResolvedValue([]) },
 }))
 
 jest.mock('@/lib/background-jobs/queue-service', () => ({
@@ -46,7 +39,7 @@ import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embeddin
 import { handleEmbeddingRefit } from '@/lib/background-jobs/handlers/embedding-refit'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { buildMemoryEmbeddingText } from '@/lib/memory/episodic'
+import { embeddingTextFor, memoryIndex } from '@/lib/memory/index-store'
 import type { BackgroundJob } from '@/lib/schemas/types'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -80,7 +73,7 @@ function job(type: string, payload: Record<string, unknown>): BackgroundJob {
 describe('bug 204 — background memory embeds carry the anchor line', () => {
   beforeEach(() => jest.clearAllMocks())
 
-  it('EMBEDDING_GENERATE embeds buildMemoryEmbeddingText(memory), anchor line included', async () => {
+  it('EMBEDDING_GENERATE embeds embeddingTextFor(memory), anchor line included, and writes through memoryIndex', async () => {
     mockGenerate.mockResolvedValue({ embedding: new Float32Array([1, 0]), dimensions: 2 } as never)
     mockGetRepositories.mockReturnValue({
       memories: {
@@ -95,9 +88,13 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
 
     await handleEmbeddingGenerate(job('EMBEDDING_GENERATE', { entityType: 'MEMORY', entityId: 'mem-1', profileId: 'p-1' }))
 
-    const expected = buildMemoryEmbeddingText(anchoredMemory.summary, anchoredMemory.content, anchoredMemory)
+    const expected = embeddingTextFor(anchoredMemory)
     expect(expected).toContain('place: Gullhaven')
     expect(mockGenerate).toHaveBeenCalledWith(expected, 'user-1', 'p-1', { priority: 'background' })
+    // The vector lands through the index (row + cache), hot by default.
+    expect(memoryIndex.upsert).toHaveBeenCalledWith('char-1', [
+      { id: 'mem-1', embedding: new Float32Array([1, 0]), tier: 'hot' },
+    ])
   })
 
   it('EMBEDDING_REFIT fits the vocabulary on the anchored text', async () => {

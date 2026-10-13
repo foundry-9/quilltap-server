@@ -13,7 +13,7 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
+import { embeddingTextFor } from '@/lib/memory/index-store';
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingRefitPayload } from '../queue-service';
 import { enqueueEmbeddingReindexAll } from '../queue-service';
@@ -97,7 +97,7 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
   // that occur only in anchor lines make it into the fitted vocabulary (bug 204).
   // Anchor dates render on the instance's memory calendar (cold cache in the child).
   const memoryTimeZone = await refreshMemoryTimeZone();
-  const documents = allMemories.map(m => buildMemoryEmbeddingText(m.summary, m.content, m, memoryTimeZone));
+  const documents = allMemories.map(m => embeddingTextFor(m, memoryTimeZone));
 
   // Include help docs in the corpus for better vocabulary coverage
   try {

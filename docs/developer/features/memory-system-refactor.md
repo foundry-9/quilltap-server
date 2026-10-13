@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3); Phases B–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7); Phases C–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -885,6 +885,45 @@ passes it explicitly, so the parent and a cold job child render the same date.
   environment (no V4test instance). The probe-set ordering is unchanged by construction (the
   blend already read reinforced importance); the protection formula moved file but not value,
   and `protection-and-age.test.ts` pins it.
+
+**Amendment (2026-10-13, Phase B).** Phase B landed as §3.5 and §3.10 describe, with these
+departures:
+
+- **The child's index writes buffer; they do not throw yet.** §3.5 and invariant 9 make
+  `memoryIndex.upsert` / `setTier` / `remove` throw in the job child, which presumes admission has
+  already moved to the parent (Phase C). Until it does, the gate, consolidation and housekeeping
+  still run in the child, so there the index's row writes go through the repository proxy (buffered,
+  committed with the job — invariant 9's "buffered batch") and the child's own cache is updated in
+  place so the same job sees its vectors. The parent drops its cache for every character a committed
+  batch touched. Phase C turns the child-side writes into the throw.
+- **The index has two methods §3.5 does not list.** `indexInserted` caches the vector of a row its
+  creator has just inserted *with* that vector (admission's create, a consolidation digest), so a
+  new row is never written twice and never exists without its embedding (invariant 4).
+  `shape(characterId, queryDims)` reports size, dominant length and matching count, which recall
+  and the anchor probe use to detect a profile mismatch. `upsert` takes an optional `alongside`
+  patch written in the same row update, so an edit or a digest revision never puts new text beside
+  an old vector.
+- **Mixed vector lengths are held, not refused.** With the mirror gone the cache loads whatever the
+  rows hold, so a corpus part-way through a re-embed has two lengths. Search scores entries matching
+  the query's length; recall falls back to text only when none match. A full reindex therefore no
+  longer empties the index first: until each row is re-embedded, a same-length model swap compares
+  against the old model's vectors (previously the store was deleted and recall used text search).
+- **The digest cascade skips retention.** Invariant 8 retires a digest with its last member. Applied
+  to `coldRetentionDays`, that would delete every digest whose superseded members aged out — the
+  digest exists to outlive them. `retireMemories` cascades for every reason except `'retention'`.
+- **Dispatcher invalidation keeps bug 217's shape table** rather than reloading on every `memories.*`
+  write: link, count and footnote writes do not change what the cache holds, and reloading on them
+  dropped the cache after nearly every turn. The table now lists only the `memories` writes that
+  change a vector, a tier or a row.
+- **Restore backfills from an older archive's mirror.** §3.5 says restore ignores
+  `vector-entries.json`; it reads it only to give a memory that arrived with no embedding the vector
+  its archive kept beside it, the same safety the migration applies.
+- `rebuildVectorIndex` stays as a cache reload (the `PUT ?action=embeddings` route) and reports rows
+  without an embedding as `failed`. `MemoriesRepository.delete` throws rather than being removed: the
+  base repository declares it. `memories validate --repair` (dangling ids already on disk) stays
+  with the CLI work in Phase G.
+- The V4test acceptance walk (delete in the browser, re-extract, restart) was not run in this
+  environment; `memory-index-and-retire.test.ts` covers the same paths against real SQLite.
 
 ## 8. Risks
 

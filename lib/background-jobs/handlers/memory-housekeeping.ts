@@ -63,8 +63,8 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
         ...(payload.dryRun !== undefined && { dryRun: payload.dryRun }),
       });
 
-      // `deleteMemoriesWithUnlinkBatch` already counts from the resolved ids
-      // when the child's buffered delete returns nothing; this is the last
+      // `retireMemories` already counts from the resolved ids when the
+      // child's buffered delete returns nothing (`RetireReport.retired`); this is the last
       // line of defence so a NaN can never reach the log or the backoff below
       // (`NaN < minEffective` is false, which disarmed it).
       if (!Number.isFinite(result.deleted)) {

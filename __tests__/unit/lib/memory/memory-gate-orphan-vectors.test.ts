@@ -13,8 +13,9 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  ...jest.requireActual('@/lib/memory/index-store'),
+  memoryIndex: { search: jest.fn() },
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -46,12 +47,11 @@ jest.mock('@/lib/logger', () => ({
 
 import { runMemoryGate } from '@/lib/memory/memory-gate'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex } from '@/lib/memory/index-store'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import type { Memory } from '@/lib/schemas/types'
 
 const mockedRepos = getRepositories as jest.MockedFunction<typeof getRepositories>
-const mockedStore = getCharacterVectorStore as jest.MockedFunction<typeof getCharacterVectorStore>
 const mockedEmbed = generateEmbeddingForUser as jest.MockedFunction<typeof generateEmbeddingForUser>
 
 const liveMemory = {
@@ -77,8 +77,8 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockedEmbed.mockResolvedValue({ embedding: new Float32Array([1, 0, 0]) } as never)
-    search = jest.fn()
-    mockedStore.mockResolvedValue({ search } as never)
+    search = memoryIndex.search as unknown as jest.Mock
+    search.mockReset()
     mockedRepos.mockReturnValue({
       memories: {
         // Only the live row exists; 'orphan' has a vector and no row.
@@ -88,7 +88,7 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
   })
 
   it('reinforces the live match behind an orphan at rank 1', async () => {
-    search.mockReturnValue([hit('orphan', 0.97), hit('live', 0.88)])
+    search.mockResolvedValue([hit('orphan', 0.97), hit('live', 0.88)])
 
     const result = await runMemoryGate('char-1', 'Charlie loves lighthouses.', 'Loves lighthouses', [], 'user-1')
 
@@ -96,7 +96,7 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
   })
 
   it('absorbs a live near-duplicate behind an orphan', async () => {
-    search.mockReturnValue([hit('orphan', 0.99), hit('live', 0.93)])
+    search.mockResolvedValue([hit('orphan', 0.99), hit('live', 0.93)])
 
     const result = await runMemoryGate('char-1', 'Charlie likes lighthouses.', 'Likes lighthouses', [], 'user-1')
 
@@ -107,7 +107,7 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
     // Five orphans outrank the live near-duplicate; a top-5 search alone
     // would see only orphans and insert.
     const orphans = ['o1', 'o2', 'o3', 'o4', 'o5'].map((id, i) => hit(id, 0.99 - i * 0.001))
-    search.mockImplementation((_embedding: unknown, k: number) => [...orphans, hit('live', 0.93)].slice(0, k))
+    search.mockImplementation(async (_characterId: string, _embedding: unknown, opts: { limit: number }) => [...orphans, hit('live', 0.93)].slice(0, opts.limit))
 
     const result = await runMemoryGate('char-1', 'Charlie likes lighthouses.', 'Likes lighthouses', [], 'user-1')
 
@@ -117,7 +117,7 @@ describe('runMemoryGate — orphan vectors (bug 200)', () => {
 
   it('inserts when every hit is an orphan', async () => {
     // The store holds nothing else: search returns fewer than K, so no wider search.
-    search.mockReturnValue([hit('orphan', 0.99)])
+    search.mockResolvedValue([hit('orphan', 0.99)])
 
     const result = await runMemoryGate('char-1', 'Charlie likes lighthouses.', 'Likes lighthouses', [], 'user-1')
 

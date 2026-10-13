@@ -159,7 +159,7 @@ Changing **Truncate output to** affects only *new* embeddings — your existing 
 Quilltap will queue a background job that:
 
 - Takes a `VACUUM INTO` backup of every affected database — `quilltap.bak-pre-truncation-<date>.db` next to the main database, and the same suffix on the mount-index database if document stores are involved. These are your rollback if anything goes sideways.
-- Walks every embedding-bearing table (`memories`, `vector_entries`, `conversation_chunks`, `help_docs`, and `doc_mount_chunks`).
+- Walks every embedding-bearing table (`memories`, `conversation_chunks`, `help_docs`, `help_doc_chunks`, and `doc_mount_chunks`).
 - For each stored vector longer than the target, slices the first N components, renormalises, and writes the result back inside a single transaction per table.
 - VACUUMs the source databases to reclaim freed space.
 
@@ -173,7 +173,7 @@ When you swap embedding models, the corpus often ends up with a few stragglers t
 
 For exactly this case the profile list offers a **Re-embed Mismatched** button on default non-built-in profiles. It enqueues an `EMBEDDING_GENERATE` job for every memory, conversation chunk, and help doc whose stored vector dimension differs from the active profile's target (its `truncateToDimensions` if set, otherwise its `dimensions`). Rows that already match are left alone — no provider call, no charge.
 
-Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not delete vector stores, cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
+Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
 
 ## One Standard, Kept Automatically
 

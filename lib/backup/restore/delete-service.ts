@@ -11,7 +11,7 @@
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate';
+import { retireMemories } from '@/lib/memory/retire';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -22,7 +22,7 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
 /**
  * Truncate the format-3 tables (mount-index + new main-DB tables) before a
  * replace-mode restore. Done via raw DELETEs because per-row repository
- * deletes are expensive at scale (especially vector_entries and
+ * deletes are expensive at scale (especially conversation_chunks and
  * doc_mount_chunks). Each statement is independently guarded — if a table
  * doesn't exist on a very old database, the rest still run.
  *
@@ -47,8 +47,6 @@ async function clearFormat3Entities(): Promise<void> {
     'conversation_annotations',
     'tfidf_vocabularies',
     'embedding_status',
-    'vector_entries',
-    'vector_indices',
     'text_replacement_rules',
     // The wardrobe wear ledger. Global like the rest of this list (no userId),
     // and its unique (itemId, wearer) index would otherwise make a
@@ -164,7 +162,7 @@ export async function deleteUserData(
       memoryIds.push(memory.id);
     }
   }
-  await deleteMemoriesWithUnlinkBatch(memoryIds);
+  await retireMemories(memoryIds, { reason: 'restore-replace' });
 
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([

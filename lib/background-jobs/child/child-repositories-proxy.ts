@@ -382,13 +382,7 @@ function recordBufferedMemoryWrite(
       }
       break;
     }
-    case 'delete':
-    case 'deleteForCharacter': {
-      const id = asId(methodName === 'delete' ? args[0] : args[1]);
-      if (id) memoryOverlayEntry(scope, id).deleted = true;
-      break;
-    }
-    case 'bulkDelete': {
+    case 'bulkDeleteUnsafe': {
       const ids = Array.isArray(args[1]) ? args[1] : [];
       for (const raw of ids) {
         const id = asId(raw);
@@ -563,7 +557,6 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'conversationChunks.findByInterchangeIndex': 'read',
   'backgroundJobs.findByUserId': 'read',
   'backgroundJobs.findDistinctChatIds': 'read',
-  'vectorIndices.entryExists': 'read',
 
   // ---- Writes with non-conforming names ------------------------------------
   // folders: find-or-create. Buffered *whole* so the parent replays it on its
@@ -615,11 +608,6 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'helpDocChunks.replaceForDoc': 'write',
   // llm logs
   'llmLogs.cleanupOldLogs': 'write',
-  // vector indices
-  'vectorIndices.addEntry': 'write',
-  'vectorIndices.updateEntryEmbedding': 'write',
-  'vectorIndices.saveMeta': 'write',
-  'vectorIndices.deleteStore': 'write',
   // conversation chunks
   'conversationChunks.upsert': 'write',
   // doc mount points

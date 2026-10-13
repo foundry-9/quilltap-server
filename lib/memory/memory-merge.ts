@@ -21,7 +21,7 @@
  * Order matters: callers apply the merge BEFORE deleting the losers, and
  * delete only the losers whose fold succeeded — a failed fold keeps its
  * losers rather than discarding what the survivor never absorbed. A plan's
- * links exclude only its own group; `deleteMemoriesWithUnlinkBatch` then
+ * links exclude only its own group; `retireMemories` then
  * scrubs the ids actually deleted with a removal delta applied after the
  * survivor's write, so the union loses only what was deleted (bug 234).
  * Links to anything that is kept survive.

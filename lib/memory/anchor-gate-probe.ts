@@ -29,10 +29,9 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex, embeddingTextFor } from './index-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildMemoryEmbeddingText } from './episodic'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { MERGE_THRESHOLD, NEAR_DUPLICATE_THRESHOLD } from './memory-gate'
 
@@ -85,8 +84,8 @@ export interface RunAnchorGateProbeInput {
 
 function hasAnchors(memory: Memory, timeZone: string): boolean {
   return (
-    buildMemoryEmbeddingText(memory.summary, memory.content, memory, timeZone) !==
-    buildMemoryEmbeddingText(memory.summary, memory.content)
+    embeddingTextFor(memory, timeZone) !==
+    embeddingTextFor({ summary: memory.summary, content: memory.content })
   )
 }
 
@@ -94,8 +93,6 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const limit = Math.min(200, Math.max(1, input.limit ?? 50))
   const repos = getRepositories()
   const sample = await repos.memories.findRecent(input.characterId, limit)
-  const vectorStore = await getCharacterVectorStore(input.characterId)
-  const storeDimensions = vectorStore.getDimensions()
   // Anchor dates render on the instance's memory calendar, as the gate's do.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -121,7 +118,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const anchorFreeEmbedding = async (memory: Memory): Promise<Float32Array> => {
     const cached = anchorFreeCache.get(memory.id)
     if (cached) return cached
-    const vec = await embed(buildMemoryEmbeddingText(memory.summary, memory.content))
+    const vec = await embed(embeddingTextFor({ summary: memory.summary, content: memory.content }))
     anchorFreeCache.set(memory.id, vec)
     return vec
   }
@@ -153,12 +150,13 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     }
 
     try {
-      const anchoredVec = await embed(buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone))
-      if (storeDimensions !== null && anchoredVec.length !== storeDimensions) {
+      const anchoredVec = await embed(embeddingTextFor(memory, memoryTimeZone))
+      const shape = await memoryIndex.shape(input.characterId, anchoredVec.length)
+      if (shape.size > 0 && shape.matching === 0) {
         logger.warn('Probe embedding dimension does not match the store; skipping row', {
           memoryId: memory.id,
           probe: anchoredVec.length,
-          store: storeDimensions,
+          store: shape.dominantDimensions,
         })
         rows.push(row)
         continue
@@ -167,8 +165,10 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
 
       // Over-fetch so filtering out self and newer rows still leaves K.
       const fetchK = PROBE_TOP_K * 4
-      const anchoredHits = vectorStore.search(anchoredVec, fetchK)
-      const freeHits = anchored ? vectorStore.search(freeVec, fetchK) : anchoredHits
+      const anchoredHits = await memoryIndex.search(input.characterId, anchoredVec, { limit: fetchK, hotOnly: false })
+      const freeHits = anchored
+        ? await memoryIndex.search(input.characterId, freeVec, { limit: fetchK, hotOnly: false })
+        : anchoredHits
       await loadMemories([...anchoredHits, ...freeHits].map(h => h.id))
 
       const isOlder = (id: string): boolean => {

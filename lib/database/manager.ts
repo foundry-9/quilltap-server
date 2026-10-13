@@ -116,7 +116,6 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
       // regardless of which repository is accessed first.
       if (backend instanceof SQLiteBackend) {
         backend.registerBlobColumns('memories', ['embedding']);
-        backend.registerBlobColumns('vector_entries', ['embedding']);
         backend.registerBlobColumns('conversation_chunks', ['embedding']);
         // The rendered interchange text is a second copy of the transcript
         // and is never SQL-searched — only fetched by id/chatId or ranked by

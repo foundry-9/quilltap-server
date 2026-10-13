@@ -27,8 +27,6 @@ import type {
   CharacterPluginData,
   ConversationAnnotation,
   ConversationChunk,
-  VectorIndexMeta,
-  VectorEntryRow,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
@@ -61,9 +59,11 @@ export interface InstanceSettingRow {
 }
 
 /**
- * A vector entry whose Float32 embedding has been encoded as a plain number
- * array so it can survive JSON serialisation. The repository accepts number[]
- * on the way back in and rehydrates it as Float32Array.
+ * A row of the retired `vector_entries` mirror, as archives written before
+ * Phase B of the memory refactor carry it in `data/vector-entries.json`. New
+ * backups write no such file: a memory's vector rides on its own row. A
+ * restore reads this only to give a memory that arrived without an embedding
+ * the one its archive kept beside it.
  */
 export interface SerializedVectorEntry {
   id: string;
@@ -221,10 +221,6 @@ export interface BackupManifest {
     conversationChunks?: number;
     /** Number of TfidfVocabulary entities */
     tfidfVocabularies?: number;
-    /** Number of VectorIndexMeta entities (one per character with embeddings) */
-    vectorIndexMetas?: number;
-    /** Number of vector entries (per-memory Float32 embeddings) */
-    vectorEntries?: number;
     /** Number of DocMountPoint entities (document stores) */
     docMountPoints?: number;
     /** Number of DocMountFolder entities */
@@ -367,12 +363,10 @@ export interface BackupData {
   /** TF-IDF vocabularies for BUILTIN embedding profiles. */
   tfidfVocabularies?: TfidfVocabulary[];
 
-  /** Per-character vector-index metadata (one row per indexed character). */
-  vectorIndexMetas?: VectorIndexMeta[];
-
   /**
-   * Per-memory vector embeddings (Float32Array serialised to number[]).
-   * Skipping this would force every restored memory to be re-embedded.
+   * Legacy only: the retired `vector_entries` mirror from an archive written
+   * before Phase B. Read on restore to backfill a memory row that arrived with
+   * no embedding; never written.
    */
   vectorEntries?: SerializedVectorEntry[];
 
@@ -573,11 +567,11 @@ export interface RestoreSummary {
   /** Number of TfidfVocabulary entities restored */
   tfidfVocabularies?: number;
 
-  /** Number of VectorIndexMeta entities restored */
-  vectorIndexMetas?: number;
-
-  /** Number of vector entries restored */
-  vectorEntries?: number;
+  /**
+   * Memories that arrived without an embedding and took the one an older
+   * archive kept in its `vector-entries.json`.
+   */
+  legacyVectorsAdopted?: number;
 
   /** Number of DocMountPoint entities restored */
   docMountPoints?: number;
@@ -626,8 +620,6 @@ export interface RestoreSummary {
   embeddingReconcile?: {
     targetDimensions: number | null;
     skippedReason: string | null;
-    vectorEntriesDeleted: number;
-    vectorIndexMetaFixed: number;
     reindexEnqueued: boolean;
   };
 

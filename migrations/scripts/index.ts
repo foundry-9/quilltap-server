@@ -434,6 +434,7 @@ import { rezoneLegacyMemoryOccurredAtMigration } from './rezone-legacy-memory-oc
 import { addMemoriesSupersededByIndexMigration } from './add-memories-superseded-by-index-v1';
 // Memory: housekeeping settings into instance_settings.memoryMaintenance; dead knobs dropped (refactor phase A)
 import { moveMemoryMaintenanceSettingsMigration } from './move-memory-maintenance-settings-v1';
+import { retireMemoryVectorEntriesMigration } from './retire-memory-vector-entries-v1';
 
 /**
  * All available migrations.
@@ -884,6 +885,8 @@ export const migrations: Migration[] = [
   addMemoriesSupersededByIndexMigration,
   // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
   moveMemoryMaintenanceSettingsMigration,
+  // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
+  retireMemoryVectorEntriesMigration,
 ];
 
 export {
@@ -1312,5 +1315,7 @@ export {
   addMemoriesSupersededByIndexMigration,
   // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
   moveMemoryMaintenanceSettingsMigration,
+  // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
+  retireMemoryVectorEntriesMigration,
 };
 

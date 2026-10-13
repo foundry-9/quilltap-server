@@ -18,10 +18,19 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   }),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
-  isHotVector: (metadata: { tier?: string }) => metadata.tier !== 'cold',
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -39,11 +48,11 @@ import { resolveRecallTuning } from '@/lib/memory/recall-tuning'
 import type { RecallContext } from '@/lib/memory/recall-tags'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex } from '@/lib/memory/index-store'
 
 const mockRepos = getRepositories as jest.Mock
 const mockEmbed = generateEmbeddingForUser as jest.Mock
-const mockStore = getCharacterVectorStore as jest.Mock
+const mockIndex = memoryIndex as unknown as { search: jest.Mock; shape: jest.Mock }
 
 const T0 = '2026-04-01T00:00:00.000Z'
 
@@ -81,14 +90,18 @@ let vectorSearch: jest.Mock
 function prime(memories: Mem[], hits: Record<string, Mem[]> = {}) {
   corpus = memories
   contentHits = hits
-  vectorSearch = jest.fn((_q: unknown, limit: number, filter?: (m: { memoryId: string }) => boolean) =>
-    corpus
-      .filter(m => !filter || filter({ memoryId: m.id }))
-      .map(m => ({ id: m.id, score: m.embedding[0], metadata: { memoryId: m.id, characterId: 'char-1' } }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit),
+  // An index that honors exclude / hotOnly, like the real one.
+  vectorSearch = jest.fn(
+    (_c: string, _q: unknown, opts: { limit: number; hotOnly: boolean; exclude?: ReadonlySet<string> }) =>
+      corpus
+        .filter(m => !opts.exclude?.has(m.id))
+        .filter(m => !opts.hotOnly || (m as { tier?: string }).tier !== 'cold')
+        .map(m => ({ id: m.id, score: m.embedding[0], metadata: { memoryId: m.id, characterId: 'char-1' } }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, opts.limit),
   )
-  mockStore.mockResolvedValue({ search: vectorSearch, getDimensions: () => 3 })
+  mockIndex.search.mockImplementation(vectorSearch)
+  mockIndex.shape.mockResolvedValue({ size: corpus.length, dominantDimensions: 3, matching: corpus.length })
   mockRepos.mockReturnValue({
     memories: {
       findByIds: jest.fn(async (ids: string[]) => corpus.filter(m => ids.includes(m.id))),
@@ -120,7 +133,7 @@ describe('excludeMemoryIds', () => {
     })
 
     expect(results.map(r => r.memory.id)).toEqual(['old'])
-    expect(vectorSearch.mock.calls[0][2]).toEqual(expect.any(Function))
+    expect(vectorSearch.mock.calls[0][2]).toEqual(expect.objectContaining({ exclude: new Set(['later']) }))
   })
 
   it('keeps an excluded memory out of the entity-anchor union', async () => {
@@ -139,14 +152,14 @@ describe('excludeMemoryIds', () => {
     expect(results.map(r => r.memory.id)).toEqual(['old'])
   })
 
-  it('passes only the hot-tier filter when nothing is excluded', async () => {
+  it('asks only for the hot tier when nothing is excluded', async () => {
     prime([memory('a', 0.6)])
 
     await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
-    const filter = vectorSearch.mock.calls[0][2] as (m: Record<string, unknown>) => boolean
-    expect(filter({ memoryId: 'a', tier: 'hot' })).toBe(true)
-    expect(filter({ memoryId: 'a', tier: 'cold' })).toBe(false)
+    const opts = vectorSearch.mock.calls[0][2] as { hotOnly: boolean; exclude?: ReadonlySet<string> }
+    expect(opts.hotOnly).toBe(true)
+    expect(opts.exclude?.size ?? 0).toBe(0)
   })
 })
 

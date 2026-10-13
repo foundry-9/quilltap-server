@@ -59,8 +59,6 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,
       tfidfVocabularies: data.tfidfVocabularies?.length || 0,
-      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
-      vectorEntries: data.vectorEntries?.length || 0,
       docMountPoints: data.docMountPoints?.length || 0,
       docMountFolders: data.docMountFolders?.length || 0,
       docMountFiles: data.docMountFiles?.length || 0,

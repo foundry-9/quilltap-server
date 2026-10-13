@@ -4,9 +4,10 @@
  * Small, pure utilities shared by the write path (memory-service, memory-gate,
  * extraction) and the read path (injector, tools):
  *
- *  - {@link buildMemoryAnchorLine} / {@link buildMemoryEmbeddingText}: the
- *    `(when: 2026-07-14 · place: Lighthouse Point)` anchor line appended to a
- *    memory's embedded text so the vector itself carries temporal/place signal.
+ *  - {@link buildMemoryAnchorLine}: the `(when: 2026-07-14 · place: Lighthouse
+ *    Point)` anchor line appended to a memory's embedded text (built by
+ *    `embeddingTextFor` in `lib/memory/index-store`) so the vector itself
+ *    carries temporal/place signal.
  *  (Resolving a model's `when` phrase into an `occurredAt` lives with the
  *  read-side day references in `lib/memory/time`, on one rule table.)
  *  - {@link eventReferenceTimeMs}: the event clock (`occurredAt ?? write
@@ -70,30 +71,6 @@ export function buildMemoryAnchorLine(view: EpisodicAnchorView, timeZone?: strin
   }
   if (parts.length === 0) return ''
   return `(${parts.join(' · ')})`
-}
-
-/**
- * Build the canonical embedded text for a memory: `summary\n\ncontent`, plus
- * the anchor line when any episodic anchor is present. Single source of truth —
- * the gate, the create paths, re-embeds, and reinforcement must all agree or
- * the gate compares against differently-shaped vectors than it writes.
- *
- * New writes only carry the anchor; legacy rows re-embed without one until the
- * optional batched re-embed runs. Mixed old/new embedded-text rows are an
- * accepted, indefinite state (see the spec's cross-cutting list).
- *
- * `timeZone` is passed through to {@link buildMemoryAnchorLine}; every caller
- * resolves it with `refreshMemoryTimeZone()` first.
- */
-export function buildMemoryEmbeddingText(
-  summary: string,
-  content: string,
-  anchors?: EpisodicAnchorView | null,
-  timeZone?: string,
-): string {
-  const base = `${summary}\n\n${content}`
-  const anchorLine = anchors ? buildMemoryAnchorLine(anchors, timeZone) : ''
-  return anchorLine ? `${base}\n${anchorLine}` : base
 }
 
 /**

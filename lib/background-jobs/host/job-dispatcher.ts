@@ -372,9 +372,8 @@ export async function applyWritesUnsafe(
   jobType?: string,
 ): Promise<void> {
   const parts = partitionWrites(writes);
-  // Memory-id-keyed writes (`memories.delete`, `vectorIndices.updateEntryEmbedding`)
-  // name no character; resolve their owners now, while a deleted row still
-  // exists to be read (bug 217).
+  // Memory-id-keyed writes (`memories.update`) name no character; resolve
+  // their owners now, while the row still exists to be read (bug 217).
   const memoryOwners = lookupMemoryOwners(memoryIdsNeedingOwnerLookup(writes), jobId);
   // Likewise the subject buckets of any digest the batch deletes, so their
   // Commonplace mirror can be refreshed once the delete has committed.
@@ -764,8 +763,10 @@ export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob
 
 /**
  * Map memory ids to their owning character, read from the main database before
- * a batch commits. Checks `vector_entries` too, so a vector whose row is
- * already gone still resolves. Best-effort: a failed read resolves nothing.
+ * a batch commits. The memory rows are the only copy (the `vector_entries`
+ * mirror was retired in 4.10), and a row the batch deletes is keyed by its
+ * `characterArg`, so only memory-id-keyed writes to live rows need this.
+ * Best-effort: a failed read resolves nothing, and says so.
  */
 function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, string> {
   const owners = new Map<string, string>();
@@ -779,10 +780,9 @@ function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, str
       const placeholders = chunk.map(() => '?').join(',');
       const rows = db
         .prepare(
-          `SELECT "id", "characterId" FROM "memories" WHERE "id" IN (${placeholders})
-           UNION SELECT "id", "characterId" FROM "vector_entries" WHERE "id" IN (${placeholders})`,
+          `SELECT "id", "characterId" FROM "memories" WHERE "id" IN (${placeholders})`,
         )
-        .all(...chunk, ...chunk) as Array<{ id: string; characterId: string | null }>;
+        .all(...chunk) as Array<{ id: string; characterId: string | null }>;
       for (const row of rows) {
         if (row.characterId) owners.set(row.id, row.characterId);
       }
@@ -793,7 +793,7 @@ function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, str
       resolved: owners.size,
     });
   } catch (err) {
-    log.debug('Memory owner lookup for vector-store invalidation failed', {
+    log.warn('Memory owner lookup for vector-store invalidation failed', {
       jobId,
       error: getErrorMessage(err),
     });
@@ -845,10 +845,9 @@ async function invalidateLocalCachesAsync(
 ): Promise<void> {
   if (vectorStoreKeys.size > 0) {
     try {
-      const mod = await import('@/lib/embedding/vector-store');
-      const mgr = mod.getVectorStoreManager();
+      const { memoryIndex } = await import('@/lib/memory/index-store');
       for (const key of vectorStoreKeys) {
-        try { mgr.unloadStore(key); }
+        try { memoryIndex.reload(key); }
         catch { /* best effort */ }
       }
     } catch { /* best effort */ }

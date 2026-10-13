@@ -218,8 +218,8 @@ Certain columns (notably vector embeddings) are stored as compact Float32 BLOBs 
 **Registration:** Repositories call `registerBlobColumns(tableName, columns)` via the database manager to declare which columns contain BLOB data:
 
 ```ts
-await registerBlobColumns('vector_entries', ['embedding']);
 await registerBlobColumns('memories', ['embedding']);
+await registerBlobColumns('conversation_chunks', ['embedding']);
 ```
 
 **Behavior:**

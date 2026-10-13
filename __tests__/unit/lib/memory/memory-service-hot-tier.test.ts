@@ -16,10 +16,19 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   cosineSimilarity: jest.fn(() => 0.5),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
-  isHotVector: (metadata: { tier?: string }) => metadata.tier !== 'cold',
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -31,7 +40,7 @@ jest.mock('@/lib/logger', () => ({
 
 const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
 const embeddingMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock }
-const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock }
+const indexMock = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: { search: jest.Mock; shape: jest.Mock } }
 
 const t = '2026-04-01T00:00:00.000Z'
 function makeMemory(id: string, tier: 'hot' | 'cold') {
@@ -48,7 +57,6 @@ describe('searchMemoriesSemantic — hot/cold tiers', () => {
   let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
   const hot = makeMemory('hot-1', 'hot')
   const cold = makeMemory('cold-1', 'cold')
-  let store: { search: jest.Mock; getDimensions: jest.Mock }
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -59,26 +67,27 @@ describe('searchMemoriesSemantic — hot/cold tiers', () => {
         updateAccessTimeBulk: jest.fn(async () => undefined),
       },
     } as never)
-    // A store that honors its filter, like the real one.
+    // An index that honors hotOnly / exclude, like the real one.
     const entries = [
       { id: 'hot-1', score: 0.8, metadata: { memoryId: 'hot-1', characterId: 'char-1', tier: 'hot' } },
       { id: 'cold-1', score: 0.9, metadata: { memoryId: 'cold-1', characterId: 'char-1', tier: 'cold' } },
     ]
-    store = {
-      search: jest.fn((_e: unknown, _k: number, filter?: (m: any) => boolean) =>
-        entries.filter(e => !filter || filter(e.metadata))),
-      getDimensions: jest.fn().mockReturnValue(3),
-    }
-    vectorStoreMock.getCharacterVectorStore.mockResolvedValue(store)
+    indexMock.memoryIndex.search.mockImplementation(
+      async (_c: unknown, _v: unknown, opts: any) =>
+        entries.filter(
+          e => (!opts.hotOnly || e.metadata.tier !== 'cold') && !(opts.exclude?.has(e.metadata.memoryId)),
+        ),
+    )
+    indexMock.memoryIndex.shape.mockResolvedValue({ size: 2, dominantDimensions: 3, matching: 2 } as never)
     embeddingMock.generateEmbeddingForUser.mockResolvedValue({ embedding: new Float32Array([1, 0, 0]), model: 'test' })
     jest.isolateModules(() => {
       searchMemoriesSemantic = require('@/lib/memory/memory-service').searchMemoriesSemantic
     })
   })
 
-  it('passes a hot-only filter to the vector search by default', async () => {
+  it('asks the index for the hot tier only by default', async () => {
     const results = await searchMemoriesSemantic('char-1', 'anything at all', { userId: 'u1', limit: 10 })
-    expect(store.search.mock.calls[0][2]).toBeInstanceOf(Function)
+    expect(indexMock.memoryIndex.search.mock.calls[0][2]).toMatchObject({ hotOnly: true })
     expect(results.map(r => r.memory.id)).toEqual(['hot-1'])
   })
 
@@ -93,6 +102,7 @@ describe('searchMemoriesSemantic — hot/cold tiers', () => {
     const results = await searchMemoriesSemantic('char-1', 'anything at all', {
       userId: 'u1', limit: 10, includeCold: true,
     })
+    expect(indexMock.memoryIndex.search.mock.calls[0][2]).toMatchObject({ hotOnly: false })
     expect(results.map(r => r.memory.id).sort()).toEqual(['cold-1', 'hot-1'])
   })
 

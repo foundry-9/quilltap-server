@@ -19,14 +19,11 @@
 
 import { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex, embeddingTextFor } from './index-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
-import { rawQuery } from '@/lib/database/manager'
-import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
-import { publishRealtime } from '@/lib/realtime/bus'
-import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
+import type { EpisodicAnchorView } from './episodic'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { calculateReinforcedImportance } from './scoring'
 import {
@@ -223,23 +220,12 @@ async function resolveColdForAbsorb(
 }
 
 /**
- * Move a cold, non-superseded memory back to the hot tier. In the parent the
- * write lands immediately and the in-memory vector store is re-stamped; in the
- * job child it buffers, and the dispatcher invalidates the parent's store when
- * it commits.
+ * Move a cold, non-superseded memory back to the hot tier through the index.
+ * In the parent the write lands immediately; in the job child it buffers, and
+ * the dispatcher drops the parent's cache for the character when it commits.
  */
 async function promoteColdMemory(memory: Memory): Promise<Memory> {
-  const repos = getRepositories()
-  await repos.memories.updateTierBulk(memory.characterId, [memory.id], 'hot', { supersededById: null })
-  try {
-    const store = await getCharacterVectorStore(memory.characterId)
-    store.setTier([memory.id], 'hot')
-  } catch (error) {
-    logger.warn('[MemoryGate] Failed to re-stamp vector tier after promotion', {
-      memoryId: memory.id,
-      error: String(error),
-    })
-  }
+  await memoryIndex.setTier(memory.characterId, [memory.id], 'hot', { supersededById: null })
   logger.debug('[MemoryGate] Promoted cold memory to hot on re-observation', {
     memoryId: memory.id,
     characterId: memory.characterId,
@@ -275,11 +261,9 @@ async function runMemoryGateInner(
 ): Promise<GateResult> {
   const debugInfo: string[] = []
   // Anchor line included so the gate compares/writes the same vector shape the
-  // create path stores (see buildMemoryEmbeddingText).
-  const embeddingText = buildMemoryEmbeddingText(
-    candidateSummary,
-    candidateContent,
-    candidateAnchors,
+  // create path stores (see embeddingTextFor).
+  const embeddingText = embeddingTextFor(
+    { summary: candidateSummary, content: candidateContent, ...(candidateAnchors ?? {}) },
     await refreshMemoryTimeZone(),
   )
 
@@ -318,7 +302,6 @@ async function runMemoryGateInner(
   const embedding = embeddingResult.embedding
   debugInfo.push(`[Gate] Generated embedding (${embedding.length} dimensions)`)
 
-  const vectorStore = await getCharacterVectorStore(characterId)
   const repos = getRepositories()
 
   // A vector whose row is gone (an orphan) must not stand at rank 1: with no
@@ -328,7 +311,7 @@ async function runMemoryGateInner(
   // out of the top K. Orphans are not pruned here: in the job child a row this
   // job inserted is invisible to the snapshot (bug 209) and would look like one.
   let k = GATE_TOP_K
-  let vectorResults = vectorStore.search(embedding, k)
+  let vectorResults = await memoryIndex.search(characterId, embedding, { limit: k, hotOnly: false })
   let memoryMap = new Map<string, Memory>()
   for (;;) {
     const matchedIds = vectorResults.map(r => r.id)
@@ -338,7 +321,7 @@ async function runMemoryGateInner(
     const storeExhausted = vectorResults.length < k
     if (live >= GATE_TOP_K || storeExhausted || k >= GATE_MAX_SEARCH_K) break
     k = Math.min(GATE_MAX_SEARCH_K, k + (GATE_TOP_K - live))
-    vectorResults = vectorStore.search(embedding, k)
+    vectorResults = await memoryIndex.search(characterId, embedding, { limit: k, hotOnly: false })
   }
   const results = vectorResults.filter(r => memoryMap.has(r.id)).slice(0, GATE_TOP_K)
   const orphanIds = vectorResults.filter(r => !memoryMap.has(r.id)).map(r => r.id)
@@ -481,39 +464,25 @@ export async function patchMemory(memory: Memory, patch: Partial<Memory>): Promi
 
 /**
  * Regenerate a memory's embedding from its current summary/content/anchors and
- * write it to both the row and the character's vector store. Best-effort:
- * failures warn and leave the old vector in place.
+ * write it through the index (row and cache, tier kept). Best-effort: failures
+ * warn and leave the old vector in place.
  */
 export async function reembedMemory(
   memory: Memory,
   userId: string,
   embeddingProfileId?: string,
 ): Promise<boolean> {
-  const repos = getRepositories()
   try {
     const embeddingResult = await generateEmbeddingForUser(
-      buildMemoryEmbeddingText(memory.summary, memory.content, memory, await refreshMemoryTimeZone()),
+      embeddingTextFor(memory, await refreshMemoryTimeZone()),
       userId,
       embeddingProfileId,
       { priority: 'background' }
     )
 
-    await repos.memories.updateForCharacter(
-      memory.characterId,
-      memory.id,
-      { embedding: embeddingResult.embedding }
-    )
-
-    const vectorStore = await getCharacterVectorStore(memory.characterId)
-    if (vectorStore.hasVector(memory.id)) {
-      await vectorStore.updateVector(memory.id, embeddingResult.embedding)
-    } else {
-      await vectorStore.addVector(memory.id, embeddingResult.embedding, {
-        memoryId: memory.id,
-        characterId: memory.characterId,
-      })
-    }
-    await vectorStore.save()
+    await memoryIndex.upsert(memory.characterId, [
+      { id: memory.id, embedding: embeddingResult.embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' },
+    ])
     logger.debug('[MemoryGate] Re-embedded memory', { memoryId: memory.id })
     return true
   } catch (error) {
@@ -791,317 +760,6 @@ export async function linkRelatedMemories(
   })
 
   return linkedIds
-}
-
-// =============================================================================
-// Deletion chokepoint — unlink before delete
-// =============================================================================
-
-/**
- * Warn-log threshold for single-memory deletions touching an unusually
- * large neighbour set. Either indicates a hub node (interesting) or a bug.
- */
-const SINGLE_DELETE_NEIGHBOUR_WARN = 20
-
-/**
- * Warn-log threshold for batch deletions. Batch cascades from large
- * characters or chats are expected; the warn fires when neighbour count
- * outstrips even those.
- */
-const BATCH_DELETE_NEIGHBOUR_WARN = 200
-
-/**
- * Remove deleted memories' vectors from their characters' indexes. Part of the
- * delete chokepoint (bug 200): `vector_entries` has no foreign key to
- * `memories`, so a row deleted without this leaves an orphan vector behind.
- * Best-effort — a failed removal is logged, never rethrown, because the rows
- * are already gone and the gate tolerates orphans. In the job child the store's
- * `save()` buffers like any other write and commits with the job.
- */
-async function removeDeletedVectors(idsByCharacter: ReadonlyMap<string, readonly string[]>): Promise<number> {
-  let removed = 0
-  for (const [characterId, ids] of idsByCharacter) {
-    try {
-      const store = await getCharacterVectorStore(characterId)
-      let removedHere = 0
-      for (const id of ids) {
-        if (await store.removeVector(id)) removedHere++
-      }
-      if (removedHere > 0) await store.save()
-      removed += removedHere
-    } catch (error) {
-      logger.warn('[MemoryGate] Failed to remove vectors for deleted memories', {
-        characterId,
-        memoryCount: ids.length,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-  return removed
-}
-
-/**
- * Scrub the digest bookkeeping that points at deleted rows (bug 225):
- *
- * - a surviving digest's `consolidatedFrom` drops the deleted members, so its
- *   size on the memory card and the model-facing "from N notes" provenance
- *   count only members that still exist;
- * - a surviving member of a deleted digest loses its `supersededById` and
- *   becomes a cap-demoted cold row (still cold, no digest), which the next
- *   consolidation can re-digest — rather than naming a digest that is gone.
- *
- * Scoped to the doomed rows' holders (a digest and its members share one) and
- * read through the repository, so in the job child the per-job memory overlay
- * applies. The `consolidatedFrom` scrub is a removal delta
- * (`removeConsolidatedMembers`), never a whole-array write built from a read:
- * two deletes from one digest in one job each buffer only their own removal,
- * and the replay applies both.
- *
- * Runs before the rows are deleted, alongside the `relatedMemoryIds` scrub.
- * Returns how many surviving rows it rewrote.
- */
-async function scrubDigestLinks(doomed: ReadonlySet<string>, holderIds: Iterable<string>): Promise<number> {
-  const holders = Array.from(new Set(holderIds))
-  if (doomed.size === 0 || holders.length === 0) return 0
-  const repos = getRepositories()
-  const doomedIds = Array.from(doomed)
-  let touched = 0
-
-  const digests = await repos.memories.findDigestsContainingMembers(holders, doomedIds)
-  for (const digest of digests) {
-    if (doomed.has(digest.id)) continue
-    const removed = (digest.consolidatedFrom ?? []).filter(id => doomed.has(id))
-    if (removed.length === 0) continue
-    await repos.memories.removeConsolidatedMembers(digest.characterId, digest.id, removed)
-    touched++
-  }
-
-  const orphanedByCharacter = new Map<string, string[]>()
-  for (const member of await repos.memories.findIdsSupersededByAny(holders, doomedIds)) {
-    if (doomed.has(member.id)) continue
-    const list = orphanedByCharacter.get(member.characterId) ?? []
-    list.push(member.id)
-    orphanedByCharacter.set(member.characterId, list)
-  }
-  for (const [characterId, ids] of orphanedByCharacter) {
-    await repos.memories.updateTierBulk(characterId, ids, 'cold', { supersededById: null })
-    touched += ids.length
-  }
-
-  logger.debug('[MemoryGate] Scrubbed digest links to deleted memories', {
-    doomed: doomed.size,
-    holders: holders.length,
-    digestsScanned: digests.length,
-    touched,
-    orphanedMembers: Array.from(orphanedByCharacter.values()).reduce((n, ids) => n + ids.length, 0),
-  })
-  return touched
-}
-
-/** Holder id → the subject buckets of the digests a delete removed. */
-type DeletedDigestBuckets = Map<string, Set<string>>
-
-function addDigestBucket(
-  buckets: DeletedDigestBuckets,
-  row: { characterId: string; aboutCharacterId?: string | null; source?: string | null },
-): void {
-  if (row.source !== 'CONSOLIDATED') return
-  if (!row.characterId || !row.aboutCharacterId) return // the no-subject bucket has no mirror
-  const set = buckets.get(row.characterId) ?? new Set<string>()
-  set.add(row.aboutCharacterId)
-  buckets.set(row.characterId, set)
-}
-
-/**
- * Refresh the Commonplace mirror (`Commonplace/<Subject>.md`) of every bucket
- * a delete just took a digest out of, so the vault stops presenting a deleted
- * digest as canon. Parent-only by construction: in the job child
- * `mirrorCommonplaceForSubjects` writes nothing, and the dispatcher mirrors a
- * child's digest deletes after its batch commits. Never throws.
- */
-async function mirrorBucketsAfterDigestDelete(buckets: DeletedDigestBuckets): Promise<void> {
-  if (buckets.size === 0) return
-  if (process.env.QUILLTAP_JOB_CHILD === '1') {
-    logger.debug('[MemoryGate] Digest deleted in the job child; the dispatcher mirrors after commit', {
-      holders: buckets.size,
-    })
-    return
-  }
-  try {
-    const { mirrorCommonplaceForSubjects } = await import('./commonplace-mirror')
-    for (const [holderId, subjects] of buckets) {
-      const written = await mirrorCommonplaceForSubjects(holderId, subjects)
-      logger.debug('[MemoryGate] Refreshed Commonplace mirror after digest delete', {
-        characterId: holderId,
-        subjects: subjects.size,
-        written,
-      })
-    }
-  } catch (error) {
-    logger.warn('[MemoryGate] Commonplace mirror refresh after digest delete failed', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
-
-/**
- * Delete a single memory, scrub the deleted ID from every neighbour's
- * `relatedMemoryIds` and from the digest bookkeeping (`consolidatedFrom`,
- * `supersededById` — see {@link scrubDigestLinks}), and remove its vector.
- * The single chokepoint for memory deletion — parallel to
- * `createMemoryWithGate` on the write side. Idempotent: if the row is
- * already gone, returns false without touching neighbours.
- *
- * Callers that need to cascade many memories at once should use
- * {@link deleteMemoriesWithUnlinkBatch} — it scrubs neighbours with one
- * statement per holder instead of one per ID.
- */
-export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean> {
-  const startedAt = Date.now()
-  const repos = getRepositories()
-
-  const target = await repos.memories.findById(memoryId)
-  if (!target) {
-    return false
-  }
-
-  // A removal delta in SQL across every holder: applied against the rows at
-  // commit, so two deletes in one job, or two jobs, each remove their own id
-  // (bug 234).
-  const neighboursTouched = await repos.memories.removeRelatedMemoryIdsEverywhere([memoryId])
-  const digestLinksScrubbed = await scrubDigestLinks(new Set([memoryId]), [target.characterId])
-
-  const deleted = await repos.memories.delete(memoryId)
-  const vectorsRemoved = deleted
-    ? await removeDeletedVectors(new Map([[target.characterId, [memoryId]]]))
-    : 0
-
-  const logFields = {
-    memoryId,
-    vectorsRemoved,
-    digestLinksScrubbed,
-    neighboursTouched: neighboursTouched ?? 0,
-    durationMs: Date.now() - startedAt,
-  }
-  if ((neighboursTouched ?? 0) >= SINGLE_DELETE_NEIGHBOUR_WARN) {
-    logger.warn('[MemoryGate] deleteMemoryWithUnlink touched an unusually large neighbour set', logFields)
-  }
-  logger.debug('[MemoryGate] deleteMemoryWithUnlink complete', logFields)
-
-  // Collection-wide: this takes a memory id, not a chat id, so there is no
-  // narrower hint to give. A no-op from the job child by design — the parent
-  // chokepoints announce a child's deletions.
-  if (deleted) {
-    publishRealtime('memories')
-    const buckets: DeletedDigestBuckets = new Map()
-    addDigestBucket(buckets, target)
-    await mirrorBucketsAfterDigestDelete(buckets)
-  }
-
-  return deleted
-}
-
-/**
- * Batch version of {@link deleteMemoryWithUnlink}. Scrubs every requested ID —
- * found or already gone — from every row's `relatedMemoryIds` with one SQL
- * removal delta, deletes the batch, then removes the deleted rows' vectors.
- *
- * Use this for cascades: character deletion, chat-wipe, swipe-group cleanup,
- * housekeeping retention sweeps. Calling the single-ID helper in a loop is
- * correct but wastes a full table scan per ID.
- *
- * Returns the number of memory rows actually deleted (the neighbour count is
- * logged, not returned).
- */
-export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promise<number> {
-  return (await deleteMemoriesWithUnlinkBatchReport(memoryIds)).deleted
-}
-
-/**
- * {@link deleteMemoriesWithUnlinkBatch}, also reporting how many vectors the
- * chokepoint removed. For cascades that log or return that count.
- */
-export async function deleteMemoriesWithUnlinkBatchReport(
-  memoryIds: string[],
-): Promise<{ deleted: number; vectorsRemoved: number }> {
-  if (memoryIds.length === 0) return { deleted: 0, vectorsRemoved: 0 }
-
-  const startedAt = Date.now()
-  const repos = getRepositories()
-  const doomedSet = new Set(memoryIds)
-
-  // Group by character so each deletion call carries its proper scope. The
-  // by-character split also means we never touch unrelated rows — the
-  // repository's bulkDelete is `characterId`-scoped. Chunked because each ID
-  // is one bind variable, and a full-wipe cascade can pass more IDs than
-  // SQLITE_MAX_VARIABLE_NUMBER allows in a single statement. Resolved before
-  // the digest scrub, which is scoped to these holders; the digest rows'
-  // buckets are noted for the Commonplace mirror refresh after the delete.
-  const idsByCharacter = new Map<string, string[]>()
-  const deletedDigestBuckets: DeletedDigestBuckets = new Map()
-  for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
-    const toResolve = await rawQuery<Array<{ id: string; characterId: string; source?: string | null; aboutCharacterId?: string | null }>>(
-      `SELECT id, characterId, source, aboutCharacterId FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
-      chunk
-    )
-    for (const row of toResolve) {
-      const list = idsByCharacter.get(row.characterId) ?? []
-      list.push(row.id)
-      idsByCharacter.set(row.characterId, list)
-      addDigestBucket(deletedDigestBuckets, row)
-    }
-  }
-  // The neighbour scrub: one SQL removal delta across every holder, applied
-  // against the rows at commit (bug 234). It takes every requested id, not
-  // only those still found as rows, so an id already gone leaves its
-  // neighbours too. A row the caller has just rewritten in this operation (a
-  // merge survivor) is reached by the same delta after its own write, so no
-  // override list is needed.
-  const neighboursTouched = (await repos.memories.removeRelatedMemoryIdsEverywhere([...doomedSet])) ?? 0
-  const digestLinksScrubbed = await scrubDigestLinks(doomedSet, idsByCharacter.keys())
-
-  // In the job child, `bulkDelete` is a buffered write and returns nothing —
-  // the rows go at commit. Counting `undefined` produced NaN (logged as
-  // `deleted: null`), which also disarmed the ineffective-sweep backoff. The
-  // ids were resolved against the database just above, so their count is what
-  // the commit will remove.
-  let deleted = 0
-  let countSource: 'repository' | 'resolved-ids' = 'repository'
-  for (const [characterId, ids] of idsByCharacter) {
-    const result: unknown = await repos.memories.bulkDelete(characterId, ids)
-    if (typeof result === 'number' && Number.isFinite(result)) {
-      deleted += result
-    } else {
-      deleted += ids.length
-      countSource = 'resolved-ids'
-    }
-  }
-
-  const vectorsRemoved = await removeDeletedVectors(idsByCharacter)
-
-  const logFields = {
-    requested: memoryIds.length,
-    deleted,
-    vectorsRemoved,
-    countSource,
-    neighboursTouched,
-    digestLinksScrubbed,
-    charactersAffected: idsByCharacter.size,
-    durationMs: Date.now() - startedAt,
-  }
-  if (neighboursTouched >= BATCH_DELETE_NEIGHBOUR_WARN) {
-    logger.warn('[MemoryGate] deleteMemoriesWithUnlinkBatch touched an unusually large neighbour set', logFields)
-  }
-  logger.debug('[MemoryGate] deleteMemoriesWithUnlinkBatch complete', logFields)
-
-  // Collection-wide for the same reason as the single-ID path, and doubly so:
-  // a batch can span several chats.
-  if (deleted > 0) {
-    publishRealtime('memories')
-    await mirrorBucketsAfterDigestDelete(deletedDigestBuckets)
-  }
-
-  return { deleted, vectorsRemoved }
 }
 
 // =============================================================================

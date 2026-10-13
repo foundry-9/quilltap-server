@@ -8,8 +8,8 @@
  */
 
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/memory/memory-service', () => ({
-  deleteMemoriesByChatIdWithVectors: jest.fn(async () => ({ deleted: 3, vectorsRemoved: 3 })),
+jest.mock('@/lib/memory/retire', () => ({
+  retireChatMemories: jest.fn(async () => ({ retired: 3, spared: 0, vectorsRemoved: 3 })),
 }))
 jest.mock('@/lib/background-jobs/queue-service', () => ({ enqueueMemoryExtraction: jest.fn(async () => 'job') }))
 jest.mock('@/lib/instance-settings', () => ({ getMemoryExtractionModeSettings: jest.fn() }))
@@ -21,6 +21,7 @@ import { handleMemoryRegenerateChat } from '@/lib/background-jobs/handlers/memor
 import { getRepositories } from '@/lib/repositories/factory'
 import { enqueueMemoryExtraction } from '@/lib/background-jobs/queue-service'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
+import { retireChatMemories } from '@/lib/memory/retire'
 
 const chatsUpdate = jest.fn()
 
@@ -51,6 +52,14 @@ const job = { id: 'job-9', userId: 'user-1', payload: { chatId: 'chat-1', connec
 
 beforeEach(() => {
   jest.clearAllMocks()
+})
+
+describe('memory regenerate — the wipe', () => {
+  it('wipes the chat through retireChatMemories', async () => {
+    setup('turn', null)
+    await handleMemoryRegenerateChat(job as never)
+    expect(retireChatMemories).toHaveBeenCalledWith('chat-1')
+  })
 })
 
 describe('memory regenerate — fold-grain OTHER rebuild', () => {

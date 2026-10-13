@@ -31,7 +31,7 @@ import { logger } from '@/lib/logger';
 import type { EmbeddingReindexAllPayload } from '../queue-service';
 import { ensureProcessorRunning } from '../processor';
 import { syncHelpDocs } from '@/lib/help/help-doc-sync';
-import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+import { memoryIndex } from '@/lib/memory/index-store';
 
 /** Max jobs per batch insert (SQLite variable limit is 999; stay well under). */
 const BATCH_SIZE = 200;
@@ -237,18 +237,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // vault is unavailable, and a dropped character's memories would then be
   // left permanently un-re-embedded. Memories are the ground truth here.
   const memoryCharacterIds = await repos.memories.findDistinctCharacterIds();
-  const vectorStoreManager = getVectorStoreManager();
-
-  // Full scope: clear every character's vector index so the dimension
-  // constraint resets (e.g. 1536 → 4096 model swap). Partial scope: leave
-  // stores alone — the per-row update path on EMBEDDING_GENERATE will
-  // overwrite the affected entries in place, and the migration's
-  // realignVectorIndicesDimensions pass already nudged the meta dim.
-  if (scope === 'all') {
-    for (const characterId of memoryCharacterIds) {
-      await vectorStoreManager.deleteStore(characterId);
-    }
-  }
+  // Nothing to clear: the memory index is the rows themselves, and each
+  // EMBEDDING_GENERATE rewrites its row's vector through `memoryIndex`; the
+  // parent drops a character's cache as each of those batches commits. Until
+  // then the cache matches the rows. A search mid-reindex scores the vectors
+  // that match the query's length and skips the rest.
 
   const failedMemoryIds = await failedIdsFor('MEMORY');
   for (const characterId of memoryCharacterIds) {

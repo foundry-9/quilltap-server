@@ -38,6 +38,11 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
+// The restore drops the memory-index cache once the rows are in.
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
+}))
+
 jest.mock('@/lib/file-storage/library-file-writer', () => ({
   writeLibraryFileBytes: jest.fn(),
 }))
@@ -82,7 +87,7 @@ const EMPTY_COLLECTIONS = [
   'groups', 'llmLogs', 'pluginConfigs', 'folders', 'wardrobeItems',
   'characterPluginData', 'conversationAnnotations', 'chatDocuments',
   'instanceSettings', 'embeddingStatus', 'conversationChunks', 'tfidfVocabularies',
-  'vectorIndexMetas', 'textReplacementRules', 'docMountPoints', 'docMountFiles',
+  'textReplacementRules', 'docMountPoints', 'docMountFiles',
   'docMountDocuments', 'docMountChunks', 'docMountFileLinks', 'docMountFolders',
   'docMountBlobs', 'projectDocMountLinks', 'groupDocMountLinks',
   'groupCharacterMembers', 'vectorEntries', 'chats', 'memories', 'chatSettings',

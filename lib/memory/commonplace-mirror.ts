@@ -227,9 +227,8 @@ export async function mirrorCommonplaceAfterCommit(
 
 /** The buffered memories writes that delete rows, and where each names its ids. */
 const MEMORY_DELETE_WRITES: Readonly<Record<string, (args: readonly unknown[]) => unknown[]>> = {
-  'memories.delete': (args) => [args[0]],
-  'memories.deleteForCharacter': (args) => [args[1]],
-  'memories.bulkDelete': (args) => (Array.isArray(args[1]) ? args[1] : []),
+  // `retireMemories` is the only deleter, and this is its only delete.
+  'memories.bulkDeleteUnsafe': (args) => (Array.isArray(args[1]) ? args[1] : []),
 }
 
 /** Every memory id a write batch deletes. Pure. */

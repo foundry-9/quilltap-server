@@ -4334,10 +4334,15 @@ Embedding coverage for one character.
 
 #### `PUT /api/v1/memories?action=embeddings`
 
-Rebuild the vector index for one character from the stored embeddings. Each entry carries its
-row's tier, so cold rows stay out of hot-only recall. `PUT` without `?action=embeddings` is a `400`.
+Rebuild the vector index for one character. Since 4.10 the index *is* the memory rows
+(`memories.embedding` + `memories.tier`), so this drops the in-process cache and reloads it from
+them; each vector arrives with its row's tier, so cold rows stay out of hot-only recall. `PUT`
+without `?action=embeddings` is a `400`.
 
 **Request Body**: `{ "characterId": "char-uuid" }`
+
+**Response**: `200 OK` — `{ message, indexed, failed }`: `indexed` vectors now in the index, and
+`failed` memories with no embedding (fill them with `POST ?action=embeddings`).
 
 #### `POST /api/v1/memories?action=anchor-gate-probe`
 
@@ -5510,9 +5515,10 @@ Create a backup and stage it for download. Returns a temporary backup ID.
 ```
 
 `compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory
-embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`,
-`vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json` and
-`doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore
+embeddings are nulled and `conversation-chunks.json`, `tfidf-vocabularies.json`,
+`embedding-status.json` and `doc-mount-chunks.json` are not written at all (no backup has written
+`vector-entries.json` / `vector-index-metas.json` since 4.10: a memory's vector rides on its row;
+a restore reads an older archive's `vector-entries.json` only to backfill a memory without one) — and the manifest records `compact: true`. Restore
 keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent
 rather than rejected.
 

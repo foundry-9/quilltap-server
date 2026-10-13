@@ -16,7 +16,7 @@ import {
   regenerateMessageAsSwipe,
   streamSwipeRegeneration,
 } from '@/lib/services/chat-message';
-import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { retireMemories } from '@/lib/memory/retire';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -179,12 +179,16 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       let memoriesDeleted = 0;
       if (memoryCount > 0 && memoryAction && memoryAction !== 'KEEP_MEMORIES') {
         if (memoryAction === 'DELETE_MEMORIES' || memoryAction === 'REGENERATE_MEMORIES') {
-          const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessagesWithVectors(messageIdsToDelete);
-          memoriesDeleted = deleted;
+          const memoryIds: string[] = [];
+          for (const sourceMessageId of messageIdsToDelete) {
+            memoryIds.push(...(await repos.memories.findBySourceMessageId(sourceMessageId)).map((m) => m.id));
+          }
+          const report = await retireMemories(memoryIds, { reason: 'message-cascade' });
+          memoriesDeleted = report.retired;
           logger.info('[Messages API v1] Cascade deleted memories with message', {
             messageId,
-            memoriesDeleted: deleted,
-            vectorsRemoved,
+            memoriesDeleted: report.retired,
+            vectorsRemoved: report.vectorsRemoved,
           });
         }
       }
@@ -416,18 +420,20 @@ async function handleReattributeAction(
     return badRequest('Target participant not found in chat');
   }
 
-  // Find and delete memories associated with this message
+  // Find and delete memories associated with this message: they were
+  // extracted for the old speaker.
   const memoriesFromMessage = await repos.memories.findBySourceMessageId(messageId);
   let memoriesDeleted = 0;
-  for (const memory of memoriesFromMessage) {
+  if (memoriesFromMessage.length > 0) {
     try {
-      const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
-      if (deleted) {
-        memoriesDeleted++;
-      }
+      const report = await retireMemories(memoriesFromMessage.map((memory: { id: string }) => memory.id), {
+        reason: 'message-reattribution',
+      });
+      memoriesDeleted = report.retired;
     } catch (error) {
-      logger.error('[Messages API v1] Failed to delete memory during re-attribution', {
-        memoryId: memory.id,
+      logger.error('[Messages API v1] Failed to delete memories during re-attribution', {
+        messageId,
+        memoryCount: memoriesFromMessage.length,
         error: error instanceof Error ? error.message : String(error),
       });
     }

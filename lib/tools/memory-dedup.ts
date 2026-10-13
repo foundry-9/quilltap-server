@@ -11,7 +11,7 @@
 
 import { Memory } from '@/lib/schemas/types'
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { retireMemories } from '@/lib/memory/retire'
 import { planMemoryMerge, applyMemoryMerge } from '@/lib/memory/memory-merge'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { partitionByPolicyProtection } from '@/lib/memory/policy-protection'
@@ -339,10 +339,10 @@ export async function deduplicateCharacterMemories(
       })
     }
 
-    // Bulk delete discarded memories through the chokepoint (which also
-    // removes their vectors) so neighbours'
-    // relatedMemoryIds get scrubbed, the survivors' new link lists included.
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds)
+    // Retire the discarded memories through the deletion chokepoint, which
+    // evicts their vectors and scrubs every link that names them, the
+    // survivors' new link lists included.
+    const deletedCount = (await retireMemories(removeIds, { reason: 'near-duplicate-fold' })).retired
     logger.info('[MemoryDedup] Bulk deleted memories', {
       context: 'memory-dedup.deduplicateCharacterMemories',
       characterId,

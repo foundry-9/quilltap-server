@@ -5,12 +5,9 @@
  * default embedding profile produces. This pass runs on every boot and makes
  * the stored corpus conform to it, across every embedding-bearing store:
  *
- *   - memories               (main DB — re-embedded via reindex)
- *   - vector_entries         (main DB — non-conforming rows DELETED here;
- *                             they are derived data, already invisible to
- *                             vector search, and the memory re-embed
- *                             recreates them)
- *   - vector_indices         (main DB — meta `dimensions` snapped to target)
+ *   - memories               (main DB — re-embedded via reindex; the row is
+ *                             the memory index, so a non-conforming vector
+ *                             is skipped by search until it is replaced)
  *   - conversation_chunks    (main DB — re-embedded via reindex; stale chats
  *                             are treated like any other chat, since chunk
  *                             embeddings are never cold-tiered)
@@ -54,10 +51,6 @@ export interface EmbeddingDimensionReconcileResult {
   targetDimensions: number | null
   /** Why the pass was skipped, if it was. */
   skippedReason: 'no-profile' | 'builtin-profile' | 'no-fixed-dim' | 'db-unavailable' | null
-  /** Non-conforming vector_entries rows deleted. */
-  vectorEntriesDeleted: number
-  /** vector_indices meta rows whose dimensions were snapped to target. */
-  vectorIndexMetaFixed: number
   /** Recoverable non-conforming rows found, per table. */
   mismatched: {
     memories: number
@@ -70,8 +63,6 @@ export interface EmbeddingDimensionReconcileResult {
 }
 
 const EMPTY_RESULT: Omit<EmbeddingDimensionReconcileResult, 'targetDimensions' | 'skippedReason'> = {
-  vectorEntriesDeleted: 0,
-  vectorIndexMetaFixed: 0,
   mismatched: { memories: 0, conversationChunks: 0, helpDocs: 0, mountChunks: 0 },
   reindexEnqueued: false,
 }
@@ -175,31 +166,6 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
     mismatched: { ...EMPTY_RESULT.mismatched },
   }
 
-  // ---- vector_entries: delete non-conforming rows outright. They are pure
-  // derived data (the memory row keeps the source text), every search path
-  // already skips them by length, and the memory re-embed recreates them.
-  if (tableExists(db, 'vector_entries')) {
-    const del = db
-      .prepare(`DELETE FROM "vector_entries" WHERE ${NONCONFORMING}`)
-      .run(targetDim)
-    result.vectorEntriesDeleted = del.changes
-  }
-
-  // ---- vector_indices: snap meta dimensions to the standard so freshly
-  // re-embedded vectors are accepted and search validates against the truth.
-  if (tableExists(db, 'vector_indices')) {
-    const fix = db
-      .prepare(`UPDATE "vector_indices" SET dimensions = ? WHERE dimensions != ?`)
-      .run(targetDim, targetDim)
-    result.vectorIndexMetaFixed = fix.changes
-  }
-
-  if (result.vectorEntriesDeleted > 0 || result.vectorIndexMetaFixed > 0) {
-    // Drop cached in-memory stores so the next search loads the cleaned rows.
-    const { getVectorStoreManager } = await import('@/lib/embedding/vector-store')
-    getVectorStoreManager().unloadAll()
-  }
-
   // ---- Count what still needs re-embedding (recoverable rows only).
   if (tableExists(db, 'memories')) {
     // characterId guard mirrors the reindex fan-out (it enumerates characters
@@ -240,17 +206,10 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
     result.reindexEnqueued = await enqueueMismatchedReindex(profile.userId, profile.id)
   }
 
-  const touchedAnything =
-    totalMismatched > 0 ||
-    result.vectorEntriesDeleted > 0 ||
-    result.vectorIndexMetaFixed > 0
-
-  if (touchedAnything) {
+  if (totalMismatched > 0) {
     logger.info('Embedding dimension reconcile found non-conforming vectors', {
       profileId: profile.id,
       targetDimensions: targetDim,
-      vectorEntriesDeleted: result.vectorEntriesDeleted,
-      vectorIndexMetaFixed: result.vectorIndexMetaFixed,
       ...result.mismatched,
       reindexEnqueued: result.reindexEnqueued,
     })

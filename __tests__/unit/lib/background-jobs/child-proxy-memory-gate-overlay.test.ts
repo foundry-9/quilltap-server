@@ -45,8 +45,9 @@ jest.mock('@/lib/logging/create-logger', () => ({
   }),
 }));
 
+// The gate reaches the vector cache only through `memoryIndex`, which asks the
+// store manager for the character's store.
 jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
   getVectorStoreManager: jest.fn(),
   isHotVector: jest.fn(() => true),
 }));
@@ -75,13 +76,25 @@ import {
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
 import { createMemoryWithGate } from '@/lib/memory/memory-service';
-import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
+import { retireMemories } from '@/lib/memory/retire';
+import { rawQuery } from '@/lib/database/manager';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import type { Memory } from '@/lib/schemas/types';
 import type { ChildWritePayload } from '@/lib/background-jobs/ipc-types';
 
-const vectorMock = jest.requireMock('@/lib/embedding/vector-store') as { getCharacterVectorStore: jest.Mock };
+const vectorMock = jest.requireMock('@/lib/embedding/vector-store') as { getVectorStoreManager: jest.Mock };
+const mockedRawQuery = rawQuery as jest.MockedFunction<typeof rawQuery>;
+
+/** Hand the index this store for every character, loaded. */
+function installStore(store: Record<string, unknown>) {
+  vectorMock.getVectorStoreManager.mockReturnValue({
+    getStore: jest.fn(async () => store),
+    getLoadedStore: jest.fn(async () => store),
+    unloadStore: jest.fn(() => true),
+    unloadAll: jest.fn(),
+  });
+}
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock };
 const mockedRepoSource = mockedRealRepositories as jest.MockedFunction<typeof mockedRealRepositories>;
 
@@ -126,8 +139,7 @@ function installSnapshot(rows: Memory[]) {
     create: jest.fn(),
     updateForCharacter: jest.fn(),
     incrementReinforcement: jest.fn(),
-    bulkDelete: jest.fn(),
-    delete: jest.fn(),
+    bulkDeleteUnsafe: jest.fn(),
     addRelatedMemoryIds: jest.fn(),
     removeRelatedMemoryIds: jest.fn(),
     removeRelatedMemoryIdsEverywhere: jest.fn(),
@@ -137,6 +149,21 @@ function installSnapshot(rows: Memory[]) {
     findDigestsContainingMembers: jest.fn(async () => []),
     findIdsSupersededByAny: jest.fn(async () => []),
   };
+  // `retireMemories` resolves the rows it retires with raw SQL against the
+  // committed snapshot (not through the overlay).
+  mockedRawQuery.mockImplementation((async (_sql: string, params: string[] = []) =>
+    params
+      .map(id => byId.get(id))
+      .filter((r): r is Memory => !!r)
+      .map(r => ({
+        id: r.id,
+        characterId: r.characterId,
+        source: r.source,
+        tier: r.tier ?? 'hot',
+        aboutCharacterId: r.aboutCharacterId ?? null,
+        consolidatedFrom: JSON.stringify(r.consolidatedFrom ?? []),
+        supersededById: r.supersededById ?? null,
+      }))) as never);
   mockedRepoSource.mockReturnValue({
     memories,
     chatSettings: { findByUserId: jest.fn(async () => null) },
@@ -156,10 +183,10 @@ function installVectorStore(script: Array<(created: string[]) => Array<{ id: str
     search: jest.fn(() => (script.shift() ?? (() => []))(created)),
     addVector: jest.fn(async (id: string) => { created.push(id); }),
     hasVector: jest.fn(() => true),
-    updateVector: jest.fn(async () => undefined),
-    save: jest.fn(async () => undefined),
+    removeVector: jest.fn(async () => true),
+    tierOf: jest.fn(() => 'hot'),
   };
-  vectorMock.getCharacterVectorStore.mockResolvedValue(store);
+  installStore(store);
   return store;
 }
 
@@ -205,10 +232,8 @@ function replay(snapshot: Memory[], writes: ChildWritePayload[]): Map<string, Re
     } else if (method === 'appendReinforcementFootnotes') {
       const target = table.get(a[1] as string);
       if (target) target.content = appendCappedFootnotes(target.content as string, a[2] as string[]).content;
-    } else if (method === 'bulkDelete') {
+    } else if (method === 'bulkDeleteUnsafe') {
       for (const id of a[1] as string[]) table.delete(id);
-    } else if (method === 'delete') {
-      table.delete(a[0] as string);
     }
   }
   return table;
@@ -323,7 +348,7 @@ describe('bug 209 — the gate sees its own buffered writes inside one job', () 
       const repos = getChildRepositoriesProxy();
       await repos.memories.incrementReinforcement(CHAR, EXISTING, '2026-06-01T00:00:00.000Z', 3);
       await repos.memories.updateForCharacter(CHAR, EXISTING, { content: 'Patched.' });
-      await repos.memories.bulkDelete(CHAR, [NEIGHBOUR]);
+      await repos.memories.bulkDeleteUnsafe(CHAR, [NEIGHBOUR]);
 
       const rows = await repos.memories.findByIds([EXISTING, NEIGHBOUR]);
       expect(rows).toHaveLength(1);
@@ -416,15 +441,13 @@ describe('bug 234 — two deletes in one job scrub a shared neighbour of both', 
     const b = row({ id: B, relatedMemoryIds: [NEIGHBOUR] });
     const kept = row({ id: EXISTING, relatedMemoryIds: [NEIGHBOUR] });
     installSnapshot([neighbour, a, b, kept]);
-    vectorMock.getCharacterVectorStore.mockResolvedValue({
-      removeVector: jest.fn(async () => true),
-      save: jest.fn(async () => undefined),
-    });
+    const removeVector = jest.fn(async () => true);
+    installStore({ removeVector });
 
     const writes = await runWithJobScope('job-delete', async () => {
       // In the child the delete is buffered; the replay below is the commit.
-      await deleteMemoryWithUnlink(A);
-      await deleteMemoryWithUnlink(B);
+      await retireMemories([A], { reason: 'item-delete' });
+      await retireMemories([B], { reason: 'item-delete' });
       const [seen] = await getChildRepositoriesProxy().memories.findByIds([NEIGHBOUR]);
       expect(seen.relatedMemoryIds).toEqual([EXISTING]);
       return flushPendingWrites();
@@ -433,6 +456,10 @@ describe('bug 234 — two deletes in one job scrub a shared neighbour of both', 
     // No whole-list write of the neighbour: only deltas.
     expect(writes.some(w => w.method === 'memories.updateForCharacter'
       && (w.args[1] === NEIGHBOUR))).toBe(false);
+    // Each row went through the one sanctioned delete, and its vector left the cache.
+    expect(writes.filter(w => w.method === 'memories.bulkDeleteUnsafe').map(w => w.args))
+      .toEqual([[CHAR, [A]], [CHAR, [B]]]);
+    expect(removeVector.mock.calls.map(c => (c as unknown[])[0])).toEqual([A, B]);
     const table = replay([neighbour, a, b, kept], writes);
     expect(table.has(A)).toBe(false);
     expect(table.has(B)).toBe(false);
