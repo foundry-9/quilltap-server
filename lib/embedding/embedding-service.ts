@@ -14,6 +14,8 @@ import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { processSingleton } from '@/lib/utils/process-singleton'
+// Direct module, not the index-store barrel: the barrel's index imports this service.
+import { lexicalEmbeddingText } from '@/lib/memory/index-store/embedding-text'
 
 /**
  * Result of an embedding operation.
@@ -223,8 +225,18 @@ async function generateBuiltinEmbedding(
       fittedAt: vocabulary.fittedAt,
     })
 
-    // Generate the embedding
-    const result = embeddingProvider.generateEmbedding(text)
+    // A lexical embedder never sees a memory's anchor line (see
+    // `lexicalEmbeddingText`); every BUILTIN embed passes through here, so the
+    // stored rows, the admission candidate and the query agree on the shape.
+    const lexicalText = lexicalEmbeddingText(text)
+    if (lexicalText.length !== text.length) {
+      logger.debug('[Embedding] BUILTIN embed: memory anchor line left out', {
+        context: 'generateBuiltinEmbedding',
+        profileId: profile.id,
+        strippedChars: text.length - lexicalText.length,
+      })
+    }
+    const result = embeddingProvider.generateEmbedding(lexicalText)
 
     const embedding = applyEmbeddingProfile(result.embedding, profile)
 

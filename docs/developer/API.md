@@ -4410,7 +4410,7 @@ Fold clusters of one character's hot memories into digest rows and send the orig
 
 **Request Body**: `{ characterId, dryRun?, maxClustersPerRun?, clusterThreshold? }`. `characterId`
 is a UUID; `clusterThreshold` is 0–1 and overrides the stored threshold for this run, dry or real
-(a real run carries it in the job payload).
+(a real run carries it in the job payload), whichever embedding provider is the default.
 
 - `dryRun: true` runs **in-process** (dry-run jobs only log, so the report is returned directly),
   writes nothing, and is bounded: `maxClustersPerRun` defaults to 10 and is capped at 40, with a
@@ -4428,7 +4428,8 @@ Read and write the **instance-wide** consolidation settings (`instance_settings[
 `POST` merges a partial patch over the stored values; both return `{ success, settings }`.
 
 **Settings**: `enabled` (default false), `connectionProfileId` (null → cheap LLM), `clusterThreshold`
-(0–1, 0.72), `minClusterSize` (3), `maxClusterSize` (30), `matureAfterDays` (7), `maxClustersPerRun`
+(0–1, 0.72; neural default profiles), `tfidfClusterThreshold` (0–1, 0.30; used instead when the default
+embedding profile is BUILTIN), `minClusterSize` (3), `maxClusterSize` (30), `matureAfterDays` (7), `maxClustersPerRun`
 (40), `watermark` (150), `coldRetentionDays` (null → never delete cold rows).
 
 #### `GET` / `POST /api/v1/memories?action=extraction-mode-config`

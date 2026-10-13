@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Built-in TF-IDF profile: memory tuning; fix bug 243
+
+Spec: `docs/developer/features/builtin-tfidf-memory-tuning.md`. No migrations, no schema change, no plugin change.
+
+- BUILTIN embeds leave out a memory's trailing anchor line (`lexicalEmbeddingText`, `lib/memory/index-store/embedding-text.ts`, applied in `generateBuiltinEmbedding` and the refit corpus). Under TF-IDF the anchor's dates and place names dominated short memories: identical text with different anchors scored ~0.4–0.5, unrelated facts sharing a place ~0.4. `embeddingTextFor` is unchanged and still the only builder; neural profiles embed exactly what they did. `isMemoryAnchorLine` (`lib/memory/episodic.ts`) is the one reader of the line's grammar.
+- Admission thresholds per provider: `ADMISSION_THRESHOLDS_TFIDF` (near-duplicate 0.80, reinforce 0.40, related 0.20) beside the neural `ADMISSION_THRESHOLDS`, picked by `admissionThresholdsForProvider`. `AdmitPreparedRequest.embeddingProvider` carries the candidate's provider to the parent; missing reads as neural. The anchor probe uses the same picker. `AdmissionThresholds` is now an interface; `MemorySettings` gains `admissionTfidf`.
+- Consolidation: new `memoryConsolidation.tfidfClusterThreshold` (default 0.30), used instead of `clusterThreshold` (0.72) when the default embedding profile is BUILTIN (`resolveClusterThreshold`). A per-run threshold still wins. The report's `settings.clusterThreshold` is the one used. Consolidation card gains "Cluster threshold (Built-in)".
+- TF-IDF refit only when due (`lib/embedding/builtin-refit-policy.ts`): no vocabulary, a vocabulary fitted before `BUILTIN_TEXT_SHAPE_EPOCH` (2026-10-14, one-time re-embed without anchors), or memories created since the fit ≥ max(25, 10% of all memories). `scheduleRefit` evaluates this when its debounce fires (manual create/edit/delete no longer always refit and re-embed everything); import passes `{ force: true }`. `checkBuiltinRefit` runs at boot (instrumentation phase 3.8) and in the scheduled maintenance pass (step 10, `builtinRefit` in the summary). Both paths skip when a refit or full reindex is already pending or running (`refitInHand`).
+- Recall floor for TF-IDF unchanged (0.10); offline, relevant memories score 0.22–0.26 once anchors are out.
+- 243: the job child ran jobs before its plugin registry had loaded, so the first jobs after a fork failed with "Provider '…' not found in registry"; on BUILTIN instances the boot-time help-doc embeds were skipped section by section. `runJob` now awaits `whenPluginsReady()` (`lib/background-jobs/child/plugin-readiness.ts`), capped at 60 s.
+- Help: `help/embedding-profiles.md` (the Built-in profile's separate measures), `help/memory-consolidation.md` (Built-in cluster threshold).
+- Tests: `builtin-lexical-text.test.ts`, `builtin-refit-policy.test.ts`, `provider-thresholds.test.ts`, `consolidation-provider-threshold.test.ts`, `child-plugin-readiness.test.ts`; `admission-admit.test.ts` (TF-IDF vs neural scale), `embedding-memory-anchor-text.test.ts` (refit corpus without anchors), `import-memory-embeddings.test.ts` (forced refit).
+- `quilltap` CLI 4.10.0-dev.167 (version bump only).
+
 #### Memory refactor Phase E: recall as a pipeline; delivery
 
 Structural Phase E of `docs/developer/features/memory-system-refactor.md`. No migrations.

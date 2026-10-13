@@ -17,7 +17,8 @@
  *   searches' top-K, re-embedded on the fly).
  *
  * For each side it asks admission's own decider (`decideAdmission`, with the
- * same `ADMISSION_THRESHOLDS` admission itself uses) what it would do with the row against
+ * thresholds admission itself uses for the profile's provider —
+ * `admissionThresholdsForProvider`) what it would do with the row against
  * those neighbours, and reports how many rows would fold (reinforce, absorb or
  * promote) and how many would be absorbed as near-duplicates. If anchor-free
  * folds are materially higher, admission should compare on anchor-free text.
@@ -35,7 +36,7 @@ import { memoryIndex, embeddingTextFor } from './index-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
-import { ADMISSION_THRESHOLDS } from './settings'
+import { admissionThresholdsForProvider } from './settings'
 import {
   admissionReinforced,
   decideAdmission,
@@ -107,7 +108,8 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const limit = Math.min(200, Math.max(1, input.limit ?? 50))
   const repos = getRepositories()
   const sample = await repos.memories.findRecent(input.characterId, limit)
-  const thresholds = ADMISSION_THRESHOLDS
+  // Set from the first embedding's provider: the scale admission would use.
+  let thresholds = admissionThresholdsForProvider(null)
   // Anchor dates render on the instance's memory calendar, as the gate's do.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -126,6 +128,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     const result = await generateEmbeddingForUser(text, input.userId, input.embeddingProfileId, {
       priority: 'background',
     })
+    thresholds = admissionThresholdsForProvider(result.provider)
     return result.embedding
   }
 

@@ -40,6 +40,7 @@ A dry run spends one model call per cluster, so it is capped at a modest number 
 - **Enable consolidation** — turns on the daily run and the watermark trigger.
 - **Connection profile** — the model that writes digests. Blank uses your cheap LLM. A more capable model writes noticeably better digests, which matters: a poor digest outranks the notes it replaced. Consider a capable model for a first run over a large backlog, and the cheap one for the daily trickle after.
 - **Cluster threshold** — how alike two memories must be to share a cluster (default 0.72). Higher makes smaller, tighter clusters. A threshold given for a single run (through the API or `quilltap memories consolidate --threshold`) is honoured by a real run just as it is by a dry run, so the rehearsal and the performance gather the same clusters.
+- **Cluster threshold (Built-in)** — the same measure, used instead when the default embedding profile is the Built-in (TF-IDF) one (default 0.30). That profile reckons likeness by shared words alone and scores even close cousins modestly, so 0.72 would gather nothing at all. A threshold given for a single run applies whichever profile is in charge, and the run's report states the threshold it actually used.
 - **Minimum / maximum cluster size** — the fewest notes worth a digest (default 3; 2 once the notes are a fortnight old) and the most handed to one call (default 30).
 - **Mature after (days)** — memories younger than this are left alone (default 7).
 - **Clusters per run** — the most model calls one run makes (default 40).

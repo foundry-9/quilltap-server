@@ -2,7 +2,9 @@
  * Bug 204: the background re-embed (EMBEDDING_GENERATE for a MEMORY) and the
  * BUILTIN vocabulary refit must build a memory's text through
  * `embeddingTextFor`, the builder the gate and the create paths use —
- * anchor line (when / place) included.
+ * anchor line (when / place) included. The refit fits on that text as the
+ * BUILTIN path embeds it, i.e. through `lexicalEmbeddingText`, which leaves
+ * the anchor line out (builtin-tfidf-memory-tuning §2).
  */
 
 jest.mock('@/lib/logger', () => ({
@@ -97,7 +99,7 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
     ])
   })
 
-  it('EMBEDDING_REFIT fits the vocabulary on the anchored text', async () => {
+  it('EMBEDDING_REFIT fits the vocabulary on the BUILTIN text: canonical text, anchor line left out', async () => {
     const upsertByProfileId = jest.fn().mockResolvedValue(undefined)
     mockGetRepositories.mockReturnValue({
       embeddingProfiles: { findById: jest.fn().mockResolvedValue({ id: 'p-1', provider: 'BUILTIN' }) },
@@ -109,11 +111,12 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
 
     await handleEmbeddingRefit(job('EMBEDDING_REFIT', { profileId: 'p-1', triggerReindex: false }))
 
-    // The entity word appears only in the anchor line; it is in the fitted
-    // vocabulary only if the corpus was built with the anchor.
+    // Summary and content words are fitted; the words that appear only in
+    // the anchor line are not, because the BUILTIN path never embeds it.
     const saved = upsertByProfileId.mock.calls[0][1] as { vocabulary: string }
     const terms = JSON.stringify(JSON.parse(saved.vocabulary))
-    expect(terms).toContain('"gullhaven"')
-    expect(terms).toContain('"place"')
+    expect(terms).toContain('"sandwich"')
+    expect(terms).not.toContain('"gullhaven"')
+    expect(terms).not.toContain('"place"')
   })
 })

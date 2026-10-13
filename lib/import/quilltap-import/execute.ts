@@ -400,11 +400,12 @@ async function enqueueImportedMemoryEmbeddings(
   }
 
   // BUILTIN TF-IDF vocabularies are corpus-derived and the corpus just grew:
-  // schedule the debounced refit-with-reindex, the same follow-up manual
-  // memory creation performs. (No-op for API-backed providers.)
+  // schedule the debounced refit-with-reindex. Forced, because imported rows
+  // keep their original `createdAt`, so the drift count that gates a manual
+  // edit's refit cannot see them. (No-op for API-backed providers.)
   if (profile.provider === 'BUILTIN') {
     try {
-      await scheduleRefit(userId, profile.id);
+      await scheduleRefit(userId, profile.id, { force: true });
     } catch (error) {
       moduleLogger.warn('Failed to schedule vocabulary refit after import', {
         userId,

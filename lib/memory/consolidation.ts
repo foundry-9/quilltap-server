@@ -69,6 +69,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { memoryIndex, embeddingTextFor } from './index-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
+import { resolveClusterThreshold } from './settings-defaults'
 import { invalidateFrozenArchive } from './recall/archive'
 import {
   clusterBucket,
@@ -700,12 +701,25 @@ export async function runConsolidation(
   }
   const userId = opts.userId ?? holderRaw.userId
 
+  // The clustered vectors are the default profile's; cluster on its scale.
+  let embeddingProvider: string | null = null
+  try {
+    embeddingProvider = (await repos.embeddingProfiles.findDefault(userId))?.provider ?? null
+  } catch (error) {
+    log.debug('Could not read the default embedding profile; clustering on the neural scale', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  settings.clusterThreshold = resolveClusterThreshold(settings, embeddingProvider, opts.settings?.clusterThreshold)
+
   log.debug('Consolidation starting', {
     characterId,
     trigger,
     dryRun,
     maxClusters,
     clusterThreshold: settings.clusterThreshold,
+    embeddingProvider,
     minClusterSize: settings.minClusterSize,
     maxClusterSize: settings.maxClusterSize,
     matureAfterDays: settings.matureAfterDays,

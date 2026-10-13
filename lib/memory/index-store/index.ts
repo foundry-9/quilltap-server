@@ -15,5 +15,5 @@ export {
   type MemoryIndexHit,
   type MemoryIndexEntryView,
 } from './memory-index'
-export { embeddingTextFor, type EmbeddingTextSource } from './embedding-text'
+export { embeddingTextFor, lexicalEmbeddingText, type EmbeddingTextSource } from './embedding-text'
 export { generateMissingEmbeddings, rebuildVectorIndex, type BackfillOptions } from './backfill'

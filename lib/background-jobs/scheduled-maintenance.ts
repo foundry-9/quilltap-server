@@ -15,7 +15,9 @@
  *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
  *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
  *  6. closed terminal (Ariel) PTY sessions and their transcript files;
- *  7. orphaned thumbnail-cache entries whose source file is gone.
+ *  7. orphaned thumbnail-cache entries whose source file is gone;
+ *  8–9. the fold OTHER and episode catch-ups;
+ *  10. the Built-in (TF-IDF) vocabulary drift check (`checkBuiltinRefit`).
  *
  * ## Why parent-side, not a forked-child job
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
@@ -46,6 +48,7 @@ import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-asset
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
 import { enqueueFoldCatchups } from './maintenance/fold-catchup';
+import { checkBuiltinRefit } from '@/lib/embedding/builtin-refit-policy';
 import type { ExtractionCursorMap } from '@/lib/schemas/memory-extraction-cursor.types';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
@@ -83,6 +86,8 @@ export interface MaintenanceSweepSummary {
   orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
   foldOtherCatchup: { enqueued: number; deferred: number };
   foldEpisodeCatchup: { enqueued: number; deferred: number };
+  /** Why the Built-in (TF-IDF) vocabulary was refit this pass, if it was. */
+  builtinRefit: { reason: string | null; enqueued: boolean };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
 }
@@ -201,6 +206,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
     foldOtherCatchup: { enqueued: 0, deferred: 0 },
     foldEpisodeCatchup: { enqueued: 0, deferred: 0 },
+    builtinRefit: { reason: null, enqueued: false },
     failures: [],
   };
 
@@ -282,6 +288,13 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   await runSweep(summary, 'fold-episode-catchup', 'Fold episode catch-up failed — continuing',
     () => enqueueFoldCatchups('episode-fold', { chats: catchupChats, cursors: catchupCursors }),
     (result) => { summary.foldEpisodeCatchup = result; });
+
+  // 10. Built-in (TF-IDF) vocabulary drift: AUTO memories never ask for a
+  //     refit themselves, so the pass checks whether the corpus has outgrown
+  //     the vocabulary (no-op on neural defaults).
+  await runSweep(summary, 'builtin-refit', 'TF-IDF refit check failed — continuing',
+    () => checkBuiltinRefit(),
+    (result) => { summary.builtinRefit = { reason: result.reason, enqueued: result.enqueued }; });
 
   try {
     await setLastMaintenanceSweepAt();

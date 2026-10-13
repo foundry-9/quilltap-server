@@ -215,6 +215,7 @@ precedent: `memoryRecall`, `memoryExtractionLimits`):
   enabled: boolean            // default false; Friday rollout turns it on
   connectionProfileId: string | null  // null → cheap LLM; recommend a capable model
   clusterThreshold: number    // cosine, default 0.72
+  tfidfClusterThreshold: number // cosine when the default profile is BUILTIN, default 0.30 (builtin-tfidf-memory-tuning.md §5)
   minClusterSize: number      // default 3 (2 when any member is > matureAfterDays old)
   maxClusterSize: number      // default 30
   matureAfterDays: number     // default 7 — don't consolidate rows younger than this

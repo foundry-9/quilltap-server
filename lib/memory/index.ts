@@ -147,6 +147,8 @@ export {
   resolveMemorySettings,
   MEMORY_SETTING_DEFAULTS,
   ADMISSION_THRESHOLDS,
+  ADMISSION_THRESHOLDS_TFIDF,
+  admissionThresholdsForProvider,
   type MemorySettings,
 } from './settings'
 

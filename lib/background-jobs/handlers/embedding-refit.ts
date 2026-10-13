@@ -13,7 +13,7 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { embeddingTextFor } from '@/lib/memory/index-store';
+import { embeddingTextFor, lexicalEmbeddingText } from '@/lib/memory/index-store';
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingRefitPayload } from '../queue-service';
 import { enqueueEmbeddingReindexAll } from '../queue-service';
@@ -92,12 +92,13 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
     return;
   }
 
-  // Prepare documents for TF-IDF fitting
-  // Same text the rows are embedded with (anchor line included), so tokens
-  // that occur only in anchor lines make it into the fitted vocabulary (bug 204).
+  // Prepare documents for TF-IDF fitting: exactly the text the BUILTIN path
+  // embeds — the canonical memory text (bug 204) with its anchor line left
+  // out, as `generateBuiltinEmbedding` does — so the vocabulary, IDF and
+  // average length describe what is actually vectorised.
   // Anchor dates render on the instance's memory calendar (cold cache in the child).
   const memoryTimeZone = await refreshMemoryTimeZone();
-  const documents = allMemories.map(m => embeddingTextFor(m, memoryTimeZone));
+  const documents = allMemories.map(m => lexicalEmbeddingText(embeddingTextFor(m, memoryTimeZone)));
 
   // Include help docs in the corpus for better vocabulary coverage
   try {

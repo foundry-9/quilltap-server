@@ -235,8 +235,13 @@ export const MemoryConsolidationSettingsSchema = z.object({
   enabled: z.boolean().default(false),
   /** Connection profile for the consolidation call. Null → the cheap LLM. */
   connectionProfileId: z.string().nullable().default(null),
-  /** Cosine similarity at which two memories join a cluster. */
+  /** Cosine similarity at which two memories join a cluster (neural embedding profiles). */
   clusterThreshold: z.number().min(0).max(1).default(0.72),
+  /**
+   * The same, when the default embedding profile is the Built-in (TF-IDF) one,
+   * whose cosines run far lower (builtin-tfidf-memory-tuning §5).
+   */
+  tfidfClusterThreshold: z.number().min(0).max(1).default(0.30),
   /** Smallest cluster worth a digest (drops to 2 when any member is older than `matureAfterDays`). */
   minClusterSize: z.number().int().min(2).default(3),
   /** Largest cluster handed to one consolidation call. */

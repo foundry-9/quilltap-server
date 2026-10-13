@@ -2,7 +2,8 @@
  * Embedding Job Scheduler
  *
  * Schedules debounced vocabulary refit jobs for BUILTIN embedding profiles
- * and cleans up embedding-status rows when an embeddable entity is deleted.
+ * (when `builtin-refit-policy` says one is due) and cleans up embedding-status
+ * rows when an embeddable entity is deleted.
  */
 
 import { logger } from '@/lib/logger';
@@ -10,6 +11,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueEmbeddingRefit } from '@/lib/background-jobs/queue-service';
 import type { EmbeddableEntityType } from '@/lib/schemas/types';
 import { processSingleton } from '@/lib/utils/process-singleton';
+import { assessBuiltinRefit, refitInHand } from './builtin-refit-policy';
 
 /**
  * Debounce state for refit scheduling
@@ -17,23 +19,40 @@ import { processSingleton } from '@/lib/utils/process-singleton';
  */
 const refitDebounceTimers = processSingleton('embedding.refitDebounceTimers', () => new Map<string, NodeJS.Timeout>());
 
+/** Debounce keys whose pending refit was requested with `force`. */
+const forcedRefits = processSingleton('embedding.refitForced', () => new Set<string>());
+
 /**
  * Default debounce delay for refit scheduling (5 seconds)
  */
 const REFIT_DEBOUNCE_MS = 5000;
 
+export interface ScheduleRefitOptions {
+  /**
+   * Refit whatever the vocabulary's state. For bulk corpus changes the drift
+   * count cannot see — an import keeps its rows' original `createdAt`.
+   */
+  force?: boolean;
+}
+
 /**
  * Schedule a vocabulary refit for a BUILTIN profile (debounced)
  *
- * Multiple rapid calls will be collapsed into a single refit.
- * Only schedules if the user has a BUILTIN default profile.
+ * Multiple rapid calls will be collapsed into a single check; a forced call
+ * keeps the collapsed check forced. Only schedules if the user has a BUILTIN
+ * default profile. When the timer fires, the refit (with its full reindex) is
+ * enqueued only if the vocabulary needs one (`assessBuiltinRefit`: unfitted,
+ * fitted before the text-shape change, or drifted), or when forced — a
+ * single memory edit is embedded against the current vocabulary and is not by
+ * itself a reason to re-embed everything.
  *
  * @param userId The user ID
  * @param profileId Optional profile ID (uses default if not specified)
  */
 export async function scheduleRefit(
   userId: string,
-  profileId?: string
+  profileId?: string,
+  options: ScheduleRefitOptions = {}
 ): Promise<void> {
   const repos = getRepositories();
 
@@ -55,6 +74,7 @@ export async function scheduleRefit(
   }
 
   const debounceKey = `${userId}:${profile.id}`;
+  if (options.force) forcedRefits.add(debounceKey);
 
   // Clear any existing timer
   const existingTimer = refitDebounceTimers.get(debounceKey);
@@ -62,11 +82,46 @@ export async function scheduleRefit(
     clearTimeout(existingTimer);
   }
 
+  logger.debug('[EmbeddingScheduler] Refit check scheduled (debounced)', {
+    context: 'scheduleRefit',
+    userId,
+    profileId: profile.id,
+    forced: forcedRefits.has(debounceKey),
+  });
+
   // Schedule new refit with debounce
   const timer = setTimeout(async () => {
     refitDebounceTimers.delete(debounceKey);
+    const forced = forcedRefits.delete(debounceKey);
 
     try {
+      let reason: string | null = forced ? 'forced' : null;
+      if (!forced) {
+        const assessment = await assessBuiltinRefit(profile);
+        reason = assessment.reason;
+        if (!reason) {
+          logger.info('[EmbeddingScheduler] Refit not needed; the vocabulary is current', {
+            context: 'scheduleRefit',
+            userId,
+            profileId: profile.id,
+            newSinceFit: assessment.newSinceFit,
+            totalMemories: assessment.totalMemories,
+          });
+          return;
+        }
+        const inHand = await refitInHand();
+        if (inHand) {
+          logger.info('[EmbeddingScheduler] Refit due but one is already in hand; not enqueueing another', {
+            context: 'scheduleRefit',
+            userId,
+            profileId: profile.id,
+            reason,
+            inHand,
+          });
+          return;
+        }
+      }
+
       await enqueueEmbeddingRefit(userId, {
         profileId: profile.id,
         triggerReindex: true,
@@ -76,6 +131,7 @@ export async function scheduleRefit(
         context: 'scheduleRefit',
         userId,
         profileId: profile.id,
+        reason,
       });
     } catch (error) {
       logger.error('[EmbeddingScheduler] Failed to schedule refit job', {
