@@ -769,7 +769,10 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   message <id>                Full content of a single chat message
   log <id>                    Full request/response of a single LLM log
   memories --character <id>   Memories held by a character
-                              (flags: --about <id|name> --source AUTO|MANUAL)
+                              (flags: --about <id|name>
+                              --source AUTO|MANUAL|CONSOLIDATED
+                              --tier hot|cold (NULL tier counts as hot)
+                              --limit N)
   characters status           Per-character vault readiness report:
                               flag value, vault present, single-file count,
                               Prompts/ and Scenarios/ folder counts, and any

@@ -658,10 +658,20 @@ function cmdMemories(args, ctx) {
   const { flags } = parseSubArgs(args);
   const json = asBool(flags.json);
   const limit = asInt(flags.limit, 50);
-  if (!flags.character) throw new Error('Usage: quilltap db memories --character <id|name> [--about <id|name>] [--source AUTO|MANUAL] [--limit N]');
+  if (!flags.character) throw new Error('Usage: quilltap db memories --character <id|name> [--about <id|name>] [--source AUTO|MANUAL|CONSOLIDATED] [--tier hot|cold] [--limit N]');
+  const tier = flags.tier === undefined ? null : String(flags.tier).toLowerCase();
+  if (tier !== null && tier !== 'hot' && tier !== 'cold') {
+    throw new Error(`--tier must be hot or cold (got '${flags.tier === true ? '' : flags.tier}')`);
+  }
 
   const db = ctx.openMain();
   try {
+    // Instances that predate the memory tiers have no `tier` column: every
+    // row reads as hot there.
+    let hasTier = false;
+    try {
+      hasTier = db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === 'tier');
+    } catch { /* treat as absent */ }
     const holder = resolveCharacter(db, String(flags.character), ctx.openMounts);
     const conditions = ['characterId = ?'];
     const params = [holder.id];
@@ -674,8 +684,13 @@ function cmdMemories(args, ctx) {
       conditions.push('source = ?');
       params.push(String(flags.source).toUpperCase());
     }
+    if (tier) {
+      if (hasTier) conditions.push(tier === 'hot' ? "COALESCE(tier, 'hot') = 'hot'" : "tier = 'cold'");
+      else if (tier === 'cold') conditions.push('0');
+    }
+    const tierSelect = hasTier ? "COALESCE(tier, 'hot') AS tier" : "'hot' AS tier";
     const rows = db.prepare(`
-      SELECT id, createdAt, source, importance, reinforcementCount,
+      SELECT id, createdAt, source, ${tierSelect}, importance, reinforcementCount,
              aboutCharacterId, chatId, summary
       FROM memories WHERE ${conditions.join(' AND ')}
       ORDER BY createdAt DESC LIMIT ?
@@ -685,11 +700,12 @@ function cmdMemories(args, ctx) {
 
     if (json) return printJson({ holder, total: totalRow.n, returned: rows.length, memories: rows });
 
-    console.log(`Memories held by ${holder.name} (${holder.id}) — ${rows.length} of ${totalRow.n}`);
+    console.log(`Memories held by ${holder.name} (${holder.id})${tier ? ` [${tier}]` : ''} — ${rows.length} of ${totalRow.n}`);
     printTable(rows.map(r => ({
       createdAt: r.createdAt,
       id: r.id,
       src: r.source,
+      tier: r.tier,
       imp: r.importance,
       rein: r.reinforcementCount,
       about: r.aboutCharacterId === holder.id ? 'self' : (r.aboutCharacterId || ''),

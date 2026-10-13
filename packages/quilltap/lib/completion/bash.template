@@ -69,11 +69,11 @@ _quilltap_complete() {
   # makes a flag's value look like the subcommand's verb, which is how
   # `quilltap docs --limit 5 <TAB>` used to lose the verb list.
   local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
-  local vf_db=" --limit --grep --character --project --about --source --chat --message --field --tail --last --from --type --out --id --count "
+  local vf_db=" --limit --grep --character --project --about --source --tier --chat --message --field --tail --last --from --type --out --id --count "
   local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
   local vf_sync=" --direction --prefer "
   local vf_themes=" -o --output -k --key -n --name "
-  local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --tier --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
+  local vf_memories=" -d --data-dir --instance --passphrase -p --port --phases --cap --character --about --source --tier --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
   local vf_memory_diff=" --concurrency --out "
   local vf_recall_replay=" --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --port "
@@ -185,6 +185,10 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "hot cold" -- "$cur"))
       return
       ;;
+    --phases)
+      COMPREPLY=($(compgen -W "fold-near-duplicates consolidate demote retire mirror" -- "$cur"))
+      return
+      ;;
     --sort)
       COMPREPLY=($(compgen -W "name time size links reinforced importance created accessed reinforcement-count" -- "$cur"))
       return
@@ -220,7 +224,7 @@ _quilltap_complete() {
     db)
       local db_verbs="schema find chats messages logs message log memories characters optimize backup integrity"
       local db_flags="--instance --data-dir --passphrase --json --limit --grep \
-        --character --project --about --source --chat --message --rendered --field \
+        --character --project --about --source --tier --chat --message --rendered --field \
         --tail --last --full --from --type --out --id --diverged --blocked --help \
         --tables --count --repl --write --llm-logs --mount-points \
         --lock-status --lock-clean --lock-override"
@@ -317,13 +321,13 @@ _quilltap_complete() {
       fi
       ;;
     memories)
-      local mem_verbs="ls find grep show tree status validate consolidate"
+      local mem_verbs="ls find grep show tree status validate maintain"
       local mem_flags="--character --about --source --tier --chat --project --since --until \
         --min-importance --min-reinforced --has-embedding --no-embedding \
         --sort -r --reverse --limit --full-titles --in --no-related --list \
         --ignore-case -i --paths-only -l --max --context --depth --max-nodes \
-        --semantic --top --threshold --dry-run \
-        --instance --data-dir --passphrase --port --json --help"
+        --semantic --top --threshold --dry-run --phases --cap --repair --write \
+        --instance --data-dir --passphrase -p --port --json --help"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then
           COMPREPLY=($(compgen -W "$mem_flags" -- "$cur"))
