@@ -1,7 +1,8 @@
 /**
- * Bug 203: a hand edit (PUT /api/v1/memories/[id]) goes through `editMemory`,
- * which keeps the row's derived state in step — re-embed, reinforcedImportance,
- * two-sided links, frozen archive, realtime hint, Commonplace mirror.
+ * Bug 203: a hand edit (PUT /api/v1/memories/[id]) goes through `updateMemory`
+ * (`lib/memory/admission`), which keeps the row's derived state in step —
+ * re-embed, reinforcedImportance, two-sided links, frozen archive, realtime
+ * hint, Commonplace mirror.
  */
 
 jest.mock('@/lib/logger', () => {
@@ -9,30 +10,39 @@ jest.mock('@/lib/logger', () => {
   return { logger: { ...child, child: jest.fn(() => child) } }
 })
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/memory/memory-service', () => ({
-  updateMemoryWithEmbedding: jest.fn(),
-  MemoryReembedError: class MemoryReembedError extends Error {
-    constructor(public readonly memoryId: string, cause?: unknown) {
-      super(`Could not embed the edited memory: ${cause instanceof Error ? cause.message : String(cause)}`)
-      this.name = 'MemoryReembedError'
-    }
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
   },
+  embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
 }))
+jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/memory/frozen-archive-cache', () => ({ invalidateFrozenArchive: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/file-storage/commonplace-digest-vault-bridge', () => ({
   writeCommonplaceDigestsToVault: jest.fn().mockResolvedValue({ written: 1, unchanged: 0, skipped: 0 }),
 }))
 
-import { editMemory } from '@/lib/memory/memory-edit'
+import { updateMemory } from '@/lib/memory/admission'
 import { getRepositories } from '@/lib/repositories/factory'
-import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service'
+import { memoryIndex } from '@/lib/memory/index-store'
+import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance'
 
 type Row = Record<string, any>
+
+const NEW_VECTOR = new Float32Array([0.5, 0.5])
 
 function setup(rows: Row[]) {
   const byId = new Map(rows.map((r) => [r.id, { ...r }]))
@@ -83,9 +93,15 @@ function setup(rows: Row[]) {
     findByIdRaw: jest.fn(async (id: string) => name(id)),
   }
   jest.mocked(getRepositories).mockReturnValue({ memories, characters } as never)
-  jest.mocked(updateMemoryWithEmbedding).mockImplementation(async (characterId, id, patch) =>
-    memories.updateForCharacter(characterId, id, patch as Row) as never
-  )
+  // The index writes the text and its vector in one row update.
+  jest.mocked(memoryIndex.upsert).mockImplementation(async (characterId, entries) => {
+    const rows = []
+    for (const e of entries) {
+      rows.push(await memories.updateForCharacter(characterId, e.id, { ...(e.alongside ?? {}), embedding: e.embedding }))
+    }
+    return rows as never
+  })
+  jest.mocked(generateEmbeddingForUser).mockResolvedValue({ embedding: NEW_VECTOR } as never)
   return { memories, byId }
 }
 
@@ -102,29 +118,39 @@ const base = {
   aboutCharacterId: null,
 }
 
-describe('editMemory (bug 203)', () => {
+describe('updateMemory (bug 203)', () => {
   beforeEach(() => jest.clearAllMocks())
 
-  it('routes text through the re-embedding update, invalidates the archive and publishes', async () => {
-    setup([{ ...base, id: 'm1' }])
-    const result = await editMemory('holder', 'm1', { content: 'new text' }, { userId: 'u1' })
+  it('embeds the edited text and writes text and vector in one index upsert, invalidates the archive and publishes', async () => {
+    const { byId } = setup([{ ...base, id: 'm1' }])
+    const result = await updateMemory('holder', 'm1', { content: 'new text' }, { userId: 'u1' })
 
     expect(result.ok).toBe(true)
-    expect(updateMemoryWithEmbedding).toHaveBeenCalledWith('holder', 'm1', { content: 'new text' }, { userId: 'u1' })
+    // The edited text (not the stored one) is what gets embedded.
+    expect(generateEmbeddingForUser).toHaveBeenCalledWith('old\n\nnew text', 'u1')
+    expect(memoryIndex.upsert).toHaveBeenCalledWith('holder', [
+      { id: 'm1', embedding: NEW_VECTOR, alongside: { content: 'new text' } },
+    ])
+    expect(byId.get('m1')!.content).toBe('new text')
+    expect(byId.get('m1')!.embedding).toBe(NEW_VECTOR)
     expect(invalidateFrozenArchive).toHaveBeenCalledWith('holder')
     expect(publishRealtime).toHaveBeenCalledWith('memories')
     expect(writeCommonplaceDigestsToVault).not.toHaveBeenCalled()
   })
 
   it('recomputes reinforcedImportance from the reinforcement count when importance changes', async () => {
-    const { byId } = setup([{ ...base, id: 'm1' }])
-    await editMemory('holder', 'm1', { importance: 0.9 }, { userId: 'u1' })
+    const { byId, memories } = setup([{ ...base, id: 'm1' }])
+    await updateMemory('holder', 'm1', { importance: 0.9 }, { userId: 'u1' })
     expect(byId.get('m1')!.reinforcedImportance).toBe(calculateReinforcedImportance(0.9, 4))
+    // The embedded text did not change: a plain row update, no re-embed.
+    expect(generateEmbeddingForUser).not.toHaveBeenCalled()
+    expect(memoryIndex.upsert).not.toHaveBeenCalled()
+    expect(memories.updateForCharacter).toHaveBeenCalledTimes(1)
   })
 
   it('leaves reinforcedImportance alone when importance is unchanged', async () => {
     const { byId } = setup([{ ...base, id: 'm1' }])
-    await editMemory('holder', 'm1', { importance: 0.3, summary: 'new' }, { userId: 'u1' })
+    await updateMemory('holder', 'm1', { importance: 0.3, summary: 'new' }, { userId: 'u1' })
     expect(byId.get('m1')!.reinforcedImportance).toBe(0.4)
   })
 
@@ -133,9 +159,10 @@ describe('editMemory (bug 203)', () => {
       { ...base, id: 'm1' },
       { ...base, id: 'foreign', characterId: 'someone-else' },
     ])
-    const result = await editMemory('holder', 'm1', { relatedMemoryIds: ['foreign', 'ghost'] }, { userId: 'u1' })
+    const result = await updateMemory('holder', 'm1', { relatedMemoryIds: ['foreign', 'ghost'] }, { userId: 'u1' })
     expect(result).toEqual({ ok: false, reason: 'invalid-related', invalidIds: ['foreign', 'ghost'] })
-    expect(updateMemoryWithEmbedding).not.toHaveBeenCalled()
+    expect(memoryIndex.upsert).not.toHaveBeenCalled()
+    expect(getRepositories().memories.updateForCharacter).not.toHaveBeenCalled()
   })
 
   it('writes links on both sides: added neighbours gain the id, dropped ones lose it', async () => {
@@ -144,7 +171,7 @@ describe('editMemory (bug 203)', () => {
       { ...base, id: 'old-n', relatedMemoryIds: ['m1'] },
       { ...base, id: 'new-n', relatedMemoryIds: [] },
     ])
-    const result = await editMemory('holder', 'm1', { relatedMemoryIds: ['new-n', 'm1'] }, { userId: 'u1' })
+    const result = await updateMemory('holder', 'm1', { relatedMemoryIds: ['new-n', 'm1'] }, { userId: 'u1' })
     expect(result.ok).toBe(true)
     expect(byId.get('m1')!.relatedMemoryIds).toEqual(['new-n'])
     expect(byId.get('new-n')!.relatedMemoryIds).toEqual(['m1'])
@@ -158,7 +185,7 @@ describe('editMemory (bug 203)', () => {
       { ...base, id: 'd2', source: 'CONSOLIDATED', aboutCharacterId: 'otto', embedding, content: 'other digest' },
       { ...base, id: 'd3', source: 'CONSOLIDATED', aboutCharacterId: 'otto', embedding, tier: 'cold' },
     ])
-    await editMemory('holder', 'd1', { content: 'revised digest' }, { userId: 'u1' })
+    await updateMemory('holder', 'd1', { content: 'revised digest' }, { userId: 'u1' })
 
     expect(writeCommonplaceDigestsToVault).toHaveBeenCalledTimes(1)
     const input = jest.mocked(writeCommonplaceDigestsToVault).mock.calls[0][0]
@@ -174,27 +201,31 @@ describe('editMemory (bug 203)', () => {
       { ...base, id: 'd1', source: 'CONSOLIDATED', aboutCharacterId: 'otto', content: 'otto digest' },
       { ...base, id: 'd2', source: 'CONSOLIDATED', aboutCharacterId: 'pip', content: 'pip digest' },
     ])
-    await editMemory('holder', 'd1', { aboutCharacterId: 'pip' }, { userId: 'u1' })
+    await updateMemory('holder', 'd1', { aboutCharacterId: 'pip' }, { userId: 'u1' })
 
     expect(writeCommonplaceDigestsToVault).toHaveBeenCalledTimes(1)
     const input = jest.mocked(writeCommonplaceDigestsToVault).mock.calls[0][0]
     const bySubject = Object.fromEntries(input.files.map((f) => [f.subjectCharacterId, f.digests.map((d) => d.content).sort()]))
     expect(bySubject).toEqual({ otto: [], pip: ['otto digest', 'pip digest'] })
-    const src = require('fs').readFileSync(require('path').join(process.cwd(), 'lib/memory/memory-edit.ts'), 'utf8')
+    const src = require('fs').readFileSync(require('path').join(process.cwd(), 'lib/memory/admission/update-memory.ts'), 'utf8')
     expect(src).not.toMatch(/function refreshCommonplaceMirror/)
   })
 
   it('reports a failed re-embed instead of saving text over a stale vector', async () => {
-    const { MemoryReembedError } = jest.requireMock<typeof import('@/lib/memory/memory-service')>(
-      '@/lib/memory/memory-service'
-    )
-    const { byId } = setup([{ ...base, id: 'm1', relatedMemoryIds: [] }, { ...base, id: 'n1' }])
-    jest.mocked(updateMemoryWithEmbedding).mockRejectedValue(new MemoryReembedError('m1', new Error('provider down')))
+    const { byId, memories } = setup([{ ...base, id: 'm1', relatedMemoryIds: [] }, { ...base, id: 'n1' }])
+    jest.mocked(generateEmbeddingForUser).mockRejectedValue(new Error('provider down'))
 
-    const result = await editMemory('holder', 'm1', { content: 'new text', relatedMemoryIds: ['n1'] }, { userId: 'u1' })
+    const result = await updateMemory('holder', 'm1', { content: 'new text', relatedMemoryIds: ['n1'] }, { userId: 'u1' })
 
-    expect(result).toEqual({ ok: false, reason: 'embedding-failed', message: expect.stringContaining('provider down') })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'embedding-failed',
+      message: 'Could not embed the edited memory: provider down',
+    })
     expect(byId.get('m1')!.content).toBe('old text')
+    expect(memoryIndex.upsert).not.toHaveBeenCalled()
+    expect(memories.updateForCharacter).not.toHaveBeenCalled()
+    expect(memories.addRelatedMemoryIds).not.toHaveBeenCalled()
     expect(byId.get('n1')!.relatedMemoryIds).toEqual([])
     expect(invalidateFrozenArchive).not.toHaveBeenCalled()
     expect(publishRealtime).not.toHaveBeenCalled()
@@ -202,7 +233,7 @@ describe('editMemory (bug 203)', () => {
 
   it('returns not-found for a memory of another character', async () => {
     setup([{ ...base, id: 'm1' }])
-    expect(await editMemory('someone-else', 'm1', { content: 'x' }, { userId: 'u1' })).toEqual({
+    expect(await updateMemory('someone-else', 'm1', { content: 'x' }, { userId: 'u1' })).toEqual({
       ok: false,
       reason: 'not-found',
     })

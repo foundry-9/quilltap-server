@@ -33,19 +33,9 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EMBEDDING_MAX_CHARS: 128 * 1024,
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn().mockReturnValue({
-    unloadStore: jest.fn(),
-  }),
-}))
-
-jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
-  getVectorIndicesRepository: jest.fn().mockReturnValue({
-    entryExists: jest.fn().mockResolvedValue(false),
-    addEntry: jest.fn().mockResolvedValue(undefined),
-    updateEntryEmbedding: jest.fn().mockResolvedValue(true),
-    saveMeta: jest.fn().mockResolvedValue(undefined),
-  }),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { upsert: jest.fn().mockResolvedValue([]) },
+  embeddingTextFor: jest.fn(() => 'memory text'),
 }))
 
 import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embedding-generate'

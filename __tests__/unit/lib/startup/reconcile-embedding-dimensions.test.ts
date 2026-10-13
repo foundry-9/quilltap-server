@@ -6,11 +6,12 @@
  * Regression context: a TF-IDF-era corpus (258-d vectors, some in legacy raw
  * Float32 blobs, some int8-quantized) survived a switch to a 1024-d neural
  * default profile because switching WHICH profile is default never triggered
- * a re-embed. The reconcile must delete non-conforming vector-index entries,
- * snap index metadata, count the recoverable non-conforming rows (stale
- * chats included — conversation-chunk embeddings are never cold-tiered), and
- * enqueue a mismatched-dim reindex — while excluding FAILED rows and orphans
- * that would re-trigger the sweep on every boot with no progress.
+ * a re-embed. The reconcile must count the recoverable non-conforming rows
+ * (stale chats included — conversation-chunk embeddings are never
+ * cold-tiered) and enqueue a mismatched-dim reindex — while excluding FAILED rows and orphans
+ * that would re-trigger the sweep on every boot with no progress. Memories
+ * are the only copy of a memory's vector since the vector_entries mirror was
+ * retired, so no mirror table is touched here.
  */
 
 jest.mock('@/lib/database/backends/sqlite/client', () => ({
@@ -27,10 +28,6 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueEmbeddingReindexAll: jest.fn(),
-}));
-
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn(),
 }));
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -69,9 +66,6 @@ const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
 const { enqueueEmbeddingReindexAll } = jest.requireMock('@/lib/background-jobs/queue-service') as {
   enqueueEmbeddingReindexAll: jest.Mock;
 };
-const { getVectorStoreManager } = jest.requireMock('@/lib/embedding/vector-store') as {
-  getVectorStoreManager: jest.Mock;
-};
 const PROFILE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TARGET_DIM = 1024;
@@ -95,8 +89,6 @@ function createMainDb(): any {
       id TEXT PRIMARY KEY, userId TEXT, provider TEXT,
       dimensions INTEGER, truncateToDimensions INTEGER, isDefault INTEGER
     );
-    CREATE TABLE vector_entries (id TEXT PRIMARY KEY, characterId TEXT, embedding BLOB);
-    CREATE TABLE vector_indices (characterId TEXT PRIMARY KEY, dimensions INTEGER);
     CREATE TABLE chats (id TEXT PRIMARY KEY, updatedAt TEXT);
     CREATE TABLE conversation_chunks (id TEXT PRIMARY KEY, chatId TEXT, embedding BLOB);
     CREATE TABLE memories (id TEXT PRIMARY KEY, characterId TEXT, embedding BLOB);
@@ -132,7 +124,6 @@ function insertDefaultProfile(db: any, provider = 'OPENAI'): void {
 describe('reconcileEmbeddingDimensions', () => {
   let mainDb: any;
   let mountDb: any;
-  let unloadAll: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -140,8 +131,6 @@ describe('reconcileEmbeddingDimensions', () => {
     mountDb = createMountDb();
     getRawDatabase.mockReturnValue(mainDb);
     getRawMountIndexDatabase.mockReturnValue(mountDb);
-    unloadAll = jest.fn();
-    getVectorStoreManager.mockReturnValue({ unloadAll });
     getRepositories.mockReturnValue({
       backgroundJobs: { findRecentByType: jest.fn(async () => []) },
     });
@@ -152,11 +141,17 @@ describe('reconcileEmbeddingDimensions', () => {
     mountDb.close();
   });
 
-  it('deletes non-conforming vector entries (raw AND quantized) and snaps index meta', async () => {
+  it('leaves a not-yet-retired vector_entries / vector_indices mirror untouched', async () => {
+    // The reconcile no longer knows about the retired mirror: the retirement
+    // migration owns it. A database that still has the tables keeps them
+    // byte-for-byte, and the result carries no mirror counters.
     insertDefaultProfile(mainDb);
+    mainDb.exec(`
+      CREATE TABLE vector_entries (id TEXT PRIMARY KEY, characterId TEXT, embedding BLOB);
+      CREATE TABLE vector_indices (characterId TEXT PRIMARY KEY, dimensions INTEGER);
+    `);
     const ins = mainDb.prepare('INSERT INTO vector_entries (id, characterId, embedding) VALUES (?, ?, ?)');
     ins.run('e-raw-258', 'char-1', rawBlob(OLD_DIM));
-    ins.run('e-quant-258', 'char-1', goodBlob(OLD_DIM));
     ins.run('e-good', 'char-1', goodBlob(TARGET_DIM));
     mainDb.prepare('INSERT INTO vector_indices (characterId, dimensions) VALUES (?, ?)').run('char-1', OLD_DIM);
 
@@ -164,14 +159,12 @@ describe('reconcileEmbeddingDimensions', () => {
 
     expect(result.skippedReason).toBeNull();
     expect(result.targetDimensions).toBe(TARGET_DIM);
-    expect(result.vectorEntriesDeleted).toBe(2);
-    expect(result.vectorIndexMetaFixed).toBe(1);
-    expect(unloadAll).toHaveBeenCalled();
-
-    const remaining = mainDb.prepare('SELECT id FROM vector_entries').all();
-    expect(remaining.map((r: { id: string }) => r.id)).toEqual(['e-good']);
-    const meta = mainDb.prepare('SELECT dimensions FROM vector_indices').get();
-    expect(meta.dimensions).toBe(TARGET_DIM);
+    expect(result).not.toHaveProperty('vectorEntriesDeleted');
+    expect(result).not.toHaveProperty('vectorIndexMetaFixed');
+    expect(mainDb.prepare('SELECT COUNT(*) AS n FROM vector_entries').get().n).toBe(2);
+    expect(mainDb.prepare('SELECT dimensions FROM vector_indices').get().dimensions).toBe(OLD_DIM);
+    // Nothing in the memory rows needs work, so nothing is enqueued.
+    expect(result.reindexEnqueued).toBe(false);
   });
 
   it('counts non-conforming and NULL memories, excludes FAILED rows, and enqueues a mismatched-dim reindex', async () => {
@@ -256,13 +249,14 @@ describe('reconcileEmbeddingDimensions', () => {
 
   it('is a no-op for a BUILTIN default profile', async () => {
     insertDefaultProfile(mainDb, 'BUILTIN');
-    mainDb.prepare('INSERT INTO vector_entries (id, characterId, embedding) VALUES (?, ?, ?)')
-      .run('e-old', 'char-1', rawBlob(OLD_DIM));
+    mainDb.prepare('INSERT INTO memories (id, characterId, embedding) VALUES (?, ?, ?)')
+      .run('m-old', 'char-1', rawBlob(OLD_DIM));
 
     const result = await reconcileEmbeddingDimensions();
 
     expect(result.skippedReason).toBe('builtin-profile');
-    expect(mainDb.prepare('SELECT COUNT(*) AS n FROM vector_entries').get().n).toBe(1);
+    expect(result.mismatched.memories).toBe(0);
+    expect(mainDb.prepare(`SELECT embedding FROM memories WHERE id = 'm-old'`).get().embedding).not.toBeNull();
     expect(enqueueEmbeddingReindexAll).not.toHaveBeenCalled();
   });
 
@@ -270,12 +264,9 @@ describe('reconcileEmbeddingDimensions', () => {
     insertDefaultProfile(mainDb);
     mainDb.prepare('INSERT INTO memories (id, characterId, embedding) VALUES (?, ?, ?)')
       .run('m-good', 'char-1', goodBlob(TARGET_DIM));
-    mainDb.prepare('INSERT INTO vector_entries (id, characterId, embedding) VALUES (?, ?, ?)')
-      .run('e-good', 'char-1', goodBlob(TARGET_DIM));
 
     const result = await reconcileEmbeddingDimensions();
 
-    expect(result.vectorEntriesDeleted).toBe(0);
     expect(result.mismatched.memories).toBe(0);
     expect(result.reindexEnqueued).toBe(false);
     expect(enqueueEmbeddingReindexAll).not.toHaveBeenCalled();

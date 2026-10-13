@@ -28,9 +28,9 @@ jest.mock('@/lib/api/responses', () => ({
   errorResponse: (msg: string, status = 500) => ({ status, body: { error: msg } }),
 }))
 
-const mockEditMemory = jest.fn()
-jest.mock('@/lib/memory/memory-edit', () => ({ editMemory: (...args: unknown[]) => mockEditMemory(...args) }))
-jest.mock('@/lib/memory/memory-gate', () => ({ deleteMemoryWithUnlink: jest.fn() }))
+const mockUpdateMemory = jest.fn()
+jest.mock('@/lib/memory/admission', () => ({ updateMemory: (...args: unknown[]) => mockUpdateMemory(...args) }))
+jest.mock('@/lib/memory/retire', () => ({ retireMemories: jest.fn() }))
 jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({
   scheduleRefit: jest.fn(async () => undefined),
   handleEntityDeletion: jest.fn(),
@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe('PUT /api/v1/memories/[id] with a failing embedder', () => {
   it('answers 502 with the reason and schedules no refit', async () => {
-    mockEditMemory.mockResolvedValue({ ok: false, reason: 'embedding-failed', message: 'provider down' })
+    mockUpdateMemory.mockResolvedValue({ ok: false, reason: 'embedding-failed', message: 'provider down' })
     const res: any = await PUT({ json: async () => ({ content: 'new words' }) } as any, {
       params: Promise.resolve({ id: MEMORY_ID }),
     } as any)

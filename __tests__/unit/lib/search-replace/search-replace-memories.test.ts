@@ -1,21 +1,21 @@
 /**
  * Search and replace over memories (bug 233): each replaced row is written
- * through editMemory with the old row as its baseline, so the new text is
+ * through updateMemory with the old row as its baseline, so the new text is
  * re-embedded in the same write. A row whose new text cannot be embedded is
  * left unchanged and reported.
  */
 
 import { executeSearchReplace, planMemoryReplacement } from '@/lib/search-replace/search-replace-service';
-import { editMemory } from '@/lib/memory/memory-edit';
+import { updateMemory } from '@/lib/memory/admission';
 import { getRepositories } from '@/lib/repositories/factory';
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }));
-jest.mock('@/lib/memory/memory-edit', () => ({ editMemory: jest.fn() }));
+jest.mock('@/lib/memory/admission', () => ({ updateMemory: jest.fn() }));
 
-const mockEdit = editMemory as jest.Mock;
+const mockEdit = updateMemory as jest.Mock;
 const mockRepos = getRepositories as jest.Mock;
 
 const laura = {
@@ -67,7 +67,7 @@ describe('executeSearchReplace — memories (bug 233)', () => {
     });
   });
 
-  it('writes each row through editMemory with the replaced fields', async () => {
+  it('writes each row through updateMemory with the replaced fields', async () => {
     mockEdit.mockResolvedValue({ ok: true, memory: {} });
 
     const result = await executeSearchReplace(request, 'u1');

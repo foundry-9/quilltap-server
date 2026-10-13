@@ -37,27 +37,22 @@ describe('repairTextEmbeddings', () => {
     const { repairTextEmbeddings } = await import('@/lib/startup/repair-text-embeddings')
     const result = await repairTextEmbeddings()
 
-    expect(result.vectorEntriesRepaired).toBe(0)
+    expect(result).not.toHaveProperty('vectorEntriesRepaired')
     expect(result.memoriesRepaired).toBe(0)
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-  it('repairs JSON text embeddings in both vector_entries and memories tables', async () => {
+  it('repairs JSON text embeddings in memories and never touches a leftover vector_entries table', async () => {
     // The mock simulates the production WHERE filter:
     // once a row is updated (BLOB or NULL), the next page-select drops it.
-    const vectorTable = new Map<string, string | Buffer | null>([
-      ['vec-1', '[1, 2, 3]'],
-      ['vec-bad', 'not-json'],
-    ])
+    // vector_entries still "exists" here (a database the retirement migration
+    // has not reached yet): the repair must leave it alone.
     const memoryTable = new Map<string, string | Buffer | null>([
       ['mem-1', '[4, 5]'],
       ['mem-empty', '[]'],
       ['mem-bad', '{oops'],
     ])
 
-    const updateVectorRun = jest.fn((value: Buffer | null, id: string) => {
-      vectorTable.set(id, value)
-    })
     const updateMemoryRun = jest.fn((value: Buffer | null, id: string) => {
       memoryTable.set(id, value)
     })
@@ -75,19 +70,6 @@ describe('repairTextEmbeddings', () => {
               count: ['vector_entries', 'memories'].includes(tableName) ? 1 : 0,
             }),
           }
-        }
-
-        if (sql.includes("COUNT(*) as count FROM vector_entries")) {
-          return { get: () => ({ count: textRowsFrom(vectorTable).length }) }
-        }
-        if (sql.includes("SELECT id, embedding FROM vector_entries")) {
-          return { all: () => textRowsFrom(vectorTable) }
-        }
-        if (sql.includes("UPDATE vector_entries SET embedding = NULL")) {
-          return { run: (id: string) => vectorTable.set(id, null) }
-        }
-        if (sql.includes("UPDATE vector_entries SET embedding = ?")) {
-          return { run: updateVectorRun }
         }
 
         if (sql.includes("COUNT(*) as count FROM memories")) {
@@ -115,16 +97,14 @@ describe('repairTextEmbeddings', () => {
     const { repairTextEmbeddings } = await import('@/lib/startup/repair-text-embeddings')
     const result = await repairTextEmbeddings()
 
-    expect(result).toMatchObject({
-      vectorEntriesRepaired: 1,
-      memoriesRepaired: 2,
-    })
+    expect(result).toMatchObject({ memoriesRepaired: 2 })
+    expect(result).not.toHaveProperty('vectorEntriesRepaired')
 
-    const repairedVectorBlob = updateVectorRun.mock.calls[0]?.[0] as Uint8Array
+    const preparedSql = (db.prepare.mock.calls as unknown as Array<[string]>).map(([sql]) => sql)
+    expect(preparedSql.some((sql) => sql.includes('vector_entries'))).toBe(false)
+
     const repairedMemoryBlob = updateMemoryRun.mock.calls[0]?.[0] as Uint8Array
 
-    expect(repairedVectorBlob.byteLength).toBeGreaterThan(0)
-    expect(updateVectorRun.mock.calls[0]?.[1]).toBe('vec-1')
     expect(repairedMemoryBlob.byteLength).toBeGreaterThan(0)
     expect(updateMemoryRun.mock.calls[0]?.[1]).toBe('mem-1')
     expect(updateMemoryRun).toHaveBeenCalledWith(null, 'mem-empty')

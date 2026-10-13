@@ -27,24 +27,19 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   EMBEDDING_MAX_CHARS: 128 * 1024,
 }))
 
-const vectorStore = {
-  hasVector: jest.fn().mockReturnValue(true),
-  updateVector: jest.fn().mockResolvedValue(undefined),
-  addVector: jest.fn().mockResolvedValue(undefined),
-  save: jest.fn().mockResolvedValue(undefined),
-}
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn().mockReturnValue({ unloadStore: jest.fn() }),
-  getCharacterVectorStore: jest.fn(async () => vectorStore),
-}))
-
-jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
-  getVectorIndicesRepository: jest.fn().mockReturnValue({
-    entryExists: jest.fn().mockResolvedValue(false),
-    addEntry: jest.fn().mockResolvedValue(undefined),
-    updateEntryEmbedding: jest.fn().mockResolvedValue(true),
-    saveMeta: jest.fn().mockResolvedValue(undefined),
-  }),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn().mockResolvedValue([]),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
 }))
 
 jest.mock('@/lib/background-jobs/queue-service', () => ({

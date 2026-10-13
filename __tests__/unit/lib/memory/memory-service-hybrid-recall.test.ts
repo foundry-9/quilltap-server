@@ -33,9 +33,19 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   }),
 }))
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
-  getVectorStoreManager: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: {
+    search: jest.fn(),
+    shape: jest.fn(),
+    upsert: jest.fn(),
+    indexInserted: jest.fn(),
+    setTier: jest.fn(),
+    remove: jest.fn(),
+    reload: jest.fn(),
+    reloadAll: jest.fn(),
+    entries: jest.fn(),
+  },
+  embeddingTextFor: (jest.requireActual('@/lib/memory/index-store/embedding-text') as any).embeddingTextFor,
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -62,8 +72,8 @@ const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
 const embeddingMock = jest.requireMock('@/lib/embedding/embedding-service') as {
   generateEmbeddingForUser: jest.Mock
 }
-const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as {
-  getCharacterVectorStore: jest.Mock
+const indexMock = jest.requireMock('@/lib/memory/index-store') as {
+  memoryIndex: { search: jest.Mock; shape: jest.Mock }
 }
 
 const baseTime = '2026-04-01T00:00:00.000Z'
@@ -99,9 +109,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
     searchByContent: jest.Mock
     updateAccessTimeBulk: jest.Mock
   }
+  // The index's search: the vector top-K candidate pool.
   let mockVectorStore: {
     search: jest.Mock
-    getDimensions: jest.Mock
   }
   let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
 
@@ -117,11 +127,9 @@ describe('searchMemoriesSemantic — hybrid recall', () => {
       memories: mockMemoriesRepo,
     } as never)
 
-    mockVectorStore = {
-      search: jest.fn(),
-      getDimensions: jest.fn().mockReturnValue(3),
-    }
-    vectorStoreMock.getCharacterVectorStore.mockResolvedValue(mockVectorStore)
+    mockVectorStore = { search: indexMock.memoryIndex.search }
+    indexMock.memoryIndex.search.mockReset()
+    indexMock.memoryIndex.shape.mockResolvedValue({ size: 2, dominantDimensions: 3, matching: 2 })
 
     embeddingMock.generateEmbeddingForUser.mockResolvedValue({
       embedding: new Float32Array([1, 0, 0]),

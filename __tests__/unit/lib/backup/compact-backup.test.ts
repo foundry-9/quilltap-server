@@ -127,12 +127,13 @@ function repoStub(overrides: Record<string, unknown> = {}) {
 
 const DERIVED_EMBEDDING_FILES = [
   'conversation-chunks.json',
-  'vector-entries.json',
-  'vector-index-metas.json',
   'tfidf-vocabularies.json',
   'embedding-status.json',
   'doc-mount-chunks.json',
 ];
+
+/** The retired vector mirror: never written, in any mode (memory rows carry the vectors). */
+const RETIRED_MIRROR_FILES = ['vector-entries.json', 'vector-index-metas.json'];
 
 describe('createBackup — compact mode', () => {
   const testUserId = 'user-compact';
@@ -159,11 +160,6 @@ describe('createBackup — compact mode', () => {
     });
     const globalRepos = repoStub({
       chatSettings: methodStub({ findByUserId: jest.fn().mockResolvedValue(null) }),
-      vectorIndices: methodStub({
-        getAllCharacterIds: jest.fn().mockResolvedValue([]),
-        findMetaByCharacterId: jest.fn().mockResolvedValue(null),
-        findEntriesByCharacterId: jest.fn().mockResolvedValue([]),
-      }),
       textReplacementRules: methodStub({ list: jest.fn().mockResolvedValue([]) }),
     });
 
@@ -188,13 +184,18 @@ describe('createBackup — compact mode', () => {
     for (const file of DERIVED_EMBEDDING_FILES) {
       expect(staged).toContain(file);
     }
+    for (const file of RETIRED_MIRROR_FILES) {
+      expect(staged).not.toContain(file);
+    }
+    expect(manifest.counts).not.toHaveProperty('vectorEntries');
+    expect(manifest.counts).not.toHaveProperty('vectorIndexMetas');
   });
 
   it('omits the derived embedding collections entirely when compact', async () => {
     const { manifest, staged } = await runBackup({ compact: true });
 
     expect(manifest.compact).toBe(true);
-    for (const file of DERIVED_EMBEDDING_FILES) {
+    for (const file of [...DERIVED_EMBEDDING_FILES, ...RETIRED_MIRROR_FILES]) {
       expect(staged).not.toContain(file);
     }
     // Everything the user actually wrote is still there.
