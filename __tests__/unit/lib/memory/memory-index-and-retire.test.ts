@@ -304,6 +304,36 @@ describe('retireMemories — the one deletion', () => {
     expect(read('digest')).toBeUndefined()
   })
 
+  it('a member promoted out of its digest no longer keeps it alive (one liveness rule)', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'promoted']) },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest' },
+      // Exists, but was promoted back to hot: it no longer names the digest.
+      { id: 'promoted', tier: 'hot', supersededById: null },
+    ])
+    installRepos()
+
+    const report = await retireMemories(['m-1'], { reason: 'item-delete' })
+
+    expect(report.digestsRetiredWithLastMember).toBe(1)
+    expect(read('digest')).toBeUndefined()
+    expect(read('promoted')).toBeDefined()
+  })
+
+  it('reads the digests containing doomed members once when the cascade adds nothing', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1', 'm-2']) },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest' },
+      { id: 'm-2', tier: 'cold', supersededById: 'digest' },
+    ])
+    const repos = installRepos()
+
+    await retireMemories(['m-1'], { reason: 'item-delete' })
+
+    expect(repos.findDigestsContainingMembers).toHaveBeenCalledTimes(1)
+    expect(ids('consolidatedFrom', 'digest')).toEqual(['m-2'])
+  })
+
   it('retention never takes the digest its expired members leave behind', async () => {
     seed([
       { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1']) },

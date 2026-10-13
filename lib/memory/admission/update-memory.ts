@@ -9,7 +9,7 @@
  * describing the row as it was before the edit (bug 203). {@link updateMemory}
  * keeps every piece in step:
  *
- *   - a change to the embedded text (summary, content or an anchor) embeds the
+ *   - a change to the embedded text (summary or content) embeds the
  *     edited text first and writes text and vector in one row update through
  *     `memoryIndex.upsert` (anchor line included, tier kept); a failed embed
  *     writes nothing;
@@ -59,15 +59,15 @@ export type UpdateMemoryResult =
   /** The edited text could not be embedded; nothing was written. */
   | { ok: false; reason: 'embedding-failed'; message: string }
 
-/** Does the patch change the text the row is embedded as? */
-function changesEmbeddedText(existing: Memory, patch: Partial<Memory>): boolean {
+/**
+ * Does the patch change the text the row is embedded as? A hand edit can
+ * reach only `summary` and `content` of that text: `MemoryEditPatch` carries
+ * no anchor field.
+ */
+function changesEmbeddedText(existing: Memory, patch: MemoryEditPatch): boolean {
   return (
     (patch.content !== undefined && patch.content !== existing.content) ||
-    (patch.summary !== undefined && patch.summary !== existing.summary) ||
-    (patch.occurredAt !== undefined && patch.occurredAt !== existing.occurredAt) ||
-    (patch.narrativeTime !== undefined && patch.narrativeTime !== existing.narrativeTime) ||
-    (patch.entities !== undefined &&
-      JSON.stringify(patch.entities) !== JSON.stringify(existing.entities ?? []))
+    (patch.summary !== undefined && patch.summary !== existing.summary)
   )
 }
 
@@ -132,7 +132,7 @@ export async function updateMemory(
   // links below, the archive and the mirror) exactly as they were. The vector
   // rides in the same row update as the text, so they never disagree on disk.
   let memory: Memory | null
-  if (changesEmbeddedText(existing, update)) {
+  if (changesEmbeddedText(existing, patch)) {
     let embedding: Float32Array
     try {
       const merged = { ...existing, ...update } as Memory

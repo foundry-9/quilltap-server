@@ -149,23 +149,38 @@ async function resolveRows(ids: readonly string[]): Promise<RetireRow[]> {
   return rows
 }
 
-/** Ids among `ids` that exist as rows. */
-async function existingIds(ids: readonly string[]): Promise<Set<string>> {
-  const found = new Set<string>()
-  for (const chunk of chunkArray([...ids], SQLITE_VARIABLE_CHUNK_SIZE)) {
-    const rows = await rawQuery<Array<{ id: string }>>(
-      `SELECT id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
-      chunk,
-    )
-    for (const row of rows) found.add(row.id)
+/** A digest as the digest lookups return it. */
+type DigestRef = { id: string; characterId: string; consolidatedFrom: string[] }
+
+/**
+ * The one rule for "this digest is still alive": some member listed in its
+ * `consolidatedFrom`, outside the doomed set, exists and still names it
+ * (`supersededById`). A member promoted back to hot or re-consolidated
+ * elsewhere no longer speaks for it. Both `keep: 'manual'` and the
+ * last-member cascade ask this. Returns the ids of the living digests.
+ */
+async function digestsWithLivingMember(
+  digests: readonly DigestRef[],
+  doomed: ReadonlySet<string>,
+): Promise<Set<string>> {
+  const alive = new Set<string>()
+  if (digests.length === 0) return alive
+  const memberIds = [...new Set(digests.flatMap((d) => d.consolidatedFrom))].filter((id) => !doomed.has(id))
+  if (memberIds.length === 0) return alive
+  const digestIds = new Set(digests.map((d) => d.id))
+  for (const member of await getRepositories().memories.findByIds(memberIds)) {
+    if (member.supersededById && digestIds.has(member.supersededById) && !doomed.has(member.id)) {
+      alive.add(member.supersededById)
+    }
   }
-  return found
+  return alive
 }
 
 /**
  * Under `keep: 'manual'`: split the rows into those to retire and those to
- * spare. A digest is spared only while a member outside this retirement still
- * names it; a digest whose members are all going (or already gone) goes too.
+ * spare. A digest is spared only while it has a living member
+ * ({@link digestsWithLivingMember}); one whose members are all going (or
+ * already gone) goes too.
  */
 async function applyKeepManual(
   rows: RetireRow[],
@@ -188,16 +203,12 @@ async function applyKeepManual(
   }
 
   if (sparedDigests.length > 0) {
-    const doomedIds = new Set(doomed.map((r) => r.id))
-    const memberIds = [...new Set(sparedDigests.flatMap((d) => parseIdList(d.consolidatedFrom)))].filter(
-      (id) => !doomedIds.has(id),
+    const alive = await digestsWithLivingMember(
+      sparedDigests.map((d) => ({ id: d.id, characterId: d.characterId, consolidatedFrom: parseIdList(d.consolidatedFrom) })),
+      new Set(doomed.map((r) => r.id)),
     )
-    const members = memberIds.length > 0 ? await getRepositories().memories.findByIds(memberIds) : []
-    // A member speaks for a digest only while it still names it: a row
-    // promoted or re-consolidated elsewhere no longer does.
-    const named = new Set(members.map((m) => m.supersededById).filter((id): id is string => !!id))
     for (const digest of sparedDigests) {
-      if (named.has(digest.id)) {
+      if (alive.has(digest.id)) {
         report.sparedBy.digest++
       } else {
         doomed.push(digest)
@@ -210,29 +221,31 @@ async function applyKeepManual(
 }
 
 /**
- * Digests the retirement would leave with no member: every id in their
- * `consolidatedFrom` is being retired or is already gone. Repeated, bounded,
- * in case a retired digest was itself a member of another.
+ * Digests the retirement would leave with no living member
+ * ({@link digestsWithLivingMember}). Repeated, bounded, in case a retired
+ * digest was itself a member of another.
+ *
+ * Also hands back the digests that contain a doomed member, as read against
+ * the final doomed set, so the link scrub need not run the same scan again;
+ * `null` when the last pass grew the set after reading (the scrub reads it).
  */
-async function cascadeEmptiedDigests(doomed: Map<string, RetireRow>): Promise<number> {
+async function cascadeEmptiedDigests(
+  doomed: Map<string, RetireRow>,
+): Promise<{ added: number; containing: DigestRef[] | null }> {
   const repos = getRepositories()
   let added = 0
+  let containing: DigestRef[] | null = null
   for (let pass = 0; pass < MAX_DIGEST_CASCADE_PASSES; pass++) {
     const holders = [...new Set([...doomed.values()].map((r) => r.characterId))]
     const digests = await repos.memories.findDigestsContainingMembers(holders, [...doomed.keys()])
+    containing = digests
     const candidates = digests.filter((d) => !doomed.has(d.id))
     if (candidates.length === 0) break
 
-    const remainingIds = [
-      ...new Set(candidates.flatMap((d) => d.consolidatedFrom.filter((id) => !doomed.has(id)))),
-    ]
-    const surviving = remainingIds.length > 0 ? await existingIds(remainingIds) : new Set<string>()
-
-    const emptied = candidates.filter(
-      (digest) => !digest.consolidatedFrom.some((id) => !doomed.has(id) && surviving.has(id)),
-    )
-    const addedThisPass = emptied.length
-    for (const row of emptied.length > 0 ? await resolveRows(emptied.map((d) => d.id)) : []) {
+    const alive = await digestsWithLivingMember(candidates, new Set(doomed.keys()))
+    const emptied = candidates.filter((digest) => !alive.has(digest.id))
+    if (emptied.length === 0) break
+    for (const row of await resolveRows(emptied.map((d) => d.id))) {
       doomed.set(row.id, row)
       log.debug('Digest retires with its last member', {
         digestId: row.id,
@@ -240,10 +253,10 @@ async function cascadeEmptiedDigests(doomed: Map<string, RetireRow>): Promise<nu
         members: parseIdList(row.consolidatedFrom).length,
       })
     }
-    added += addedThisPass
-    if (addedThisPass === 0) break
+    added += emptied.length
+    containing = null // the doomed set grew after this read
   }
-  return added
+  return { added, containing }
 }
 
 /**
@@ -253,14 +266,18 @@ async function cascadeEmptiedDigests(doomed: Map<string, RetireRow>): Promise<nu
  * `memoryIndex.setTier` (still cold, no digest). Scoped to the doomed rows'
  * holders — a digest and its members share one. Returns rows rewritten.
  */
-async function scrubDigestLinks(doomed: ReadonlySet<string>, holderIds: Iterable<string>): Promise<number> {
+async function scrubDigestLinks(
+  doomed: ReadonlySet<string>,
+  holderIds: Iterable<string>,
+  prefetched: DigestRef[] | null = null,
+): Promise<number> {
   const holders = [...new Set(holderIds)]
   if (doomed.size === 0 || holders.length === 0) return 0
   const repos = getRepositories()
   const doomedIds = [...doomed]
   let touched = 0
 
-  const digests = await repos.memories.findDigestsContainingMembers(holders, doomedIds)
+  const digests = prefetched ?? (await repos.memories.findDigestsContainingMembers(holders, doomedIds))
   for (const digest of digests) {
     if (doomed.has(digest.id)) continue
     const removed = (digest.consolidatedFrom ?? []).filter((id) => doomed.has(id))
@@ -351,8 +368,11 @@ export async function retireMemories(ids: readonly string[], opts: RetireOptions
   }
 
   const doomed = new Map(rows.map((r) => [r.id, r]))
+  let prefetchedDigests: DigestRef[] | null = null
   if (opts.reason !== 'retention' && doomed.size > 0) {
-    report.digestsRetiredWithLastMember = await cascadeEmptiedDigests(doomed)
+    const cascade = await cascadeEmptiedDigests(doomed)
+    report.digestsRetiredWithLastMember = cascade.added
+    prefetchedDigests = cascade.containing
   }
 
   // The neighbour scrub is one SQL removal delta across every holder (bug
@@ -378,7 +398,7 @@ export async function retireMemories(ids: readonly string[], opts: RetireOptions
     idsByCharacter.set(row.characterId, list)
   }
   report.charactersAffected = idsByCharacter.size
-  report.digestLinksScrubbed = await scrubDigestLinks(new Set(doomed.keys()), idsByCharacter.keys())
+  report.digestLinksScrubbed = await scrubDigestLinks(new Set(doomed.keys()), idsByCharacter.keys(), prefetchedDigests)
 
   // In the job child the delete buffers and returns nothing; the ids were
   // resolved against the database just above, so their count is what the

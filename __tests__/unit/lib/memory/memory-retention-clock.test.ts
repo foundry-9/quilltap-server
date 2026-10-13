@@ -89,6 +89,8 @@ function installRepos() {
   const real = new MemoriesRepository()
   const memories = {
     findById: jest.fn(async (id: string) => read(id) ?? null),
+    // The retirement's digest-liveness rule reads members by id.
+    findByIds: jest.fn(async (ids: string[]) => ids.map(read).filter((r): r is Record<string, unknown> => !!r)),
     // The digest scrub's reads and its removal delta are the production SQL.
     findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),

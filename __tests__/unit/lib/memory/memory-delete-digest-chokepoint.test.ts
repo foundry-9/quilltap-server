@@ -146,6 +146,8 @@ function installRepos() {
   const now = '2026-09-01T00:00:00.000Z'
   const memories = {
     findById: jest.fn(async (id: string) => hydrate(read(id))),
+    // The retirement's digest-liveness rule reads members by id.
+    findByIds: jest.fn(async (ids: string[]) => ids.map((id) => hydrate(read(id))).filter((r) => !!r)),
     findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
     findDigestSubjectsByIds: jest.fn((ids: string[]) => real.findDigestSubjectsByIds(ids)),
