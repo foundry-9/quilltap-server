@@ -132,6 +132,14 @@ process.on('message', (raw: unknown) => {
         });
       });
       break;
+    case 'memory-index-patch':
+      handleMemoryIndexPatch(msg.characterId, msg.entries).catch(err => {
+        log.warn('Memory index patch failed', {
+          characterId: msg.characterId,
+          error: getErrorMessage(err),
+        });
+      });
+      break;
     case 'shutdown':
       beginShutdown();
       break;
@@ -213,6 +221,17 @@ async function handleInvalidate(target: 'vectorStore' | 'mountPoint', key: strin
     const mod = await import('@/lib/mount-index/mount-chunk-cache');
     mod.invalidateMountPoint(key);
   }
+}
+
+async function handleMemoryIndexPatch(
+  characterId: string,
+  entries: Array<{ id: string; embedding: Float32Array; tier: 'hot' | 'cold' }>,
+): Promise<void> {
+  // Cache only: the rows are already written. A character whose cache is not
+  // loaded costs nothing (the next search reads the rows).
+  const { memoryIndex } = await import('@/lib/memory/index-store');
+  await memoryIndex.indexInserted(characterId, entries);
+  log.debug('Patched memory index cache from parent admission', { characterId, entries: entries.length });
 }
 
 // ============================================================================

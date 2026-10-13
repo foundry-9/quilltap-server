@@ -387,7 +387,7 @@ The server memoises the replay's embeddings by text until it restarts, so repeat
 
 ## Anchor Probe
 
-`quilltap anchor-probe <characterId>` measures whether the episodic anchor line embedded with each memory suppresses Memory Gate reinforcement. It re-embeds the character's most recent memories with and without the anchor line, compares each against older rows, and reports how many would cross the reinforce (0.85) and near-duplicate (0.90) thresholds each way, plus a per-row table (rows that cross 0.85 only without anchors are highlighted). Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
+`quilltap anchor-probe <characterId>` measures whether the episodic anchor line embedded with each memory suppresses reinforcement at admission. It re-embeds the character's most recent memories with and without the anchor line, compares each against older rows, asks admission's own decider (the same subject, kind, source and date-guard rules a new memory meets) what it would do each way, and reports how many rows would fold into an older one and how many would be absorbed as near-duplicates, plus a per-row table (rows that would fold only without anchors are highlighted). Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
 
 ```bash
 quilltap anchor-probe <characterId>             # Sample the 50 most recent memories

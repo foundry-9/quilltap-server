@@ -162,7 +162,7 @@ flowchart TD
 
 From chat messages landing in the database through extraction, gating, reinforcement, and storage.
 
-Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/scoring/`
+Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/admission/`, `lib/memory/scoring/`
 
 ```mermaid
 flowchart TD
@@ -192,38 +192,38 @@ flowchart TD
         EX4 --> PARSE
     end
 
-    subgraph Gate["Memory Gate Decision"]
-        PARSE --> CAND["For each MemoryCandidate:<br/>content, summary, keywords, importance"]
-        CAND --> EMB["Generate embedding<br/><i>embedding-service.ts</i>"]
-        EMB --> SIM["Search top 5 similar memories<br/><i>vector-store.ts</i><br/>Cosine similarity"]
-        SIM --> THRESH{"Similarity<br/>score?"}
+    subgraph Gate["Admission (admitCandidate)"]
+        PARSE --> CAND["For each MemoryCandidate:<br/>name-presence + episodic anchor safety nets<br/><i>admission/prepare.ts</i>"]
+        CAND --> EMB["Embed (one retry; failure → reject, nothing written)<br/><i>caller's process — the job child for extraction</i>"]
+        EMB --> RPC["admitMemory host-RPC → parent<br/><i>admitPrepared, admission/admit.ts</i>"]
+        RPC --> SIM["gatherNeighbours: top 5 live rows, both tiers;<br/>superseded members → their digest<br/><i>admission/neighbours.ts</i>"]
+        SIM --> THRESH{"decideAdmission (pure)<br/>closest eligible neighbour?"}
 
-        THRESH -->|">= 0.80"| REINFORCE
-        THRESH -->|"0.70 - 0.80"| RELATED
+        THRESH -->|">= 0.90 same subject/kind/occasion"| ABSORB
+        THRESH -->|"0.85 - 0.90 same subject/kind/occasion"| REINFORCE
+        THRESH -->|"cold, not superseded"| PROMOTE
+        THRESH -->|"0.70 - 0.85, or close but ineligible"| RELATED
         THRESH -->|"< 0.70"| INSERT
     end
 
-    subgraph Actions["Gate Actions"]
-        REINFORCE["REINFORCE<br/><i>memory-gate.ts</i>"]
-        REINFORCE --> R1[Increment reinforcementCount]
-        R1 --> R2[Update lastReinforcedAt]
-        R2 --> R3["extractNovelDetails()<br/><i>Regex-based, no LLM</i><br/>Proper nouns, dates, numbers,<br/>currency, technical terms"]
-        R3 --> R4{"Novel details<br/>found?"}
-        R4 -->|Yes| R5["Append as footnotes<br/>[+] new detail"]
-        R4 -->|No| R6[Keep existing content]
-        R5 --> R7["Recalc reinforcedImportance<br/>min(1.0, base + log2(count+1) * 0.05)"]
-        R6 --> R7
-        R7 --> R8[Re-embed if content changed]
+    subgraph Actions["Admission Actions (parent, real rows)"]
+        ABSORB["absorb<br/>incrementReinforcement(1) only"] --> DONE
+        PROMOTE["promote-and-reinforce<br/>memoryIndex.setTier(hot)"] --> REINFORCE
+        REINFORCE["reinforce<br/><i>foldInto → applyFold</i>"]
+        REINFORCE --> R3["extractNovelDetails()<br/><i>Regex-based, no LLM</i>"]
+        R3 --> R5["appendReinforcementFootnotes (delta, cap 8)"]
+        R5 --> R7["incrementReinforcement(by)<br/>reinforcedImportance = min(1, i + log2(n) * 0.05)"]
+        R7 --> R8[Re-embed through memoryIndex if the embedded text changed]
         R8 --> DONE
 
-        RELATED["INSERT_RELATED"]
-        RELATED --> REL1[Create new memory]
-        REL1 --> REL2[Bidirectional link with<br/>similar memories via relatedMemoryIds]
+        RELATED["insert-linked"]
+        RELATED --> REL1[Create new memory with its embedding]
+        REL1 --> REL2[addRelatedMemoryIds on both sides]
         REL2 --> DONE
 
-        INSERT["INSERT"]
-        INSERT --> INS1[Create new memory record]
-        INS1 --> INS2[Store embedding in vector store]
+        INSERT["insert"]
+        INSERT --> INS1[Create new memory record with its embedding]
+        INS1 --> INS2[memoryIndex.indexInserted]
         INS2 --> DONE
     end
 
@@ -231,16 +231,11 @@ flowchart TD
         DONE[Memory stored] --> W1["Memory retrieval request"]
         W1 --> W2["daysOld = now - max(createdAt, lastReinforcedAt)"]
         W2 --> W3["timeDecay = 0.5 ^ (daysOld / 30)<br/><i>Half-life: 30 days</i>"]
-        W3 --> W4["rawWeight = reinforcedImportance * timeDecay"]
-        W4 --> W5["minWeight = reinforcedImportance * 0.70<br/><i>Floor: 70% of importance retained</i>"]
-        W5 --> W6["effectiveWeight = max(rawWeight, minWeight)"]
-        W6 --> W7{"effectiveWeight<br/>> 0.05?"}
-        W7 -->|Yes| W8[Include in search results]
-        W7 -->|No| W9[Filter out]
+        W3 --> W4["salience = reinforcedImportance * timeDecay<br/><i>no floor; lib/memory/scoring</i>"]
     end
 
     subgraph Result["Return to Caller"]
-        W8 --> RES["MemoryProcessingResult<br/>memoryIds[], reinforcedMemoryIds[],<br/>relatedMemoryIds[], tokenUsage, debugLogs"]
+        W4 --> RES["MemoryProcessingResult<br/>memoryIds[], reinforcedMemoryIds[],<br/>relatedMemoryIds[], tokenUsage, debugLogs"]
         RES --> STORE["Debug logs stored on<br/>source message in DB"]
     end
 ```
@@ -577,8 +572,8 @@ flowchart TD
 | System | Key Files |
 |--------|-----------|
 | **System Prompt** | `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/context-builder.service.ts`, `lib/services/chat-message/orchestrator.service.ts` |
-| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/scoring/` |
-| **Memory Storage** | `lib/memory/memory-service.ts`, `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
+| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/admission/`, `lib/memory/scoring/` |
+| **Memory Storage** | `lib/memory/admission/`, `lib/memory/index-store/`, `lib/memory/retire.ts`, `lib/memory/memory-service.ts` (search), `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
 | **Context Summary** | `lib/chat/context-summary.ts`, `lib/background-jobs/handlers/context-summary.ts`, `lib/memory/cheap-llm-tasks/chat-tasks.ts` |
 | **Scene State** | `lib/background-jobs/handlers/scene-state-tracking.ts`, `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` |
 | **Story Backgrounds** | `lib/background-jobs/handlers/story-background.ts`, `lib/background-jobs/handlers/title-update.ts`, `lib/image-gen/appearance-resolution.ts` |

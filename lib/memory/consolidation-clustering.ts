@@ -25,7 +25,7 @@
  *      {@link EPISODIC_WINDOW_MS} (one day) between its earliest and latest
  *      event time — i.e. every pair of members sits within a day of each other.
  *      Event time is `occurredAt`, falling back to `createdAt` (the caller
- *      supplies it). This mirrors the gate's `DATE_GUARD_DAYS` rule — distinct
+ *      supplies it). This mirrors admission's date guard (`ADMISSION_THRESHOLDS.dateGuardDays`) — distinct
  *      occasions stay distinct — at a one-day grain, and like the date guard
  *      it never blocks on a missing timestamp.
  *

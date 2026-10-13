@@ -17,6 +17,8 @@
 
 **FIXED in v4 (2026-10-12).** There are two halves:
 
+**Memory refactor Phase C (2026-10-13).** The live-row search moved with admission to `gatherNeighbours` (`lib/memory/admission/neighbours.ts`); `memory-gate.ts` is gone. The orphan tests now live in `lib/memory/__tests__/admission-neighbours.test.ts`.
+
 1. **Vector removal is part of the delete chokepoint.** `deleteMemoryWithUnlink` and
    `deleteMemoriesWithUnlinkBatch` remove the deleted rows' vectors themselves (best-effort, logged),
    so no caller that deletes through them can leave an orphan. The item route, restore's delete

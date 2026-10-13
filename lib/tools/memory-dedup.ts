@@ -12,7 +12,7 @@
 import { Memory } from '@/lib/schemas/types'
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { retireMemories } from '@/lib/memory/retire'
-import { planMemoryMerge, applyMemoryMerge } from '@/lib/memory/memory-merge'
+import { foldInto, applyFold, FOLD_CAPS } from '@/lib/memory/admission'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { partitionByPolicyProtection } from '@/lib/memory/policy-protection'
 import { getRepositories } from '@/lib/repositories/factory'
@@ -148,7 +148,7 @@ function scoreMemory(memory: Memory): number {
  * 3. Compute pairwise cosine similarity within each dimension group
  * 4. Cluster via Union-Find at threshold
  * 5. Score and select survivors from each multi-member cluster
- * 6. Preview what each survivor would absorb (shared merge, memory-merge.ts)
+ * 6. Preview what each survivor would absorb (the one combine, `foldInto`)
  * 7. If not dryRun: fold each cluster into its survivor (capped [+]
  *    footnotes, summed reinforcement, unioned links, earliest occurredAt,
  *    re-embed on content change), then bulk-delete the discards of every fold
@@ -279,8 +279,8 @@ export async function deduplicateCharacterMemories(
       // Preview the fold: which novel details the discards would add to the
       // survivor. The real plan is recomputed against the full removal set
       // once every cluster is known (so links never point at a doomed row).
-      const preview = planMemoryMerge(survivor.memory, discards.map(d => d.memory))
-      const mergedDetailCount = preview.mergedDetails.length
+      const preview = foldInto(survivor.memory, discards.map(d => d.memory), FOLD_CAPS)
+      const mergedDetailCount = preview.footnotes.length
       totalMergedDetails += mergedDetailCount
       allMerges.push({ survivor: survivor.memory, losers: discards.map(d => d.memory) })
 
@@ -316,8 +316,8 @@ export async function deduplicateCharacterMemories(
     for (const { survivor, losers } of allMerges) {
       let applied = null
       try {
-        const plan = planMemoryMerge(survivor, losers)
-        applied = await applyMemoryMerge(survivor, plan, { userId })
+        const plan = foldInto(survivor, losers, FOLD_CAPS)
+        applied = await applyFold(survivor, plan, { userId })
       } catch (error) {
         logger.warn('[MemoryDedup] Failed to fold discards into survivor', {
           context: 'memory-dedup.deduplicateCharacterMemories',

@@ -34,7 +34,7 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import type { MemoryCreateInput } from '@/lib/database/repositories/memories.repository'
-import { calculateReinforcedImportance } from './memory-gate'
+import { calculateReinforcedImportance } from './scoring'
 import { parseTargetingTags } from './recall-tags'
 import type { ConsolidationContradiction, ConsolidationDigestOutput } from './cheap-llm-tasks/consolidation-tasks'
 import { DEFAULT_TARGETING, normaliseTargeting, splitTargetingKeywords, targetingKeywords } from './candidate'

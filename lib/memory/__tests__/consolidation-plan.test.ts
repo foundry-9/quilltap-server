@@ -22,7 +22,7 @@ import {
   type LinkIndexRow,
   type ResolvedClusterOutcome,
 } from '../consolidation-plan'
-import { calculateReinforcedImportance } from '../memory-gate'
+import { calculateReinforcedImportance } from '../scoring'
 import type { Memory } from '@/lib/schemas/types'
 
 const HOLDER = 'holder-1'

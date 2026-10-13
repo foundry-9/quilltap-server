@@ -25,9 +25,11 @@
  * they buffer and commit with the job; the child's own cache is updated in
  * place so later steps of the same job see their writes, and the parent drops
  * its cache for every character a committed batch touched
- * (`lib/background-jobs/host/vector-store-invalidation.ts`). Phase C of the
- * memory refactor moves admission to the parent, after which the child's
- * writes here become a throw.
+ * (`lib/background-jobs/host/vector-store-invalidation.ts`). Admission does not
+ * write from the child (Phase C moved it to the parent, over host-RPC); the
+ * child-side writers left are consolidation, housekeeping and the embedding
+ * jobs; once none is left, the child's writes here become a throw
+ * (invariant 9).
  *
  * @module memory/index-store/memory-index
  */
@@ -67,7 +69,7 @@ export interface MemoryIndexUpsert extends MemoryIndexEntry {
 
 export interface MemoryIndexSearchOptions {
   limit: number
-  /** Recall paths read the hot tier only; the gate and the search tool read both. */
+  /** Recall paths read the hot tier only; admission and the search tool read both. */
   hotOnly: boolean
   /** Ids to leave out of the scan (they never take a top-K slot). */
   exclude?: ReadonlySet<string>

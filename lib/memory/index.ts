@@ -55,21 +55,6 @@ export {
   type HousekeepingDetail,
 } from './housekeeping'
 
-// Memory Gate (Pre-Write Similarity Check)
-export {
-  runMemoryGate,
-  reinforceMemory,
-  linkRelatedMemories,
-  extractNovelDetails,
-  calculateReinforcedImportance,
-  NEAR_DUPLICATE_THRESHOLD,
-  MERGE_THRESHOLD,
-  RELATED_THRESHOLD,
-  type GateDecision,
-  type GateResult,
-  type MemoryGateOutcome,
-} from './memory-gate'
-
 // Memory Recap (Chat Start / Character Join)
 export {
   generateMemoryRecap,
@@ -104,7 +89,8 @@ export {
   splitTargetingKeywords,
   coerceImportance,
   candidateFromDraft,
-  toCreateMemoryOptions,
+  toAdmissionRow,
+  type ResolvedCandidateTime,
   type MemoryCandidate,
   type TargetingTags,
   type CandidatePass,
@@ -157,5 +143,24 @@ export {
   type RetireReport,
 } from './retire'
 
-// Hand edits (refactor §3.11)
-export { updateMemory, type MemoryEditPatch, type UpdateMemoryResult } from './admission'
+// Admission: decide, then apply, in the parent; one combine (refactor §3.6)
+export {
+  admitCandidate,
+  admissionInserted,
+  admissionReinforced,
+  decideAdmission,
+  foldInto,
+  applyFold,
+  extractNovelDetails,
+  describeAdmission,
+  updateMemory,
+  type AdmitOptions,
+  type AdmissionAction,
+  type AdmissionOutcome,
+  type AdmissionRow,
+  type AdmissionTrace,
+  type FoldPlan,
+  type MemoryEditPatch,
+  type UpdateMemoryResult,
+} from './admission'
+export { calculateReinforcedImportance } from './scoring'

@@ -83,8 +83,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         throw new Error(result.error || 'Failed to save memory')
       }
 
-      // A new memory that the gate folded into an existing one comes back as
-      // 200 with the gate's action rather than 201.
+      // A new memory that admission folded into an existing one comes back as
+      // 200 with admission's action rather than 201.
       const merged = !isEditing && result.status === 200
       showSuccessToast(
         isEditing ? 'Memory updated' : merged ? 'Already on file — the existing memory has been reinforced instead' : 'Memory created'

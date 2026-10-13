@@ -22,6 +22,11 @@
  * self-aborts. Running it on the host makes the write+enqueue atomic-in-order,
  * exactly like the always-race-free manual start.
  *
+ * `admitMemory` is here for READ-YOUR-WRITES: memory admission searches the
+ * character's rows, decides, and writes the new row, reinforcement or link at
+ * once, so the next candidate of the same job sees it (bug 209). The child
+ * extracts and embeds; the parent does the rest (`admitPrepared`).
+ *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
  * `QUILLTAP_JOB_CHILD` is unset, so there is no re-dispatch loop).
@@ -120,6 +125,11 @@ async function runMethod(
       // Parent re-entry: QUILLTAP_JOB_CHILD is unset here, so the bridge runs
       // `beginAutonomousRun` directly on the RW connection (no re-dispatch loop).
       return startScheduledAutonomousRun(params);
+    }
+    case 'admitMemory': {
+      const { admitPrepared } = await import('@/lib/memory/admission/admit');
+      const request = args[0] as Parameters<typeof admitPrepared>[0];
+      return admitPrepared(request);
     }
     default: {
       const exhaustive: never = method;

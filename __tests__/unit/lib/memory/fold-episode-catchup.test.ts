@@ -10,7 +10,7 @@
 
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({ extractEpisodesFromFold: jest.fn() }))
-jest.mock('@/lib/memory/memory-service', () => ({ createMemoryWithGate: jest.fn() }))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 jest.mock('@/lib/memory/fold-catchup', () => {
   const actual = jest.requireActual('@/lib/memory/fold-catchup')
   return {

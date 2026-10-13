@@ -6,8 +6,8 @@
  * keywords, importance, targeting, kind, `when`, entities). The producer that
  * knows who holds the memory, whom it is about and where it came from turns
  * the draft into a {@link MemoryCandidate} with {@link candidateFromDraft}; the
- * episode pass, the manual API and the others build one directly. The writer
- * turns a candidate into the gate's input with {@link toCreateMemoryOptions}.
+ * episode pass, the manual API and the others build one directly. Admission
+ * (`admitCandidate`) turns a candidate into its row with {@link toAdmissionRow}.
  *
  *  - **Importance** is defaulted once, by the parser ({@link coerceImportance}):
  *    a number is clamped to [0, 1], anything else is 0.5. Nothing downstream
@@ -16,7 +16,7 @@
  *    `keywords`; {@link normaliseTargeting} is the one place a raw value
  *    becomes a tag. The row keeps storing them in `keywords` as it always has
  *    (the whisper and `parseTargetingTags` read them there) —
- *    {@link toCreateMemoryOptions} writes them in.
+ *    {@link toAdmissionRow} writes them in.
  *
  * Pure; safe in the forked job child.
  *
@@ -36,7 +36,7 @@ import {
   type ScopeTag,
   type TemporalTag,
 } from './recall-tags'
-import type { CreateMemoryOptions } from './memory-service'
+import type { AdmissionRow } from './admission/types'
 
 // ---------------------------------------------------------------------------
 // Targeting
@@ -132,6 +132,9 @@ export function coerceImportance(raw: unknown): number {
 
 const Id = z.string().min(1)
 
+/** Most entities a memory carries: the candidate's bound, and every fold's. */
+export const MEMORY_ENTITY_CAP = 12
+
 export const CandidatePassEnum = z.enum([
   'self-turn',
   'other-turn',
@@ -159,7 +162,7 @@ export const MemoryCandidateSchema = z.object({
   kind: MemoryKindEnum,
   /** The model's time phrase; the memory clock resolves it. */
   when: z.string().nullable(),
-  entities: z.array(z.string()).max(12).default([]),
+  entities: z.array(z.string()).max(MEMORY_ENTITY_CAP).default([]),
   /** Group-level tags (UUIDs) — the memory editor's, not the targeting ones. */
   tags: z.array(z.string()).default([]),
   subject: z.object({ holderId: Id, aboutId: Id.nullable() }),
@@ -229,7 +232,7 @@ export function candidateFromDraft(
     importance: coerceImportance(draft.importance),
     kind: draft.kind === 'episodic' ? 'episodic' : 'semantic',
     when: draft.when ?? null,
-    entities: (draft.entities ?? []).slice(0, 12),
+    entities: (draft.entities ?? []).slice(0, MEMORY_ENTITY_CAP),
     tags: [],
     subject,
     provenance,
@@ -246,13 +249,13 @@ export interface ResolvedCandidateTime {
 }
 
 /**
- * The gate's input for a candidate (`toMemoryRow`): the targeting tags are
- * written into the row's keywords here, after the free words.
+ * The row a candidate becomes at admission: the targeting tags are written
+ * into the row's keywords here, after the free words.
  */
-export function toCreateMemoryOptions(
+export function toAdmissionRow(
   candidate: MemoryCandidate,
   resolved: ResolvedCandidateTime,
-): CreateMemoryOptions {
+): AdmissionRow {
   return {
     characterId: candidate.subject.holderId,
     aboutCharacterId: candidate.subject.aboutId,

@@ -16,6 +16,8 @@
 ---
 
 **FIXED in v4 (2026-10-12).** Related links and reinforcement footnotes are written as deltas
+
+**Memory refactor Phase C (2026-10-13).** Admission's links, footnotes and counts are written in the parent (`lib/memory/admission/apply.ts`), still as deltas. The two-job cases moved to `__tests__/unit/lib/background-jobs/admission-host-rpc.test.ts`; the overlay test file is now `child-proxy-memory-overlay.test.ts`.
 against the row as it stands at write time, never as whole values built from a job's snapshot.
 `MemoriesRepository.addRelatedMemoryIds` / `removeRelatedMemoryIds` read and rewrite one row's
 `relatedMemoryIds` inside a single SQLite transaction, and `appendReinforcementFootnotes` re-reads the

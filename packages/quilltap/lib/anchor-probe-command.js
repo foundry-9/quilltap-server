@@ -2,7 +2,7 @@
 
 /**
  * `quilltap anchor-probe <characterId>` — measure whether the episodic anchor
- * line embedded with each memory suppresses Memory Gate reinforcement.
+ * line embedded with each memory suppresses reinforcement at admission.
  *
  * Thin wrapper over POST /api/v1/memories?action=anchor-gate-probe.
  * Read-only; nothing is persisted server-side, but it costs embedding calls.
@@ -23,10 +23,11 @@ Quilltap anchor-probe Tool
 Usage: quilltap anchor-probe <characterId> [options]
 
 Measures whether the episodic anchor line embedded with each memory suppresses
-Memory Gate reinforcement. Re-embeds the character's most recent memories with
-and without the anchor line, compares each against older rows, and reports how
-many would cross the reinforce (0.85) and near-duplicate (0.90) thresholds
-each way.
+reinforcement at admission. Re-embeds the character's most recent memories with
+and without the anchor line, compares each against older rows, asks admission's
+own decider what it would do each way, and reports how many rows would fold
+into an older one (reinforce or better) and how many would be absorbed as
+near-duplicates.
 
 Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
 
@@ -107,19 +108,19 @@ function printRows(rows, thresholds) {
   console.log(
     `  ${DIM}${'anchored'.padEnd(10)}${'free'.padEnd(10)}${'delta'.padEnd(9)}${'anchor'.padEnd(8)}summary${RESET}`
   );
-  const reinforce = thresholds?.reinforce ?? 0.85;
+  const folds = (kind) => kind === 'reinforce' || kind === 'absorb' || kind === 'promote-and-reinforce';
   for (const row of rows) {
     const a = row.anchoredBest;
     const f = row.anchorFreeBest;
     const delta = typeof a === 'number' && typeof f === 'number' ? f - a : null;
-    const onlyFree = typeof f === 'number' && f >= reinforce && !(typeof a === 'number' && a >= reinforce);
+    const onlyFree = folds(row.anchorFreeAction) && !folds(row.anchoredAction);
     const deltaStr = delta === null ? DIM + '—' + RESET : (delta >= 0 ? '+' : '') + delta.toFixed(3);
     const anchorStr = row.hasAnchorLine ? 'yes' : `${DIM}no${RESET}`;
     const summary = (row.summary || '').replace(/\s+/g, ' ').slice(0, 60);
     const line = `${pad(fmt(a), 10)}${pad(fmt(f), 10)}${pad(deltaStr, 9)}${pad(anchorStr, 8)}${summary}`;
     console.log(onlyFree ? `${YELLOW}▸ ${RESET}${line}` : `  ${line}`);
   }
-  console.log(`\n  ${YELLOW}▸${RESET} ${DIM}= crosses ${reinforce} only without the anchor line${RESET}`);
+  console.log(`\n  ${YELLOW}▸${RESET} ${DIM}= would fold into an older row only without the anchor line (reinforce ≥ ${fmt(thresholds?.reinforce, 2)})${RESET}`);
 }
 
 async function anchorProbeCommand(args) {
@@ -179,10 +180,10 @@ async function anchorProbeCommand(args) {
   console.log(`${BOLD}Sampled${RESET}    ${result.sampled} rows, ${result.anchoredRows} with an anchor line`);
   console.log(`${BOLD}Embeddings${RESET} ${result.embeddingsGenerated} generated`);
   console.log(`\n${DIM}${''.padEnd(22)}${'anchored'.padEnd(11)}anchor-free${RESET}`);
-  console.log(`${BOLD}${('reinforce ≥ ' + fmt(t.reinforce, 2)).padEnd(22)}${RESET}${String(anchored.reinforce).padEnd(11)}${CYAN}${free.reinforce}${RESET}`);
-  console.log(`${BOLD}${('near-dup ≥ ' + fmt(t.nearDuplicate, 2)).padEnd(22)}${RESET}${String(anchored.nearDuplicate).padEnd(11)}${CYAN}${free.nearDuplicate}${RESET}`);
+  console.log(`${BOLD}${'would fold'.padEnd(22)}${RESET}${String(anchored.reinforce).padEnd(11)}${CYAN}${free.reinforce}${RESET}`);
+  console.log(`${BOLD}${'near-dup absorbed'.padEnd(22)}${RESET}${String(anchored.nearDuplicate).padEnd(11)}${CYAN}${free.nearDuplicate}${RESET}`);
   const only = result.crossedOnlyWithoutAnchors;
-  console.log(`${BOLD}Crossed only without anchors${RESET}  ${only > 0 ? YELLOW : GREEN}${only}${RESET}`);
+  console.log(`${BOLD}Fold only without anchors${RESET}  ${only > 0 ? YELLOW : GREEN}${only}${RESET}`);
 
   printRows(result.rows || [], t);
   console.log('');

@@ -66,12 +66,11 @@ interface JobScope {
    */
   equippedOutfits: Map<string, EquippedSlots>;
   /**
-   * Read-your-writes overlay for memory rows, keyed by memory id. The memory
-   * gate decides each candidate from the rows it reads, so a second candidate
-   * in one job must see the first's buffered insert, links, footnotes and
-   * count — otherwise it inserts a duplicate, and its absolute
-   * `relatedMemoryIds` / `content` patch, built from the stale snapshot,
-   * replaces the first's when the parent replays the batch (bug 209).
+   * Read-your-writes overlay for memory rows, keyed by memory id. A later step
+   * of a job must see the job's own buffered inserts, links, footnotes, counts,
+   * tier moves and deletes (bug 209). Admission no longer writes from here —
+   * it runs in the parent over host-RPC (`admitMemory`) — but consolidation,
+   * housekeeping, the fold passes and `retireMemories` still do.
    */
   memories: Map<string, MemoryOverlayEntry>;
   /**
@@ -80,6 +79,13 @@ interface JobScope {
    * the job touched that row otherwise (bug 234).
    */
   memoryRelatedScrubs: Set<string>;
+  /**
+   * How many times this job attempt has admitted each candidate (by content
+   * key). With the job id it makes admission's idempotency key: a retry of
+   * the job is a new scope, so its counts restart and its candidates map to
+   * the keys the failed attempt already admitted.
+   */
+  admissionOccurrences: Map<string, number>;
 }
 
 /** One memory row's buffered changes this job (see {@link JobScope.memories}). */
@@ -125,12 +131,26 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     equippedOutfits: new Map(),
     memories: new Map(),
     memoryRelatedScrubs: new Set(),
+    admissionOccurrences: new Map(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
   // getJobFolderEnsureCache without importing this heavy proxy (and the
   // repositories barrel it pulls in). See job-folder-cache.ts.
   return jobScopeStore.run(scope, () => runWithJobFolderCache(fn));
+}
+
+/**
+ * The idempotency key for one admission in the running job attempt:
+ * `jobId:contentKey:n`, where `n` counts earlier admissions of the same
+ * content in this attempt. Null outside a job scope.
+ */
+export function nextAdmissionKey(contentKey: string): string | null {
+  const scope = jobScopeStore.getStore();
+  if (!scope) return null;
+  const n = scope.admissionOccurrences.get(contentKey) ?? 0;
+  scope.admissionOccurrences.set(contentKey, n + 1);
+  return `${scope.jobId}:${contentKey}:${n}`;
 }
 
 export function flushPendingWrites(): ChildWritePayload[] {
@@ -270,8 +290,9 @@ function asId(value: unknown): string | null {
 
 /**
  * Record what a buffered memory write will leave behind, so later reads in the
- * same job see it. Covers every memories write the gate, the fold passes and
- * the delete chokepoint issue; the parent's replay is unchanged.
+ * same job see it. Covers every memories write consolidation, housekeeping,
+ * the fold passes and the delete chokepoint issue; the parent's replay is
+ * unchanged.
  */
 function recordBufferedMemoryWrite(
   scope: JobScope,
@@ -906,7 +927,7 @@ export function getChildRepositoriesProxy(): RepositoryContainer {
   // Build a wrapping object whose own keys mirror the real container, but
   // whose values are repo-Proxy wrappers. We can't Proxy the container
   // itself because property access patterns inside Quilltap include
-  // `repos.memories.create(...)` — and we want the inner Proxy to be
+  // `repos.memories.create` called directly — and we want the inner Proxy to be
   // returned synchronously.
   const wrapped: Record<string, unknown> = {};
   for (const key of Object.keys(real) as Array<keyof RepositoryContainer>) {

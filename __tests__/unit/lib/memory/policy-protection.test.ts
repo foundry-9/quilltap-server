@@ -39,9 +39,9 @@ jest.mock('@/lib/memory/commonplace-mirror', () => ({
   mirrorCommonplaceForSubjects: jest.fn(async () => 0),
 }))
 
-jest.mock('@/lib/memory/memory-merge', () => ({
-  planMemoryMerge: jest.fn(() => ({ mergedDetails: [] })),
-  applyMemoryMerge: jest.fn(async (survivor: { characterId: string }) => ({ characterId: survivor.characterId, relatedMemoryIds: [] })),
+jest.mock('@/lib/memory/admission', () => ({
+  foldInto: jest.fn(() => ({ footnotes: [] })),
+  applyFold: jest.fn(async (survivor: { characterId: string }) => ({ characterId: survivor.characterId, relatedMemoryIds: [] })),
 }))
 
 jest.mock('@/lib/memory/frozen-archive-cache', () => ({

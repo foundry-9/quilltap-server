@@ -27,13 +27,7 @@ import {
   MemoryRecallSettingsSchema,
 } from '@/lib/schemas/settings.types'
 import { DEFAULT_RECALL_TUNING } from '@/lib/memory/recall-tuning'
-import {
-  NEAR_DUPLICATE_THRESHOLD,
-  MERGE_THRESHOLD,
-  RELATED_THRESHOLD,
-  DATE_GUARD_DAYS,
-  MAX_REINFORCEMENT_FOOTNOTES,
-} from '@/lib/memory/memory-gate'
+import { MAX_REINFORCEMENT_FOOTNOTES } from '@/lib/memory/reinforcement-footnotes'
 
 const mocked = instanceSettings as unknown as Record<string, jest.Mock>
 
@@ -55,12 +49,8 @@ describe('MEMORY_SETTING_DEFAULTS', () => {
     expect(MEMORY_SETTING_DEFAULTS.maintenance).toEqual({ enabled: false, perCharacterCap: 2000, perCharacterCapOverrides: {} })
   })
 
-  it('the admission thresholds the gate exports are the façade\'s', () => {
+  it('the admission thresholds live in the façade alone', () => {
     expect(ADMISSION_THRESHOLDS).toEqual({ nearDuplicate: 0.9, reinforce: 0.85, related: 0.7, dateGuardDays: 7, footnoteCap: 8 })
-    expect(NEAR_DUPLICATE_THRESHOLD).toBe(ADMISSION_THRESHOLDS.nearDuplicate)
-    expect(MERGE_THRESHOLD).toBe(ADMISSION_THRESHOLDS.reinforce)
-    expect(RELATED_THRESHOLD).toBe(ADMISSION_THRESHOLDS.related)
-    expect(DATE_GUARD_DAYS).toBe(ADMISSION_THRESHOLDS.dateGuardDays)
     expect(MAX_REINFORCEMENT_FOOTNOTES).toBe(ADMISSION_THRESHOLDS.footnoteCap)
   })
 

@@ -2,11 +2,12 @@
  * Memory recall and housekeeping fixes
  * (docs/developer/features/memory-recall-and-housekeeping-fixes.md)
  *
- * F1 — a near-duplicate re-observation counts as reinforcement
- * F3 — reinforcement footnotes are capped
+ * (F1 — near-duplicates count, F3 — the footnote cap and F9 — dedup folds
+ * are pinned with the one combine in admission-fold.test.ts and
+ * admission-admit.test.ts.)
+ *
  * F7 — the dynamic head and archive are sized from the memory budget
  * F8 — retirement never reports NaN; the outcome cache never stores it
- * F9 — housekeeping/dedup merges fold the loser into the survivor
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
@@ -68,9 +69,7 @@ const indexMock = jest.requireMock('@/lib/memory/index-store') as {
 }
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock<any> }
 
-const gate = require('@/lib/memory/memory-gate') as typeof import('@/lib/memory/memory-gate')
 const retire = require('@/lib/memory/retire') as typeof import('@/lib/memory/retire')
-const merge = require('@/lib/memory/memory-merge') as typeof import('@/lib/memory/memory-merge')
 const outcomeCache = require('@/lib/memory/housekeeping-outcome-cache') as typeof import('@/lib/memory/housekeeping-outcome-cache')
 const injector = require('@/lib/chat/context/memory-injector') as typeof import('@/lib/chat/context/memory-injector')
 
@@ -100,141 +99,15 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 }
 
 let updateForCharacter: jest.Mock<any>
-let incrementReinforcement: jest.Mock<any>
-let appendReinforcementFootnotes: jest.Mock<any>
 
 beforeEach(() => {
   jest.clearAllMocks()
   updateForCharacter = jest.fn(async (characterId: string, id: string, patch: Partial<Memory>) => ({ ...makeMemory({ id, characterId }), ...patch }))
-  // Stands in for the atomic write: the count it returns is the committed row's,
-  // here 7 → 8, deliberately not the snapshot's, so tests can tell them apart.
-  incrementReinforcement = jest.fn(async (_c: string, _id: string, at: string) => ({
-    reinforcementCount: 8,
-    reinforcedImportance: gate.calculateReinforcedImportance(0.6, 8),
-    lastReinforcedAt: at,
-  }))
-  // The footnote delta (bug 231): appends against the row it is given.
-  appendReinforcementFootnotes = jest.fn(async (_c: string, _id: string, details: string[]) => ({
-    content: gate.appendCappedFootnotes('Friday keeps the ledger.', details).content,
-    appended: details,
-  }))
-  factoryMock.getRepositories.mockReturnValue({
-    memories: { updateForCharacter, incrementReinforcement, appendReinforcementFootnotes },
-  })
+  factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter } })
   indexMock.memoryIndex.upsert.mockResolvedValue([])
   indexMock.memoryIndex.remove.mockImplementation(async (_c: string, ids: string[]) => ids.length)
   indexMock.memoryIndex.setTier.mockResolvedValue(0)
   embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: EMBEDDING, model: 'test', dimensions: 2 })
-})
-
-// =============================================================================
-// F1
-// =============================================================================
-
-describe('F1 — absorbNearDuplicate', () => {
-  it('counts through the atomic increment, writes no patch, leaves content and embedding alone', async () => {
-    const existing = makeMemory({ reinforcementCount: 1, importance: 0.6 })
-
-    const result = await gate.absorbNearDuplicate(existing)
-
-    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    const [charId, memId, at] = incrementReinforcement.mock.calls[0] as [string, string, string]
-    expect(charId).toBe('char-1')
-    expect(memId).toBe('mem-1')
-    expect(typeof at).toBe('string')
-    // Bug 182: no absolute count from the snapshot ever reaches a patch.
-    expect(updateForCharacter).not.toHaveBeenCalled()
-    expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
-    // The committed row's count wins over snapshot + 1.
-    expect(result.reinforcementCount).toBe(8)
-    expect(result.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 8))
-    expect(result.lastReinforcedAt).toBe(at)
-    expect(result.content).toBe(existing.content)
-  })
-
-  it('returns the snapshot + 1 as its local view when the write is buffered (job child returns undefined)', async () => {
-    incrementReinforcement.mockResolvedValue(undefined)
-    const existing = makeMemory({ reinforcementCount: 4 })
-
-    const result = await gate.absorbNearDuplicate(existing)
-
-    expect(result.reinforcementCount).toBe(5)
-    expect(result.id).toBe('mem-1')
-  })
-
-  it('returns the original row when the memory is gone (repository null)', async () => {
-    incrementReinforcement.mockResolvedValue(null)
-    const existing = makeMemory()
-
-    const result = await gate.absorbNearDuplicate(existing)
-
-    expect(result).toBe(existing)
-  })
-})
-
-// =============================================================================
-// F3
-// =============================================================================
-
-describe('F3 — reinforcement footnote cap', () => {
-  const footnotes = (n: number) => Array.from({ length: n }, (_, i) => `[+] Detail${i}`).join('\n')
-
-  it('counts only [+] lines', () => {
-    expect(gate.countReinforcementFootnotes(`Body text\n${footnotes(3)}\nnot [+] a footnote`)).toBe(3)
-  })
-
-  it('appends up to the cap and no further', () => {
-    const base = `Body\n${footnotes(gate.MAX_REINFORCEMENT_FOOTNOTES - 2)}`
-    const { content, appended } = gate.appendCappedFootnotes(base, ['Alpha', 'Beta', 'Gamma'])
-    expect(appended).toEqual(['Alpha', 'Beta'])
-    expect(gate.countReinforcementFootnotes(content)).toBe(gate.MAX_REINFORCEMENT_FOOTNOTES)
-  })
-
-  it('past the cap: bumps count, unions entities, appends nothing, does not re-embed', async () => {
-    const existing = makeMemory({
-      content: `Friday keeps the ledger.\n${footnotes(gate.MAX_REINFORCEMENT_FOOTNOTES)}`,
-      entities: ['Friday'],
-      reinforcementCount: 3,
-    })
-
-    const { novelDetails } = await gate.reinforceMemory(
-      existing,
-      'Friday keeps the ledger with Marguerite in Valparaiso.',
-      'Friday keeps the ledger.',
-      'user-1',
-      undefined,
-      { occurredAt: null, narrativeTime: null, entities: ['Marguerite'] },
-    )
-
-    expect(novelDetails).toEqual([])
-    expect(appendReinforcementFootnotes).not.toHaveBeenCalled()
-    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    const patch = updateForCharacter.mock.calls[0][2] as Partial<Memory>
-    expect(patch).not.toHaveProperty('reinforcementCount')
-    expect(patch).not.toHaveProperty('reinforcedImportance')
-    expect(patch).not.toHaveProperty('lastReinforcedAt')
-    expect(patch).not.toHaveProperty('content')
-    expect(patch.entities).toEqual(['Friday', 'Marguerite'])
-    expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
-  })
-
-  it('below the cap: appends novel details and re-embeds', async () => {
-    const existing = makeMemory({ content: 'Friday keeps the ledger.' })
-
-    const { novelDetails } = await gate.reinforceMemory(
-      existing,
-      'Friday keeps the ledger with Marguerite.',
-      'Friday keeps the ledger.',
-      'user-1',
-    )
-
-    expect(novelDetails).toContain('Marguerite')
-    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    // Footnotes land as a delta against the live row, never a content patch.
-    expect(appendReinforcementFootnotes).toHaveBeenCalledWith('char-1', 'mem-1', novelDetails)
-    expect(updateForCharacter.mock.calls.some(c => 'content' in (c[2] as object))).toBe(false)
-    expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)
-  })
 })
 
 // =============================================================================
@@ -349,127 +222,5 @@ describe('F8 — housekeeping outcome cache', () => {
   it('a non-finite deleted count still arms the ineffective-sweep backoff', () => {
     outcomeCache.recordHousekeepingOutcome('char-nan', Number.NaN, 5013, 5000)
     expect(outcomeCache.shouldSkipWatermarkSweep('char-nan')).toBe(true)
-  })
-})
-
-// =============================================================================
-// F9
-// =============================================================================
-
-describe('F9 — planMemoryMerge / applyMemoryMerge', () => {
-  it('folds details, reinforcement, links and the earliest occurredAt into the survivor', () => {
-    const survivor = makeMemory({
-      id: 'keep',
-      content: 'Friday keeps the ledger.',
-      importance: 0.6,
-      reinforcementCount: 2,
-      relatedMemoryIds: ['n1', 'loser'],
-      occurredAt: '2026-03-10T00:00:00.000Z',
-    })
-    const loser = makeMemory({
-      id: 'loser',
-      content: 'Friday keeps the ledger for Marguerite.',
-      reinforcementCount: 3,
-      relatedMemoryIds: ['keep', 'n2', 'doomed'],
-      occurredAt: '2026-03-08T00:00:00.000Z',
-    })
-
-    const plan = merge.planMemoryMerge(survivor, [loser], ['doomed'])
-
-    expect(plan.contentChanged).toBe(true)
-    expect(plan.mergedDetails).toEqual(['Marguerite'])
-    expect(plan.patch.content).toBe('Friday keeps the ledger.\n[+] Marguerite')
-    // Bug 226: the losers' counts ride as a delta, never an absolute total.
-    expect(plan.reinforcementDelta).toBe(3)
-    expect(plan.patch).not.toHaveProperty('reinforcementCount')
-    expect(plan.patch).not.toHaveProperty('reinforcedImportance')
-    expect(plan.patch).not.toHaveProperty('lastReinforcedAt')
-    expect(new Set(plan.patch.relatedMemoryIds)).toEqual(new Set(['n1', 'n2']))
-    expect(plan.patch.occurredAt).toBe('2026-03-08T00:00:00.000Z')
-  })
-
-  it('respects the footnote cap when folding', () => {
-    const full = Array.from({ length: gate.MAX_REINFORCEMENT_FOOTNOTES }, (_, i) => `[+] D${i}`).join('\n')
-    const survivor = makeMemory({ id: 'keep', content: `Body\n${full}` })
-    const loser = makeMemory({ id: 'loser', content: 'Body with Marguerite and Valparaiso.' })
-
-    const plan = merge.planMemoryMerge(survivor, [loser])
-
-    expect(plan.contentChanged).toBe(false)
-    expect(plan.mergedDetails).toEqual([])
-    expect(plan.patch).not.toHaveProperty('content')
-    expect(plan.reinforcementDelta).toBe(1)
-  })
-
-  it('applies the patch and re-embeds when content changed', async () => {
-    const survivor = makeMemory({ id: 'keep', content: 'Friday keeps the ledger.' })
-    const loser = makeMemory({ id: 'loser', content: 'Friday keeps the ledger for Marguerite.' })
-    const plan = merge.planMemoryMerge(survivor, [loser])
-
-    const updated = await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
-
-    expect(updated?.content).toContain('[+] Marguerite')
-    expect(updateForCharacter.mock.calls[0][2]).not.toHaveProperty('reinforcementCount')
-    // The count lands through the atomic increment, by the loser's count.
-    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    expect(incrementReinforcement.mock.calls[0]).toEqual(['char-1', 'keep', loser.createdAt, 1])
-    expect(updated?.reinforcementCount).toBe(8)
-    expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)
-    // Row and cache in one index upsert, the survivor's tier kept.
-    expect(indexMock.memoryIndex.upsert).toHaveBeenCalledWith('char-1', [
-      { id: 'keep', embedding: EMBEDDING, tier: 'hot' },
-    ])
-  })
-
-  it('does not re-embed when only counts change', async () => {
-    const survivor = makeMemory({ id: 'keep', content: 'Same words.' })
-    const loser = makeMemory({ id: 'loser', content: 'Same words.' })
-    const plan = merge.planMemoryMerge(survivor, [loser])
-
-    await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
-
-    expect(updateForCharacter).not.toHaveBeenCalled()
-    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
-    expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
-  })
-
-  it('bug 226: no merge path writes reinforcementCount through updateForCharacter', () => {
-    const fs = require('fs') as typeof import('fs')
-    const path = require('path') as typeof import('path')
-    const src = fs.readFileSync(path.join(process.cwd(), 'lib/memory/memory-merge.ts'), 'utf8')
-    expect(src).not.toMatch(/patch\.reinforcementCount\s*=/)
-    expect(src).not.toMatch(/patch\.reinforcedImportance\s*=/)
-  })
-
-  it('bug 226: the delta lands on the committed row, so a concurrent reinforcement survives', async () => {
-    const Database = require(require('path').join(process.cwd(), 'node_modules', 'better-sqlite3'))
-    const db = new Database(':memory:')
-    db.exec(`CREATE TABLE "memories" (
-      "id" TEXT PRIMARY KEY, "characterId" TEXT NOT NULL, "importance" REAL DEFAULT 0.5,
-      "reinforcementCount" INTEGER DEFAULT 1, "lastReinforcedAt" TEXT DEFAULT NULL,
-      "reinforcedImportance" REAL DEFAULT 0.5, "updatedAt" TEXT NOT NULL)`)
-    db.prepare(`INSERT INTO "memories" VALUES ('keep', 'char-1', 0.6, 3, '2026-05-01T00:00:00.000Z', 0.6, 'x')`).run()
-    const clientMock = jest.requireMock('@/lib/database/backends/sqlite/client') as { getRawDatabase: jest.Mock<any> }
-    clientMock.getRawDatabase.mockReturnValue(db)
-    const { MemoriesRepository } = require('@/lib/database/repositories/memories.repository')
-    const repo = new MemoriesRepository()
-    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, incrementReinforcement: repo.incrementReinforcement.bind(repo) } })
-
-    // The dedup run read the survivor at count 3 …
-    const survivor = makeMemory({ id: 'keep', content: 'Same words.', reinforcementCount: 3, importance: 0.6 })
-    const loser = makeMemory({ id: 'loser', content: 'Same words.', reinforcementCount: 2, createdAt: '2026-04-01T00:00:00.000Z' })
-    const plan = merge.planMemoryMerge(survivor, [loser])
-    // … an extraction job commits a reinforcement before the merge writes …
-    await repo.incrementReinforcement('char-1', 'keep', '2026-06-01T00:00:00.000Z')
-    // … and the merge's delta still counts it: 3 + 1 + 2 = 6.
-    const updated = await merge.applyMemoryMerge(survivor, plan, { userId: 'user-1' })
-
-    const row = db.prepare(`SELECT * FROM "memories" WHERE "id" = 'keep'`).get()
-    expect(row.reinforcementCount).toBe(6)
-    expect(row.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 6))
-    // The loser's older timestamp does not rewind the concurrent one.
-    expect(row.lastReinforcedAt).toBe('2026-06-01T00:00:00.000Z')
-    expect(updated?.reinforcementCount).toBe(6)
-    db.close()
   })
 })

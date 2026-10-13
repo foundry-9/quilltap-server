@@ -59,9 +59,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   renderOtherCanonBlock: jest.fn(() => 'CANON'),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  createMemoryWithGate: jest.fn(),
-}))
+jest.mock('@/lib/memory/admission', () => require('../../../helpers/admission-mock').admissionModuleMock())
 
 const { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } = jest.requireMock('@/lib/llm/cheap-llm') as {
   getCheapLLMProvider: jest.Mock
@@ -78,9 +76,7 @@ const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
   renderSelfCanonBlock: jest.Mock
   renderOtherCanonBlock: jest.Mock
 }
-const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
-  createMemoryWithGate: jest.Mock
-}
+const { mockAdmitRow: admitRow, admissionOutcome } = require('../../../helpers/admission-mock') as typeof import('../../../helpers/admission-mock')
 
 /** Build the Map shape returned by extractOtherMemoriesFromTurn (multi-subject). */
 function otherResult(byId: Record<string, Array<{ content: string; summary: string; keywords?: string[]; importance?: number }>>) {
@@ -200,7 +196,7 @@ describe('processTurnForMemory — memory-calendar zone on a cold cache', () => 
       result: new Map(),
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
-    createMemoryWithGate.mockResolvedValue({ action: 'INSERT', memory: { id: 'mem-1' } } as any)
+    admitRow.mockResolvedValue(admissionOutcome('insert', { id: 'mem-1' }))
     ;({ processTurnForMemory } = await import('@/lib/memory/memory-processor'))
   })
 
@@ -222,7 +218,7 @@ describe('processTurnForMemory — memory-calendar zone on a cold cache', () => 
 
     // "yesterday" in Tokyo is 07-13, whose local midnight is 07-12T15:00Z
     // (the UTC fallback would have said 07-12T00:00Z).
-    expect(createMemoryWithGate).toHaveBeenCalledWith(
+    expect(admitRow).toHaveBeenCalledWith(
       expect.objectContaining({ occurredAt: '2026-07-12T15:00:00.000Z' }),
       expect.anything(),
     )

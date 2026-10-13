@@ -9,7 +9,7 @@
  * candidates, each thread stated once.
  *
  * Candidates reach the store through the very writer the per-turn pass uses
- * (`writeCandidate` in memory-processor.ts → `createMemoryWithGate`), so
+ * (`writeCandidate` in memory-processor.ts → `admitCandidate`), so
  * about-character resolution, witnessedContext and occurredAt stamping cannot
  * drift between the two grains. Speaker labels come from the shared resolver
  * (`lib/chat/speaker-names.ts`), never from message roles. The Concierge

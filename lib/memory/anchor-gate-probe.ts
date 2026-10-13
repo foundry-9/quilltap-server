@@ -16,10 +16,12 @@
  *   anchor-free embeddings of the same older neighbours (the union of both
  *   searches' top-K, re-embedded on the fly).
  *
- * It reports how many rows cross {@link MERGE_THRESHOLD} (0.85) and
- * {@link NEAR_DUPLICATE_THRESHOLD} (0.90) each way. If anchor-free crossings
- * are materially higher, the gate should compare on anchor-free text. Nothing
- * is written: no rows, no vectors, no access stamps.
+ * For each side it asks admission's own decider (`decideAdmission`, with the
+ * same `ADMISSION_THRESHOLDS` admission itself uses) what it would do with the row against
+ * those neighbours, and reports how many rows would fold (reinforce, absorb or
+ * promote) and how many would be absorbed as near-duplicates. If anchor-free
+ * folds are materially higher, admission should compare on anchor-free text.
+ * Nothing is written: no rows, no vectors, no access stamps.
  *
  * Caveats: content may have gained `[+]` footnotes since the row was written,
  * and the store holds the row's CURRENT vector, so the anchored side is an
@@ -33,7 +35,15 @@ import { memoryIndex, embeddingTextFor } from './index-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
-import { MERGE_THRESHOLD, NEAR_DUPLICATE_THRESHOLD } from './memory-gate'
+import { ADMISSION_THRESHOLDS } from './settings'
+import {
+  admissionReinforced,
+  decideAdmission,
+  isNearDuplicateDecision,
+  type AdmissionAction,
+  type AdmissionDecision,
+  type AdmissionNeighbour,
+} from './admission'
 
 const logger = createServiceLogger('AnchorGateProbe')
 
@@ -48,15 +58,19 @@ export interface AnchorGateProbeRow {
   /** Best cosine against older rows, anchored text vs. anchored vectors. */
   anchoredBest: number | null
   anchoredBestId: string | null
+  /** What admission would do with the row, anchored. */
+  anchoredAction: AdmissionAction['kind'] | null
   /** Best cosine against older rows, anchor-free text on both sides. */
   anchorFreeBest: number | null
   anchorFreeBestId: string | null
+  /** What admission would do with the row, anchor-free. */
+  anchorFreeAction: AdmissionAction['kind'] | null
 }
 
 export interface AnchorGateProbeBand {
-  /** Rows whose best match reaches MERGE_THRESHOLD (would REINFORCE or better). */
+  /** Rows admission would fold into an older row (reinforce, absorb or promote). */
   reinforce: number
-  /** Rows whose best match reaches NEAR_DUPLICATE_THRESHOLD. */
+  /** Rows whose fold target is a near-duplicate (absorbed, or a cold row promoted and absorbed). */
   nearDuplicate: number
 }
 
@@ -68,7 +82,7 @@ export interface AnchorGateProbeResult {
   thresholds: { reinforce: number; nearDuplicate: number }
   anchored: AnchorGateProbeBand
   anchorFree: AnchorGateProbeBand
-  /** Rows below MERGE_THRESHOLD anchored but at/above it anchor-free. */
+  /** Rows admission would insert anchored but fold anchor-free. */
   crossedOnlyWithoutAnchors: number
   embeddingsGenerated: number
   rows: AnchorGateProbeRow[]
@@ -93,6 +107,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const limit = Math.min(200, Math.max(1, input.limit ?? 50))
   const repos = getRepositories()
   const sample = await repos.memories.findRecent(input.characterId, limit)
+  const thresholds = ADMISSION_THRESHOLDS
   // Anchor dates render on the instance's memory calendar, as the gate's do.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -134,6 +149,31 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     return memoryCache
   }
 
+  // Admission's own decision for a row against scored older neighbours.
+  // (The probe does not follow superseded members to their digests; it
+  // measures text against text.)
+  const decide = (memory: Memory, scored: Array<{ id: string; cosine: number }>): AdmissionDecision => {
+    const neighbours: AdmissionNeighbour[] = scored
+      .map(({ id, cosine }) => ({ memory: memoryCache.get(id), cosine }))
+      .filter((n): n is AdmissionNeighbour => n.memory !== undefined)
+    return decideAdmission({
+      candidate: {
+        holderId: memory.characterId,
+        aboutId: memory.aboutCharacterId,
+        kind: memory.kind,
+        source: memory.source,
+        occurredAt: memory.occurredAt,
+      },
+      neighbours,
+      thresholds,
+    })
+  }
+  const folds = (decision: AdmissionDecision | null): boolean => !!decision && admissionReinforced(decision)
+  const nearDuplicate = (decision: AdmissionDecision | null): boolean =>
+    !!decision && isNearDuplicateDecision(decision, thresholds)
+  // Each row's decisions, for the band counts (the rows carry only the kinds).
+  const decisions = new Map<AnchorGateProbeRow, { anchored: AdmissionDecision | null; anchorFree: AdmissionDecision | null }>()
+
   const rows: AnchorGateProbeRow[] = []
   for (const memory of sample) {
     const createdMs = Date.parse(memory.createdAt)
@@ -147,6 +187,8 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
       anchoredBestId: null,
       anchorFreeBest: null,
       anchorFreeBestId: null,
+      anchorFreeAction: null,
+      anchoredAction: null,
     }
 
     try {
@@ -182,12 +224,16 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
         row.anchoredBest = olderAnchored[0].score
         row.anchoredBestId = olderAnchored[0].id
       }
+      const anchoredDecision = decide(memory, olderAnchored.map(h => ({ id: h.id, cosine: h.score })))
+      row.anchoredAction = anchoredDecision.action.kind
+      decisions.set(row, { anchored: anchoredDecision, anchorFree: null })
 
       // Anchor-free side: re-embed the union of both searches' older
       // neighbours without their anchor lines and score like for like.
       const neighbourIds = Array.from(
         new Set([...olderAnchored, ...freeHits.filter(h => isOlder(h.id)).slice(0, PROBE_TOP_K)].map(h => h.id)),
       )
+      const anchorFreeScores: Array<{ id: string; cosine: number }> = []
       for (const id of neighbourIds) {
         const neighbour = memoryCache.get(id)
         if (!neighbour) continue
@@ -197,11 +243,15 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
             ? neighbour.embedding
             : await anchorFreeEmbedding(neighbour)
         const score = cosineSimilarity(freeVec, neighbourVec)
+        anchorFreeScores.push({ id, cosine: score })
         if (row.anchorFreeBest === null || score > row.anchorFreeBest) {
           row.anchorFreeBest = score
           row.anchorFreeBestId = id
         }
       }
+      const anchorFreeDecision = decide(memory, anchorFreeScores)
+      row.anchorFreeAction = anchorFreeDecision.action.kind
+      decisions.set(row, { anchored: decisions.get(row)?.anchored ?? null, anchorFree: anchorFreeDecision })
     } catch (error) {
       logger.warn('Probe failed for row; continuing', {
         memoryId: memory.id,
@@ -211,21 +261,20 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     rows.push(row)
   }
 
-  const band = (pick: (r: AnchorGateProbeRow) => number | null): AnchorGateProbeBand => ({
-    reinforce: rows.filter(r => (pick(r) ?? 0) >= MERGE_THRESHOLD).length,
-    nearDuplicate: rows.filter(r => (pick(r) ?? 0) >= NEAR_DUPLICATE_THRESHOLD).length,
+  const side = (which: 'anchored' | 'anchorFree') => (r: AnchorGateProbeRow) => decisions.get(r)?.[which] ?? null
+  const band = (pick: (r: AnchorGateProbeRow) => AdmissionDecision | null): AnchorGateProbeBand => ({
+    reinforce: rows.filter(r => folds(pick(r))).length,
+    nearDuplicate: rows.filter(r => nearDuplicate(pick(r))).length,
   })
 
   const result: AnchorGateProbeResult = {
     characterId: input.characterId,
     sampled: sample.length,
     anchoredRows: rows.filter(r => r.hasAnchorLine).length,
-    thresholds: { reinforce: MERGE_THRESHOLD, nearDuplicate: NEAR_DUPLICATE_THRESHOLD },
-    anchored: band(r => r.anchoredBest),
-    anchorFree: band(r => r.anchorFreeBest),
-    crossedOnlyWithoutAnchors: rows.filter(
-      r => (r.anchoredBest ?? 0) < MERGE_THRESHOLD && (r.anchorFreeBest ?? 0) >= MERGE_THRESHOLD,
-    ).length,
+    thresholds: { reinforce: thresholds.reinforce, nearDuplicate: thresholds.nearDuplicate },
+    anchored: band(side('anchored')),
+    anchorFree: band(side('anchorFree')),
+    crossedOnlyWithoutAnchors: rows.filter(r => !folds(side('anchored')(r)) && folds(side('anchorFree')(r))).length,
     embeddingsGenerated,
     rows,
   }

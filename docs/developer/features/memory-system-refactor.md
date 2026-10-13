@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7); Phases C–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7); Phases D–G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -924,6 +924,67 @@ departures:
   with the CLI work in Phase G.
 - The V4test acceptance walk (delete in the browser, re-extract, restart) was not run in this
   environment; `memory-index-and-retire.test.ts` covers the same paths against real SQLite.
+
+**Amendment (2026-10-13, Phase C).** Phase C landed as §3.6 describes, with these departures:
+
+- **`decideAdmission` takes a candidate *view*, not the candidate.** Its input is
+  `{ holderId, aboutId, kind, source, occurredAt }`, the hydrated neighbours and the thresholds —
+  no embedding and no clock, since event time is resolved before admission and the decider reads
+  only `occurredAt`. `admitCandidate(candidate, resolved, opts)` takes the clock's resolved
+  anchors beside the candidate for the same reason; `admitRow` is the same call for a row already
+  built (`toAdmissionRow`, which replaces `toCreateMemoryOptions`), and `admitPrepared` is the
+  parent half the `admitMemory` host-RPC runs.
+- **The action union differs in detail.** `reinforce` has no `withFootnotes` (it always writes
+  them); `promote-and-reinforce` carries `withFootnotes` (false for a cold near-duplicate, which is
+  promoted and absorbed by count). `insert-linked.reason` adds `'mismatch'`. `reject` is
+  `'embedding-failed' | 'empty'`: a subject mismatch is not a rejection.
+- **A close neighbour the candidate may not fold into is linked.** At or above the reinforce
+  threshold, a neighbour about a different subject (a self memory reads as the holder whether
+  `aboutCharacterId` is null or the holder's id), of a different kind, an AUTO row under a MANUAL
+  candidate, or a different occasion is excluded from folding and becomes a link target beside
+  the related band. The date guard reads every such neighbour, so a same-occasion row below a
+  different-occasion one still takes the candidate.
+- **`promoteOnMatch` is gone with the AUTO→MANUAL promotion.** A hand-written memory never folds
+  into an extracted row (it inserts and links, per §3.6); folded into a MANUAL row or a digest, it
+  raises that row's importance when higher and the row keeps its source.
+- **The child's index writes still buffer.** Admission no longer writes from the job child, but
+  consolidation, housekeeping and the embedding jobs still do, so `memoryIndex` writes in the child
+  cannot throw yet (invariant 9's throw waits for the last of them). After a parent-side admission
+  writes, it sends the child the written vectors and tiers (`memory-index-patch`), which patch the
+  child's cache without discarding in-place updates a running child job made.
+- **Admission commits outside the job's write batch**, so the parent guards it three ways (review
+  of PR 93): a per-character lock around search → decide → write (concurrent jobs cannot both
+  insert one memory); an idempotency key per admission from the child (`jobId : content hash :
+  occurrence in the attempt`) whose outcome the parent remembers for 24 hours, so a failed and
+  retried job does not count its observations twice; and a second decision when the fold target is
+  retired mid-write, inserting if it vanishes again. The ledger lives in the parent's memory: a
+  restart between attempts forgets it.
+- **`dryRun` is not built.** Nothing called it; Phase D adds the dry run on the extraction context
+  and invariant 10's test with it.
+- **The footnote cap limits footnotes only.** A fold re-embeds whenever the embedded text (content
+  or anchor line) changed, at the cap too (bug 204's invariant); the old gate froze the vector at
+  the cap. `applyFold` refuses to run in the job child.
+- **Consolidation's member merge does not call `foldInto`.** A digest's content is written by the
+  model, its count is an absolute sum capped at 50, and its links are remapped across every
+  cluster of the run; none of that is a fold of rows into a survivor. It stays with the planner
+  until Phase F. `foldInto` serves admission's reinforce and the dedup tool; one consequence is
+  that a reinforce now takes the earliest `occurredAt` (within the date guard) instead of filling a
+  null only, and a dedup fold now unions entities.
+- **Watermarks.** The housekeeping watermark runs in the process that asked for the admission
+  (the child, for extraction), where the housekeeping job records its outcomes, so its one-hour
+  backoff still reads where it is written. The consolidation watermark runs in `admitPrepared` in
+  the parent: extraction batches no longer carry `memories.create`, so the dispatcher's commit hook
+  no longer sees them.
+- **Round-trip timing was not measured** (no V4test instance in this environment); admission is
+  one host-RPC call per candidate as decided. `memory-diff` acceptance on V4test was not run either.
+  `admission-host-rpc.test.ts` drives the child → host-RPC → parent path (V8-serialised as the IPC
+  channel does) and pins bug 209 and bug 231 there.
+- Removed beyond §3.6's list: `createMemoryWithGate`, `createMemoryWithEmbedding`,
+  `CreateMemoryOptions`, `MemoryGateOutcome`, `runMemoryGate`, `reembedMemory`,
+  `promoteMatchedMemory`, and `skipGate` / `skipEmbedding` / `promoteOnMatch` on
+  `MemoryServiceOptions`; `memory-gate.ts` is deleted outright (`extractNovelDetails` moved to
+  `admission/novel-details.ts`, the threshold constants to the façade's `ADMISSION_THRESHOLDS`
+  only). The Memories API answers `action` with the action kind (`insert`, `reinforce`, …).
 
 ## 8. Risks
 

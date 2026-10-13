@@ -1,8 +1,9 @@
 /**
  * /api/v1/memories — manual create (bug 218) and item read (bug 219):
  *  - POST forces source MANUAL and witnessedContext 'manual', ignores skipGate,
- *    resolves projectId (explicit or from the chat), and returns 201 only on
- *    insert — 200 with the existing row when the gate reinforced / absorbed.
+ *    resolves projectId (explicit or from the chat), admits the candidate
+ *    through `admitCandidate`, and returns 201 only on insert — 200 with the
+ *    existing row when admission reinforced / absorbed.
  *  - GET /memories/[id] does not stamp lastAccessedAt.
  */
 
@@ -38,9 +39,11 @@ jest.mock('@/lib/api/responses', () => ({
   successResponse: (data: any) => ({ status: 200, body: data }),
 }))
 
-const mockCreateMemoryWithGate = jest.fn()
-jest.mock('@/lib/memory/memory-service', () => ({
-  createMemoryWithGate: (...args: unknown[]) => mockCreateMemoryWithGate(...args),
+const mockAdmit = jest.fn()
+jest.mock('@/lib/memory/memory-service', () => ({}))
+jest.mock('@/lib/memory/admission', () => ({
+  admitCandidate: (...args: unknown[]) => mockAdmit(...args),
+  admissionInserted: (o: { action: { kind: string } }) => o.action.kind === 'insert' || o.action.kind === 'insert-linked',
 }))
 
 jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({
@@ -48,7 +51,6 @@ jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({
   handleEntityDeletion: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-gate', () => ({ deleteMemoryWithUnlink: jest.fn() }))
 jest.mock('@/lib/memory/consolidation', () => ({}))
 jest.mock('@/lib/background-jobs/queue-service', () => ({}))
 jest.mock('@/lib/instance-settings', () => ({}))
@@ -59,6 +61,7 @@ jest.mock('@/lib/background-jobs/processor', () => ({}))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({}))
 
 import { POST } from '@/app/api/v1/memories/route'
+import { toAdmissionRow } from '@/lib/memory/candidate'
 import { GET as GET_ITEM } from '@/app/api/v1/memories/[id]/route'
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111'
@@ -69,6 +72,12 @@ const MEMORY_ID = '55555555-5555-4555-8555-555555555555'
 
 function req(body?: unknown): any {
   return { nextUrl: { searchParams: new URLSearchParams() }, json: async () => body }
+}
+
+/** The row admission was asked to admit on call `i`. */
+function admittedRow(i = 0) {
+  const [candidate, resolved] = mockAdmit.mock.calls[i]
+  return toAdmissionRow(candidate, resolved)
 }
 
 const baseBody = { characterId: CHAR_ID, content: 'Alice likes tea', summary: 'Tea' }
@@ -95,32 +104,31 @@ beforeEach(() => {
       tags: { findAll: jest.fn(async () => []) },
     },
   }
-  mockCreateMemoryWithGate.mockResolvedValue({ memory: { id: 'new-row' }, action: 'INSERT' })
+  mockAdmit.mockResolvedValue({ memory: { id: 'new-row' }, action: { kind: 'insert' } })
 })
 
 describe('POST /api/v1/memories (manual create, bug 218)', () => {
   it('forces MANUAL source and manual provenance, and ignores skipGate', async () => {
     const res: any = await POST(req({ ...baseBody, source: 'AUTO', skipGate: true }))
     expect(res.status).toBe(201)
-    expect(res.body).toEqual({ memory: { id: 'new-row' }, action: 'INSERT' })
-    const [data, opts] = mockCreateMemoryWithGate.mock.calls[0]
+    expect(res.body).toEqual({ memory: { id: 'new-row' }, action: 'insert' })
+    const data = admittedRow()
     expect(data.source).toBe('MANUAL')
     expect(data.witnessedContext).toBe('manual')
     expect(data.projectId).toBeNull()
-    expect(opts).toEqual({ userId: 'user-1', promoteOnMatch: true })
-    expect(opts.skipGate).toBeUndefined()
+    expect(mockAdmit.mock.calls[0][2]).toEqual({ userId: 'user-1' })
   })
 
   it('derives projectId from the supplied chat', async () => {
     await POST(req({ ...baseBody, chatId: CHAT_ID }))
-    const [data] = mockCreateMemoryWithGate.mock.calls[0]
+    const data = admittedRow()
     expect(data.chatId).toBe(CHAT_ID)
     expect(data.projectId).toBe(PROJECT_ID)
   })
 
   it('an explicit projectId wins over the chat', async () => {
     await POST(req({ ...baseBody, chatId: CHAT_ID, projectId: OTHER_PROJECT_ID }))
-    expect(mockCreateMemoryWithGate.mock.calls[0][0].projectId).toBe(OTHER_PROJECT_ID)
+    expect(admittedRow().projectId).toBe(OTHER_PROJECT_ID)
   })
 
   it('404s an unknown project or chat without writing', async () => {
@@ -128,33 +136,33 @@ describe('POST /api/v1/memories (manual create, bug 218)', () => {
     expect(r1.status).toBe(404)
     const r2: any = await POST(req({ ...baseBody, chatId: MEMORY_ID }))
     expect(r2.status).toBe(404)
-    expect(mockCreateMemoryWithGate).not.toHaveBeenCalled()
+    expect(mockAdmit).not.toHaveBeenCalled()
   })
 
   it('passes kind, occurredAt and entities through', async () => {
     await POST(req({ ...baseBody, kind: 'episodic', occurredAt: '2026-10-01T18:00:00Z', entities: ['Kettle'] }))
-    expect(mockCreateMemoryWithGate.mock.calls[0][0]).toMatchObject({
+    expect(admittedRow()).toMatchObject({
       kind: 'episodic',
       occurredAt: '2026-10-01T18:00:00Z',
       entities: ['Kettle'],
     })
   })
 
-  it('returns 201 for INSERT_RELATED', async () => {
-    mockCreateMemoryWithGate.mockResolvedValue({ memory: { id: 'new-row' }, action: 'INSERT_RELATED' })
+  it('returns 201 for insert-linked', async () => {
+    mockAdmit.mockResolvedValue({ memory: { id: 'new-row' }, action: { kind: 'insert-linked', linkTo: ['x'], reason: 'band' } })
     const res: any = await POST(req(baseBody))
     expect(res.status).toBe(201)
   })
 
-  it.each(['REINFORCE', 'SKIP_NEAR_DUPLICATE'])('returns 200 with the existing row on %s', async (action) => {
-    mockCreateMemoryWithGate.mockResolvedValue({ memory: { id: 'existing-row' }, action })
+  it.each(['reinforce', 'absorb', 'promote-and-reinforce'])('returns 200 with the existing row on %s', async (kind) => {
+    mockAdmit.mockResolvedValue({ memory: { id: 'existing-row' }, action: { kind, into: 'existing-row' } })
     const res: any = await POST(req(baseBody))
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ memory: { id: 'existing-row' }, action })
+    expect(res.body).toEqual({ memory: { id: 'existing-row' }, action: kind })
   })
 
   it('500s when the embedding failed and nothing was written', async () => {
-    mockCreateMemoryWithGate.mockResolvedValue({ memory: null, action: 'SKIP_EMBEDDING_FAILED' })
+    mockAdmit.mockResolvedValue({ memory: null, action: { kind: 'reject', reason: 'embedding-failed' } })
     const res: any = await POST(req(baseBody))
     expect(res.status).toBe(500)
   })
@@ -162,7 +170,7 @@ describe('POST /api/v1/memories (manual create, bug 218)', () => {
   it('400s a malformed body', async () => {
     const res: any = await POST(req({ ...baseBody, characterId: 'nope' }))
     expect(res.status).toBe(400)
-    expect(mockCreateMemoryWithGate).not.toHaveBeenCalled()
+    expect(mockAdmit).not.toHaveBeenCalled()
   })
 })
 

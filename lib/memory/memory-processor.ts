@@ -43,10 +43,9 @@ import type { Pronouns } from '@/lib/schemas/character.types'
 import type { MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
-import { createMemoryWithGate } from './memory-service'
+import { admitCandidate, admissionInserted, describeAdmission } from './admission'
 import { resolveEpisodicAnchors } from './time/anchors'
-import { anchorTimeMsFrom, candidateFromDraft, toCreateMemoryOptions, type CandidatePass } from './candidate'
-import type { MemoryGateOutcome } from './memory-gate'
+import { anchorTimeMsFrom, candidateFromDraft, toAdmissionRow, type CandidatePass } from './candidate'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
@@ -160,8 +159,8 @@ export interface TurnMemoryExtractionContext {
 }
 
 /**
- * Candidate memory captured during a dry-run extraction. Mirrors the input to
- * `createMemoryWithGate` plus the metadata a caller needs to attribute it
+ * Candidate memory captured during a dry-run extraction. Mirrors the row
+ * admission would be handed (`toAdmissionRow`) plus the metadata a caller needs to attribute it
  * (which character, observing whom, from which pass, sourced from which message).
  */
 export interface ExtractedCandidate {
@@ -326,13 +325,14 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
     opts.debugLogs.push(`[Memory] ${opts.passLabel} — skipped a draft with no usable text`)
     return
   }
-  const createOptions = toCreateMemoryOptions(candidate, {
+  const resolved = {
     occurredAt,
     narrativeTime,
     sourceMessageTimestamp: opts.ctx.sourceMessageTimestamp,
-  })
+  }
 
   if (opts.ctx.dryRun) {
+    const row = toAdmissionRow(candidate, resolved)
     opts.collected.push({
       pass: opts.pass,
       characterId: opts.characterId,
@@ -340,9 +340,9 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
       aboutCharacterId: opts.aboutCharacterId,
       aboutCharacterName: opts.aboutCharacterName,
       sourceMessageId: opts.sourceMessageId,
-      content: createOptions.content,
-      summary: createOptions.summary,
-      keywords: createOptions.keywords ?? [],
+      content: row.content,
+      summary: row.summary,
+      keywords: row.keywords ?? [],
       importance: candidate.importance,
       kind: candidate.kind,
       when: candidate.when,
@@ -356,51 +356,18 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
     return
   }
 
-  const outcome: MemoryGateOutcome = await createMemoryWithGate(
-    createOptions,
-    { userId: opts.ctx.userId }
-  )
-
-  switch (outcome.action) {
-    case 'SKIP_NEAR_DUPLICATE': {
-      opts.debugLogs.push(
-        `[Memory] SKIPPED near-duplicate ${opts.passLabel}: absorbed into ${outcome.memory?.id ?? 'unknown'} ` +
-        `(similarity ${outcome.similarity?.toFixed(3) ?? 'n/a'}) — ${opts.candidate.summary}`
-      )
-      break
-    }
-    case 'SKIP_EMBEDDING_FAILED': {
-      opts.debugLogs.push(
-        `[Memory] SKIPPED ${opts.passLabel} — embedding generation failed: ${outcome.reason ?? 'unknown'}`
-      )
-      break
-    }
-    case 'REINFORCE': {
-      if (outcome.memory) opts.reinforcedIds.push(outcome.memory.id)
-      opts.debugLogs.push(
-        `[Memory] REINFORCED ${opts.passLabel}: ${outcome.memory?.id ?? 'unknown'} ` +
-        `(count ${outcome.memory?.reinforcementCount ?? 1}) — ${opts.candidate.summary}`
-      )
-      break
-    }
-    case 'INSERT_RELATED': {
-      if (outcome.memory) opts.createdIds.push(outcome.memory.id)
-      opts.debugLogs.push(
-        `[Memory] Created ${opts.passLabel} (linked to ${outcome.relatedMemoryIds?.length || 0} related) — ` +
-        `${opts.candidate.summary}`
-      )
-      break
-    }
-    case 'INSERT':
-    case 'SKIP_GATE':
-    default: {
-      if (outcome.memory) opts.createdIds.push(outcome.memory.id)
-      opts.debugLogs.push(
-        `[Memory] Created ${opts.passLabel} — ${opts.candidate.summary}`
-      )
-      break
-    }
+  const outcome = await admitCandidate(candidate, resolved, { userId: opts.ctx.userId })
+  // A near-duplicate absorption counts on its row but is not a reinforcement
+  // with new detail, so it is reported in the debug line only.
+  const action = outcome.action
+  if (outcome.memory && admissionInserted(outcome)) opts.createdIds.push(outcome.memory.id)
+  else if (
+    outcome.memory &&
+    (action.kind === 'reinforce' || (action.kind === 'promote-and-reinforce' && action.withFootnotes))
+  ) {
+    opts.reinforcedIds.push(outcome.memory.id)
   }
+  opts.debugLogs.push(describeAdmission(outcome, opts.passLabel, candidate.summary))
 }
 
 /**

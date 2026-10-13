@@ -16,6 +16,8 @@
 ---
 
 **FIXED in v4 (2026-10-12).** Both delete chokepoints scrub `relatedMemoryIds` with one SQL removal
+
+**Memory refactor Phase C (2026-10-13).** The bug 234 block is in `child-proxy-memory-overlay.test.ts` (renamed from `child-proxy-memory-gate-overlay.test.ts`).
 delta per holder, `MemoriesRepository.removeRelatedMemoryIdsForCharacter(characterId, ids)`, which
 removes the ids from every row of that character that names them, against the rows as they stand at
 write time. There is no neighbour read and no whole-list write, so two deletes in one job (or two

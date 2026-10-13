@@ -40,13 +40,14 @@ import {
   dispatchAction,
   type RequestContext,
 } from '@/lib/api/middleware';
-import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
+import { searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
+import { admitCandidate, admissionInserted } from '@/lib/memory/admission';
 import { retireChatMemories } from '@/lib/memory/retire';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 import { resolveMemoryMaintenance } from '@/lib/memory/settings';
-import { MemoryCandidateSchema, toCreateMemoryOptions } from '@/lib/memory/candidate';
+import { MemoryCandidateSchema, MEMORY_ENTITY_CAP } from '@/lib/memory/candidate';
 import {
   MemoryMaintenanceCapSchema,
   MemoryMaintenanceCapOverridesSchema,
@@ -96,8 +97,8 @@ const createMemorySchema = z.object({
   kind: MemoryKindEnum.optional(),
   /** ISO wall-clock time of the event the memory records. */
   occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  /** At most 12, the candidate schema's bound (`MemoryCandidateSchema`). */
-  entities: z.array(z.string().min(1)).max(12).optional(),
+  /** The candidate schema's bound (`MEMORY_ENTITY_CAP`). */
+  entities: z.array(z.string().min(1)).max(MEMORY_ENTITY_CAP).optional(),
   // Deliberately absent (bug 218, refactor decision 13): `source` is always
   // MANUAL here — a client-claimed AUTO would switch on the extractor-only
   // heuristics — and `skipGate` has left the API, so every manual write goes
@@ -579,27 +580,28 @@ async function handleCreateMemory(
     return validationError(parsedCandidate.error);
   }
   const candidate = parsedCandidate.data;
-  const outcome = await createMemoryWithGate(
-    toCreateMemoryOptions(candidate, { occurredAt: validatedData.occurredAt ?? null, narrativeTime: null }),
-    // A hand-written memory the gate folds into an existing extracted row
-    // promotes that row to MANUAL at the higher importance, so the operator's
-    // intent survives housekeeping.
-    { userId: user.id, promoteOnMatch: true }
+  // A hand-written memory never folds into an extracted row (it is inserted
+  // and linked instead); folded into a MANUAL row or a digest, it raises that
+  // row's importance to the one asked for.
+  const outcome = await admitCandidate(
+    candidate,
+    { occurredAt: validatedData.occurredAt ?? null, narrativeTime: null },
+    { userId: user.id }
   );
 
   const memory = outcome.memory;
   if (!memory) {
     // Embedding generation failed after retry; no row was written because a
-    // memory without an embedding would be invisible to every future gate
-    // check. Surface this to the client so the UI can show the real reason.
+    // memory without an embedding would be invisible to every future
+    // admission. Surface this to the client so the UI can show the real reason.
     return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
   }
 
-  const inserted = outcome.action === 'INSERT' || outcome.action === 'INSERT_RELATED';
+  const inserted = admissionInserted(outcome);
   logger.debug('[Memories API] Manual memory create resolved', {
     characterId: validatedData.characterId,
     memoryId: memory.id,
-    action: outcome.action,
+    action: outcome.action.kind,
     inserted,
     projectId,
   });
@@ -614,7 +616,7 @@ async function handleCreateMemory(
 
   // 201 only when a row was created; a reinforcement or near-duplicate
   // absorption returns 200 with the existing row, and `action` says which.
-  return NextResponse.json({ memory, action: outcome.action }, { status: inserted ? 201 : 200 });
+  return NextResponse.json({ memory, action: outcome.action.kind }, { status: inserted ? 201 : 200 });
 }
 
 async function handleSearch(
