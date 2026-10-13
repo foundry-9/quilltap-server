@@ -372,9 +372,8 @@ export async function applyWritesUnsafe(
   jobType?: string,
 ): Promise<void> {
   const parts = partitionWrites(writes);
-  // Memory-id-keyed writes (`memories.delete`, `vectorIndices.updateEntryEmbedding`)
-  // name no character; resolve their owners now, while a deleted row still
-  // exists to be read (bug 217).
+  // Memory-id-keyed writes (`memories.update`) name no character; resolve
+  // their owners now, while the row still exists to be read (bug 217).
   const memoryOwners = lookupMemoryOwners(memoryIdsNeedingOwnerLookup(writes), jobId);
   // Likewise the subject buckets of any digest the batch deletes, so their
   // Commonplace mirror can be refreshed once the delete has committed.
@@ -845,10 +844,9 @@ async function invalidateLocalCachesAsync(
 ): Promise<void> {
   if (vectorStoreKeys.size > 0) {
     try {
-      const mod = await import('@/lib/embedding/vector-store');
-      const mgr = mod.getVectorStoreManager();
+      const { memoryIndex } = await import('@/lib/memory/index-store');
       for (const key of vectorStoreKeys) {
-        try { mgr.unloadStore(key); }
+        try { memoryIndex.reload(key); }
         catch { /* best effort */ }
       }
     } catch { /* best effort */ }

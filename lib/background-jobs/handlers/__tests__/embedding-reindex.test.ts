@@ -28,8 +28,8 @@ jest.mock('@/lib/help/help-doc-sync', () => ({
   })),
 }));
 
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn(),
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
 }));
 
 jest.mock('@/lib/mount-index/mount-chunk-cache', () => ({
@@ -42,8 +42,8 @@ import type { BackgroundJob } from '@/lib/schemas/types';
 const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
   getRepositories: jest.Mock;
 };
-const { getVectorStoreManager } = jest.requireMock('@/lib/embedding/vector-store') as {
-  getVectorStoreManager: jest.Mock;
+const { memoryIndex } = jest.requireMock('@/lib/memory/index-store') as {
+  memoryIndex: { reloadAll: jest.Mock };
 };
 
 const PROFILE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -78,8 +78,6 @@ interface RepoOverrides {
 
 function makeRepos(overrides: RepoOverrides = {}) {
   const createBatch = jest.fn(async () => undefined);
-  const deleteStore = jest.fn(async () => true);
-  getVectorStoreManager.mockReturnValue({ deleteStore });
 
   const repos = {
     embeddingProfiles: {
@@ -150,7 +148,7 @@ function makeRepos(overrides: RepoOverrides = {}) {
     },
   };
   getRepositories.mockReturnValue(repos);
-  return { repos, createBatch, deleteStore };
+  return { repos, createBatch };
 }
 
 /** All entityType/entityId pairs across every createBatch call. */
@@ -205,13 +203,14 @@ describe('handleEmbeddingReindexAll', () => {
     expect(repos.embeddingStatus.listFailedEntityIds).toHaveBeenCalledWith('MEMORY', PROFILE_ID);
   });
 
-  it('all scope: clears vector stores for every memory-holding character (vaults not consulted)', async () => {
-    const { repos, createBatch, deleteStore } = makeRepos();
+  it('all scope: drops every cached memory index once and enqueues every memory-holding character (vaults not consulted)', async () => {
+    const { repos, createBatch } = makeRepos();
 
     await handleEmbeddingReindexAll(makeJob('all'));
 
-    expect(deleteStore).toHaveBeenCalledWith('char-ok');
-    expect(deleteStore).toHaveBeenCalledWith('char-vaultless');
+    expect(memoryIndex.reloadAll).toHaveBeenCalledTimes(1);
+    expect(repos.memories.findByCharacterId).toHaveBeenCalledWith('char-ok');
+    expect(repos.memories.findByCharacterId).toHaveBeenCalledWith('char-vaultless');
     expect(repos.embeddingStatus.markAllPendingByProfileId).toHaveBeenCalledWith(PROFILE_ID);
     // 'all' scope re-embeds conforming rows too, stale chats included.
     const ids = enqueuedEntities(createBatch).map((e) => e.id);

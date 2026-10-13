@@ -21,7 +21,7 @@
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
+import { retireChatMemories } from '@/lib/memory/retire';
 import { enqueueMemoryExtraction } from '../queue-service';
 import { logger } from '@/lib/logger';
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings';
@@ -34,11 +34,11 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
   const chat = await repos.chats.findById(payload.chatId);
   if (!chat) {
     // Orphaned memories: chat is gone, just wipe whatever is left and stop.
-    const wipeResult = await deleteMemoriesByChatIdWithVectors(payload.chatId);
+    const wipeResult = await retireChatMemories(payload.chatId);
     logger.info('[MemoryRegenerateChat] Chat no longer exists; deleted orphan memories', {
       jobId: job.id,
       chatId: payload.chatId,
-      deleted: wipeResult.deleted,
+      deleted: wipeResult.retired,
       spared: wipeResult.spared,
       vectorsRemoved: wipeResult.vectorsRemoved,
     });
@@ -54,7 +54,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
     );
   }
 
-  const wipeResult = await deleteMemoriesByChatIdWithVectors(payload.chatId);
+  const wipeResult = await retireChatMemories(payload.chatId);
   await rebuildFoldGrainObservations(job, payload, chat.otherExtractionWatermarkMessageId ?? null);
   await resetEpisodeWatermark(job, payload, chat.episodeExtractionWatermarkMessageId ?? null);
 
@@ -93,7 +93,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
     logger.info('[MemoryRegenerateChat] Wiped chat and enqueued greeting extraction', {
       jobId: job.id,
       chatId: payload.chatId,
-      deleted: wipeResult.deleted,
+      deleted: wipeResult.retired,
       spared: wipeResult.spared,
       vectorsRemoved: wipeResult.vectorsRemoved,
       extractionsEnqueued: 1,
@@ -116,7 +116,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
   logger.info('[MemoryRegenerateChat] Wiped chat and enqueued per-turn extractions', {
     jobId: job.id,
     chatId: payload.chatId,
-    deleted: wipeResult.deleted,
+    deleted: wipeResult.retired,
     vectorsRemoved: wipeResult.vectorsRemoved,
     extractionsEnqueued: turnOpenerIds.length,
   });

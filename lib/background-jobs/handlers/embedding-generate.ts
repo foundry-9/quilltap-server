@@ -8,12 +8,10 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { EMBEDDING_MAX_CHARS, averageEmbeddings, generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getVectorStoreManager } from '@/lib/embedding/vector-store';
-import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
-import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
+import { memoryIndex, embeddingTextFor } from '@/lib/memory/index-store';
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -151,7 +149,7 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
     // The anchor date renders on the instance's memory calendar; the job
     // child's zone cache starts cold, so resolve it before building the text.
     const memoryTimeZone = await refreshMemoryTimeZone();
-    const textToEmbed = buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone);
+    const textToEmbed = embeddingTextFor(memory, memoryTimeZone);
     logger.debug('[EmbeddingGenerate] Built memory embedding text', {
       context: 'handleEmbeddingGenerate',
       memoryId: memory.id,
@@ -170,33 +168,12 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       { priority: 'background' }
     );
 
-    // Update memory with embedding
-    await repos.memories.updateForCharacter(
-      memory.characterId,
-      memory.id,
-      { embedding: embeddingResult.embedding }
-    );
-
-    // Write directly to the database instead of loading the full in-memory
-    // vector store. Loading the store for a character with thousands of entries
-    // (e.g. 12k+ vectors × 1536 dimensions) would consume hundreds of MB of
-    // heap just to insert one row.
-    const vectorRepo = getVectorIndicesRepository();
-    const exists = await vectorRepo.entryExists(memory.id);
-    if (exists) {
-      await vectorRepo.updateEntryEmbedding(memory.id, embeddingResult.embedding);
-    } else {
-      await vectorRepo.addEntry({
-        id: memory.id,
-        characterId: memory.characterId,
-        embedding: embeddingResult.embedding,
-      });
-    }
-    await vectorRepo.saveMeta(memory.characterId, embeddingResult.dimensions);
-
-    // Invalidate the cached in-memory store for this character so the next
-    // search operation reloads fresh data from the database.
-    getVectorStoreManager().unloadStore(memory.characterId);
+    // Row and index through the one writer. In the job child the row write
+    // buffers and the parent drops its cache for the character on commit; a
+    // store nobody has loaded is not loaded just to take one vector.
+    await memoryIndex.upsert(memory.characterId, [
+      { id: memory.id, embedding: embeddingResult.embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' },
+    ]);
 
     // Mark status as embedded
     await repos.embeddingStatus.markAsEmbedded(

@@ -11,8 +11,8 @@
  * stored vector, no provider call needed.
  *
  * Tables walked (mirrors `normalize-embeddings-unit-vectors-v1`):
- *   - memories                 (main DB)
- *   - vector_entries           (main DB)
+ *   - memories                 (main DB — the memory index itself; its
+ *                                in-process cache is dropped afterwards)
  *   - conversation_chunks      (main DB)
  *   - help_docs                (main DB)
  *   - help_doc_chunks          (main DB)
@@ -37,7 +37,7 @@ import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { applySqlcipherKey } from '@/lib/database/backends/sqlite/sqlcipher-key'
 import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
-import { getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { memoryIndex } from '@/lib/memory/index-store'
 import { blobToFloat32, float32ToBlob, EMBEDDING_DIM_SQL } from '@/lib/embedding/float32-conversion'
 import { tableExists } from '@/lib/database/backends/sqlite/introspection'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
@@ -45,7 +45,7 @@ import type { EmbeddingProfile } from '@/lib/schemas/types'
 const FLUSH_BATCH = 500
 const ZERO_MAG = 1e-10
 
-const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs', 'help_doc_chunks'] as const
+const MAIN_DB_TABLES = ['memories', 'conversation_chunks', 'help_docs', 'help_doc_chunks'] as const
 
 function requireMainDatabase(): DatabaseType {
   const db = getRawDatabase()
@@ -402,9 +402,9 @@ export async function reapplyEmbeddingProfile(
     })
   }
   try {
-    getVectorStoreManager().unloadAll()
+    memoryIndex.reloadAll()
   } catch (err) {
-    logger.warn('[ReapplyProfile] Failed to unload vector stores', {
+    logger.warn('[ReapplyProfile] Failed to drop the memory index caches', {
       error: err instanceof Error ? err.message : String(err),
     })
   }

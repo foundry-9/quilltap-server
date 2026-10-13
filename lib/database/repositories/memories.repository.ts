@@ -17,6 +17,7 @@ import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
 import { getRawDatabase } from '../backends/sqlite/client';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
+import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 
 /**
  * Input to {@link MemoriesRepository.create}. The tier fields are optional
@@ -42,6 +43,27 @@ function parseJsonIdList(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * A stored embedding as `rawQuery` returns it — a BLOB (raw Float32 or the
+ * quantized format) or, on a row older than `normalize-vector-storage-v1`, JSON
+ * text — decoded to a Float32Array. Null when it is neither.
+ */
+function decodeStoredEmbedding(value: unknown): Float32Array | null {
+  if (value instanceof Float32Array) return value;
+  if (Buffer.isBuffer(value)) return blobToFloat32(value);
+  if (value instanceof Uint8Array) return blobToFloat32(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+  if (Array.isArray(value)) return Float32Array.from(value as number[]);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? Float32Array.from(parsed as number[]) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
@@ -822,55 +844,26 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Delete a memory
-   * @param id The memory ID
-   * @returns Promise<boolean> True if memory was deleted, false if not found
+   * Refused. A memory row is deleted only by `retireMemories`
+   * (`lib/memory/retire.ts`), which scrubs the links that name it and evicts
+   * its vector; a bare delete is how orphan vectors and dangling links were
+   * made (bugs 200, 225). Present only because the base repository declares it.
    */
   async delete(id: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const result = await this._delete(id);
-        return result;
-      },
-      'Error deleting memory',
-      { memoryId: id }
-    );
+    logger.error('Refused a bare memory delete; memories are deleted through retireMemories', { memoryId: id });
+    throw new Error('MemoriesRepository.delete is refused: delete memories through retireMemories (lib/memory/retire.ts)');
   }
 
   /**
-   * Delete a specific character's memory
-   * @param characterId The character ID
-   * @param memoryId The memory ID
-   * @returns Promise<boolean> True if memory was deleted, false if not found or doesn't belong to character
-   */
-  async deleteForCharacter(characterId: string, memoryId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const memory = await this.findById(memoryId);
-        if (!memory) {
-          logger.warn('Memory not found for deletion', { memoryId, characterId });
-          return false;
-        }
-
-        if (memory.characterId !== characterId) {
-          logger.warn('Memory does not belong to character', { characterId, memoryId });
-          return false;
-        }
-
-        return await this.delete(memoryId);
-      },
-      'Error deleting memory for character',
-      { characterId, memoryId }
-    );
-  }
-
-  /**
-   * Delete multiple memories for a character
+   * Delete a character's memory rows outright — nothing else. Named *Unsafe*
+   * because it scrubs no links and touches no index: `retireMemories`
+   * (`lib/memory/retire.ts`) is its only caller and does both, and a test
+   * greps for any other.
    * @param characterId The character ID
    * @param memoryIds Array of memory IDs to delete
    * @returns Promise<number> Number of memories successfully deleted
    */
-  async bulkDelete(characterId: string, memoryIds: string[]): Promise<number> {
+  async bulkDeleteUnsafe(characterId: string, memoryIds: string[]): Promise<number> {
     return this.safeQuery(
       async () => {
         if (memoryIds.length === 0) {
@@ -1022,20 +1015,38 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Ids of a character's cold memories. The vector store reads this at load
-   * time to stamp `tier` into each entry's metadata (the index itself does not
-   * persist metadata), so recall's hot-only predicate costs nothing per search.
+   * Every embedded memory of a character as the index holds it: id, vector and
+   * tier, in one query. `memories.embedding` and `memories.tier` are the only
+   * copy (the `vector_entries` mirror was retired in Phase B of the memory
+   * refactor); the in-process store is a cache of this read. A row whose blob
+   * cannot be decoded is skipped with a warning rather than costing the index.
    */
-  async findColdIdsByCharacterId(characterId: string): Promise<string[]> {
+  async findIndexRowsByCharacterId(
+    characterId: string,
+  ): Promise<Array<{ id: string; embedding: Float32Array; tier: MemoryTier }>> {
     return this.safeQuery(
       async () => {
-        const rows = await rawQuery<Array<{ id: string }>>(
-          `SELECT id FROM memories WHERE characterId = ? AND tier = 'cold'`,
+        const rows = await rawQuery<Array<{ id: string; embedding: unknown; tier: string | null }>>(
+          `SELECT id, embedding, tier FROM memories WHERE characterId = ? AND embedding IS NOT NULL`,
           [characterId],
         );
-        return rows.map((r) => r.id);
+        const out: Array<{ id: string; embedding: Float32Array; tier: MemoryTier }> = [];
+        let undecodable = 0;
+        for (const row of rows) {
+          const embedding = decodeStoredEmbedding(row.embedding);
+          if (!embedding || embedding.length === 0) {
+            undecodable++;
+            continue;
+          }
+          out.push({ id: row.id, embedding, tier: row.tier === 'cold' ? 'cold' : 'hot' });
+        }
+        if (undecodable > 0) {
+          logger.warn('Skipped memory embeddings that could not be decoded', { characterId, undecodable });
+        }
+        logger.debug('Read memory index rows', { characterId, rows: out.length });
+        return out;
       },
-      'Error finding cold memory ids',
+      'Error reading memory index rows',
       { characterId },
       [],
     );
@@ -1095,9 +1106,8 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * character's store. Returns the number of rows changed (0 in the job
    * child, where the write is buffered).
    *
-   * Callers must keep the character's vector store metadata in step (see
-   * `CharacterVectorStore.setTier`); the parent's post-job invalidation
-   * reloads it for writes made from the child.
+   * Called only by `memoryIndex.setTier` (`lib/memory/index-store/`), which
+   * keeps the in-process index in step; a test greps for any other caller.
    */
   async updateTierBulk(
     characterId: string,
@@ -1580,22 +1590,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Delete all memories associated with a specific source message
-   * @param sourceMessageId The source message ID
-   * @returns Promise<number> Number of memories deleted
-   */
-  async deleteBySourceMessageId(sourceMessageId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const deletedCount = await this.deleteMany({ sourceMessageId });
-        return deletedCount;
-      },
-      'Error deleting memories by source message ID',
-      { sourceMessageId }
-    );
-  }
-
-  /**
    * Count memories associated with a specific source message
    * @param sourceMessageId The source message ID
    * @returns Promise<number> Number of memories for the message
@@ -1632,22 +1626,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error counting memories for source messages',
       { count: sourceMessageIds.length },
       0
-    );
-  }
-
-  /**
-   * Delete all memories associated with a specific chat
-   * @param chatId The chat ID
-   * @returns Promise<number> Number of memories deleted
-   */
-  async deleteByChatId(chatId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const deletedCount = await this.deleteMany({ chatId });
-        return deletedCount;
-      },
-      'Error deleting memories by chat ID',
-      { chatId }
     );
   }
 

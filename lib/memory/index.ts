@@ -138,3 +138,24 @@ export {
   ADMISSION_THRESHOLDS,
   type MemorySettings,
 } from './settings'
+
+// The index gets an owner: every embedding and tier write (refactor §3.5)
+export {
+  memoryIndex,
+  embeddingTextFor,
+  type MemoryIndex,
+  type MemoryIndexEntry,
+  type MemoryIndexUpsert,
+} from './index-store'
+
+// One deletion (refactor §3.10)
+export {
+  retireMemories,
+  retireChatMemories,
+  type RetireReason,
+  type RetireOptions,
+  type RetireReport,
+} from './retire'
+
+// Hand edits (refactor §3.11)
+export { updateMemory, type MemoryEditPatch, type UpdateMemoryResult } from './admission'

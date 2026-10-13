@@ -321,7 +321,7 @@ Schemas drift fast and there are 30+ tables across these three databases, so the
 - **connectionProfiles / embeddingProfiles / imageProfiles / providerModels** — provider configuration
 - **promptTemplates / roleplayTemplates** — prompt / roleplay format templates
 - **background_jobs / embedding_status** — Prospero job queue
-- **vector_indices / vector_entries / tfidf_vocabularies** — semantic search and recall
+- **tfidf_vocabularies** — TF-IDF search vocabularies (memory vectors live on `memories.embedding`)
 - **plugin_configs / instance_settings / quilltap_meta / migrations_state / migrations_metadata** — instance plumbing
 - **help_docs** — built MessagePack help index
 

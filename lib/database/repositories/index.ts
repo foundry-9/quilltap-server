@@ -37,7 +37,6 @@ export { ProviderModelsRepository } from './provider-models.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 export { TagsRepository } from './tags.repository';
 export { UsersRepository } from './users.repository';
-export { VectorIndicesRepository } from './vector-indices.repository';
 export { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
@@ -82,7 +81,6 @@ import { ProviderModelsRepository } from './provider-models.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 import { TagsRepository } from './tags.repository';
 import { UsersRepository } from './users.repository';
-import { VectorIndicesRepository } from './vector-indices.repository';
 import { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
@@ -132,7 +130,6 @@ export interface RepositoryContainer {
   roleplayTemplates: RoleplayTemplatesRepository;
   tags: TagsRepository;
   users: UsersRepository;
-  vectorIndices: VectorIndicesRepository;
   tfidfVocabularies: TfidfVocabularyRepository;
   embeddingStatus: EmbeddingStatusRepository;
   wardrobe: WardrobeRepository;
@@ -195,7 +192,6 @@ export function createRepositories(): RepositoryContainer {
       roleplayTemplates: new RoleplayTemplatesRepository(),
       tags: new TagsRepository(),
       users: new UsersRepository(),
-      vectorIndices: new VectorIndicesRepository(),
       tfidfVocabularies: new TfidfVocabularyRepository(),
       embeddingStatus: new EmbeddingStatusRepository(),
       wardrobe: new WardrobeRepository(),

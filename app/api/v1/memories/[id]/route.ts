@@ -12,8 +12,8 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, errorResponse, notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
-import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
-import { editMemory } from '@/lib/memory/memory-edit';
+import { retireMemories } from '@/lib/memory/retire';
+import { updateMemory } from '@/lib/memory/admission';
 
 // Validation schema for updating a memory
 const updateMemorySchema = z.object({
@@ -96,7 +96,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     // text, recomputes reinforcedImportance, links both sides, invalidates the
     // frozen archive, publishes `memories` and refreshes a digest's
     // Commonplace mirror (bug 203).
-    const result = await editMemory(existingMemory.characterId, memoryId, validatedData, {
+    const result = await updateMemory(existingMemory.characterId, memoryId, validatedData, {
       userId: user.id,
     });
 
@@ -157,10 +157,10 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return notFound('Memory');
       }
 
-      // The chokepoint removes the row, scrubs neighbours' links and removes
-      // the vector (bug 200: an orphan vector blinded the gate).
-      const deleted = await deleteMemoryWithUnlink(memoryId);
-      if (!deleted) {
+      // The deletion chokepoint removes the row, scrubs every link that names
+      // it and evicts its vector (bug 200: an orphan vector blinded the gate).
+      const { retired } = await retireMemories([memoryId], { reason: 'item-delete' });
+      if (retired === 0) {
         return notFound('Memory');
       }
 

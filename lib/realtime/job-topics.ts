@@ -139,8 +139,8 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   jobs: [],
   // Deliberately empty, and `memories` is deliberately absent from
   // REPOSITORY_TOPICS: a memories hint is scoped by *chat* id, while
-  // `firstIdArg` would hand back `memories.delete(memoryId)`'s positional
-  // memory id. Every chat-scoped subscriber would then filter that hint out —
+  // `firstIdArg` would hand back `memories.updateForCharacter(characterId, …)`'s
+  // positional character id. Every chat-scoped subscriber would then filter that hint out —
   // coverage that reaches nobody, which is worse than none.
   memories: [],
 };

@@ -395,25 +395,6 @@ export type {
 } from './llm-log.types';
 
 // ============================================================================
-// VECTOR INDICES TYPES
-// ============================================================================
-export {
-  VectorMetadataSchema,
-  VectorEntrySchema,
-  VectorIndexSchema,
-  VectorIndexMetaSchema,
-  VectorEntryRowSchema,
-} from './vector-indices.types';
-
-export type {
-  VectorMetadata,
-  VectorEntry,
-  VectorIndex,
-  VectorIndexMeta,
-  VectorEntryRow,
-} from './vector-indices.types';
-
-// ============================================================================
 // EMBEDDING JOB TYPES (TF-IDF vocabulary and embedding status tracking)
 // ============================================================================
 export {

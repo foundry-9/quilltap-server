@@ -34,6 +34,7 @@ import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
 import { withMemoryMaintenanceFromLegacy } from '@/lib/memory/settings-legacy';
+import { memoryIndex } from '@/lib/memory/index-store';
 import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
 import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
@@ -323,6 +324,11 @@ export async function restore(
       }
       return owned;
     };
+    // An archive written before Phase B of the memory refactor carries the
+    // retired vector mirror beside the rows. The row is the only copy now, so
+    // a memory that arrived without an embedding takes the mirror's.
+    const legacyVectors = new Map((data.vectorEntries || []).map((e) => [e.id, e.embedding]));
+    let legacyVectorsAdopted = 0;
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
@@ -338,6 +344,12 @@ export async function restore(
           });
           cleanMemoryData.embedding = decodedEmbedding;
         }
+        const legacy = legacyVectors.get(id);
+        const hasEmbedding = Array.isArray(cleanMemoryData.embedding) && cleanMemoryData.embedding.length > 0;
+        if (!hasEmbedding && Array.isArray(legacy) && legacy.length > 0) {
+          cleanMemoryData.embedding = legacy;
+          legacyVectorsAdopted++;
+        }
         if (!(await memoryOwnerIsTargetUser(cleanMemoryData.characterId as string))) {
           throw new Error('Character not found or access denied');
         }
@@ -348,6 +360,14 @@ export async function restore(
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
       }
     }
+    // The index is the rows just written; drop any cached copy so the next
+    // search reads them.
+    memoryIndex.reloadAll();
+    moduleLogger.debug('Restored memories', {
+      total: data.memories.length,
+      restored: memoriesRestored,
+      legacyVectorsAdopted,
+    });
 
     // 10. Prompt Templates (user-created only)
     let promptTemplatesRestored = 0;
@@ -1046,37 +1066,6 @@ export async function restore(
       restored: chatInformsRestored,
     });
 
-    // 22j. Vector index metas + entries. Without these every memory would
-    // need to be re-embedded after restore.
-    let vectorIndexMetasRestored = 0;
-    for (const meta of data.vectorIndexMetas || []) {
-      try {
-        await globalRepos.vectorIndices.saveMeta(meta.characterId, meta.dimensions);
-        vectorIndexMetasRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore vector index meta for character ${meta.characterId}: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore vector index meta', { characterId: meta.characterId, error });
-      }
-    }
-
-    // The repo's addEntries batch path expects Float32Array; the serialised
-    // form holds plain number arrays, so rehydrate before insert.
-    let vectorEntriesRestored = 0;
-    if ((data.vectorEntries || []).length > 0) {
-      try {
-        const rehydrated = (data.vectorEntries || []).map((e) => ({
-          id: e.id,
-          characterId: e.characterId,
-          embedding: new Float32Array(e.embedding),
-        }));
-        await globalRepos.vectorIndices.addEntries(rehydrated);
-        vectorEntriesRestored = rehydrated.length;
-      } catch (error) {
-        warnings.push(`Failed to restore vector entries: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore vector entries batch', { error });
-      }
-    }
-
     // 22k. Conversation chunks (semantic chunks with embeddings).
     let conversationChunksRestored = 0;
     for (const chunk of data.conversationChunks || []) {
@@ -1292,8 +1281,8 @@ export async function restore(
     }
 
     // 24a. Compact archives arrive with no vectors at all: memory embeddings
-    // are NULL and every derived collection (conversation chunks, vector
-    // entries, TF-IDF vocabularies, doc-mount chunks) was omitted at backup
+    // are NULL and every derived collection (conversation chunks, TF-IDF
+    // vocabularies, doc-mount chunks) was omitted at backup
     // time. The reconcile below deliberately ignores *absent* chunk rows — it
     // only repairs non-conforming ones — so without this the instance would
     // come back with search quietly cold. Enqueued before the reconcile so the
@@ -1343,8 +1332,6 @@ export async function restore(
     moduleLogger.debug('Post-restore embedding reconcile complete', {
       targetDimensions: reconcileResult.targetDimensions,
       skippedReason: reconcileResult.skippedReason,
-      vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
-      vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
       reindexEnqueued: reconcileResult.reindexEnqueued,
       mismatched: reconcileResult.mismatched,
     });
@@ -1394,8 +1381,7 @@ export async function restore(
       embeddingStatus: embeddingStatusRestored,
       conversationChunks: conversationChunksRestored,
       tfidfVocabularies: tfidfVocabulariesRestored,
-      vectorIndexMetas: vectorIndexMetasRestored,
-      vectorEntries: vectorEntriesRestored,
+      legacyVectorsAdopted,
       docMountPoints: docMountPointsRestored,
       docMountFolders: docMountFoldersRestored,
       docMountFiles: docMountFilesRestored,
@@ -1411,8 +1397,6 @@ export async function restore(
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,
-        vectorEntriesDeleted: reconcileResult.vectorEntriesDeleted,
-        vectorIndexMetaFixed: reconcileResult.vectorIndexMetaFixed,
         reindexEnqueued: reconcileResult.reindexEnqueued,
       },
       warnings,

@@ -207,8 +207,8 @@ function sendJobResult(jobId: string, ok: boolean, writes: ReturnType<typeof flu
 async function handleInvalidate(target: 'vectorStore' | 'mountPoint', key: string): Promise<void> {
   // Lazy import so the parent doesn't pay the cost.
   if (target === 'vectorStore') {
-    const mod = await import('@/lib/embedding/vector-store');
-    mod.getVectorStoreManager().unloadStore(key);
+    const { memoryIndex } = await import('@/lib/memory/index-store');
+    memoryIndex.reload(key);
   } else if (target === 'mountPoint') {
     const mod = await import('@/lib/mount-index/mount-chunk-cache');
     mod.invalidateMountPoint(key);

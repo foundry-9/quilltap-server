@@ -66,9 +66,8 @@ import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex, embeddingTextFor } from './index-store'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { buildMemoryEmbeddingText } from './episodic'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 import {
@@ -578,57 +577,37 @@ async function executePlan(
   nowIso: string,
 ): Promise<void> {
   const repos = getRepositories()
-  let store: Awaited<ReturnType<typeof getCharacterVectorStore>> | null = null
-  try {
-    store = await getCharacterVectorStore(characterId)
-  } catch (error) {
-    log.warn('Vector store unavailable during consolidation; digests are written without vectors', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-
-  const addOrUpdateVector = async (id: string, embedding: Float32Array): Promise<void> => {
-    if (!store) return
-    try {
-      if (store.hasVector(id)) {
-        await store.updateVector(id, embedding)
-      } else {
-        await store.addVector(id, embedding, { memoryId: id, characterId, tier: 'hot' })
-      }
-    } catch (error) {
-      log.warn('Failed to stage digest vector', {
-        characterId,
-        memoryId: id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
 
   for (const create of plan.creates) {
-    await repos.memories.create(create.data, { id: create.id, createdAt: nowIso, updatedAt: nowIso })
+    // The vector rides in the create itself, so a digest never exists
+    // without it; the index then caches it without a second write.
+    await repos.memories.create(
+      create.embedding ? { ...create.data, embedding: create.embedding } : create.data,
+      { id: create.id, createdAt: nowIso, updatedAt: nowIso },
+    )
     if (create.embedding) {
-      await repos.memories.updateForCharacter(characterId, create.id, { embedding: create.embedding })
-      await addOrUpdateVector(create.id, create.embedding)
+      await memoryIndex.indexInserted(characterId, [{ id: create.id, embedding: create.embedding, tier: 'hot' }])
     }
     log.debug('Digest created', { characterId, memoryId: create.id, members: create.memberIds.length })
   }
 
   for (const update of plan.updates) {
-    await repos.memories.updateForCharacter(characterId, update.id, {
-      ...update.patch,
-      ...(update.embedding ? { embedding: update.embedding } : {}),
-    })
-    if (update.embedding) await addOrUpdateVector(update.id, update.embedding)
+    if (update.embedding) {
+      // The revised text and its vector land in one row update.
+      await memoryIndex.upsert(characterId, [
+        { id: update.id, embedding: update.embedding, tier: 'hot', alongside: update.patch },
+      ])
+    } else {
+      await repos.memories.updateForCharacter(characterId, update.id, update.patch)
+    }
     log.debug('Digest revised in place', { characterId, memoryId: update.id, newMembers: update.memberIds.length })
   }
 
   for (const move of plan.tierMoves) {
-    await repos.memories.updateTierBulk(characterId, move.ids, 'cold', {
+    await memoryIndex.setTier(characterId, move.ids, 'cold', {
       supersededById: move.supersededById,
       consolidatedAt: nowIso,
     })
-    store?.setTier(move.ids, 'cold')
   }
 
   const considered = Array.from(new Set([...plan.considered, ...extraConsidered]))
@@ -638,17 +617,6 @@ async function executePlan(
 
   for (const rewrite of plan.linkRewrites) {
     await repos.memories.updateForCharacter(characterId, rewrite.id, { relatedMemoryIds: rewrite.relatedMemoryIds })
-  }
-
-  if (store) {
-    try {
-      await store.save()
-    } catch (error) {
-      log.warn('Failed to save vector store after consolidation', {
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
   }
 }
 
@@ -955,7 +923,9 @@ export async function runConsolidation(
       if (failed.has(digest.clusterIndex)) continue
       try {
         const result = await generateEmbeddingForUser(
-          buildMemoryEmbeddingText(digest.summary, digest.content, {
+          embeddingTextFor({
+            summary: digest.summary,
+            content: digest.content,
             occurredAt: digest.occurredAt,
             narrativeTime: digest.narrativeTime,
             entities: digest.entities,

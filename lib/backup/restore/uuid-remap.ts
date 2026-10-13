@@ -42,7 +42,6 @@ import type {
   PluginConfig,
   CharacterPluginData,
   ConversationAnnotation,
-  VectorIndexMeta,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
@@ -519,13 +518,9 @@ export function remapBackupData(
     ),
   })) as SerializedConversationChunk[];
 
-  // Vector index meta — id and characterId share the same value by convention.
-  const remappedVectorIndexMetas = (data.vectorIndexMetas || []).map((meta) => ({
-    ...remapper.remapFields(meta, ['id', 'characterId']),
-  })) as VectorIndexMeta[];
-
-  // Vector entries — id is typically the memory id (already remapped through
-  // the memory pass). characterId is also remapped.
+  // Legacy vector entries (pre-Phase-B archives) — id is the memory id
+  // (already remapped through the memory pass), so the restore can still match
+  // each to its memory. characterId is also remapped.
   const remappedVectorEntries = (data.vectorEntries || []).map((entry) => ({
     ...remapper.remapFields(entry, ['id', 'characterId']),
   })) as SerializedVectorEntry[];
@@ -634,7 +629,6 @@ export function remapBackupData(
     embeddingStatus: remappedEmbeddingStatus,
     conversationChunks: remappedConversationChunks,
     tfidfVocabularies: remappedTfidfVocabularies,
-    vectorIndexMetas: remappedVectorIndexMetas,
     vectorEntries: remappedVectorEntries,
     docMountPoints: remappedDocMountPoints,
     docMountFolders: remappedDocMountFolders,

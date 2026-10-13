@@ -11,10 +11,10 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
+import { memoryIndex } from './index-store'
 import { filterImportance, protection } from './scoring'
 import { MEMORY_SETTING_DEFAULTS } from './settings-defaults'
-import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
+import { retireMemories } from './retire'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 
@@ -372,16 +372,7 @@ export async function runHousekeeping(
 
   let vectorStoreDirty = false
   if (!opts.dryRun && demotedIds.length > 0) {
-    await repos.memories.updateTierBulk(characterId, demotedIds, 'cold')
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      vectorStore.setTier(demotedIds, 'cold')
-    } catch (error) {
-      logger.warn('[Housekeeping] Failed to re-stamp vector tier after demotion', {
-        characterId,
-        error: String(error),
-      })
-    }
+    await memoryIndex.setTier(characterId, demotedIds, 'cold')
     result.demoted = demotedIds.length
     result.demotedIds = demotedIds
     vectorStoreDirty = true
@@ -391,8 +382,10 @@ export async function runHousekeeping(
   }
 
   if (!opts.dryRun && expiredIds.length > 0) {
-    // The chokepoint removes the rows' vectors too.
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(expiredIds)
+    // The deletion chokepoint scrubs links and evicts the rows' vectors too.
+    // Retention never takes a digest with its last member: outliving the
+    // members it replaced is the digest's purpose.
+    const deletedCount = (await retireMemories(expiredIds, { reason: 'retention' })).retired
     result.deleted = deletedCount
     result.deletedIds = expiredIds
     vectorStoreDirty = true

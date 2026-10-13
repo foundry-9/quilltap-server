@@ -5,9 +5,9 @@
 
 import {
   buildMemoryAnchorLine,
-  buildMemoryEmbeddingText,
   eventReferenceTimeMs,
 } from '../episodic'
+import { embeddingTextFor } from '../index-store/embedding-text'
 import { resolveWhenPhrase } from '../time/clock'
 
 describe('buildMemoryAnchorLine', () => {
@@ -42,15 +42,17 @@ describe('buildMemoryAnchorLine', () => {
   })
 })
 
-describe('buildMemoryEmbeddingText', () => {
+describe('embeddingTextFor', () => {
   it('is byte-identical to the legacy form without anchors', () => {
-    expect(buildMemoryEmbeddingText('sum', 'content')).toBe('sum\n\ncontent')
-    expect(buildMemoryEmbeddingText('sum', 'content', {})).toBe('sum\n\ncontent')
+    expect(embeddingTextFor({ summary: 'sum', content: 'content' })).toBe('sum\n\ncontent')
+    expect(
+      embeddingTextFor({ summary: 'sum', content: 'content', occurredAt: null, narrativeTime: null, entities: [] }),
+    ).toBe('sum\n\ncontent')
   })
 
   it('appends the anchor line when anchors exist', () => {
     expect(
-      buildMemoryEmbeddingText('sum', 'content', { occurredAt: '2026-07-14T00:00:00.000Z' }),
+      embeddingTextFor({ summary: 'sum', content: 'content', occurredAt: '2026-07-14T00:00:00.000Z' }),
     ).toBe('sum\n\ncontent\n(when: 2026-07-14)')
   })
 })

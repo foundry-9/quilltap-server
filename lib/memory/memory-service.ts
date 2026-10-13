@@ -14,7 +14,7 @@ import {
   containsLiteralPhrase,
   getLiteralPhrase,
 } from '@/lib/embedding/literal-boost'
-import { getCharacterVectorStore, getVectorStoreManager, isHotVector, type VectorMetadata } from '@/lib/embedding/vector-store'
+import { memoryIndex, embeddingTextFor } from './index-store'
 import { logger } from '@/lib/logger'
 import {
   runMemoryGate,
@@ -23,8 +23,6 @@ import {
   promoteMatchedMemory,
   linkRelatedMemories,
   calculateReinforcedImportance,
-  deleteMemoryWithUnlink,
-  deleteMemoriesWithUnlinkBatchReport,
   extractNovelDetails,
 } from './memory-gate'
 import {
@@ -35,7 +33,7 @@ import {
 } from './scoring'
 import { boostGateThreshold, combineRecallMultipliers, recallTuningOf, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { selectSpecificAnchors } from './recall-tuning'
-import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
+import type { EpisodicAnchorView } from './episodic'
 import { resolveWhenPhrase } from './time/clock'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { getMemoryMaintenanceSettings } from '@/lib/instance-settings'
@@ -43,7 +41,6 @@ import { resolveMemoryCap } from './settings'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
-import { partitionByPolicyProtection } from './policy-protection'
 export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
@@ -578,7 +575,7 @@ async function createMemoryDirect(
   }
 
   // Generate embedding (anchor line included so the vector carries when/where)
-  const embeddingText = buildMemoryEmbeddingText(data.summary, data.content, data, await refreshMemoryTimeZone())
+  const embeddingText = embeddingTextFor(data, await refreshMemoryTimeZone())
   let embedding: Float32Array
   try {
     embedding = (await generateEmbeddingForUser(
@@ -639,14 +636,9 @@ async function createMemoryDirectWithEmbedding(
   )
 
   if (embedding) {
-    // A new row is always hot; stamp it so the index never has to guess.
-    const vectorStore = await getCharacterVectorStore(data.characterId)
-    await vectorStore.addVector(memory.id, embedding, {
-      memoryId: memory.id,
-      characterId: data.characterId,
-      tier: 'hot',
-    })
-    await vectorStore.save()
+    // The row already carries its vector; index it without a second write. A
+    // new row is always hot.
+    await memoryIndex.indexInserted(data.characterId, [{ id: memory.id, embedding, tier: 'hot' }])
   }
   logger.debug('[Memory] New memory persisted', {
     characterId: data.characterId,
@@ -656,131 +648,6 @@ async function createMemoryDirectWithEmbedding(
   })
 
   return memory
-}
-
-/**
- * The edited text of a memory could not be embedded, so the edit was not
- * written. Carries the provider's message for the caller to report.
- */
-export class MemoryReembedError extends Error {
-  constructor(
-    public readonly memoryId: string,
-    public readonly originalError?: unknown,
-  ) {
-    super(
-      `Could not embed the edited memory: ${originalError instanceof Error ? originalError.message : String(originalError)}`
-    )
-    this.name = 'MemoryReembedError'
-  }
-}
-
-/**
- * Update a memory and regenerate its embedding if content changed.
- *
- * The embedding is generated from the edited text BEFORE anything is written
- * and lands in the same update; if it cannot be generated this throws
- * {@link MemoryReembedError} and the row is untouched.
- */
-export async function updateMemoryWithEmbedding(
-  characterId: string,
-  memoryId: string,
-  data: Partial<Memory>,
-  options: MemoryServiceOptions
-): Promise<Memory | null> {
-  const repos = getRepositories()
-
-  // Get the existing memory
-  const existingMemory = await repos.memories.findByIdForCharacter(characterId, memoryId)
-  if (!existingMemory) {
-    return null
-  }
-
-  // Check if content changed (requires re-embedding). Anchor-field changes
-  // count too — the anchor line is part of the embedded text.
-  const contentChanged =
-    (data.content && data.content !== existingMemory.content) ||
-    (data.summary && data.summary !== existingMemory.summary) ||
-    (data.occurredAt !== undefined && data.occurredAt !== existingMemory.occurredAt) ||
-    (data.narrativeTime !== undefined && data.narrativeTime !== existingMemory.narrativeTime) ||
-    (data.entities !== undefined &&
-      JSON.stringify(data.entities) !== JSON.stringify(existingMemory.entities ?? []))
-
-  // Embed first, write second: a failed embed must leave the row as it was,
-  // never new text over the old vector. The embedding rides in the same
-  // update as the text, so there is no window where they disagree.
-  let embedding: Memory['embedding'] | undefined
-  if (contentChanged && !options.skipEmbedding) {
-    const merged = { ...existingMemory, ...data } as Memory
-    try {
-      const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(merged.summary, merged.content, merged, await refreshMemoryTimeZone()),
-        options.userId,
-        options.embeddingProfileId
-      )
-      embedding = embeddingResult.embedding
-    } catch (error) {
-      logger.warn(`[Memory] Failed to embed edited memory ${memoryId}; row left unchanged`, {
-        characterId,
-        memoryId,
-        userId: options.userId,
-        error: String(error),
-      })
-      throw new MemoryReembedError(memoryId, error)
-    }
-  }
-
-  const patch: Partial<Memory> = embedding ? { ...data, embedding } : data
-  const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, patch)
-  if (!updatedMemory) {
-    return null
-  }
-
-  if (embedding) {
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      if (vectorStore.hasVector(memoryId)) {
-        await vectorStore.updateVector(memoryId, embedding)
-      } else {
-        await vectorStore.addVector(memoryId, embedding, {
-          memoryId,
-          characterId,
-          tier: updatedMemory.tier === 'cold' ? 'cold' : 'hot',
-        })
-      }
-      await vectorStore.save()
-      logger.debug('[Memory] Updated memory re-embedded', { characterId, memoryId })
-    } catch (error) {
-      // The row already carries the new embedding; the vector index is
-      // rebuilt from rows on the next reindex.
-      logger.warn(`[Memory] Vector store update failed for memory ${memoryId} (row embedding is current)`, {
-        characterId,
-        memoryId,
-        error: String(error),
-      })
-    }
-  }
-
-  return updatedMemory
-}
-
-/**
- * Delete a memory and remove its vector
- */
-export async function deleteMemoryWithVector(
-  characterId: string,
-  memoryId: string
-): Promise<boolean> {
-  const repos = getRepositories()
-
-  // Confirm ownership before going through the chokepoint, which is
-  // characterId-agnostic.
-  const existing = await repos.memories.findById(memoryId)
-  if (!existing || existing.characterId !== characterId) {
-    return false
-  }
-
-  // The chokepoint removes the vector too.
-  return deleteMemoryWithUnlink(memoryId)
 }
 
 /**
@@ -978,14 +845,16 @@ export async function searchMemoriesSemantic(
     // neural or the TF-IDF scale.
     const minScore = explicitMinScore ?? defaultMinCosineForProvider(embeddingResult.provider)
 
-    const vectorStore = await getCharacterVectorStore(characterId)
-    const storedDimensions = vectorStore.getDimensions()
+    const indexShape = await memoryIndex.shape(characterId, embeddingResult.embedding.length)
+    const storedDimensions = indexShape.dominantDimensions
 
-    // Check for dimension mismatch before searching — if the search embedding
-    // profile differs from the one used to build the index, vector search will
-    // return nothing. Fall back to text search immediately rather than silently
-    // returning empty results.
-    if (storedDimensions !== null && embeddingResult.embedding.length !== storedDimensions) {
+    // Check for dimension mismatch before searching — if no stored vector has
+    // the query's length (the search embedding profile differs from the one
+    // the corpus was embedded with), vector search returns nothing. Fall back
+    // to text search immediately rather than silently returning empty
+    // results. A corpus part-way through a re-embed searches the vectors that
+    // already match.
+    if (indexShape.size > 0 && indexShape.matching === 0) {
       const warnKey = `${characterId}:${storedDimensions}->${embeddingResult.embedding.length}`
       if (!dimensionMismatchWarned.has(warnKey)) {
         dimensionMismatchWarned.add(warnKey)
@@ -1006,16 +875,11 @@ export async function searchMemoriesSemantic(
       return searchMemoriesText(characterId, query, options)
     }
 
-    const excluded = options.excludeMemoryIds
-    const includeCold = options.includeCold === true
-    const hasExclusions = !!excluded && excluded.size > 0
     // Hot-only unless the caller asked for the archive: cold rows are filtered
     // inside the (brute-force) vector scan, so the top-K is drawn from hot rows.
-    const vectorFilter = hasExclusions || !includeCold
-      ? (metadata: VectorMetadata) =>
-          (!hasExclusions || !excluded!.has(metadata.memoryId)) &&
-          (includeCold || isHotVector(metadata))
-      : undefined
+    const excluded = options.excludeMemoryIds
+    const includeCold = options.includeCold === true
+    const indexSearch = { hotOnly: !includeCold, exclude: excluded }
     // The ranking knobs: the context's own tuning, else the retuned defaults.
     // The R1 gate's constants are on the neural cosine scale; TF-IDF
     // (`BUILTIN`) cosines distribute very differently, so the gate stays off
@@ -1029,11 +893,10 @@ export async function searchMemoriesSemantic(
     const weightClockMs = options.weightClockMs
 
     // Search vectors
-    let vectorResults = vectorStore.search(
-      embeddingResult.embedding,
-      limit * 3, // Get more results to filter
-      vectorFilter,
-    )
+    let vectorResults = await memoryIndex.search(characterId, embeddingResult.embedding, {
+      ...indexSearch,
+      limit: limit * 3, // Get more results to filter
+    })
 
     // Multi-probe union (retrospective turns): embed each extra probe, union
     // its top-K pool with the main query's, keep each memory's max cosine.
@@ -1048,7 +911,7 @@ export async function searchMemoriesSemantic(
         try {
           const probeResult = await embed(probe)
           if (probeResult.embedding.length !== embeddingResult.embedding.length) continue
-          for (const vr of vectorStore.search(probeResult.embedding, limit * 3, vectorFilter)) {
+          for (const vr of await memoryIndex.search(characterId, probeResult.embedding, { ...indexSearch, limit: limit * 3 })) {
             const existing = byId.get(vr.id)
             if (!existing || vr.score > existing.score) {
               byId.set(vr.id, vr)
@@ -1652,12 +1515,10 @@ function scoreTextMatch(memory: Memory, text: string): number {
 export async function generateMissingEmbeddings(
   characterId: string,
   options: MemoryServiceOptions & {
-    batchSize?: number
     onProgress?: (processed: number, total: number, current: Memory) => void
   }
 ): Promise<{ processed: number; failed: number; skipped: number }> {
   const repos = getRepositories()
-  const batchSize = options.batchSize || 10
 
   // Get all memories without embeddings
   const memories = await repos.memories.findByCharacterId(characterId)
@@ -1669,7 +1530,6 @@ export async function generateMissingEmbeddings(
   let failed = 0
   let skipped = 0
 
-  const vectorStore = await getCharacterVectorStore(characterId)
   // Anchor dates render on the instance's memory calendar.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -1678,233 +1538,50 @@ export async function generateMissingEmbeddings(
       options.onProgress?.(processed + failed + skipped, memoriesWithoutEmbeddings.length, memory)
 
       const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone),
+        embeddingTextFor(memory, memoryTimeZone),
         options.userId,
         options.embeddingProfileId,
         { priority: 'background' }
       )
 
-      // Update memory with embedding
-      await repos.memories.updateForCharacter(characterId, memory.id, {
-        embedding: embeddingResult.embedding,
-      })
-
-      // Add to vector store
-      await vectorStore.addVector(memory.id, embeddingResult.embedding, {
-        memoryId: memory.id,
-        characterId,
-        tier: memory.tier === 'cold' ? 'cold' : 'hot',
-      })
-
+      // Row and index in one call; the row's tier rides with the vector.
+      await memoryIndex.upsert(characterId, [
+        { id: memory.id, embedding: embeddingResult.embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' },
+      ])
       processed++
-
-      // Save periodically
-      if (processed % batchSize === 0) {
-        await vectorStore.save()
-      }
     } catch (error) {
       logger.warn(`[Memory] Failed to generate embedding for memory ${memory.id}`, { characterId, memoryId: memory.id, userId: options.userId, error: String(error) })
       failed++
     }
   }
 
-  // Final save
-  await vectorStore.save()
-
+  logger.debug('[Memory] Backfilled missing embeddings', { characterId, processed, failed, skipped })
   return { processed, failed, skipped }
 }
 
 /**
- * Rebuild the vector index for a character from scratch
+ * Rebuild a character's vector index.
  *
- * Useful if the vector store becomes corrupted or out of sync.
+ * The rows are the index (`memories.embedding` + `memories.tier`); the
+ * in-process store is only a cache of them. Rebuilding drops the cache and
+ * reads the rows again, so the tiers come with the vectors (bug 205 cannot
+ * recur). Reports how many vectors the reloaded index holds, and how many of
+ * the character's rows have none (those need `generate-embeddings`).
  */
 export async function rebuildVectorIndex(
   characterId: string,
-  options: MemoryServiceOptions & {
-    onProgress?: (processed: number, total: number) => void
-  }
 ): Promise<{ indexed: number; failed: number }> {
-  const repos = getRepositories()
-  const manager = getVectorStoreManager()
+  memoryIndex.reload(characterId)
+  const entries = await memoryIndex.entries(characterId)
+  const coldIndexed = entries.filter(e => e.metadata.tier === 'cold').length
+  const failed = await getRepositories().memories.countWithoutEmbedding(characterId)
 
-  // Delete existing index
-  await manager.deleteStore(characterId)
-
-  // Get fresh store
-  const vectorStore = await manager.getStore(characterId)
-
-  // Get all memories with embeddings
-  const memories = await repos.memories.findByCharacterId(characterId)
-  const memoriesWithEmbeddings = memories.filter(
-    m => m.embedding && m.embedding.length > 0
-  )
-
-  let indexed = 0
-  let failed = 0
-  let coldIndexed = 0
-
-  for (const memory of memoriesWithEmbeddings) {
-    try {
-      options.onProgress?.(indexed + failed, memoriesWithEmbeddings.length)
-
-      // Tier rides with the vector: the store was just emptied, so load()
-      // stamped nothing, and an entry with no tier reads as hot — every cold
-      // row would leak into hot-only recall until the next unload (bug 205).
-      await vectorStore.addVector(memory.id, memory.embedding!, {
-        memoryId: memory.id,
-        characterId,
-        tier: memory.tier === 'cold' ? 'cold' : 'hot',
-      })
-      if (memory.tier === 'cold') coldIndexed++
-      indexed++
-    } catch (error) {
-      logger.warn(`[Memory] Failed to index memory ${memory.id}`, { characterId, memoryId: memory.id, error: String(error) })
-      failed++
-    }
-  }
-
-  await vectorStore.save()
-
-  logger.debug('[Memory] Rebuilt vector index', { characterId, indexed, coldIndexed, failed })
-
-  return { indexed, failed }
-}
-
-/**
- * Delete all memories for a source message with vector store cleanup.
- * Handles multi-character case where one message may have memories for multiple characters.
- *
- * @param sourceMessageId The source message ID
- * @returns Object with count of deleted memories and removed vectors
- */
-export async function deleteMemoriesBySourceMessageWithVectors(
-  sourceMessageId: string
-): Promise<{ deleted: number; vectorsRemoved: number }> {
-  const repos = getRepositories()
-  const memories = await repos.memories.findBySourceMessageId(sourceMessageId)
-  if (memories.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0 }
-  }
-
-  // The chokepoint scrubs neighbours' relatedMemoryIds and removes the vectors.
-  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(memories.map(m => m.id))
-
-  logger.info('[Memory] Cascade deleted memories for source message', {
-    sourceMessageId,
-    deleted,
-    vectorsRemoved,
-    characterCount: new Set(memories.map(m => m.characterId)).size,
+  logger.debug('[Memory] Rebuilt vector index from memory rows', {
+    characterId,
+    indexed: entries.length,
+    coldIndexed,
+    withoutEmbedding: failed,
   })
 
-  return { deleted, vectorsRemoved }
-}
-
-/**
- * Delete all memories for multiple source messages (swipe group) with vector cleanup.
- *
- * @param sourceMessageIds Array of source message IDs
- * @returns Object with count of deleted memories and removed vectors
- */
-export async function deleteMemoriesBySourceMessagesWithVectors(
-  sourceMessageIds: string[]
-): Promise<{ deleted: number; vectorsRemoved: number }> {
-  if (sourceMessageIds.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0 }
-  }
-
-  const repos = getRepositories()
-
-  // Gather every memory across the whole swipe group up front, so the chokepoint
-  // scan only sweeps the relatedMemoryIds column once for the entire batch.
-  const allMemories: Memory[] = []
-  for (const sourceMessageId of sourceMessageIds) {
-    const slice = await repos.memories.findBySourceMessageId(sourceMessageId)
-    allMemories.push(...slice)
-  }
-  if (allMemories.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0 }
-  }
-
-  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(allMemories.map(m => m.id))
-
-  logger.info('[Memory] Bulk cascade deleted memories for swipe group', {
-    messageCount: sourceMessageIds.length,
-    totalDeleted: deleted,
-    totalVectorsRemoved: vectorsRemoved,
-  })
-
-  return { deleted, vectorsRemoved }
-}
-
-/**
- * Delete the chat's extracted memories (across all characters) and remove
- * their entries from each character's vector store.
- *
- * Used by the DELETE /api/v1/memories?chatId= route and by the
- * MEMORY_REGENERATE_CHAT job when wiping a chat's auto-extracted memories
- * before re-running extraction from scratch.
- *
- * Only what extraction would write back is wiped (bug 201): MANUAL rows and
- * cold rows are spared, and so is a digest while any of its members survives —
- * removing it would leave those members' `supersededById` dangling. The
- * per-row delete remains the way to purge any of them.
- */
-export async function deleteMemoriesByChatIdWithVectors(
-  chatId: string,
-): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number; spared: number }> {
-  const repos = getRepositories()
-
-  const chatMemories = await repos.memories.findByChatId(chatId)
-  const { actionable, spared, sparedBy } = partitionByPolicyProtection(chatMemories)
-  const doomedIds = new Set(actionable.map(m => m.id))
-
-  // A digest with no surviving member describes nothing; it may go. A member
-  // survives when it is not being wiped here and still names this digest —
-  // a row re-promoted or re-consolidated elsewhere no longer speaks for it.
-  // One lookup for every spared digest's members.
-  const sparedDigests = spared.filter(m => m.source === 'CONSOLIDATED')
-  const memberIds = [...new Set(sparedDigests.flatMap(d => d.consolidatedFrom ?? []))]
-    .filter(id => !doomedIds.has(id))
-  const members = memberIds.length > 0 ? await repos.memories.findByIds(memberIds) : []
-  const survivingDigestIds = new Set(
-    members.map(m => m.supersededById).filter((id): id is string => !!id),
-  )
-  const memories = [...actionable]
-  let digestsKept = 0
-  for (const digest of sparedDigests) {
-    if (survivingDigestIds.has(digest.id)) {
-      digestsKept++
-    } else {
-      memories.push(digest)
-    }
-  }
-  const sparedCount = chatMemories.length - memories.length
-  if (sparedCount > 0) {
-    logger.info('[Memory] Chat wipe spared manual, cold and digest rows', {
-      chatId,
-      spared: sparedCount,
-      manual: sparedBy.manual,
-      cold: sparedBy.cold,
-      digests: digestsKept,
-    })
-  }
-
-  if (memories.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0, characterCount: 0, spared: sparedCount }
-  }
-
-  // The chokepoint scrubs neighbours' relatedMemoryIds and removes the vectors.
-  const { deleted, vectorsRemoved } = await deleteMemoriesWithUnlinkBatchReport(memories.map(m => m.id))
-  const characterCount = new Set(memories.map(m => m.characterId)).size
-
-  logger.info('[Memory] Cascade deleted memories for chat', {
-    chatId,
-    deleted,
-    vectorsRemoved,
-    spared: sparedCount,
-    characterCount,
-  })
-
-  return { deleted, vectorsRemoved, characterCount, spared: sparedCount }
+  return { indexed: entries.length, failed }
 }

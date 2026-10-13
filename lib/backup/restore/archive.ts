@@ -41,7 +41,6 @@ import type {
   PluginConfig,
   CharacterPluginData,
   ConversationAnnotation,
-  VectorIndexMeta,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
@@ -255,7 +254,9 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const embeddingStatus = await readJsonArrayFileOptional<EmbeddingStatus>(rootPath, 'data/embedding-status.json', []);
     const conversationChunks = await readJsonArrayFileOptional<SerializedConversationChunk>(rootPath, 'data/conversation-chunks.json', []);
     const tfidfVocabularies = await readJsonArrayFileOptional<TfidfVocabulary>(rootPath, 'data/tfidf-vocabularies.json', []);
-    const vectorIndexMetas = await readJsonArrayFileOptional<VectorIndexMeta>(rootPath, 'data/vector-index-metas.json', []);
+    // Legacy (pre-Phase-B archives): the retired vector mirror, read only to
+    // backfill a memory that arrived without an embedding. Its per-character
+    // metas file is ignored.
     const vectorEntries = await readJsonArrayFileOptional<SerializedVectorEntry>(rootPath, 'data/vector-entries.json', []);
     const docMountPoints = await readJsonArrayFileOptional<DocMountPoint>(rootPath, 'data/doc-mount-points.json', []);
     const docMountFolders = await readJsonArrayFileOptional<DocMountFolder>(rootPath, 'data/doc-mount-folders.json', []);
@@ -305,7 +306,6 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       embeddingStatus,
       conversationChunks,
       tfidfVocabularies,
-      vectorIndexMetas,
       vectorEntries,
       docMountPoints,
       docMountFolders,

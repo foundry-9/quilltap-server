@@ -1,15 +1,18 @@
 /**
- * Hand edits to a memory (the memory editor's `PUT /api/v1/memories/[id]`).
+ * Hand edits to a memory (the memory editor's `PUT /api/v1/memories/[id]`, and
+ * search and replace).
  *
  * A memory row carries derived state beside the text a person edits: its
  * vector, `reinforcedImportance`, the character's frozen archive, the
  * `memories` realtime topic and, for a consolidation digest, the Commonplace
  * mirror in the holder's vault. A raw `updateForCharacter` left all of it
- * describing the row as it was before the edit (bug 203). {@link editMemory}
+ * describing the row as it was before the edit (bug 203). {@link updateMemory}
  * keeps every piece in step:
  *
- *   - text changes re-embed through `updateMemoryWithEmbedding` (anchor line
- *     included, vector store updated, tier preserved);
+ *   - a change to the embedded text (summary, content or an anchor) embeds the
+ *     edited text first and writes text and vector in one row update through
+ *     `memoryIndex.upsert` (anchor line included, tier kept); a failed embed
+ *     writes nothing;
  *   - an importance change recomputes `reinforcedImportance` from the row's
  *     reinforcement count;
  *   - `relatedMemoryIds` must name existing memories of the same character, and
@@ -21,19 +24,21 @@
  * Parent-process only (it publishes realtime hints and invalidates the
  * parent's archive cache).
  *
- * @module memory/memory-edit
+ * @module memory/admission/update-memory
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { calculateReinforcedImportance } from './scoring'
-import { MemoryReembedError, updateMemoryWithEmbedding } from './memory-service'
-import { invalidateFrozenArchive } from './frozen-archive-cache'
-import { mirrorCommonplaceForSubjects } from './commonplace-mirror'
+import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
+import { calculateReinforcedImportance } from '../scoring'
+import { invalidateFrozenArchive } from '../frozen-archive-cache'
+import { mirrorCommonplaceForSubjects } from '../commonplace-mirror'
+import { refreshMemoryTimeZone } from '../time/calendar-refresh'
+import { memoryIndex, embeddingTextFor } from '../index-store'
 
-const log = logger.child({ module: 'memory:memory-edit' })
+const log = logger.child({ module: 'memory:update-memory' })
 
 /** The fields a hand edit may change. */
 export interface MemoryEditPatch {
@@ -47,22 +52,34 @@ export interface MemoryEditPatch {
   relatedMemoryIds?: string[]
 }
 
-export type EditMemoryResult =
+export type UpdateMemoryResult =
   | { ok: true; memory: Memory }
   | { ok: false; reason: 'not-found' }
   | { ok: false; reason: 'invalid-related'; invalidIds: string[] }
   /** The edited text could not be embedded; nothing was written. */
   | { ok: false; reason: 'embedding-failed'; message: string }
 
+/** Does the patch change the text the row is embedded as? */
+function changesEmbeddedText(existing: Memory, patch: Partial<Memory>): boolean {
+  return (
+    (patch.content !== undefined && patch.content !== existing.content) ||
+    (patch.summary !== undefined && patch.summary !== existing.summary) ||
+    (patch.occurredAt !== undefined && patch.occurredAt !== existing.occurredAt) ||
+    (patch.narrativeTime !== undefined && patch.narrativeTime !== existing.narrativeTime) ||
+    (patch.entities !== undefined &&
+      JSON.stringify(patch.entities) !== JSON.stringify(existing.entities ?? []))
+  )
+}
+
 /**
  * Apply a hand edit to one memory and bring its derived state with it.
  */
-export async function editMemory(
+export async function updateMemory(
   characterId: string,
   memoryId: string,
   patch: MemoryEditPatch,
   options: { userId: string },
-): Promise<EditMemoryResult> {
+): Promise<UpdateMemoryResult> {
   const repos = getRepositories()
   const existing = await repos.memories.findByIdForCharacter(characterId, memoryId)
   if (!existing) return { ok: false, reason: 'not-found' }
@@ -111,23 +128,32 @@ export async function editMemory(
   }
 
   // --- the row, re-embedded when its embedded text changed ------------------
-  // Embeds before it writes: a failed embed leaves the row (and so the links
-  // below, the archive and the mirror) exactly as they were.
+  // Embed first, write second: a failed embed leaves the row (and so the
+  // links below, the archive and the mirror) exactly as they were. The vector
+  // rides in the same row update as the text, so they never disagree on disk.
   let memory: Memory | null
-  try {
-    memory = await updateMemoryWithEmbedding(characterId, memoryId, update, {
-      userId: options.userId,
-    })
-  } catch (error) {
-    if (error instanceof MemoryReembedError) {
+  if (changesEmbeddedText(existing, update)) {
+    let embedding: Float32Array
+    try {
+      const merged = { ...existing, ...update } as Memory
+      embedding = (await generateEmbeddingForUser(
+        embeddingTextFor(merged, await refreshMemoryTimeZone()),
+        options.userId,
+      )).embedding
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
       log.warn('Memory edit refused: the edited text could not be embedded', {
         characterId,
         memoryId,
-        error: error.message,
+        error: message,
       })
-      return { ok: false, reason: 'embedding-failed', message: error.message }
+      return { ok: false, reason: 'embedding-failed', message: `Could not embed the edited memory: ${message}` }
     }
-    throw error
+    const [row] = await memoryIndex.upsert(characterId, [{ id: memoryId, embedding, alongside: update }])
+    memory = row
+    log.debug('Edited memory re-embedded', { characterId, memoryId })
+  } else {
+    memory = await repos.memories.updateForCharacter(characterId, memoryId, update)
   }
   if (!memory) return { ok: false, reason: 'not-found' }
 

@@ -40,7 +40,8 @@ import {
   dispatchAction,
   type RequestContext,
 } from '@/lib/api/middleware';
-import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
+import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
+import { retireChatMemories } from '@/lib/memory/retire';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
@@ -124,7 +125,6 @@ const housekeepingOptionsSchema = z.object({
 
 const generateEmbeddingsSchema = z.object({
   characterId: z.uuid('Character ID is required'),
-  batchSize: z.number().min(1).max(50).prefault(10),
 });
 
 const rebuildIndexSchema = z.object({
@@ -1194,7 +1194,7 @@ async function handleGenerateEmbeddings(
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json().catch(() => ({}));
-  const { characterId, batchSize } = generateEmbeddingsSchema.parse(body);
+  const { characterId } = generateEmbeddingsSchema.parse(body);
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
@@ -1227,7 +1227,6 @@ async function handleGenerateEmbeddings(
   // Generate embeddings
   const result = await generateMissingEmbeddings(characterId, {
     userId: user.id,
-    batchSize,
   });
 
   return NextResponse.json({
@@ -1287,7 +1286,7 @@ async function handleRebuildIndex(
   }
 
   // Rebuild the vector index
-  const result = await rebuildVectorIndex(characterId, { userId: user.id });
+  const result = await rebuildVectorIndex(characterId);
 
   return NextResponse.json({
     message: 'Vector index rebuilt successfully',
@@ -1307,10 +1306,10 @@ async function handleDeleteByChatId(
   }
 
   // Manual rows, cold rows and digests with surviving members are spared (bug 201).
-  const { deleted, spared } = await deleteMemoriesByChatIdWithVectors(chatId);
+  const { retired: deleted, spared } = await retireChatMemories(chatId);
 
-  // No publish here. This path runs through `deleteMemoriesWithUnlinkBatch`,
-  // and the memory-gate chokepoint already announces `memories` collection-wide
+  // No publish here. This path runs through `retireMemories`, which already
+  // announces `memories` collection-wide
   // — which a chat-scoped subscriber takes, since `useRealtimeTopic`'s id filter
   // only discards an event that names a *different* id. A second, chat-scoped
   // hint would cost every subscriber a duplicate refetch, and would fire on the

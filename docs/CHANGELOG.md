@@ -4,6 +4,22 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase B: the index gets an owner; one deletion
+
+Structural Phase B of `docs/developer/features/memory-system-refactor.md`. One migration. No open bugs were in the catalogue.
+
+- Index: `memories.embedding` and `memories.tier` are the only stored copy of a memory's vector and tier. New `lib/memory/index-store/` owns them: `memoryIndex` (`search`, `shape`, `entries`, `upsert`, `indexInserted`, `setTier`, `remove`, `reload`, `reloadAll`) and `embeddingTextFor`, the one embedded text (replaces `buildMemoryEmbeddingText`). Every embedding and tier write goes through it: the gate, re-embeds, edits, consolidation, housekeeping demotion, `EMBEDDING_GENERATE`, the missing-embeddings backfill.
+- `lib/embedding/vector-store.ts` is now a cache only: it loads `id, embedding, tier` from `memories` in one query and writes nothing. Only `index-store/` imports it. First loads are memoised (concurrent first use no longer builds two stores). Mixed vector lengths are held; search scores entries matching the query's length and recall falls back to text only when none match.
+- Migration `retire-memory-vector-entries-v1`: copies any vector `vector_entries` held that its memory row lacked, then drops `vector_entries` and `vector_indices`. `VectorIndicesRepository`, `lib/schemas/vector-indices.types.ts` and `scripts/rebuild-vector-indices.ts` removed. `normalize-vector-storage-v1` no longer recreates the table once both are gone.
+- Deletion: new `retireMemories(ids, { reason, keep? })` (`lib/memory/retire.ts`) is the only delete. It scrubs `relatedMemoryIds`, surviving digests' `consolidatedFrom` and surviving members' `supersededById`, retires a digest with its last member (not during retention), evicts vectors, and in the parent invalidates the frozen archive, publishes `memories` and refreshes the Commonplace mirror. `retireChatMemories(chatId)` is the chat wipe (`keep: 'manual'`). Removed: `deleteMemoryWithUnlink`, `deleteMemoriesWithUnlinkBatch(Report)`, `deleteMemoryWithVector`, the three `deleteMemoriesBy*WithVectors`. Every caller (item delete, chat wipe, regenerate, message and swipe cascades, re-attribution, character delete and archive, restore, retention, dedup) now calls it.
+- Repository: `MemoriesRepository.bulkDelete` renamed `bulkDeleteUnsafe`; `delete` throws; `deleteForCharacter`, `deleteBySourceMessageId`, `deleteByChatId`, `findColdIdsByCharacterId` removed; `findIndexRowsByCharacterId` added.
+- Edits: `editMemory` (`lib/memory/memory-edit.ts`) moved to `updateMemory` (`lib/memory/admission/`); it embeds the edited text and writes text and vector in one row update. `updateMemoryWithEmbedding` and `MemoryReembedError` removed.
+- Job host/child: post-commit cache invalidation lists only `memories` writes that change a vector, tier or row (`vector-store-invalidation.ts`) and reloads through `memoryIndex.reload`.
+- Backup: no `vector-entries.json` or `vector-index-metas.json`. Restore of an older archive uses its `vector-entries.json` only to fill a memory row that arrived without an embedding (`legacyVectorsAdopted` in the summary); the vector-index counts are gone from the manifest, preview and restore summary.
+- Startup: the dimension reconcile and text-embedding repair no longer touch the mirror; `vectorEntriesDeleted`, `vectorIndexMetaFixed` and `vectorEntriesRepaired` removed from their results. A full reindex drops the caches instead of deleting stores.
+- API: `PUT ?action=embeddings` reloads the index from the rows and reports `failed` as memories with no embedding; `POST ?action=embeddings` no longer takes `batchSize`.
+- Tests: `__tests__/unit/lib/memory/memory-index-and-retire.test.ts` (index round trip, tier on reload, memoised load, the three scrubs, digest cascade, `keep: 'manual'`, grep-tests for both chokepoints), migration test, dispatcher reload by touched characters.
+
 #### PR 91 review: 9 findings on Phase A
 
 - A candidate that fails validation no longer throws. `candidateFromDraft` returns null for a draft with no usable text (whitespace-only content and summary); `writeCandidate` skips that draft and the rest of the turn's extraction continues. A blank `content` falls back to the summary.

@@ -32,7 +32,7 @@ import {
 } from '@/lib/services/character-field-semantics';
 import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getCharacterVectorStore, isHotVector } from '@/lib/embedding/vector-store';
+import { memoryIndex } from '@/lib/memory/index-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -734,8 +734,7 @@ export async function runCharacterOptimizer(
           const embeddingAvailable = await isEmbeddingAvailable(userId);
           if (embeddingAvailable) {
             const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
-            const vectorStore = await getCharacterVectorStore(characterId);
-            const results = vectorStore.search(embeddingResult.embedding, 500, isHotVector);
+            const results = await memoryIndex.search(characterId, embeddingResult.embedding, { limit: 500, hotOnly: true });
             const matchedIds = new Set(results.map(r => r.id));
             const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
             candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));

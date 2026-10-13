@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
-import { deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { retireMemories } from '@/lib/memory/retire';
 import { bulkReattributeSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, ChatEvent } from '@/lib/schemas/types';
@@ -70,24 +70,26 @@ export async function handleBulkReattribute(
   let memoriesDeleted = 0;
   const affectedMessageIds = new Set(affectedMessages.map((m) => m.id));
 
+  // The re-attributed lines' memories were extracted for the old speaker;
+  // they go together, through the deletion chokepoint.
+  const memoryIdsToRetire: string[] = [];
   for (const msg of affectedMessages) {
     const memoriesFromMessage = await repos.memories.findBySourceMessageId(msg.id);
-    for (const memory of memoriesFromMessage) {
-      try {
-        const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
-        if (deleted) {
-          memoriesDeleted++;
+    memoryIdsToRetire.push(...memoriesFromMessage.map((memory) => memory.id));
+  }
+  if (memoryIdsToRetire.length > 0) {
+    try {
+      const report = await retireMemories(memoryIdsToRetire, { reason: 'message-reattribution' });
+      memoriesDeleted = report.retired;
+    } catch (error) {
+      logger.error(
+        '[Chats v1] Failed to delete memories during bulk re-attribution',
+        {
+          memoryCount: memoryIdsToRetire.length,
+          error: error instanceof Error ? error.message : String(error),
         }
-      } catch (error) {
-        logger.error(
-          '[Chats v1] Failed to delete memory during bulk re-attribution',
-          {
-            memoryId: memory.id,
-            error: error instanceof Error ? error.message : String(error),
-          }
-        );
-        // Continue with other memories - best effort cleanup
-      }
+      );
+      // Best effort cleanup: the re-attribution itself still proceeds
     }
   }
 
