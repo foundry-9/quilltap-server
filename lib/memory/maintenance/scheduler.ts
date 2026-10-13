@@ -28,6 +28,7 @@ export const RECENT_RUN_WINDOW_MS = 20 * 60 * 60 * 1000
 
 const state = processSingleton('memory.maintenanceScheduler', () => ({
   interval: null as ReturnType<typeof setInterval> | null,
+  startup: null as ReturnType<typeof setTimeout> | null,
   running: false,
 }))
 
@@ -43,17 +44,21 @@ export function scheduleMemoryMaintenance(intervalMs: number = MAINTENANCE_INTER
   state.interval.unref?.()
   log.info('Maintenance scheduler started', { intervalMs, startupGraceMs: STARTUP_GRACE_MS })
 
-  const startup = setTimeout(() => {
+  state.startup = setTimeout(() => {
+    state.startup = null
     runStartupTick().catch((error) => {
       log.error('Startup maintenance tick failed', { error: error instanceof Error ? error.message : String(error) })
     })
   }, STARTUP_GRACE_MS)
-  startup.unref?.()
+  state.startup.unref?.()
 }
 
+/** Stop the daily sweep, the startup tick included if it has not fired yet. */
 export function stopMemoryMaintenanceScheduler(): void {
   if (state.interval) clearInterval(state.interval)
+  if (state.startup) clearTimeout(state.startup)
   state.interval = null
+  state.startup = null
   state.running = false
   log.info('Maintenance scheduler stopped')
 }

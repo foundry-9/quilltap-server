@@ -47,7 +47,13 @@ import {
   type WatermarkReading,
 } from '@/lib/memory/maintenance/ledger'
 import { maybeEnqueueMaintenance, maybeEnqueueMaintenanceAfterCommit } from '@/lib/memory/maintenance/triggers'
-import { runScheduledMemoryMaintenance, runStartupTick } from '@/lib/memory/maintenance/scheduler'
+import {
+  runScheduledMemoryMaintenance,
+  runStartupTick,
+  scheduleMemoryMaintenance,
+  stopMemoryMaintenanceScheduler,
+  STARTUP_GRACE_MS,
+} from '@/lib/memory/maintenance/scheduler'
 import { runMaintenance } from '@/lib/memory/maintenance/run'
 import { setJobResult } from '@/lib/background-jobs/child/child-repositories-proxy'
 import { handleMemoryMaintenance, MAINTENANCE_FAIL_AFTER_PLAN_ENV } from '@/lib/background-jobs/handlers/memory-maintenance'
@@ -244,6 +250,21 @@ describe('scheduler', () => {
   })
 })
 
+describe('scheduler lifecycle', () => {
+  it('stopping before the startup grace ends cancels the startup tick', () => {
+    jest.useFakeTimers()
+    try {
+      scheduleMemoryMaintenance()
+      stopMemoryMaintenanceScheduler()
+      jest.advanceTimersByTime(STARTUP_GRACE_MS + 1000)
+      expect(repos.backgroundJobs.findRecentByType).not.toHaveBeenCalled()
+      expect(mockEnqueueMany).not.toHaveBeenCalled()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+})
+
 describe('MEMORY_MAINTENANCE handler', () => {
   const job = {
     id: 'job-1',
@@ -304,6 +325,20 @@ describe('MEMORY_MAINTENANCE handler', () => {
     jest.mocked(runMaintenance).mockResolvedValue({ characterId: 'char-a' } as never)
     await handleMemoryMaintenance(job)
     expect(runMaintenance).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores the test flag in production', async () => {
+    process.env[MAINTENANCE_FAIL_AFTER_PLAN_ENV] = '1'
+    const env = process.env as Record<string, string | undefined>
+    const prior = env.NODE_ENV
+    env.NODE_ENV = 'production'
+    try {
+      jest.mocked(runMaintenance).mockResolvedValue({ characterId: 'char-a' } as never)
+      await handleMemoryMaintenance(job)
+      expect(setJobResult).toHaveBeenCalledTimes(1)
+    } finally {
+      env.NODE_ENV = prior
+    }
   })
 
   it('fails after planning under the test flag, so its batch never commits', async () => {

@@ -32,7 +32,11 @@ export const MAINTENANCE_JOB_TIME_BUDGET_MS = 7 * 60 * 1000;
 /**
  * Test flag: fail the job after every phase has planned and buffered its
  * writes, so the batch never commits. Used to show that a failed run leaves no
- * `Commonplace/` file behind.
+ * `Commonplace/` file behind. Honoured only outside production
+ * (`NODE_ENV !== 'production'`): a stray variable in a deployment is ignored,
+ * with a warning, rather than failing every run. Note that the near-duplicate
+ * fold has already committed in the parent by then; only the job's own batch
+ * is lost.
  */
 export const MAINTENANCE_FAIL_AFTER_PLAN_ENV = 'QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN';
 
@@ -113,7 +117,13 @@ export async function handleMemoryMaintenance(job: BackgroundJob): Promise<void>
   const summary = summarizeMaintenance(report);
 
   if (process.env[MAINTENANCE_FAIL_AFTER_PLAN_ENV] === '1') {
-    throw new Error('Maintenance failed after planning (test flag)');
+    if (process.env.NODE_ENV !== 'production') {
+      throw new Error('Maintenance failed after planning (test flag)');
+    }
+    log.warn('Ignoring the maintenance fail-after-plan test flag in production', {
+      jobId: job.id,
+      env: MAINTENANCE_FAIL_AFTER_PLAN_ENV,
+    });
   }
 
   setJobResult(summary);

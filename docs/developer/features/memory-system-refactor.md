@@ -1182,7 +1182,7 @@ departures:
   a real over-cap run demoting `demotable − cap`, `quilltap memories status`, the forced failure
   leaving no `Commonplace/*.md`). `run-maintenance.test.ts` and `ledger-and-triggers.test.ts`
   cover the same paths with mocked I/O; the failure is forced with
-  `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN=1`, and the dispatcher suite pins that a failed batch
+  `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN=1` (honoured outside production only), and the dispatcher suite pins that a failed batch
   writes no mirror and records nothing in the ledger. Friday's first run should still be a dry run
   reviewed by Charlie (§8).
 

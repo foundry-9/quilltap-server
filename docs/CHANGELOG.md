@@ -13,6 +13,8 @@
 - The near-duplicate fold takes admission's lock one group at a time and retires each group inside it; under a job's time budget it stops starting groups after 40% of the budget (`groupsDeferred`), and consolidation gets what is left.
 - `enqueueMemoryMaintenanceMany`: a user-wide run and the daily sweep read each owner's pending jobs once, not twice per character.
 - A live `POST ?action=housekeep` enqueues a `MEMORY_MAINTENANCE` job (`{ queued: true, jobId }`) instead of demoting in the server process beside a running job. The Memory Cleanup dialog's toast says so.
+- `stopMemoryMaintenanceScheduler` also cancels the startup tick if it has not fired.
+- `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN` is honoured only when `NODE_ENV !== 'production'`; in production it is ignored with a warning.
 
 #### Memory refactor Phase F: one maintenance job
 
