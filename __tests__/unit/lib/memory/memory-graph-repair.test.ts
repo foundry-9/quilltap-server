@@ -61,10 +61,11 @@ function seed(row: {
   supersededById?: string | null
   tier?: 'hot' | 'cold'
   embedded?: boolean
+  source?: string
 }) {
   db.prepare(
-    `INSERT INTO memories (id, characterId, relatedMemoryIds, consolidatedFrom, supersededById, tier, embedding, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO memories (id, characterId, relatedMemoryIds, consolidatedFrom, supersededById, tier, embedding, updatedAt, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id,
     row.characterId,
@@ -74,6 +75,7 @@ function seed(row: {
     row.tier ?? 'hot',
     row.embedded === false ? null : 'x',
     '2026-01-01T00:00:00.000Z',
+    row.source ?? 'AUTO',
   )
 }
 
@@ -85,29 +87,39 @@ beforeEach(() => {
   db = new Database(':memory:')
   db.exec(`CREATE TABLE memories (
     id TEXT PRIMARY KEY, characterId TEXT NOT NULL, relatedMemoryIds TEXT DEFAULT '[]',
-    consolidatedFrom TEXT DEFAULT '[]', supersededById TEXT, tier TEXT, embedding TEXT, updatedAt TEXT)`)
+    consolidatedFrom TEXT DEFAULT '[]', supersededById TEXT, tier TEXT, embedding TEXT, updatedAt TEXT,
+    source TEXT DEFAULT 'AUTO', aboutCharacterId TEXT)`)
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) => db.prepare(sql).all(...params))
 
   repo = new MemoriesRepository()
-  // The repair reads through the real SQL above; the tier write and the
-  // missing-embedding count are the only other repository calls it makes.
-  const memories = {
-    findDanglingLinks: (ids?: string[]) => repo.findDanglingLinks(ids),
-    removeRelatedMemoryIdsEverywhere: (ids: string[]) => repo.removeRelatedMemoryIdsEverywhere(ids),
-    removeConsolidatedMembers: (c: string, d: string, m: string[]) => repo.removeConsolidatedMembers(c, d, m),
+  // The repair and the retirement it may call read and write through the
+  // repository's real SQL above; the collection-layer methods (tier write,
+  // row delete, id lookup, count) are answered straight from the table.
+  const overrides: Record<string, unknown> = {
     updateTierBulk: jest.fn(async (characterId: string, ids: string[], tier: string, extra: { supersededById?: null }) => {
       for (const id of ids) {
         db.prepare('UPDATE memories SET tier = ?, supersededById = ? WHERE id = ? AND characterId = ?').run(tier, extra?.supersededById ?? null, id, characterId)
       }
       return ids.length
     }),
+    bulkDeleteUnsafe: jest.fn(async (characterId: string, ids: string[]) => {
+      let n = 0
+      for (const id of ids) n += db.prepare('DELETE FROM memories WHERE id = ? AND characterId = ?').run(id, characterId).changes
+      return n
+    }),
+    findByIds: jest.fn(async (ids: string[]) =>
+      ids.map((id) => db.prepare('SELECT id, supersededById FROM memories WHERE id = ?').get(id)).filter(Boolean),
+    ),
     countWithoutEmbedding: jest.fn(async (characterId?: string) =>
       characterId
         ? db.prepare('SELECT count(*) AS n FROM memories WHERE embedding IS NULL AND characterId = ?').get(characterId).n
         : db.prepare('SELECT count(*) AS n FROM memories WHERE embedding IS NULL').get().n,
     ),
   }
+  const memories = new Proxy(repo, {
+    get: (target, prop: string) => overrides[prop] ?? (target as any)[prop]?.bind(target),
+  })
   ;(getRepositories as jest.Mock).mockReturnValue({ memories })
 
   // A: n1 links a live row and a gone one; d1 is a digest naming a live and a gone member;
@@ -117,6 +129,9 @@ beforeEach(() => {
   seed({ id: 'd1', characterId: A, consolidatedFrom: ['live', 'gone-2'] })
   seed({ id: 'm1', characterId: A, tier: 'cold', supersededById: 'gone-3' })
   seed({ id: 'm2', characterId: A, tier: 'hot', supersededById: 'gone-4', embedded: false })
+  // d2: a digest every one of whose members is gone; n1 also links to it.
+  seed({ id: 'd2', characterId: A, source: 'CONSOLIDATED', consolidatedFrom: ['gone-5', 'gone-6'] })
+  db.prepare(`UPDATE memories SET relatedMemoryIds = '["live","gone-1","d2"]' WHERE id = 'n1'`).run()
   // B links across to A's live row (legitimate) and to a gone row.
   seed({ id: 'o1', characterId: B, related: ['live', 'gone-1'] })
 })
@@ -130,11 +145,20 @@ describe('MemoriesRepository.findDanglingLinks', () => {
   it('finds every link to a missing row in all three columns, cross-holder links allowed', async () => {
     const found = await repo.findDanglingLinks()
     expect(found.related.map((l) => [l.id, l.target]).sort()).toEqual([['n1', 'gone-1'], ['o1', 'gone-1']])
-    expect(found.consolidatedFrom).toEqual([{ id: 'd1', characterId: A, target: 'gone-2' }])
+    expect(found.consolidatedFrom.map((l) => [l.id, l.target, l.memberCount]).sort()).toEqual([
+      ['d1', 'gone-2', 2],
+      ['d2', 'gone-5', 2],
+      ['d2', 'gone-6', 2],
+    ])
     expect(found.supersededBy.map((l) => [l.id, l.target, l.tier]).sort()).toEqual([
       ['m1', 'gone-3', 'cold'],
       ['m2', 'gone-4', 'hot'],
     ])
+  })
+
+  it('lets a failed scan throw rather than read as a clean graph', async () => {
+    ;(rawQuery as jest.Mock).mockRejectedValueOnce(new Error('database is locked'))
+    await expect(repo.findDanglingLinks()).rejects.toThrow()
   })
 
   it('scopes to the named holders', async () => {
@@ -150,18 +174,20 @@ describe('repairMemoryGraph', () => {
     const report = await repairMemoryGraph({ userId: 'u', dryRun: true })
     expect(report.found).toEqual({
       related: { links: 2, rows: 2 },
-      consolidatedFrom: { links: 1, digests: 1 },
+      consolidatedFrom: { links: 3, digests: 2 },
       supersededBy: 2,
       missingEmbeddings: 1,
     })
     expect(report.repaired).toBeUndefined()
-    expect(JSON.parse(col('n1', 'relatedMemoryIds') as string)).toEqual(['live', 'gone-1'])
+    expect(JSON.parse(col('n1', 'relatedMemoryIds') as string)).toEqual(['live', 'gone-1', 'd2'])
     expect(enqueueMissingEmbeddings).not.toHaveBeenCalled()
     expect(publishRealtime).not.toHaveBeenCalled()
   })
 
   it('a live run scrubs every dangling link, keeps tiers, and queues the missing embedding', async () => {
     const report = await repairMemoryGraph({ userId: 'u', dryRun: false })
+    // d2 summarized nothing left: retired (invariant 8), and its link from n1 went with it.
+    expect(db.prepare("SELECT count(*) AS n FROM memories WHERE id = 'd2'").get().n).toBe(0)
     expect(JSON.parse(col('n1', 'relatedMemoryIds') as string)).toEqual(['live'])
     expect(JSON.parse(col('o1', 'relatedMemoryIds') as string)).toEqual(['live'])
     expect(JSON.parse(col('live', 'relatedMemoryIds') as string)).toEqual(['n1'])
@@ -170,12 +196,22 @@ describe('repairMemoryGraph', () => {
     expect(col('m1', 'tier')).toBe('cold')
     expect(col('m2', 'supersededById')).toBeNull()
     expect(col('m2', 'tier')).toBe('hot')
-    expect(report.repaired).toMatchObject({ relatedRowsTouched: 2, digestsTouched: 1, membersCut: 2, embeddingJobsQueued: 1 })
+    expect(report.repaired).toMatchObject({ relatedRowsTouched: 2, digestsTouched: 1, digestsRetired: 1, membersCut: 2, embeddingJobsQueued: 1, charactersAffected: 2 })
     expect(enqueueMissingEmbeddings).toHaveBeenCalledWith({ userId: 'u', characterId: undefined, limit: 2000 })
     expect(publishRealtime).toHaveBeenCalledWith('memories')
 
     // Idempotent: a second scan finds nothing.
     const again = await repo.findDanglingLinks()
     expect(again).toEqual({ related: [], consolidatedFrom: [], supersededBy: [] })
+  })
+})
+
+describe('repairMemoryGraph, scoped to one holder', () => {
+  it('writes only that holder\'s rows', async () => {
+    const report = await repairMemoryGraph({ userId: 'u', characterId: B, dryRun: false })
+    expect(JSON.parse(col('o1', 'relatedMemoryIds') as string)).toEqual(['live'])
+    // A's rows still name the gone row: they were not in scope.
+    expect(JSON.parse(col('n1', 'relatedMemoryIds') as string)).toEqual(['live', 'gone-1', 'd2'])
+    expect(report.repaired).toMatchObject({ relatedRowsTouched: 1, charactersAffected: 1, digestsRetired: 0 })
   })
 })

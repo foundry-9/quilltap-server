@@ -13,14 +13,10 @@
 
 const { postMemoriesAction } = require('./memories-server');
 
-/** The phases, in the order the server always runs them (lib/memory/maintenance/types.ts). */
-const MAINTENANCE_PHASES = ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'];
-
-/** The per-character demotion cap's bounds (MEMORY_MAINTENANCE_CAP_MIN / _MAX). */
-const CAP_MIN = 100;
-const CAP_MAX = 100000;
-/** maxClustersPerRun's bounds on the maintain request schema. */
-const MAX_CLUSTERS_MAX = 1000;
+// The phase names, the cap's bounds and maxClustersPerRun's bounds are the
+// server's (lib/memory/maintenance/types.ts, lib/schemas/settings.types.ts).
+// The CLI keeps no copy of them: the request goes as typed, and the server's
+// 400 — whose details postMemoriesAction prints — says what it refused.
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -46,29 +42,19 @@ function bucketLabel(bucket) {
 }
 
 /**
- * Parse `--phases a,b,…` into a validated list (in run order). Empty or
- * absent means "every phase" and returns null.
- * @throws on an unknown phase name
+ * Parse `--phases a,b,…` into a list (trimmed, duplicates dropped). Empty or
+ * absent means "every phase" and returns null. The server checks the names
+ * and always runs them in its own order.
  */
 function parsePhases(value) {
   if (value == null || value === '') return null;
-  const asked = String(value).split(',').map((p) => p.trim()).filter(Boolean);
-  if (asked.length === 0) return null;
-  const unknown = asked.filter((p) => !MAINTENANCE_PHASES.includes(p));
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown maintenance phase${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}. ` +
-      `Valid phases: ${MAINTENANCE_PHASES.join(', ')}.`
-    );
-  }
-  const set = new Set(asked);
-  return MAINTENANCE_PHASES.filter((p) => set.has(p));
+  const asked = [...new Set(String(value).split(',').map((p) => p.trim()).filter(Boolean))];
+  return asked.length === 0 ? null : asked;
 }
 
 /**
  * Build the `?action=maintain` request body from parsed CLI flags.
  * `characterId` null means every character the user owns.
- * @throws on a flag the server would refuse
  */
 function buildMaintainBody(characterId, flags) {
   const body = {};
@@ -78,28 +64,10 @@ function buildMaintainBody(characterId, flags) {
   if (phases) body.phases = phases;
 
   const settings = {};
-  if (flags.max > 0) {
-    if (flags.max > MAX_CLUSTERS_MAX) throw new Error(`--max must be between 1 and ${MAX_CLUSTERS_MAX}`);
-    settings.maxClustersPerRun = flags.max;
-  }
+  if (flags.max > 0) settings.maxClustersPerRun = flags.max;
   if (flags.threshold >= 0) settings.consolidation = { clusterThreshold: flags.threshold };
-  if (flags.cap != null) {
-    if (!Number.isInteger(flags.cap) || flags.cap < CAP_MIN || flags.cap > CAP_MAX) {
-      throw new Error(`--cap must be an integer between ${CAP_MIN} and ${CAP_MAX}`);
-    }
-    settings.cap = flags.cap;
-  }
+  if (flags.cap != null) settings.cap = flags.cap;
   if (Object.keys(settings).length > 0) body.settings = settings;
-
-  // The server refuses a user-wide rehearsal that may call the model; say so
-  // here, before a round trip.
-  if (!characterId && body.dryRun && (!phases || phases.includes('consolidate'))) {
-    throw new Error(
-      'A dry run across every character cannot include consolidation (it calls the model per character). ' +
-      'Name one with --character, or pass --phases without consolidate ' +
-      `(e.g. --phases ${MAINTENANCE_PHASES.filter((p) => p !== 'consolidate').join(',')}).`
-    );
-  }
   return body;
 }
 
@@ -261,7 +229,6 @@ async function cmdMaintain(flags, resolveCharacterId) {
 }
 
 module.exports = {
-  MAINTENANCE_PHASES,
   cmdMaintain,
   parsePhases,
   buildMaintainBody,

@@ -4327,15 +4327,18 @@ The memory graph repair behind `quilltap memories validate --repair` (`repairMem
 `lib/memory/repair.ts`). Finds links that name a row which no longer exists — in
 `relatedMemoryIds`, digests' `consolidatedFrom`, and members' `supersededById` — and rows with no
 embedding. A live run scrubs the links with the retirement's own removal deltas
-(`scrubDanglingMemoryLinks`; a member whose digest is gone keeps its tier) and queues up to 2,000
-`EMBEDDING_GENERATE` jobs under the default embedding profile.
+(`scrubDanglingMemoryLinks`; a member whose digest is gone keeps its tier; a digest every one of
+whose members is gone is retired through `retireMemories`, invariant 8) and queues up to 2,000
+`EMBEDDING_GENERATE` jobs under the default embedding profile, in one batch (a row that already has
+a pending job is skipped and not counted). With `characterId`, only that holder's rows are written.
+A scan that fails is a `500`, never an empty report.
 
 **Request Body**: `{ characterId?, dryRun? }` (omitted `characterId`: every memory in the instance;
 `dryRun` defaults to false).
 
 **Response**: `200 OK` — `{ success, report: { dryRun, characterId, found: { related: { links, rows },
 consolidatedFrom: { links, digests }, supersededBy, missingEmbeddings }, repaired?: {
-relatedRowsTouched, digestsTouched, membersCut, charactersAffected, embeddingJobsQueued,
+relatedRowsTouched, digestsTouched, digestsRetired, membersCut, charactersAffected, embeddingJobsQueued,
 embeddingSkippedReason? } } }`. `404` for an unknown character, `400` for a malformed body.
 
 #### `GET /api/v1/memories?action=maintenance-status`

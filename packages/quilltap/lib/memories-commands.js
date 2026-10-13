@@ -17,7 +17,7 @@ const {
   loadMemoryIds,
   memoryColumns,
 } = require('./graph-integrity');
-const { cmdMaintain, MAINTENANCE_PHASES } = require('./memories-maintain-command');
+const { cmdMaintain } = require('./memories-maintain-command');
 const { postMemoriesAction, resolveMemoriesServerPort } = require('./memories-server');
 
 // ---------- colour & marker helpers ----------
@@ -1311,9 +1311,11 @@ function renderStatusBlock(holder, stats) {
 function renderMaintenance(m) {
   console.log(`  Maintenance:`);
   if (m.ledger) {
-    for (const phase of MAINTENANCE_PHASES) {
-      const run = m.ledger.lastRun && m.ledger.lastRun[phase];
-      console.log(`    ${(phase + ':').padEnd(22)}${run ? `${run.at} (${run.reason})` : 'never (this session)'}`);
+    // The phases are the server's; print the ones it reports a run for.
+    const runs = Object.entries(m.ledger.lastRun || {});
+    if (runs.length === 0) console.log('    no phase has run since the server started');
+    for (const [phase, run] of runs) {
+      console.log(`    ${(phase + ':').padEnd(22)}${run.at} (${run.reason})`);
     }
     const d = m.ledger.lastDemotion;
     if (d) {
@@ -1345,10 +1347,14 @@ async function cmdValidate(flags) {
       holderRows = [{ id: c.id, name: c.name }];
       characterId = c.id;
     } else {
+      // Every holder in the memories table — including one whose character
+      // row is gone — so the local scan covers the same rows the server's
+      // unscoped repair scans and scrubs (review of PR 98).
       holderRows = db.prepare(`
-        SELECT c.id, c.name FROM characters c
-        WHERE EXISTS (SELECT 1 FROM memories m WHERE m.characterId = c.id)
-        ORDER BY c.name
+        SELECT h.characterId AS id, COALESCE(c.name, '(missing character ' || substr(h.characterId, 1, 8) || ')') AS name
+          FROM (SELECT DISTINCT characterId FROM memories) h
+          LEFT JOIN characters c ON c.id = h.characterId
+         ORDER BY c.name IS NULL, c.name
       `).all();
     }
     local = scanForValidate(db, holderRows, Boolean(flags.list));

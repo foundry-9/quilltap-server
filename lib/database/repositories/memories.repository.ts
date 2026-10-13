@@ -37,7 +37,8 @@ export interface DanglingMemoryLink {
 /** {@link MemoriesRepository.findDanglingLinks}: dangling links by column. */
 export interface DanglingMemoryLinks {
   related: DanglingMemoryLink[];
-  consolidatedFrom: DanglingMemoryLink[];
+  /** `memberCount` is the digest's whole `consolidatedFrom` length, dangling members included. */
+  consolidatedFrom: Array<DanglingMemoryLink & { memberCount: number }>;
   /** A member whose digest is gone; `tier` is the member's own. */
   supersededBy: Array<DanglingMemoryLink & { tier: MemoryTier }>;
 }
@@ -1297,8 +1298,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           const holder = chunk ? `AND m.characterId IN (${chunk.map(() => '?').join(',')})` : '';
           const params = chunk ?? [];
           for (const column of ['relatedMemoryIds', 'consolidatedFrom'] as const) {
-            const rows = await rawQuery<Array<{ id: string; characterId: string; target: string }>>(
-              `SELECT m.id AS id, m.characterId AS characterId, j.value AS target
+            const rows = await rawQuery<Array<{ id: string; characterId: string; target: string; listLength: number }>>(
+              `SELECT m.id AS id, m.characterId AS characterId, j.value AS target,
+                      json_array_length(m.${column}) AS listLength
                  FROM memories m, json_each(m.${column}) j
                 WHERE m.${column} IS NOT NULL
                   AND m.${column} <> '[]'
@@ -1307,7 +1309,11 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
                   AND NOT EXISTS (SELECT 1 FROM memories t WHERE t.id = j.value)`,
               params,
             );
-            (column === 'relatedMemoryIds' ? out.related : out.consolidatedFrom).push(...rows);
+            if (column === 'relatedMemoryIds') {
+              out.related.push(...rows.map(({ id, characterId, target }) => ({ id, characterId, target })));
+            } else {
+              out.consolidatedFrom.push(...rows.map(({ id, characterId, target, listLength }) => ({ id, characterId, target, memberCount: listLength })));
+            }
           }
           const superseded = await rawQuery<Array<{ id: string; characterId: string; target: string; tier: string | null }>>(
             `SELECT m.id AS id, m.characterId AS characterId, m.supersededById AS target, m.tier AS tier
@@ -1329,9 +1335,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         });
         return out;
       },
+      // No fallback: a scan that failed must not read as a clean graph.
       'Error scanning for dangling memory links',
       { characters: characterIds?.length ?? 'all' },
-      { related: [], consolidatedFrom: [], supersededBy: [] },
     );
   }
 
@@ -1495,20 +1501,26 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   async findIdsWithoutEmbedding(options: { characterId?: string; limit?: number } = {}): Promise<Array<{ id: string; characterId: string }>> {
     return this.safeQuery(
       async () => {
-        const filter: TypedQueryFilter<Memory> = options.characterId
-          ? { characterId: options.characterId, embedding: null } as TypedQueryFilter<Memory>
-          : { embedding: null } as TypedQueryFilter<Memory>;
-        const memories = await this.findByFilter(filter, {
-          sort: { createdAt: -1 as any },
-          limit: options.limit ?? 500,
-        });
-        return memories.map(m => ({ id: m.id, characterId: m.characterId }));
+        // Two columns only: a backfill batch is up to a few thousand rows, and
+        // hydrating each whole row to read its id was most of the cost.
+        const params: unknown[] = [];
+        let where = 'embedding IS NULL';
+        if (options.characterId) {
+          where += ' AND characterId = ?';
+          params.push(options.characterId);
+        }
+        params.push(options.limit ?? 500);
+        return await rawQuery<Array<{ id: string; characterId: string }>>(
+          `SELECT id, characterId FROM memories WHERE ${where} ORDER BY createdAt DESC LIMIT ?`,
+          params,
+        );
       },
       'Error finding memories without embedding',
       { characterId: options.characterId, limit: options.limit },
       []
     );
   }
+
 
   /**
    * Find memories that a character has about another character

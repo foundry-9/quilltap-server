@@ -120,6 +120,17 @@ describe('MemoryMaintenanceCard', () => {
     expect(posts('consolidation-config')).toEqual([{ coldRetentionDays: null }])
   })
 
+  it('saves a typed per-character cap on blur (review of PR 98)', async () => {
+    renderWithQuery(<MemoryMaintenanceCard />)
+    const input = await screen.findByLabelText(/per-character cap/i)
+    fireEvent.change(input, { target: { value: '3000' } })
+    await act(async () => {
+      fireEvent.blur(input)
+    })
+    expect(posts('maintenance-config')).toEqual([{ perCharacterCap: 3000 }])
+    expect(input).toHaveValue(3000)
+  })
+
   it('shows the ledger by character name with the last run’s outcome', async () => {
     renderWithQuery(<MemoryMaintenanceCard />)
     await waitFor(() => expect(screen.getByText(/100 archived \(2100\/2000 counted\)/)).toBeInTheDocument())

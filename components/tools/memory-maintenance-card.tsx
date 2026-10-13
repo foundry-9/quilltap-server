@@ -187,14 +187,24 @@ function CapSettings({
   maintenance: MemorySettingsDocument<MemoryMaintenanceSettings>
   characters: CharacterSummary[]
 }) {
-  const { config, saving, save, setConfig, setError } = maintenance
+  const { config, saving, save, setError } = maintenance
   const [showOverrides, setShowOverrides] = useState(false)
+  // The typed cap lives in a draft until blur, so `config` still holds the
+  // saved value to compare against (writing it into `config` on every
+  // keystroke made the blur think nothing had changed).
+  const [capDraft, setCapDraft] = useState<string | null>(null)
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({})
 
-  const handleCapBlur = (value: number) => {
-    if (!Number.isFinite(value) || value < CAP_MIN || value > CAP_MAX) return
+  const handleCapBlur = () => {
+    if (capDraft === null) return
+    const value = Math.floor(Number(capDraft.trim()))
+    setCapDraft(null)
+    if (capDraft.trim() === '' || !Number.isFinite(value) || value < CAP_MIN || value > CAP_MAX) {
+      setError(`The per-character cap must be between ${CAP_MIN.toLocaleString()} and ${CAP_MAX.toLocaleString()}`)
+      return
+    }
     if (value === config.perCharacterCap) return
-    void save({ perCharacterCap: Math.floor(value) })
+    void save({ perCharacterCap: value })
   }
 
   const handleOverrideBlur = (characterId: string, rawValue: string) => {
@@ -235,10 +245,10 @@ function CapSettings({
           min={CAP_MIN}
           max={CAP_MAX}
           step={100}
-          value={config.perCharacterCap}
+          value={capDraft ?? String(config.perCharacterCap)}
           disabled={saving}
-          onChange={(e) => setConfig((c) => ({ ...c, perCharacterCap: Number(e.target.value) }))}
-          onBlur={(e) => handleCapBlur(Number(e.target.value))}
+          onChange={(e) => setCapDraft(e.target.value)}
+          onBlur={handleCapBlur}
           className="qt-input w-32"
         />
         <span className="qt-text-small qt-text-muted">extracted notes per character</span>

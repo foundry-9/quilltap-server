@@ -4,6 +4,14 @@
 
 ### 4.10-dev
 
+#### PR 98 review: 7 findings on Phase G
+
+- Maintenance card: a typed per-character cap is now saved on blur. The input wrote each keystroke into the form state, so the blur compared the value with itself and never posted (carried over from the old Housekeeping card).
+- Graph repair: a digest whose members are all gone is retired through `retireMemories` (`reason: 'graph-repair'`) instead of being left with an empty `consolidatedFrom`. Related links are removed per row, so a repair scoped to one character writes only that character's rows and invalidates exactly the holders it changed. The report gains `digestsRetired`.
+- `findDanglingLinks` no longer falls back to an empty result; a failed scan is a 500, not "nothing to repair".
+- Embedding backfill (`repair`, `backfill-embeddings`): `findIdsWithoutEmbedding` selects only `id` and `characterId`; new `enqueueEmbeddingGenerateMany` reads the active `EMBEDDING_GENERATE` jobs once and inserts the batch in one call. Rows that already have a job are no longer counted as queued.
+- CLI: `memories validate` without `--character` scans every holder in `memories`, including ones whose character row is gone, matching the server's unscoped repair. `memories maintain` no longer copies the server's phase list, cap bounds or cluster bounds; the server's 400 reports a bad value. `memories status` prints the ledger's phases as reported.
+
 #### Memory refactor Phase G: surfaces, docs, retirement of the old specs
 
 Final structural phase of `docs/developer/features/memory-system-refactor.md`. No migration.

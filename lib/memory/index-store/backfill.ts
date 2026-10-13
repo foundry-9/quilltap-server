@@ -127,24 +127,19 @@ export async function enqueueMissingEmbeddings(options: {
   }
 
   // Lazy, as the maintenance triggers import it: lib/memory never loads the queue at module scope.
-  const { enqueueEmbeddingGenerate } = await import('@/lib/background-jobs/queue-service')
-  let enqueued = 0
-  for (const memory of missing) {
-    try {
-      await enqueueEmbeddingGenerate(options.userId, {
-        entityType: 'MEMORY',
-        entityId: memory.id,
-        characterId: memory.characterId,
-        profileId: profile.id,
-      })
-      enqueued++
-    } catch (error) {
-      logger.warn('[Memory backfill] Failed to enqueue an embedding job', {
-        memoryId: memory.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
+  // One read of the active jobs and one batch insert, however large the batch;
+  // a row that already has a job is not queued twice and not counted.
+  const { enqueueEmbeddingGenerateMany } = await import('@/lib/background-jobs/queue-service')
+  const jobIds = await enqueueEmbeddingGenerateMany(
+    options.userId,
+    missing.map((memory) => ({
+      entityType: 'MEMORY' as const,
+      entityId: memory.id,
+      characterId: memory.characterId,
+      profileId: profile.id,
+    })),
+  )
+  const enqueued = jobIds.length
   const remaining = await repos.memories.countWithoutEmbedding(options.characterId)
   logger.debug('[Memory backfill] Embedding jobs enqueued', {
     characterId: options.characterId ?? '(all)',

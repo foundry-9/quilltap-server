@@ -9,7 +9,6 @@
 
 const { parseFlags, renderRepairText } = require('../memories-commands');
 const {
-  MAINTENANCE_PHASES,
   parsePhases,
   buildMaintainBody,
   renderMaintenanceReport,
@@ -49,16 +48,10 @@ describe('parsePhases', () => {
     expect(parsePhases(undefined)).toBeNull();
   });
 
-  it('puts the phases in run order and drops duplicates', () => {
-    expect(parsePhases('mirror, demote,fold-near-duplicates,demote')).toEqual(['fold-near-duplicates', 'demote', 'mirror']);
-  });
-
-  it('refuses an unknown phase, naming the valid ones', () => {
-    expect(() => parsePhases('consolidate,housekeep')).toThrow(/Unknown maintenance phase: housekeep.*fold-near-duplicates/);
-  });
-
-  it('knows the five phases', () => {
-    expect(MAINTENANCE_PHASES).toEqual(['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror']);
+  it('trims and drops duplicates, leaving names and order to the server', () => {
+    expect(parsePhases('mirror, demote,fold-near-duplicates,demote')).toEqual(['mirror', 'demote', 'fold-near-duplicates']);
+    // No local phase list: an unknown name is the server's 400 to report.
+    expect(parsePhases('consolidate,housekeep')).toEqual(['consolidate', 'housekeep']);
   });
 });
 
@@ -90,16 +83,10 @@ describe('buildMaintainBody', () => {
     expect(buildMaintainBody(null, flags)).toEqual({ dryRun: true, phases: ['demote', 'retire'] });
   });
 
-  it('refuses a user-wide dry run that would consolidate', () => {
-    const all = parseFlags(['maintain', '--dry-run']).flags;
-    expect(() => buildMaintainBody(null, all)).toThrow(/cannot include consolidation/);
-    const named = parseFlags(['maintain', '--dry-run', '--phases', 'consolidate']).flags;
-    expect(() => buildMaintainBody(null, named)).toThrow(/cannot include consolidation/);
-  });
-
-  it('refuses a cap or max the server would refuse', () => {
-    expect(() => buildMaintainBody(ID, parseFlags(['maintain', '--cap', '50']).flags)).toThrow(/--cap/);
-    expect(() => buildMaintainBody(ID, parseFlags(['maintain', '--max', '5000']).flags)).toThrow(/--max/);
+  it('passes bounds through for the server to judge (no local copy of its limits)', () => {
+    expect(buildMaintainBody(ID, parseFlags(['maintain', '--cap', '50']).flags)).toMatchObject({ settings: { cap: 50 } });
+    expect(buildMaintainBody(ID, parseFlags(['maintain', '--max', '5000']).flags)).toMatchObject({ settings: { maxClustersPerRun: 5000 } });
+    expect(buildMaintainBody(null, parseFlags(['maintain', '--dry-run']).flags)).toEqual({ dryRun: true });
   });
 });
 

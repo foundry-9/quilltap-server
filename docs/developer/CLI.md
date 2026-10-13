@@ -64,11 +64,12 @@ reason as sync: the work runs through chokepoints that live in TypeScript (`admi
 `retireMemories`, `memoryIndex`, the maintenance job), and the server is the only database writer.
 
 - `maintain` → `POST /api/v1/memories?action=maintain` (`{ characterId?, phases?, dryRun?,
-  settings? }`). `--character all` omits `characterId`; `--phases` is validated locally against
-  `MAINTENANCE_PHASES` (a copy of the server's list in `lib/memory/maintenance/types.ts` — keep them
-  in step); `--max` → `settings.maxClustersPerRun`, `--threshold` →
-  `settings.consolidation.clusterThreshold`, `--cap` → `settings.cap`. A user-wide dry run that would
-  consolidate is refused locally before the round trip, as the server would refuse it. The old
+  settings? }`). `--character all` omits `characterId`; `--phases` is sent as typed (trimmed,
+  de-duplicated); `--max` → `settings.maxClustersPerRun`, `--threshold` →
+  `settings.consolidation.clusterThreshold`, `--cap` → `settings.cap`. The CLI keeps no copy of the
+  server's phase list or bounds (review of PR 98): an unknown phase, an out-of-range cap and a
+  user-wide dry run that would consolidate are the server's 400, printed with its details. `memories
+  status` prints the ledger's phases as the server reports them. The old
   `consolidate` verb is gone (no alias): it is `maintain --phases consolidate`.
 - `validate` scans locally (`graph-integrity.js`: dangling `relatedMemoryIds`, dangling
   `consolidatedFrom` members, dangling `supersededById`, rows with `embedding IS NULL`; the columns

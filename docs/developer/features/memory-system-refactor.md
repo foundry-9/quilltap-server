@@ -1205,6 +1205,13 @@ departures:
   embeddings are queued through `enqueueMissingEmbeddings` (`index-store/backfill.ts`, now shared
   with `?action=backfill-embeddings`), at most 2,000 per call. The CLI asks for a dry run unless
   `--write` is given (the repo's rule for CLI writes), as `characters archive` does.
+  Review of PR 98: the scrub writes only the rows the scan named (per-row `removeRelatedMemoryIds`,
+  so a repair scoped to one holder touches that holder alone and announces exactly the holders it
+  wrote); a digest every one of whose members is gone is retired through `retireMemories`
+  (`reason: 'graph-repair'`) rather than left empty; `findDanglingLinks` has no fallback, so a
+  failed scan is a 500; the embedding jobs are queued in one batch (`enqueueEmbeddingGenerateMany`:
+  one read of the active jobs, one insert; `findIdsWithoutEmbedding` selects two columns); and the
+  CLI's unscoped scan covers every holder in `memories`, orphans included, as the server's does.
 - **Bug 244 was found here and fixed in the phase.** Moving the `*-config` actions onto the
   façade's schemas showed that Zod 4's `.partial()` re-applies every default, so every one-field
   settings write (the Consolidation card saved one field per change) reset the others.
@@ -1222,8 +1229,8 @@ departures:
 - **Settings stored values.** `MemoryExtractionLimitsSchema.maxPerHour` gained the API's old
   10,000 upper bound, so the façade is the only bound.
 - **The CLI** also resolves the server port from `--instance` for every memory verb that calls the
-  server, and keeps its own copy of the phase list (`memories-maintain-command.js`; CLI.md notes
-  it must follow `maintenance/types.ts`). `--threshold` sets `clusterThreshold` only, which the
+  server. After review it keeps no copy of the server's phase list or bounds: `maintain` sends what
+  was typed and prints the server's 400. `--threshold` sets `clusterThreshold` only, which the
   Built-in TF-IDF profile does not read; the help says so.
 - **Specs.** The four superseded specs moved to `complete/` with a pointer here; this spec stays in
   `features/` until the Friday backfill is recorded below. `memory_management.md` §9 was rewritten;
