@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
-import { HousekeepingDialog } from './housekeeping-dialog'
+import { MaintenanceDialog } from './maintenance-dialog'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 import { showConfirmation } from '@/lib/alert'
@@ -69,7 +69,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [showEditor, setShowEditor] = useState(false)
-  const [showHousekeeping, setShowHousekeeping] = useState(false)
+  const [showMaintenance, setShowMaintenance] = useState(false)
 
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
@@ -227,8 +227,9 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
     fetchMemories(0, search, false)
   }, [fetchMemories, search])
 
-  const handleHousekeepingComplete = useCallback(() => {
-    setShowHousekeeping(false)
+  // A real run is queued and works in the background; re-read the first page
+  // so anything it has already finished shows.
+  const handleMaintenanceQueued = useCallback(() => {
     setPage(0)
     fetchMemories(0, search, false)
   }, [fetchMemories, search])
@@ -252,11 +253,11 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         />
         {memories.length > 0 && (
           <button
-            onClick={() => setShowHousekeeping(true)}
+            onClick={() => setShowMaintenance(true)}
             className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg qt-hover-accent"
-            title="Clean up old and low-importance memories"
+            title="Fold repetitions, consolidate, and keep this character under the cap"
           >
-            Cleanup
+            Maintenance
           </button>
         )}
       </div>
@@ -388,12 +389,12 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         document.body
       )}
 
-      {/* Housekeeping Dialog */}
-      {showHousekeeping && (
-        <HousekeepingDialog
+      {/* Maintenance Dialog */}
+      {showMaintenance && (
+        <MaintenanceDialog
           characterId={characterId}
-          onClose={() => setShowHousekeeping(false)}
-          onComplete={handleHousekeepingComplete}
+          onClose={() => setShowMaintenance(false)}
+          onQueued={handleMaintenanceQueued}
         />
       )}
     </div>

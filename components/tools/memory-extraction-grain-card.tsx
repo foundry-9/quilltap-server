@@ -6,6 +6,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { readErrorText, writeErrorText } from './hooks/api-error-text'
+import { MemoryExtractionLimitsSection } from './memory-extraction-limits-section'
 
 type OtherPass = 'turn' | 'fold' | 'hybrid'
 
@@ -183,6 +184,10 @@ export function MemoryExtractionGrainCard() {
       </div>
 
       {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
+
+      <div className="pt-4 border-t qt-border-default">
+        <MemoryExtractionLimitsSection />
+      </div>
     </div>
   )
 }
