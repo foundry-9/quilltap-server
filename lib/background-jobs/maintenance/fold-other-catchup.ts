@@ -15,6 +15,7 @@
 
 import { logger } from '@/lib/logger';
 import { enqueueMemoryExtraction } from '../queue-service';
+import type { ChatMetadata } from '@/lib/schemas/types';
 import {
   findFoldOtherCatchupCandidates,
   FOLD_OTHER_CATCHUP_MAX_CHATS,
@@ -30,10 +31,14 @@ export interface FoldOtherCatchupSweepSummary {
 }
 
 export async function enqueueFoldOtherCatchups(
-  options: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number; chats?: readonly ChatMetadata[] } = {},
 ): Promise<FoldOtherCatchupSweepSummary> {
   const limit = options.limit ?? FOLD_OTHER_CATCHUP_MAX_CHATS;
-  const { candidates, deferred } = await findFoldOtherCatchupCandidates({ now: options.now, limit });
+  const { candidates, deferred } = await findFoldOtherCatchupCandidates({
+    now: options.now,
+    limit,
+    chats: options.chats,
+  });
 
   let enqueued = 0;
   for (const candidate of candidates) {

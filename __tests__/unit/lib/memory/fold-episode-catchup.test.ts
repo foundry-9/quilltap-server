@@ -28,6 +28,7 @@ import {
   findFoldEpisodeCatchupCandidates,
   foldEndIndex,
   isEpisodeBacklogBehind,
+  isEpisodeBacklogBehindByAnchors,
   runFoldEpisodeCatchup,
 } from '@/lib/memory/fold-episode-catchup'
 import { resolveFoldCatchupRoute } from '@/lib/memory/fold-catchup'
@@ -116,6 +117,20 @@ describe('fold boundary and backlog', () => {
   })
 })
 
+describe('isEpisodeBacklogBehindByAnchors (the sweep reads no transcript)', () => {
+  const anchors = ['h1', 'h2', 'h3', 'h4']
+  it('is caught up only when the watermark sits on the last anchor', () => {
+    expect(isEpisodeBacklogBehindByAnchors({ summaryAnchorMessageIds: anchors, episodeExtractionWatermarkMessageId: 'h4' }))
+      .toEqual({ behind: false, foldEndMessageId: 'h4' })
+    expect(isEpisodeBacklogBehindByAnchors({ summaryAnchorMessageIds: anchors, episodeExtractionWatermarkMessageId: 'h2' }).behind).toBe(true)
+    expect(isEpisodeBacklogBehindByAnchors({ summaryAnchorMessageIds: anchors, episodeExtractionWatermarkMessageId: null }).behind).toBe(true)
+    // Not in the folded list: behind, for the job's transcript check to settle.
+    expect(isEpisodeBacklogBehindByAnchors({ summaryAnchorMessageIds: anchors, episodeExtractionWatermarkMessageId: 'gone' }).behind).toBe(true)
+    expect(isEpisodeBacklogBehindByAnchors({ summaryAnchorMessageIds: [], episodeExtractionWatermarkMessageId: null }))
+      .toEqual({ behind: false, foldEndMessageId: null })
+  })
+})
+
 describe('findFoldEpisodeCatchupCandidates', () => {
   it('selects an idle folded chat whose episode watermark is behind', async () => {
     const all = history(20)
@@ -138,6 +153,19 @@ describe('findFoldEpisodeCatchupCandidates', () => {
 
     primeRepos(chatRow({ summaryAnchorMessageIds: ['h1', 'h2'], lastMessageAt: new Date(NOW - 60_000).toISOString() }), all)
     expect((await findFoldEpisodeCatchupCandidates({ now: NOW })).candidates).toHaveLength(0)
+  })
+
+  it('reads no transcript, and uses a chat list it is handed instead of its own', async () => {
+    const all = history(20)
+    primeRepos(chatRow(), all)
+    const shared = [chatRow({ summaryAnchorMessageIds: ['h1', 'h2', 'h3'], episodeExtractionWatermarkMessageId: 'h1' })]
+
+    const sel = await findFoldEpisodeCatchupCandidates({ now: NOW, chats: shared as never })
+
+    expect(sel.candidates.map(c => c.foldEndMessageId)).toEqual(['h3'])
+    const repos = mockRepos.mock.results[0]?.value ?? mockRepos()
+    expect(repos.chats.getMessages).not.toHaveBeenCalled()
+    expect(repos.chats.findAll).not.toHaveBeenCalled()
   })
 })
 

@@ -716,18 +716,17 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Remove `ids` from the `relatedMemoryIds` of every row of `characterId` that
-   * names any of them — the delete chokepoints' neighbour scrub. One SQL
-   * removal delta per chunk, applied against the rows as they stand at write
-   * time, so two deletes in one job (or in two jobs) each remove only their
-   * own id and the replay applies both (bug 234). Scoped to the character: a
-   * memory links only to its own holder's memories. Returns rows changed (0 in
-   * the job child, where the write is buffered).
+   * Remove `ids` from the `relatedMemoryIds` of every row, whichever character
+   * holds it, that names any of them — the delete chokepoints' neighbour
+   * scrub. One SQL removal delta per chunk, applied against the rows as they
+   * stand at write time, so two deletes in one job (or in two jobs) each
+   * remove only their own id and the replay applies both (bug 234).
+   * Instance-wide on purpose: the gate links only within a holder, but an
+   * import, a restore or legacy data can cross characters, and an id whose row
+   * is already gone still has to leave its neighbours. Returns rows changed (0
+   * in the job child, where the write is buffered).
    */
-  async removeRelatedMemoryIdsForCharacter(
-    characterId: string,
-    ids: readonly string[],
-  ): Promise<number> {
+  async removeRelatedMemoryIdsEverywhere(ids: readonly string[]): Promise<number> {
     return this.safeQuery(
       async () => {
         const removing = Array.from(new Set(ids));
@@ -738,9 +737,8 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         }
         const now = this.getCurrentTimestamp();
         let changed = 0;
-        // Each chunk binds its ids twice (the filter and the EXISTS), plus
-        // updatedAt and characterId.
-        const chunkSize = Math.max(1, Math.floor((SQLITE_VARIABLE_CHUNK_SIZE - 2) / 2));
+        // Each chunk binds its ids twice (the filter and the EXISTS), plus updatedAt.
+        const chunkSize = Math.max(1, Math.floor((SQLITE_VARIABLE_CHUNK_SIZE - 1) / 2));
         for (const chunk of chunkArray(removing, chunkSize)) {
           const placeholders = chunk.map(() => '?').join(',');
           const result = db
@@ -752,21 +750,22 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
                          WHERE value NOT IN (${placeholders})
                       ),
                       updatedAt = ?
-                WHERE characterId = ?
+                WHERE relatedMemoryIds IS NOT NULL
+                  AND relatedMemoryIds <> '[]'
                   AND json_valid(relatedMemoryIds)
                   AND EXISTS (
                         SELECT 1 FROM json_each(memories.relatedMemoryIds)
                          WHERE value IN (${placeholders})
                       )`,
             )
-            .run(...chunk, now, characterId, ...chunk);
+            .run(...chunk, now, ...chunk);
           changed += result.changes;
         }
-        logger.debug('Scrubbed deleted ids from related links', { characterId, ids: removing.length, changed });
+        logger.debug('Scrubbed deleted ids from related links', { ids: removing.length, changed });
         return changed;
       },
       'Error scrubbing related memory links',
-      { characterId, count: ids.length },
+      { count: ids.length },
       0,
     );
   }

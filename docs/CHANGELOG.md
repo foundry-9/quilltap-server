@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### PR 91 review: 9 findings on Phase A
+
+- A candidate that fails validation no longer throws. `candidateFromDraft` returns null for a draft with no usable text (whitespace-only content and summary); `writeCandidate` skips that draft and the rest of the turn's extraction continues. A blank `content` falls back to the summary.
+- An empty or malformed source timestamp no longer produces a NaN anchor: new `anchorTimeMsFrom` takes the first parseable of the source message time, the turn time, then now. Used by the per-turn writer and the fold episode pass.
+- Manual memory create (`POST /api/v1/memories`) caps `entities` at 12 in the request schema and returns 400, not 500, when the candidate schema refuses the input.
+- The housekeeping dialog no longer sends a fixed cap of 2000. It omits `maxMemories` until the user types one, so the server applies the character's configured cap; the preview response now includes `capUsed`, which the dialog displays.
+- The housekeep, preview and job paths read only the `memoryMaintenance` setting (`resolveMemoryMaintenance`) instead of all five memory settings.
+- The neighbour scrub on delete is instance-wide again: `removeRelatedMemoryIdsForCharacter(characterId, ids)` is replaced by `removeRelatedMemoryIdsEverywhere(ids)`, which scrubs every requested id (including ids whose rows are already gone) from every row, still as one SQL removal delta. The job child's scrub set is job-wide.
+- The episode catch-up sweep skips a chat that already has an episode catch-up job queued or running, whatever its anchor, so a `continue-episode:` chain and a new sweep job never read the same slices.
+- The episode catch-up sweep reads no transcripts: it tests the backlog against `summaryAnchorMessageIds` (`isEpisodeBacklogBehindByAnchors`); the job keeps the exact transcript check. Both catch-up sweeps share one `chats.findAll()`.
+- `FOLD_EPISODE_PROMPT` no longer asks for `participants`, which the parser stopped reading.
+
 #### Memory refactor Phase A: scoring, clock, settings, candidate
 
 Structural Phase A of `docs/developer/features/memory-system-refactor.md`. One migration.

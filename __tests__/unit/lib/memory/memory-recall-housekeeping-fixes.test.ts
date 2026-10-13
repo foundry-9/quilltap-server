@@ -301,7 +301,7 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
     ])
     const bulkDelete = jest.fn(async () => bulkDeleteResult)
     factoryMock.getRepositories.mockReturnValue({
-      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsForCharacter: jest.fn(), ...noDigestScrub() },
+      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsEverywhere: jest.fn(), ...noDigestScrub() },
     })
     return bulkDelete
   }
@@ -317,16 +317,16 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
   it('scrubs neighbours (a merge survivor included) with a removal delta, never a stale list', async () => {
     dbMock.rawQuery.mockImplementation(async () => [{ id: 'a', characterId: 'char-1' }])
     const bulkDelete = jest.fn(async () => 1)
-    const removeRelatedMemoryIdsForCharacter = jest.fn(async () => 2)
+    const removeRelatedMemoryIdsEverywhere = jest.fn(async () => 2)
     factoryMock.getRepositories.mockReturnValue({
-      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsForCharacter, ...noDigestScrub() },
+      memories: { updateForCharacter, bulkDelete, removeRelatedMemoryIdsEverywhere, ...noDigestScrub() },
     })
 
     await gate.deleteMemoriesWithUnlinkBatch(['a'])
 
     // Applied after the survivor's own link write, the delta removes only the
     // deleted id from whatever list the row then holds (bug 234).
-    expect(removeRelatedMemoryIdsForCharacter).toHaveBeenCalledWith('char-1', ['a'])
+    expect(removeRelatedMemoryIdsEverywhere).toHaveBeenCalledWith(['a'])
     expect(updateForCharacter).not.toHaveBeenCalled()
   })
 

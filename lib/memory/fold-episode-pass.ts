@@ -42,7 +42,7 @@ import {
   type UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
-import { MemoryCandidateSchema, toCreateMemoryOptions, type TargetingTags } from './candidate'
+import { MemoryCandidateSchema, anchorTimeMsFrom, toCreateMemoryOptions, type TargetingTags } from './candidate'
 import { resolveEpisodicAnchors } from './time/anchors'
 import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
@@ -319,7 +319,7 @@ async function runSlice(
           importance: episode.importance,
           kind: 'episodic',
           when: episode.when ?? null,
-          entities: episode.entities,
+          entities: episode.entities.slice(0, 12),
           subject: { holderId: characterId, aboutId: null },
           provenance: {
             source: 'AUTO',
@@ -327,7 +327,7 @@ async function runSlice(
             chatId,
             projectId: input.projectId ?? null,
             sourceMessageId,
-            anchorTimeMs: Date.parse(clock.nowIso),
+            anchorTimeMs: anchorTimeMsFrom([clock.nowIso, windowStartIso]),
             pass: 'episode-fold',
           },
         })

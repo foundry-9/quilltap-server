@@ -111,7 +111,7 @@ describe('child proxy — memory housekeeping writes', () => {
       memories: {
         bulkDelete: realBulkDelete,
         updateForCharacter: jest.fn(),
-        removeRelatedMemoryIdsForCharacter: jest.fn(),
+        removeRelatedMemoryIdsEverywhere: jest.fn(),
         // The digest scrub's reads: nothing to scrub.
         findDigestsContainingMembers: jest.fn(async () => []),
         findIdsSupersededByAny: jest.fn(async () => []),

@@ -1239,7 +1239,6 @@ For each episode:
   narrativeTime the in-story time phrase, only when the story runs on a
                 fictional timeline ("the third night at sea")
   entities      2–6 proper nouns: places, people, named things
-  participants  names of those involved
   importance    0.20–1.00 (0.9 = a day the participants will retell for
                 years; 0.5 = a pleasant but ordinary outing)
 

@@ -4,7 +4,7 @@
  * Runs the retention-policy housekeeping sweep for a single character or —
  * when no characterId is provided — every character owned by the user.
  * Settings come from `instance_settings.memoryMaintenance` through
- * `resolveMemorySettings` (whose `capFor` is the one cap resolver), and the
+ * `resolveMemoryMaintenance` (whose `capFor` is the one cap resolver), and the
  * cap can be overridden per job via the payload.
  */
 
@@ -13,14 +13,14 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { runHousekeeping } from '@/lib/memory/housekeeping';
 import { recordHousekeepingOutcome } from '@/lib/memory/housekeeping-outcome-cache';
 import { logger } from '@/lib/logger';
-import { resolveMemorySettings } from '@/lib/memory/settings';
+import { resolveMemoryMaintenance } from '@/lib/memory/settings';
 import type { MemoryHousekeepingPayload } from '../queue-service';
 
 export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryHousekeepingPayload;
   const repos = getRepositories();
 
-  const { maintenance } = await resolveMemorySettings(job.userId);
+  const maintenance = await resolveMemoryMaintenance();
 
   if (!maintenance.enabled) {
     // Manual / one-shot jobs (e.g. from the "Run now" button) may still run

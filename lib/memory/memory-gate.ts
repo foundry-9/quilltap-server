@@ -965,13 +965,10 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
     return false
   }
 
-  // A removal delta in SQL, scoped to the holder (a memory links only to its
-  // own holder's memories): applied against the rows at commit, so two deletes
-  // in one job, or two jobs, each remove their own id (bug 234).
-  const neighboursTouched = await repos.memories.removeRelatedMemoryIdsForCharacter(
-    target.characterId,
-    [memoryId],
-  )
+  // A removal delta in SQL across every holder: applied against the rows at
+  // commit, so two deletes in one job, or two jobs, each remove their own id
+  // (bug 234).
+  const neighboursTouched = await repos.memories.removeRelatedMemoryIdsEverywhere([memoryId])
   const digestLinksScrubbed = await scrubDigestLinks(new Set([memoryId]), [target.characterId])
 
   const deleted = await repos.memories.delete(memoryId)
@@ -1005,9 +1002,9 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
 }
 
 /**
- * Batch version of {@link deleteMemoryWithUnlink}. Scrubs every doomed ID
- * from its holder's other rows' `relatedMemoryIds` with one SQL removal delta
- * per holder, deletes the batch, then removes the deleted rows' vectors.
+ * Batch version of {@link deleteMemoryWithUnlink}. Scrubs every requested ID —
+ * found or already gone — from every row's `relatedMemoryIds` with one SQL
+ * removal delta, deletes the batch, then removes the deleted rows' vectors.
  *
  * Use this for cascades: character deletion, chat-wipe, swipe-group cleanup,
  * housekeeping retention sweeps. Calling the single-ID helper in a loop is
@@ -1054,14 +1051,13 @@ export async function deleteMemoriesWithUnlinkBatchReport(
       addDigestBucket(deletedDigestBuckets, row)
     }
   }
-  // The neighbour scrub: one SQL removal delta per holder, applied against the
-  // rows at commit (bug 234). A row the caller has just rewritten in this
-  // operation (a merge survivor) is reached by the same delta after its own
-  // write, so no override list is needed.
-  let neighboursTouched = 0
-  for (const [characterId, ids] of idsByCharacter) {
-    neighboursTouched += (await repos.memories.removeRelatedMemoryIdsForCharacter(characterId, ids)) ?? 0
-  }
+  // The neighbour scrub: one SQL removal delta across every holder, applied
+  // against the rows at commit (bug 234). It takes every requested id, not
+  // only those still found as rows, so an id already gone leaves its
+  // neighbours too. A row the caller has just rewritten in this operation (a
+  // merge survivor) is reached by the same delta after its own write, so no
+  // override list is needed.
+  const neighboursTouched = (await repos.memories.removeRelatedMemoryIdsEverywhere([...doomedSet])) ?? 0
   const digestLinksScrubbed = await scrubDigestLinks(doomedSet, idsByCharacter.keys())
 
   // In the job child, `bulkDelete` is a buffered write and returns nothing —

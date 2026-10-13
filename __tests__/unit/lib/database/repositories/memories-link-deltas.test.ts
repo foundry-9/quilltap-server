@@ -8,7 +8,7 @@
  *
  * Guards: lib/database/repositories/memories.repository.ts
  *   (addRelatedMemoryIds, removeRelatedMemoryIds,
- *    removeRelatedMemoryIdsForCharacter, appendReinforcementFootnotes)
+ *    removeRelatedMemoryIdsEverywhere, appendReinforcementFootnotes)
  */
 
 import path from 'path';
@@ -81,8 +81,8 @@ describe('addRelatedMemoryIds / removeRelatedMemoryIds (bug 231)', () => {
   });
 });
 
-describe('removeRelatedMemoryIdsForCharacter (bug 234)', () => {
-  it('scrubs every row of the holder that names a removed id, and nothing else', async () => {
+describe('removeRelatedMemoryIdsEverywhere (bug 234)', () => {
+  it('scrubs every row, whichever holder, that names a removed id, and nothing else', async () => {
     seed('n1', CHAR, ['a', 'b', 'k']);
     seed('n2', CHAR, ['b']);
     seed('n3', CHAR, ['k']);
@@ -91,13 +91,14 @@ describe('removeRelatedMemoryIdsForCharacter (bug 234)', () => {
     const repo = new MemoriesRepository();
 
     // Two deletes, applied one after the other, each naming only its own id.
-    await expect(repo.removeRelatedMemoryIdsForCharacter(CHAR, ['a'])).resolves.toBe(1);
-    await expect(repo.removeRelatedMemoryIdsForCharacter(CHAR, ['b'])).resolves.toBe(2);
+    // A link that crosses characters (an import, a restore) is scrubbed too.
+    await expect(repo.removeRelatedMemoryIdsEverywhere(['a'])).resolves.toBe(2);
+    await expect(repo.removeRelatedMemoryIdsEverywhere(['b'])).resolves.toBe(2);
 
     expect(links('n1')).toEqual(['k']);
     expect(links('n2')).toEqual([]);
     expect(links('n3')).toEqual(['k']);
-    expect(links('o1')).toEqual(['a']);
+    expect(links('o1')).toEqual([]);
     expect(db.prepare('SELECT relatedMemoryIds FROM memories WHERE id = ?').get('bad').relatedMemoryIds).toBe('not json');
   });
 
@@ -105,7 +106,7 @@ describe('removeRelatedMemoryIdsForCharacter (bug 234)', () => {
     const ids = Array.from({ length: 1500 }, (_, i) => `gone-${i}`);
     seed('n', CHAR, ['gone-3', 'keep', 'gone-1499']);
     const repo = new MemoriesRepository();
-    await repo.removeRelatedMemoryIdsForCharacter(CHAR, ids);
+    await repo.removeRelatedMemoryIdsEverywhere(ids);
     expect(links('n')).toEqual(['keep']);
   });
 });

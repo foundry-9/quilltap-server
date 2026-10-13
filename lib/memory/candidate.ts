@@ -169,8 +169,8 @@ export const MemoryCandidateSchema = z.object({
     chatId: Id.nullable(),
     projectId: Id.nullable(),
     sourceMessageId: Id.nullable(),
-    /** The message clock (ms) the clock resolves `when` against. */
-    anchorTimeMs: z.number(),
+    /** The message clock (ms) the clock resolves `when` against; see {@link anchorTimeMsFrom}. */
+    anchorTimeMs: z.number().finite(),
     pass: CandidatePassEnum,
   }),
 })
@@ -190,18 +190,37 @@ export interface MemoryDraftLike {
 }
 
 /**
+ * The first of `isoCandidates` that parses as a time, in ms; else `fallbackMs`
+ * (now). A source message with an empty or malformed timestamp still yields
+ * a candidate rather than a NaN the schema refuses.
+ */
+export function anchorTimeMsFrom(
+  isoCandidates: ReadonlyArray<string | null | undefined>,
+  fallbackMs: number = Date.now(),
+): number {
+  for (const iso of isoCandidates) {
+    if (!iso) continue
+    const ms = Date.parse(iso)
+    if (Number.isFinite(ms)) return ms
+  }
+  return fallbackMs
+}
+
+/**
  * The candidate for a parsed draft, given who holds it, whom it is about and
- * where it came from. Missing text falls back to the other field (a draft is
- * dropped by its parser when it has neither).
+ * where it came from. Missing or blank text falls back to the other field.
+ * Null when the draft cannot be a candidate (no text in either field, or a
+ * value the schema refuses): the caller skips it, as the parser skips a draft
+ * with neither field — it never aborts the turn.
  */
 export function candidateFromDraft(
   draft: MemoryDraftLike,
   subject: MemoryCandidate['subject'],
   provenance: MemoryCandidate['provenance'],
-): MemoryCandidate {
-  const content = draft.content?.trim() ? draft.content : (draft.summary ?? '')
-  const summary = draft.summary?.trim() ? draft.summary : (draft.content ?? '')
-  return MemoryCandidateSchema.parse({
+): MemoryCandidate | null {
+  const content = draft.content?.trim() ? draft.content : draft.summary?.trim() ? draft.summary : ''
+  const summary = draft.summary?.trim() ? draft.summary : content
+  const parsed = MemoryCandidateSchema.safeParse({
     content,
     summary,
     keywords: draft.keywords ?? [],
@@ -215,6 +234,7 @@ export function candidateFromDraft(
     subject,
     provenance,
   })
+  return parsed.success ? parsed.data : null
 }
 
 /** The anchors the clock resolved for a candidate. */

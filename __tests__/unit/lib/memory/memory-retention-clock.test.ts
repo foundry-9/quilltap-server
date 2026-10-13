@@ -94,7 +94,7 @@ function installRepos() {
     findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
     findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
     removeConsolidatedMembers: jest.fn((c: string, d: string, m: string[]) => real.removeConsolidatedMembers(c, d, m)),
-    removeRelatedMemoryIdsForCharacter: jest.fn((c: string, ids: string[]) => real.removeRelatedMemoryIdsForCharacter(c, ids)),
+    removeRelatedMemoryIdsEverywhere: jest.fn((ids: string[]) => real.removeRelatedMemoryIdsEverywhere(ids)),
     updateForCharacter: jest.fn(async (_c: string, id: string, patch: Record<string, unknown>) => {
       for (const [k, v] of Object.entries(patch)) {
         db.prepare(`UPDATE memories SET "${k}" = ?, updatedAt = ? WHERE id = ?`)

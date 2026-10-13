@@ -45,7 +45,7 @@ import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/r
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
 import { resolveEpisodicAnchors } from './time/anchors'
-import { candidateFromDraft, toCreateMemoryOptions, type CandidatePass } from './candidate'
+import { anchorTimeMsFrom, candidateFromDraft, toCreateMemoryOptions, type CandidatePass } from './candidate'
 import type { MemoryGateOutcome } from './memory-gate'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
@@ -270,11 +270,18 @@ export interface WriteOptions {
 
 export async function writeCandidate(opts: WriteOptions): Promise<void> {
   const timelineMode = opts.ctx.timelineMode ?? 'realtime'
+  // The first parseable of the source message's time, the turn's, then now:
+  // an empty or malformed timestamp falls through rather than poisoning the
+  // anchor (a NaN the candidate schema refuses).
+  const anchorCandidates = [
+    opts.sourceMessageCreatedAt,
+    opts.ctx.sourceMessageTimestamp,
+    opts.ctx.transcript?.turnTimestamp,
+  ]
+  const anchorTimeMs = anchorTimeMsFrom(anchorCandidates)
   const anchorIso =
-    opts.sourceMessageCreatedAt ??
-    opts.ctx.sourceMessageTimestamp ??
-    opts.ctx.transcript?.turnTimestamp ??
-    new Date().toISOString()
+    anchorCandidates.find((iso): iso is string => !!iso && Number.isFinite(Date.parse(iso))) ??
+    new Date(anchorTimeMs).toISOString()
   // Episodic spine: `occurredAt` defaults to the source message timestamp
   // (authoritative from the transcript — never asked of the model); a retold
   // EVENT's `when` phrase resolves against that same anchor and overrides it.
@@ -304,10 +311,21 @@ export async function writeCandidate(opts: WriteOptions): Promise<void> {
       chatId: opts.ctx.chatId,
       projectId: opts.ctx.projectId ?? null,
       sourceMessageId: opts.sourceMessageId,
-      anchorTimeMs: Date.parse(anchorIso),
+      anchorTimeMs,
       pass: opts.candidatePass ?? (opts.pass === 'SELF' ? 'self-turn' : 'other-turn'),
     },
   )
+  if (!candidate) {
+    // A draft the parser kept but that cannot be a memory (blank text): skip
+    // it alone, never the turn's other candidates.
+    logger.debug('[Memory] Skipping a draft that is not a valid candidate', {
+      chatId: opts.ctx.chatId,
+      characterId: opts.characterId,
+      pass: opts.pass,
+    })
+    opts.debugLogs.push(`[Memory] ${opts.passLabel} — skipped a draft with no usable text`)
+    return
+  }
   const createOptions = toCreateMemoryOptions(candidate, {
     occurredAt,
     narrativeTime,

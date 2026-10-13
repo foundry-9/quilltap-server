@@ -44,7 +44,7 @@ import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
-import { resolveMemorySettings } from '@/lib/memory/settings';
+import { resolveMemoryMaintenance } from '@/lib/memory/settings';
 import { MemoryCandidateSchema, toCreateMemoryOptions } from '@/lib/memory/candidate';
 import {
   MemoryMaintenanceCapSchema,
@@ -95,7 +95,8 @@ const createMemorySchema = z.object({
   kind: MemoryKindEnum.optional(),
   /** ISO wall-clock time of the event the memory records. */
   occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  entities: z.array(z.string().min(1)).optional(),
+  /** At most 12, the candidate schema's bound (`MemoryCandidateSchema`). */
+  entities: z.array(z.string().min(1)).max(12).optional(),
   // Deliberately absent (bug 218, refactor decision 13): `source` is always
   // MANUAL here — a client-claimed AUTO would switch on the extractor-only
   // heuristics — and `skipGate` has left the API, so every manual write goes
@@ -547,7 +548,7 @@ async function handleCreateMemory(
   // MANUAL, provenance stamped 'manual'. A hand-written memory carries no
   // targeting tags (it reads as the defaults) and its event time is given,
   // not phrased.
-  const candidate = MemoryCandidateSchema.parse({
+  const parsedCandidate = MemoryCandidateSchema.safeParse({
     content: validatedData.content,
     summary: validatedData.summary,
     keywords: validatedData.keywords,
@@ -568,6 +569,16 @@ async function handleCreateMemory(
       pass: 'manual',
     },
   });
+  if (!parsedCandidate.success) {
+    // The request schema should already have refused anything the candidate
+    // refuses; a gap between the two is still the client's 400, never a 500.
+    logger.debug('[Memories API] Manual memory refused by the candidate schema', {
+      characterId: validatedData.characterId,
+      issues: parsedCandidate.error.issues.length,
+    });
+    return validationError(parsedCandidate.error);
+  }
+  const candidate = parsedCandidate.data;
   const outcome = await createMemoryWithGate(
     toCreateMemoryOptions(candidate, { occurredAt: validatedData.occurredAt ?? null, narrativeTime: null }),
     // A hand-written memory the gate folds into an existing extracted row
@@ -718,7 +729,7 @@ async function handleHousekeep(
   }
 
   // The manual action honours the character's cap override, as the sweep does.
-  const { maintenance } = await resolveMemorySettings(user.id);
+  const maintenance = await resolveMemoryMaintenance();
   const options: HousekeepingOptions = {
     ...optionData,
     maxMemories: optionData.maxMemories ?? maintenance.capFor(characterId),
@@ -788,7 +799,7 @@ async function handleHousekeepPreview(
 
   // Parse options from query params
   const { searchParams } = req.nextUrl;
-  const { maintenance } = await resolveMemorySettings(user.id);
+  const maintenance = await resolveMemoryMaintenance();
   const options: HousekeepingOptions = { maxMemories: maintenance.capFor(characterId) };
 
   if (searchParams.has('maxMemories')) {
@@ -826,6 +837,8 @@ async function handleHousekeepPreview(
       totalBefore: preview.totalBefore,
       totalAfter: preview.totalAfter,
       coldCount: preview.coldCount,
+      // The cap the preview used: the request's, else the character's configured one.
+      capUsed: preview.capUsed,
       details: preview.details,
     },
   });

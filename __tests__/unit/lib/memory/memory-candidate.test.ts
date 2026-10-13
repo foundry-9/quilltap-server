@@ -16,6 +16,7 @@ import {
   splitTargetingKeywords,
   targetingKeywords,
   coerceImportance,
+  anchorTimeMsFrom,
   DEFAULT_TARGETING,
   type MemoryCandidate,
 } from '@/lib/memory/candidate'
@@ -123,7 +124,7 @@ describe('producers', () => {
       keywords: ['dark', 'present', 'scope: wide', 'relationships'],
     })
 
-    roundTrip(candidateFromDraft(draft, { holderId: HOLDER, aboutId: OTHER }, provenance('other-turn')))
+    roundTrip(candidateFromDraft(draft, { holderId: HOLDER, aboutId: OTHER }, provenance('other-turn'))!)
   })
 
   it('the dry run reports the same keywords and importance the live write sends', async () => {
@@ -205,6 +206,65 @@ describe('producers', () => {
         provenance: provenance('consolidation'),
       }),
     )
+  })
+
+  it('a blank draft is not a candidate, and skips alone rather than aborting the turn', async () => {
+    expect(candidateFromDraft({ content: '   ' }, { holderId: HOLDER, aboutId: null }, provenance('self-turn'))).toBeNull()
+    // Blank content with a usable summary falls back to the summary.
+    expect(
+      candidateFromDraft({ content: '  ', summary: 'kept' }, { holderId: HOLDER, aboutId: null }, provenance('self-turn'))
+        ?.content,
+    ).toBe('kept')
+
+    const debugLogs: string[] = []
+    const collected: unknown[] = []
+    await expect(
+      writeCandidate({
+        characterId: HOLDER,
+        characterName: 'Holly',
+        aboutCharacterId: HOLDER,
+        aboutCharacterName: 'Holly',
+        pass: 'SELF',
+        candidate: { content: '   ', importance: 0.5, targeting: DEFAULT_TARGETING },
+        passLabel: 'test',
+        ctx: { chatId: 'chat-1', userId: 'u1', dryRun: true },
+        sourceMessageId: null,
+        sourceMessageCreatedAt: '2026-10-12T19:00:00.000Z',
+        timeZone: 'UTC',
+        debugLogs,
+        createdIds: [],
+        reinforcedIds: [],
+        collected: collected as never,
+      }),
+    ).resolves.toBeUndefined()
+    expect(collected).toHaveLength(0)
+    expect(createMemoryWithGate).not.toHaveBeenCalled()
+  })
+
+  it('an empty or malformed source timestamp falls through to the next anchor', async () => {
+    expect(anchorTimeMsFrom(['', 'not a date', '2026-10-12T19:00:00.000Z'])).toBe(Date.parse('2026-10-12T19:00:00.000Z'))
+    expect(anchorTimeMsFrom([null, undefined, ''], 42)).toBe(42)
+
+    const collected: Array<{ occurredAt: string | null }> = []
+    await writeCandidate({
+      characterId: HOLDER,
+      characterName: 'Holly',
+      aboutCharacterId: HOLDER,
+      aboutCharacterName: 'Holly',
+      pass: 'SELF',
+      candidate: { content: 'I promised.', summary: 'promised', importance: 0.5, targeting: DEFAULT_TARGETING },
+      passLabel: 'test',
+      ctx: { chatId: 'chat-1', userId: 'u1', dryRun: true, transcript: { turnTimestamp: '2026-10-12T19:00:00.000Z' } },
+      sourceMessageId: null,
+      sourceMessageCreatedAt: '',
+      timeZone: 'UTC',
+      debugLogs: [],
+      createdIds: [],
+      reinforcedIds: [],
+      collected: collected as never,
+    })
+    expect(collected).toHaveLength(1)
+    expect(collected[0].occurredAt).toBe('2026-10-12T19:00:00.000Z')
   })
 
   it('refuses a candidate with no text or an out-of-range importance', () => {

@@ -4306,7 +4306,11 @@ Run housekeeping (cap demotion and cold retention) on one character's memories. 
 }
 ```
 
-**Response** (both verbs): `{ success, dryRun, result: { demoted, deleted, kept, totalBefore,
+**Response** (`GET`): `{ success, preview: { wouldDemote, wouldDelete, wouldKeep, totalBefore,
+totalAfter, coldCount, capUsed, details } }` — `capUsed` is the cap applied: `maxMemories` when
+given, else the character's configured cap.
+
+**Response** (`POST`): `{ success, dryRun, result: { demoted, deleted, kept, totalBefore,
 totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds,
 details? } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
 MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,

@@ -81,47 +81,65 @@ export function isEpisodeBacklogBehind(
 }
 
 /**
+ * The sweep's transcript-free test: whether the episode watermark is behind
+ * the fold boundary as the chat row alone records it. `summaryAnchorMessageIds`
+ * lists every folded message in turn order, so the fold boundary is its last
+ * entry and the watermark's position in it says how far the pass has read. A
+ * watermark outside the list (never set, or naming a message no longer
+ * folded) reads as behind. This can only err towards "behind" — a last anchor
+ * since deleted from the transcript, or a watermark left past a fold boundary
+ * that `rebuild-summary` pulled back — and the job's own check
+ * ({@link isEpisodeBacklogBehind}, against the transcript it loads anyway)
+ * then skips the chat; once a run has covered the window the watermark sits
+ * on the fold boundary and the chat drops out.
+ */
+export function isEpisodeBacklogBehindByAnchors(
+  chat: Pick<ChatMetadata, 'summaryAnchorMessageIds' | 'episodeExtractionWatermarkMessageId'>,
+): { behind: boolean; foldEndMessageId: string | null } {
+  const anchors = chat.summaryAnchorMessageIds ?? []
+  if (anchors.length === 0) return { behind: false, foldEndMessageId: null }
+  const foldEndMessageId = anchors[anchors.length - 1]
+  const watermark = chat.episodeExtractionWatermarkMessageId ?? null
+  const watermarkIndex = watermark ? anchors.lastIndexOf(watermark) : -1
+  return { behind: watermarkIndex < anchors.length - 1, foldEndMessageId }
+}
+
+/**
  * Idle chats whose episode watermark is behind their fold boundary. Most
- * recently active first, bounded by `limit`.
+ * recently active first, bounded by `limit`. Reads no transcript: the
+ * backlog test runs on the chat row ({@link isEpisodeBacklogBehindByAnchors}),
+ * and `chats` lets the maintenance sweep share one chat list with the OTHER
+ * catch-up.
  */
 export async function findFoldEpisodeCatchupCandidates(
-  options: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number; chats?: readonly ChatMetadata[] } = {},
 ): Promise<FoldEpisodeCatchupSelection> {
   const now = options.now ?? Date.now()
   const limit = options.limit ?? FOLD_CATCHUP_MAX_CHATS
-  const repos = getRepositories()
-  const chats = await repos.chats.findAll()
-  // Cheap prefilter: a chat that has never folded has no episode backlog.
+  const chats = options.chats ?? await getRepositories().chats.findAll()
+  // A chat that has never folded has no episode backlog.
   const prefiltered = idleChatsForCatchup(chats, now).filter(c => (c.summaryAnchorMessageIds?.length ?? 0) > 0)
 
   const candidates: FoldEpisodeCatchupCandidate[] = []
   let deferred = 0
   for (const chat of prefiltered) {
+    const { behind, foldEndMessageId } = isEpisodeBacklogBehindByAnchors(chat)
+    if (!behind || !foldEndMessageId) continue
     if (candidates.length >= limit) {
       deferred++
       continue
     }
-    try {
-      const messages = await loadMessages(chat.id)
-      const { behind, endIndex } = isEpisodeBacklogBehind(messages, chat)
-      if (!behind) continue
-      const profileId = pickCatchupConnectionProfileId(chat)
-      if (!profileId) {
-        logger.debug('[FoldEpisodeCatchup] No connection profile on any seat; skipping chat', { chatId: chat.id })
-        continue
-      }
-      candidates.push({
-        chatId: chat.id,
-        userId: chat.userId,
-        foldEndMessageId: messages[endIndex].id,
-        connectionProfileId: profileId,
-      })
-    } catch (error) {
-      logger.warn('[FoldEpisodeCatchup] Could not inspect chat; skipping', {
-        chatId: chat.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
+    const profileId = pickCatchupConnectionProfileId(chat)
+    if (!profileId) {
+      logger.debug('[FoldEpisodeCatchup] No connection profile on any seat; skipping chat', { chatId: chat.id })
+      continue
     }
+    candidates.push({
+      chatId: chat.id,
+      userId: chat.userId,
+      foldEndMessageId,
+      connectionProfileId: profileId,
+    })
   }
 
   logger.debug('[FoldEpisodeCatchup] Selection complete', {

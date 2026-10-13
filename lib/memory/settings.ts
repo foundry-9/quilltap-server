@@ -42,9 +42,7 @@ export interface MemorySettings {
     tuning: ResolvedRecallTuning
     minCosine: { neural: number; tfidf: number }
   }
-  maintenance: MemoryMaintenanceSettings & {
-    /** The cap for one character: its override, else `perCharacterCap`. */
-    capFor(characterId: string): number
+  maintenance: ResolvedMemoryMaintenance & {
     consolidation: MemoryConsolidationSettings
     coldRetentionDays: number | null
   }
@@ -63,6 +61,25 @@ export function resolveMemoryCap(
     settings?.perCharacterCap ??
     MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap
   )
+}
+
+/** The maintenance settings with the one cap resolver attached. */
+export type ResolvedMemoryMaintenance = MemoryMaintenanceSettings & {
+  /** The cap for one character: its override, else `perCharacterCap`. */
+  capFor(characterId: string): number
+}
+
+function withCapFor(maintenance: MemoryMaintenanceSettings): ResolvedMemoryMaintenance {
+  return { ...maintenance, capFor: (characterId: string) => resolveMemoryCap(maintenance, characterId) }
+}
+
+/**
+ * Only the maintenance settings (one instance-setting read), for paths that
+ * need nothing but the cap — housekeeping's preview, run and job. The same
+ * `capFor` as {@link resolveMemorySettings}'s.
+ */
+export async function resolveMemoryMaintenance(): Promise<ResolvedMemoryMaintenance> {
+  return withCapFor(await getMemoryMaintenanceSettings())
 }
 
 /**
@@ -95,8 +112,7 @@ export async function resolveMemorySettings(userId?: string): Promise<MemorySett
       minCosine: { neural: DEFAULT_MIN_COSINE_NEURAL, tfidf: DEFAULT_MIN_COSINE_TFIDF },
     },
     maintenance: {
-      ...maintenance,
-      capFor: (characterId: string) => resolveMemoryCap(maintenance, characterId),
+      ...withCapFor(maintenance),
       consolidation,
       coldRetentionDays: consolidation.coldRetentionDays,
     },

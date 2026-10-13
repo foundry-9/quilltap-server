@@ -4,8 +4,8 @@
  *   - deleteMemoriesWithUnlinkBatch / deleteMemoriesWithUnlinkBatchReport
  *
  * These verify that the deleted ID is scrubbed from every neighbour's
- * `relatedMemoryIds` *before* the rows are removed — as one removal delta per
- * holder (`removeRelatedMemoryIdsForCharacter`, bug 234), never as a
+ * `relatedMemoryIds` *before* the rows are removed — as one removal delta
+ * across every holder (`removeRelatedMemoryIdsEverywhere`, bug 234), never as a
  * whole-list write built from a read.
  */
 
@@ -77,7 +77,7 @@ interface FakeMemoryRow {
 
 function buildRepo(rows: FakeMemoryRow[]) {
   const updates: Array<{ characterId: string; memoryId: string; relatedMemoryIds: string[] }> = []
-  const scrubs: Array<{ characterId: string; ids: string[] }> = []
+  const scrubs: Array<{ ids: string[] }> = []
   const deleted: string[] = []
   const bulkDeleted: Array<{ characterId: string; ids: string[] }> = []
 
@@ -104,17 +104,16 @@ function buildRepo(rows: FakeMemoryRow[]) {
         removeConsolidatedMembers: jest.fn(async () => 0),
         updateTierBulk: jest.fn(async () => 0),
         // The repository's removal delta, simulated over the fake rows: every
-        // row of the character naming a removed id loses it.
-        removeRelatedMemoryIdsForCharacter: jest.fn(async (characterId: string, ids: string[]) => {
-          scrubs.push({ characterId, ids: [...ids] })
+        // row, whichever holder, naming a removed id loses it.
+        removeRelatedMemoryIdsEverywhere: jest.fn(async (ids: string[]) => {
+          scrubs.push({ ids: [...ids] })
           const removing = new Set(ids)
           let changed = 0
           for (const row of rows) {
-            if (row.characterId !== characterId) continue
             const links: string[] = row.relatedMemoryIds ? JSON.parse(row.relatedMemoryIds) : []
             const next = links.filter(id => !removing.has(id))
             if (next.length === links.length) continue
-            updates.push({ characterId, memoryId: row.id, relatedMemoryIds: next })
+            updates.push({ characterId: row.characterId, memoryId: row.id, relatedMemoryIds: next })
             changed++
           }
           return changed
@@ -152,7 +151,7 @@ describe('deleteMemoryWithUnlink', () => {
 
     const result = await deleteMemoryWithUnlink('B')
     expect(result).toBe(true)
-    expect(scrubs).toEqual([{ characterId: 'char-1', ids: ['B'] }])
+    expect(scrubs).toEqual([{ ids: ['B'] }])
     expect(repo.memories.updateForCharacter).not.toHaveBeenCalled()
     expect(dbMock.rawQuery).not.toHaveBeenCalled()
     expect(updates).toEqual([
@@ -170,12 +169,12 @@ describe('deleteMemoryWithUnlink', () => {
     expect(result).toBe(false)
     expect(updates).toEqual([])
     expect(deleted).toEqual([])
-    expect(repo.memories.removeRelatedMemoryIdsForCharacter).not.toHaveBeenCalled()
+    expect(repo.memories.removeRelatedMemoryIdsEverywhere).not.toHaveBeenCalled()
   })
 
-  it('scopes the scrub to the deleted row\'s holder', async () => {
+  it('scrubs the deleted id from every holder, including a link that crosses characters', async () => {
     const rows: FakeMemoryRow[] = [
-      { id: 'X', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['Y']) },
+      { id: 'X', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['Y', 'T']) },
       { id: 'T', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['U']) },
       { id: 'U', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['T']) },
     ]
@@ -184,15 +183,16 @@ describe('deleteMemoryWithUnlink', () => {
 
     await deleteMemoryWithUnlink('T')
 
-    expect(scrubs).toEqual([{ characterId: 'char-2', ids: ['T'] }])
+    expect(scrubs).toEqual([{ ids: ['T'] }])
     expect(updates).toEqual([
+      { characterId: 'char-1', memoryId: 'X', relatedMemoryIds: ['Y'] },
       { characterId: 'char-2', memoryId: 'U', relatedMemoryIds: [] },
     ])
   })
 })
 
 describe('deleteMemoriesWithUnlinkBatch', () => {
-  it('scrubs neighbours with one delta per holder for the whole batch', async () => {
+  it('scrubs neighbours with one delta for the whole batch', async () => {
     // Graph A↔B↔C↔D. Delete {B, C} together. A and D should be scrubbed; B
     // and C shouldn't churn against each other.
     const rows: FakeMemoryRow[] = [
@@ -214,8 +214,8 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const deleted = await deleteMemoriesWithUnlinkBatch(['B', 'C'])
 
     expect(deleted).toBe(2)
-    expect(repo.memories.removeRelatedMemoryIdsForCharacter).toHaveBeenCalledTimes(1)
-    expect(repo.memories.removeRelatedMemoryIdsForCharacter).toHaveBeenCalledWith('char-1', ['B', 'C'])
+    expect(repo.memories.removeRelatedMemoryIdsEverywhere).toHaveBeenCalledTimes(1)
+    expect(repo.memories.removeRelatedMemoryIdsEverywhere).toHaveBeenCalledWith(['B', 'C'])
     expect(repo.memories.updateForCharacter).not.toHaveBeenCalled()
     // A and D lose their links; the doomed rows go with the delete.
     expect(updates.filter(u => u.memoryId === 'A' || u.memoryId === 'D').map(u => u.memoryId).sort()).toEqual(['A', 'D'])
@@ -224,6 +224,26 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     expect(aUpdate?.relatedMemoryIds).toEqual([])
     expect(dUpdate?.relatedMemoryIds).toEqual([])
     expect(bulkDeleted).toEqual([{ characterId: 'char-1', ids: ['B', 'C'] }])
+  })
+
+  it('scrubs an id whose row is already gone, and links that cross characters', async () => {
+    const rows: FakeMemoryRow[] = [
+      { id: 'a', characterId: 'char-1', relatedMemoryIds: JSON.stringify([]) },
+      { id: 'n1', characterId: 'char-1', relatedMemoryIds: JSON.stringify(['a', 'already-gone']) },
+      { id: 'n2', characterId: 'char-2', relatedMemoryIds: JSON.stringify(['a', 'keep']) },
+    ]
+    const { repo, updates, scrubs } = buildRepo(rows)
+    factoryMock.getRepositories.mockReturnValue(repo)
+    dbMock.rawQuery.mockResolvedValueOnce([{ id: 'a', characterId: 'char-1' }])
+
+    const deleted = await deleteMemoriesWithUnlinkBatch(['a', 'already-gone'])
+
+    expect(deleted).toBe(1)
+    expect(scrubs).toEqual([{ ids: ['a', 'already-gone'] }])
+    expect(updates).toEqual([
+      { characterId: 'char-1', memoryId: 'n1', relatedMemoryIds: [] },
+      { characterId: 'char-2', memoryId: 'n2', relatedMemoryIds: ['keep'] },
+    ])
   })
 
   it('returns 0 immediately for an empty batch', async () => {

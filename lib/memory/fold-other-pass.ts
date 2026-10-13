@@ -81,6 +81,7 @@ import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import type {
   Character,
+  ChatMetadata,
   CheapLLMSettings,
   ConnectionProfile,
   MessageEvent,
@@ -547,7 +548,7 @@ export interface FoldOtherCatchupSelection {
  * 'turn' selects nothing. Most recently active first, bounded by `limit`.
  */
 export async function findFoldOtherCatchupCandidates(
-  options: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number; chats?: readonly ChatMetadata[] } = {},
 ): Promise<FoldOtherCatchupSelection> {
   const now = options.now ?? Date.now()
   const limit = options.limit ?? FOLD_OTHER_CATCHUP_MAX_CHATS
@@ -559,7 +560,8 @@ export async function findFoldOtherCatchupCandidates(
   }
 
   const repos = getRepositories()
-  const chats = await repos.chats.findAll()
+  // The maintenance sweep reads the chat list once for both catch-ups.
+  const chats = options.chats ?? await repos.chats.findAll()
   const prefiltered = idleChatsForCatchup(chats, now)
 
   const candidates: FoldOtherCatchupCandidate[] = []

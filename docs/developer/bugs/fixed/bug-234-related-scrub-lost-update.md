@@ -9,7 +9,7 @@
 | **Who it bites** | background jobs that delete two memories sharing a neighbour (regenerate, housekeeping, retention, dedup) |
 | **Provenance** | Original to v4. The `consolidatedFrom` half of the same pattern was fixed in PR 90 (review finding #2) with a removal delta |
 | **Defect site** | `lib/memory/memory-gate.ts` `deleteMemoryWithUnlink` (neighbour scan via `rawQuery`, ~`:995`) and `deleteMemoriesWithUnlinkBatch` (~`:1091`): both read neighbours from the committed snapshot and write each neighbour's whole `relatedMemoryIds` list back |
-| **Fix site** | `lib/database/repositories/memories.repository.ts` (new `removeRelatedMemoryIdsForCharacter`), `lib/memory/memory-gate.ts` (`deleteMemoryWithUnlink`, `deleteMemoriesWithUnlinkBatchReport`), `lib/background-jobs/child/child-repositories-proxy.ts` (character-wide scrub in the overlay) |
+| **Fix site** | `lib/database/repositories/memories.repository.ts` (new `removeRelatedMemoryIdsEverywhere`), `lib/memory/memory-gate.ts` (`deleteMemoryWithUnlink`, `deleteMemoriesWithUnlinkBatchReport`), `lib/background-jobs/child/child-repositories-proxy.ts` (job-wide scrub in the overlay) |
 | **v5 status** | Not assessed |
 | **Index** | [bugs.md](../../bugs.md) |
 
@@ -26,6 +26,14 @@ write. In the job child the overlay applies a buffered character-wide scrub to e
 later read returns. The digest created and member-deleted in the same job (the "smaller relative")
 is unchanged. Tests: the bug 234 block in `child-proxy-memory-gate-overlay.test.ts`,
 `memories-link-deltas.test.ts`, and the rewritten `memory-gate-delete-with-unlink.test.ts`.
+
+**Amended (2026-10-13, review of PR 91).** The first fix scoped the scrub to the deleted rows'
+holders and, in the batch, to the ids still found as rows. That lost two cases the old instance-wide
+scan covered: an id whose row was already gone stayed in its neighbours' lists, and a link that
+crosses characters (an import, a restore, legacy data) was never scrubbed. The method is now
+`removeRelatedMemoryIdsEverywhere(ids)`: one instance-wide removal delta per chunk, over every
+requested id, still applied against the rows at write time. The child overlay's scrub set is
+job-wide rather than per character.
 
 ## Symptom
 

@@ -75,12 +75,11 @@ interface JobScope {
    */
   memories: Map<string, MemoryOverlayEntry>;
   /**
-   * Ids buffered `removeRelatedMemoryIdsForCharacter` calls scrub from every
-   * row of a character, keyed by character id. Applied to every memories row
-   * a later read returns, whether or not the job touched that row otherwise
-   * (bug 234).
+   * Ids buffered `removeRelatedMemoryIdsEverywhere` calls scrub from every
+   * row. Applied to every memories row a later read returns, whether or not
+   * the job touched that row otherwise (bug 234).
    */
-  memoryRelatedScrubs: Map<string, Set<string>>;
+  memoryRelatedScrubs: Set<string>;
 }
 
 /** One memory row's buffered changes this job (see {@link JobScope.memories}). */
@@ -125,7 +124,7 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     sanitizedArgs: 0,
     equippedOutfits: new Map(),
     memories: new Map(),
-    memoryRelatedScrubs: new Map(),
+    memoryRelatedScrubs: new Set(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
@@ -336,13 +335,9 @@ function recordBufferedMemoryWrite(
       entry.relatedRemoved = removed;
       break;
     }
-    case 'removeRelatedMemoryIdsForCharacter': {
-      const characterId = asId(args[0]);
-      const ids = Array.isArray(args[1]) ? args[1].filter((m): m is string => typeof m === 'string') : [];
-      if (!characterId || ids.length === 0) return;
-      const scrubbed = scope.memoryRelatedScrubs.get(characterId) ?? new Set<string>();
-      for (const m of ids) scrubbed.add(m);
-      scope.memoryRelatedScrubs.set(characterId, scrubbed);
+    case 'removeRelatedMemoryIdsEverywhere': {
+      const ids = Array.isArray(args[0]) ? args[0].filter((m): m is string => typeof m === 'string') : [];
+      for (const m of ids) scope.memoryRelatedScrubs.add(m);
       break;
     }
     case 'appendReinforcementFootnotes': {
@@ -417,11 +412,10 @@ function readIdList(value: unknown): unknown[] | null {
   return Array.isArray(list) ? list : null;
 }
 
-/** Apply a character's buffered link scrubs to a row read this job (bug 234). */
+/** Apply the job's buffered link scrubs to a row read this job (bug 234). */
 function scrubRelatedLinks(scope: JobScope, row: Record<string, unknown>): Record<string, unknown> {
-  const characterId = typeof row.characterId === 'string' ? row.characterId : null;
-  const scrubbed = characterId ? scope.memoryRelatedScrubs.get(characterId) : undefined;
-  if (!scrubbed || scrubbed.size === 0) return row;
+  const scrubbed = scope.memoryRelatedScrubs;
+  if (scrubbed.size === 0) return row;
   const list = readIdList(row.relatedMemoryIds);
   if (!list || !list.some((m) => scrubbed.has(m as string))) return row;
   return { ...row, relatedMemoryIds: list.filter((m) => !scrubbed.has(m as string)) };

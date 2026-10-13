@@ -54,7 +54,7 @@ Turns the feature on. Like every other Commonplace Book setting, it belongs to t
 
 The number of **automatic** memories a character may keep on the active shelf before housekeeping engages. Archived memories, memories you wrote by hand, and consolidation digests do not count against it. Default **2000**. Acceptable range 100 – 100,000 — the same bounds govern the overrides below and the **Run housekeeping now** dialog, so no corner of the house keeps a different ledger. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
 
-If you want a different cap for a particular character, open **Per-character overrides** beneath the cap. Each character is listed with two figures: how many memories are *counted* against the cap, and how many are *protected* (hand-written and digests) and so exempt. The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one.
+If you want a different cap for a particular character, open **Per-character overrides** beneath the cap. Each character is listed with two figures: how many memories are *counted* against the cap, and how many are *protected* (hand-written and digests) and so exempt. The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one. The **Memory Cleanup** dialog on a character's own memory page opens on that character's cap — override and all — so a one-off cleanup measures against the same figure the automatic sweep would; type a different number only if you mean to.
 
 ### Merging similar memories (retired)
 

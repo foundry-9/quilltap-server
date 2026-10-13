@@ -130,7 +130,7 @@ function installSnapshot(rows: Memory[]) {
     delete: jest.fn(),
     addRelatedMemoryIds: jest.fn(),
     removeRelatedMemoryIds: jest.fn(),
-    removeRelatedMemoryIdsForCharacter: jest.fn(),
+    removeRelatedMemoryIdsEverywhere: jest.fn(),
     appendReinforcementFootnotes: jest.fn(),
     removeConsolidatedMembers: jest.fn(),
     updateTierBulk: jest.fn(),
@@ -197,10 +197,9 @@ function replay(snapshot: Memory[], writes: ChildWritePayload[]): Map<string, Re
         const removing = new Set(a[2] as string[]);
         target.relatedMemoryIds = ((target.relatedMemoryIds as string[]) ?? []).filter(id => !removing.has(id));
       }
-    } else if (method === 'removeRelatedMemoryIdsForCharacter') {
-      const removing = new Set(a[1] as string[]);
+    } else if (method === 'removeRelatedMemoryIdsEverywhere') {
+      const removing = new Set(a[0] as string[]);
       for (const target of table.values()) {
-        if (target.characterId !== a[0]) continue;
         target.relatedMemoryIds = ((target.relatedMemoryIds as string[]) ?? []).filter(id => !removing.has(id));
       }
     } else if (method === 'appendReinforcementFootnotes') {
