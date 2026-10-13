@@ -1018,7 +1018,10 @@ departures:
   outlives one unit of work, or the per-hour cap means nothing. Admission (already in the parent)
   records each AUTO insert in an in-memory ledger (`admission/rate-ledger.ts`); a context reads it
   once per character (host-RPC `countRecentAdmissions` from the child) and adds its own inserts as
-  they land. A restart forgets the hour. The limit now also applies to the episode pass, and a
+  they land. A restart forgets the hour. Rebuilds of history (regenerate, queue-memories, import,
+  the dry run) carry `backfill: true`: the limit is off for them and their inserts are not counted.
+  A fold slice whose calls would all be skipped is deferred unread (cursor left before it), never
+  passed over (review of PR 94). The limit now also applies to the episode pass, and a
   rate-limited character remains a subject of others' OTHER calls (the limit stops a holder gaining
   memories, not others observing them).
 - **The route honours the global default cheap profile** (`buildCheapLLMConfig`). Of the three
@@ -1027,8 +1030,9 @@ departures:
   the turn passes, `foldCandidatesPerSubject` for `other-fold`. The episode pass keeps
   `FOLD_EPISODE_CAP` (2) without the budget clamp: it is per stretch, not per subject, and the
   spec names only the fold OTHER cap. On a default profile (8,000 output tokens) the fold OTHER cap
-  falls from 3 to 1 per subject (plus the event slot). Watch this against the V4test acceptance
-  count; raise the clamp's divisor in a tuning commit if the fold pass goes too quiet.
+  falls from 3 to 1 per subject (plus the event slot). Kept on review of PR 94 (Charlie). Watch this
+  against the V4test acceptance count; raise the clamp's divisor in a tuning commit if the fold pass
+  goes too quiet.
 - **The dry run embeds.** `admitCandidate({ dryRun: true })` embeds the candidate, gathers its
   neighbours and decides, writing nothing (`decideOnly`), so `memory-diff` reports decisions; a dry
   run therefore costs embedding calls. Within one dry run a later candidate is decided against the

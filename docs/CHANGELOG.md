@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### PR 94 review: 3 findings on Phase D
+
+- A fold slice whose calls the rate limit would all skip is deferred, not read: the cursor stays before it and the next fold or catch-up reads it (`runPass({ deferOnRateLimit })`, `skippedReason: 'rate-limited'`, no follow-up job). Before, the cursor moved past it and the stretch was never read.
+- Rebuilds of history are exempt from the rate limit and do not count towards it: regenerate (turn jobs and catch-ups), queue-memories, SillyTavern import and the dry run carry `backfill: true` (job payload, extraction context, `admitCandidate`). Before, a long regenerate hit the hourly cap after a few turns and lost every later turn.
+- `listExtractionTurns` keeps the greeting turn (character lines before the first user message) as a null-opener turn, as the live trigger extracts it; regenerate, queue-memories, the dry run and the SillyTavern import no longer drop it.
+- The fold OTHER cap stays budget-clamped (owner's call).
+
 #### Memory refactor Phase D: extraction — one context, four passes, cursors
 
 Structural Phase D of `docs/developer/features/memory-system-refactor.md`. Two migrations.

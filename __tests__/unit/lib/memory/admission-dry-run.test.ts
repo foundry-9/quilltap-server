@@ -156,6 +156,14 @@ describe('the admission rate ledger', () => {
     expect(countRecentAdmissionsLocal('char-2', since)).toBe(0)
   })
 
+  it('does not count a backfill\'s inserts (a regenerate must not trip the live cap)', async () => {
+    const since = Date.now() - 1000
+    await admitCandidate(candidate('rebuilt one'), NO_TIME, { ...OPTS, backfill: true })
+    await admitCandidate(candidate('rebuilt two'), NO_TIME, { ...OPTS, backfill: true })
+    await admitCandidate(candidate('live'), NO_TIME, OPTS)
+    expect(countRecentAdmissionsLocal('char-1', since)).toBe(1)
+  })
+
   it('does not count hand-written rows', async () => {
     const since = Date.now() - 1000
     const manual = candidate('a note', {

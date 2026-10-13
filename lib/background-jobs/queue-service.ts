@@ -89,6 +89,13 @@ export interface MemoryExtractionPayload {
   cursor?: string | null;
   /** Catch-ups: run even if the chat is not idle (a regenerate wants it now). */
   ignoreIdle?: boolean;
+  /**
+   * A rebuild of history (regenerate, queue-memories, SillyTavern import), not
+   * live conversation: the extraction rate limit does not apply to it, and its
+   * inserts do not count towards it. Without this a 100-turn regenerate would
+   * hit the hourly cap after a handful of turns and lose every later turn.
+   */
+  backfill?: boolean;
   /** @deprecated Rows queued before Phase D: `pass: 'other-fold'`. Read by {@link memoryExtractionPassOf} only. */
   foldOtherCatchup?: boolean;
   /** @deprecated Rows queued before Phase D: `ignoreIdle`. */
@@ -1352,6 +1359,8 @@ export async function enqueueMemoryExtractionBatch(
         turnOpenerMessageId,
         extractionAnchorMessageId,
         connectionProfileId,
+        // Every batch rebuilds history (queue-memories, SillyTavern import).
+        backfill: true,
       },
       priority: options?.priority ?? 0,
       attempts: 0,

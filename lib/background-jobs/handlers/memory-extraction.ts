@@ -97,7 +97,7 @@ export async function extractionContextForJob(
   job: BackgroundJob,
   chatId: string,
   connectionProfileId: string,
-  extra: { extraCharacterIds?: string[] } = {},
+  extra: { extraCharacterIds?: string[]; backfill?: boolean } = {},
 ): Promise<ExtractionContext | null> {
   const connectionProfile = await getRepositories().connections.findById(connectionProfileId);
   if (!connectionProfile) throw new Error(`Connection profile not found: ${connectionProfileId}`);
@@ -115,7 +115,9 @@ export async function extractionContextForJob(
 export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as MemoryExtractionPayload;
   const pass = memoryExtractionPassOf(payload);
-  const ctx = await extractionContextForJob(job, payload.chatId, payload.connectionProfileId);
+  const ctx = await extractionContextForJob(job, payload.chatId, payload.connectionProfileId, {
+    backfill: payload.backfill === true,
+  });
   if (!ctx) return;
 
   if (pass !== 'turn') {
@@ -135,7 +137,9 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     await finishExtractionJob(job, ctx, result, { taskLabel: `${pass}-catchup` });
     // The rest of a long backlog is the next job's, keyed on the cursor this
     // one advanced to so successive steps never dedupe into each other.
-    if (result.slicesDeferred > 0 && result.cursorAdvancedTo) {
+    // A slice deferred by the rate limit waits for the next fold or sweep, not
+    // a successor that would meet the same cap at once.
+    if (result.slicesDeferred > 0 && result.cursorAdvancedTo && result.skippedReason !== 'rate-limited') {
       await enqueueMemoryExtraction(job.userId, {
         chatId: payload.chatId,
         turnOpenerMessageId: null,
@@ -144,6 +148,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
         pass,
         cursor: result.cursorAdvancedTo,
         ...(ignoreIdle ? { ignoreIdle: true } : {}),
+        ...(payload.backfill ? { backfill: true } : {}),
       });
       logger.debug('[MemoryExtraction] Fold catch-up continues in a follow-up job', {
         jobId: job.id,

@@ -38,6 +38,7 @@ export interface TestContextOptions {
   recentAdmissions?: Record<string, number>
   maxTokens?: number
   dryRun?: boolean
+  backfill?: boolean
   timeZone?: string
   projectId?: string | null
   projectDescription?: string | null
@@ -138,6 +139,7 @@ export function makeExtractionContext(opts: TestContextOptions = {}): Extraction
     rateLimit: createRateLimiter(limits, async (characterId: string) => opts.recentAdmissions?.[characterId] ?? 0),
     cursors: memoryCursorStore(chatId, opts.cursors ?? {}),
     dryRun: opts.dryRun === true,
+    backfill: opts.backfill === true,
     inAutonomousRoom: chat.chatType === 'autonomous',
     messages: async () => opts.messages ?? [],
   }

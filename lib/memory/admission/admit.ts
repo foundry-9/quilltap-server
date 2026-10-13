@@ -77,6 +77,8 @@ export interface AdmitOptions {
    * for an insert).
    */
   dryRun?: boolean
+  /** A rebuild of history: the insert is not counted towards the extraction rate limit. */
+  backfill?: boolean
 }
 
 /** What the child hands the parent over host-RPC (`admitMemory`). Structured-clone safe. */
@@ -90,6 +92,8 @@ export interface AdmitPreparedRequest {
   idempotencyKey?: string | null
   /** Decide only; see {@link AdmitOptions.dryRun}. */
   dryRun?: boolean
+  /** Not counted towards the rate limit; see {@link AdmitOptions.backfill}. */
+  backfill?: boolean
 }
 
 function isJobChild(): boolean {
@@ -196,6 +200,7 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
       embeddingAttempts: attempts,
       notes,
       ...(opts.dryRun ? { dryRun: true } : {}),
+      ...(opts.backfill ? { backfill: true } : {}),
     }
     let outcome: AdmissionOutcome
     if (isJobChild()) {
@@ -372,7 +377,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     }
 
     if (outcome.memory) publishRealtime('memories')
-    if (admissionInserted(outcome) && row.source === 'AUTO') recordAdmissionInsert(characterId)
+    if (admissionInserted(outcome) && row.source === 'AUTO' && !request.backfill) recordAdmissionInsert(characterId)
     void patchChildIndex(characterId, applied!.indexEntries)
     if (admissionInserted(outcome)) {
       // The consolidation watermark counts the row just written (it used to run

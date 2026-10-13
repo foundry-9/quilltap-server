@@ -45,8 +45,9 @@ export interface RunFoldInput {
 export interface FoldResult extends PassResult {
   /**
    * Set when the pass did nothing on purpose or could not run: `mode-turn`, `empty-window`,
-   * `behind-cursor`, `nothing-to-observe`, `nobody-present`, `error`; catch-ups add `not-idle`
-   * and `never-folded`.
+   * `behind-cursor`, `nothing-to-observe`, `nobody-present`, `rate-limited` (a slice's holders
+   * were all at the hourly cap; it and the rest are left unread), `error`; catch-ups add
+   * `not-idle` and `never-folded`.
    */
   skippedReason?: string
   /** Slices read. */
@@ -143,8 +144,26 @@ export async function runFoldPass(
     let slicesWithNoCalls = 0
     for (let i = 0; i < slices.length; i++) {
       const slice = slices[i]
-      const sliceResult = await runPass(pass, ctx, stretchWindow(slice.messages, ctx.speakerNames, slice.coverThroughMessageId))
+      const sliceResult = await runPass(
+        pass,
+        ctx,
+        stretchWindow(slice.messages, ctx.speakerNames, slice.coverThroughMessageId),
+        { deferOnRateLimit: true },
+      )
       mergePassResult(result, sliceResult)
+      if (sliceResult.rateDeferred) {
+        // Not read: the cursor stays before this slice, and the next fold or
+        // catch-up reads it once the hour has passed.
+        result.skippedReason = 'rate-limited'
+        result.slicesDeferred += slices.length - i
+        logger.info('[Memory] Fold slice deferred by the rate limit; cursor not advanced past it', {
+          chatId,
+          pass: passName,
+          slice: i + 1,
+          slices: slices.length,
+        })
+        break
+      }
       result.slices++
       if (sliceResult.calls === 0 && sliceResult.timedOut === 0) slicesWithNoCalls++
       if (sliceResult.timedOut > 0) {
@@ -158,7 +177,7 @@ export async function runFoldPass(
       }
       await advance(ctx, passName, slice.coverThroughMessageId, result)
     }
-    if (slicesWithNoCalls === result.slices && result.timedOut === 0) {
+    if (!result.rateDeferred && slicesWithNoCalls === result.slices && result.timedOut === 0) {
       result.skippedReason = passName === 'episode-fold' ? 'nobody-present' : 'nothing-to-observe'
     }
 

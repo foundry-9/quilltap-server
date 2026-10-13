@@ -90,6 +90,23 @@ export interface PassResult {
   reinforcedIds: string[]
   usage: { promptTokens: number; completionTokens: number; totalTokens: number }
   debugLogs: string[]
+  /**
+   * Set when a `deferOnRateLimit` run made no call because one of its calls'
+   * holders were all at the hourly cap: the window was not read, and a fold
+   * must not move its cursor past it.
+   */
+  rateDeferred: boolean
+}
+
+export interface RunPassOptions {
+  /**
+   * Make no call at all when any call's holders are all at the rate limit's
+   * cap, and report `rateDeferred` (the fold passes: a skipped call there
+   * would otherwise pass for a read slice and its messages would never be
+   * read again). The turn passes leave this off — a capped holder simply
+   * forms nothing from that turn.
+   */
+  deferOnRateLimit?: boolean
 }
 
 export function emptyPassResult(pass: ExtractionPassName): PassResult {
@@ -103,6 +120,7 @@ export function emptyPassResult(pass: ExtractionPassName): PassResult {
     reinforcedIds: [],
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     debugLogs: [],
+    rateDeferred: false,
   }
 }
 
@@ -118,6 +136,7 @@ export function mergePassResult(into: PassResult, next: PassResult): PassResult 
   into.usage.completionTokens += next.usage.completionTokens
   into.usage.totalTokens += next.usage.totalTokens
   into.debugLogs.push(...next.debugLogs)
+  into.rateDeferred = into.rateDeferred || next.rateDeferred
   return into
 }
 
@@ -140,9 +159,27 @@ export async function runPass(
   pass: ExtractionPass,
   ctx: ExtractionContext,
   window: TranscriptWindow,
+  opts: RunPassOptions = {},
 ): Promise<PassResult> {
   const result = emptyPassResult(pass.name)
   const calls = await pass.calls(ctx, window)
+
+  if (opts.deferOnRateLimit) {
+    for (const call of calls) {
+      if (call.holders.length === 0) continue
+      const decisions = await Promise.all(call.holders.map(h => ctx.rateLimit.decide(h.characterId)))
+      if (decisions.every(d => d.mode === 'skip')) {
+        result.rateDeferred = true
+        result.debugLogs.push(`[Memory] ${call.label} deferred — every holder is at the hourly cap; the window is left unread`)
+        logger.info('[Memory] Pass deferred by the rate limit; window left unread', {
+          chatId: ctx.chat.id,
+          pass: pass.name,
+          call: call.label,
+        })
+        return result
+      }
+    }
+  }
 
   for (const call of calls) {
     // The rate limit gates each holder; a call none of its holders may use is not made.
@@ -309,7 +346,7 @@ async function admitDraft(
     outcome = await admitCandidate(
       candidate,
       { occurredAt, narrativeTime, sourceMessageTimestamp: createdAt },
-      { userId: ctx.userId, ...(ctx.dryRun ? { dryRun: true } : {}) },
+      { userId: ctx.userId, ...(ctx.dryRun ? { dryRun: true } : {}), ...(ctx.backfill ? { backfill: true } : {}) },
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

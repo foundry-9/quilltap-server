@@ -69,6 +69,8 @@ export interface ExtractionContext {
   rateLimit: RateLimiter
   cursors: CursorStore
   dryRun: boolean
+  /** A rebuild of history; see {@link BuildExtractionContextOptions.backfill}. */
+  backfill: boolean
   inAutonomousRoom: boolean
   /** The chat's `type: 'message'` rows, chronological. Read once, on first use. */
   messages(): Promise<MessageEvent[]>
@@ -89,6 +91,12 @@ export interface BuildExtractionContextOptions {
   extraCharacterIds?: string[]
   /** Defaults to the chat's live cursors, or an empty in-memory store for a dry run. */
   cursors?: CursorStore
+  /**
+   * A rebuild of history (regenerate, queue-memories, import, the dry run that
+   * previews a regenerate): the rate limit is off, and admissions do not count
+   * towards it.
+   */
+  backfill?: boolean
 }
 
 export class ExtractionContextError extends Error {
@@ -269,9 +277,12 @@ export async function buildExtractionContext(
       chatContextSummary: opts.chatContextSummary !== undefined ? opts.chatContextSummary : chat.contextSummary ?? null,
     },
     route,
-    rateLimit: createRateLimiter(settings.extraction.limits),
+    rateLimit: createRateLimiter(
+      opts.backfill ? { ...settings.extraction.limits, enabled: false } : settings.extraction.limits,
+    ),
     cursors: opts.cursors ?? (dryRun ? memoryCursorStore(chatId) : liveCursorStore(chatId)),
     dryRun,
+    backfill: opts.backfill === true,
     inAutonomousRoom: chat.chatType === 'autonomous',
     messages() {
       if (!messagesPromise) {
@@ -286,6 +297,7 @@ export async function buildExtractionContext(
   logger.debug('[Memory] Extraction context built', {
     chatId,
     dryRun,
+    backfill: opts.backfill === true,
     cast: cast.size,
     userCharacterId: userCharacter?.characterId ?? null,
     projectId,

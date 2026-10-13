@@ -79,6 +79,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
         turnOpenerMessageId: turn.turnOpenerMessageId,
         extractionAnchorMessageId: turn.extractionAnchorMessageId ?? null,
         connectionProfileId: payload.connectionProfileId,
+        backfill: true,
       },
       { skipDedupCheck: true },
     );
@@ -97,6 +98,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
         connectionProfileId: payload.connectionProfileId,
         pass,
         ignoreIdle: true,
+        backfill: true,
       },
       { skipDedupCheck: true },
     );

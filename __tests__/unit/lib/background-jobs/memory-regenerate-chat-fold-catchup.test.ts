@@ -92,8 +92,9 @@ describe('memory regenerate — turn jobs', () => {
     await handleMemoryRegenerateChat(job as never)
     const turns = payloads().filter(p => !p.pass)
     expect(turns).toEqual([
-      { chatId: 'chat-1', turnOpenerMessageId: 'u1', extractionAnchorMessageId: null, connectionProfileId: 'profile-1' },
-      { chatId: 'chat-1', turnOpenerMessageId: 'u2', extractionAnchorMessageId: null, connectionProfileId: 'profile-1' },
+      // Backfill: the rate limit neither applies to nor counts a rebuild (review of PR 94).
+      { chatId: 'chat-1', turnOpenerMessageId: 'u1', extractionAnchorMessageId: null, connectionProfileId: 'profile-1', backfill: true },
+      { chatId: 'chat-1', turnOpenerMessageId: 'u2', extractionAnchorMessageId: null, connectionProfileId: 'profile-1', backfill: true },
     ])
     expect((enqueueMemoryExtraction as jest.Mock).mock.calls.every(c => c[2]?.skipDedupCheck === true)).toBe(true)
   })

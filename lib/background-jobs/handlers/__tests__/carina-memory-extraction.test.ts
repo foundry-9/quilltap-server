@@ -107,6 +107,7 @@ beforeEach(() => {
   jest.mocked(buildExtractionContext).mockResolvedValue(makeCtx());
   jest.mocked(runCarinaExtraction).mockResolvedValue({
     pass: 'self-turn',
+    rateDeferred: false,
     calls: 1,
     timedOut: 0,
     failed: 0,

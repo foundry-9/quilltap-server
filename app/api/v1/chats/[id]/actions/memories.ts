@@ -166,7 +166,7 @@ export async function handleExtractMemoriesDryRun(
   // route, same clock, same project and summary, autonomous rooms included.
   let extraction;
   try {
-    extraction = await buildExtractionContext(chatId, user.id, { chat, connectionProfileId, dryRun: true });
+    extraction = await buildExtractionContext(chatId, user.id, { chat, connectionProfileId, dryRun: true, backfill: true });
   } catch (error) {
     if (error instanceof ExtractionContextError) return badRequest(error.message);
     throw error;

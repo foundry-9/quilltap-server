@@ -101,9 +101,11 @@ export interface ExtractionTurnLocator {
  * queue-memories action, the dry run, the regenerate and the SillyTavern
  * import share.
  *
- *  - An ordinary chat: one turn per non-staff USER message (each opens a
- *    turn); a chat with none (greeting only) is one null-opener turn when it
- *    has any character line, else no turns.
+ *  - An ordinary chat: one null-opener turn for the greeting when any
+ *    character line comes before the first user message (the live trigger
+ *    enqueues it when the greeting finalizes), then one turn per non-staff
+ *    USER message (each opens a turn). A chat with no user message and some
+ *    character line is just the greeting turn; with neither, no turns.
  *  - An autonomous room: no USER opener ever, so one turn per closing
  *    ASSISTANT line, each anchored on it (the live trigger's shape).
  */
@@ -114,9 +116,12 @@ export function listExtractionTurns(
   if (chatType === 'autonomous') {
     return messages.filter(isAutonomousTurnAnchor).map(m => ({ turnOpenerMessageId: null, extractionAnchorMessageId: m.id }))
   }
-  const openers = messages.filter(m => m.type === 'message' && m.role === 'USER' && !m.systemSender)
-  if (openers.length > 0) return openers.map(m => ({ turnOpenerMessageId: m.id }))
-  return messages.some(isAutonomousTurnAnchor) ? [{ turnOpenerMessageId: null }] : []
+  const isOpener = (m: MessageEvent) => m.type === 'message' && m.role === 'USER' && !m.systemSender
+  const firstOpener = messages.findIndex(isOpener)
+  const beforeFirstOpener = firstOpener === -1 ? messages : messages.slice(0, firstOpener)
+  const turns: ExtractionTurnLocator[] = beforeFirstOpener.some(isAutonomousTurnAnchor) ? [{ turnOpenerMessageId: null }] : []
+  for (const m of messages) if (isOpener(m)) turns.push({ turnOpenerMessageId: m.id })
+  return turns
 }
 
 /**

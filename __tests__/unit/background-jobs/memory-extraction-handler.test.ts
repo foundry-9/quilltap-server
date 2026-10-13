@@ -141,7 +141,7 @@ describe('handleMemoryExtraction (per-turn)', () => {
 
     expect(repositories.connections.findById).toHaveBeenCalledWith('profile-1');
     expect(mockBuildContext).toHaveBeenCalledTimes(1);
-    expect(mockBuildContext).toHaveBeenCalledWith('chat-1', 'user-7', { connectionProfile: PROFILE });
+    expect(mockBuildContext).toHaveBeenCalledWith('chat-1', 'user-7', { connectionProfile: PROFILE, backfill: false });
     expect(mockRunTurn).toHaveBeenCalledTimes(1);
     expect(mockRunTurn).toHaveBeenCalledWith(ctx, {
       turnOpenerMessageId: 'user-msg-1',
@@ -283,6 +283,21 @@ describe('handleMemoryExtraction (fold catch-up)', () => {
       cursor: 'msg-240',
       ignoreIdle: true,
     });
+  });
+
+  it('enqueues no follow-up when the rate limit deferred the backlog (review of PR 94)', async () => {
+    mockRunFoldCatchup.mockResolvedValue(
+      foldResult({ slicesDeferred: 2, cursorAdvancedTo: 'msg-60', skippedReason: 'rate-limited', rateDeferred: true }),
+    );
+    await handleMemoryExtraction(foldJob() as any);
+    expect(enqueueMemoryExtraction).not.toHaveBeenCalled();
+  });
+
+  it('carries backfill onto the follow-up job', async () => {
+    mockRunFoldCatchup.mockResolvedValue(foldResult({ slicesDeferred: 3, cursorAdvancedTo: 'msg-240' }));
+    await handleMemoryExtraction(foldJob({ backfill: true }) as any);
+    expect(mockBuildContext).toHaveBeenCalledWith('chat-1', 'user-7', expect.objectContaining({ backfill: true }));
+    expect(enqueueMemoryExtraction).toHaveBeenCalledWith('user-7', expect.objectContaining({ backfill: true, cursor: 'msg-240' }));
   });
 
   it('fails for a retry, without a follow-up, when a slice was lost to a timeout', async () => {
