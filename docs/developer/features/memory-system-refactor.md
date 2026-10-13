@@ -1057,9 +1057,11 @@ departures:
   falls back to the text strategy on a vector failure or an empty index, as the old search did.
 - **No digest redirect in `hydrate`.** Every prompt path reads hot rows only, and the tool and the
   Memories API deliberately return cold rows labelled, so there is never a hit to redirect.
-- **Precedence across pools** is archive → recap → head → inter-character. The recap narrative is
-  built without the rows the archive rendered (it reads that many more per tier so its tiers stay
-  full); the head and the inter-character section skip the recap's rows on the turn it runs. The
+- **Precedence across pools** is archive → head → inter-character. The recap is a narrative, not
+  lines, so §3.8's "at most one of … recap" holds one way only: the recap is built without the rows
+  the archive rendered (it reads that many more per tier so its tiers stay full), but the head and
+  the inter-character section do not skip the recap's rows — a lossy summary may leave out the very
+  line the chat-start turn needs (review of PR 95). The
   inter-character section dedups against what the earlier pools *rendered*, so a row the archive
   held but its budget cut stays eligible (bug 224's rule).
 - **One embedding per turn, with one exception.** The query stage embeds the query once (plus a
@@ -1074,8 +1076,9 @@ departures:
 - **Delivery** decides survival by text: a rendered line is delivered when its body is in the
   request's recall text verbatim, or when one compressed line holds at least 60% of its
   significant words (three or more). The ring is written whenever the head delivered something,
-  whether or not the whisper posted. The recap's rows are stamped when its narrative was delivered
-  (they were never stamped before). The debug record rides on the reply: `BuiltContext.recallDebugLog`,
+  whether or not the whisper posted. §3.8's "the recap stamps what it rendered" is read narrowly:
+  the recap renders a narrative, not rows, so the rows it summarised are not stamped (as before);
+  a recap row the head delivers is stamped as a head line. The debug record rides on the reply: `BuiltContext.recallDebugLog`,
   written to the assistant message's `debugMemoryLogs` by the finalizer; memory extraction now
   appends after it (`withRecallLines`) instead of overwriting. Its `[Recall:ring]` line is what the
   replay reads back.

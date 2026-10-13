@@ -123,9 +123,9 @@ export async function deliverRecall(bundle: RecallBundle, opts: DeliverOptions):
     delivered[pool] = [...keptIds]
     for (const line of lines) if (!keptIds.has(line.memoryId)) lost.push(line.memoryId)
   }
-  // The recap is a narrative, not lines: its rows were delivered when its text was.
-  const recapDelivered = !!bundle.sections.recap && opts.deliveredText.includes(bundle.sections.recap)
-  if (recapDelivered && bundle.pools.recap.length > 0) delivered.recap = [...bundle.pools.recap]
+  // The recap is a narrative, not lines: the rows it summarised did not reach
+  // the model in their own words, so they are not stamped (only the ones a
+  // line-rendered pool delivered are).
 
   stampAccessed(opts.characterId, Object.values(delivered).flat())
 

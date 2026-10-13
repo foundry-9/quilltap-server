@@ -13,8 +13,12 @@
  * - **The inter-character relevance half is a filter of the turn's one
  *   gathered pool** by `aboutCharacterId` (decision 12), not a search per
  *   present character.
- * - **A row reaches the model in at most one pool** (bug 224), in this order of
- *   precedence: archive → recap → head → inter-character. The archive keeps its
+ * - **A row reaches the model in at most one line-rendered pool** (bug 224), in
+ *   this order of precedence: archive → head → inter-character. The recap is a
+ *   narrative, not lines: it is built without the archive's rows (which the
+ *   archive already says verbatim), but it never takes a row from the head or
+ *   the inter-character section — a lossy summary is no stand-in for the
+ *   memory's own words on the turn it is most wanted. The archive keeps its
  *   composition and id sort; its size and token budget are fixed per
  *   compaction generation, so a retrospective turn's larger head never changes
  *   it — the head borrows from what the archive leaves.
@@ -211,7 +215,7 @@ export interface RecallBundle {
   tokens: { recap: number; relevant: number; interCharacter: number }
   /** What each line-rendered pool wrote, for `deliver`. */
   lines: Partial<Record<RecallPool, RenderedLine[]>>
-  /** Rendered ids per pool (the recap's are the rows its narrative read). */
+  /** Rendered ids per pool. The recap's are the rows its narrative read — not delivered in their own words, so never stamped or deduped against. */
   pools: { archive: string[]; head: string[]; interCharacter: string[]; recap: string[] }
   retroSignature: string | null
   debugMemories: DebugMemoryInfo[]
@@ -387,8 +391,8 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
   }
   plan.onStatusChange?.('assembling_context', 'Assembling context...')
 
-  // 4. The head: the pool past the archive and the recap.
-  const recapIds = new Set(bundle.pools.recap)
+  // 4. The head: the pool past the archive. The recap's rows stay eligible —
+  // its narrative may have left out exactly the line this turn needs.
   let headTokens = 0
   let headContent = ''
   // A retrospective head borrows what the archive left of the memory budget
@@ -397,7 +401,7 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
     ? Math.min(retroSizing.headTokenBudget, Math.max(ordinarySizing.headTokenBudget, plan.memoryBudget - archiveTokens))
     : ordinarySizing.headTokenBudget
   if (!plan.skipMemories && bundle.pool.length > 0) {
-    const headCandidates = bundle.pool.filter(c => !archiveIds.has(c.memory.id) && !recapIds.has(c.memory.id))
+    const headCandidates = bundle.pool.filter(c => !archiveIds.has(c.memory.id))
     const head = renderHead(headCandidates, plan.provider, subject, {
       maxTokens: headTokenBudget,
       maxEntries: turnSizing.headEntries,
@@ -410,7 +414,6 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
     traceStage(trace, 'assemble', {
       pool: bundle.pool.length,
       removedAsArchive: bundle.pool.filter(c => archiveIds.has(c.memory.id)).length,
-      removedAsRecap: bundle.pool.filter(c => recapIds.has(c.memory.id)).length,
       rendered: head.lines.length,
       cutByBudget: Math.min(headCandidates.length, turnSizing.headEntries) - head.lines.length,
       entries: turnSizing.headEntries,
@@ -426,7 +429,7 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
   // an earlier pool already delivers.
   if (!plan.skipMemories && plan.interCharacterSubjects.length > 0) {
     try {
-      await assembleInterCharacter(plan, bundle, recapIds, nowMs)
+      await assembleInterCharacter(plan, bundle, nowMs)
     } catch (error) {
       bundle.warnings.push(`Failed to retrieve inter-character memories: ${errorText(error)}`)
     }
@@ -443,7 +446,6 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
 async function assembleInterCharacter(
   plan: RecallPlan,
   bundle: RecallBundle,
-  recapIds: ReadonlySet<string>,
   nowMs: number,
 ): Promise<void> {
   const characterId = plan.character.id
@@ -452,7 +454,7 @@ async function assembleInterCharacter(
   if (budget <= 0) return
   const repos = getRepositories()
   const otherIds = subjects.map(s => s.id)
-  const delivered = new Set<string>([...bundle.pools.archive, ...bundle.pools.head, ...recapIds])
+  const delivered = new Set<string>([...bundle.pools.archive, ...bundle.pools.head])
   const excludeIds = plan.replay?.excludeIds
 
   // Importance half: hot digests about each, then the partition query.

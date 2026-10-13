@@ -5,7 +5,8 @@
  *   inter-character relevance half, the recap's conversation list, the
  *   per-turn conversation list and the retrospective mini-recap all ride it.
  * - **A row reaches the model in at most one pool** (bug 224): archive →
- *   recap → head → inter-character.
+ *   head → inter-character; the recap narrative skips the archive's rows but
+ *   never takes a row from the head (it is a summary, not the memory's words).
  * - **The inter-character relevance half is a filter of the turn's pool**
  *   (decision 12) — no search of its own.
  * - **`deliver` stamps only what reached the model**: a line compression cut
@@ -181,14 +182,14 @@ describe('assembleRecall', () => {
     expect((memoryIndex.search as jest.Mock).mock.calls).toHaveLength(1)
   })
 
-  it('leaves the recap’s rows out of the head on the turn it runs, on the same vector', async () => {
+  it('keeps the recap’s rows in the head on the turn it runs — a summary is no stand-in for the line', async () => {
     const bundle = await assembleRecall(plan({
       recap: { selection: {} as never, fallbackQuery: 'the scenario' },
     }))
 
     expect(bundle.pools.recap).toContain('recap-only')
     expect(bundle.pools.recap).not.toContain('archived')
-    expect(bundle.pools.head).not.toContain('recap-only')
+    expect(bundle.pools.head).toContain('recap-only')
     expect(mockEmbed).toHaveBeenCalledTimes(1)
     // The per-turn list stands down when the recap already lists the shelf.
     expect(mockVault).toHaveBeenCalledTimes(1)
@@ -262,11 +263,19 @@ describe('deliverRecall', () => {
     expect(delivery.debugLog.some(l => l.startsWith('[Recall] assemble (interCharacter)'))).toBe(true)
   })
 
-  it('stamps the recap’s rows when its narrative was delivered', async () => {
-    const bundle = await assembleRecall(plan({ recap: { selection: {} as never, fallbackQuery: '' } }))
+  it('does not stamp rows the recap only summarised', async () => {
+    // A row the narrative read that no line-rendered pool delivers.
+    const narrated = mem('narrated', 0, { summary: 'only the narrative mentions this' })
+    repos.memories.findRecentByImportanceTier.mockResolvedValueOnce({ high: [recapOnly, narrated], medium: [], low: [] })
+    const bundle = await assembleRecall(plan({ recap: { selection: {} as never, fallbackQuery: '' }, recallSettings: { scopePolicy: 'down-weight', expandRelated: false, perTurnConversationSummaries: false } }))
     await deliverRecall(bundle, { characterId: LYRA, chat: { id: 'chat-1' }, deliveredText: everything(bundle) })
 
-    expect(repos.memories.updateAccessTimeBulk.mock.calls[0][1]).toContain('recap-only')
+    const recapLeftOut = bundle.pools.recap.filter(id => !bundle.pools.head.includes(id) && !bundle.pools.archive.includes(id))
+    const stamped = repos.memories.updateAccessTimeBulk.mock.calls[0][1] as string[]
+    expect(recapLeftOut).toEqual(['narrated'])
+    expect(stamped).not.toContain('narrated')
+    // What the head delivered verbatim is stamped, recap row or not.
+    expect(stamped).toContain('recap-only')
   })
 
   it('stamps nothing when nothing was delivered', async () => {

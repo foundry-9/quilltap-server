@@ -79,7 +79,7 @@ A memory now counts as *recently consulted* only when it actually reached the ch
 
 Each turn the Book now frames a single question of the moment and puts it to your embedding provider exactly once. Every bundle it then assembles — the steady shelf, the handful of pertinent memories, what the character recalls of the others present, the list of past conversations, the recap that opens a chat — is drawn by that one question. (A turn that reaches pointedly into the past asks up to two small supplementary questions besides; that is the whole of the extravagance.) Where the Book once went back to the well for each person in the room, it now simply sorts what it has already drawn by whom each memory concerns.
 
-It also refuses to say the same thing twice in one breath. A memory appears in at most one bundle per turn: the steady shelf has first claim, then the opening recap, then the pertinent handful, then what the character recalls of the others. A digest about the woman across the table that already stands on the shelf is not read out a second time under her name.
+It also refuses to say the same thing twice in one breath. A memory is read out in at most one list per turn: the steady shelf has first claim, then the pertinent handful, then what the character recalls of the others. A digest about the woman across the table that already stands on the shelf is not read out a second time under her name. The recap that opens a chat leaves the shelf's memories to the shelf, but it does not keep a memory out of the pertinent handful — a summary may gloss over precisely the particular the moment calls for, so the memory's own words are still offered when they bear on it.
 
 ## What Reaches the Character, and What Is Merely Noted
 
