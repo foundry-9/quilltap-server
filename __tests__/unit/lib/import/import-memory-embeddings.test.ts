@@ -234,7 +234,7 @@ describe('import → memory re-embedding', () => {
       testUserId,
       expect.objectContaining({ entityType: 'MEMORY', profileId: 'profile-builtin' })
     );
-    expect(scheduleRefit).toHaveBeenCalledWith(testUserId, 'profile-builtin');
+    expect(scheduleRefit).toHaveBeenCalledWith(testUserId, 'profile-builtin', { force: true });
     expect(result.warnings.some((w) => w.includes('TF-IDF'))).toBe(false);
   });
 

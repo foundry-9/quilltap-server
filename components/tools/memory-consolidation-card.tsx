@@ -14,6 +14,7 @@ interface ConsolidationConfig {
   enabled: boolean
   connectionProfileId: string | null
   clusterThreshold: number
+  tfidfClusterThreshold: number
   minClusterSize: number
   maxClusterSize: number
   matureAfterDays: number
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: ConsolidationConfig = {
   enabled: false,
   connectionProfileId: null,
   clusterThreshold: 0.72,
+  tfidfClusterThreshold: 0.3,
   minClusterSize: 3,
   maxClusterSize: 30,
   matureAfterDays: 7,
@@ -59,6 +61,7 @@ interface NumberFieldSpec {
 
 const NUMBER_FIELDS: ReadonlyArray<NumberFieldSpec> = [
   { key: 'clusterThreshold', label: 'Cluster threshold', help: 'How alike two notes must be (0 to 1, by cosine) to be folded together.', min: 0, max: 1, step: 0.01, integer: false },
+  { key: 'tfidfClusterThreshold', label: 'Cluster threshold (Built-in)', help: 'The same measure when the default embedding profile is the Built-in TF-IDF one, which reckons likeness far more sparingly.', min: 0, max: 1, step: 0.01, integer: false },
   { key: 'minClusterSize', label: 'Smallest cluster', help: 'Fewest notes worth a digest. Falls to two when one of them is quite old.', min: 2, step: 1, integer: true },
   { key: 'maxClusterSize', label: 'Largest cluster', help: 'Most notes put before the model in one sitting.', min: 2, step: 1, integer: true },
   { key: 'matureAfterDays', label: 'Mature after (days)', help: 'Notes younger than this are left to settle.', min: 0, step: 1, integer: false },

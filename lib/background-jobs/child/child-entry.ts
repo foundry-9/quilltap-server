@@ -27,6 +27,7 @@ import {
   isParentToChildMessage,
 } from '../ipc-types';
 import { handleHostRpcResponse } from './host-rpc-client';
+import { startPluginInitialization, whenPluginsReady } from './plugin-readiness';
 import { runAttributedToJob } from '../activity-registry';
 import { activityKindForJobType } from '../activity-kinds';
 import type { BackgroundJob } from '@/lib/schemas/types';
@@ -61,11 +62,12 @@ getChildRepositoriesProxy();
 // EMBEDDING_GENERATE call into `providerRegistry.createEmbeddingProvider`,
 // and `initializePlugins` is the canonical wiring path. It's read-only
 // (scans plugins, loads modules, registers in memory) so it's safe to
-// run inside the child's readonly DB context. We do this asynchronously
-// so the child can already accept jobs while plugins finish loading;
-// any job that requires a registered provider before init completes will
-// fail and retry on the dispatcher's normal backoff.
-(async () => {
+// run inside the child's readonly DB context. It runs asynchronously so
+// the child answers IPC at once, but every job waits for it to settle
+// (`whenPluginsReady` in `runJob`): the parent forks the child on the first
+// job and sends it straight away, and a handler that reached the registry
+// first used to fail with "Provider '…' not found in registry" (bug 243).
+startPluginInitialization(async () => {
   try {
     const { initializePlugins } = await import('@/lib/startup/plugin-initialization');
     const result = await initializePlugins();
@@ -79,7 +81,7 @@ getChildRepositoriesProxy();
       error: getErrorMessage(err),
     });
   }
-})();
+});
 
 log.info('Job-runner child ready', {
   pid: process.pid,
@@ -171,6 +173,7 @@ async function runJob(job: BackgroundJob): Promise<void> {
   log.info('Running job in child', { jobId: job.id, type: job.type, attempts: job.attempts });
 
   try {
+    await whenPluginsReady();
     await runWithJobScope(job.id, async () => {
       const handler = getHandler(job.type);
       // Attribute the handler to its own chip kind without adding a count —

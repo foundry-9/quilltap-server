@@ -15,6 +15,7 @@
  */
 
 import { rankByBlend, rankForRecall, salience, type RankInput } from '../scoring'
+import { isLexicalEmbeddingProvider } from '@/lib/embedding/cosine-scale'
 import { recallTuningOf, type RecallContext } from './tags'
 import type { Gathered } from './gather'
 import { traceStage, type HydratedHit, type RecallCandidate, type RecallTrace } from './types'
@@ -71,7 +72,7 @@ export function score(
   let context = opts.recallContext
   if (context && gathered.strategy === 'text') {
     context = { ...context, tuning: { ...recallTuningOf(context), boostGate: null } }
-  } else if (context && !context.tuning && gathered.provider === 'BUILTIN') {
+  } else if (context && !context.tuning && isLexicalEmbeddingProvider(gathered.provider)) {
     context = { ...context, tuning: { ...recallTuningOf(context), boostGate: null } }
   }
 

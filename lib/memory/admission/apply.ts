@@ -15,7 +15,7 @@ import type { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { memoryIndex, embeddingTextFor } from '../index-store'
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '../index-store'
 import { calculateReinforcedImportance } from '../scoring'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
 import type { FoldPlan } from './fold'
@@ -82,7 +82,7 @@ export async function reembedRow(memory: Memory, userId: string): Promise<Float3
       embeddingTextFor(memory, await refreshMemoryTimeZone()),
       userId,
       undefined,
-      { priority: 'background' },
+      { priority: 'background', lexicalText: lexicalEmbeddingTextFor(memory) },
     )
     await memoryIndex.upsert(memory.characterId, [
       { id: memory.id, embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' },

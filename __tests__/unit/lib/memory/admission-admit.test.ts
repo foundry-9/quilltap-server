@@ -8,6 +8,7 @@ jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/memory/index-store', () => ({
   memoryIndex: {},
   embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
+  lexicalEmbeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').lexicalEmbeddingTextFor,
 }))
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
@@ -268,6 +269,25 @@ describe('admitCandidate (parent)', () => {
     expect(store.rows.size).toBe(1)
     expect(second.action.kind).toBe('absorb')
     expect(Array.from(store.rows.values())[0].reinforcementCount).toBe(2)
+  })
+
+  it('decides on the TF-IDF scale when the candidate was embedded by the Built-in profile', async () => {
+    // cos 0.5: below the neural related band, a restatement on the TF-IDF scale.
+    const HALF = new Float32Array([0.5, Math.sqrt(0.75), 0])
+    seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', summary: 'Ledger', embedding: LEDGER })
+    embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: HALF, provider: 'BUILTIN' })
+    const outcome = await admitCandidate(candidate('Friday keeps the household ledger'), NO_TIME, OPTS)
+    expect(outcome.action).toEqual({ kind: 'reinforce', into: 'ledger' })
+    expect(outcome.trace.thresholds.reinforce).toBe(0.4)
+  })
+
+  it('the same cosine inserts on the neural scale', async () => {
+    const HALF = new Float32Array([0.5, Math.sqrt(0.75), 0])
+    seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', summary: 'Ledger', embedding: LEDGER })
+    embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: HALF, provider: 'OPENAI' })
+    const outcome = await admitCandidate(candidate('Friday keeps the household ledger'), NO_TIME, OPTS)
+    expect(outcome.action).toEqual({ kind: 'insert' })
+    expect(outcome.trace.thresholds.reinforce).toBe(0.85)
   })
 
   it('admitPrepared refuses to run in the job child', async () => {

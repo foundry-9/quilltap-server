@@ -956,6 +956,26 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     );
   }
 
+  /**
+   * The whole memory corpus in two counts: every row, and the rows created at
+   * or after `since` (0 when `since` is null). What the TF-IDF refit policy
+   * weighs (`assessBuiltinRefit`); the refit fits on these same rows.
+   */
+  async countCorpusSince(since: string | null): Promise<{ total: number; createdSince: number }> {
+    return this.safeQuery(
+      async () => {
+        const total = await this.count({} as TypedQueryFilter<Memory>);
+        const createdSince = since
+          ? await this.count({ createdAt: { $gte: since } } as TypedQueryFilter<Memory>)
+          : 0;
+        return { total, createdSince };
+      },
+      'Error counting the memory corpus',
+      { since },
+      { total: 0, createdSince: 0 }
+    );
+  }
+
   // ==========================================================================
   // Tiers and consolidation (memory-consolidation-and-tiers.md, workstream B)
   // ==========================================================================

@@ -186,6 +186,16 @@ There is precisely one embedding standard per Quilltap instance: whatever the de
 
 Mind the meter: if a large corpus predates this housekeeping, the first restart after switching to a paid provider will queue a re-embedding of every stale row. The **Emb** badge in the header shows the queue draining.
 
+## The Built-in Profile, Tailored to Its Temperament
+
+The Built-in (TF-IDF) profile is a counting-house clerk rather than a poet: it tallies which words two passages share and thinks no further. It needs no key and no wire, but it reckons likeness on a far stingier scale than the cloud models — a fact told twice in different words scores about half what a neural model would give it. The Commonplace Book therefore keeps a separate set of measures for it:
+
+- **It ignores the margin notes.** Each memory carries a small anchor line recording when and where it happened. A neural model reads that as helpful context; the clerk, counting words, found the dates and place names drowning out the memory itself, so that one fact told on two different days looked like two strangers. Under the Built-in profile the anchor line is left out of the tally. When it happened is still minded — two accounts more than a week apart are still kept as separate occasions — it simply no longer muddles the arithmetic.
+- **Its own thresholds for duplicates.** When a fresh memory arrives, the Book decides whether it repeats, reinforces or merely relates to one already on file. Under the Built-in profile those decisions use cut-offs fitted to the clerk's sparser figures, so a restatement reinforces the original instead of filing a near-twin beside it. Cloud profiles keep their own measures unchanged.
+- **Its own consolidation threshold.** See **Cluster threshold (Built-in)** in [Memory Consolidation](/settings?tab=memory&section=memory-consolidation).
+- **Its vocabulary is refreshed only when it has grown stale.** The clerk's ledger of words is built from all your memories and the help pages. It used to be rebuilt — and every memory re-copied — whenever a single memory was written or edited by hand. Now a new memory is filed against the ledger already open, and the ledger is rebuilt only when a good many memories (twenty-five, or a tenth of the collection, whichever is larger) have arrived since it was last drawn up, when an import brings in a crate of them, or on the first start after this improvement arrived, so that every memory is re-copied once without its anchor line. The **Emb** badge shows that one-time re-copy draining.
+- **The help pages are indexed promptly.** On a Built-in instance the help pages were once skipped at startup because the indexing clerk arrived for work before his ledger had been unlocked; he now waits for it.
+
 ## Deleting an Embedding Profile
 
 To remove a profile:

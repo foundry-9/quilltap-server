@@ -13,8 +13,7 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { embeddingTextFor } from '@/lib/memory/index-store';
-import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
+import { lexicalEmbeddingTextFor, LEXICAL_TEXT_SHAPE_VERSION } from '@/lib/memory/index-store';
 import type { EmbeddingRefitPayload } from '../queue-service';
 import { enqueueEmbeddingReindexAll } from '../queue-service';
 
@@ -64,24 +63,22 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
     return;
   }
 
-  // Get all characters for this user
-  const characters = await repos.characters.findByUserId(job.userId);
-
-  if (characters.length === 0) {
-    logger.info('[EmbeddingRefit] No characters found, skipping refit', {
-      context: 'handleEmbeddingRefit',
-      jobId: job.id,
-      profileId: payload.profileId,
-    });
-    return;
-  }
-
-  // Get all memories for all characters
+  // Every memory, by the characters that hold one: the same corpus the refit
+  // policy counts (`assessBuiltinRefit`). Enumerating characters instead
+  // would miss memories held by a character whose vault cannot be read, and a
+  // refit the policy keeps asking for would never clear its reason.
+  const characterIds = await repos.memories.findDistinctCharacterIds();
   const allMemories: import('@/lib/schemas/types').Memory[] = [];
-  for (const character of characters) {
-    const characterMemories = await repos.memories.findByCharacterId(character.id);
+  for (const characterId of characterIds) {
+    const characterMemories = await repos.memories.findByCharacterId(characterId);
     allMemories.push(...characterMemories);
   }
+  logger.debug('[EmbeddingRefit] Corpus gathered', {
+    context: 'handleEmbeddingRefit',
+    jobId: job.id,
+    characters: characterIds.length,
+    memories: allMemories.length,
+  });
 
   if (allMemories.length === 0) {
     logger.info('[EmbeddingRefit] No memories found, skipping refit', {
@@ -92,12 +89,12 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
     return;
   }
 
-  // Prepare documents for TF-IDF fitting
-  // Same text the rows are embedded with (anchor line included), so tokens
-  // that occur only in anchor lines make it into the fitted vocabulary (bug 204).
-  // Anchor dates render on the instance's memory calendar (cold cache in the child).
-  const memoryTimeZone = await refreshMemoryTimeZone();
-  const documents = allMemories.map(m => embeddingTextFor(m, memoryTimeZone));
+  // Prepare documents for TF-IDF fitting: exactly the text the BUILTIN path
+  // embeds for a memory — `lexicalEmbeddingTextFor`, the canonical text
+  // (bug 204) without its anchor line, which every memory writer hands the
+  // embedding service as `lexicalText` — so the vocabulary, IDF and average
+  // length describe what is actually vectorised.
+  const documents = allMemories.map(m => lexicalEmbeddingTextFor(m));
 
   // Include help docs in the corpus for better vocabulary coverage
   try {
@@ -135,6 +132,7 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
     vocabularySize: state.vocabularySize,
     includeBigrams: state.includeBigrams,
     fittedAt: state.fittedAt,
+    textShapeVersion: LEXICAL_TEXT_SHAPE_VERSION,
   });
 
   logger.info('[EmbeddingRefit] Vocabulary fitted and saved', {

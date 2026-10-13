@@ -30,6 +30,10 @@ export interface EpisodicAnchorView {
 /** Cap on entities rendered into the anchor line so it stays one line. */
 const ANCHOR_MAX_ENTITIES = 4
 
+/** The labels an anchor line's parts open with, in the order they are written. */
+const ANCHOR_LABELS = ['when', 'story time', 'place'] as const
+
+
 /**
  * Render the anchor line appended to a memory's embedded text, e.g.
  * `(when: 2026-07-14 · place: Lighthouse Point)`. Returns `''` when the memory
@@ -55,19 +59,19 @@ export function buildMemoryAnchorLine(view: EpisodicAnchorView, timeZone?: strin
       ? zonedDateStamp(parsed, timeZone ?? getMemoryTimeZone())
       : occurredAt.slice(0, 10)
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      parts.push(`when: ${dateOnly}`)
+      parts.push(`${ANCHOR_LABELS[0]}: ${dateOnly}`)
     }
   }
   const narrativeTime = view.narrativeTime?.trim()
   if (narrativeTime) {
-    parts.push(`story time: ${narrativeTime}`)
+    parts.push(`${ANCHOR_LABELS[1]}: ${narrativeTime}`)
   }
   const entities = (view.entities ?? [])
     .map(e => (typeof e === 'string' ? e.trim() : ''))
     .filter(e => e.length > 0)
     .slice(0, ANCHOR_MAX_ENTITIES)
   if (entities.length > 0) {
-    parts.push(`place: ${entities.join(', ')}`)
+    parts.push(`${ANCHOR_LABELS[2]}: ${entities.join(', ')}`)
   }
   if (parts.length === 0) return ''
   return `(${parts.join(' · ')})`

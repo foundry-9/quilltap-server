@@ -16,6 +16,7 @@
 jest.mock('@/lib/memory/index-store', () => ({
   memoryIndex: { search: jest.fn(), shape: jest.fn(), entries: jest.fn(), reload: jest.fn() },
   embeddingTextFor: (m: { summary: string; content: string }) => `${m.summary}\n\n${m.content}`,
+  lexicalEmbeddingTextFor: (m: { summary: string; content: string }) => `${m.summary}\n\n${m.content}`,
 }))
 
 const mockGenerateEmbedding = jest.fn()

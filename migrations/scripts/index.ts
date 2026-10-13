@@ -438,6 +438,7 @@ import { retireMemoryVectorEntriesMigration } from './retire-memory-vector-entri
 // Memory: extraction cursors table; fold-pass watermark columns dropped (refactor phase D)
 import { addMemoryExtractionCursorsMigration } from './add-memory-extraction-cursors-v1';
 import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-memory-jobs-v1';
+import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-version-v1';
 
 /**
  * All available migrations.
@@ -894,6 +895,8 @@ export const migrations: Migration[] = [
   addMemoryExtractionCursorsMigration,
   // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
   dropInterCharacterMemoryJobsMigration,
+  // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
+  addTfidfTextShapeVersionMigration,
 ];
 
 export {
@@ -1328,5 +1331,7 @@ export {
   addMemoryExtractionCursorsMigration,
   // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
   dropInterCharacterMemoryJobsMigration,
+  // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
+  addTfidfTextShapeVersionMigration,
 };
 

@@ -10,6 +10,8 @@
  * @module memory/scoring/relevance
  */
 
+import { isLexicalEmbeddingProvider } from '@/lib/embedding/cosine-scale'
+
 /** Relevance of a candidate to a query: the cosine itself. */
 export function relevance(cosine: number): number {
   return cosine
@@ -34,5 +36,5 @@ export const DEFAULT_MIN_COSINE_TFIDF = 0.10
 
 /** The relevance floor for an embedding profile's provider (`BUILTIN` is TF-IDF). */
 export function defaultMinCosineForProvider(provider: string | undefined | null): number {
-  return provider === 'BUILTIN' ? DEFAULT_MIN_COSINE_TFIDF : DEFAULT_MIN_COSINE_NEURAL
+  return isLexicalEmbeddingProvider(provider) ? DEFAULT_MIN_COSINE_TFIDF : DEFAULT_MIN_COSINE_NEURAL
 }

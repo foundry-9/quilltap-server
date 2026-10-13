@@ -11,7 +11,7 @@ import { EMBEDDING_MAX_CHARS, averageEmbeddings, generateEmbeddingForUser } from
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
-import { memoryIndex, embeddingTextFor } from '@/lib/memory/index-store';
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '@/lib/memory/index-store';
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -165,7 +165,7 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       textToEmbed,
       job.userId,
       payload.profileId,
-      { priority: 'background' }
+      { priority: 'background', lexicalText: lexicalEmbeddingTextFor(memory) }
     );
 
     // Row and index through the one writer. In the job child the row write

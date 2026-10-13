@@ -32,6 +32,7 @@ jest.mock('@/lib/memory/index-store', () => ({
     entries: jest.fn(),
   },
   embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
+  lexicalEmbeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').lexicalEmbeddingTextFor,
 }))
 jest.mock('@/lib/background-jobs/activity-registry', () => ({
   __esModule: true,

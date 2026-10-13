@@ -28,16 +28,25 @@ import type {
   MemoryRecallSettings,
 } from '@/lib/schemas/settings.types'
 import { logger } from '@/lib/logger'
-import { ADMISSION_THRESHOLDS, MEMORY_SETTING_DEFAULTS, type AdmissionThresholds } from './settings-defaults'
+import { ADMISSION_THRESHOLDS, ADMISSION_THRESHOLDS_TFIDF, MEMORY_SETTING_DEFAULTS, type AdmissionThresholds } from './settings-defaults'
 import { DEFAULT_RECALL_TUNING } from './recall/tags'
 import type { ResolvedRecallTuning } from './recall/tuning'
 import { DEFAULT_MIN_COSINE_NEURAL, DEFAULT_MIN_COSINE_TFIDF } from './scoring'
 
-export { ADMISSION_THRESHOLDS, MEMORY_SETTING_DEFAULTS, MEMORY_CAP_BOUNDS } from './settings-defaults'
+export {
+  ADMISSION_THRESHOLDS,
+  ADMISSION_THRESHOLDS_TFIDF,
+  admissionThresholdsForProvider,
+  MEMORY_SETTING_DEFAULTS,
+  MEMORY_CAP_BOUNDS,
+} from './settings-defaults'
 
 export interface MemorySettings {
   extraction: { limits: MemoryExtractionLimits; mode: MemoryExtractionModeSettings }
+  /** Neural-embedding admission thresholds. */
   admission: AdmissionThresholds
+  /** Built-in (TF-IDF) admission thresholds; pick with `admissionThresholdsForProvider`. */
+  admissionTfidf: AdmissionThresholds
   recall: MemoryRecallSettings & {
     tuning: ResolvedRecallTuning
     minCosine: { neural: number; tfidf: number }
@@ -106,6 +115,7 @@ export async function resolveMemorySettings(userId?: string): Promise<MemorySett
   return {
     extraction: { limits, mode },
     admission: ADMISSION_THRESHOLDS,
+    admissionTfidf: ADMISSION_THRESHOLDS_TFIDF,
     recall: {
       ...recall,
       tuning: DEFAULT_RECALL_TUNING,

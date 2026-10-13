@@ -993,6 +993,24 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.8: Refit a Built-in (TF-IDF) vocabulary that is due
+      // ================================================================
+      // The dimension pass above skips BUILTIN defaults; their width is the
+      // fitted vocabulary's. Refit when there is no vocabulary, when it was
+      // fitted before the BUILTIN path stopped embedding anchor lines, or when
+      // the corpus has drifted (builtin-tfidf-memory-tuning §6). Fire-and-
+      // forget; a no-op on neural defaults and current vocabularies.
+      try {
+        const { checkBuiltinRefit } = await import('./lib/embedding/builtin-refit-policy');
+        void checkBuiltinRefit();
+      } catch (builtinRefitImportError) {
+        logger.warn('Failed to import the TF-IDF refit check', {
+          context: 'instrumentation.register',
+          error: builtinRefitImportError instanceof Error ? builtinRefitImportError.message : String(builtinRefitImportError),
+        });
+      }
+
+      // ================================================================
       // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');

@@ -36,7 +36,7 @@ import { calculateReinforcedImportance } from '../scoring'
 import { invalidateFrozenArchive } from '../recall/archive'
 import { mirrorCommonplaceForSubjects } from '../commonplace-mirror'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
-import { memoryIndex, embeddingTextFor } from '../index-store'
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '../index-store'
 
 const log = logger.child({ module: 'memory:update-memory' })
 
@@ -139,6 +139,8 @@ export async function updateMemory(
       embedding = (await generateEmbeddingForUser(
         embeddingTextFor(merged, await refreshMemoryTimeZone()),
         options.userId,
+        undefined,
+        { lexicalText: lexicalEmbeddingTextFor(merged) },
       )).embedding
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

@@ -42,9 +42,9 @@ import { logger } from '@/lib/logger'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { embeddingTextFor, memoryIndex } from '../index-store'
+import { embeddingTextFor, lexicalEmbeddingTextFor, memoryIndex } from '../index-store'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
-import { ADMISSION_THRESHOLDS } from '../settings-defaults'
+import { ADMISSION_THRESHOLDS, admissionThresholdsForProvider } from '../settings-defaults'
 import { toAdmissionRow, type MemoryCandidate, type ResolvedCandidateTime } from '../candidate'
 import { decideAdmission } from './decide'
 import { foldInto, FOLD_CAPS } from './fold'
@@ -93,6 +93,11 @@ export interface AdmitOptions {
 export interface AdmitPreparedRequest {
   row: AdmissionRow
   embedding: Float32Array
+  /**
+   * The provider that made `embedding` (`BUILTIN` is TF-IDF), so the parent
+   * decides on that vector's cosine scale. Absent reads as neural.
+   */
+  embeddingProvider?: string | null
   userId: string
   embeddingAttempts: number
   notes: string[]
@@ -136,18 +141,19 @@ async function embedRow(
   timeZone: string,
   opts: AdmitOptions,
   notes: string[],
-): Promise<{ embedding: Float32Array | null; attempts: number }> {
+): Promise<{ embedding: Float32Array | null; provider: string | null; attempts: number }> {
   const text = embeddingTextFor(row, timeZone)
+  const call = { priority: 'background' as const, lexicalText: lexicalEmbeddingTextFor(row) }
   const describe = (e: unknown) => (e instanceof EmbeddingError ? e.message : String(e))
   try {
-    const { embedding } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
-    return { embedding, attempts: 1 }
+    const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, call)
+    return { embedding, provider: provider ?? null, attempts: 1 }
   } catch (first) {
     notes.push(`embedding attempt 1 failed (${describe(first)})`)
     try {
       await new Promise((resolve) => setTimeout(resolve, EMBEDDING_RETRY_DELAY_MS))
-      const { embedding } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
-      return { embedding, attempts: 2 }
+      const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, call)
+      return { embedding, provider: provider ?? null, attempts: 2 }
     } catch (second) {
       notes.push(`embedding failed after retry (${describe(second)})`)
       log.warn('Memory not admitted: embedding failed after retry', {
@@ -155,7 +161,7 @@ async function embedRow(
         userId: opts.userId,
         error: describe(second),
       })
-      return { embedding: null, attempts: 2 }
+      return { embedding: null, provider: null, attempts: 2 }
     }
   }
 }
@@ -203,12 +209,13 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
     let prepared = await applyNamePresenceCheck(row, notes)
     prepared = applyEpisodicFallbackAnchors(prepared, timeZone)
 
-    const { embedding, attempts } = await embedRow(prepared, timeZone, opts, notes)
+    const { embedding, provider, attempts } = await embedRow(prepared, timeZone, opts, notes)
     if (!embedding) return rejected('embedding-failed', notes, attempts)
 
     const request: AdmitPreparedRequest = {
       row: prepared,
       embedding,
+      embeddingProvider: provider,
       userId: opts.userId,
       embeddingAttempts: attempts,
       notes,
@@ -345,6 +352,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     let neighbourCount = 0
     let bestCosine: number | null = null
 
+    const thresholds = admissionThresholdsForProvider(request.embeddingProvider)
     for (let attempt = 0; attempt < 2 && !applied; attempt++) {
       const gathered = await gatherNeighbours(characterId, embedding, { probe: neighbourProbe(row, userId) })
       const decision = decideAdmission({
@@ -356,10 +364,10 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
           occurredAt: row.occurredAt,
         },
         neighbours: gathered.neighbours,
-        thresholds: ADMISSION_THRESHOLDS,
+        thresholds,
       })
       trace = {
-        thresholds: ADMISSION_THRESHOLDS,
+        thresholds,
         assessments: decision.assessments,
         embeddingAttempts: request.embeddingAttempts,
         orphansIgnored: gathered.orphanIds.length,
@@ -412,6 +420,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
       novelDetails: outcome.novelDetails.length,
       linked: outcome.linkedIds.length,
       keyed: !!idempotencyKey,
+      thresholdScale: thresholds === ADMISSION_THRESHOLDS ? 'neural' : 'tfidf',
     })
     return outcome
   })
@@ -424,6 +433,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
  */
 async function decideOnly(request: AdmitPreparedRequest, book?: DryRunBook): Promise<AdmissionOutcome> {
   const { row, embedding } = request
+  const thresholds = admissionThresholdsForProvider(request.embeddingProvider)
   const gathered = await gatherNeighbours(row.characterId, embedding, {
     ...(book ? { exclude: book.retiring } : {}),
     probe: neighbourProbe(row, request.userId),
@@ -442,7 +452,7 @@ async function decideOnly(request: AdmitPreparedRequest, book?: DryRunBook): Pro
       occurredAt: row.occurredAt,
     },
     neighbours: gathered.neighbours,
-    thresholds: ADMISSION_THRESHOLDS,
+    thresholds,
   })
   const action = decision.action
   const target =
@@ -462,7 +472,7 @@ async function decideOnly(request: AdmitPreparedRequest, book?: DryRunBook): Pro
     novelDetails: [],
     linkedIds: action.kind === 'insert-linked' ? [...action.linkTo] : [],
     trace: {
-      thresholds: ADMISSION_THRESHOLDS,
+      thresholds,
       assessments: decision.assessments,
       embeddingAttempts: request.embeddingAttempts,
       orphansIgnored: gathered.orphanIds.length,

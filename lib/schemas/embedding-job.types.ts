@@ -48,6 +48,12 @@ export const TfidfVocabularySchema = z.object({
   includeBigrams: z.boolean().default(true),
   /** When the vocabulary was last fitted */
   fittedAt: TimestampSchema,
+  /**
+   * The text shape the vocabulary was fitted on and its memories embedded
+   * with (`BUILTIN_TEXT_SHAPE_VERSION` in `lib/embedding/builtin-refit-policy`).
+   * 0 — rows from before the column — is the anchored shape, refit once.
+   */
+  textShapeVersion: z.number().int().nonnegative().default(0),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
