@@ -459,6 +459,14 @@ describe('chokepoint grep-tests', () => {
     ])
   })
 
+  it('links between memories are added only inside admission', () => {
+    expect(filesMatching(/\.addRelatedMemoryIds\(/)).toEqual([
+      'lib/memory/admission/apply.ts',
+      'lib/memory/admission/links.ts',
+      'lib/memory/admission/update-memory.ts',
+    ])
+  })
+
   it('the old gate, merge and direct-create paths are gone', () => {
     expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-gate.ts'))).toBe(false)
     expect(fs.existsSync(path.join(ROOT, 'lib/memory/memory-merge.ts'))).toBe(false)

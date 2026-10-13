@@ -79,6 +79,13 @@ interface JobScope {
    * the job touched that row otherwise (bug 234).
    */
   memoryRelatedScrubs: Set<string>;
+  /**
+   * How many times this job attempt has admitted each candidate (by content
+   * key). With the job id it makes admission's idempotency key: a retry of
+   * the job is a new scope, so its counts restart and its candidates map to
+   * the keys the failed attempt already admitted.
+   */
+  admissionOccurrences: Map<string, number>;
 }
 
 /** One memory row's buffered changes this job (see {@link JobScope.memories}). */
@@ -124,12 +131,26 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     equippedOutfits: new Map(),
     memories: new Map(),
     memoryRelatedScrubs: new Set(),
+    admissionOccurrences: new Map(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
   // getJobFolderEnsureCache without importing this heavy proxy (and the
   // repositories barrel it pulls in). See job-folder-cache.ts.
   return jobScopeStore.run(scope, () => runWithJobFolderCache(fn));
+}
+
+/**
+ * The idempotency key for one admission in the running job attempt:
+ * `jobId:contentKey:n`, where `n` counts earlier admissions of the same
+ * content in this attempt. Null outside a job scope.
+ */
+export function nextAdmissionKey(contentKey: string): string | null {
+  const scope = jobScopeStore.getStore();
+  if (!scope) return null;
+  const n = scope.admissionOccurrences.get(contentKey) ?? 0;
+  scope.admissionOccurrences.set(contentKey, n + 1);
+  return `${scope.jobId}:${contentKey}:${n}`;
 }
 
 export function flushPendingWrites(): ChildWritePayload[] {

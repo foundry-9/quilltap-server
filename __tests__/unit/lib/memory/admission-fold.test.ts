@@ -129,7 +129,7 @@ describe('foldInto', () => {
     expect(plan.reembed).toBe(true)
   })
 
-  it('past the cap: counts and unions entities, appends nothing, does not re-embed', () => {
+  it('past the cap: counts and unions entities, appends nothing, and re-embeds the changed anchor line (review #5)', () => {
     const survivor = makeMemory({
       content: `Friday keeps the ledger.\n${footnotes(MAX_REINFORCEMENT_FOOTNOTES)}`,
       entities: ['Friday'],
@@ -139,6 +139,14 @@ describe('foldInto', () => {
     expect(plan.footnotes).toEqual([])
     expect(plan.patch.entities).toEqual(['Friday', 'Marguerite'])
     expect(plan.reinforcementDelta).toBe(1)
+    // The entities are on the anchor line, so the stored vector must follow (bug 204).
+    expect(plan.reembed).toBe(true)
+  })
+
+  it('past the cap with nothing new to the anchor line: no re-embed', () => {
+    const survivor = makeMemory({ content: `Body\n${footnotes(MAX_REINFORCEMENT_FOOTNOTES)}` })
+    const plan = foldInto(survivor, [{ content: 'Body with Marguerite.' }], CAPS)
+    expect(plan.atCap).toBe(true)
     expect(plan.reembed).toBe(false)
   })
 
@@ -250,6 +258,17 @@ describe('applyFold', () => {
     const survivor = makeMemory({ content: 'Same words.' })
     const updated = await applyFold(survivor, foldInto(survivor, [{ content: 'Same words.' }], CAPS), { userId: 'user-1' })
     expect(updated).toBeNull()
+  })
+
+  it('refuses to run in the job child, where buffered writes read back as missing (review #4)', async () => {
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    try {
+      const survivor = makeMemory()
+      await expect(applyFold(survivor, foldInto(survivor, [{ content: 'x' }], CAPS), { userId: 'user-1' })).rejects.toThrow(/parent only/)
+      expect(appendReinforcementFootnotes).not.toHaveBeenCalled()
+    } finally {
+      delete process.env.QUILLTAP_JOB_CHILD
+    }
   })
 
   it('bug 226: the delta lands on the committed row, so a concurrent reinforcement survives', async () => {

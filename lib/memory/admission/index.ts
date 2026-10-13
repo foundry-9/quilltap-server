@@ -15,13 +15,15 @@ export {
   admitCandidate,
   admitRow,
   admitPrepared,
+  admissionContentKey,
   type AdmitOptions,
   type AdmitPreparedRequest,
 } from './admit'
-export { admissionInserted, admissionReinforced } from './outcome'
+export { admissionInserted, admissionReinforced, isNearDuplicateDecision } from './outcome'
 export { decideAdmission, occasionsAreDistinct, type AdmissionCandidateView } from './decide'
-export { foldInto, type FoldPlan, type FoldSource, type FoldSurvivor, type FoldCaps } from './fold'
+export { foldInto, FOLD_CAPS, type FoldPlan, type FoldSource, type FoldSurvivor, type FoldCaps } from './fold'
 export { applyFold } from './apply'
+export { linkBothWays } from './links'
 export { extractNovelDetails } from './novel-details'
 export { describeAdmission } from './describe'
 export type {

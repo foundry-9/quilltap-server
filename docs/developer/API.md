@@ -4349,9 +4349,10 @@ without `?action=embeddings` is a `400`.
 
 Measurement-only developer tool (wrapped by `quilltap anchor-probe`). Re-embeds a character's most
 recent memories with and without the episodic anchor line, scores each against older rows both
-ways, and asks admission's decider (`decideAdmission`, thresholds from `resolveMemorySettings`)
-what it would do each way. `reinforce` counts rows that would fold into an older one (reinforce,
-absorb or promote); `nearDuplicate` counts rows that would be absorbed. Writes nothing; costs
+ways, and asks admission's decider (`decideAdmission`, with the same `ADMISSION_THRESHOLDS`
+admission uses) what it would do each way. `reinforce` counts rows that would fold into an older
+one (reinforce, absorb or promote); `nearDuplicate` counts rows whose fold target is a
+near-duplicate (absorbed, or a cold row promoted and absorbed). Writes nothing; costs
 roughly up to 7 embedding calls per sampled row.
 
 **Request Body**: `{ "characterId": "char-uuid", "limit": 50 }` (`limit` 1–200, default 50)

@@ -17,7 +17,6 @@ function neighbourNote(a: NeighbourAssessment): string {
 /** `[Memory] <what happened> <label> … — <summary> · <neighbours>` */
 export function describeAdmission(outcome: AdmissionOutcome, label: string, summary: string): string {
   const { action, memory, trace } = outcome
-  const prefix = outcome.dryRun ? '[Memory] DRY-RUN' : '[Memory]'
   const id = memory?.id ?? (('into' in action && action.into) || 'unknown')
   let head: string
   switch (action.kind) {
@@ -48,5 +47,5 @@ export function describeAdmission(outcome: AdmissionOutcome, label: string, summ
       break
   }
   const neighbours = trace.assessments.filter((a) => a.verdict !== 'below').map(neighbourNote)
-  return `${prefix} ${head} — ${summary}${neighbours.length > 0 ? ` · ${neighbours.join('; ')}` : ''}`
+  return `[Memory] ${head} — ${summary}${neighbours.length > 0 ? ` · ${neighbours.join('; ')}` : ''}`
 }

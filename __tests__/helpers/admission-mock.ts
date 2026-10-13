@@ -9,7 +9,7 @@
  * candidate becomes (`toAdmissionRow`) — so a test asserts on the fields that
  * would be written. Its resolved value is the outcome; build one with
  * {@link admissionOutcome}. The pure helpers (`admissionInserted`,
- * `describeAdmission`) are the real ones.
+ * `describeAdmission`) and `linkBothWays` are the real ones.
  */
 
 import type { Memory } from '@/lib/schemas/types'
@@ -22,6 +22,7 @@ export function admissionModuleMock() {
   const { toAdmissionRow } = jest.requireActual('@/lib/memory/candidate')
   const outcome = jest.requireActual('@/lib/memory/admission/outcome')
   const { describeAdmission } = jest.requireActual('@/lib/memory/admission/describe')
+  const { linkBothWays } = jest.requireActual('@/lib/memory/admission/links')
   return {
     admitCandidate: jest.fn((candidate: unknown, resolved: unknown, opts: unknown) =>
       mockAdmitRow(toAdmissionRow(candidate, resolved), opts),
@@ -29,6 +30,7 @@ export function admissionModuleMock() {
     admissionInserted: outcome.admissionInserted,
     admissionReinforced: outcome.admissionReinforced,
     describeAdmission,
+    linkBothWays,
   }
 }
 
@@ -56,7 +58,6 @@ export function admissionOutcome(
     memory: memory as Memory | null,
     novelDetails: extra.novelDetails ?? [],
     linkedIds: extra.linkTo ?? [],
-    dryRun: false,
     trace: {
       thresholds: ADMISSION_THRESHOLDS,
       assessments: [],

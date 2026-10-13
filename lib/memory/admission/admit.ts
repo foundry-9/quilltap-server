@@ -17,12 +17,25 @@
  *     reinforces it instead of inserting a twin (bug 209), and the count moves
  *     only through the atomic `incrementReinforcement`.
  *
- * Dry run: the same search and decision, no writes; the outcome names what
- * would have happened.
+ * Three guards keep the parent half honest:
+ *
+ *  - **One admission per character at a time.** Search → decide → write spans
+ *    several awaits; two jobs admitting for one character would each miss the
+ *    other's new row and both insert. A per-character lock serialises them.
+ *  - **A retried job does not count twice.** Admission commits at once, outside
+ *    the job's write batch, so a job that fails after admitting and is retried
+ *    would otherwise reinforce the same observations again. From the child each
+ *    admission carries a key (`jobId : content : occurrence-in-attempt`); the
+ *    parent remembers the outcome per key and answers a repeat from memory.
+ *  - **A target that vanishes is not a lost observation.** If the row the
+ *    decision folded into is retired before the write lands, admission decides
+ *    once more against the index as it now stands, and inserts if the target
+ *    vanishes again.
  *
  * @module memory/admission/admit
  */
 
+import { createHash } from 'node:crypto'
 import type { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
@@ -34,10 +47,11 @@ import { refreshMemoryTimeZone } from '../time/calendar-refresh'
 import { ADMISSION_THRESHOLDS } from '../settings-defaults'
 import { toAdmissionRow, type MemoryCandidate, type ResolvedCandidateTime } from '../candidate'
 import { decideAdmission } from './decide'
-import { foldInto } from './fold'
+import { foldInto, FOLD_CAPS } from './fold'
 import { gatherNeighbours } from './neighbours'
 import { applyEpisodicFallbackAnchors, applyNamePresenceCheck } from './prepare'
-import { applyFold, insertRow, linkBothWays, raiseImportance, withoutEmbedding } from './apply'
+import { applyFold, insertRow, raiseImportance, withoutEmbedding } from './apply'
+import { linkBothWays } from './links'
 import { maybeEnqueueHousekeeping } from './after-insert'
 import { admissionInserted } from './outcome'
 import type { AdmissionAction, AdmissionOutcome, AdmissionRow, AdmissionTrace } from './types'
@@ -47,14 +61,13 @@ const log = logger.child({ module: 'memory:admission' })
 /** Milliseconds before the one embedding retry. */
 const EMBEDDING_RETRY_DELAY_MS = 500
 
-/** Entity bound on a folded row (the candidate schema's). */
-const ENTITY_CAP = 12
+/** How long the parent remembers a keyed admission's outcome (covers a job's retries). */
+const ADMISSION_LEDGER_TTL_MS = 24 * 60 * 60 * 1000
+/** Most keyed outcomes the parent keeps; the oldest go first. */
+const ADMISSION_LEDGER_MAX = 5000
 
 export interface AdmitOptions {
   userId: string
-  embeddingProfileId?: string
-  /** Search and decide, write nothing. */
-  dryRun?: boolean
 }
 
 /** What the child hands the parent over host-RPC (`admitMemory`). Structured-clone safe. */
@@ -62,35 +75,30 @@ export interface AdmitPreparedRequest {
   row: AdmissionRow
   embedding: Float32Array
   userId: string
-  embeddingProfileId?: string
-  dryRun: boolean
   embeddingAttempts: number
   notes: string[]
+  /** `jobId:content:n` from the job child; absent outside a job. */
+  idempotencyKey?: string | null
 }
 
 function isJobChild(): boolean {
   return process.env.QUILLTAP_JOB_CHILD === '1'
 }
 
-function emptyTrace(notes: string[], embeddingAttempts: number): AdmissionTrace {
-  return {
-    thresholds: ADMISSION_THRESHOLDS,
-    assessments: [],
-    embeddingAttempts,
-    orphansIgnored: 0,
-    searchedK: 0,
-    notes,
-  }
-}
-
-function rejected(reason: 'embedding-failed' | 'empty', notes: string[], attempts: number, dryRun: boolean): AdmissionOutcome {
+function rejected(reason: 'embedding-failed' | 'empty', notes: string[], attempts: number): AdmissionOutcome {
   return {
     action: { kind: 'reject', reason },
     memory: null,
     novelDetails: [],
     linkedIds: [],
-    dryRun,
-    trace: emptyTrace(notes, attempts),
+    trace: {
+      thresholds: ADMISSION_THRESHOLDS,
+      assessments: [],
+      embeddingAttempts: attempts,
+      orphansIgnored: 0,
+      searchedK: 0,
+      notes,
+    },
   }
 }
 
@@ -104,13 +112,13 @@ async function embedRow(
   const text = embeddingTextFor(row, timeZone)
   const describe = (e: unknown) => (e instanceof EmbeddingError ? e.message : String(e))
   try {
-    const { embedding } = await generateEmbeddingForUser(text, opts.userId, opts.embeddingProfileId, { priority: 'background' })
+    const { embedding } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
     return { embedding, attempts: 1 }
   } catch (first) {
     notes.push(`embedding attempt 1 failed (${describe(first)})`)
     try {
       await new Promise((resolve) => setTimeout(resolve, EMBEDDING_RETRY_DELAY_MS))
-      const { embedding } = await generateEmbeddingForUser(text, opts.userId, opts.embeddingProfileId, { priority: 'background' })
+      const { embedding } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
       return { embedding, attempts: 2 }
     } catch (second) {
       notes.push(`embedding failed after retry (${describe(second)})`)
@@ -122,6 +130,22 @@ async function embedRow(
       return { embedding: null, attempts: 2 }
     }
   }
+}
+
+/** A stable key for what a row says and whom it is about (not where it came from in time). */
+export function admissionContentKey(row: AdmissionRow): string {
+  return createHash('sha1')
+    .update(JSON.stringify([
+      row.characterId,
+      row.aboutCharacterId ?? null,
+      row.kind ?? 'semantic',
+      row.source ?? 'MANUAL',
+      row.summary,
+      row.content,
+      row.sourceMessageId ?? null,
+      row.occurredAt ?? null,
+    ]))
+    .digest('hex')
 }
 
 /**
@@ -142,10 +166,9 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
   // count them, so admission registers itself. Re-entrant by kind.
   return trackActivity('memory', async () => {
     const notes: string[] = []
-    const dryRun = opts.dryRun === true
     if (!row.content?.trim() || !row.summary?.trim()) {
       log.debug('Memory not admitted: empty text', { characterId: row.characterId })
-      return rejected('empty', notes, 0, dryRun)
+      return rejected('empty', notes, 0)
     }
 
     const timeZone = await refreshMemoryTimeZone()
@@ -153,26 +176,26 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
     prepared = applyEpisodicFallbackAnchors(prepared, timeZone)
 
     const { embedding, attempts } = await embedRow(prepared, timeZone, opts, notes)
-    if (!embedding) return rejected('embedding-failed', notes, attempts, dryRun)
+    if (!embedding) return rejected('embedding-failed', notes, attempts)
 
     const request: AdmitPreparedRequest = {
       row: prepared,
       embedding,
       userId: opts.userId,
-      embeddingProfileId: opts.embeddingProfileId,
-      dryRun,
       embeddingAttempts: attempts,
       notes,
     }
     let outcome: AdmissionOutcome
     if (isJobChild()) {
+      const { nextAdmissionKey } = await import('@/lib/background-jobs/child/child-repositories-proxy')
+      request.idempotencyKey = nextAdmissionKey(admissionContentKey(prepared))
       const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client')
       outcome = await callHost<AdmissionOutcome>('admitMemory', request)
     } else {
       outcome = await admitPrepared(request)
     }
 
-    if (!outcome.dryRun && admissionInserted(outcome)) {
+    if (admissionInserted(outcome)) {
       // Fire-and-forget; never blocks the write that just landed.
       void maybeEnqueueHousekeeping(prepared.characterId, opts.userId)
     }
@@ -180,18 +203,76 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
   })
 }
 
-/** Tell the job child its cache of this character's vectors is stale. Best-effort. */
-async function notifyChildIndexChanged(characterId: string): Promise<void> {
+// ---------------------------------------------------------------------------
+// Parent-side guards
+// ---------------------------------------------------------------------------
+
+/** Tail of each character's admission chain. */
+const characterLocks = new Map<string, Promise<void>>()
+
+/** Run `fn` after every earlier admission for this character has finished. */
+async function withCharacterLock<T>(characterId: string, fn: () => Promise<T>): Promise<T> {
+  const prior = characterLocks.get(characterId) ?? Promise.resolve()
+  let release!: () => void
+  const mine = new Promise<void>((resolve) => { release = resolve })
+  const tail = prior.then(() => mine)
+  characterLocks.set(characterId, tail)
+  await prior
   try {
-    const { notifyChild } = await import('@/lib/background-jobs/host/processor-host')
-    notifyChild('vectorStore', characterId)
+    return await fn()
+  } finally {
+    release()
+    if (characterLocks.get(characterId) === tail) characterLocks.delete(characterId)
+  }
+}
+
+/** Outcomes of keyed admissions, oldest first (Map keeps insertion order). */
+const admissionLedger = new Map<string, { outcome: AdmissionOutcome; at: number }>()
+
+function recallAdmission(key: string, now: number): AdmissionOutcome | null {
+  const entry = admissionLedger.get(key)
+  if (!entry) return null
+  if (now - entry.at > ADMISSION_LEDGER_TTL_MS) {
+    admissionLedger.delete(key)
+    return null
+  }
+  return entry.outcome
+}
+
+function recordAdmission(key: string, outcome: AdmissionOutcome, now: number): void {
+  admissionLedger.set(key, { outcome, at: now })
+  for (const [oldest, entry] of admissionLedger) {
+    if (admissionLedger.size <= ADMISSION_LEDGER_MAX && now - entry.at <= ADMISSION_LEDGER_TTL_MS) break
+    admissionLedger.delete(oldest)
+  }
+}
+
+/** Test hook. */
+export function resetAdmissionStateForTests(): void {
+  characterLocks.clear()
+  admissionLedger.clear()
+}
+
+/**
+ * Hand the job child the vectors and tiers just written, so its cache is
+ * patched rather than dropped. Best-effort.
+ */
+async function patchChildIndex(characterId: string, entries: IndexEntry[]): Promise<void> {
+  if (entries.length === 0) return
+  try {
+    const { patchChildMemoryIndex } = await import('@/lib/background-jobs/host/processor-host')
+    patchChildMemoryIndex(characterId, entries)
   } catch (error) {
-    log.debug('Could not notify the job child of an index change', {
+    log.debug('Could not patch the job child\'s memory index cache', {
       characterId,
       error: error instanceof Error ? error.message : String(error),
     })
   }
 }
+
+// ---------------------------------------------------------------------------
+// The parent half
+// ---------------------------------------------------------------------------
 
 /**
  * The parent half: search, decide, write. Never call it from the job child —
@@ -201,88 +282,141 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
   if (isJobChild()) {
     throw new Error('admitPrepared runs in the parent; the job child admits through host-RPC (admitMemory)')
   }
-  const { row, embedding, userId, embeddingProfileId, dryRun } = request
-  const notes = [...request.notes]
+  const { row, embedding, userId, idempotencyKey } = request
   const characterId = row.characterId
-  const thresholds = ADMISSION_THRESHOLDS
 
-  const gathered = await gatherNeighbours(characterId, embedding)
-  const decision = decideAdmission({
-    candidate: {
-      holderId: characterId,
-      aboutId: row.aboutCharacterId,
-      kind: row.kind,
-      source: row.source,
-      occurredAt: row.occurredAt,
-    },
-    neighbours: gathered.neighbours,
-    thresholds,
-  })
-  const action = decision.action
-  const trace: AdmissionTrace = {
-    thresholds,
-    assessments: decision.assessments,
-    embeddingAttempts: request.embeddingAttempts,
-    orphansIgnored: gathered.orphanIds.length,
-    searchedK: gathered.searchedK,
-    notes,
-  }
-  const neighbourById = new Map(gathered.neighbours.map((n) => [n.memory.id, n.memory]))
-
-  if (dryRun) {
-    const target = 'into' in action ? neighbourById.get(action.into) ?? null : null
-    log.debug('Admission dry run', { characterId, action: action.kind })
-    return {
-      action,
-      memory: target ? withoutEmbedding(target) : null,
-      novelDetails: [],
-      linkedIds: action.kind === 'insert-linked' ? action.linkTo : [],
-      dryRun: true,
-      trace,
+  return withCharacterLock(characterId, async () => {
+    const now = Date.now()
+    if (idempotencyKey) {
+      const earlier = recallAdmission(idempotencyKey, now)
+      if (earlier) {
+        log.debug('Admission already made by an earlier attempt of this job; nothing written', {
+          characterId,
+          action: earlier.action.kind,
+          memoryId: earlier.memory?.id ?? null,
+        })
+        return {
+          ...earlier,
+          trace: { ...earlier.trace, notes: [...earlier.trace.notes, 'already admitted by an earlier attempt of this job'] },
+        }
+      }
     }
-  }
 
-  const outcome = await applyAction(action, row, embedding, neighbourById, { userId, embeddingProfileId }, notes)
-  if (outcome.memory) {
-    publishRealtime('memories')
-    void notifyChildIndexChanged(characterId)
-  }
-  if (admissionInserted({ action })) {
-    // The consolidation watermark counts the row just written (it used to run
-    // from the job dispatcher's commit hook, when admission buffered its rows).
-    void import('../consolidation-triggers')
-      .then((mod) => mod.maybeEnqueueConsolidationForCharacters([characterId]))
-      .catch((error) => log.debug('Consolidation watermark check skipped after admission', { characterId, error: String(error) }))
-  }
+    const notes = [...request.notes]
+    let trace: AdmissionTrace | null = null
+    let applied: Applied | null = null
+    let neighbourCount = 0
+    let bestCosine: number | null = null
 
-  log.debug('Memory admitted', {
-    characterId,
-    action: action.kind,
-    memoryId: outcome.memory?.id ?? null,
-    neighbours: gathered.neighbours.length,
-    bestCosine: gathered.neighbours[0]?.cosine ?? null,
-    novelDetails: outcome.novelDetails.length,
-    linked: outcome.linkedIds.length,
+    for (let attempt = 0; attempt < 2 && !applied; attempt++) {
+      const gathered = await gatherNeighbours(characterId, embedding)
+      const decision = decideAdmission({
+        candidate: {
+          holderId: characterId,
+          aboutId: row.aboutCharacterId,
+          kind: row.kind,
+          source: row.source,
+          occurredAt: row.occurredAt,
+        },
+        neighbours: gathered.neighbours,
+        thresholds: ADMISSION_THRESHOLDS,
+      })
+      trace = {
+        thresholds: ADMISSION_THRESHOLDS,
+        assessments: decision.assessments,
+        embeddingAttempts: request.embeddingAttempts,
+        orphansIgnored: gathered.orphanIds.length,
+        searchedK: gathered.searchedK,
+        notes,
+      }
+      neighbourCount = gathered.neighbours.length
+      bestCosine = gathered.neighbours[0]?.cosine ?? null
+      const neighbourById = new Map(gathered.neighbours.map((n) => [n.memory.id, n.memory]))
+
+      const result = await applyAction(decision.action, row, embedding, neighbourById, userId, notes)
+      if (result !== 'vanished') {
+        applied = result
+      } else if (attempt === 0) {
+        notes.push('target retired before the write; deciding again')
+        log.debug('Admission target vanished; deciding again', { characterId, action: decision.action.kind })
+      } else {
+        notes.push('target retired again; inserted instead')
+        log.warn('Admission target vanished twice; inserting the candidate', { characterId })
+        applied = (await applyAction({ kind: 'insert' }, row, embedding, new Map(), userId, notes)) as Applied
+      }
+    }
+
+    const outcome: AdmissionOutcome = {
+      action: applied!.action,
+      memory: applied!.memory,
+      novelDetails: applied!.novelDetails,
+      linkedIds: applied!.linkedIds,
+      trace: trace!,
+    }
+
+    if (outcome.memory) publishRealtime('memories')
+    void patchChildIndex(characterId, applied!.indexEntries)
+    if (admissionInserted(outcome)) {
+      // The consolidation watermark counts the row just written (it used to run
+      // from the job dispatcher's commit hook, when admission buffered its rows).
+      void import('../consolidation-triggers')
+        .then((mod) => mod.maybeEnqueueConsolidationForCharacters([characterId]))
+        .catch((error) => log.debug('Consolidation watermark check skipped after admission', { characterId, error: String(error) }))
+    }
+    if (idempotencyKey) recordAdmission(idempotencyKey, outcome, now)
+
+    log.debug('Memory admitted', {
+      characterId,
+      action: outcome.action.kind,
+      memoryId: outcome.memory?.id ?? null,
+      neighbours: neighbourCount,
+      bestCosine,
+      novelDetails: outcome.novelDetails.length,
+      linked: outcome.linkedIds.length,
+      keyed: !!idempotencyKey,
+    })
+    return outcome
   })
-  return { ...outcome, dryRun: false, trace }
 }
 
+type IndexEntry = { id: string; embedding: Float32Array; tier: 'hot' | 'cold' }
+
+interface Applied {
+  action: AdmissionAction
+  memory: Memory | null
+  novelDetails: string[]
+  linkedIds: string[]
+  /** Vectors and tiers this write changed, for the job child's cache. */
+  indexEntries: IndexEntry[]
+}
+
+/** The row's vector and tier as a cache entry, when it carries one. */
+function indexEntryOf(memory: Memory): IndexEntry[] {
+  const embedding = memory.embedding
+  if (!(embedding instanceof Float32Array) || embedding.length === 0) return []
+  return [{ id: memory.id, embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' }]
+}
+
+/**
+ * Write one decision. `'vanished'` when the row it folds into is gone before
+ * the write lands (retired meanwhile); the caller decides again.
+ */
 async function applyAction(
   action: AdmissionAction,
   row: AdmissionRow,
   embedding: Float32Array,
   neighbours: ReadonlyMap<string, Memory>,
-  opts: { userId: string; embeddingProfileId?: string },
+  userId: string,
   notes: string[],
-): Promise<Omit<AdmissionOutcome, 'dryRun' | 'trace'>> {
-  const none = { novelDetails: [] as string[], linkedIds: [] as string[] }
+): Promise<Applied | 'vanished'> {
+  const none = { novelDetails: [] as string[], linkedIds: [] as string[], indexEntries: [] as IndexEntry[] }
   switch (action.kind) {
     case 'reject':
       return { action, memory: null, ...none }
 
     case 'insert': {
       const memory = await insertRow(row, embedding)
-      return { action, memory: withoutEmbedding(memory), ...none }
+      return { action, memory: withoutEmbedding(memory), ...none, indexEntries: [{ id: memory.id, embedding, tier: 'hot' }] }
     }
 
     case 'insert-linked': {
@@ -290,7 +424,13 @@ async function applyAction(
       const linkedIds = await linkBothWays(row.characterId, memory.id, action.linkTo)
       // The post-link row: callers that union `relatedMemoryIds` must start
       // from the links written here (bug 26).
-      return { action, memory: withoutEmbedding({ ...memory, relatedMemoryIds: linkedIds }), novelDetails: [], linkedIds }
+      return {
+        action,
+        memory: withoutEmbedding({ ...memory, relatedMemoryIds: linkedIds }),
+        novelDetails: [],
+        linkedIds,
+        indexEntries: [{ id: memory.id, embedding, tier: 'hot' }],
+      }
     }
 
     case 'absorb':
@@ -303,7 +443,9 @@ async function applyAction(
       }
       if (action.kind === 'promote-and-reinforce') {
         // The world asked for a cap-demoted row again: back to the hot tier.
-        await memoryIndex.setTier(target.characterId, [target.id], 'hot', { supersededById: null })
+        // Retired meanwhile, the tier move touches nothing.
+        const moved = await memoryIndex.setTier(target.characterId, [target.id], 'hot', { supersededById: null })
+        if (moved === 0) return 'vanished'
         target = { ...target, tier: 'hot', supersededById: null }
         notes.push(`promoted cold row ${target.id} to hot`)
       }
@@ -324,9 +466,9 @@ async function applyAction(
             reinforcementCount: 1,
             lastReinforcedAt: new Date().toISOString(),
           }],
-          { footnoteCap: ADMISSION_THRESHOLDS.footnoteCap, entityCap: ENTITY_CAP },
+          FOLD_CAPS,
         )
-        memory = await applyFold(target, plan, opts)
+        memory = await applyFold(target, plan, { userId })
         novelDetails = memory ? plan.footnotes : []
       } else {
         // Count only: a near-duplicate's text and vector stay as they are.
@@ -339,12 +481,18 @@ async function applyAction(
         memory = counted ? { ...target, ...counted } : null
       }
       if (!memory) {
-        notes.push(`target ${action.into} vanished before the write`)
-        log.warn('Admission target vanished before the write; nothing counted', { memoryId: action.into })
-        return { action, memory: null, ...none }
+        log.debug('Admission target vanished before the write', { memoryId: action.into })
+        return 'vanished'
       }
       if (row.source === 'MANUAL') memory = await raiseImportance(memory, row.importance)
-      return { action, memory: withoutEmbedding(memory), novelDetails, linkedIds: [] }
+      const changedIndex = action.kind === 'promote-and-reinforce' || (withFootnotes && memory.embedding !== target.embedding)
+      return {
+        action,
+        memory: withoutEmbedding(memory),
+        novelDetails,
+        linkedIds: [],
+        indexEntries: changedIndex ? indexEntryOf(memory) : [],
+      }
     }
   }
 }

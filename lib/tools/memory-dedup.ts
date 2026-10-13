@@ -12,8 +12,7 @@
 import { Memory } from '@/lib/schemas/types'
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { retireMemories } from '@/lib/memory/retire'
-import { foldInto, applyFold } from '@/lib/memory/admission'
-import { ADMISSION_THRESHOLDS } from '@/lib/memory/settings-defaults'
+import { foldInto, applyFold, FOLD_CAPS } from '@/lib/memory/admission'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { partitionByPolicyProtection } from '@/lib/memory/policy-protection'
 import { getRepositories } from '@/lib/repositories/factory'
@@ -140,9 +139,6 @@ function scoreMemory(memory: Memory): number {
 // =============================================================================
 // Per-Character Deduplication
 // =============================================================================
-
-/** The bounds every fold respects: the footnote cap and the candidate schema's entity bound. */
-const FOLD_CAPS = { footnoteCap: ADMISSION_THRESHOLDS.footnoteCap, entityCap: 12 }
 
 /**
  * Deduplicate memories for a single character.

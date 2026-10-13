@@ -17,12 +17,13 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
   trackActivity: (_kind: string, fn: () => unknown) => fn(),
 }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
-jest.mock('@/lib/background-jobs/host/processor-host', () => ({ notifyChild: jest.fn() }))
+jest.mock('@/lib/background-jobs/host/processor-host', () => ({ patchChildMemoryIndex: jest.fn() }))
 jest.mock('@/lib/memory/consolidation-triggers', () => ({ maybeEnqueueConsolidationForCharacters: jest.fn(async () => []) }))
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/instance-settings', () => ({ getMemoryMaintenanceSettings: jest.fn(async () => ({ enabled: false })) }))
 
 import { admitCandidate, admitPrepared } from '@/lib/memory/admission'
+import { resetAdmissionStateForTests } from '@/lib/memory/admission/admit'
 import { MemoryCandidateSchema, type MemoryCandidate } from '@/lib/memory/candidate'
 import { createFakeMemoryStore, fakeMemoryIndex, fakeRepositories, seedMemory, type FakeMemoryStore } from '../../../helpers/memory-admission-fake'
 
@@ -30,6 +31,7 @@ const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepos
 const indexMock = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: Record<string, unknown> }
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock }
 const busMock = jest.requireMock('@/lib/realtime/bus') as { publishRealtime: jest.Mock }
+const processorHostMock = jest.requireMock('@/lib/background-jobs/host/processor-host') as { patchChildMemoryIndex: jest.Mock }
 
 const LEDGER = new Float32Array([1, 0, 0])
 /** cos(LEDGER, NEAR_LEDGER) ≈ 0.87 — the reinforce band. */
@@ -71,6 +73,7 @@ describe('admitCandidate (parent)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetAdmissionStateForTests()
     store = createFakeMemoryStore()
     vectors = new Map()
     factoryMock.getRepositories.mockReturnValue(fakeRepositories(store))
@@ -192,15 +195,70 @@ describe('admitCandidate (parent)', () => {
     expect(store.writes).toEqual([])
   })
 
-  it('a dry run decides the same and writes nothing (invariant 10)', async () => {
+  it('serialises concurrent admissions for one character, so they make one row (review #2)', async () => {
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const [a, b] = await Promise.all([
+      admitCandidate(candidate('Friday keeps the ledger.'), NO_TIME, OPTS),
+      admitCandidate(candidate('Friday keeps the ledger!'), NO_TIME, OPTS),
+    ])
+    expect([a.action.kind, b.action.kind].sort()).toEqual(['absorb', 'insert'])
+    expect(store.rows.size).toBe(1)
+    expect(Array.from(store.rows.values())[0].reinforcementCount).toBe(2)
+  })
+
+  it('answers a repeated job-attempt key from the ledger and writes nothing (review #1)', async () => {
+    const request = {
+      row: { characterId: 'char-1', content: 'Friday keeps the ledger.', summary: 'Ledger', source: 'AUTO' as const },
+      embedding: LEDGER,
+      userId: 'user-1',
+      embeddingAttempts: 1,
+      notes: [],
+      idempotencyKey: 'job-1:abc:0',
+    }
+    const first = await admitPrepared(request)
+    expect(first.action.kind).toBe('insert')
+    const writesAfterFirst = store.writes.length
+
+    // The job failed after this admission and is retried: same key.
+    const retried = await admitPrepared(request)
+    expect(retried.action).toEqual(first.action)
+    expect(retried.memory?.id).toBe(first.memory?.id)
+    expect(store.writes.length).toBe(writesAfterFirst)
+    expect(retried.trace.notes).toContain('already admitted by an earlier attempt of this job')
+
+    // A genuinely new observation (another key) still counts.
+    const next = await admitPrepared({ ...request, idempotencyKey: 'job-2:abc:0' })
+    expect(next.action.kind).toBe('absorb')
+    expect(store.rows.get(first.memory!.id)!.reinforcementCount).toBe(2)
+  })
+
+  it('decides again when the target is retired mid-write, and never drops the candidate (review #3)', async () => {
     seedMemory(store, { id: 'ledger', content: 'Friday keeps the ledger.', embedding: LEDGER })
-    vectors.set('Friday keeps the ledger for Marguerite', NEAR_LEDGER)
-    const dry = await admitCandidate(candidate('Friday keeps the ledger for Marguerite'), NO_TIME, { ...OPTS, dryRun: true })
-    expect(dry.dryRun).toBe(true)
-    expect(store.writes).toEqual([])
-    const live = await admitCandidate(candidate('Friday keeps the ledger for Marguerite'), NO_TIME, OPTS)
-    expect(live.action).toEqual(dry.action)
-    expect(live.trace.assessments).toEqual(dry.trace.assessments)
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const repos = fakeRepositories(store)
+    const realIncrement = repos.memories.incrementReinforcement
+    repos.memories.incrementReinforcement = async (c: string, id: string, at: string, by?: number) => {
+      // retireMemories ran between the decision and the write.
+      store.rows.delete(id)
+      return realIncrement(c, id, at, by)
+    }
+    factoryMock.getRepositories.mockReturnValue(repos)
+
+    const outcome = await admitCandidate(candidate('Friday keeps the ledger'), NO_TIME, OPTS)
+
+    expect(outcome.action).toEqual({ kind: 'insert' })
+    expect(outcome.memory).not.toBeNull()
+    expect(store.rows.size).toBe(1)
+    expect(outcome.trace.notes).toContain('target retired before the write; deciding again')
+  })
+
+  it('patches the job child\'s cache with the new vector instead of dropping it (review #6)', async () => {
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const outcome = await admitCandidate(candidate('Friday keeps the ledger'), NO_TIME, OPTS)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(processorHostMock.patchChildMemoryIndex).toHaveBeenCalledWith('char-1', [
+      { id: outcome.memory!.id, embedding: LEDGER, tier: 'hot' },
+    ])
   })
 
   it('two near-identical candidates make one row with count 2 (bug 209)', async () => {
@@ -220,7 +278,6 @@ describe('admitCandidate (parent)', () => {
           row: { characterId: 'char-1', content: 'x', summary: 'x' },
           embedding: LEDGER,
           userId: 'user-1',
-          dryRun: false,
           embeddingAttempts: 1,
           notes: [],
         }),

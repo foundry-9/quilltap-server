@@ -47,7 +47,7 @@ import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 import { resolveMemoryMaintenance } from '@/lib/memory/settings';
-import { MemoryCandidateSchema } from '@/lib/memory/candidate';
+import { MemoryCandidateSchema, MEMORY_ENTITY_CAP } from '@/lib/memory/candidate';
 import {
   MemoryMaintenanceCapSchema,
   MemoryMaintenanceCapOverridesSchema,
@@ -97,8 +97,8 @@ const createMemorySchema = z.object({
   kind: MemoryKindEnum.optional(),
   /** ISO wall-clock time of the event the memory records. */
   occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
-  /** At most 12, the candidate schema's bound (`MemoryCandidateSchema`). */
-  entities: z.array(z.string().min(1)).max(12).optional(),
+  /** The candidate schema's bound (`MEMORY_ENTITY_CAP`). */
+  entities: z.array(z.string().min(1)).max(MEMORY_ENTITY_CAP).optional(),
   // Deliberately absent (bug 218, refactor decision 13): `source` is always
   // MANUAL here — a client-claimed AUTO would switch on the extractor-only
   // heuristics — and `skipGate` has left the API, so every manual write goes

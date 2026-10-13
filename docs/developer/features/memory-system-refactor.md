@@ -950,7 +950,20 @@ departures:
 - **The child's index writes still buffer.** Admission no longer writes from the job child, but
   consolidation, housekeeping and the embedding jobs still do, so `memoryIndex` writes in the child
   cannot throw yet (invariant 9's throw waits for the last of them). After a parent-side admission
-  writes, it tells the child to drop its cache for that character.
+  writes, it sends the child the written vectors and tiers (`memory-index-patch`), which patch the
+  child's cache without discarding in-place updates a running child job made.
+- **Admission commits outside the job's write batch**, so the parent guards it three ways (review
+  of PR 93): a per-character lock around search → decide → write (concurrent jobs cannot both
+  insert one memory); an idempotency key per admission from the child (`jobId : content hash :
+  occurrence in the attempt`) whose outcome the parent remembers for 24 hours, so a failed and
+  retried job does not count its observations twice; and a second decision when the fold target is
+  retired mid-write, inserting if it vanishes again. The ledger lives in the parent's memory: a
+  restart between attempts forgets it.
+- **`dryRun` is not built.** Nothing called it; Phase D adds the dry run on the extraction context
+  and invariant 10's test with it.
+- **The footnote cap limits footnotes only.** A fold re-embeds whenever the embedded text (content
+  or anchor line) changed, at the cap too (bug 204's invariant); the old gate froze the vector at
+  the cap. `applyFold` refuses to run in the job child.
 - **Consolidation's member merge does not call `foldInto`.** A digest's content is written by the
   model, its count is an absolute sum capped at 50, and its links are remapped across every
   cluster of the run; none of that is a fold of rows into a survivor. It stays with the planner

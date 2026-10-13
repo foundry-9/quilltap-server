@@ -41,8 +41,8 @@ import {
   type FoldEpisodeMessage,
   type UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
-import { admitCandidate, admissionInserted } from './admission'
-import { MemoryCandidateSchema, anchorTimeMsFrom, type TargetingTags } from './candidate'
+import { admitCandidate, admissionInserted, linkBothWays } from './admission'
+import { MemoryCandidateSchema, MEMORY_ENTITY_CAP, anchorTimeMsFrom, type TargetingTags } from './candidate'
 import { resolveEpisodicAnchors } from './time/anchors'
 import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
@@ -319,7 +319,7 @@ async function runSlice(
           importance: episode.importance,
           kind: 'episodic',
           when: episode.when ?? null,
-          entities: episode.entities.slice(0, 12),
+          entities: episode.entities.slice(0, MEMORY_ENTITY_CAP),
           subject: { holderId: characterId, aboutId: null },
           provenance: {
             source: 'AUTO',
@@ -374,18 +374,16 @@ async function runSlice(
 
         // Links are deltas against the rows at commit, never lists built from
         // this read: another job linking the same rows keeps its links (bug 231).
+        // Only pairs not already linked on both sides are written.
         const existingEpisodeLinks = new Set(memory.relatedMemoryIds ?? [])
-        const newEpisodeLinks = fragmentIds.filter(id => !existingEpisodeLinks.has(id))
-        if (newEpisodeLinks.length > 0) {
-          await repos.memories.addRelatedMemoryIds(characterId, memory.id, newEpisodeLinks)
-        }
-        for (const fragment of fragments) {
-          if (fragment.id === memory.id) continue
-          if (!fragmentIds.includes(fragment.id)) continue
-          if ((fragment.relatedMemoryIds ?? []).includes(memory.id)) continue
-          await repos.memories.addRelatedMemoryIds(characterId, fragment.id, [memory.id])
-          result.fragmentsLinked++
-        }
+        const newlyLinkedFragments = fragments.filter(
+          f => fragmentIds.includes(f.id) && !(f.relatedMemoryIds ?? []).includes(memory.id),
+        )
+        const linkTo = fragmentIds.filter(
+          id => !existingEpisodeLinks.has(id) || newlyLinkedFragments.some(f => f.id === id),
+        )
+        await linkBothWays(characterId, memory.id, linkTo)
+        result.fragmentsLinked += newlyLinkedFragments.length
       } catch (perCharacterError) {
         logger.warn('[FoldEpisodePass] Failed to write episode for character', {
           chatId,

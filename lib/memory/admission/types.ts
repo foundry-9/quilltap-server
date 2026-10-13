@@ -131,7 +131,5 @@ export interface AdmissionOutcome {
   novelDetails: string[]
   /** Neighbours the new row was linked to (insert-linked only). */
   linkedIds: string[]
-  /** True when nothing was written (a dry run). */
-  dryRun: boolean
   trace: AdmissionTrace
 }

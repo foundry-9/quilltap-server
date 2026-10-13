@@ -122,7 +122,7 @@ describe('memory anchor line on a cold timezone cache', () => {
   })
 
   it('reembedRow (admission\'s re-embed after a fold) embeds the instance-zone date', async () => {
-    await reembedRow(tokyoMemory, 'user-1', 'p-1')
+    await reembedRow(tokyoMemory, 'user-1')
     expect(embeddedText()).toContain('when: 2026-07-14')
   })
 })

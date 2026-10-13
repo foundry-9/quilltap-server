@@ -72,43 +72,29 @@ export async function insertRow(row: AdmissionRow, embedding: Float32Array): Pro
 }
 
 /**
- * Link a new row and its neighbours both ways. Returns the new row's link
- * list as written.
- */
-export async function linkBothWays(characterId: string, memoryId: string, linkTo: readonly string[]): Promise<string[]> {
-  const repos = getRepositories()
-  const targets = linkTo.filter((id) => id !== memoryId)
-  for (const id of targets) {
-    await repos.memories.addRelatedMemoryIds(characterId, id, [memoryId])
-  }
-  const written = targets.length > 0 ? await repos.memories.addRelatedMemoryIds(characterId, memoryId, targets) : []
-  log.debug('Linked new memory to neighbours', { characterId, memoryId, linked: targets.length })
-  return written ?? targets
-}
-
-/**
  * Re-embed a row from its current text and write the vector through the index
- * (tier kept). Best-effort: a failure leaves the old vector and returns false.
+ * (tier kept). Best-effort: a failure leaves the old vector and returns null;
+ * otherwise the new vector.
  */
-export async function reembedRow(memory: Memory, userId: string, embeddingProfileId?: string): Promise<boolean> {
+export async function reembedRow(memory: Memory, userId: string): Promise<Float32Array | null> {
   try {
     const { embedding } = await generateEmbeddingForUser(
       embeddingTextFor(memory, await refreshMemoryTimeZone()),
       userId,
-      embeddingProfileId,
+      undefined,
       { priority: 'background' },
     )
     await memoryIndex.upsert(memory.characterId, [
       { id: memory.id, embedding, tier: memory.tier === 'cold' ? 'cold' : 'hot' },
     ])
     log.debug('Re-embedded memory', { memoryId: memory.id })
-    return true
+    return embedding
   } catch (error) {
     log.warn('Failed to re-embed memory; it keeps its old vector', {
       memoryId: memory.id,
       error: error instanceof Error ? error.message : String(error),
     })
-    return false
+    return null
   }
 }
 
@@ -120,14 +106,22 @@ export async function reembedRow(memory: Memory, userId: string, embeddingProfil
  * stands, so a caller deleting the absorbed rows does not keep them beside a
  * survivor that already took them in.
  *
- * Without a `userId` a changed survivor keeps its old vector (logged) until
- * the next reindex.
+ * The returned row carries its vector (the new one after a re-embed). Without
+ * a `userId` a changed survivor keeps its old vector (logged) until the next
+ * reindex.
+ *
+ * Parent only. In the job child every write buffers and returns `undefined`,
+ * which this cannot tell from a missing row, so it refuses rather than report
+ * a landed fold as failed.
  */
 export async function applyFold(
   survivor: Memory,
   plan: FoldPlan,
-  opts: { userId?: string; embeddingProfileId?: string } = {},
+  opts: { userId?: string } = {},
 ): Promise<Memory | null> {
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    throw new Error('applyFold writes in the parent only; the job child cannot read its buffered writes back')
+  }
   const repos = getRepositories()
   const { characterId, id } = survivor
   let current: Memory = survivor
@@ -189,7 +183,11 @@ export async function applyFold(
   let reembedded = false
   if (plan.reembed && landed) {
     if (opts.userId) {
-      reembedded = await reembedRow(current, opts.userId, opts.embeddingProfileId)
+      const embedding = await reembedRow(current, opts.userId)
+      if (embedding) {
+        current = { ...current, embedding }
+        reembedded = true
+      }
     } else {
       log.warn('Survivor changed but no userId to re-embed with', { survivorId: id })
     }

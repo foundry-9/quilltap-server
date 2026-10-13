@@ -13,9 +13,10 @@
  *  - links union, minus the survivor and every absorbed source;
  *  - the earliest `occurredAt` wins, a missing `narrativeTime` is filled;
  *  - `lastReinforcedAt` is the latest observation (the write never rewinds it);
- *  - the survivor is re-embedded when its embedded text changed — unless it was
- *    already at the footnote cap, where its vector stays frozen until
- *    consolidation rewrites it.
+ *  - the survivor is re-embedded whenever the text it is embedded as
+ *    (`embeddingTextFor`: content and the anchor line) changed. The footnote
+ *    cap stops the prose from growing; it never leaves a changed anchor line
+ *    on an old vector (bug 204).
  *
  * Pure: `applyFold` (`apply.ts`) writes the plan.
  *
@@ -24,6 +25,8 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import { appendCappedFootnotes, countReinforcementFootnotes } from '../reinforcement-footnotes'
+import { ADMISSION_THRESHOLDS } from '../settings-defaults'
+import { MEMORY_ENTITY_CAP } from '../candidate'
 import { extractNovelDetails } from './novel-details'
 
 /** Bounds a fold respects. */
@@ -31,6 +34,12 @@ export interface FoldCaps {
   footnoteCap: number
   entityCap: number
 }
+
+/** The bounds every fold uses: the admission footnote cap and the candidate's entity bound. */
+export const FOLD_CAPS: FoldCaps = Object.freeze({
+  footnoteCap: ADMISSION_THRESHOLDS.footnoteCap,
+  entityCap: MEMORY_ENTITY_CAP,
+})
 
 /** What a fold takes from each absorbed source. */
 export interface FoldSource {
@@ -68,9 +77,9 @@ export interface FoldPlan {
   reinforcementDelta: number
   /** Latest observation time among survivor and sources. */
   reinforcedAt: string | null
-  /** The survivor already carried the footnote cap. */
+  /** The survivor already carried the footnote cap (no footnote can be added). */
   atCap: boolean
-  /** The embedded text changed and the survivor is not frozen at the cap. */
+  /** The embedded text (content or anchor line) changed. */
   reembed: boolean
 }
 
@@ -147,7 +156,7 @@ export function foldInto(
     ...absorbed.map((s) => s.lastReinforcedAt ?? s.createdAt),
   ])
 
-  const embeddedTextChanged = content !== survivor.content || Object.keys(patch).length > 0
+  const reembed = content !== survivor.content || Object.keys(patch).length > 0
   return {
     survivorId: survivor.id,
     footnotes,
@@ -157,6 +166,6 @@ export function foldInto(
     reinforcementDelta,
     reinforcedAt,
     atCap,
-    reembed: embeddedTextChanged && !atCap,
+    reembed,
   }
 }

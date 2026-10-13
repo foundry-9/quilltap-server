@@ -17,7 +17,7 @@
  *   searches' top-K, re-embedded on the fly).
  *
  * For each side it asks admission's own decider (`decideAdmission`, with the
- * thresholds from the settings façade) what it would do with the row against
+ * same `ADMISSION_THRESHOLDS` admission itself uses) what it would do with the row against
  * those neighbours, and reports how many rows would fold (reinforce, absorb or
  * promote) and how many would be absorbed as near-duplicates. If anchor-free
  * folds are materially higher, admission should compare on anchor-free text.
@@ -35,8 +35,15 @@ import { memoryIndex, embeddingTextFor } from './index-store'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
-import { resolveMemorySettings } from './settings'
-import { decideAdmission, type AdmissionAction, type AdmissionNeighbour } from './admission'
+import { ADMISSION_THRESHOLDS } from './settings'
+import {
+  admissionReinforced,
+  decideAdmission,
+  isNearDuplicateDecision,
+  type AdmissionAction,
+  type AdmissionDecision,
+  type AdmissionNeighbour,
+} from './admission'
 
 const logger = createServiceLogger('AnchorGateProbe')
 
@@ -63,7 +70,7 @@ export interface AnchorGateProbeRow {
 export interface AnchorGateProbeBand {
   /** Rows admission would fold into an older row (reinforce, absorb or promote). */
   reinforce: number
-  /** Rows admission would absorb as near-duplicates (no new detail). */
+  /** Rows whose fold target is a near-duplicate (absorbed, or a cold row promoted and absorbed). */
   nearDuplicate: number
 }
 
@@ -100,7 +107,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const limit = Math.min(200, Math.max(1, input.limit ?? 50))
   const repos = getRepositories()
   const sample = await repos.memories.findRecent(input.characterId, limit)
-  const thresholds = (await resolveMemorySettings(input.userId)).admission
+  const thresholds = ADMISSION_THRESHOLDS
   // Anchor dates render on the instance's memory calendar, as the gate's do.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -145,7 +152,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   // Admission's own decision for a row against scored older neighbours.
   // (The probe does not follow superseded members to their digests; it
   // measures text against text.)
-  const decide = (memory: Memory, scored: Array<{ id: string; cosine: number }>): AdmissionAction['kind'] => {
+  const decide = (memory: Memory, scored: Array<{ id: string; cosine: number }>): AdmissionDecision => {
     const neighbours: AdmissionNeighbour[] = scored
       .map(({ id, cosine }) => ({ memory: memoryCache.get(id), cosine }))
       .filter((n): n is AdmissionNeighbour => n.memory !== undefined)
@@ -159,10 +166,13 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
       },
       neighbours,
       thresholds,
-    }).action.kind
+    })
   }
-  const folds = (kind: AdmissionAction['kind'] | null): boolean =>
-    kind === 'reinforce' || kind === 'absorb' || kind === 'promote-and-reinforce'
+  const folds = (decision: AdmissionDecision | null): boolean => !!decision && admissionReinforced(decision)
+  const nearDuplicate = (decision: AdmissionDecision | null): boolean =>
+    !!decision && isNearDuplicateDecision(decision, thresholds)
+  // Each row's decisions, for the band counts (the rows carry only the kinds).
+  const decisions = new Map<AnchorGateProbeRow, { anchored: AdmissionDecision | null; anchorFree: AdmissionDecision | null }>()
 
   const rows: AnchorGateProbeRow[] = []
   for (const memory of sample) {
@@ -214,7 +224,9 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
         row.anchoredBest = olderAnchored[0].score
         row.anchoredBestId = olderAnchored[0].id
       }
-      row.anchoredAction = decide(memory, olderAnchored.map(h => ({ id: h.id, cosine: h.score })))
+      const anchoredDecision = decide(memory, olderAnchored.map(h => ({ id: h.id, cosine: h.score })))
+      row.anchoredAction = anchoredDecision.action.kind
+      decisions.set(row, { anchored: anchoredDecision, anchorFree: null })
 
       // Anchor-free side: re-embed the union of both searches' older
       // neighbours without their anchor lines and score like for like.
@@ -237,7 +249,9 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
           row.anchorFreeBestId = id
         }
       }
-      row.anchorFreeAction = decide(memory, anchorFreeScores)
+      const anchorFreeDecision = decide(memory, anchorFreeScores)
+      row.anchorFreeAction = anchorFreeDecision.action.kind
+      decisions.set(row, { anchored: decisions.get(row)?.anchored ?? null, anchorFree: anchorFreeDecision })
     } catch (error) {
       logger.warn('Probe failed for row; continuing', {
         memoryId: memory.id,
@@ -247,9 +261,10 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     rows.push(row)
   }
 
-  const band = (pick: (r: AnchorGateProbeRow) => AdmissionAction['kind'] | null): AnchorGateProbeBand => ({
+  const side = (which: 'anchored' | 'anchorFree') => (r: AnchorGateProbeRow) => decisions.get(r)?.[which] ?? null
+  const band = (pick: (r: AnchorGateProbeRow) => AdmissionDecision | null): AnchorGateProbeBand => ({
     reinforce: rows.filter(r => folds(pick(r))).length,
-    nearDuplicate: rows.filter(r => pick(r) === 'absorb').length,
+    nearDuplicate: rows.filter(r => nearDuplicate(pick(r))).length,
   })
 
   const result: AnchorGateProbeResult = {
@@ -257,9 +272,9 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     sampled: sample.length,
     anchoredRows: rows.filter(r => r.hasAnchorLine).length,
     thresholds: { reinforce: thresholds.reinforce, nearDuplicate: thresholds.nearDuplicate },
-    anchored: band(r => r.anchoredAction),
-    anchorFree: band(r => r.anchorFreeAction),
-    crossedOnlyWithoutAnchors: rows.filter(r => !folds(r.anchoredAction) && folds(r.anchorFreeAction)).length,
+    anchored: band(side('anchored')),
+    anchorFree: band(side('anchorFree')),
+    crossedOnlyWithoutAnchors: rows.filter(r => !folds(side('anchored')(r)) && folds(side('anchorFree')(r))).length,
     embeddingsGenerated,
     rows,
   }

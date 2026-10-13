@@ -30,7 +30,7 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
   trackActivity: (_kind: string, fn: () => unknown) => fn(),
 }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
-jest.mock('@/lib/background-jobs/host/processor-host', () => ({ notifyChild: jest.fn() }))
+jest.mock('@/lib/background-jobs/host/processor-host', () => ({ patchChildMemoryIndex: jest.fn() }))
 jest.mock('@/lib/memory/consolidation-triggers', () => ({ maybeEnqueueConsolidationForCharacters: jest.fn(async () => []) }))
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/instance-settings', () => ({ getMemoryMaintenanceSettings: jest.fn(async () => ({ enabled: false })) }))
@@ -38,6 +38,8 @@ jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({ callHost: jest
 
 import v8 from 'node:v8'
 import { admitCandidate } from '@/lib/memory/admission'
+import { resetAdmissionStateForTests } from '@/lib/memory/admission/admit'
+import { runWithJobScope } from '@/lib/background-jobs/child/child-repositories-proxy'
 import { MemoryCandidateSchema, type MemoryCandidate } from '@/lib/memory/candidate'
 import { dispatchHostRpc } from '@/lib/background-jobs/host/host-rpc-dispatcher'
 import { createFakeMemoryStore, fakeMemoryIndex, fakeRepositories, seedMemory, type FakeMemoryStore } from '../../../helpers/memory-admission-fake'
@@ -46,7 +48,7 @@ const factoryMock = jest.requireMock('@/lib/repositories/factory') as { getRepos
 const indexMock = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: Record<string, unknown> }
 const embedMock = jest.requireMock('@/lib/embedding/embedding-service') as { generateEmbeddingForUser: jest.Mock }
 const rpcMock = jest.requireMock('@/lib/background-jobs/child/host-rpc-client') as { callHost: jest.Mock }
-const processorHostMock = jest.requireMock('@/lib/background-jobs/host/processor-host') as { notifyChild: jest.Mock }
+const processorHostMock = jest.requireMock('@/lib/background-jobs/host/processor-host') as { patchChildMemoryIndex: jest.Mock }
 
 /** What the advanced-serialization IPC channel does to a message. */
 const overIpc = <T>(value: T): T => v8.deserialize(v8.serialize(value)) as T
@@ -86,6 +88,7 @@ describe('admission from the job child runs in the parent', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetAdmissionStateForTests()
     store = createFakeMemoryStore()
     vectors = new Map()
     childWrites = []
@@ -150,8 +153,11 @@ describe('admission from the job child runs in the parent', () => {
     expect(rpcMock.callHost.mock.calls[0][0]).toBe('admitMemory')
     // The child never wrote a memory row; it only read characters/rows.
     expect(childWrites).toEqual([])
-    // The parent tells the child its vector cache is stale.
-    expect(processorHostMock.notifyChild).toHaveBeenCalledWith('vectorStore', 'char-1')
+    // The parent patches the child's cache with the new vector.
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(processorHostMock.patchChildMemoryIndex).toHaveBeenCalledWith('char-1', [
+      { id: first.memory!.id, embedding: LEDGER, tier: 'hot' },
+    ])
   })
 
   it('the child embeds; the parent never calls the embedding provider for a plain insert', async () => {
@@ -193,5 +199,24 @@ describe('admission from the job child runs in the parent', () => {
     expect(row.content).toContain('[+] Valparaiso')
     expect(row.reinforcementCount).toBe(3)
     expect(childWrites).toEqual([])
+  })
+
+  it('a retried job does not count its admissions twice (review #1)', async () => {
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const attempt = () =>
+      runWithJobScope('job-retry', async () => {
+        await admitCandidate(candidate('Friday keeps the ledger.'), NO_TIME, { userId: 'user-1' })
+        // The same observation twice in one attempt is two observations.
+        await admitCandidate(candidate('Friday keeps the ledger.'), NO_TIME, { userId: 'user-1' })
+      })
+
+    await attempt()
+    const [row] = Array.from(store.rows.values())
+    expect(row.reinforcementCount).toBe(2)
+
+    // The job failed after admitting and is retried: same job id, new attempt.
+    await attempt()
+    expect(store.rows.size).toBe(1)
+    expect(store.rows.get(row.id)!.reinforcementCount).toBe(2)
   })
 })

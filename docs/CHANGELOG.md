@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### PR 93 review: 10 findings on Phase C
+
+- A retried job no longer counts its admissions twice. Each admission from the job child carries a key (job id, content hash, occurrence in the attempt); the parent remembers the outcome per key for 24 hours (up to 5,000 keys) and answers a repeat without writing. A parent restart between attempts forgets the keys.
+- Admissions for one character are serialised in the parent (a per-character lock around search, decide and write), so two concurrent jobs no longer both insert the same memory.
+- When the row an admission folds into is retired before the write lands, admission decides again against the current index, and inserts if the target vanishes a second time. The candidate is never dropped, and the Memories API no longer reports this race as an embedding failure.
+- `applyFold` refuses to run in the job child, where buffered writes read back as missing rows.
+- A fold re-embeds the survivor whenever its content or anchor line changed, including at the footnote cap (the cap now limits only footnotes).
+- After a parent-side admission the job child's vector cache is patched with the written vectors and tiers (new IPC message `memory-index-patch`), not dropped.
+- The anchor gate probe uses the same `ADMISSION_THRESHOLDS` as admission, and counts a cold near-duplicate that would be promoted and absorbed as a near-duplicate (`isNearDuplicateDecision`).
+- The episode pass writes its fragment links through `linkBothWays` (`lib/memory/admission/links.ts`); a grep-test limits `addRelatedMemoryIds` to admission.
+- The entity bound is `MEMORY_ENTITY_CAP` in `lib/memory/candidate.ts` (used by the schema, the API, the episode pass and `FOLD_CAPS`); the probe uses `admissionReinforced` instead of a copy.
+- Removed the unused `dryRun` and `embeddingProfileId` admission options and the dry-run outcome flag.
+
 #### Memory refactor Phase C: admission in the parent; one combine
 
 Structural Phase C of `docs/developer/features/memory-system-refactor.md`. No migrations.
@@ -14,7 +27,7 @@ Structural Phase C of `docs/developer/features/memory-system-refactor.md`. No mi
 - Removed: `createMemoryWithGate`, `createMemoryWithEmbedding`, `createMemoryDirect`, `CreateMemoryOptions`, `MemoryGateOutcome`, `runMemoryGate`, `reinforceMemory`, `absorbNearDuplicate`, `countReinforcement`, `patchMemory`, `linkRelatedMemories`, `promoteMatchedMemory`, `reembedMemory`, the exported threshold constants (read `ADMISSION_THRESHOLDS`), and `skipGate` / `skipEmbedding` / `promoteOnMatch` on `MemoryServiceOptions`. `toCreateMemoryOptions` is now `toAdmissionRow`.
 - Manual create (`POST /api/v1/memories`): goes through `admitCandidate`. A hand-written memory folded into a MANUAL row or a digest raises that row's importance when higher; it no longer re-files an AUTO row as MANUAL (it is inserted and linked instead). The response's `action` is the action kind (`insert`, `reinforce`, …).
 - Anchor gate probe (`?action=anchor-gate-probe`, `quilltap anchor-probe`): reads thresholds from `resolveMemorySettings` and reports `decideAdmission`'s decision per row (`anchoredAction`, `anchorFreeAction`); the band counts are rows that would fold / be absorbed.
-- The consolidation watermark is checked by admission in the parent (extraction batches no longer carry `memories.create`); the housekeeping watermark still runs where the housekeeping outcome cache lives. A parent-side admission tells the job child to drop that character's vector cache.
+- The consolidation watermark is checked by admission in the parent (extraction batches no longer carry `memories.create`); the housekeeping watermark still runs where the housekeeping outcome cache lives.
 - Extraction debug lines come from the admission trace (`describeAdmission`): action, target, count, and each neighbour's cosine and verdict.
 - Help: `help/characters.md` (hand-written memories), `help/episodic-memory.md` (date guard over every match; subject and kind kept apart). CLI README and API.md updated.
 - Tests: `admission-decide.test.ts`, `admission-neighbours.test.ts`, `admission-fold.test.ts`, `admission-admit.test.ts`, `admission-host-rpc.test.ts` (child → host-RPC → parent), grep-tests for the insert and reinforcement chokepoints. Gate, merge and manual-promote tests removed or ported; the overlay test is renamed `child-proxy-memory-overlay.test.ts`.

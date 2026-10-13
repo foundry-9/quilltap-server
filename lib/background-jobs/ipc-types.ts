@@ -34,6 +34,18 @@ export interface ParentInvalidateMessage {
   key: string;
 }
 
+/**
+ * Bring the child's memory-index cache in step with rows the parent just wrote
+ * (admission over host-RPC): put each entry's vector and tier into the
+ * character's cache if it is loaded, leaving the rest of the cache — and any
+ * in-place updates a running child job made to it — alone.
+ */
+export interface ParentMemoryIndexPatchMessage {
+  type: 'memory-index-patch';
+  characterId: string;
+  entries: Array<{ id: string; embedding: Float32Array; tier: 'hot' | 'cold' }>;
+}
+
 /** Begin graceful drain. Child stops accepting new jobs and exits when idle. */
 export interface ParentShutdownMessage {
   type: 'shutdown';
@@ -57,6 +69,7 @@ export interface ParentHostRpcResponseMessage {
 export type ParentToChildMessage =
   | ParentJobMessage
   | ParentInvalidateMessage
+  | ParentMemoryIndexPatchMessage
   | ParentShutdownMessage
   | ParentHostRpcResponseMessage;
 
@@ -205,5 +218,5 @@ export function isChildToParentMessage(value: unknown): value is ChildToParentMe
 export function isParentToChildMessage(value: unknown): value is ParentToChildMessage {
   if (!value || typeof value !== 'object') return false;
   const t = (value as { type?: unknown }).type;
-  return t === 'job' || t === 'invalidate' || t === 'shutdown' || t === 'host-rpc-response';
+  return t === 'job' || t === 'invalidate' || t === 'memory-index-patch' || t === 'shutdown' || t === 'host-rpc-response';
 }
