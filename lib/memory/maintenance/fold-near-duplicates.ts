@@ -134,12 +134,16 @@ export interface AppliedNearDuplicateFolds {
   /** Rows retired (folded into a survivor). */
   retiredIds: string[]
   groupsFailed: number
+  /** Groups not attempted because the deadline passed; a later run finds them again. */
+  groupsDeferred: number
 }
 
 export interface ApplyNearDuplicateFoldsRequest {
   characterId: string
   groups: NearDuplicateGroup[]
   userId: string
+  /** Epoch ms after which no further group is started. */
+  deadlineAt?: number
 }
 
 function isJobChild(): boolean {
@@ -147,10 +151,58 @@ function isJobChild(): boolean {
 }
 
 /**
- * Apply planned folds in the parent. Each group re-reads its rows first: a row
- * gone, gone cold, or no longer AUTO since planning is left out, and a group
- * whose survivor is no longer eligible is skipped whole. Absorbed rows are
- * retired only after their survivor has taken them in.
+ * Fold one group under admission's lock: re-read its rows, fold, retire the
+ * absorbed rows. The lock is held for one group at a time (one survivor
+ * re-embed), so admission for the character waits on one fold, never on the
+ * whole phase. Returns the survivor as it now stands, or null when the group
+ * no longer applies or its fold did not land.
+ */
+async function foldOneGroup(
+  characterId: string,
+  group: NearDuplicateGroup,
+  userId: string,
+): Promise<{ survivor: Memory; retiredIds: string[] } | null> {
+  return withAdmissionLock(characterId, async () => {
+    const ids = [group.survivorId, ...group.absorbedIds]
+    const rows = new Map(
+      (await getRepositories().memories.findByIds(ids)).filter((m) => m.characterId === characterId).map((m) => [m.id, m]),
+    )
+    const survivor = rows.get(group.survivorId)
+    const absorbed = group.absorbedIds.map((id) => rows.get(id)).filter((m): m is Memory => !!m && isFoldEligible(m))
+    if (!survivor || !isFoldEligible(survivor) || absorbed.length === 0) {
+      log.debug('Near-duplicate group no longer applies; skipped', {
+        characterId,
+        survivorId: group.survivorId,
+        survivorPresent: !!survivor,
+        absorbedStill: absorbed.length,
+      })
+      return null
+    }
+    let applied: Memory | null = null
+    try {
+      applied = await applyFold(survivor, foldInto(survivor, absorbed, FOLD_CAPS), { userId })
+    } catch (error) {
+      log.warn('Near-duplicate fold failed; its rows are kept', {
+        characterId,
+        survivorId: survivor.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (!applied) return null
+    // Inside the lock, so no admission can reinforce an absorbed row between
+    // the fold and its retirement. The chokepoint scrubs every link to the
+    // folded rows (the survivor's new ones included) and evicts their vectors.
+    const report = await retireMemories(absorbed.map((m) => m.id), { reason: 'near-duplicate-fold' })
+    return { survivor: applied, retiredIds: report.retiredIds }
+  })
+}
+
+/**
+ * Apply planned folds in the parent, one group at a time. Each group re-reads
+ * its rows first: a row gone, gone cold, or no longer AUTO since planning is
+ * left out, and a group whose survivor is no longer eligible is skipped whole.
+ * Absorbed rows are retired only after their survivor has taken them in. Past
+ * `deadlineAt` no further group is started; the rest are deferred.
  */
 export async function applyNearDuplicateFolds(
   request: ApplyNearDuplicateFoldsRequest,
@@ -158,72 +210,49 @@ export async function applyNearDuplicateFolds(
   if (isJobChild()) {
     throw new Error('applyNearDuplicateFolds runs in the parent; the job child folds through host-RPC (foldNearDuplicates)')
   }
-  const { characterId, groups, userId } = request
-  const result: AppliedNearDuplicateFolds = { survivors: [], retiredIds: [], groupsFailed: 0 }
+  const { characterId, groups, userId, deadlineAt } = request
+  const result: AppliedNearDuplicateFolds = { survivors: [], retiredIds: [], groupsFailed: 0, groupsDeferred: 0 }
   if (groups.length === 0) return result
 
-  return withAdmissionLock(characterId, async () => {
-    const repos = getRepositories()
-    const ids = Array.from(new Set(groups.flatMap((g) => [g.survivorId, ...g.absorbedIds])))
-    const rows = new Map((await repos.memories.findByIds(ids)).filter((m) => m.characterId === characterId).map((m) => [m.id, m]))
-    const toRetire: string[] = []
-
-    for (const group of groups) {
-      const survivor = rows.get(group.survivorId)
-      const absorbed = group.absorbedIds.map((id) => rows.get(id)).filter((m): m is Memory => !!m && isFoldEligible(m))
-      if (!survivor || !isFoldEligible(survivor) || absorbed.length === 0) {
-        result.groupsFailed++
-        log.debug('Near-duplicate group no longer applies; skipped', {
-          characterId,
-          survivorId: group.survivorId,
-          survivorPresent: !!survivor,
-          absorbedStill: absorbed.length,
-        })
-        continue
-      }
-      let applied: Memory | null = null
-      try {
-        applied = await applyFold(survivor, foldInto(survivor, absorbed, FOLD_CAPS), { userId })
-      } catch (error) {
-        log.warn('Near-duplicate fold failed; its rows are kept', {
-          characterId,
-          survivorId: survivor.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-      if (!applied) {
-        result.groupsFailed++
-        continue
-      }
-      result.survivors.push(applied)
-      toRetire.push(...absorbed.map((m) => m.id))
+  for (let i = 0; i < groups.length; i++) {
+    if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+      result.groupsDeferred = groups.length - i
+      log.info('Near-duplicate fold budget spent; the remaining groups wait for the next run', {
+        characterId,
+        deferred: result.groupsDeferred,
+      })
+      break
     }
-
-    if (toRetire.length > 0) {
-      // The deletion chokepoint scrubs every link to the folded rows (the
-      // survivors' new ones included) and evicts their vectors.
-      const report = await retireMemories(toRetire, { reason: 'near-duplicate-fold' })
-      result.retiredIds = report.retiredIds
-      // The job child's cache still holds the folded rows; it reloads on next use.
-      try {
-        const { notifyChild } = await import('@/lib/background-jobs/host/processor-host')
-        notifyChild('vectorStore', characterId)
-      } catch (error) {
-        log.debug('Could not tell the job child to drop its memory index cache', {
-          characterId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+    const done = await foldOneGroup(characterId, groups[i], userId)
+    if (!done) {
+      result.groupsFailed++
+      continue
     }
-    log.debug('Near-duplicate folds applied', {
-      characterId,
-      groups: groups.length,
-      landed: result.survivors.length,
-      failed: result.groupsFailed,
-      retired: result.retiredIds.length,
-    })
-    return result
+    result.survivors.push(done.survivor)
+    result.retiredIds.push(...done.retiredIds)
+  }
+
+  if (result.retiredIds.length > 0) {
+    // The job child's cache still holds the folded rows; it reloads on next use.
+    try {
+      const { notifyChild } = await import('@/lib/background-jobs/host/processor-host')
+      notifyChild('vectorStore', characterId)
+    } catch (error) {
+      log.debug('Could not tell the job child to drop its memory index cache', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  log.debug('Near-duplicate folds applied', {
+    characterId,
+    groups: groups.length,
+    landed: result.survivors.length,
+    failed: result.groupsFailed,
+    deferred: result.groupsDeferred,
+    retired: result.retiredIds.length,
   })
+  return result
 }
 
 /**

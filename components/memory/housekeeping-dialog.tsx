@@ -83,12 +83,16 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
 
       if (!res.ok) throw new Error('Failed to run housekeeping')
 
-      const data = await res.json()
-      const moved = data.result.demoted ?? 0
+      // The run is queued behind any maintenance already under way for this
+      // character; the preview's count is what it expects to move.
+      await res.json()
+      const moving = preview?.wouldDemote ?? 0
       showSuccessToast(
-        moved === 1
-          ? 'One memory has been shown to the archive, where it will keep.'
-          : `${moved} memories have been shown to the archive, where they will keep.`
+        moving === 0
+          ? 'The housekeeper has been sent round; nothing looked in need of the archive.'
+          : moving === 1
+            ? 'The housekeeper has been sent round to show one memory to the archive, where it will keep.'
+            : `The housekeeper has been sent round to show ${moving} memories to the archive, where they will keep.`
       )
       onComplete()
     } catch (err) {

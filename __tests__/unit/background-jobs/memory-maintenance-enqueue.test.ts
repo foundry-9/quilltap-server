@@ -3,7 +3,12 @@
  *   - bug 221: one MEMORY_MAINTENANCE job per character whatever the reason;
  *     a user-wide run fans out into one job per character, so a scheduled run
  *     and a watermark run collide on the same character.
- *   - a waiting job widens to the phases asked for; a running one is left.
+ *   - a waiting job widens to the phases asked for; each phase keeps its own
+ *     exemption, so merging a manual ask never lends a scheduled phase the
+ *     manual exemption (PR 97 review);
+ *   - a running job never absorbs a request: a new waiting job is made, which
+ *     the handler defers while the running one finishes (PR 97 review);
+ *   - a user-wide run reads the user's pending jobs once (PR 97 review).
  *   - bug 223: a manual run carries the requested `clusterThreshold`.
  */
 
@@ -11,6 +16,7 @@ import {
   enqueueMemoryMaintenance,
   enqueueMemoryMaintenanceForUser,
 } from '@/lib/background-jobs/queue-service';
+import { resolvePhases } from '@/lib/memory/maintenance/run';
 import { getRepositories } from '@/lib/repositories/factory';
 
 jest.mock('@/lib/logger', () => {
@@ -63,14 +69,18 @@ beforeEach(() => {
   jest.mocked(getRepositories).mockReturnValue(repos);
 });
 
+const ALL = ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'];
+
 describe('one maintenance job per character (bug 221)', () => {
-  it('a user-wide run fans out into one job per live character', async () => {
+  it('a user-wide run fans out into one job per live character, reading pending jobs once', async () => {
     const ids = await enqueueMemoryMaintenanceForUser('user-1', { reason: 'scheduled' });
     expect(ids).toHaveLength(2);
     expect(jobs.map((j) => [j.type, j.payload])).toEqual([
-      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-a' }],
-      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-b' }],
+      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-a', exemptPhases: [] }],
+      ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-b', exemptPhases: [] }],
     ]);
+    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(1);
+    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledWith('user-1', 'PENDING');
   });
 
   it('a watermark run collides with the scheduled run for the same character', async () => {
@@ -86,7 +96,7 @@ describe('one maintenance job per character (bug 221)', () => {
     expect(jobs).toHaveLength(2);
   });
 
-  it('a waiting job widens to the phases asked for, and a manual ask makes it manual', async () => {
+  it('a waiting job widens to the phases asked for; only the hand-asked phases are exempt', async () => {
     await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
     await enqueueMemoryMaintenance('user-1', {
       characterId: 'char-a',
@@ -99,22 +109,52 @@ describe('one maintenance job per character (bug 221)', () => {
       characterId: 'char-a',
       reason: 'manual',
       phases: ['demote', 'consolidate', 'mirror'],
+      exemptPhases: ['consolidate', 'mirror'],
       settings: { consolidation: { clusterThreshold: 0.65 } },
     });
+  });
+
+  it('a manual ask merged into a scheduled job does not lend it the exemption', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'scheduled' });
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'manual', phases: ['fold-near-duplicates'] });
+    const merged = jobs[0].payload as any;
+    expect(merged.phases).toBeUndefined();
+    expect(merged.exemptPhases).toEqual(['fold-near-duplicates']);
+
+    // With consolidation and maintenance both switched off, only the fold runs.
+    const off = {
+      maintenance: {
+        enabled: false,
+        phases: { foldNearDuplicates: true, demote: true, retire: true },
+        coldRetentionDays: 30,
+        consolidation: { enabled: false },
+      },
+    };
+    const plan = resolvePhases(merged, off as never);
+    expect(plan.get('fold-near-duplicates')).toBeNull();
+    expect(plan.get('consolidate')).toBe('consolidation-disabled');
+    expect(plan.get('demote')).toBe('maintenance-disabled');
+    expect(plan.get('retire')).toBe('maintenance-disabled');
+  });
+
+  it('an unscoped manual ask exempts every phase', async () => {
+    await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'manual' });
+    expect((jobs[0].payload as any).exemptPhases).toEqual(ALL);
   });
 
   it('a waiting job that runs every phase stays unscoped', async () => {
     await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'scheduled' });
     await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
-    expect(jobs[0].payload).toEqual({ characterId: 'char-a', reason: 'scheduled' });
+    expect(jobs[0].payload).toEqual({ characterId: 'char-a', reason: 'scheduled', exemptPhases: [] });
   });
 
-  it('a running job is left alone', async () => {
+  it('a running job never absorbs a request: a new waiting job is made', async () => {
     await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'watermark', phases: ['demote'] });
     jobs[0].status = 'PROCESSING';
     const id = await enqueueMemoryMaintenance('user-1', { characterId: 'char-a', reason: 'manual', phases: ['consolidate'] });
-    expect(id).toBe('job-1');
+    expect(id).toBe('job-2');
     expect(jobs[0].payload.phases).toEqual(['demote']);
+    expect(jobs[1].payload).toMatchObject({ characterId: 'char-a', phases: ['consolidate'], exemptPhases: ['consolidate'] });
     expect(repos.backgroundJobs.update).not.toHaveBeenCalled();
   });
 

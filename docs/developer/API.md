@@ -4287,8 +4287,10 @@ Search memories (uses embeddings if available, falls back to keyword).
 
 Memory maintenance (memory refactor §3.9): one `MEMORY_MAINTENANCE` run per character, its phases
 always in this order — `fold-near-duplicates` → `consolidate` → `demote` → `retire` → `mirror`.
-Manual runs ignore the `memoryMaintenance.enabled` / `memoryConsolidation.enabled` switches; an
-unscoped run (no `phases`) still respects the per-phase toggles, and `retire` needs
+The phases a manual request asks for (every phase when it names none) run whatever the
+`memoryMaintenance.enabled` / `memoryConsolidation.enabled` switches and the per-phase toggles say;
+the job records them as `exemptPhases`. Phases a scheduled or watermark request asked for obey
+them, even after a manual request has been merged into the same waiting job. `retire` always needs
 `coldRetentionDays`.
 
 **Request Body**: `{ characterId?, phases?, dryRun?, settings? }`. `phases` is a non-empty list of
@@ -4305,7 +4307,8 @@ maxClustersPerRun?, cap? }` (`cap` an integer 100–100,000; otherwise the chara
   `characterId` a dry run is allowed only for phases that never call a model (no `consolidate`) and
   returns `{ success, dryRun: true, reports: MaintenanceReport[] }`, one per live character.
 - otherwise one job is enqueued for the character — or one per character the user owns — each
-  deduped per character (a waiting job widens to the phases asked for). **Response**: `{ success,
+  deduped per character: a waiting job widens to the phases asked for; a running one never absorbs
+  the request (a new job waits, and starts once the running one has finished). **Response**: `{ success,
   dryRun: false, jobId, jobIds }`.
 
 `404` for an unknown character; `400` for a malformed body or a user-wide dry run that would
@@ -4332,7 +4335,10 @@ the protection score).
 
 #### `POST /api/v1/memories?action=housekeep`
 
-Run the `demote` and `retire` phases on one character, synchronously, in the server process.
+The `demote` and `retire` phases on one character. With `dryRun: true` the plan is computed
+in-process and returned; otherwise a `MEMORY_MAINTENANCE` job with those two phases is enqueued
+(deduped per character like any other) and `{ success, dryRun: false, queued: true, jobId }`
+returned, so a live run never overlaps a maintenance job already working on the character.
 
 **Request Body**:
 
@@ -4348,9 +4354,9 @@ Run the `demote` and `retire` phases on one character, synchronously, in the ser
 totalAfter, coldCount, capUsed, details } }` — `capUsed` is the cap applied: `maxMemories` when
 given, else the character's configured cap.
 
-**Response** (`POST`): `{ success, dryRun, result: { demoted, deleted, kept, totalBefore,
-totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds,
-details? } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
+**Response** (`POST`, dry run): `{ success, dryRun: true, result: { demoted, deleted, kept,
+totalBefore, totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds,
+deletedIds, details } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
 MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,
 exactly the excess is demoted, lowest protection score first.
 

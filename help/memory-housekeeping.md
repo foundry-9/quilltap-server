@@ -38,7 +38,7 @@ When enabled, the errand runs in two ways:
 - **Reactively**, whenever a character reaches 90% of their per-character cap after a new memory is written. The check is cheap, and it is made in the server's own head, which also remembers when it last ran: it will not send the housekeeper round again for at least fifteen minutes, nor for an hour after a round that could barely make a dent. The work itself runs as a background job, so it never blocks a chat turn.
 - **On a schedule**, once a day, as a safety net for characters whose counts crept up while no one was chatting with them.
 
-Only one round is ever under way for a character at a time: a reactive round, the daily round and a button-press all queue behind the one already waiting, which simply takes on whatever extra steps the newcomer asked for.
+Only one round is ever under way for a character at a time. A reactive round, the daily round and a button-press all join the round already waiting, which simply takes on whatever extra steps the newcomer asked for; a request that arrives while a round is actually under way waits its turn behind it, rather than being swallowed by a round that may already be past the step it wanted. The **Memory Cleanup** dialog on a character's page sends its round through the same queue, so it never trips over one already working on that character.
 
 You can also run it on demand with the **Run housekeeping now** button — handy after importing a large archive or after flipping the feature on for the first time.
 
@@ -72,7 +72,7 @@ If you want a different cap for a particular character, open **Per-character ove
 
 Earlier versions offered a tick-box to merge near-identical memories during the sweep. Its work is now done two ways: the round's first step folds true near-duplicates on its own, and [Memory Consolidation](memory-consolidation.md) combines whole clusters of related memories into digests. The old setting has been cleared out of saved configuration altogether, along with its threshold. **Near-Duplicate Folding**, further down this tab, runs the first step by itself, with a preview, for every character at once.
 
-Each of the round's own steps — folding, archiving the excess, retiring — can be switched off on its own through the maintenance settings (`phases` on `?action=maintenance-config`); a round you start by naming its steps runs them regardless.
+Each of the round's own steps — folding, archiving the excess, retiring — can be switched off on its own through the maintenance settings (`phases` on `?action=maintenance-config`). The switches govern every step the house decides on for itself, in the daily round or the reactive one; a step you ask for by hand runs regardless. Should your request join a round already waiting, only the steps you asked for are excused the switches — the rest of that round still minds them.
 
 ### Deleting archived memories
 

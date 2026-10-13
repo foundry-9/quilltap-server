@@ -22,8 +22,10 @@ jest.mock('@/lib/logger', () => {
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/memory/settings', () => ({ resolveMemorySettings: jest.fn() }))
 const mockEnqueue = jest.fn(async () => 'job-new')
+const mockEnqueueMany = jest.fn(async (_u: string, ids: string[]) => ids.map((id) => `job-${id}`))
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueMemoryMaintenance: (...args: unknown[]) => mockEnqueue(...(args as [])),
+  enqueueMemoryMaintenanceMany: (...args: unknown[]) => mockEnqueueMany(...(args as [string, string[]])),
 }))
 jest.mock('@/lib/memory/maintenance/run', () => ({
   runMaintenance: jest.fn(),
@@ -54,6 +56,7 @@ import type { MaintenanceSummary } from '@/lib/memory/maintenance/types'
 const T0 = Date.parse('2026-10-13T12:00:00.000Z')
 
 let recentJobs: unknown[]
+let processingJobs: unknown[]
 let repos: any
 
 function reading(overrides: Partial<WatermarkReading> = {}): WatermarkReading {
@@ -91,8 +94,12 @@ beforeEach(() => {
   jest.clearAllMocks()
   resetMaintenanceLedgerForTests()
   recentJobs = []
+  processingJobs = []
   repos = {
-    backgroundJobs: { findRecentByType: jest.fn(async () => recentJobs) },
+    backgroundJobs: {
+      findRecentByType: jest.fn(async () => recentJobs),
+      findByUserId: jest.fn(async () => processingJobs),
+    },
     memories: {
       countCapBreakdown: jest.fn(async () => ({ hotTotal: 1900, demotable: 1900, protected: 0, cold: 0 })),
       countUnconsideredHot: jest.fn(async () => 10),
@@ -160,6 +167,13 @@ describe('shouldEnqueue', () => {
     expect(await shouldEnqueue('char-a', 'watermark', r, T0)).toBeNull()
   })
 
+  it('a demotion that found no excess backs off for the hour too (between 90% and 100% of the cap)', async () => {
+    recordMaintenanceOutcome(summary({ demote: { cap: 2000, hotTotal: 1850, demotable: 1850, protected: 0, excess: 0, demoted: 0, highestScoreDemoted: null } }))
+    const r = reading({ demotable: 1850 })
+    expect(await shouldEnqueue('char-a', 'watermark', r, T0 + DEMOTE_THROTTLE_MS + 1)).toBeNull()
+    expect(await shouldEnqueue('char-a', 'watermark', r, T0 + INEFFECTIVE_BACKOFF_MS)).not.toBeNull()
+  })
+
   it('a dry run records nothing', async () => {
     recordMaintenanceOutcome(summary({ dryRun: true }))
     expect(await shouldEnqueue('char-a', 'watermark', reading(), T0 + 1)).not.toBeNull()
@@ -213,25 +227,30 @@ describe('maybeEnqueueMaintenance', () => {
 })
 
 describe('scheduler', () => {
-  it('enqueues one scheduled job per live character holding memories', async () => {
+  it('enqueues one scheduled job per live character holding memories, one batch per owner', async () => {
     const result = await runScheduledMemoryMaintenance()
     expect(result).toEqual({ charactersScanned: 3, jobsEnqueued: 2 })
-    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: 'char-a', reason: 'scheduled' })
-    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: 'char-b', reason: 'scheduled' })
+    expect(mockEnqueueMany).toHaveBeenCalledTimes(1)
+    expect(mockEnqueueMany).toHaveBeenCalledWith('user-1', ['char-a', 'char-b'], { reason: 'scheduled' })
   })
 
   it('skips the startup tick when a scheduled run completed within 20 hours', async () => {
     recentJobs = [{ id: 'j', status: 'COMPLETED', updatedAt: new Date(T0 - 3_600_000).toISOString(), payload: { reason: 'scheduled' } }]
     await runStartupTick(T0)
-    expect(mockEnqueue).not.toHaveBeenCalled()
+    expect(mockEnqueueMany).not.toHaveBeenCalled()
     recentJobs = [{ id: 'j', status: 'COMPLETED', updatedAt: new Date(T0 - 21 * 3_600_000).toISOString(), payload: { reason: 'scheduled' } }]
     await runStartupTick(T0)
-    expect(mockEnqueue).toHaveBeenCalledTimes(2)
+    expect(mockEnqueueMany).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('MEMORY_MAINTENANCE handler', () => {
-  const job = { id: 'job-1', userId: 'user-1', payload: { characterId: 'char-a', reason: 'watermark', phases: ['demote'] } } as never
+  const job = {
+    id: 'job-1',
+    userId: 'user-1',
+    createdAt: '2026-10-13T12:00:00.000Z',
+    payload: { characterId: 'char-a', reason: 'watermark', phases: ['demote'] },
+  } as never
 
   afterEach(() => {
     delete process.env[MAINTENANCE_FAIL_AFTER_PLAN_ENV]
@@ -245,6 +264,46 @@ describe('MEMORY_MAINTENANCE handler', () => {
       { userId: 'user-1', timeBudgetMs: 7 * 60 * 1000 },
     )
     expect(setJobResult).toHaveBeenCalledWith({ summarized: { characterId: 'char-a' }, phases: [] })
+  })
+
+  it('passes the hand-asked phases through', async () => {
+    jest.mocked(runMaintenance).mockResolvedValue({ characterId: 'char-a' } as never)
+    await handleMemoryMaintenance({
+      id: 'job-2',
+      userId: 'user-1',
+      payload: { characterId: 'char-a', reason: 'manual', exemptPhases: ['consolidate'] },
+    } as never)
+    expect(jest.mocked(runMaintenance).mock.calls[0][0]).toEqual({
+      characterId: 'char-a',
+      reason: 'manual',
+      exemptPhases: ['consolidate'],
+    })
+  })
+
+  it('defers itself while another run for the character is under way (bug 221)', async () => {
+    processingJobs = [
+      { id: 'job-1', type: 'MEMORY_MAINTENANCE', createdAt: '2026-10-13T12:00:00.000Z', payload: { characterId: 'char-a' } },
+      { id: 'job-0', type: 'MEMORY_MAINTENANCE', createdAt: '2026-10-13T11:00:00.000Z', payload: { characterId: 'char-a' } },
+    ]
+    await handleMemoryMaintenance(job)
+    expect(runMaintenance).not.toHaveBeenCalled()
+    expect(setJobResult).not.toHaveBeenCalled()
+    const [userId, payload, options] = mockEnqueue.mock.calls[0] as unknown as [string, unknown, { scheduledAt: Date }]
+    expect(userId).toBe('user-1')
+    expect(payload).toEqual({ characterId: 'char-a', reason: 'watermark', phases: ['demote'] })
+    expect(options.scheduledAt.getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it('runs when the only other run is another character\'s, or younger than itself', async () => {
+    processingJobs = [
+      { id: 'job-1', type: 'MEMORY_MAINTENANCE', createdAt: '2026-10-13T12:00:00.000Z', payload: { characterId: 'char-a' } },
+      { id: 'job-9', type: 'MEMORY_MAINTENANCE', createdAt: '2026-10-13T11:00:00.000Z', payload: { characterId: 'char-b' } },
+      // Started at the same time but enqueued later: it yields, this one runs.
+      { id: 'job-7', type: 'MEMORY_MAINTENANCE', createdAt: '2026-10-13T12:05:00.000Z', payload: { characterId: 'char-a' } },
+    ]
+    jest.mocked(runMaintenance).mockResolvedValue({ characterId: 'char-a' } as never)
+    await handleMemoryMaintenance(job)
+    expect(runMaintenance).toHaveBeenCalledTimes(1)
   })
 
   it('fails after planning under the test flag, so its batch never commits', async () => {

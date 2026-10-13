@@ -171,10 +171,23 @@ describe('phase order and skipping', () => {
     expect([...manual.values()]).toEqual([null, null, null, null, null])
   })
 
-  it('per-phase toggles skip an unscoped run; naming the phase overrides them', () => {
-    const s = settings({ phases: { foldNearDuplicates: false, demote: true, retire: true } })
+  it('per-phase toggles govern automatic runs, named phases included; a hand-asked phase overrides them', () => {
+    const s = settings({ phases: { foldNearDuplicates: false, demote: false, retire: true } })
     expect(resolvePhases({ reason: 'scheduled' }, s as never).get('fold-near-duplicates')).toBe('phase-disabled')
+    // A watermark run always names its phases; the toggles still apply (PR 97 review).
+    const watermark = resolvePhases({ reason: 'watermark', phases: ['fold-near-duplicates', 'demote', 'retire'] }, s as never)
+    expect(watermark.get('fold-near-duplicates')).toBe('phase-disabled')
+    expect(watermark.get('demote')).toBe('phase-disabled')
     expect(resolvePhases({ reason: 'manual', phases: ['fold-near-duplicates'] }, s as never).get('fold-near-duplicates')).toBeNull()
+  })
+
+  it('a merged job exempts only the phases asked for by hand', () => {
+    const off = settings({ enabled: false, consolidationEnabled: false, coldRetentionDays: 30 })
+    const plan = resolvePhases({ reason: 'manual', exemptPhases: ['demote'] }, off as never)
+    expect(plan.get('demote')).toBeNull()
+    expect(plan.get('consolidate')).toBe('consolidation-disabled')
+    expect(plan.get('fold-near-duplicates')).toBe('maintenance-disabled')
+    expect(plan.get('retire')).toBe('maintenance-disabled')
   })
 
   it('retire needs a retention window; unrequested phases say so', () => {

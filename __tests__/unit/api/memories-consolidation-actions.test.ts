@@ -292,6 +292,23 @@ describe('POST ?action=housekeep (the demote and retire phases)', () => {
   })
 })
 
+describe('POST ?action=housekeep, live', () => {
+  it('enqueues a maintenance job instead of writing in-process (bug 221)', async () => {
+    mockAction = 'housekeep'
+    mockEnqueue.mockResolvedValue('job-hk')
+    const res: any = await POST(req({ characterId: CHAR_ID, maxMemories: 500 }))
+    const body = res.body ?? (await res.json())
+    expect(mockRunMaintenance).not.toHaveBeenCalled()
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
+      characterId: CHAR_ID,
+      reason: 'manual',
+      phases: ['demote', 'retire'],
+      settings: { cap: 500 },
+    })
+    expect(body).toEqual({ success: true, dryRun: false, queued: true, jobId: 'job-hk' })
+  })
+})
+
 describe('POST ?action=maintain', () => {
   it('a dry run for one character runs in-process and returns the report', async () => {
     mockAction = 'maintain'

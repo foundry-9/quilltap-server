@@ -51,21 +51,35 @@ import {
 
 const log = logger.child({ module: 'memory:maintenance' })
 
+/** The share of a run's time budget the near-duplicate fold may spend; consolidation gets the rest. */
+export const FOLD_BUDGET_SHARE = 0.4
+
 function isJobChild(): boolean {
   return process.env.QUILLTAP_JOB_CHILD === '1'
 }
 
+/** The phases a request exempts from the switches (see `MaintenanceRequest.exemptPhases`). */
+export function exemptPhasesFor(
+  request: Pick<MaintenanceRequest, 'phases' | 'reason' | 'exemptPhases'>,
+): Set<MaintenancePhase> {
+  if (request.exemptPhases) return new Set(request.exemptPhases)
+  if (request.reason !== 'manual') return new Set()
+  return new Set(request.phases && request.phases.length > 0 ? request.phases : MAINTENANCE_PHASES)
+}
+
 /**
- * Which phases run, and why the others do not. Automatic runs obey the enabled
- * switches; a manual run does not. Phases named explicitly override the
- * per-phase toggles; an unscoped run (no `phases`) respects them.
+ * Which phases run, and why the others do not. A phase asked for by hand
+ * (exempt) runs whatever the enabled switches and per-phase toggles say;
+ * every other phase — anything a scheduled or watermark request asked for,
+ * even when merged into a manual job — obeys them. `retire` always needs a
+ * retention window.
  */
 export function resolvePhases(
-  request: Pick<MaintenanceRequest, 'phases' | 'reason'>,
+  request: Pick<MaintenanceRequest, 'phases' | 'reason' | 'exemptPhases'>,
   settings: Pick<MemorySettings, 'maintenance'>,
 ): Map<MaintenancePhase, PhaseSkipReason | null> {
-  const automatic = request.reason !== 'manual'
   const explicit = request.phases && request.phases.length > 0 ? new Set(request.phases) : null
+  const exempt = exemptPhasesFor(request)
   const m = settings.maintenance
   const toggles = m.phases
   const out = new Map<MaintenancePhase, PhaseSkipReason | null>()
@@ -74,13 +88,13 @@ export function resolvePhases(
     if (explicit && !explicit.has(phase)) {
       skip = 'not-requested'
     } else if (phase === 'consolidate') {
-      if (automatic && !m.consolidation.enabled) skip = 'consolidation-disabled'
+      if (!exempt.has(phase) && !m.consolidation.enabled) skip = 'consolidation-disabled'
     } else if (phase !== 'mirror') {
-      if (automatic && !m.enabled) skip = 'maintenance-disabled'
-      else if (!explicit) {
+      if (!exempt.has(phase)) {
         const on =
           phase === 'fold-near-duplicates' ? toggles.foldNearDuplicates : phase === 'demote' ? toggles.demote : toggles.retire
-        if (!on) skip = 'phase-disabled'
+        if (!m.enabled) skip = 'maintenance-disabled'
+        else if (!on) skip = 'phase-disabled'
       }
       if (!skip && phase === 'retire' && !(m.coldRetentionDays && m.coldRetentionDays > 0)) skip = 'no-retention-window'
     }
@@ -107,6 +121,7 @@ export function summarizeMaintenance(report: MaintenanceReport): MaintenanceSumm
             groups: report.fold.groups.length,
             folded: report.fold.folded,
             groupsFailed: report.fold.groupsFailed,
+            groupsDeferred: report.fold.groupsDeferred,
           },
         }
       : {}),
@@ -266,14 +281,19 @@ export async function runMaintenance(
       groups: planned.groups,
       folded: dryRun ? folding : 0,
       groupsFailed: 0,
+      groupsDeferred: 0,
     }
     if (dryRun || planned.groups.length === 0) {
       applyFoldsToCorpus(corpus, planned.groups, null)
       return
     }
-    const applied = await foldNearDuplicateGroups({ characterId, groups: planned.groups, userId })
+    // Each group re-embeds its survivor; under a budget the fold gets its
+    // share and leaves the rest of its groups for the next run.
+    const deadlineAt = ctx.timeBudgetMs !== undefined ? startedMs + ctx.timeBudgetMs * FOLD_BUDGET_SHARE : undefined
+    const applied = await foldNearDuplicateGroups({ characterId, groups: planned.groups, userId, deadlineAt })
     report.fold.folded = applied.retiredIds.length
     report.fold.groupsFailed = applied.groupsFailed
+    report.fold.groupsDeferred = applied.groupsDeferred
     applyFoldsToCorpus(corpus, planned.groups, applied)
   })
 
@@ -289,7 +309,8 @@ export async function runMaintenance(
       settings: request.settings?.consolidation,
       maxClustersPerRun: request.settings?.maxClustersPerRun,
       userId,
-      timeBudgetMs: ctx.timeBudgetMs,
+      // What the run's budget has left after the fold.
+      timeBudgetMs: ctx.timeBudgetMs !== undefined ? Math.max(0, ctx.timeBudgetMs - (Date.now() - startedMs)) : undefined,
       trigger: reason,
       now,
       matureAfterDays: consolidation.matureAfterDays,

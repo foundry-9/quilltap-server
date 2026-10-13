@@ -10,7 +10,7 @@
  * Actions (via ?action= query parameter):
  * - POST ?action=search - Semantic/keyword search (characterId in body)
  * - POST ?action=maintain - Memory maintenance ({ characterId?, phases?, dryRun?, settings? }). A dry run runs in-process and returns the report (`reports` for a user-wide dry run, allowed only for the LLM-free phases); otherwise one MEMORY_MAINTENANCE job per character (or for every character the user owns) is enqueued and `{ jobIds }` returned
- * - POST ?action=housekeep - The demote and retire phases, synchronously, for one character (characterId, maxMemories?, dryRun? in body). Alias kept for the character page's dialog
+ * - POST ?action=housekeep - The demote and retire phases for one character (characterId, maxMemories?, dryRun? in body): a dry run returns the plan in-process; a live run enqueues a maintenance job and returns { jobId }. Alias kept for the character page's dialog
  * - POST ?action=housekeep-sweep - Enqueue the demote and retire phases for every character the user owns
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=maintenance-config - Update memory maintenance settings (enabled, per-character cap and overrides; instance-wide). `housekeeping-config` is the old name and still answers.
@@ -881,7 +881,8 @@ function housekeepingView(report: MaintenanceReport) {
   };
 }
 
-async function runHousekeepingPhases(characterId: string, userId: string, cap: number | undefined, dryRun: boolean) {
+/** A dry run of the demote and retire phases (live runs are enqueued). */
+async function runHousekeepingPhases(characterId: string, userId: string, cap: number | undefined, dryRun: true) {
   return runMaintenance(
     {
       characterId,
@@ -913,18 +914,35 @@ async function handleHousekeep(
     return notFound('Character');
   }
 
-  // Absent a cap, the run uses the character's own (override → global), as the sweep does.
-  const report = await runHousekeepingPhases(characterId, user.id, maxMemories, !!dryRun);
+  if (!dryRun) {
+    // A live run goes through the queue like every other one, so it never
+    // overlaps a maintenance job already working on this character (bug 221).
+    try {
+      const jobId = await enqueueMemoryMaintenance(user.id, {
+        characterId,
+        reason: 'manual',
+        phases: ['demote', 'retire'],
+        ...(maxMemories !== undefined ? { settings: { cap: maxMemories } } : {}),
+      });
+      logger.info('[Memories API] Demote/retire run enqueued', { characterId, jobId, cap: maxMemories ?? 'configured' });
+      return NextResponse.json({ success: true, dryRun: false, queued: true, jobId });
+    } catch (error) {
+      logger.error('[Memories API] Failed to enqueue demote/retire run', { characterId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to enqueue housekeeping');
+    }
+  }
+
+  // Absent a cap, the preview uses the character's own (override → global), as the sweep does.
+  const report = await runHousekeepingPhases(characterId, user.id, maxMemories, true);
   const view = housekeepingView(report);
   const counts = await repos.memories.countCapBreakdown(characterId);
 
   return NextResponse.json({
     success: true,
-    dryRun: !!dryRun,
+    dryRun: true,
     result: {
       ...view,
       coldCount: counts.cold,
-      details: dryRun ? view.details : undefined,
     },
   });
 }

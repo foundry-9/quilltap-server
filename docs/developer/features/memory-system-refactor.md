@@ -1135,19 +1135,31 @@ departures:
   demote → retire, the consolidation watermark (unconsidered > `watermark`) for consolidate →
   mirror. `memoryMaintenance.phases` (`foldNearDuplicates`, `demote`, `retire`, default on) is new:
   §3.9's "each skippable by settings" needed a setting, and Phase G's card will expose it. It
-  gates automatic and unscoped runs; a run that names its phases overrides it. Consolidation keeps
+  gates every phase a scheduled or watermark request asks for, named or not; a phase asked for by
+  hand (`exemptPhases`, set at enqueue: a manual request's phases, or all of them) runs regardless
+  of it and of the enabled switches (review of PR 97). Consolidation keeps
   its own `memoryConsolidation.enabled`; `retire` also needs `coldRetentionDays`. A fold now runs
   automatically whenever maintenance is on (the old dedup tool was manual-only); it never touches
   MANUAL, digests or cold rows (decision 4).
+- **The near-duplicate fold takes admission's lock one group at a time** (one survivor re-embed),
+  never for the whole phase, and under a job's time budget stops starting groups after 40% of it
+  (`FOLD_BUDGET_SHARE`); the rest are deferred to the next run and consolidation gets what the
+  budget has left (review of PR 97).
 - **The ledger's throttles keep the old values**: cap watermark 90%, 15 minutes between demotions,
-  an hour's backoff after a demotion that moved fewer than max(10, 1% of the excess), six hours
+  an hour's backoff after a demotion that moved fewer than max(10, 1% of the excess) — a demotion
+  that found no excess included, as the old outcome cache did — six hours
   between watermark consolidations. The check itself is debounced to once per character per two
   minutes (the cap check used to run on every insert, the consolidation check every ten minutes).
   The ledger lives in parent memory and seeds itself once per process from the last 100
   `MEMORY_MAINTENANCE` rows, which replaces both durable job-table throttles.
 - **Dedupe.** One job per character whatever the reason. A pending job widens to the union of the
-  phases asked for (an unscoped job stays unscoped), takes `reason: 'manual'` when a manual request
-  joins it, and merges `settings` (bug 223's threshold); a running job is left alone. Dry runs are
+  phases asked for (an unscoped job stays unscoped) and of the hand-asked `exemptPhases`, and merges
+  `settings` (bug 223's threshold); merging a manual request never lends a scheduled phase its
+  exemption. A running job never absorbs a request (it has read the corpus and may be past the
+  phase): a new pending job is made, and the handler defers it two minutes, re-enqueued, while
+  another run for the character is PROCESSING. A user-wide fan-out and the daily sweep read each
+  owner's pending jobs once (review of PR 97). A live `?action=housekeep` enqueues rather than
+  writing in-process, so nothing demotes beside a running job. Dry runs are
   never enqueued: they run in-process (the API, bounded as the consolidate dry run was), so the
   dedupe never needs a dry-run flag.
 - **Retire** is planned from the corpus and is AUTO-only, as §3.9 says; the old SQL took any

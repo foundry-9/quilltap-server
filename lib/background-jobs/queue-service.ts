@@ -6,10 +6,10 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { BackgroundJobType } from '@/lib/schemas/types';
+import { BackgroundJobType, type BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import type { MaintenancePhase, MaintenanceReason, MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
+import { MAINTENANCE_PHASES, type MaintenancePhase, type MaintenanceReason, type MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
@@ -324,8 +324,14 @@ export interface MemoryMaintenancePayload {
   characterId: string;
   /** Phases asked for; omitted, every phase the settings allow. */
   phases?: MaintenancePhase[];
-  /** Why the job was enqueued. Automatic reasons obey the enabled switches. */
+  /** Why the job was enqueued (for the ledger and logs). */
   reason: MaintenanceReason;
+  /**
+   * Phases asked for by hand, which run whatever the enabled switches and
+   * per-phase toggles say. Set at enqueue: a manual request's phases (all of
+   * them when it names none); empty for an automatic request.
+   */
+  exemptPhases?: MaintenancePhase[];
   /** Per-run overrides (a manual run's cluster threshold, say — bug 223). */
   settings?: MaintenanceRunSettings;
 }
@@ -627,13 +633,99 @@ function unionPhases(a: MaintenancePhase[] | undefined, b: MaintenancePhase[] | 
 }
 
 /**
+ * The phases a request asks for by hand: they run whatever the enabled
+ * switches and per-phase toggles say. A manual request exempts what it names
+ * (every phase when it names none); an automatic one exempts nothing.
+ */
+function exemptPhasesOf(payload: MemoryMaintenancePayload): MaintenancePhase[] {
+  if (payload.exemptPhases) return payload.exemptPhases;
+  if (payload.reason !== 'manual') return [];
+  return payload.phases ?? [...MAINTENANCE_PHASES];
+}
+
+/** Fold `payload` into a waiting job's payload. Each phase keeps its own exemption. */
+function widenPayload(prior: MemoryMaintenancePayload, payload: MemoryMaintenancePayload): MemoryMaintenancePayload {
+  const phases = unionPhases(prior.phases, payload.phases);
+  const exemptPhases = Array.from(new Set([...exemptPhasesOf(prior), ...exemptPhasesOf(payload)]));
+  const widened: MemoryMaintenancePayload = {
+    ...prior,
+    ...(phases ? { phases } : {}),
+    // For the ledger and the logs only: what may skip the switches is `exemptPhases`.
+    reason: payload.reason === 'manual' ? 'manual' : prior.reason,
+    exemptPhases,
+    ...(payload.settings ? { settings: { ...prior.settings, ...payload.settings } } : {}),
+  };
+  if (!phases) delete widened.phases;
+  return widened;
+}
+
+/**
+ * Enqueue (or widen) one character's maintenance job against an already-read
+ * list of the user's PENDING maintenance jobs, which it keeps up to date.
+ */
+async function enqueueMaintenanceAgainst(
+  userId: string,
+  payload: MemoryMaintenancePayload,
+  pending: BackgroundJob[] | null,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const normalized: MemoryMaintenancePayload = { ...payload, exemptPhases: exemptPhasesOf(payload) };
+  const existing = pending?.find(
+    j => (j.payload as Record<string, unknown>).characterId === payload.characterId
+  );
+  if (existing) {
+    const widened = widenPayload(existing.payload as unknown as MemoryMaintenancePayload, normalized);
+    await getRepositories().backgroundJobs.update(existing.id, { payload: widened as unknown as Record<string, unknown> });
+    existing.payload = widened as unknown as Record<string, unknown>;
+    logger.debug('[Maintenance] Pending job widened to the requested phases', {
+      characterId: payload.characterId,
+      existingJobId: existing.id,
+      phases: widened.phases ?? 'all',
+      exemptPhases: widened.exemptPhases,
+      reason: widened.reason,
+    });
+    return existing.id;
+  }
+  const id = await enqueueJob(
+    userId,
+    'MEMORY_MAINTENANCE',
+    normalized as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  pending?.push({ id, payload: normalized } as unknown as BackgroundJob);
+  return id;
+}
+
+/** The user's PENDING maintenance jobs, or null when they cannot be read. */
+async function findPendingMaintenance(userId: string, characterId?: string): Promise<BackgroundJob[] | null> {
+  try {
+    const pending = await getRepositories().backgroundJobs.findByUserId(userId, 'PENDING');
+    return pending.filter(j => j.type === 'MEMORY_MAINTENANCE');
+  } catch (error) {
+    logger.warn('[Maintenance] Failed to check for pending jobs during enqueue', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // A duplicate run is wasteful, not harmful.
+    return null;
+  }
+}
+
+/**
  * Enqueue memory maintenance for one character.
  *
- * Dedupe key is the character, whatever the reason (bug 221): a PENDING or
- * PROCESSING maintenance job for the same character makes this a no-op that
- * returns the existing id, so the daily sweep, a watermark run and a manual
- * run never work on one character at once. A waiting job widens to the phases
- * asked for and adopts the requested overrides; a running one is left alone.
+ * Dedupe key is the character, whatever the reason (bug 221): a PENDING
+ * maintenance job for the same character absorbs the request — it widens to
+ * the phases asked for and adopts the requested overrides — so the daily
+ * sweep, a watermark run and a manual run collapse into one job. Each phase
+ * keeps its own exemption (`exemptPhases`): a manual request's phases run
+ * whatever the switches say, an automatic request's never do, so merging
+ * the two never lends a scheduled phase the manual exemption.
+ *
+ * A PROCESSING job never absorbs a request: it has already read the corpus
+ * and may be past the phase asked for. A new PENDING job is created instead,
+ * and the handler defers it while the running one finishes, so two runs
+ * never work on one character at once.
  *
  * Retry-hostile: a rerun redoes every model call, and the next scheduled or
  * watermark pass picks up whatever this one left, so attempts default to 1.
@@ -643,61 +735,33 @@ export async function enqueueMemoryMaintenance(
   payload: MemoryMaintenancePayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  const repos = getRepositories();
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(
-      j => j.type === 'MEMORY_MAINTENANCE' && (j.payload as Record<string, unknown>).characterId === payload.characterId
-    );
-    if (existing) {
-      const prior = existing.payload as unknown as MemoryMaintenancePayload;
-      if (existing.status === 'PENDING') {
-        const phases = unionPhases(prior.phases, payload.phases);
-        const widened: MemoryMaintenancePayload = {
-          ...prior,
-          ...(phases ? { phases } : {}),
-          // A manual request outranks an automatic one (it ignores the enabled switches).
-          reason: payload.reason === 'manual' ? 'manual' : prior.reason,
-          ...(payload.settings ? { settings: { ...prior.settings, ...payload.settings } } : {}),
-        };
-        if (!phases) delete widened.phases;
-        await repos.backgroundJobs.update(existing.id, { payload: widened as unknown as Record<string, unknown> });
-        logger.debug('[Maintenance] Pending job widened to the requested phases', {
-          characterId: payload.characterId,
-          existingJobId: existing.id,
-          phases: widened.phases ?? 'all',
-          reason: widened.reason,
-        });
-      } else {
-        logger.debug('[Maintenance] A run is already in progress for the character; not enqueuing another', {
-          characterId: payload.characterId,
-          existingJobId: existing.id,
-          requestedPhases: payload.phases ?? 'all',
-          reason: payload.reason,
-        });
-      }
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[Maintenance] Failed to check for existing jobs during enqueue', {
-      characterId: payload.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through — a duplicate run is wasteful, not harmful.
-  }
-
-  return enqueueJob(
-    userId,
-    'MEMORY_MAINTENANCE',
-    payload as unknown as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
+  const pending = await findPendingMaintenance(userId, payload.characterId);
+  return enqueueMaintenanceAgainst(userId, payload, pending, options);
 }
 
 /**
- * One maintenance job per character the user owns (each deduped per
- * character). Returns every job id, new or already in flight.
+ * One maintenance job per listed character, each deduped per character, with
+ * one read of the user's pending jobs for the whole batch. Returns every job
+ * id, new or widened, without duplicates.
+ */
+export async function enqueueMemoryMaintenanceMany(
+  userId: string,
+  characterIds: readonly string[],
+  payload: Omit<MemoryMaintenancePayload, 'characterId'>,
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  const pending = await findPendingMaintenance(userId);
+  const ids: string[] = [];
+  for (const characterId of characterIds) {
+    const id = await enqueueMaintenanceAgainst(userId, { ...payload, characterId }, pending, options);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * One maintenance job per live character the user owns (each deduped per
+ * character). Returns every job id, new or widened.
  */
 export async function enqueueMemoryMaintenanceForUser(
   userId: string,
@@ -705,16 +769,12 @@ export async function enqueueMemoryMaintenanceForUser(
   options?: EnqueueJobOptions
 ): Promise<string[]> {
   const characters = await getRepositories().characters.findByUserId(userId);
-  const ids: string[] = [];
-  for (const character of characters) {
-    if (character.archivedAt) continue;
-    const id = await enqueueMemoryMaintenance(userId, { ...payload, characterId: character.id }, options);
-    if (id && !ids.includes(id)) ids.push(id);
-  }
+  const live = characters.filter(c => !c.archivedAt).map(c => c.id);
+  const ids = await enqueueMemoryMaintenanceMany(userId, live, payload, options);
   logger.debug('[Maintenance] User-wide run fanned out per character', {
     userId,
     reason: payload.reason,
-    characters: characters.length,
+    characters: live.length,
     jobs: ids.length,
   });
   return ids;

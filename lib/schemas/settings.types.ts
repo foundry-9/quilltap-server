@@ -175,8 +175,9 @@ export const MemoryMaintenanceSettingsSchema = z.object({
   /** Per-character cap overrides keyed by characterId. */
   perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.default({}),
   /**
-   * Which of the maintenance job's own phases an automatic run (scheduled or
-   * watermark) and an unscoped "Run now" include. Consolidation has its own
+   * Which of the maintenance job's own phases run when nobody asked for them
+   * by hand: every phase of a scheduled or watermark request (named or not).
+   * A phase a manual request asks for runs regardless. Consolidation has its own
    * switch (`memoryConsolidation.enabled`); the Commonplace mirror always
    * follows consolidation; retirement also needs `coldRetentionDays`.
    */

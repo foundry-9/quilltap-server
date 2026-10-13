@@ -101,17 +101,32 @@ export async function runScheduledMemoryMaintenance(): Promise<{ charactersScann
     return result
   }
   const repos = getRepositories()
-  const { enqueueMemoryMaintenance } = await import('@/lib/background-jobs/queue-service')
+  const { enqueueMemoryMaintenanceMany } = await import('@/lib/background-jobs/queue-service')
+  // Live characters holding memories, by owner: each owner's in-flight jobs are read once.
+  const byUser = new Map<string, string[]>()
   for (const characterId of await repos.memories.findDistinctCharacterIds()) {
     result.charactersScanned++
     try {
       const character = await repos.characters.findByIdRaw(characterId)
       if (!character || character.archivedAt) continue
-      await enqueueMemoryMaintenance(character.userId, { characterId, reason: 'scheduled' })
-      result.jobsEnqueued++
+      const list = byUser.get(character.userId) ?? []
+      list.push(characterId)
+      byUser.set(character.userId, list)
     } catch (error) {
-      log.warn('Failed to enqueue scheduled maintenance for a character', {
+      log.warn('Failed to read a character for scheduled maintenance', {
         characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  for (const [userId, characterIds] of byUser) {
+    try {
+      const ids = await enqueueMemoryMaintenanceMany(userId, characterIds, { reason: 'scheduled' })
+      result.jobsEnqueued += ids.length
+    } catch (error) {
+      log.warn('Failed to enqueue scheduled maintenance for a user', {
+        userId,
+        characters: characterIds.length,
         error: error instanceof Error ? error.message : String(error),
       })
     }

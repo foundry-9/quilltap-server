@@ -79,6 +79,8 @@ export async function maybeEnqueueMaintenance(characterIds: readonly string[], n
 
       const { enqueueMemoryMaintenance } = await import('@/lib/background-jobs/queue-service')
       const jobId = await enqueueMemoryMaintenance(character.userId, { characterId, reason: 'watermark', phases })
+      // The id is always a waiting job carrying these phases (a running job
+      // never absorbs a request), so the throttles may start now.
       noteEnqueued(characterId, phases, nowMs)
       enqueued.push(characterId)
       log.info('Maintenance watermark reached; run enqueued', { characterId, phases, demotable, unconsidered, jobId })

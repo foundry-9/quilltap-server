@@ -162,12 +162,17 @@ export interface WatermarkReading {
   consolidationEnabled: boolean
 }
 
-/** True when the last demotion moved too few rows to be worth repeating soon. */
+/**
+ * True when the last demotion moved too few rows to be worth repeating soon.
+ * That includes a demotion with nothing to move: a character between 90% and
+ * 100% of its cap trips the watermark on every insert, and a run that finds
+ * no excess has nothing to do there for the next hour either.
+ */
 function lastDemotionIneffective(entry: LedgerEntry, nowMs: number): boolean {
   const last = entry.lastDemotion
   if (!last || nowMs - last.at >= INEFFECTIVE_BACKOFF_MS) return false
   const needed = Math.max(MIN_EFFECTIVE_DEMOTIONS, Math.floor(last.excess * EXCESS_RATIO_THRESHOLD))
-  return last.excess > 0 && last.demoted < needed
+  return last.demoted < needed
 }
 
 /** True when the phase ran, or a run asking for it was enqueued, inside the window. */

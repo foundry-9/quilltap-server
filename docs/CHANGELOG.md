@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### PR 97 review: 8 findings on Phase F
+
+- Exemption is per phase, not per job: a maintenance payload carries `exemptPhases` (a manual request's phases, or all of them when it names none). Merging a manual request into a waiting scheduled job no longer lets the scheduled phases skip `memoryMaintenance.enabled` / `memoryConsolidation.enabled`.
+- The per-phase toggles (`memoryMaintenance.phases`) govern every phase a scheduled or watermark request asks for, named or not. Before, a watermark run named its phases and so skipped the toggles.
+- A PROCESSING maintenance job no longer absorbs a new request. A new PENDING job is made; the handler re-enqueues itself two minutes later while another run for the character is in progress. A watermark therefore no longer starts a six-hour consolidation throttle for a run that never happens.
+- A demotion that found no excess counts as ineffective, so a character between 90% and 100% of its cap backs off for an hour, as before Phase F.
+- The near-duplicate fold takes admission's lock one group at a time and retires each group inside it; under a job's time budget it stops starting groups after 40% of the budget (`groupsDeferred`), and consolidation gets what is left.
+- `enqueueMemoryMaintenanceMany`: a user-wide run and the daily sweep read each owner's pending jobs once, not twice per character.
+- A live `POST ?action=housekeep` enqueues a `MEMORY_MAINTENANCE` job (`{ queued: true, jobId }`) instead of demoting in the server process beside a running job. The Memory Cleanup dialog's toast says so.
+
 #### Memory refactor Phase F: one maintenance job
 
 Structural Phase F of `docs/developer/features/memory-system-refactor.md`. One migration.
@@ -17,7 +27,7 @@ Structural Phase F of `docs/developer/features/memory-system-refactor.md`. One m
 - All effects after commit: in the job child the run announces nothing; the dispatcher's commit hooks invalidate the frozen archive, publish `memories` and `mountPoints`, write the `Commonplace/` mirror from committed rows, and record the run's summary in the parent ledger. The child hands the summary back through a new `result` field on the `job-result` message (`setJobResult`). In-process runs announce after their writes.
 - New parent-side ledger (`maintenance/ledger.ts`): last run per phase, last summary, last demotion's effectiveness, watermark debounce; seeded once per process from recent `MEMORY_MAINTENANCE` rows. `shouldEnqueue(characterId, reason)` replaces `maybeEnqueueHousekeeping`'s two throttles, the child-side `housekeeping-outcome-cache.ts`, and `consolidation-triggers.ts`'s debounce and throttle (same values: cap watermark at 90%, 15-minute demotion throttle, 1-hour backoff after an ineffective demotion, consolidation watermark with a 6-hour throttle). The watermark check (`maybeEnqueueMaintenance`) runs in the parent after admission inserts and from the dispatcher commit hook; the child-side `admission/after-insert.ts` is deleted.
 - One scheduler, `maintenance/scheduler.ts` (`scheduleMemoryMaintenance`): daily tick, 5-minute startup grace, startup skip after a scheduled run in the last 20 hours; one job per live character holding memories. Replaces `scheduled-housekeeping.ts` and `runScheduledConsolidation`; the 30-minute consolidation-then-housekeeping delay is now phase order.
-- Settings: `memoryMaintenance.phases` (`foldNearDuplicates`, `demote`, `retire`; default on) gates the job's own phases for automatic and unscoped runs; `?action=maintenance-config` accepts a partial `phases`.
+- Settings: `memoryMaintenance.phases` (`foldNearDuplicates`, `demote`, `retire`; default on) gates the job's own phases for scheduled and watermark requests; `?action=maintenance-config` accepts a partial `phases`.
 - API: new `POST /api/v1/memories?action=maintain` (`{ characterId?, phases?, dryRun?, settings? }`; dry runs in-process, user-wide only for LLM-free phases; otherwise enqueues per character) and `GET ?action=maintenance-status` (the ledger). `housekeep`, `housekeep-sweep` and `consolidate` now run through `runMaintenance` / `MEMORY_MAINTENANCE` with their old response shapes. `system/tools?action=memory-dedup` and `memory-dedup-preview` removed; the settings card (now "Near-Duplicate Folding") calls `maintain` with `phases: ['fold-near-duplicates']` and has no threshold slider.
 - CLI: `quilltap memories status` shows the maintenance ledger from the running server (`--port`) and the last three `MEMORY_MAINTENANCE` job rows. `quilltap memories consolidate` enqueues a maintenance job. `quilltap` CLI 4.10.0-dev.170.
 - Help: `memory-housekeeping.md`, `memory-consolidation.md`, `system-tools.md`, `settings.md`, `memory-recall-relevance.md`, `cli-memories.md`. API.md, BACKGROUND_JOBS_CHILD.md and DDL.md (`memoryMaintenance.phases`) updated.

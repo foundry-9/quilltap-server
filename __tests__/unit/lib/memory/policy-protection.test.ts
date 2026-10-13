@@ -285,6 +285,29 @@ describe('near-duplicate folding (bug 201)', () => {
     expect(plan.groups).toEqual([])
   })
 
+  it('takes admission\'s lock one group at a time and stops at the deadline', async () => {
+    const { withAdmissionLock } = jest.requireMock('@/lib/memory/admission/admit') as { withAdmissionLock: jest.Mock }
+    const v = (x: number) => new Float32Array([x, 1, 0])
+    const all = [
+      row('a1', { importance: 0.9, embedding: v(0) }),
+      row('a2', { embedding: v(0) }),
+      row('b1', { importance: 0.9, embedding: new Float32Array([0, 0, 1]), aboutCharacterId: 'other' }),
+      row('b2', { embedding: new Float32Array([0, 0, 1]), aboutCharacterId: 'other' }),
+    ]
+    installRepos(all, { findByIds: jest.fn(async (ids: string[]) => all.filter(m => ids.includes(m.id))) })
+    const plan = await planNearDuplicateFolds(all, ADMISSION_THRESHOLDS, NOW)
+    expect(plan.groups).toHaveLength(2)
+
+    const both = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1' })
+    expect(withAdmissionLock).toHaveBeenCalledTimes(2)
+    expect(both.retiredIds.sort()).toEqual(['a2', 'b2'])
+
+    withAdmissionLock.mockClear()
+    const late = await applyNearDuplicateFolds({ characterId: 'char-1', groups: plan.groups, userId: 'user-1', deadlineAt: Date.now() - 1 })
+    expect(withAdmissionLock).not.toHaveBeenCalled()
+    expect(late).toMatchObject({ groupsDeferred: 2, retiredIds: [], survivors: [] })
+  })
+
   it('skips a group whose rows went cold or MANUAL after planning, and retires nothing for it', async () => {
     const planned = [row('auto-1', { importance: 0.9 }), row('auto-2')]
     const plan = await planNearDuplicateFolds(planned, ADMISSION_THRESHOLDS, NOW)

@@ -16,7 +16,7 @@ export const MAINTENANCE_PHASES = ['fold-near-duplicates', 'consolidate', 'demot
 
 export type MaintenancePhase = (typeof MAINTENANCE_PHASES)[number]
 
-/** Why a run was asked for. Automatic reasons obey the enabled switches; `manual` does not. */
+/** Why a run was asked for (for the ledger and logs; exemption is per phase, `exemptPhases`). */
 export type MaintenanceReason = 'scheduled' | 'watermark' | 'manual'
 
 export interface MaintenanceRequest {
@@ -24,6 +24,13 @@ export interface MaintenanceRequest {
   /** The phases asked for; omitted, all of them. Always run in {@link MAINTENANCE_PHASES} order. */
   phases?: readonly MaintenancePhase[]
   reason: MaintenanceReason
+  /**
+   * Phases asked for by hand: they run whatever the enabled switches and the
+   * per-phase toggles say. Every other phase obeys them. Omitted, a manual
+   * request exempts the phases it names (all of them when it names none) and
+   * an automatic one exempts nothing.
+   */
+  exemptPhases?: readonly MaintenancePhase[]
   /** Plan every phase and write nothing. */
   dryRun?: boolean
   /** Per-run overrides. */
@@ -77,6 +84,8 @@ export interface NearDuplicateGroup {
 }
 
 export interface FoldPhaseReport {
+  /** Groups left for a later run because the fold's time budget ran out. */
+  groupsDeferred: number
   /** Hot AUTO rows with an embedding — the only rows the phase considers. */
   eligible: number
   /** Eligible rows left uncompared this run because their bucket was over the comparison bound. */
@@ -149,7 +158,7 @@ export interface MaintenanceSummary {
   durationMs: number
   skippedReason?: MaintenanceReport['skippedReason']
   phases: PhaseOutcome[]
-  fold?: { eligible: number; groups: number; folded: number; groupsFailed: number }
+  fold?: { eligible: number; groups: number; folded: number; groupsFailed: number; groupsDeferred: number }
   consolidation?: {
     digestsCreated: number
     digestsUpdated: number
