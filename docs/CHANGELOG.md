@@ -4,6 +4,10 @@
 
 ### 4.10-dev
 
+#### Bug 242: single-character turns skipped the end-of-turn work
+
+- The Salon's stream reader treated the depth-0 `turnStart` that precedes every first turn as entering a chain, so a single-character reply finished through the chain's intermediate path: no transcript refetch, no queue notification, no "empty response" toast. Only a `turnStart` with `chainDepth > 0` now enters a chain. Test: `useSSEStreaming-single-turn-done.test.tsx`.
+
 #### PR 97 review: 8 findings on Phase F
 
 - Exemption is per phase, not per job: a maintenance payload carries `exemptPhases` (a manual request's phases, or all of them when it names none). Merging a manual request into a waiting scheduled job no longer lets the scheduled phases skip `memoryMaintenance.enabled` / `memoryConsolidation.enabled`.

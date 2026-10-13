@@ -2,18 +2,28 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed 2026-10-13 |
 | **Found** | 2026-10-13, by code reading while fixing bug 241 (reported by the fixing agent, confirmed against the source) |
-| **Fixed** | — |
+| **Fixed** | 2026-10-13 |
 | **Severity** | Medium — after an ordinary single-character reply the Salon skips its end-of-turn work: no transcript refetch, no queue notification, no "empty response" toast, live tool batches and the responder indicator not reset |
 | **Who it bites** | every single-character chat (and a multi-character turn that produced no content and was not skipped) |
 | **Provenance** | `5a99e4b8f` (2026-05-25, "align streaming bubble avatar with server's chosen responder") made `processMessage` emit a depth-0 `turnStart` for every first turn; the client treats any `turnStart` as entering a chain |
 | **Defect site** | `lib/services/chat-message/orchestrator.service.ts:410` (`encodeTurnStartEvent` at `chainDepth: 0`, unconditionally); `lib/services/chat-message/turn-orchestrator.service.ts:317` (`executeTurnChain` returns for `!isMultiCharacter` without a `chainComplete`); `app/salon/[id]/hooks/useSSEStreaming.ts:738-743` (`done` with `inChain` routes to `onIntermediateDone`) and `:755-757` (`turnStart` sets `inChain = true`) |
-| **Fix site** | — |
+| **Fix site** | `app/salon/[id]/hooks/useSSEStreaming.ts` (`readSSEStream`: only a `turnStart` with `chainDepth > 0` sets `inChain`) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-13).** The stream reader now enters a chain only on a `turnStart` whose
+`chainDepth` is above 0. The depth-0 event the server sends before every first turn still drives
+`onTurnStart` (the bubble's avatar and name), but no longer sets `inChain`, so a lone `done` reaches
+`onDone` again — refetch, queue notification, the empty-response toast and the indicator resets.
+In a multi-character chain the first turn's `done` also goes to `onDone`, as it did before
+`5a99e4b8f`; the chained turns (depth ≥ 1) still take the intermediate path and the chain still
+ends with `onChainComplete`. `triggerContinueMode` shares the same reader, so the continue path is
+fixed with it. Test: `__tests__/unit/hooks/useSSEStreaming-single-turn-done.test.tsx` (fails
+without the fix).
 
 ## Symptom
 
@@ -49,7 +59,7 @@ Realtime topics usually refetch the transcript shortly after anyway, which hides
 `fetchChat`; the empty-response path is rare; and no test drives `sendMessage` with a depth-0
 `turnStart` followed by `done`.
 
-## Fix (proposed)
+## Fix
 
 Make "in a chain" mean what it says: set `inChain` only for `turnStart` events with
 `chainDepth > 0` (the depth-0 event still drives `onTurnStart` for the avatar), or have the server
