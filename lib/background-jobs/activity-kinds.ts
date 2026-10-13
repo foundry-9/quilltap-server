@@ -38,7 +38,6 @@ export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> = {
   // ── Mem ──────────────────────────────────────────────────────────────────
   MEMORY_EXTRACTION: 'memory',
-  INTER_CHARACTER_MEMORY: 'memory',
   MEMORY_REGENERATE_CHAT: 'memory',
   MEMORY_REGENERATE_ALL: 'memory',
   MEMORY_HOUSEKEEPING: 'memory',

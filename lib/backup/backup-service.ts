@@ -7,6 +7,7 @@
  * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
+import { withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -196,8 +197,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
       const messageEvents = messages.filter(
         (event): event is ChatEvent & { type: 'message' } => event.type === 'message'
       );
+      // The fold passes' cursors ride on the chat under their legacy field names.
       return {
-        ...chat,
+        ...(await withBundleCursorFields(chat)),
         messages: messageEvents,
       } as ChatWithMessages;
     })

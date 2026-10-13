@@ -163,6 +163,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'move-memory-maintenance-settings-v1': 'Moving the Commonplace Book’s tidying orders to the household ledger…',
   'add-memories-superseded-by-index-v1': 'Cross-indexing the cellar, so every bottle may be traced to its vintage…',
   'retire-memory-vector-entries-v1': 'Retiring the duplicate ledger of recollections, now that each one keeps its own…',
+  'add-memory-extraction-cursors-v1': 'Gathering every chronicle’s bookmarks into one drawer…',
+  'drop-inter-character-memory-jobs-v1': 'Dismissing a clerk who had nothing left to file…',
   'add-chat-scenario-source-v1': "Noting where each chat's scene was found",
   'add-episode-extraction-watermark-v1': 'Slipping a bookmark into each chronicle, lest old chapters be retold…',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',

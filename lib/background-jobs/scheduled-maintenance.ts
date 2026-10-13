@@ -45,8 +45,8 @@ import { cleanupFinishedJobs } from './queue-service';
 import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-assets';
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
-import { enqueueFoldOtherCatchups } from './maintenance/fold-other-catchup';
-import { enqueueFoldEpisodeCatchups } from './maintenance/fold-episode-catchup';
+import { enqueueFoldCatchups } from './maintenance/fold-catchup';
+import type { ExtractionCursorMap } from '@/lib/schemas/memory-extraction-cursor.types';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
@@ -257,11 +257,13 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     () => sweepOrphanedThumbnails(),
     (result) => { summary.orphanedThumbnailsSwept = result; });
 
-  // Steps 8 and 9 select from the same chat list; read it once for both. A
-  // failed read leaves each catch-up to read its own.
+  // Steps 8 and 9 select from the same chat list and cursor table; read each
+  // once for both. A failed read leaves each catch-up to read its own.
   let catchupChats: ChatMetadata[] | undefined;
+  let catchupCursors: Map<string, ExtractionCursorMap> | undefined;
   try {
     catchupChats = await getRepositories().chats.findAll();
+    catchupCursors = await getRepositories().memoryExtractionCursors.findAllByChat();
   } catch (error) {
     moduleLogger.warn('Could not list chats for the fold catch-ups; each will read its own', {
       error: error instanceof Error ? error.message : String(error),
@@ -269,16 +271,16 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   }
 
   // 8. Fold-grain OTHER catch-up: enqueue a MEMORY_EXTRACTION job for each chat
-  //    idle > 2 h whose tail is past the OTHER watermark (short chats never fold).
+  //    idle > 2 h whose tail is past its other-fold cursor (short chats never fold).
   await runSweep(summary, 'fold-other-catchup', 'Fold-grain OTHER catch-up failed — continuing',
-    () => enqueueFoldOtherCatchups({ chats: catchupChats }),
+    () => enqueueFoldCatchups('other-fold', { chats: catchupChats, cursors: catchupCursors }),
     (result) => { summary.foldOtherCatchup = result; });
 
   // 9. Fold episode catch-up: enqueue a MEMORY_EXTRACTION job for each chat
-  //    idle > 2 h whose episode watermark is behind its fold boundary, so a
+  //    idle > 2 h whose episode-fold cursor is behind its fold boundary, so a
   //    capped backlog drains without waiting for more folds (bug 232).
   await runSweep(summary, 'fold-episode-catchup', 'Fold episode catch-up failed — continuing',
-    () => enqueueFoldEpisodeCatchups({ chats: catchupChats }),
+    () => enqueueFoldCatchups('episode-fold', { chats: catchupChats, cursors: catchupCursors }),
     (result) => { summary.foldEpisodeCatchup = result; });
 
   try {

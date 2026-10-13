@@ -5,6 +5,7 @@
  * supporting full user data exports and imports with version management.
  */
 
+import type { BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import type {
   Character,
   ChatMetadata,
@@ -430,7 +431,7 @@ export interface BackupData {
  * This combines the ChatMetadata with an array of all MessageEvent objects
  * that belong to the chat. Used primarily during backup/restore operations.
  */
-export interface ChatWithMessages extends ChatMetadata {
+export interface ChatWithMessages extends ChatMetadata, BundleCursorFields {
   /** Array of message events for this chat in chronological order */
   messages: MessageEvent[];
 }

@@ -2945,24 +2945,21 @@ Execute an RNG operation (dice, coin flip, spin the bottle) and add result as a 
 
 #### `POST /api/v1/chats/[id]?action=queue-memories`
 
-Queue memory extraction jobs for message pairs.
+Queue one `MEMORY_EXTRACTION` turn job for every turn of the chat (`listExtractionTurns`: one per
+user message; one per closing character line in an autonomous room; one for a greeting-only chat).
+No request body. Runs on a seat's connection profile, else the configured cheap profile; 400 when
+neither exists or the chat has no turns. Does not wipe existing memories first.
 
-**Request Body**:
+**Response**: `{ "success": true, "jobCount": 12, "chatId": "…", "turnCount": 12 }`
 
-```json
-{
-  "characterId": "char-uuid",
-  "characterName": "Alice",
-  "messagePairs": [
-    {
-      "userMessageId": "msg-uuid-1",
-      "assistantMessageId": "msg-uuid-2",
-      "userContent": "...",
-      "assistantContent": "..."
-    }
-  ]
-}
-```
+#### `POST /api/v1/chats/[id]?action=extract-memories-dry-run`
+
+Run the chat through the extraction pipeline without writing anything (wrapped by
+`quilltap memory-diff`). Same pipeline as live (`runExtractionDryRun`): every turn through the turn
+passes, then both fold passes over the history a regenerate would rebuild; admission embeds each
+candidate and decides without writing. `?concurrency=N` (default 4, max 32) sets turn parallelism.
+Streams NDJSON: `start`, `candidate` (each with `decision`, `extractionPass`, and `turnIndex` or
+`foldPass`), `turn`, `turn-error`, `fold`, `ping` (heartbeat), `done`, `fatal`.
 
 #### `POST /api/v1/chats/[id]?action=recall-replay`
 
@@ -4459,8 +4456,8 @@ across both tiers.
 #### `POST /api/v1/memories?action=regenerate-all`
 
 Wipe and re-extract every memory. Pressing it again is an explicit "kill the previous sweep and
-start over": all PENDING/PROCESSING `MEMORY_REGENERATE_ALL`, `MEMORY_REGENERATE_CHAT`,
-`MEMORY_EXTRACTION` and `INTER_CHARACTER_MEMORY` jobs are deleted before the fresh fan-out is
+start over": all PENDING/PROCESSING `MEMORY_REGENERATE_ALL`, `MEMORY_REGENERATE_CHAT` and
+`MEMORY_EXTRACTION` jobs are deleted before the fresh fan-out is
 enqueued. The standard and dangerous-compatible cheap profiles are resolved up front and travel in
 the job payload, so the fan-out is self-contained.
 

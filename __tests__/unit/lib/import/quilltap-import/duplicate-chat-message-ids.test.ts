@@ -22,6 +22,10 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/logger', () => ({
   logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
     child: jest.fn().mockReturnValue({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
   },
 }))
@@ -95,6 +99,7 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
   let informsCreate: jest.Mock
   let annotationsCreate: jest.Mock
   let memoriesCreate: jest.Mock
+  let setCursor: jest.Mock
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -135,11 +140,13 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
       },
     })
 
+    setCursor = jest.fn(async () => undefined)
     informsCreate = jest.fn(async (data: Record<string, unknown>) => ({ ...data, id: generateId() }))
     annotationsCreate = jest.fn(async (data: Record<string, unknown>) => ({ ...data, id: generateId() }))
     const globalRepos = new Proxy({} as Record<string, unknown>, {
       get(_t, prop: string) {
         if (prop === 'chatInforms') return repoStub({ create: informsCreate })
+        if (prop === 'memoryExtractionCursors') return repoStub({ setCursor })
         if (prop === 'conversationAnnotations') return repoStub({ create: annotationsCreate })
         return repoStub()
       },
@@ -228,8 +235,11 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
     expect(copy.contextSummary).toBeNull()
     expect(copy.lastSummaryTurn).toBe(0)
     void newUser
-    expect(copy.otherExtractionWatermarkMessageId).toBe(newB)
-    expect(copy.episodeExtractionWatermarkMessageId).toBe(newA)
+    // The fold passes' cursors follow their messages into memory_extraction_cursors.
+    expect(copy).not.toHaveProperty('otherExtractionWatermarkMessageId')
+    expect(copy).not.toHaveProperty('episodeExtractionWatermarkMessageId')
+    expect(setCursor).toHaveBeenCalledWith(copy.id, 'other-fold', newB)
+    expect(setCursor).toHaveBeenCalledWith(copy.id, 'episode-fold', newA)
     expect(copy.courierCheckpoints).toEqual({
       [ALICE_CHARACTER]: { lastResolvedMessageId: newB, resolvedAt: '2026-10-12T00:05:00.000Z' },
     })

@@ -8,6 +8,7 @@
  * store exports without hitting string-length ceilings.
  */
 
+import { withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { logger as baseLogger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import packageJson from '@/package.json';
@@ -373,8 +374,9 @@ async function* streamChats(
       commonplaceSceneCache: _ephemeralSceneCache,
       ...chatForExport
     } = chat;
+    // The fold passes' cursors ride on the chat under their legacy field names.
     const chatRecord: Omit<ExportedChat, 'messages'> = {
-      ...chatForExport,
+      ...(await withBundleCursorFields(chatForExport)),
       ...(tagNames.length > 0 && { _tagNames: tagNames }),
       ...(participantInfo.length > 0 && { _participantInfo: participantInfo }),
     };

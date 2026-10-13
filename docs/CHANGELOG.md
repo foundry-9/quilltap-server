@@ -4,6 +4,27 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase D: extraction — one context, four passes, cursors
+
+Structural Phase D of `docs/developer/features/memory-system-refactor.md`. Two migrations.
+
+- Extraction: new `lib/memory/extraction/` replaces `memory-processor.ts`, `fold-other-pass.ts`, `fold-episode-pass.ts`, `fold-window.ts`, `fold-catchup.ts`, `fold-episode-catchup.ts`, `extraction-route.ts` and the extraction half of `cheap-llm-tasks/memory-tasks.ts` (deleted). Every unit of work (a turn, a Carina answer, a fold, a catch-up job, a dry run) calls `buildExtractionContext` once — chat, cast (hydrated once), project, Concierge-resolved cheap LLM and uncensored fallback, memory calendar, settings, rate limiter, cursors — and runs passes through `runPass` (rate limit → call → parse → cap → floor → admit). Four passes: `self-turn`, `other-turn`, `other-fold`, `episode-fold`. Prompt bodies moved unchanged to `extraction/prompts/{shared,self,other,episode}.ts`; parsers to `extraction/parse.ts`; the search-keyword distiller to `lib/memory/recall/query.ts` and the recap summariser to `lib/memory/recall/recap-summary.ts`.
+- Cursors: new table `memory_extraction_cursors` (`chatId`, `pass`, `messageId`; one row per chat and fold pass) replaces `chats.otherExtractionWatermarkMessageId` and `chats.episodeExtractionWatermarkMessageId`. Migration `add-memory-extraction-cursors-v1` copies both columns into cursors and drops them. A pass advances its cursor only past slices it read. Exports and backups still carry the two field names on the chat; import and restore write them to the table (`extraction/cursor-bundle.ts`). Regenerate clears a chat's cursors.
+- `INTER_CHARACTER_MEMORY` job type and its empty handler removed; migration `drop-inter-character-memory-jobs-v1` deletes any queued rows. `batchExtractMemories` removed. `MemoryChatSettings` lost the unread `conciergePolicy` / `isDangerousChat`.
+- `MEMORY_EXTRACTION` payload gains `pass` (`turn` / `other-fold` / `episode-fold`), `cursor` and `ignoreIdle`; queued rows with the old `foldOtherCatchup` / `foldEpisodeCatchup` / `foldOtherIgnoreIdle` flags still run. One maintenance sweep module (`maintenance/fold-catchup.ts`) enqueues both catch-ups and skips a chat whose catch-up for that pass is already queued (now for the OTHER pass too).
+- Dry run (`?action=extract-memories-dry-run`, `quilltap memory-diff`): the live pipeline with `dryRun: true`. Same connection profile as live (a seat's, else the cheap profile), autonomous chats included, both fold passes over the history a regenerate would rebuild, in-memory cursors. Admission embeds each candidate and decides without writing; each candidate reports `decision` and `extractionPass`. New NDJSON `fold` event. A dry run now makes embedding calls.
+- Behaviour changes:
+  - Extraction's cheap LLM honours the global default cheap profile (`buildCheapLLMConfig`), as the context summary already did.
+  - Caps are one rule per pass: `min(base, ceil(maxTokens / 8000))`. The fold OTHER cap (`foldCandidatesPerSubject`) is now clamped by the output budget like the turn cap, and the extra slot for a dated event is kept at fold grain instead of cut. The SELF parser caps at the pass cap.
+  - A memory's `createdAt` is its source message's time on every extraction path. The fold OTHER pass used now; the episode pass used the event date; the turn passes used the turn's latest assistant message for every slice.
+  - The rate limit is a live counter: a baseline from the parent's in-memory ledger of AUTO inserts in the last hour (new host-RPC `countRecentAdmissions`), plus each insert as it lands in the unit of work. It no longer counts rows by `createdAt`. A restart forgets the ledger. It now applies to the episode pass. A rate-limited character is still a subject of other characters' OTHER calls.
+  - Carina memories carry `pass: 'carina'` in their provenance.
+  - The context summary's fold OTHER pass now gets the project description as background.
+  - Regenerate enqueues anchored turn jobs for autonomous rooms (it used to enqueue one null-opener job) and an episode catch-up at once (it used to wait for the next fold or sweep).
+  - Queue-memories (`?action=queue-memories`) uses a seat's connection profile first, handles greeting-only chats, and no longer requires a configured cheap profile.
+- CLI: `memory-diff` prints fold-pass progress lines.
+- Tests: `run-pass-invariants.test.ts` (dry run equals live, live rate counter, fold event slot), `admission-dry-run.test.ts`, `add-memory-extraction-cursors-v1.integration.test.ts`, the cursor slicing test over a 150-message chat, the context-per-unit-of-work, Carina project and episode-fallback tests; processor, fold-pass, catch-up and prompt suites ported to the new module.
+
 #### PR 93 review: 10 findings on Phase C
 
 - A retried job no longer counts its admissions twice. Each admission from the job child carries a key (job id, content hash, occurrence in the attempt); the parent remembers the outcome per key for 24 hours (up to 5,000 keys) and answers a repeat without writing. A parent restart between attempts forgets the keys.

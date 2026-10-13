@@ -36,7 +36,6 @@ describe('topicsForCompletedJob', () => {
   describe('memory jobs', () => {
     it.each([
       'MEMORY_EXTRACTION',
-      'INTER_CHARACTER_MEMORY',
       'CARINA_MEMORY_EXTRACTION',
       'MEMORY_REGENERATE_CHAT',
     ])('scopes %s to the chat its payload names', (jobType) => {

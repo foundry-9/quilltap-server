@@ -70,12 +70,11 @@ jest.mock('@/lib/services/commonplace-notifications/relevant-conversations-refre
   refreshRelevantConversationsOnFold: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/fold-other-pass', () => ({
-  runFoldOtherPass: jest.fn(async () => ({})),
-}))
-
-jest.mock('@/lib/memory/fold-episode-pass', () => ({
-  runFoldEpisodePass: jest.fn(),
+jest.mock('@/lib/memory/extraction', () => ({
+  buildExtractionContext: jest.fn(async (_chatId: string, _userId: string, opts: { messages?: unknown[] }) => ({
+    messagesHandedIn: opts.messages,
+  })),
+  runFoldPass: jest.fn(async () => ({})),
 }))
 
 jest.mock('@/lib/chat/auto-title', () => ({
@@ -185,17 +184,22 @@ describe('generateContextSummary — fold title', () => {
 
 describe('generateContextSummary — one transcript read feeds both fold passes (finding 13)', () => {
   it('hands both passes the transcript the fold already read', async () => {
-    const { runFoldEpisodePass } = jest.requireMock('@/lib/memory/fold-episode-pass') as { runFoldEpisodePass: jest.Mock }
-    const { runFoldOtherPass } = jest.requireMock('@/lib/memory/fold-other-pass') as { runFoldOtherPass: jest.Mock }
+    const { buildExtractionContext, runFoldPass } = jest.requireMock('@/lib/memory/extraction') as {
+      buildExtractionContext: jest.Mock
+      runFoldPass: jest.Mock
+    }
     primeRepos()
     await generateContextSummary(options())
 
     const repos = mockRepos.mock.results[0].value
     // One read for the fold, one fresh read for the whisper sweep; the passes read none.
     expect((repos.chats.getMessages as jest.Mock).mock.calls).toHaveLength(2)
-    const episodeTranscript = runFoldEpisodePass.mock.calls[0][0].chatMessages
-    const otherTranscript = runFoldOtherPass.mock.calls[0][0].chatMessages
-    expect(episodeTranscript).toHaveLength(24)
-    expect(otherTranscript).toBe(episodeTranscript)
+    // One extraction context, built on that transcript, serves both passes.
+    expect(buildExtractionContext).toHaveBeenCalledTimes(1)
+    const transcript = buildExtractionContext.mock.calls[0][2].messages
+    expect(transcript).toHaveLength(24)
+    expect(runFoldPass.mock.calls.map((c: unknown[]) => c[1])).toEqual(['episode-fold', 'other-fold'])
+    const ctx = buildExtractionContext.mock.results[0].value
+    for (const call of runFoldPass.mock.calls) expect(call[0]).toBe(await ctx)
   })
 })

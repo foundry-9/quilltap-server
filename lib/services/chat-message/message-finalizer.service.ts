@@ -19,7 +19,6 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -501,8 +500,6 @@ export async function finalizeMessageResponse({
   if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
-      conciergePolicy,
-      isDangerousChat: shouldUseUncensoredRoute(chat),
     }
 
     // Per-turn memory extraction.
@@ -563,8 +560,6 @@ export async function finalizeMessageResponse({
       connectionProfile,
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
-        conciergePolicy,
-        isDangerousChat: shouldUseUncensoredRoute(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,

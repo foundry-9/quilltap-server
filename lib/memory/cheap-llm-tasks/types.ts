@@ -40,6 +40,8 @@ export interface MemoryDraft {
   when?: string
   /** Proper nouns of the episode: places, people, named things. */
   entities?: string[]
+  /** An explicit in-story time stamp (the episode prompt asks for one on fictional timelines). */
+  narrativeTime?: string
 }
 
 /**

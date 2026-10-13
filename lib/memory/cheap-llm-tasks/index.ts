@@ -32,26 +32,10 @@ export {
   throwIfLostToTimeout,
 } from './core-execution'
 
-// Memory tasks
-export {
-  extractSelfMemoriesFromTurn,
-  extractOtherMemoriesFromTurn,
-  extractOtherMemoriesFromFold,
-  batchExtractMemories,
-  extractMemorySearchKeywords,
-  summarizeMemoryRecap,
-  extractEpisodesFromFold,
-  FOLD_EPISODE_CAP,
-} from './memory-tasks'
-export type {
-  OtherSubjectInput,
-  OrientingContext,
-  ExtractionClock,
-  FoldEpisode,
-  FoldEpisodeMessage,
-  FoldOtherMessage,
-  MemorySearchExtraction,
-} from './memory-tasks'
+// Recall's cheap-LLM tasks, re-exported here for their callers (the
+// extraction prompts live in `lib/memory/extraction/`).
+export { extractMemorySearchKeywords, type MemorySearchExtraction } from '../recall/query'
+export { summarizeMemoryRecap } from '../recall/recap-summary'
 
 // Canon block loader (used by the memory orchestrator to feed extractor prompts)
 export {

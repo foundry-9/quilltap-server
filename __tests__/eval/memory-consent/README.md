@@ -3,12 +3,13 @@
 Live-model check for manufactured consent in memory extraction — mechanism 6
 of [prompt-trust-and-anti-committee.md](../../../docs/developer/features/prompt-trust-and-anti-committee.md)
 (§10.3). The deterministic half lives in
-`lib/memory/cheap-llm-tasks/__tests__/memory-consent-regression.test.ts`; the
+`lib/memory/extraction/__tests__/consent-regression.test.ts`; the
 shared fixtures are in `__tests__/unit/lib/fixtures/proposal-no-reply.ts`.
 
 The suite is skipped unless `MEMORY_CONSENT_EVAL_MODEL` is set, so it never
 runs in CI. It builds the real SELF and OTHER extraction prompts with the real
-extractor and sends them to any OpenAI-compatible chat-completions endpoint.
+prompt builders (`lib/memory/extraction/prompts/`), parses the answers with the
+real extraction parsers, and sends them to any OpenAI-compatible chat-completions endpoint.
 
 | Variable | Meaning | Default |
 |---|---|---|

@@ -155,6 +155,8 @@ export interface ChildShutdownAckMessage {
  *     summary out of every participant vault
  *   - `admitMemory` — memory admission (`admitPrepared`): the child extracts and
  *     embeds, the parent searches, decides and writes against the real rows
+ *   - `countRecentAdmissions` — the extraction rate limit's read of the
+ *     parent's ledger of recent admissions (`admission/rate-ledger.ts`)
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -177,7 +179,8 @@ export interface ChildHostRpcRequestMessage {
     | 'writeConversationSummaryToVaults'
     | 'removeConversationSummariesFromVaults'
     | 'startScheduledAutonomousRun'
-    | 'admitMemory';
+    | 'admitMemory'
+    | 'countRecentAdmissions';
   args: unknown[];
 }
 

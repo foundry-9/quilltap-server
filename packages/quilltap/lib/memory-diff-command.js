@@ -328,6 +328,15 @@ async function memoryDiffCommand(args) {
           `${GREEN}${event.candidatesAdded}${RESET} candidate(s)\n`
         );
         break;
+      case 'fold':
+        // The fold passes run after every turn, over the history a regenerate
+        // would rebuild; their candidates arrive with turnIndex null.
+        process.stderr.write(
+          `  ${CYAN}[${event.pass}]${RESET} ${event.slices} slice(s): ` +
+          `${GREEN}${event.candidatesAdded}${RESET} candidate(s)` +
+          `${event.skippedReason ? ` ${DIM}(${event.skippedReason})${RESET}` : ''}\n`
+        );
+        break;
       case 'turn-error':
         process.stderr.write(
           `  ${RED}[${event.index + 1}/${turnCount}] FAILED${RESET}: ${event.error}\n`

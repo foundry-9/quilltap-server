@@ -20,10 +20,7 @@ import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
-import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
-import { runFoldOtherPass } from '@/lib/memory/fold-other-pass'
-import { buildExtractionUncensoredFallback } from '@/lib/memory/extraction-route'
-import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
+import { buildExtractionContext, runFoldPass } from '@/lib/memory/extraction'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { applyAutoTitle } from '@/lib/chat/auto-title'
 
@@ -548,81 +545,32 @@ export async function generateContextSummary(
       logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
-    // The uncensored fallback both fold passes retry an empty answer on,
-    // resolved once from the chat's Concierge state (bug 213).
-    let foldUncensoredFallback: UncensoredFallbackOptions | undefined
-    if (availableProfiles) {
-      try {
-        const chatSettingsForFold = await repos.chatSettings.findByUserId(userId)
-        foldUncensoredFallback = buildExtractionUncensoredFallback(
-          chat,
-          resolveConciergeSettings(chatSettingsForFold, chat),
-          availableProfiles,
-        )
-      } catch (e) {
-        logger.warn('[Context Summary] Could not resolve the fold passes\' uncensored fallback; running without it', {
-          chatId,
-          error: e instanceof Error ? e.message : String(e),
-        })
-      }
-    }
-    logger.debug('[Context Summary] Fold memory passes routed', {
-      chatId,
-      hasUncensoredFallback: foldUncensoredFallback !== undefined,
-      uncensoredRoute: foldUncensoredFallback?.isDangerousChat === true,
-    })
-
-    // Both fold passes place their watermarks against the transcript this fold
-    // already read; handing it over saves each a full read and decompression.
+    // Both fold memory passes — the episode pass and the fold-grain OTHER
+    // pass — run on one extraction context: the chat, its cast, the project,
+    // the Concierge-resolved cheap LLM and its uncensored fallback (bug 213),
+    // all read once. Each reads from its own cursor through the end of the
+    // folded window, so a hard rebuild's turns-1..N window only reads what that
+    // pass has not (bug 207). The transcript this fold already read places the
+    // cursors. Best-effort: a failed memory pass never fails the fold.
     const foldTranscript = allChatMessages.filter(
       (m): m is MessageEvent => m.type === 'message',
     ) as unknown as MessageEvent[]
     const foldWindowMessages = turnsToFold.flatMap(t => t.messages)
-
-    // Episodic spine: fold-time episode pass. Over the just-folded window, ask
-    // the cheap LLM for 0–2 consolidated episode records and write them as
-    // dated `kind: 'episodic'` memories linked to the window's per-turn
-    // fragments. Piggybacks the fold cadence — no new trigger. The pass keeps
-    // its own watermark, so a hard rebuild's turns-1..N window only reads what
-    // it has not (bug 207). Best-effort: a failed episode pass never fails the
-    // fold.
     try {
-      await runFoldEpisodePass({
-        chatId,
-        userId,
-        windowMessages: foldWindowMessages,
-        chatMessages: foldTranscript,
-        cheapLLM,
-        uncensoredFallback: foldUncensoredFallback,
-        timelineMode: chat.timelineMode ?? 'realtime',
-        projectId: chat.projectId ?? null,
-        inAutonomousRoom: chat.chatType === 'autonomous',
-      })
-    } catch (e) {
-      logger.error('[Context Summary] Fold episode pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
-    }
-
-    // Fold-grain OTHER pass: what each present character took away about the
-    // others across the folded window, one candidate set per (observer,
-    // subject), each thread stated once. Runs in 'fold' and 'hybrid' modes
-    // (the pass checks), advances the chat's OTHER watermark, and inherits the
-    // Concierge policy exactly as the per-turn pass does. Best-effort.
-    try {
-      await runFoldOtherPass({
-        chatId,
-        userId,
-        windowMessages: foldWindowMessages,
-        chatMessages: foldTranscript,
-        cheapLLM,
-        cheapMaxTokens: resolveMaxTokens(connectionProfile),
-        uncensoredFallback: foldUncensoredFallback,
-        timelineMode: chat.timelineMode ?? 'realtime',
-        projectId: chat.projectId ?? null,
-        inAutonomousRoom: chat.chatType === 'autonomous',
+      const extraction = await buildExtractionContext(chatId, userId, {
+        chat,
+        messages: foldTranscript,
+        connectionProfile,
         chatContextSummary: newSummary,
       })
+      // Episodic spine: 0–2 dated episode records over the folded window,
+      // linked to the window's per-turn fragments.
+      await runFoldPass(extraction, 'episode-fold', { windowMessages: foldWindowMessages })
+      // What each present character took away about the others across the
+      // folded window, each thread stated once ('fold' and 'hybrid' modes).
+      await runFoldPass(extraction, 'other-fold', { windowMessages: foldWindowMessages })
     } catch (e) {
-      logger.error('[Context Summary] Fold OTHER pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+      logger.error('[Context Summary] Fold memory passes failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

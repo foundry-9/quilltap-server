@@ -1343,7 +1343,6 @@ async function handleRegenerateAll(
       'MEMORY_REGENERATE_ALL',
       'MEMORY_REGENERATE_CHAT',
       'MEMORY_EXTRACTION',
-      'INTER_CHARACTER_MEMORY',
     ],
     ['PENDING', 'PROCESSING'],
   );

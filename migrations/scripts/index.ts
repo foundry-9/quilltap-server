@@ -435,6 +435,9 @@ import { addMemoriesSupersededByIndexMigration } from './add-memories-superseded
 // Memory: housekeeping settings into instance_settings.memoryMaintenance; dead knobs dropped (refactor phase A)
 import { moveMemoryMaintenanceSettingsMigration } from './move-memory-maintenance-settings-v1';
 import { retireMemoryVectorEntriesMigration } from './retire-memory-vector-entries-v1';
+// Memory: extraction cursors table; fold-pass watermark columns dropped (refactor phase D)
+import { addMemoryExtractionCursorsMigration } from './add-memory-extraction-cursors-v1';
+import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-memory-jobs-v1';
 
 /**
  * All available migrations.
@@ -887,6 +890,10 @@ export const migrations: Migration[] = [
   moveMemoryMaintenanceSettingsMigration,
   // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
   retireMemoryVectorEntriesMigration,
+  // Memory: memory_extraction_cursors; chats watermark columns dropped (Phase D)
+  addMemoryExtractionCursorsMigration,
+  // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
+  dropInterCharacterMemoryJobsMigration,
 ];
 
 export {
@@ -1317,5 +1324,9 @@ export {
   moveMemoryMaintenanceSettingsMigration,
   // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
   retireMemoryVectorEntriesMigration,
+  // Memory: memory_extraction_cursors; chats watermark columns dropped (Phase D)
+  addMemoryExtractionCursorsMigration,
+  // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
+  dropInterCharacterMemoryJobsMigration,
 };
 

@@ -558,9 +558,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   // `setConciergeMode` below.
 
   protected override patchOnlyFields(): readonly string[] {
-    // The fold-grain OTHER and episode watermarks are patch-only too: a stale
-    // whole-row update must not rewind one and re-trigger a pass over covered text.
-    return [...CONCIERGE_MODE_FIELDS, 'otherExtractionWatermarkMessageId', 'episodeExtractionWatermarkMessageId'];
+    return [...CONCIERGE_MODE_FIELDS];
   }
 
   /**

@@ -38,6 +38,10 @@ async function clearFormat3Entities(): Promise<void> {
     // deletion never reaches them; without this a replace-mode restore would
     // collide on the preserved primary keys, exactly as chat_documents does.
     'chat_informs',
+    // Fold-pass extraction cursors (no userId). The chat delete's cascade would
+    // remove them, but clearing them here keeps a restore from merging cursors
+    // of a chat id it is about to recreate.
+    'memory_extraction_cursors',
     'conversation_chunks',
     // Per-message annotations. On no delete path in v4, so "delete all my data"
     // left them behind (a privacy leak) and a restore into a migrated instance

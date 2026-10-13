@@ -1,30 +1,31 @@
 /**
  * Memory Regenerate Chat Job Handler
  *
- * Wipes every memory tied to one chat (with vector store cleanup) and
- * re-enqueues per-turn MEMORY_EXTRACTION jobs so the current extraction
- * pipeline rebuilds the chat's memories from scratch.
+ * Wipes every memory tied to one chat (`retireChatMemories`, which spares
+ * MANUAL rows, cold rows and digests with a surviving member) and rebuilds
+ * them through the extraction pipeline:
  *
- * One MEMORY_EXTRACTION job is enqueued per user-message turn opener.
- * The transcript builder (lib/services/chat-message/turn-transcript.ts)
- * walks forward from each opener and stops at the next user message, so
- * one job per user message exactly tiles the chat into the same turns
- * the live pipeline produces. Greeting-only chats (no user messages) get
- * a single null-opener extraction instead.
+ *  - one MEMORY_EXTRACTION turn job per turn (`listExtractionTurns`: one per
+ *    USER opener; one per closing ASSISTANT line in an autonomous room; one
+ *    null-opener job for a greeting-only chat), so the rebuilt turns tile the
+ *    chat exactly as the live pipeline does;
+ *  - both fold passes' cursors cleared, so their rows (removed by the wipe)
+ *    are rebuilt from the chat's start: an `other-fold` catch-up is enqueued
+ *    now (in the `fold` / `hybrid` modes, where it owns the observations of
+ *    others), and an `episode-fold` catch-up over the folded history.
  *
- * Observations of other characters are no longer (only) per-turn: in the
- * `fold` / `hybrid` extraction modes most of them come from the fold-grain
- * OTHER pass. The regenerate resets the chat's fold-grain watermark and
- * enqueues one fold-grain catch-up so those rows are rebuilt too. It also
- * clears the episode pass's watermark, whose episodes the wipe removed.
+ * Each catch-up reads its backlog in slices, advancing its cursor past each
+ * and enqueuing its own successor, so the rebuilt fold-grain rows cover the
+ * whole history (bug 206).
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { retireChatMemories } from '@/lib/memory/retire';
+import { listExtractionTurns } from '@/lib/services/chat-message/turn-transcript';
+import { getMemoryExtractionModeSettings } from '@/lib/instance-settings';
 import { enqueueMemoryExtraction } from '../queue-service';
 import { logger } from '@/lib/logger';
-import { getMemoryExtractionModeSettings } from '@/lib/instance-settings';
 import type { MemoryRegenerateChatPayload } from '../queue-service';
 
 export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<void> {
@@ -55,136 +56,60 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
   }
 
   const wipeResult = await retireChatMemories(payload.chatId);
-  await rebuildFoldGrainObservations(job, payload, chat.otherExtractionWatermarkMessageId ?? null);
-  await resetEpisodeWatermark(job, payload, chat.episodeExtractionWatermarkMessageId ?? null);
+  const clearedCursors = await repos.memoryExtractionCursors.clearForChat(payload.chatId);
+  logger.debug('[MemoryRegenerateChat] Cleared extraction cursors', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    clearedCursors,
+  });
 
-  const allRawMessages = await repos.chats.getMessages(payload.chatId);
-  const messageEvents = allRawMessages.filter(
+  const messages = (await repos.chats.getMessages(payload.chatId)).filter(
     (m): m is MessageEvent => m.type === 'message',
   ) as unknown as MessageEvent[];
+  const turns = listExtractionTurns(messages, chat.chatType);
 
-  // Collect user-message turn openers in chronological order. System whispers
-  // (Host, Librarian, etc.) wear role:'USER' in some places but always carry
-  // a systemSender — skip them, mirroring findTurnOpenerMessageId().
-  const turnOpenerIds: string[] = [];
-  for (const m of messageEvents) {
-    if (m.role !== 'USER') continue;
-    if (m.systemSender) continue;
-    turnOpenerIds.push(m.id);
+  // The wipe removed this chat's rows, and nothing else enqueues extractions
+  // for a chat mid-regenerate, so the per-opener dedupe scan would only cost
+  // two queries a turn.
+  for (const turn of turns) {
+    await enqueueMemoryExtraction(
+      job.userId,
+      {
+        chatId: payload.chatId,
+        turnOpenerMessageId: turn.turnOpenerMessageId,
+        extractionAnchorMessageId: turn.extractionAnchorMessageId ?? null,
+        connectionProfileId: payload.connectionProfileId,
+      },
+      { skipDedupCheck: true },
+    );
   }
 
-  // The chat's existing memories were just wiped, and no other path
-  // enqueues extractions for a chat being regenerated mid-sweep, so the
-  // dedup scan inside enqueueMemoryExtraction would just be a no-op that
-  // costs two DB queries per opener. Skip it — on a 50-turn chat that's
-  // 100 queries we don't need.
-  if (turnOpenerIds.length === 0) {
-    // Greeting-only chat: one null-opener extraction covers every assistant
-    // message in the history.
+  const mode = await getMemoryExtractionModeSettings();
+  const catchups: Array<'other-fold' | 'episode-fold'> =
+    mode.otherPass === 'turn' ? ['episode-fold'] : ['other-fold', 'episode-fold'];
+  for (const pass of catchups) {
     await enqueueMemoryExtraction(
       job.userId,
       {
         chatId: payload.chatId,
         turnOpenerMessageId: null,
+        extractionAnchorMessageId: `regenerate:${job.id}`,
         connectionProfileId: payload.connectionProfileId,
-      },
-      { skipDedupCheck: true },
-    );
-    logger.info('[MemoryRegenerateChat] Wiped chat and enqueued greeting extraction', {
-      jobId: job.id,
-      chatId: payload.chatId,
-      deleted: wipeResult.retired,
-      spared: wipeResult.spared,
-      vectorsRemoved: wipeResult.vectorsRemoved,
-      extractionsEnqueued: 1,
-    });
-    return;
-  }
-
-  for (const openerId of turnOpenerIds) {
-    await enqueueMemoryExtraction(
-      job.userId,
-      {
-        chatId: payload.chatId,
-        turnOpenerMessageId: openerId,
-        connectionProfileId: payload.connectionProfileId,
+        pass,
+        ignoreIdle: true,
       },
       { skipDedupCheck: true },
     );
   }
 
-  logger.info('[MemoryRegenerateChat] Wiped chat and enqueued per-turn extractions', {
+  logger.info('[MemoryRegenerateChat] Wiped chat and enqueued its rebuild', {
     jobId: job.id,
     chatId: payload.chatId,
+    chatType: chat.chatType ?? null,
     deleted: wipeResult.retired,
+    spared: wipeResult.spared,
     vectorsRemoved: wipeResult.vectorsRemoved,
-    extractionsEnqueued: turnOpenerIds.length,
-  });
-}
-
-/**
- * Reset the fold-grain OTHER watermark and enqueue one catch-up pass, so a
- * regenerate rebuilds the observations of others that the per-turn pass no
- * longer writes. No-op in `turn` mode, where the per-turn pass still writes
- * them all. The catch-up reads the chat's whole history in consecutive slices
- * of `FOLD_OTHER_MAX_WINDOW_MESSAGES`, advancing the watermark past each one
- * (bug 206), so the rebuilt observations cover the whole chat.
- */
-async function rebuildFoldGrainObservations(
-  job: BackgroundJob,
-  payload: MemoryRegenerateChatPayload,
-  previousWatermark: string | null,
-): Promise<void> {
-  const mode = await getMemoryExtractionModeSettings();
-  if (mode.otherPass === 'turn') {
-    logger.debug('[MemoryRegenerateChat] Extraction mode is per-turn; no fold-grain rebuild', {
-      jobId: job.id,
-      chatId: payload.chatId,
-    });
-    return;
-  }
-
-  const repos = getRepositories();
-  if (previousWatermark) {
-    await repos.chats.update(payload.chatId, { otherExtractionWatermarkMessageId: null });
-  }
-  await enqueueMemoryExtraction(
-    job.userId,
-    {
-      chatId: payload.chatId,
-      turnOpenerMessageId: null,
-      extractionAnchorMessageId: `regenerate:${job.id}`,
-      connectionProfileId: payload.connectionProfileId,
-      foldOtherCatchup: true,
-      foldOtherIgnoreIdle: true,
-    },
-    { skipDedupCheck: true },
-  );
-  logger.debug('[MemoryRegenerateChat] Reset fold-grain watermark and enqueued catch-up', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    previousWatermark,
-    otherPass: mode.otherPass,
-  });
-}
-
-/**
- * The wipe removed the chat's episode memories too, so the fold-time episode
- * pass's watermark no longer marks anything it wrote. Clearing it lets the
- * next hard-rebuild fold read the history again, in slices, and rebuild the
- * episodes (bug 207). Independent of the extraction mode: the episode pass
- * runs in every mode.
- */
-async function resetEpisodeWatermark(
-  job: BackgroundJob,
-  payload: MemoryRegenerateChatPayload,
-  previousWatermark: string | null,
-): Promise<void> {
-  if (!previousWatermark) return;
-  await getRepositories().chats.update(payload.chatId, { episodeExtractionWatermarkMessageId: null });
-  logger.debug('[MemoryRegenerateChat] Reset episode watermark', {
-    jobId: job.id,
-    chatId: payload.chatId,
-    previousWatermark,
+    turnJobs: turns.length,
+    catchups,
   });
 }

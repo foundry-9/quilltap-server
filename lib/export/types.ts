@@ -5,6 +5,7 @@
  * supporting selective entity exports with optional memory inclusion.
  */
 
+import type { BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import type {
   Character,
   ChatMetadata,
@@ -187,7 +188,7 @@ export interface ExportedCharacter extends Character {
 /**
  * Chat with messages and resolved participant information
  */
-export interface ExportedChat extends ChatMetadata {
+export interface ExportedChat extends ChatMetadata, BundleCursorFields {
   messages: MessageEvent[];
   _participantInfo?: Array<{
     participantId: string;

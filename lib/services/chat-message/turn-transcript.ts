@@ -76,6 +76,50 @@ export function findTurnOpenerMessageId(messages: MessageEvent[]): string | null
 }
 
 /**
+ * The latest message that closes an autonomous-room turn: a non-staff,
+ * non-silent ASSISTANT line from a seat. Null when there is none.
+ */
+export function findAutonomousTurnAnchorMessageId(messages: MessageEvent[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isAutonomousTurnAnchor(messages[i])) return messages[i].id
+  }
+  return null
+}
+
+function isAutonomousTurnAnchor(m: MessageEvent): boolean {
+  return m.type === 'message' && m.role === 'ASSISTANT' && !m.systemSender && !m.isSilentMessage && !!m.participantId
+}
+
+/** How a turn is addressed for extraction: its USER opener, and (autonomous rooms) the message that closes it. */
+export interface ExtractionTurnLocator {
+  turnOpenerMessageId: string | null
+  extractionAnchorMessageId?: string | null
+}
+
+/**
+ * Every turn of a chat, as extraction addresses them — the one scan the
+ * queue-memories action, the dry run, the regenerate and the SillyTavern
+ * import share.
+ *
+ *  - An ordinary chat: one turn per non-staff USER message (each opens a
+ *    turn); a chat with none (greeting only) is one null-opener turn when it
+ *    has any character line, else no turns.
+ *  - An autonomous room: no USER opener ever, so one turn per closing
+ *    ASSISTANT line, each anchored on it (the live trigger's shape).
+ */
+export function listExtractionTurns(
+  messages: MessageEvent[],
+  chatType: string | null | undefined,
+): ExtractionTurnLocator[] {
+  if (chatType === 'autonomous') {
+    return messages.filter(isAutonomousTurnAnchor).map(m => ({ turnOpenerMessageId: null, extractionAnchorMessageId: m.id }))
+  }
+  const openers = messages.filter(m => m.type === 'message' && m.role === 'USER' && !m.systemSender)
+  if (openers.length > 0) return openers.map(m => ({ turnOpenerMessageId: m.id }))
+  return messages.some(isAutonomousTurnAnchor) ? [{ turnOpenerMessageId: null }] : []
+}
+
+/**
  * Resolve the user-controlled character (if any) from a chat's participants,
  * hydrated from a map of the chat's `Character` records.
  *

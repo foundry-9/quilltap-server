@@ -57,6 +57,7 @@ export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
 export { ChatInformsRepository } from './chat-informs.repository';
+export { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 export { WardrobeWearRepository } from './wardrobe-wear.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
@@ -101,6 +102,7 @@ import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
 import { ChatInformsRepository } from './chat-informs.repository';
+import { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 import { WardrobeWearRepository } from './wardrobe-wear.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
@@ -150,6 +152,7 @@ export interface RepositoryContainer {
   groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
   chatInforms: ChatInformsRepository;
+  memoryExtractionCursors: MemoryExtractionCursorsRepository;
   wardrobeWear: WardrobeWearRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
@@ -212,6 +215,7 @@ export function createRepositories(): RepositoryContainer {
       groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
       chatInforms: new ChatInformsRepository(),
+      memoryExtractionCursors: new MemoryExtractionCursorsRepository(),
       // The wear ledger's chokepoint writes equipped slots through this chats repo.
       wardrobeWear: new WardrobeWearRepository(chatsRepo),
       terminalSessions: new TerminalSessionsRepository(),

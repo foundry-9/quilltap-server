@@ -54,6 +54,7 @@ import { applyFold, insertRow, raiseImportance, withoutEmbedding } from './apply
 import { linkBothWays } from './links'
 import { maybeEnqueueHousekeeping } from './after-insert'
 import { admissionInserted } from './outcome'
+import { recordAdmissionInsert } from './rate-ledger'
 import type { AdmissionAction, AdmissionOutcome, AdmissionRow, AdmissionTrace } from './types'
 
 const log = logger.child({ module: 'memory:admission' })
@@ -68,6 +69,14 @@ const ADMISSION_LEDGER_MAX = 5000
 
 export interface AdmitOptions {
   userId: string
+  /**
+   * Decide and return without writing (the extraction dry run). The candidate
+   * is still embedded and its neighbours searched, so the outcome names the
+   * action live admission would take; nothing is inserted, folded, linked or
+   * counted, and the outcome's `memory` is the row it would fold into (null
+   * for an insert).
+   */
+  dryRun?: boolean
 }
 
 /** What the child hands the parent over host-RPC (`admitMemory`). Structured-clone safe. */
@@ -79,6 +88,8 @@ export interface AdmitPreparedRequest {
   notes: string[]
   /** `jobId:content:n` from the job child; absent outside a job. */
   idempotencyKey?: string | null
+  /** Decide only; see {@link AdmitOptions.dryRun}. */
+  dryRun?: boolean
 }
 
 function isJobChild(): boolean {
@@ -184,18 +195,22 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
       userId: opts.userId,
       embeddingAttempts: attempts,
       notes,
+      ...(opts.dryRun ? { dryRun: true } : {}),
     }
     let outcome: AdmissionOutcome
     if (isJobChild()) {
-      const { nextAdmissionKey } = await import('@/lib/background-jobs/child/child-repositories-proxy')
-      request.idempotencyKey = nextAdmissionKey(admissionContentKey(prepared))
+      // A dry run writes nothing, so it carries no idempotency key.
+      if (!opts.dryRun) {
+        const { nextAdmissionKey } = await import('@/lib/background-jobs/child/child-repositories-proxy')
+        request.idempotencyKey = nextAdmissionKey(admissionContentKey(prepared))
+      }
       const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client')
       outcome = await callHost<AdmissionOutcome>('admitMemory', request)
     } else {
       outcome = await admitPrepared(request)
     }
 
-    if (admissionInserted(outcome)) {
+    if (admissionInserted(outcome) && !opts.dryRun) {
       // Fire-and-forget; never blocks the write that just landed.
       void maybeEnqueueHousekeeping(prepared.characterId, opts.userId)
     }
@@ -285,6 +300,8 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
   const { row, embedding, userId, idempotencyKey } = request
   const characterId = row.characterId
 
+  if (request.dryRun) return decideOnly(request)
+
   return withCharacterLock(characterId, async () => {
     const now = Date.now()
     if (idempotencyKey) {
@@ -355,6 +372,7 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     }
 
     if (outcome.memory) publishRealtime('memories')
+    if (admissionInserted(outcome) && row.source === 'AUTO') recordAdmissionInsert(characterId)
     void patchChildIndex(characterId, applied!.indexEntries)
     if (admissionInserted(outcome)) {
       // The consolidation watermark counts the row just written (it used to run
@@ -377,6 +395,52 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
     })
     return outcome
   })
+}
+
+/**
+ * The dry run's parent half: search and decide as live admission would, and
+ * write nothing. The outcome's `memory` is the row the action names (the fold
+ * target), or null for an insert.
+ */
+async function decideOnly(request: AdmitPreparedRequest): Promise<AdmissionOutcome> {
+  const { row, embedding } = request
+  const gathered = await gatherNeighbours(row.characterId, embedding)
+  const decision = decideAdmission({
+    candidate: {
+      holderId: row.characterId,
+      aboutId: row.aboutCharacterId,
+      kind: row.kind,
+      source: row.source,
+      occurredAt: row.occurredAt,
+    },
+    neighbours: gathered.neighbours,
+    thresholds: ADMISSION_THRESHOLDS,
+  })
+  const action = decision.action
+  const target =
+    action.kind === 'absorb' || action.kind === 'reinforce' || action.kind === 'promote-and-reinforce'
+      ? gathered.neighbours.find((n) => n.memory.id === action.into)?.memory ?? null
+      : null
+  log.debug('Admission decided (dry run; nothing written)', {
+    characterId: row.characterId,
+    action: action.kind,
+    targetId: target?.id ?? null,
+    neighbours: gathered.neighbours.length,
+  })
+  return {
+    action,
+    memory: target ? withoutEmbedding(target) : null,
+    novelDetails: [],
+    linkedIds: action.kind === 'insert-linked' ? [...action.linkTo] : [],
+    trace: {
+      thresholds: ADMISSION_THRESHOLDS,
+      assessments: decision.assessments,
+      embeddingAttempts: request.embeddingAttempts,
+      orphansIgnored: gathered.orphanIds.length,
+      searchedK: gathered.searchedK,
+      notes: [...request.notes, 'dry run: decided, nothing written'],
+    },
+  }
 }
 
 type IndexEntry = { id: string; embedding: Float32Array; tier: 'hot' | 'cold' }

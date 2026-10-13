@@ -54,7 +54,7 @@ Chats whose Concierge posture is *Locked* or *Unmoderated* are respected: digest
 
 The **Extraction Grain** card, beside Consolidation, changes how often a character writes down what they notice about *other* characters. Writing a note every turn meant a four-person room could produce a dozen fragments a turn about one thread of conversation, each a little different, none reinforcing the others. Now:
 
-- **Hybrid** (the default) — observations of others are gathered from stretches of conversation, at the same points the running chat summary is updated (every five turns or so), with each thread stated once and at most three notes per person per stretch. Per turn, only the weighty observations — promises, agreements, new standing facts, importance 0.75 and up — are still written straight away.
+- **Hybrid** (the default) — observations of others are gathered from stretches of conversation, at the same points the running chat summary is updated (every five turns or so), with each thread stated once and at most three notes per person per stretch (fewer when the connection profile's reply budget is modest — one note for every 8,000 tokens of reply, never less than one — plus one more when the extra note records a dated or placed event). Per turn, only the weighty observations — promises, agreements, new standing facts, importance 0.75 and up — are still written straight away.
 - **Fold** — only the stretch-at-a-time notes; nothing about others is written per turn.
 - **Turn** — the old behaviour: every turn.
 

@@ -646,8 +646,6 @@ CREATE TABLE "chats" (
   "courierCheckpoints" TEXT DEFAULT NULL,
   "commonplaceSceneCache" TEXT DEFAULT NULL,
   "commonplaceRecallHistory" TEXT DEFAULT NULL,
-  "otherExtractionWatermarkMessageId" TEXT DEFAULT NULL,  -- added in 4.10 (add-memory-tiers-v1): message id the other-subject (fold) extraction pass has covered up to; NULL = never. Advanced per slice of at most 60 eligible messages, never past one the pass did not read (bug 206). Patch-only. Message-id reference, remapped on restore
-  "episodeExtractionWatermarkMessageId" TEXT DEFAULT NULL,  -- added in 4.10 (add-episode-extraction-watermark-v1): message id the fold-time episode pass has read up to; a fold window is cut to what lies past it so a hard rebuild never re-extracts covered history (bug 207). NULL = never. Backfilled from the last summaryAnchorMessageIds entry. Patch-only; message-id reference, remapped on restore and import
   "timelineMode" TEXT DEFAULT NULL,  -- added in 4.9 (add-episodic-memory-fields-v1): 'realtime' (NULL reads as realtime) | 'narrative' — which clock the chat's story runs on (episodic recall)
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
@@ -714,6 +712,35 @@ once** — each open document surfaces as its own tab in the tabbed workspace
 (`chats.documentMode` is the coarse "any document open" flag). Inactive rows are
 retained as quick-reopen history. (Before 4.8 only one row per chat could be
 active.)
+
+### memory_extraction_cursors
+
+```sql
+CREATE TABLE "memory_extraction_cursors" (
+  "id" TEXT PRIMARY KEY,          -- "<chatId>:<pass>"
+  "chatId" TEXT NOT NULL,
+  "pass" TEXT NOT NULL,           -- 'other-fold' | 'episode-fold'
+  "messageId" TEXT NOT NULL,      -- the last message the pass has read
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE ("chatId", "pass"),
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+```
+
+Added in 4.10 (`add-memory-extraction-cursors-v1`, memory refactor Phase D):
+where each fold-grain extraction pass has read a chat to. Replaces the dropped
+`chats.otherExtractionWatermarkMessageId` (→ `other-fold`) and
+`chats.episodeExtractionWatermarkMessageId` (→ `episode-fold`), which the
+migration copied in. A pass advances its cursor only past a slice of at most 60
+eligible messages it actually read (bugs 206, 207); no row means the pass has
+never read the chat. Written only through `MemoryExtractionCursorsRepository`
+(`setCursor` is an upsert; `clearCursor`, `clearForChat`), read and advanced by
+the passes through `lib/memory/extraction/cursors.ts`. A regenerate clears the
+chat's rows. Exports and backups carry them on the chat object under the two
+legacy field names; import and restore remap the message ids and write them
+back (`lib/memory/extraction/cursor-bundle.ts`). No `userId` column: replace-mode
+restore truncates the table.
 
 ### chat_informs
 
