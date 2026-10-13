@@ -79,6 +79,28 @@ describe('fold slices and the rate limit', () => {
   })
 })
 
+describe('a fold that throws mid-run', () => {
+  it('keeps what earlier slices did and leaves the rest as deferred', async () => {
+    const messages = Array.from({ length: 150 }, (_, i) =>
+      seatMessage(`h${i + 1}`, i % 2 ? BOB : AMY, `line ${i + 1}`, new Date(Date.parse('2026-07-14T09:00:00.000Z') + i * 60000).toISOString()),
+    )
+    let call = 0
+    mockExecute.mockImplementation(async (_s, _m, _u, parse) => {
+      call++
+      if (call === 3) throw new Error('provider exploded')
+      return { success: true, result: parse('[]'), usage: { promptTokens: 7, completionTokens: 3, totalTokens: 10 } } as never
+    })
+    const ctx = makeExtractionContext({ seats: [AMY, BOB], messages })
+    const result = await runFoldPass(ctx, 'episode-fold', { windowMessages: messages, maxSlices: 100 })
+    expect(result.skippedReason).toBe('error')
+    expect(result.cursorAdvancedTo).toBe('h120')
+    expect(result.slices).toBe(2)
+    expect(result.slicesDeferred).toBe(1)
+    expect(result.usage.totalTokens).toBe(20)
+    expect((await ctx.cursors.read('episode-fold')).afterMessageId).toBe('h120')
+  })
+})
+
 describe('backfill', () => {
   it('turns the rate limit off and marks admissions as backfill', async () => {
     mockExecute.mockImplementation(async (_s, _m, _u, parse) => ({

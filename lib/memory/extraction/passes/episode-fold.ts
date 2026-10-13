@@ -14,7 +14,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { linkBothWays } from '../../admission'
+import { admissionInserted, linkBothWays } from '../../admission'
 import { parseEpisodeDrafts } from '../parse'
 import { buildEpisodeFoldMessages, FOLD_EPISODE_CAP } from '../prompts/episode'
 import { clockAt, type ExtractionContext } from '../context'
@@ -58,10 +58,15 @@ export function episodeFoldPass(): ExtractionPass {
     },
     async afterBatch(ctx: ExtractionContext, window: TranscriptWindow, admitted: AdmittedCandidate[]): Promise<void> {
       if (window.kind !== 'stretch') return
-      for (const a of admitted) if (a.outcome.memory) writtenEpisodeIds.add(a.outcome.memory.id)
+      // Only an inserted row is this run's episode. A reinforce or absorb names
+      // a row that already existed — perhaps one of the very fragments — and
+      // must neither be counted a sibling episode nor have fragments linked to
+      // it (review of PR 94).
+      const episodes = admitted.filter(a => a.outcome.memory && admissionInserted(a.outcome))
+      for (const a of episodes) writtenEpisodeIds.add(a.outcome.memory!.id)
       if (ctx.dryRun) return
       const windowMessageIds = window.messages.map(m => m.id)
-      for (const a of admitted) {
+      for (const a of episodes) {
         const memory = a.outcome.memory
         if (!memory) continue
         const characterId = a.candidate.subject.holderId

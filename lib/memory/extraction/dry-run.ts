@@ -6,7 +6,10 @@
  * through `self-turn` / `other-turn`, then both fold passes over the history a
  * regenerate would rebuild (`other-fold` from the start, `episode-fold` over
  * the folded history), autonomous rooms included. Admission decides and writes
- * nothing; the cursors live in memory. `quilltap memory-diff` therefore
+ * nothing; the cursors live in memory. Decisions are made as a regenerate would
+ * make them: past the rows its chat wipe retires (`previewChatWipe`), and
+ * against the inserts this run would already have made (the dry-run book), so
+ * a later near-duplicate reinforces an earlier candidate. `quilltap memory-diff` therefore
  * reports what a regenerate would do.
  *
  * @module memory/extraction/dry-run
@@ -15,6 +18,8 @@
 import { listExtractionTurns } from '@/lib/services/chat-message/turn-transcript'
 import { logger } from '@/lib/logger'
 import { toAdmissionRow } from '../candidate'
+import { createDryRunBook } from '../admission/dry-run-book'
+import { previewChatWipe } from '../retire'
 import type { ExtractionContext } from './context'
 import type { AdmittedCandidate, PassResult } from './run'
 import { runTurnExtraction, type TurnExtractionResult } from './turn'
@@ -93,6 +98,21 @@ export async function runExtractionDryRun(
 ): Promise<{ turns: number; candidates: number }> {
   if (!ctx.dryRun) throw new Error('runExtractionDryRun needs a dry-run extraction context')
   const hooks = options.hooks ?? {}
+  // Decide as a regenerate would: past the rows its wipe retires, and against
+  // the inserts this run would already have made.
+  if (!ctx.dryRunBook) {
+    let retiring: Set<string> = new Set()
+    try {
+      retiring = await previewChatWipe(ctx.chat.id)
+    } catch (error) {
+      // A preview that cannot read the chat's rows decides against them as they stand.
+      logger.warn('[Memory] Dry run could not preview the chat wipe; deciding against current rows', {
+        chatId: ctx.chat.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    ctx.dryRunBook = createDryRunBook(retiring)
+  }
   const cancelled = () => hooks.isCancelled?.() === true
   const turns = listExtractionTurns(await ctx.messages(), ctx.chat.chatType)
   hooks.onStart?.(turns.length)

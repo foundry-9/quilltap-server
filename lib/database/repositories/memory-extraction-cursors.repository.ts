@@ -6,6 +6,10 @@
  * through `lib/memory/extraction/cursors.ts`; bundles carry them through
  * `lib/memory/extraction/cursor-bundle.ts`.
  *
+ * Reads throw on failure rather than answering "no cursor": a pass that took a
+ * failed read for an empty cursor would re-read history it has covered, and the
+ * catch-up sweep would enqueue a job for every idle chat (review of PR 94).
+ *
  * Method names follow the job child's proxy rules: reads start with `find`,
  * writes with `set` / `clear` (see
  * `lib/background-jobs/child/child-repositories-proxy.ts`), so a cursor moved
@@ -57,7 +61,6 @@ export class MemoryExtractionCursorsRepository extends AbstractBaseRepository<Me
       },
       'Error finding extraction cursors for chat',
       { chatId },
-      {},
     )
   }
 
@@ -67,7 +70,6 @@ export class MemoryExtractionCursorsRepository extends AbstractBaseRepository<Me
       async () => (await this._findById(extractionCursorId(chatId, pass)))?.messageId ?? null,
       'Error finding extraction cursor',
       { chatId, pass },
-      null,
     )
   }
 
@@ -85,7 +87,6 @@ export class MemoryExtractionCursorsRepository extends AbstractBaseRepository<Me
       },
       'Error listing extraction cursors',
       {},
-      new Map(),
     )
   }
 

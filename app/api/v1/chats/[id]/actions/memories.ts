@@ -23,7 +23,7 @@ import {
   runExtractionDryRun,
   toExtractedCandidate,
 } from '@/lib/memory/extraction';
-import { listExtractionTurns } from '@/lib/services/chat-message/turn-transcript';
+import { listExtractionTurns, loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 
@@ -76,9 +76,7 @@ export async function handleQueueMemories(
     return badRequest('No connection profile available for memory extraction. Give a seat a profile or set a cheap LLM profile in settings.');
   }
 
-  const messages = (await repos.chats.getMessages(chatId)).filter(
-    (m): m is MessageEvent => m.type === 'message',
-  ) as unknown as MessageEvent[];
+  const messages = await loadChatMessageEvents(chatId);
   const isAutonomous = chat.chatType === 'autonomous';
   const batchEntries = listExtractionTurns(messages, chat.chatType);
 

@@ -1035,9 +1035,10 @@ departures:
   goes too quiet.
 - **The dry run embeds.** `admitCandidate({ dryRun: true })` embeds the candidate, gathers its
   neighbours and decides, writing nothing (`decideOnly`), so `memory-diff` reports decisions; a dry
-  run therefore costs embedding calls. Within one dry run a later candidate is decided against the
-  book as it stood, not after earlier candidates "landed" — live admission sees its own earlier
-  inserts. Invariant 10's test pins equality given the same admission decisions.
+  run therefore costs embedding calls. A whole-chat dry run decides as a regenerate would: past the
+  rows the chat wipe would retire (`previewChatWipe`) and against its own would-be inserts (the
+  parent-side `DryRunBook`), so a later near-duplicate reinforces an earlier candidate (review of
+  PR 94). Invariant 10's test pins equality given the same admission decisions.
 - **Regenerate enqueues the episode catch-up at once** and anchored turn jobs for autonomous rooms
   (smell 29); queue-memories and the dry run resolve the connection profile from the chat's seats
   first (smells 27, 28).

@@ -21,7 +21,7 @@ import { anchorTimeMsFrom, candidateFromDraft, type CandidatePass, type MemoryCa
 import { resolveEpisodicAnchors } from '../time/anchors'
 import { applyImportanceFloor, type RateLimitDecision } from './rate-limit'
 import type { CastMember, ExtractionContext } from './context'
-import type { TranscriptWindow } from './window'
+import { firstValidIso, type TranscriptWindow } from './window'
 
 export type ExtractionPassName = 'self-turn' | 'other-turn' | 'other-fold' | 'episode-fold'
 
@@ -302,13 +302,9 @@ async function admitDraft(
   label: string,
   result: PassResult,
 ): Promise<AdmittedCandidate | null> {
-  const anchorIsos = [batch.anchors.referenceIso, batch.anchors.fallbackIso]
-  const anchorTimeMs = anchorTimeMsFrom(anchorIsos)
-  const anchorIso = anchorIsos.find((iso): iso is string => !!iso && Number.isFinite(Date.parse(iso)))
-    ?? new Date(anchorTimeMs).toISOString()
-  const fallbackIso = batch.anchors.fallbackIso && Number.isFinite(Date.parse(batch.anchors.fallbackIso))
-    ? batch.anchors.fallbackIso
-    : anchorIso
+  const anchorTimeMs = anchorTimeMsFrom([batch.anchors.referenceIso, batch.anchors.fallbackIso])
+  const anchorIso = firstValidIso(batch.anchors.referenceIso, batch.anchors.fallbackIso) ?? new Date(anchorTimeMs).toISOString()
+  const fallbackIso = firstValidIso(batch.anchors.fallbackIso) ?? anchorIso
   const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
     when: draft.when,
     referenceIso: anchorIso,
@@ -336,9 +332,7 @@ async function admitDraft(
     return null
   }
 
-  const createdAt = batch.source.createdAt && Number.isFinite(Date.parse(batch.source.createdAt))
-    ? batch.source.createdAt
-    : undefined
+  const createdAt = firstValidIso(batch.source.createdAt) ?? undefined
   // One candidate's failed admission costs that candidate alone, never the
   // holder's other candidates, the batch's other holders or the rest of the pass.
   let outcome: AdmissionOutcome
@@ -346,7 +340,12 @@ async function admitDraft(
     outcome = await admitCandidate(
       candidate,
       { occurredAt, narrativeTime, sourceMessageTimestamp: createdAt },
-      { userId: ctx.userId, ...(ctx.dryRun ? { dryRun: true } : {}), ...(ctx.backfill ? { backfill: true } : {}) },
+      {
+        userId: ctx.userId,
+        ...(ctx.dryRun ? { dryRun: true } : {}),
+        ...(ctx.backfill ? { backfill: true } : {}),
+        ...(ctx.dryRun && ctx.dryRunBook ? { dryRunBook: ctx.dryRunBook } : {}),
+      },
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

@@ -7,7 +7,7 @@
  * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
-import { withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
+import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -190,6 +190,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     (file) => file.category !== 'BACKUP' && file.folderPath !== '/backups'
   );
   // Collect messages for each chat
+  // The fold passes' cursors for every chat, in one read.
+  const bundleCursors = await loadBundleCursors();
   const chats: ChatWithMessages[] = await Promise.all(
     chatMetadatas.map(async (chat) => {
       const messages = await repos.chats.getMessages(chat.id);
@@ -199,7 +201,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
       );
       // The fold passes' cursors ride on the chat under their legacy field names.
       return {
-        ...(await withBundleCursorFields(chat)),
+        ...(await withBundleCursorFields(chat, bundleCursors)),
         messages: messageEvents,
       } as ChatWithMessages;
     })

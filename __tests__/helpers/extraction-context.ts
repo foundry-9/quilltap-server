@@ -140,6 +140,7 @@ export function makeExtractionContext(opts: TestContextOptions = {}): Extraction
     cursors: memoryCursorStore(chatId, opts.cursors ?? {}),
     dryRun: opts.dryRun === true,
     backfill: opts.backfill === true,
+    dryRunBook: null,
     inAutonomousRoom: chat.chatType === 'autonomous',
     messages: async () => opts.messages ?? [],
   }

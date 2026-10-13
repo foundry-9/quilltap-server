@@ -46,11 +46,32 @@ export function cursorsToBundleFields(cursors: ExtractionCursorMap): BundleCurso
 }
 
 /**
- * The chat as a writer emits it: its cursors on the bundle fields.
+ * Every chat's cursors in one read, for a writer that emits many chats; null
+ * when the read fails (each chat then reads its own, best-effort).
+ */
+export async function loadBundleCursors(): Promise<ReadonlyMap<string, ExtractionCursorMap> | null> {
+  try {
+    const byChat = await getRepositories().memoryExtractionCursors.findAllByChat()
+    return byChat instanceof Map ? byChat : null
+  } catch (error) {
+    log.warn('[ExtractionCursors] Could not read the cursor table for a bundle; reading per chat', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+/**
+ * The chat as a writer emits it: its cursors on the bundle fields, from
+ * `preloaded` ({@link loadBundleCursors}) when given, else one read.
  * Best-effort: a cursor that cannot be read is left out (the pass re-reads
  * after import), never a reason to fail the export or backup.
  */
-export async function withBundleCursorFields<T extends { id: string }>(chat: T): Promise<T & BundleCursorFields> {
+export async function withBundleCursorFields<T extends { id: string }>(
+  chat: T,
+  preloaded?: ReadonlyMap<string, ExtractionCursorMap> | null,
+): Promise<T & BundleCursorFields> {
+  if (preloaded) return { ...chat, ...cursorsToBundleFields(preloaded.get(chat.id) ?? {}) }
   try {
     const cursors = await getRepositories().memoryExtractionCursors.findByChatId(chat.id)
     return { ...chat, ...cursorsToBundleFields(cursors) }

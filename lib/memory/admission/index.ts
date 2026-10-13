@@ -25,6 +25,7 @@ export { foldInto, FOLD_CAPS, type FoldPlan, type FoldSource, type FoldSurvivor,
 export { applyFold } from './apply'
 export { linkBothWays } from './links'
 export { countRecentAdmissions, RATE_LEDGER_WINDOW_MS } from './rate-ledger'
+export { createDryRunBook, type DryRunBook } from './dry-run-book'
 export { extractNovelDetails } from './novel-details'
 export { describeAdmission } from './describe'
 export type {

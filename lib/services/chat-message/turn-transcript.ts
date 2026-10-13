@@ -61,6 +61,17 @@ export interface TurnTranscript {
 }
 
 /**
+ * A chat's message rows (`type: 'message'`), chronological — the one read of
+ * a transcript every extraction path starts from.
+ */
+export async function loadChatMessageEvents(chatId: string): Promise<MessageEvent[]> {
+  const { getRepositories } = await import('@/lib/repositories/factory')
+  return (await getRepositories().chats.getMessages(chatId)).filter(
+    (m) => m.type === 'message',
+  ) as unknown as MessageEvent[]
+}
+
+/**
  * Find the most recent non-system USER message in chat history.
  * Returns null if no qualifying user message exists (fresh chat, greeting-only).
  */

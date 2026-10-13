@@ -93,6 +93,11 @@ export async function runFoldPass(
   input: RunFoldInput,
 ): Promise<FoldResult> {
   const chatId = ctx.chat.id
+  // Kept outside the try, so a throw mid-run still reports what earlier slices
+  // did — the cursor they advanced, the slices left, the tokens spent.
+  const result = foldResult(passName)
+  /** Slices of this run not yet read; a throw leaves them to a successor job. */
+  let unread = 0
   try {
     if (passName === 'other-fold' && ctx.settings.mode.otherPass === 'turn') {
       logger.debug('[Memory] otherPass=turn; fold-grain OTHER pass not run', { chatId })
@@ -118,13 +123,13 @@ export async function runFoldPass(
       }
     }
 
-    const result = foldResult(passName)
     const coverThrough = input.coverThroughMessageId ?? window[window.length - 1]?.id ?? null
     const eligible = window.filter(isFoldEligibleMessage)
     const allSlices = sliceFoldWindow(eligible, FOLD_MAX_WINDOW_MESSAGES, coverThrough)
     const maxSlices = input.maxSlices ?? FOLD_MAX_SLICES_PER_JOB
     const slices = allSlices.slice(0, maxSlices)
     result.slicesDeferred = allSlices.length - slices.length
+    unread = slices.length
     if (result.slicesDeferred > 0) {
       logger.info('[Memory] Fold backlog wider than one run; the rest waits for the next fold or catch-up', {
         chatId,
@@ -156,6 +161,7 @@ export async function runFoldPass(
         // catch-up reads it once the hour has passed.
         result.skippedReason = 'rate-limited'
         result.slicesDeferred += slices.length - i
+        unread = 0
         logger.info('[Memory] Fold slice deferred by the rate limit; cursor not advanced past it', {
           chatId,
           pass: passName,
@@ -165,6 +171,7 @@ export async function runFoldPass(
         break
       }
       result.slices++
+      unread--
       if (sliceResult.calls === 0 && sliceResult.timedOut === 0) slicesWithNoCalls++
       if (sliceResult.timedOut > 0) {
         logger.warn('[Memory] Fold slice lost to a timeout; cursor not advanced past it', {
@@ -197,8 +204,14 @@ export async function runFoldPass(
     logger.warn('[Memory] Fold pass failed (non-fatal)', {
       chatId,
       pass: passName,
+      slicesRead: result.slices,
+      cursorAdvancedTo: result.cursorAdvancedTo,
       error: error instanceof Error ? error.message : String(error),
     })
-    return foldResult(passName, 'error')
+    result.skippedReason = 'error'
+    // The slice that threw and those after it are unread; a catch-up job that
+    // advanced the cursor first hands them to its successor.
+    result.slicesDeferred += unread
+    return result
   }
 }

@@ -22,7 +22,7 @@
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { retireChatMemories } from '@/lib/memory/retire';
-import { listExtractionTurns } from '@/lib/services/chat-message/turn-transcript';
+import { listExtractionTurns, loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript';
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings';
 import { enqueueMemoryExtraction } from '../queue-service';
 import { logger } from '@/lib/logger';
@@ -63,9 +63,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
     clearedCursors,
   });
 
-  const messages = (await repos.chats.getMessages(payload.chatId)).filter(
-    (m): m is MessageEvent => m.type === 'message',
-  ) as unknown as MessageEvent[];
+  const messages = await loadChatMessageEvents(payload.chatId);
   const turns = listExtractionTurns(messages, chat.chatType);
 
   // The wipe removed this chat's rows, and nothing else enqueues extractions

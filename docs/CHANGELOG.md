@@ -4,11 +4,17 @@
 
 ### 4.10-dev
 
-#### PR 94 review: 3 findings on Phase D
+#### PR 94 review: 9 findings on Phase D
 
 - A fold slice whose calls the rate limit would all skip is deferred, not read: the cursor stays before it and the next fold or catch-up reads it (`runPass({ deferOnRateLimit })`, `skippedReason: 'rate-limited'`, no follow-up job). Before, the cursor moved past it and the stretch was never read.
 - Rebuilds of history are exempt from the rate limit and do not count towards it: regenerate (turn jobs and catch-ups), queue-memories, SillyTavern import and the dry run carry `backfill: true` (job payload, extraction context, `admitCandidate`). Before, a long regenerate hit the hourly cap after a few turns and lost every later turn.
 - `listExtractionTurns` keeps the greeting turn (character lines before the first user message) as a null-opener turn, as the live trigger extracts it; regenerate, queue-memories, the dry run and the SillyTavern import no longer drop it.
+- The dry run decides as a regenerate would: past the rows its chat wipe would retire (`previewChatWipe`, the wipe's own read-only plan, now `planRetirement` inside `retireMemories`), and against the inserts it would already have made (a parent-side `DryRunBook`), so a later near-duplicate reports `reinforce` into the earlier candidate. `gatherNeighbours` takes an `exclude` set.
+- The episode pass records and links only an episode it inserted; a reinforce or absorb into an existing row (possibly a fragment) no longer links the window's fragments to that row.
+- A fold that throws mid-run keeps what earlier slices did (cursor, usage, slices left as deferred), so its catch-up job books the tokens and hands the rest to a successor.
+- Cursor reads (`findCursor`, `findByChatId`, `findAllByChat`) throw instead of answering "no cursor", so a failed read cannot make a pass re-read covered history or the sweep enqueue a job for every idle chat.
+- Backup and multi-chat export read the cursor table once (`loadBundleCursors`), not once per chat.
+- One helper each for the valid-timestamp rule (`firstValidIso`) and the chat's message rows (`loadChatMessageEvents`, in `turn-transcript.ts`).
 - The fold OTHER cap stays budget-clamped (owner's call).
 
 #### Memory refactor Phase D: extraction — one context, four passes, cursors

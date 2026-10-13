@@ -8,7 +8,7 @@
  * store exports without hitting string-length ceilings.
  */
 
-import { withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
+import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { logger as baseLogger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import packageJson from '@/package.json';
@@ -345,6 +345,9 @@ async function* streamChats(
   // Load the character list once up front so we're not doing it per chat.
   const allCharacters = includeMemories ? await repos.characters.findAll() : [];
 
+  // The fold passes' cursors for every exported chat, in one read.
+  const bundleCursors = ids.length > 1 ? await loadBundleCursors() : null;
+
   for (const id of ids) {
     const chat = await repos.chats.findById(id);
     if (!chat) continue;
@@ -376,7 +379,7 @@ async function* streamChats(
     } = chat;
     // The fold passes' cursors ride on the chat under their legacy field names.
     const chatRecord: Omit<ExportedChat, 'messages'> = {
-      ...(await withBundleCursorFields(chatForExport)),
+      ...(await withBundleCursorFields(chatForExport, bundleCursors)),
       ...(tagNames.length > 0 && { _tagNames: tagNames }),
       ...(participantInfo.length > 0 && { _participantInfo: participantInfo }),
     };

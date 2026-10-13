@@ -302,6 +302,19 @@ describe('episode-fold — the episode memory', () => {
     expect(result.reinforcedIds).toHaveLength(reinforced)
   })
 
+  it.each(['reinforce', 'absorb', 'promote-and-reinforce'] as const)(
+    'links no fragments to a row the episode %s-ed into (it may be a fragment itself; review of PR 94)',
+    async (kind) => {
+      mockAdmit.mockResolvedValue(admissionOutcome(kind, { id: 'frag-1', relatedMemoryIds: [] }))
+      findFragments.mockResolvedValue([
+        { id: 'frag-1', relatedMemoryIds: [] },
+        { id: 'frag-2', relatedMemoryIds: [] },
+      ])
+      await run()
+      expect(addRelatedMemoryIds).not.toHaveBeenCalled()
+    },
+  )
+
   it('skips linking when admission returns no memory at all', async () => {
     mockAdmit.mockResolvedValue(admissionOutcome('reject', null))
 

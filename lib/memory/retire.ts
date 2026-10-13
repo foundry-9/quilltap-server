@@ -354,6 +354,30 @@ async function announceRetirement(characterIds: Iterable<string>, digestRows: It
  * Retire memory rows: scrub every link that names them, delete them, evict
  * their vectors, and announce it. The only deletion of a memory row.
  */
+/**
+ * Which rows a retirement takes — the requested rows less what `keep: 'manual'`
+ * spares, plus every digest left with no living member (except under
+ * `'retention'`). Reads only. Fills the report's spared and cascade counts.
+ */
+async function planRetirement(
+  requestedIds: readonly string[],
+  opts: RetireOptions,
+  report: RetireReport,
+): Promise<{ doomed: Map<string, RetireRow>; prefetchedDigests: DigestRef[] | null }> {
+  let rows = await resolveRows(requestedIds)
+  if (opts.keep === 'manual') {
+    rows = await applyKeepManual(rows, report)
+  }
+  const doomed = new Map(rows.map((r) => [r.id, r]))
+  let prefetchedDigests: DigestRef[] | null = null
+  if (opts.reason !== 'retention' && doomed.size > 0) {
+    const cascade = await cascadeEmptiedDigests(doomed)
+    report.digestsRetiredWithLastMember = cascade.added
+    prefetchedDigests = cascade.containing
+  }
+  return { doomed, prefetchedDigests }
+}
+
 export async function retireMemories(ids: readonly string[], opts: RetireOptions): Promise<RetireReport> {
   const requestedIds = [...new Set(ids)]
   const report = emptyReport(requestedIds.length)
@@ -362,18 +386,7 @@ export async function retireMemories(ids: readonly string[], opts: RetireOptions
   const startedAt = Date.now()
   const repos = getRepositories()
 
-  let rows = await resolveRows(requestedIds)
-  if (opts.keep === 'manual') {
-    rows = await applyKeepManual(rows, report)
-  }
-
-  const doomed = new Map(rows.map((r) => [r.id, r]))
-  let prefetchedDigests: DigestRef[] | null = null
-  if (opts.reason !== 'retention' && doomed.size > 0) {
-    const cascade = await cascadeEmptiedDigests(doomed)
-    report.digestsRetiredWithLastMember = cascade.added
-    prefetchedDigests = cascade.containing
-  }
+  const { doomed, prefetchedDigests } = await planRetirement(requestedIds, opts, report)
 
   // The neighbour scrub is one SQL removal delta across every holder (bug
   // 234). With nothing kept back it takes every requested id, found or
@@ -454,4 +467,18 @@ export async function retireChatMemories(chatId: string): Promise<RetireReport> 
   }
   log.debug('Wiped a chat\'s extracted memories', { chatId, retired: report.retired, spared: report.spared })
   return report
+}
+
+/**
+ * The ids a chat wipe ({@link retireChatMemories}) would retire, without
+ * retiring anything: the extraction dry run searches past them, so it decides
+ * as a regenerate would on a wiped book.
+ */
+export async function previewChatWipe(chatId: string): Promise<Set<string>> {
+  const memories = await getRepositories().memories.findByChatId(chatId)
+  const ids = [...new Set(memories.map((m) => m.id))]
+  if (ids.length === 0) return new Set()
+  const { doomed } = await planRetirement(ids, { reason: 'chat-wipe', keep: 'manual' }, emptyReport(ids.length))
+  log.debug('Previewed a chat wipe', { chatId, rows: ids.length, wouldRetire: doomed.size })
+  return new Set(doomed.keys())
 }

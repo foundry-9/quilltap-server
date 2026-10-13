@@ -48,7 +48,8 @@ import { ADMISSION_THRESHOLDS } from '../settings-defaults'
 import { toAdmissionRow, type MemoryCandidate, type ResolvedCandidateTime } from '../candidate'
 import { decideAdmission } from './decide'
 import { foldInto, FOLD_CAPS } from './fold'
-import { gatherNeighbours } from './neighbours'
+import { ADMISSION_TOP_K, gatherNeighbours } from './neighbours'
+import { bookNeighbours, recordBookInsert, type DryRunBook } from './dry-run-book'
 import { applyEpisodicFallbackAnchors, applyNamePresenceCheck } from './prepare'
 import { applyFold, insertRow, raiseImportance, withoutEmbedding } from './apply'
 import { linkBothWays } from './links'
@@ -79,6 +80,12 @@ export interface AdmitOptions {
   dryRun?: boolean
   /** A rebuild of history: the insert is not counted towards the extraction rate limit. */
   backfill?: boolean
+  /**
+   * With `dryRun`, in the parent: the dry run's scratch book — rows the
+   * regenerate would retire are searched past, and this run's would-be
+   * inserts are neighbours too (`dry-run-book.ts`).
+   */
+  dryRunBook?: DryRunBook
 }
 
 /** What the child hands the parent over host-RPC (`admitMemory`). Structured-clone safe. */
@@ -203,7 +210,9 @@ export async function admitRow(row: AdmissionRow, opts: AdmitOptions): Promise<A
       ...(opts.backfill ? { backfill: true } : {}),
     }
     let outcome: AdmissionOutcome
-    if (isJobChild()) {
+    if (opts.dryRun && !isJobChild()) {
+      outcome = await decideOnly(request, opts.dryRunBook)
+    } else if (isJobChild()) {
       // A dry run writes nothing, so it carries no idempotency key.
       if (!opts.dryRun) {
         const { nextAdmissionKey } = await import('@/lib/background-jobs/child/child-repositories-proxy')
@@ -407,9 +416,14 @@ export async function admitPrepared(request: AdmitPreparedRequest): Promise<Admi
  * write nothing. The outcome's `memory` is the row the action names (the fold
  * target), or null for an insert.
  */
-async function decideOnly(request: AdmitPreparedRequest): Promise<AdmissionOutcome> {
+async function decideOnly(request: AdmitPreparedRequest, book?: DryRunBook): Promise<AdmissionOutcome> {
   const { row, embedding } = request
-  const gathered = await gatherNeighbours(row.characterId, embedding)
+  const gathered = await gatherNeighbours(row.characterId, embedding, book ? { exclude: book.retiring } : {})
+  if (book) {
+    gathered.neighbours = [...gathered.neighbours, ...bookNeighbours(book, row.characterId, embedding)]
+      .sort((a, b) => b.cosine - a.cosine)
+      .slice(0, ADMISSION_TOP_K)
+  }
   const decision = decideAdmission({
     candidate: {
       holderId: row.characterId,
@@ -426,6 +440,7 @@ async function decideOnly(request: AdmitPreparedRequest): Promise<AdmissionOutco
     action.kind === 'absorb' || action.kind === 'reinforce' || action.kind === 'promote-and-reinforce'
       ? gathered.neighbours.find((n) => n.memory.id === action.into)?.memory ?? null
       : null
+  if (book && (action.kind === 'insert' || action.kind === 'insert-linked')) recordBookInsert(book, row, embedding)
   log.debug('Admission decided (dry run; nothing written)', {
     characterId: row.characterId,
     action: action.kind,

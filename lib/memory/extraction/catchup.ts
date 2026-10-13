@@ -23,6 +23,7 @@ import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types'
 import type { ExtractionCursorMap, ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
+import { loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript'
 import { pickExtractionConnectionProfileId, type ExtractionContext } from './context'
 import { runFoldPass, type FoldResult } from './fold'
 import { messagesPastCursor } from './window'
@@ -123,11 +124,6 @@ export interface FoldCatchupSelection {
   deferred: number
 }
 
-async function loadMessages(chatId: string): Promise<MessageEvent[]> {
-  return (await getRepositories().chats.getMessages(chatId)).filter(
-    (m): m is MessageEvent => m.type === 'message',
-  ) as unknown as MessageEvent[]
-}
 
 /**
  * Idle chats whose `pass` cursor is behind. Most recently active first,
@@ -178,7 +174,7 @@ export async function findFoldCatchupCandidates(
         continue
       }
       try {
-        const messages = await loadMessages(chat.id)
+        const messages = await loadChatMessageEvents(chat.id)
         const last = messages[messages.length - 1]
         if (!last || cursor === last.id) continue
         anchorMessageId = last.id

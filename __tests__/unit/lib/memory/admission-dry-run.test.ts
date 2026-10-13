@@ -11,6 +11,7 @@ jest.mock('@/lib/memory/index-store', () => ({
   embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
 }))
 jest.mock('@/lib/embedding/embedding-service', () => ({
+  cosineSimilarity: jest.requireActual('@/lib/embedding/embedding-service').cosineSimilarity,
   generateEmbeddingForUser: jest.fn(),
   EmbeddingError: class EmbeddingError extends Error {},
 }))
@@ -26,6 +27,7 @@ jest.mock('@/lib/instance-settings', () => ({ getMemoryMaintenanceSettings: jest
 import { admitCandidate, admitPrepared } from '@/lib/memory/admission'
 import { resetAdmissionStateForTests } from '@/lib/memory/admission/admit'
 import { countRecentAdmissionsLocal, resetRateLedgerForTests } from '@/lib/memory/admission/rate-ledger'
+import { createDryRunBook } from '@/lib/memory/admission/dry-run-book'
 import { MemoryCandidateSchema, type MemoryCandidate } from '@/lib/memory/candidate'
 import { createFakeMemoryStore, fakeMemoryIndex, fakeRepositories, seedMemory, type FakeMemoryStore } from '../../../helpers/memory-admission-fake'
 
@@ -127,6 +129,45 @@ describe('admitCandidate — dry run decides as live does, and writes nothing', 
     expect(outcome.trace.notes).toContain('dry run: decided, nothing written')
     expect(store.writes).toEqual([])
     expect(store.rows.get('ledger')!.reinforcementCount ?? 1).toBe(1)
+  })
+})
+
+describe('the dry-run book: deciding as a regenerate would (review of PR 94)', () => {
+  let store: FakeMemoryStore
+  let vectors: Map<string, Float32Array>
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    resetAdmissionStateForTests()
+    store = createFakeMemoryStore()
+    vectors = new Map()
+    factoryMock.getRepositories.mockReturnValue(fakeRepositories(store))
+    Object.assign(indexMock.memoryIndex, fakeMemoryIndex(store))
+    embedMock.generateEmbeddingForUser.mockImplementation(async (text: string) => {
+      for (const [key, vec] of vectors) if (text.startsWith(key)) return { embedding: vec }
+      return { embedding: OTHER }
+    })
+  })
+
+  it('searches past the rows the chat wipe would retire', async () => {
+    seedMemory(store, { id: 'doomed', content: 'Friday keeps the ledger.', embedding: LEDGER })
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const book = createDryRunBook(['doomed'])
+    const outcome = await admitCandidate(candidate('Friday keeps the ledger'), NO_TIME, { ...OPTS, dryRun: true, dryRunBook: book })
+    expect(outcome.action.kind).toBe('insert')
+    expect(store.writes).toEqual([])
+  })
+
+  it('lets a later candidate fold into an earlier would-be insert', async () => {
+    vectors.set('Friday keeps the ledger for Marguerite', NEAR_LEDGER)
+    vectors.set('Friday keeps the ledger', LEDGER)
+    const book = createDryRunBook()
+    const first = await admitCandidate(candidate('Friday keeps the ledger'), NO_TIME, { ...OPTS, dryRun: true, dryRunBook: book })
+    expect(first.action.kind).toBe('insert')
+    const second = await admitCandidate(candidate('Friday keeps the ledger for Marguerite'), NO_TIME, { ...OPTS, dryRun: true, dryRunBook: book })
+    expect(second.action).toEqual({ kind: 'reinforce', into: 'dry-run:char-1:1' })
+    expect(store.writes).toEqual([])
+    expect(store.rows.size).toBe(0)
   })
 })
 

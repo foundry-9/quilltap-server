@@ -19,6 +19,7 @@ import { isParticipantPresent } from '@/lib/schemas/types'
 import type { Character, ChatMetadata, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import { logger } from '@/lib/logger'
+import { loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript'
 import { resolveMemorySettings, type MemorySettings } from '../settings'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
 import type { MemoryClock } from '../time/clock'
@@ -31,6 +32,7 @@ import {
 import type { ExtractionClock, OrientingContext } from './prompts/shared'
 import { resolveExtractionRoute, type ExtractionRoute } from './route'
 import { createRateLimiter, type RateLimiter } from './rate-limit'
+import type { DryRunBook } from '../admission/dry-run-book'
 import { liveCursorStore, memoryCursorStore, type CursorStore } from './cursors'
 
 /** One character the unit of work may extract for or about. */
@@ -71,6 +73,11 @@ export interface ExtractionContext {
   dryRun: boolean
   /** A rebuild of history; see {@link BuildExtractionContextOptions.backfill}. */
   backfill: boolean
+  /**
+   * A whole-chat dry run's scratch book (`runExtractionDryRun` sets it): the
+   * rows a regenerate would retire, and the inserts this run would have made.
+   */
+  dryRunBook: DryRunBook | null
   inAutonomousRoom: boolean
   /** The chat's `type: 'message'` rows, chronological. Read once, on first use. */
   messages(): Promise<MessageEvent[]>
@@ -283,12 +290,11 @@ export async function buildExtractionContext(
     cursors: opts.cursors ?? (dryRun ? memoryCursorStore(chatId) : liveCursorStore(chatId)),
     dryRun,
     backfill: opts.backfill === true,
+    dryRunBook: null,
     inAutonomousRoom: chat.chatType === 'autonomous',
     messages() {
       if (!messagesPromise) {
-        messagesPromise = repos.chats.getMessages(chatId).then(
-          rows => rows.filter((m): m is MessageEvent => m.type === 'message') as unknown as MessageEvent[],
-        )
+        messagesPromise = loadChatMessageEvents(chatId)
       }
       return messagesPromise
     },
