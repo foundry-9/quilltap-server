@@ -18,6 +18,7 @@ Structural Phase B of `docs/developer/features/memory-system-refactor.md`. One m
 - Backup: no `vector-entries.json` or `vector-index-metas.json`. Restore of an older archive uses its `vector-entries.json` only to fill a memory row that arrived without an embedding (`legacyVectorsAdopted` in the summary); the vector-index counts are gone from the manifest, preview and restore summary.
 - Startup: the dimension reconcile and text-embedding repair no longer touch the mirror; `vectorEntriesDeleted`, `vectorIndexMetaFixed` and `vectorEntriesRepaired` removed from their results. A full reindex drops the caches instead of deleting stores.
 - API: `PUT ?action=embeddings` reloads the index from the rows and reports `failed` as memories with no embedding; `POST ?action=embeddings` no longer takes `batchSize`.
+- Help: `help/memory-consolidation.md` (deleting a digest's last note retires the digest; retention never does), `help/embedding-profiles.md`.
 - Tests: `__tests__/unit/lib/memory/memory-index-and-retire.test.ts` (index round trip, tier on reload, memoised load, the three scrubs, digest cascade, `keep: 'manual'`, grep-tests for both chokepoints), migration test, dispatcher reload by touched characters.
 
 #### PR 91 review: 9 findings on Phase A

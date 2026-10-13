@@ -885,6 +885,8 @@ export const migrations: Migration[] = [
   addMemoriesSupersededByIndexMigration,
   // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
   moveMemoryMaintenanceSettingsMigration,
+  // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
+  retireMemoryVectorEntriesMigration,
 ];
 
 export {

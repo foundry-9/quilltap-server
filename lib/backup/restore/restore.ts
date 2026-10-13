@@ -346,15 +346,16 @@ export async function restore(
         }
         const legacy = legacyVectors.get(id);
         const hasEmbedding = Array.isArray(cleanMemoryData.embedding) && cleanMemoryData.embedding.length > 0;
-        if (!hasEmbedding && Array.isArray(legacy) && legacy.length > 0) {
+        const adoptsLegacyVector = !hasEmbedding && Array.isArray(legacy) && legacy.length > 0;
+        if (adoptsLegacyVector) {
           cleanMemoryData.embedding = legacy;
-          legacyVectorsAdopted++;
         }
         if (!(await memoryOwnerIsTargetUser(cleanMemoryData.characterId as string))) {
           throw new Error('Character not found or access denied');
         }
         await globalRepos.memories.create(cleanMemoryData as Parameters<typeof globalRepos.memories.create>[0], { id });
         memoriesRestored++;
+        if (adoptsLegacyVector) legacyVectorsAdopted++;
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
