@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7). **Phase F done 2026-10-13** (see the Phase F amendment in §7). **Phase G done 2026-10-13** (see the Phase G amendment in §7) — all seven phases landed; the one item left is the Friday backfill (E2), which must be run by Charlie against the live instance with the Maintenance card's dry run. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7). **Phase F done 2026-10-13** (see the Phase F amendment in §7). **Phase G done 2026-10-13** (see the Phase G amendment in §7) — all seven phases landed. **Friday backfill (E2) done 2026-10-13** (recorded at the end of §7); the spec moved to `complete/` that day. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -9,14 +9,14 @@ half of `lib/chat/context-manager.ts`, `lib/embedding/vector-store.ts`, `lib/too
 Memories API, the Memory settings tab, and the `quilltap memories` / `recall-replay` /
 `memory-diff` / `anchor-probe` CLI commands.
 **Supersedes, once built:** the open items in
-[memory-consolidation-and-tiers.md](./complete/memory-consolidation-and-tiers.md) (E2/E3),
-[memory-recall-and-housekeeping-fixes.md](./complete/memory-recall-and-housekeeping-fixes.md) (F7 replay),
-[commonplace-relevance-fix.md](./complete/commonplace-relevance-fix.md) (F3c, tuning harness) and
-[episodic-recall-overhaul.md](./complete/episodic-recall-overhaul.md) (§3 step 2). Those four move to
+[memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md) (E2/E3),
+[memory-recall-and-housekeeping-fixes.md](./memory-recall-and-housekeeping-fixes.md) (F7 replay),
+[commonplace-relevance-fix.md](./commonplace-relevance-fix.md) (F3c, tuning harness) and
+[episodic-recall-overhaul.md](./episodic-recall-overhaul.md) (§3 step 2). Those four move to
 `complete/` at the end of Phase G with a one-line pointer here.
 
 This is a handoff spec in the manner of
-[wardrobe-refactor.md](./complete/wardrobe-refactor.md): a diagnosis, a table of defects to file
+[wardrobe-refactor.md](./wardrobe-refactor.md): a diagnosis, a table of defects to file
 first, the work in phases, and what disappears. The four code audits the diagnosis rests on are
 reproduced in full as Appendices A–D at the end. Line references were verified against the working
 tree on 2026-10-12 (`0841000c7`); verify again before editing.
@@ -121,7 +121,7 @@ collapsing the two maintenance jobs into one — then deleting what they replace
 ## 2. Defects to file first
 
 Each is verified against source (creation, gate, scoring and maintenance maps, 2026-10-12). File
-them in the [bug catalogue](../bugs.md) as **bugs 199–226** before Phase A, one file each, with the
+them in the [bug catalogue](../../bugs.md) as **bugs 199–226** before Phase A, one file each, with the
 metadata table the catalogue requires. Fix the four marked **first** before any structural work;
 the rest are closed by the phase named.
 
@@ -171,16 +171,16 @@ phases and must not be lost:
 
 | Phase | Item | Recorded in |
 |---|---|---|
-| B | A digest whose `consolidatedFrom` empties is left in place; `retireMemories` retires it with its last member. Existing dangling `consolidatedFrom` ids are not repaired (`memories validate --repair`). | [bug 225](../bugs/fixed/bug-225-retention-clock-links.md) |
-| C | Links and footnotes are now deltas against the live row (bug 231, fixed 2026-10-12: `addRelatedMemoryIds` / `removeRelatedMemoryIds` / `appendReinforcementFootnotes`). `foldInto` should keep writing them that way. | [bug 231](../bugs/fixed/bug-231-cross-job-link-race.md) |
-| C | The per-job memory overlay in `child-repositories-proxy.ts` (bug 209's fix) is deleted once admission runs in the parent. | [bug 209](../bugs/fixed/bug-209-child-gate-blind-writes.md) |
-| D | The dry run now passes project id, description and summary (bug 230, fixed 2026-10-12); the rest of smell A.6 #27 (profile, timestamps, fold passes, autonomous chats) remains. | [bug 230](../bugs/fixed/bug-230-dry-run-no-project.md) |
-| D | `chats.episodeExtractionWatermarkMessageId` (bug 207) and `otherExtractionWatermarkMessageId` fold into `memory_extraction_cursors`. | [bug 207](../bugs/fixed/bug-207-episode-pass-no-watermark.md) |
-| E | The text-search fallback still ignores `minScore` and filters raw `importance`, and has no related-memory expansion or R6 background reserve. | [bug 214](../bugs/fixed/bug-214-text-fallback-drops-options.md) |
-| E | The inter-character section is deduped against the archive by id but not backfilled; rows cut from the archive by its token budget can still appear there. | [bug 224](../bugs/fixed/bug-224-recall-sections-overlap.md) |
-| B | Both scrubs are now SQL removal deltas (`removeConsolidatedMembers`, and `removeRelatedMemoryIdsEverywhere` for bug 234, fixed 2026-10-12); `retireMemories` keeps them. A digest created and member-deleted in the same job is still not scrubbed. | [bug 234](../bugs/fixed/bug-234-related-scrub-lost-update.md) |
-| D | The episode pass's idle catch-up (bug 232, fixed 2026-10-12: `foldEpisodeCatchup`, `lib/memory/fold-episode-catchup.ts`, shared rules in `fold-catchup.ts`) folds into the cursor table and single sweep. | [bug 232](../bugs/fixed/bug-232-episode-no-idle-catchup.md) |
-| F | Housekeeping may now demote protected AUTO rows, last, when over the cap (decision 3). Review on Friday's first maintenance dry run. | [bug 210](../bugs/fixed/bug-210-cap-counts-protected-rows.md) |
+| B | A digest whose `consolidatedFrom` empties is left in place; `retireMemories` retires it with its last member. Existing dangling `consolidatedFrom` ids are not repaired (`memories validate --repair`). | [bug 225](../../bugs/fixed/bug-225-retention-clock-links.md) |
+| C | Links and footnotes are now deltas against the live row (bug 231, fixed 2026-10-12: `addRelatedMemoryIds` / `removeRelatedMemoryIds` / `appendReinforcementFootnotes`). `foldInto` should keep writing them that way. | [bug 231](../../bugs/fixed/bug-231-cross-job-link-race.md) |
+| C | The per-job memory overlay in `child-repositories-proxy.ts` (bug 209's fix) is deleted once admission runs in the parent. | [bug 209](../../bugs/fixed/bug-209-child-gate-blind-writes.md) |
+| D | The dry run now passes project id, description and summary (bug 230, fixed 2026-10-12); the rest of smell A.6 #27 (profile, timestamps, fold passes, autonomous chats) remains. | [bug 230](../../bugs/fixed/bug-230-dry-run-no-project.md) |
+| D | `chats.episodeExtractionWatermarkMessageId` (bug 207) and `otherExtractionWatermarkMessageId` fold into `memory_extraction_cursors`. | [bug 207](../../bugs/fixed/bug-207-episode-pass-no-watermark.md) |
+| E | The text-search fallback still ignores `minScore` and filters raw `importance`, and has no related-memory expansion or R6 background reserve. | [bug 214](../../bugs/fixed/bug-214-text-fallback-drops-options.md) |
+| E | The inter-character section is deduped against the archive by id but not backfilled; rows cut from the archive by its token budget can still appear there. | [bug 224](../../bugs/fixed/bug-224-recall-sections-overlap.md) |
+| B | Both scrubs are now SQL removal deltas (`removeConsolidatedMembers`, and `removeRelatedMemoryIdsEverywhere` for bug 234, fixed 2026-10-12); `retireMemories` keeps them. A digest created and member-deleted in the same job is still not scrubbed. | [bug 234](../../bugs/fixed/bug-234-related-scrub-lost-update.md) |
+| D | The episode pass's idle catch-up (bug 232, fixed 2026-10-12: `foldEpisodeCatchup`, `lib/memory/fold-episode-catchup.ts`, shared rules in `fold-catchup.ts`) folds into the cursor table and single sweep. | [bug 232](../../bugs/fixed/bug-232-episode-no-idle-catchup.md) |
+| F | Housekeeping may now demote protected AUTO rows, last, when over the cap (decision 3). Review on Friday's first maintenance dry run. | [bug 210](../../bugs/fixed/bug-210-cap-counts-protected-rows.md) |
 
 ---
 
@@ -1232,8 +1232,8 @@ departures:
   server. After review it keeps no copy of the server's phase list or bounds: `maintain` sends what
   was typed and prints the server's 400. `--threshold` sets `clusterThreshold` only, which the
   Built-in TF-IDF profile does not read; the help says so.
-- **Specs.** The four superseded specs moved to `complete/` with a pointer here; this spec stays in
-  `features/` until the Friday backfill is recorded below. `memory_management.md` §9 was rewritten;
+- **Specs.** The four superseded specs moved to `complete/` with a pointer here; this spec stayed in
+  `features/` until the Friday backfill was recorded below. `memory_management.md` §9 was rewritten;
   its other sections are kept as April history.
 - **DDL.md / export schema final pass:** Phase G changed no schema. The passes confirmed
   `memory_extraction_cursors`, `supersededAt`, the retired `vector_entries` and the dropped
@@ -1245,12 +1245,43 @@ departures:
   `memories-consolidation-actions.test.ts`, `memory-graph-repair.test.ts` and the CLI's
   `memories-maintain-command.test.js`.
 
-### Friday backfill (E2) — owed
+### Friday backfill (E2) — done 2026-10-13
 
-To be run by Charlie after Phase G merges, on a backup of Friday: on the Commonplace Book tab,
-**Maintenance → Run maintenance…**, choose Friday, untick nothing, **Dry run**; review the fold sets,
-the proposed digests and the demote count; then lower Friday's cap override toward 2,000–2,500
-(decision 3) and **Run for real**. Record the dry run's figures and the outcome here.
+The plan was: on the Commonplace Book tab, **Maintenance → Run maintenance…**, choose Friday, untick
+nothing, **Dry run**; review the fold sets, the proposed digests and the demote count; then lower
+Friday's cap override toward 2,000–2,500 (decision 3) and **Run for real**. Run by Charlie against
+the live Friday instance on 2026-10-13 (times UTC).
+
+**Migrations (22:24).** The ten refactor migrations ran in 2.96 s with no errors. Friday held 44,240
+memories, not the ~5k §8 assumed, and it made no difference to the timings. `retire-memory-vector-entries-v1`
+found every vector already on its row (44,240; 0 copied) and dropped 35 mirror entries for rows that no
+longer existed. `recompute-reinforced-importance-v1` rewrote 3,166 rows and `rezone-legacy-memory-occurred-at-v1`
+re-stamped 1,862. The maintenance settings carried a 2,000 cap and four per-character overrides,
+Friday's at 10,000.
+
+**Dry run, character Friday (22:28), cap 10,000.** Fold: 3,421 compared, 1 set. Consolidate: 4,532
+candidates (2,338 of them already cold), 156 qualifying clusters, 10 attempted under the dry run's
+budget, 10 digests proposed, 1,226 rows too young. Demote: 3,419 counted, 124 exempt (MANUAL rows and
+digests), 0 to archive. Retire skipped (no retention window).
+
+**Scheduled round (22:29–22:33).** The first daily round fired on its own after the dry run and did the
+fold and the first 40 clusters: 1 folded, 38 digests created and 2 revised, 87 members superseded, 0
+demoted. NanoGPT returned four 429s mid-run; every cluster succeeded on retry. Counted barely moved
+(3,416): most consolidation members were already cold, so a digest takes few rows off the cap.
+
+**Run for real (22:38), cap 10,000.** 39 digests created, 1 revised, 79 superseded, 0 demoted.
+
+**Dry run at cap 2,500, then run for real (22:42).** The dry run showed 3,415 counted and 915 to
+archive. The real run created 41 digests, superseded 80 and demoted **913** (3,413 counted − 2,500);
+the highest protection score demoted was 0.52. Nothing was retired. Thirty-five qualifying clusters
+remain for the daily rounds.
+
+Of the other three overrides, only Laura's (4,000 against 2,833 counted) is near its cap; every other
+character sits far under the 2,000 default. Left as they are.
+
+Three report labels read wrong on these figures and were fixed afterwards: "Clusters found" counted
+singleton clusters (now the qualifying clusters), "Protected" was the exempt MANUAL rows and digests,
+and the ledger's back-off note blamed a demotion that had no excess to move.
 
 ## 8. Risks
 

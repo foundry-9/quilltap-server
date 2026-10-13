@@ -117,7 +117,7 @@ function renderFold(fold, write) {
 }
 
 function renderDemote(d, write) {
-  write(`  cap ${d.cap}, hot ${d.hotTotal} (demotable ${d.demotable}, protected ${d.protected}), ` +
+  write(`  cap ${d.cap}, hot ${d.hotTotal} (demotable ${d.demotable}, exempt ${d.protected}), ` +
     `excess ${d.excess}, demoted ${d.demoted}` +
     `${d.highestScoreDemoted != null ? ` ${DIM}(highest score demoted ${Number(d.highestScoreDemoted).toFixed(3)})${RESET}` : ''}\n`);
 }

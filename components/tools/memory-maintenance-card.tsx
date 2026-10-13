@@ -284,7 +284,7 @@ function CapSettings({
                         <span>{character.name}</span>{' '}
                         <span className={overCap ? 'qt-text-destructive qt-text-small' : 'qt-text-muted qt-text-small'}>
                           ({character.demotable.toLocaleString()} counted
-                          {character.protected > 0 && <> &middot; {character.protected.toLocaleString()} protected</>})
+                          {character.protected > 0 && <> &middot; {character.protected.toLocaleString()} exempt</>})
                         </span>
                       </div>
                       <input

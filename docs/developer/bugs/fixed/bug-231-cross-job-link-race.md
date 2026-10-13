@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase C of the [memory system refactor](../../features/memory-system-refactor.md); admission in the parent remains the structural work) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase C of the [memory system refactor](../../features/complete/memory-system-refactor.md); admission in the parent remains the structural work) |
 | **Found** | 2026-10-12, while fixing bug 209 |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Low — needs two jobs touching the same existing memory at once; the loss is one link or one reinforcement's footnotes, never a row or a count |

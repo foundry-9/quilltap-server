@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md)) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/complete/memory-system-refactor.md)) |
 | **Found** | 2026-10-12, code audit for the memory system refactor (appendix A) |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Low — a Carina-formed memory in a project chat has `projectId: null`, so a `scope: narrow` memory escapes project scoping and recalls at full strength in other projects; the extractor also judges scope without the project description |

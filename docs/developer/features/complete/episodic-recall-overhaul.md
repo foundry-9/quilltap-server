@@ -1,6 +1,6 @@
 # Episodic Recall Overhaul — Remember the Visit, the Place, and the Week
 
-> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (§3 step 2, replaying real turns) is carried by the refactor's replay harness (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
+> **Superseded 2026-10-13** by the [memory system refactor](./memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (§3 step 2, replaying real turns) is carried by the refactor's replay harness (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
 
 **Status:** Implemented 2026-07-21 (all five workstreams + §3 harness). Awaiting
 §3 step 2 — Charlie replaying real "forgot / confabulated" turns via

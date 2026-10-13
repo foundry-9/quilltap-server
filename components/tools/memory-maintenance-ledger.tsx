@@ -89,8 +89,10 @@ export function MemoryMaintenanceLedger({ characters }: { characters: Array<{ id
             })}
           </ul>
           {entry.lastDemotion && !entry.lastDemotion.effective && (
-            <p className="qt-text-xs qt-text-warning">
-              The last demotion moved too little of the excess to be worth repeating at once; automatic demotion rests for an hour after such a round.
+            <p className={`qt-text-xs ${entry.lastDemotion.excess === 0 ? 'qt-text-muted' : 'qt-text-warning'}`}>
+              {entry.lastDemotion.excess === 0
+                ? 'Within the cap at the last demotion; automatic demotion looks again in an hour.'
+                : 'The last demotion moved too little of the excess to be worth repeating at once; automatic demotion rests for an hour after such a round.'}
             </p>
           )}
         </div>

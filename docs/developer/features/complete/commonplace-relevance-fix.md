@@ -1,6 +1,6 @@
 # Commonplace Book Relevance Fix — Make Auto-Whispered Memories Actually On-Topic
 
-> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (F3c, the tuning harness) is carried by the refactor's replay harness and probe fixture (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
+> **Superseded 2026-10-13** by the [memory system refactor](./memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (F3c, the tuning harness) is carried by the refactor's replay harness and probe fixture (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
 
 **Status:** Implemented (4.8-dev) — pending empirical tuning before release
 **Owner:** Charlie

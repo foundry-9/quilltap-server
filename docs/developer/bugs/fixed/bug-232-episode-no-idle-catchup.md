@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md), whose cursor table and single sweep still absorb it) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/complete/memory-system-refactor.md), whose cursor table and single sweep still absorb it) |
 | **Found** | 2026-10-12, fixing review finding #7 on PR 90 |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Low — episodes for the older part of a long chat are missing until the chat folds enough more times; nothing is lost from the transcript |

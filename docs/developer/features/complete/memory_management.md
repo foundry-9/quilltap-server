@@ -433,7 +433,7 @@ Ranked by expected impact on the 32k-memory case:
 
 ## 9. File inventory
 
-Rewritten 2026-10-13 for the layout the [memory system refactor](../memory-system-refactor.md) left behind (Phases A–G). §1–§8 and §10 describe the system as it stood in April 2026 and are kept as history; where they name a file below's predecessor (`memory-gate.ts`, `memory-service.ts`, `housekeeping.ts`, `memory-weighting.ts`, `memory-injector.ts`), read the refactor spec's §3 and §6 for what replaced it.
+Rewritten 2026-10-13 for the layout the [memory system refactor](./memory-system-refactor.md) left behind (Phases A–G). §1–§8 and §10 describe the system as it stood in April 2026 and are kept as history; where they name a file below's predecessor (`memory-gate.ts`, `memory-service.ts`, `housekeeping.ts`, `memory-weighting.ts`, `memory-injector.ts`), read the refactor spec's §3 and §6 for what replaced it.
 
 | Area | File(s) | Key exports |
 | --- | --- | --- |

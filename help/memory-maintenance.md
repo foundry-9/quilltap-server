@@ -61,7 +61,7 @@ The switches govern every step the house decides on for itself. A step you ask f
 
 The **per-character cap** is the number of **extracted** notes a character may keep in active service before the cap starts sending them to the archive. Archived notes, hand-written notes and digests do not count against it, so a character rich in hand-written notes is never declared "over the limit" on their account. Default **2000**; acceptable range 100 – 100,000, the same bounds everywhere the cap is typed.
 
-**Per-character overrides**, beneath the cap, list each character with two figures: how many notes are *counted* against the cap, and how many are *protected* (hand-written notes and digests). The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one.
+**Per-character overrides**, beneath the cap, list each character with two figures: how many notes are *counted* against the cap, and how many are *exempt* (hand-written notes and digests, which are never counted and never archived). The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one.
 
 ### What the cap protects
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md), which still owns the rest of smell A.6 #27) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/complete/memory-system-refactor.md), which still owns the rest of smell A.6 #27) |
 | **Found** | 2026-10-12, while fixing bug 222 (the same omission on the Carina path) |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Low — a preview only; nothing is written, but the preview can differ from what live extraction would produce in a project chat |

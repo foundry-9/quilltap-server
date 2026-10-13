@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-12)** |
-| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/memory-system-refactor.md) (appendix B) |
+| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/complete/memory-system-refactor.md) (appendix B) |
 | **Fixed** | 2026-10-12, v4.10-dev (Phase 0 of the refactor) |
 | **Severity** | High. After a deleted memory, a new candidate whose nearest neighbour was the deleted row was inserted as new, even with a live near-duplicate right behind it. Duplicates accumulated silently |
 | **Who it bites** | anyone who deletes a single memory in the Commonplace Book, and any character whose vector index otherwise drifted from its rows |

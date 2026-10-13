@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Memory refactor closed: Friday backfill recorded; three report labels fixed
+
+- The Friday backfill (E2) ran on 2026-10-13 and its figures are recorded in the spec, which moved to `docs/developer/features/complete/memory-system-refactor.md`. ROADMAP item checked.
+- Maintenance report, Consolidate: "Clusters found" (every cluster, singletons included) is replaced by "Clusters worth folding" (`clustersQualified`: selected plus deferred).
+- Maintenance report, Demote, and the card's per-character overrides: the count of MANUAL rows and digests is labelled "exempt" instead of "protected", which collided with the protection score that orders demotion. The CLI's `maintain --dry-run` line and the help pages say the same.
+- Maintenance ledger: a demotion that found no excess now reads "Within the cap at the last demotion; automatic demotion looks again in an hour" in muted text, instead of the warning that the demotion moved too little of the excess.
+
 #### PR 98 review: 7 findings on Phase G
 
 - Maintenance card: a typed per-character cap is now saved on blur. The input wrote each keystroke into the form state, so the blur compared the value with itself and never posted (carried over from the old Housekeeping card).
@@ -14,7 +21,7 @@
 
 #### Memory refactor Phase G: surfaces, docs, retirement of the old specs
 
-Final structural phase of `docs/developer/features/memory-system-refactor.md`. No migration.
+Final structural phase of `docs/developer/features/complete/memory-system-refactor.md`. No migration.
 
 - API: `?action=housekeep` (GET and POST), `housekeep-sweep`, `consolidate` and `housekeeping-config` are removed; use `maintain` (naming `consolidate` now implies `mirror`) and `maintenance-config`. New `POST ?action=repair` (`{ characterId?, dryRun? }`): finds links in `relatedMemoryIds`, `consolidatedFrom` and `supersededById` that name missing rows, and rows without embeddings; a live run scrubs the links (`scrubDanglingMemoryLinks`, through the retirement's removal deltas) and queues up to 2,000 embedding jobs. `MemoriesRepository.findDanglingLinks`; `enqueueMissingEmbeddings` is shared with `backfill-embeddings`. `extraction-limits-config` and `recall-config` validate through the façade's schemas; `maxPerHour` keeps its 10,000 bound in `MemoryExtractionLimitsSchema`.
 - Settings tab: the Housekeeping, Consolidation and Near-Duplicate Folding cards are replaced by one Maintenance card: the master switch, per-phase switches (fold, consolidate, demote, retire), archive retention, the cap and per-character overrides, consolidation particulars, "Run maintenance…" and the ledger (`?action=maintenance-status`, refreshed by the `memories` realtime topic). `section=memory-housekeeping`, `memory-consolidation` and `memory-deduplication` deep links open it. The Extraction Grain card gains the extraction rate limits. New `useMemorySettingsDocument` hook.
@@ -45,7 +52,7 @@ Final structural phase of `docs/developer/features/memory-system-refactor.md`. N
 
 #### Memory refactor Phase F: one maintenance job
 
-Structural Phase F of `docs/developer/features/memory-system-refactor.md`. One migration.
+Structural Phase F of `docs/developer/features/complete/memory-system-refactor.md`. One migration.
 
 - New job type `MEMORY_MAINTENANCE` replaces `MEMORY_HOUSEKEEPING` and `MEMORY_CONSOLIDATION` (both enums and handlers deleted; migration `drop-housekeeping-consolidation-jobs-v1` deletes their queued and historical rows). One job per character, deduped by `characterId` alone; a waiting job widens to the phases a later request asks for and adopts its overrides.
 - New `lib/memory/maintenance/`: `runMaintenance(request, ctx)` reads the corpus once (`loadCorpus` / `MaintenanceCorpus`, pages of 250) and runs the phases in fixed order — `fold-near-duplicates` → `consolidate` → `demote` → `retire` → `mirror` — each planning against the corpus as the earlier ones left it. Automatic runs (scheduled, watermark) obey `memoryMaintenance.enabled` and `memoryConsolidation.enabled`; manual runs do not.
@@ -78,7 +85,7 @@ Spec: `docs/developer/features/builtin-tfidf-memory-tuning.md`. One migration (`
 
 #### Memory refactor Phase E: recall as a pipeline; delivery
 
-Structural Phase E of `docs/developer/features/memory-system-refactor.md`. No migrations.
+Structural Phase E of `docs/developer/features/complete/memory-system-refactor.md`. No migrations.
 
 - Recall: new stages under `lib/memory/recall/` — `buildRecallQuery` (distil, choose the text, embed once; retrospective probes embedded beside it) → `gather` (vector top-K + probes + anchors, or the text strategy) → `hydrate` (rows and filters) → `score` (floor, salience, window, `rankForRecall`) → `select` (related expansion, R6, cut) → `assembleRecall` → `render` → `deliverRecall`. `searchRecall` runs the search stages; `searchMemories` is the one-shot form. `rankForRecall`, `rankByBlend` and `reserveBackgroundSlots` moved to `lib/memory/scoring/rank.ts`.
 - `lib/memory/memory-service.ts` deleted: search moved to `recall/`; `generateMissingEmbeddings` and `rebuildVectorIndex` to `index-store/backfill.ts`; `markMemoriesAccessed` became `stampAccessed` in `recall/deliver.ts`. `lib/chat/context/memory-injector.ts` deleted: memory formatters to `recall/render.ts`, pool sizing to `recall/assemble.ts`, `formatCurrentSceneState` and `formatSummaryForContext` to `lib/chat/context/scene-state.ts`.
@@ -125,7 +132,7 @@ Found dogfooding the memory refactor (Phases A–D) on `V4test`. No migrations.
 
 #### Memory refactor Phase D: extraction — one context, four passes, cursors
 
-Structural Phase D of `docs/developer/features/memory-system-refactor.md`. Two migrations.
+Structural Phase D of `docs/developer/features/complete/memory-system-refactor.md`. Two migrations.
 
 - Extraction: new `lib/memory/extraction/` replaces `memory-processor.ts`, `fold-other-pass.ts`, `fold-episode-pass.ts`, `fold-window.ts`, `fold-catchup.ts`, `fold-episode-catchup.ts`, `extraction-route.ts` and the extraction half of `cheap-llm-tasks/memory-tasks.ts` (deleted). Every unit of work (a turn, a Carina answer, a fold, a catch-up job, a dry run) calls `buildExtractionContext` once — chat, cast (hydrated once), project, Concierge-resolved cheap LLM and uncensored fallback, memory calendar, settings, rate limiter, cursors — and runs passes through `runPass` (rate limit → call → parse → cap → floor → admit). Four passes: `self-turn`, `other-turn`, `other-fold`, `episode-fold`. Prompt bodies moved unchanged to `extraction/prompts/{shared,self,other,episode}.ts`; parsers to `extraction/parse.ts`; the search-keyword distiller to `lib/memory/recall/query.ts` and the recap summariser to `lib/memory/recall/recap-summary.ts`.
 - Cursors: new table `memory_extraction_cursors` (`chatId`, `pass`, `messageId`; one row per chat and fold pass) replaces `chats.otherExtractionWatermarkMessageId` and `chats.episodeExtractionWatermarkMessageId`. Migration `add-memory-extraction-cursors-v1` copies both columns into cursors and drops them. A pass advances its cursor only past slices it read. Exports and backups still carry the two field names on the chat; import and restore write them to the table (`extraction/cursor-bundle.ts`). Regenerate clears a chat's cursors.
@@ -159,7 +166,7 @@ Structural Phase D of `docs/developer/features/memory-system-refactor.md`. Two m
 
 #### Memory refactor Phase C: admission in the parent; one combine
 
-Structural Phase C of `docs/developer/features/memory-system-refactor.md`. No migrations.
+Structural Phase C of `docs/developer/features/complete/memory-system-refactor.md`. No migrations.
 
 - Admission: new `lib/memory/admission/` replaces `lib/memory/memory-gate.ts` and the create half of `memory-service.ts`. `admitCandidate(candidate, resolved, opts)` is the one way a memory is created or reinforced: the calling process runs the name-presence and episodic-anchor safety nets and embeds (one retry; a failed embed rejects and writes nothing); `admitPrepared` searches both tiers, decides and writes in the parent. From the job child it is one host-RPC call (`admitMemory`), so every candidate reads and writes the real rows: two near-identical candidates in one job now make one row with count 2 (bug 209, structurally).
 - `decideAdmission` is pure and table-tested. Actions: `insert`, `insert-linked`, `reinforce`, `absorb`, `promote-and-reinforce`, `reject`. New rules: a neighbour at or above 0.85 about a different subject or of a different kind is linked, never folded into; a MANUAL candidate never folds into an AUTO row (it is inserted and linked); the date guard checks every close neighbour, not only the closest. Superseded cold members are replaced by their digest when neighbours are gathered (`gatherNeighbours`).
@@ -174,7 +181,7 @@ Structural Phase C of `docs/developer/features/memory-system-refactor.md`. No mi
 
 #### Memory refactor Phase B: the index gets an owner; one deletion
 
-Structural Phase B of `docs/developer/features/memory-system-refactor.md`. One migration. No open bugs were in the catalogue.
+Structural Phase B of `docs/developer/features/complete/memory-system-refactor.md`. One migration. No open bugs were in the catalogue.
 
 - Index: `memories.embedding` and `memories.tier` are the only stored copy of a memory's vector and tier. New `lib/memory/index-store/` owns them: `memoryIndex` (`search`, `shape`, `entries`, `upsert`, `indexInserted`, `setTier`, `remove`, `reload`, `reloadAll`) and `embeddingTextFor`, the one embedded text (replaces `buildMemoryEmbeddingText`). Every embedding and tier write goes through it: the gate, re-embeds, edits, consolidation, housekeeping demotion, `EMBEDDING_GENERATE`, the missing-embeddings backfill.
 - `lib/embedding/vector-store.ts` is now a cache only: it loads `id, embedding, tier` from `memories` in one query and writes nothing. Only `index-store/` imports it. First loads are memoised (concurrent first use no longer builds two stores). Mixed vector lengths are held; search scores entries matching the query's length and recall falls back to text only when none match.
@@ -205,7 +212,7 @@ Structural Phase B of `docs/developer/features/memory-system-refactor.md`. One m
 
 #### Memory refactor Phase A: scoring, clock, settings, candidate
 
-Structural Phase A of `docs/developer/features/memory-system-refactor.md`. One migration.
+Structural Phase A of `docs/developer/features/complete/memory-system-refactor.md`. One migration.
 
 - Scoring: new `lib/memory/scoring/` holds the three numbers. `relevance` (cosine and the recall blend), `salience` (reinforced importance with a 30-day half-life, no floor) and `protection` (the housekeeping score, unchanged). `calculateEffectiveWeight`, `rankMemoriesByWeight`, `lib/memory/memory-weighting.ts` and `lib/memory/reinforced-importance.ts` removed. Search results, the memory tools and debug info report `salience` instead of `effectiveWeight` / `rawWeight`.
 - Every `minImportance` filter reads reinforced importance through `filterImportance`. Prompt paths use `RECALL_MIN_IMPORTANCE` (0.3); the memory search tool and API search default to `TOOL_MIN_IMPORTANCE` (0). UI importance bands come from `importanceBand`.
@@ -348,7 +355,7 @@ Targeted fixes on the current code, ahead of the memory refactor phases. Three m
 
 #### Spec: memory system refactor
 
-- `docs/developer/features/memory-system-refactor.md`: a design for rebuilding the Commonplace Book
+- `docs/developer/features/complete/memory-system-refactor.md`: a design for rebuilding the Commonplace Book
   end to end on six abstractions it never had — one candidate shape, one extraction context, a pure
   admission decision applied in the parent over host-RPC, three named scores (relevance, salience,
   protection) with one function each, one clock for event time on both the write and read side, a

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-12)** |
-| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/memory-system-refactor.md) (appendix D) |
+| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/complete/memory-system-refactor.md) (appendix D) |
 | **Fixed** | 2026-10-12, v4.10-dev (Phase 0 of the refactor) |
 | **Severity** | High. Data loss: hand-written memories were deleted by Re-extract / Delete Memories, and deleting a digest left its cold members with a dangling `supersededById` |
 | **Who it bites** | anyone who used Delete Memories or Re-extract Memories on a chat, Regenerate Memories, or the Memory Deduplication tool |

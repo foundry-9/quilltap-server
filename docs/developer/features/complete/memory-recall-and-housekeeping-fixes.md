@@ -1,6 +1,6 @@
 # Memory Recall and Housekeeping Fixes — The Small Repairs
 
-> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (the F7 before/after replay) is carried by the refactor's replay harness and probe fixture (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
+> **Superseded 2026-10-13** by the [memory system refactor](./memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (the F7 before/after replay) is carried by the refactor's replay harness and probe fixture (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
 
 **Status:** Implemented 2026-10-08 (F1–F9). F2 is decided: no gate change (see
 [F2 result](#f2-result-2026-10-08)). One item still waits on live data: the F7 before/after replay

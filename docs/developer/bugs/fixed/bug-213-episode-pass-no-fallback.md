@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md)) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/complete/memory-system-refactor.md)) |
 | **Found** | 2026-10-12, code audit for the memory system refactor (appendix A) |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Medium — when the cheap model returns an empty answer on dangerous content, the fold episode pass loses its episodes outright, and in Unmoderated chats every extraction pass skips the uncensored-to-uncensored retry; memories are silently not formed |

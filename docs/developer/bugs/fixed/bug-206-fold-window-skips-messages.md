@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/memory-system-refactor.md)) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase D of the [memory system refactor](../../features/complete/memory-system-refactor.md)) |
 | **Found** | 2026-10-12, code audit for the memory system refactor (appendix A) |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Medium — characters permanently form no fold-grain observations of each other for any part of a long window older than its newest 60 eligible messages, and nothing reports the loss above debug level |

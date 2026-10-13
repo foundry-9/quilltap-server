@@ -1,6 +1,6 @@
 # Memory Consolidation and Tiers — Let the Commonplace Book Forget Gracefully
 
-> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open items (E2 Friday backfill, E3 measurement) are carried by the refactor, whose Phase G closes with the Friday backfill run from the Maintenance card's dry run. The text below is kept as written; its file and function names predate the refactor's layout.
+> **Superseded 2026-10-13** by the [memory system refactor](./memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open items (E2 Friday backfill, E3 measurement) are carried by the refactor, whose Phase G closes with the Friday backfill run from the Maintenance card's dry run. The text below is kept as written; its file and function names predate the refactor's layout.
 
 **Status:** Implemented 2026-10-08 (workstreams A–D, E4 chores). E2 Friday backfill and E3 measurement not yet run — see §9.
 **Owner:** Charlie

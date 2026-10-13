@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase B of the [memory system refactor](../../features/memory-system-refactor.md), whose `retireMemories` remains the structural work) |
+| **Status** | Fixed 2026-10-12 (targeted fix ahead of Phase B of the [memory system refactor](../../features/complete/memory-system-refactor.md), whose `retireMemories` remains the structural work) |
 | **Found** | 2026-10-12, fixing review finding #2 on PR 90 |
 | **Fixed** | 2026-10-12 |
 | **Severity** | Low — a dangling id in `relatedMemoryIds`; readers skip ids with no row, so the cost is a wasted lookup and a wrong link count |

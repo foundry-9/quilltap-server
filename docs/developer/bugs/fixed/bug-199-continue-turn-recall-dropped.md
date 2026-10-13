@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-12)** |
-| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/memory-system-refactor.md) (appendix C) |
+| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/complete/memory-system-refactor.md) (appendix C) |
 | **Fixed** | 2026-10-12, v4.10-dev (Phase 0 of the refactor) |
 | **Severity** | High. On every turn with no new user message, the model answered without its recalled memories, while the Commonplace Book recorded them as shown: it posted the whisper, stamped the rows accessed and wrote them to the anti-repetition ring |
 | **Who it bites** | continue, chained multi-character, nudged and autonomous-room turns, i.e. any turn built without a new user message |

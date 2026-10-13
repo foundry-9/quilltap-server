@@ -125,7 +125,7 @@ function ConsolidationSection({ report }: { report: ConsolidationReport }) {
       {report.skippedReason && <p className="qt-text-small qt-text-warning">{CONSOLIDATION_SKIP_TEXT[report.skippedReason]}</p>}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Notes considered" value={stats.candidates} />
-        <Stat label="Clusters found" value={stats.clustersFound} />
+        <Stat label="Clusters worth folding" value={stats.clustersQualified} />
         <Stat label="Clusters attempted" value={stats.clustersAttempted} />
         <Stat label="Digests proposed" value={proposed} />
       </div>
@@ -198,7 +198,7 @@ export function MaintenanceReportView({ report }: { report: MaintenanceReport })
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Stat label="Cap" value={demote.cap.toLocaleString()} />
             <Stat label="Counted" value={demote.demotable.toLocaleString()} />
-            <Stat label="Protected" value={demote.protected.toLocaleString()} />
+            <Stat label="Exempt" value={demote.protected.toLocaleString()} />
             <Stat label={report.dryRun ? 'Would archive' : 'Archived'} value={demote.demoted.toLocaleString()} />
           </div>
           <p className="qt-text-xs qt-text-muted">

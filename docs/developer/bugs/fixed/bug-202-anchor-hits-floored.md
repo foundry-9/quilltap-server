@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-12)** — as *not a defect*. The floor on anchor hits is R5 of the recall retuning, working as decided. The defect was the comment that said otherwise; it is corrected |
-| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/memory-system-refactor.md) (appendix C) |
+| **Found** | 2026-10-12, code audit for the [memory system refactor](../../features/complete/memory-system-refactor.md) (appendix C) |
 | **Fixed** | 2026-10-12 (comment only; no behaviour change) |
 | **Severity** | **None**. The audit's "Medium" read the comment as the contract |
 | **Who it bites** | nobody |
