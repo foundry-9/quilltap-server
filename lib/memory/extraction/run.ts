@@ -302,11 +302,26 @@ async function admitDraft(
   const createdAt = batch.source.createdAt && Number.isFinite(Date.parse(batch.source.createdAt))
     ? batch.source.createdAt
     : undefined
-  const outcome = await admitCandidate(
-    candidate,
-    { occurredAt, narrativeTime, sourceMessageTimestamp: createdAt },
-    { userId: ctx.userId, ...(ctx.dryRun ? { dryRun: true } : {}) },
-  )
+  // One candidate's failed admission costs that candidate alone, never the
+  // holder's other candidates, the batch's other holders or the rest of the pass.
+  let outcome: AdmissionOutcome
+  try {
+    outcome = await admitCandidate(
+      candidate,
+      { occurredAt, narrativeTime, sourceMessageTimestamp: createdAt },
+      { userId: ctx.userId, ...(ctx.dryRun ? { dryRun: true } : {}) },
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.warn('[Memory] Admission failed for one candidate; continuing', {
+      chatId: ctx.chat.id,
+      pass: pass.name,
+      holderId: holder.characterId,
+      error: message,
+    })
+    result.debugLogs.push(`[Memory] ${label} — admission failed (${message}): ${candidate.summary}`)
+    return null
+  }
 
   const action = outcome.action
   if (admissionInserted(outcome)) {

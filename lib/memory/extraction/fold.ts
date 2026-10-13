@@ -43,7 +43,11 @@ export interface RunFoldInput {
 }
 
 export interface FoldResult extends PassResult {
-  /** Set when the pass did nothing on purpose (`mode-turn`, `behind-cursor`, `nothing-to-observe`, `nobody-present`, `error`). */
+  /**
+   * Set when the pass did nothing on purpose or could not run: `mode-turn`, `empty-window`,
+   * `behind-cursor`, `nothing-to-observe`, `nobody-present`, `error`; catch-ups add `not-idle`
+   * and `never-folded`.
+   */
   skippedReason?: string
   /** Slices read. */
   slices: number

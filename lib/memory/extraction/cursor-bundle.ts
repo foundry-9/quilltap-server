@@ -20,6 +20,8 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import type { ExtractionCursorMap, ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
 
+const log = logger.child({ module: 'memory:extraction:cursor-bundle' })
+
 /** The bundle field each pass's cursor travels under. */
 export const BUNDLE_CURSOR_FIELDS = {
   'other-fold': 'otherExtractionWatermarkMessageId',
@@ -43,10 +45,22 @@ export function cursorsToBundleFields(cursors: ExtractionCursorMap): BundleCurso
   return fields
 }
 
-/** The chat as a writer emits it: its cursors on the bundle fields. */
+/**
+ * The chat as a writer emits it: its cursors on the bundle fields.
+ * Best-effort: a cursor that cannot be read is left out (the pass re-reads
+ * after import), never a reason to fail the export or backup.
+ */
 export async function withBundleCursorFields<T extends { id: string }>(chat: T): Promise<T & BundleCursorFields> {
-  const cursors = await getRepositories().memoryExtractionCursors.findByChatId(chat.id)
-  return { ...chat, ...cursorsToBundleFields(cursors) }
+  try {
+    const cursors = await getRepositories().memoryExtractionCursors.findByChatId(chat.id)
+    return { ...chat, ...cursorsToBundleFields(cursors) }
+  } catch (error) {
+    log.warn('[ExtractionCursors] Could not read a chat\'s cursors for a bundle; leaving them out', {
+      chatId: chat.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { ...chat }
+  }
 }
 
 /**
@@ -73,13 +87,13 @@ export async function restoreBundleCursors(chatId: string, cursors: ExtractionCu
       await getRepositories().memoryExtractionCursors.setCursor(chatId, pass, messageId)
       written++
     } catch (error) {
-      logger.warn('[ExtractionCursors] Could not restore a bundled cursor; the pass will re-read', {
+      log.warn('[ExtractionCursors] Could not restore a bundled cursor; the pass will re-read', {
         chatId,
         pass,
         error: error instanceof Error ? error.message : String(error),
       })
     }
   }
-  if (written > 0) logger.debug('[ExtractionCursors] Restored bundled cursors', { chatId, written })
+  if (written > 0) log.debug('[ExtractionCursors] Restored bundled cursors', { chatId, written })
   return written
 }

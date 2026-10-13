@@ -170,7 +170,7 @@ describe('episode-fold — bail-outs never throw', () => {
     await expect(run(ctx)).resolves.toMatchObject({ skippedReason: 'error', createdIds: [] })
   })
 
-  it('an admission that throws never escapes into the fold, and leaves the cursor before the slice', async () => {
+  it('an admission that throws costs that character alone: the others are written and the slice is read', async () => {
     const ctx = ctxFor({
       seats: [
         { characterId: 'char-a', name: 'A', participantId: 'p-a' },
@@ -184,8 +184,10 @@ describe('episode-fold — bail-outs never throw', () => {
 
     const result = await run(ctx)
 
-    expect(result.skippedReason).toBe('error')
-    expect((await ctx.cursors.read('episode-fold')).afterMessageId).toBeNull()
+    expect(result.skippedReason).toBeUndefined()
+    expect(result.createdIds).toEqual(['mem-b'])
+    expect(result.debugLogs.some(l => l.includes('admission failed (gate exploded)'))).toBe(true)
+    expect((await ctx.cursors.read('episode-fold')).afterMessageId).not.toBeNull()
   })
 })
 
