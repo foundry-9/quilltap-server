@@ -21,7 +21,7 @@ Structural Phase E of `docs/developer/features/memory-system-refactor.md`. No mi
   - Each reply's `debugMemoryLogs` now opens with the turn's recall record: the stage trace, delivered counts per pool, and a `[Recall:ring]` line. Memory extraction appends its lines after the record instead of overwriting the field.
 - Recall replay (`?action=recall-replay`, `quilltap recall-replay`): runs on the stages, adds `fallbackPath` (the text strategy), `trace` (query, search stages, assemble), `pools`, `ring` and `ringSource`. The ring is rebuilt as of the turn from earlier replies' `[Recall:ring]` lines, else the chat's current ring. The CLI prints the fallback table and the stage trace.
 - Tests: probe fixture (`__tests__/fixtures/recall-probes/`, captured from the pre-Phase-E search under `cap14`; `probe-fixture.test.ts` reproduces every row), stage tables (`recall-stages.test.ts`), `assemble-deliver.test.ts` (one embedding per turn, cross-pool dedup, delivery after compression), `build-recall-query.test.ts`, renderer goldens without debug labels (`render.test.ts`), a continue-turn delivery test, and grep-tests for the access stamp and the retired modules. Search suites ported to `searchMemories`.
-- `quilltap` CLI 4.10.0-dev.165.
+- `quilltap` CLI 4.10.0-dev.166.
 
 #### Fix bugs 235–241: memory refactor dogfood on V4test
 
