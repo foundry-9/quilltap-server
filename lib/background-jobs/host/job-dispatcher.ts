@@ -763,8 +763,10 @@ export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob
 
 /**
  * Map memory ids to their owning character, read from the main database before
- * a batch commits. Checks `vector_entries` too, so a vector whose row is
- * already gone still resolves. Best-effort: a failed read resolves nothing.
+ * a batch commits. The memory rows are the only copy (the `vector_entries`
+ * mirror was retired in 4.10), and a row the batch deletes is keyed by its
+ * `characterArg`, so only memory-id-keyed writes to live rows need this.
+ * Best-effort: a failed read resolves nothing, and says so.
  */
 function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, string> {
   const owners = new Map<string, string>();
@@ -778,10 +780,9 @@ function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, str
       const placeholders = chunk.map(() => '?').join(',');
       const rows = db
         .prepare(
-          `SELECT "id", "characterId" FROM "memories" WHERE "id" IN (${placeholders})
-           UNION SELECT "id", "characterId" FROM "vector_entries" WHERE "id" IN (${placeholders})`,
+          `SELECT "id", "characterId" FROM "memories" WHERE "id" IN (${placeholders})`,
         )
-        .all(...chunk, ...chunk) as Array<{ id: string; characterId: string | null }>;
+        .all(...chunk) as Array<{ id: string; characterId: string | null }>;
       for (const row of rows) {
         if (row.characterId) owners.set(row.id, row.characterId);
       }
@@ -792,7 +793,7 @@ function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, str
       resolved: owners.size,
     });
   } catch (err) {
-    log.debug('Memory owner lookup for vector-store invalidation failed', {
+    log.warn('Memory owner lookup for vector-store invalidation failed', {
       jobId,
       error: getErrorMessage(err),
     });

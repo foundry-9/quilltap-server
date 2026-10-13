@@ -170,6 +170,23 @@ describe('applyWritesUnsafe — memory-index invalidation after commit', () => {
     expect(reload.mock.calls.map((c) => c[0]).sort()).toEqual(['charA', 'charB']);
   });
 
+  it('resolves memories.update owners on a migrated database with no vector_entries table', async () => {
+    // Real binding by absolute root path — a bare require resolves to the suite-wide mock.
+    const Database = require(require('path').join(process.cwd(), 'node_modules', 'better-sqlite3'));
+    const db = new Database(':memory:');
+    db.exec('CREATE TABLE memories (id TEXT PRIMARY KEY, characterId TEXT)');
+    db.prepare('INSERT INTO memories (id, characterId) VALUES (?, ?)').run('m9', 'charB');
+    jest.mocked(getRawDatabase).mockReturnValue(db as never);
+    try {
+      await applyWritesUnsafe('job-6', [{ method: 'memories.update', args: ['m9', { tier: 'cold' }] }], 'MEMORY_HOUSEKEEPING');
+      expect(vectorNotifications()).toEqual(['charB']);
+      await new Promise((r) => setImmediate(r));
+      expect(reload).toHaveBeenCalledWith('charB');
+    } finally {
+      db.close();
+    }
+  });
+
   it('a reinforcement-only batch leaves the store loaded', async () => {
     jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
     await applyWritesUnsafe(
