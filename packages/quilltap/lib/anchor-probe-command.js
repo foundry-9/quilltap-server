@@ -208,6 +208,7 @@ async function anchorProbeCommand(args) {
   console.log(`\n${BOLD}Character${RESET}  ${result.characterId}`);
   console.log(`${BOLD}Sampled${RESET}    ${result.sampled} rows, ${result.anchoredRows} with an anchor line`);
   console.log(`${BOLD}Embeddings${RESET} ${result.embeddingsGenerated} generated`);
+  if (result.note) console.log(`${YELLOW}${result.note}${RESET}`);
   console.log(`\n${DIM}${''.padEnd(22)}${'anchored'.padEnd(11)}anchor-free${RESET}`);
   console.log(`${BOLD}${'would fold'.padEnd(22)}${RESET}${String(anchored.reinforce).padEnd(11)}${CYAN}${free.reinforce}${RESET}`);
   console.log(`${BOLD}${'near-dup absorbed'.padEnd(22)}${RESET}${String(anchored.nearDuplicate).padEnd(11)}${CYAN}${free.nearDuplicate}${RESET}`);

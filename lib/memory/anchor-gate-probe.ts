@@ -32,7 +32,8 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
-import { memoryIndex, embeddingTextFor } from './index-store'
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from './index-store'
+import { isLexicalEmbeddingProvider } from '@/lib/embedding/cosine-scale'
 import { generateEmbeddingForUser, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
@@ -86,6 +87,14 @@ export interface AnchorGateProbeResult {
   /** Rows admission would insert anchored but fold anchor-free. */
   crossedOnlyWithoutAnchors: number
   embeddingsGenerated: number
+  /**
+   * True when the profile is lexical (Built-in TF-IDF), which never embeds the
+   * anchor line: both sides then embed the same text and the comparison
+   * measures nothing. The decisions still say what admission would do.
+   */
+  lexicalProfile: boolean
+  /** Why the anchored/anchor-free comparison is not meaningful, when it is not. */
+  note: string | null
   rows: AnchorGateProbeRow[]
 }
 
@@ -110,6 +119,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   const sample = await repos.memories.findRecent(input.characterId, limit)
   // Set from the first embedding's provider: the scale admission would use.
   let thresholds = admissionThresholdsForProvider(null)
+  let provider: string | null = null
   // Anchor dates render on the instance's memory calendar, as the gate's do.
   const memoryTimeZone = await refreshMemoryTimeZone()
 
@@ -123,12 +133,17 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
   }
 
   let embeddingsGenerated = 0
-  const embed = async (text: string): Promise<Float32Array> => {
+  // `lexicalText` mirrors admission: a lexical profile embeds that instead.
+  const embed = async (text: string, lexicalText?: string): Promise<Float32Array> => {
     embeddingsGenerated++
     const result = await generateEmbeddingForUser(text, input.userId, input.embeddingProfileId, {
       priority: 'background',
+      ...(lexicalText !== undefined ? { lexicalText } : {}),
     })
-    thresholds = admissionThresholdsForProvider(result.provider)
+    if (provider === null) {
+      provider = result.provider ?? null
+      thresholds = admissionThresholdsForProvider(provider)
+    }
     return result.embedding
   }
 
@@ -195,7 +210,7 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     }
 
     try {
-      const anchoredVec = await embed(embeddingTextFor(memory, memoryTimeZone))
+      const anchoredVec = await embed(embeddingTextFor(memory, memoryTimeZone), lexicalEmbeddingTextFor(memory))
       const shape = await memoryIndex.shape(input.characterId, anchoredVec.length)
       if (shape.size > 0 && shape.matching === 0) {
         logger.warn('Probe embedding dimension does not match the store; skipping row', {
@@ -279,6 +294,10 @@ export async function runAnchorGateProbe(input: RunAnchorGateProbeInput): Promis
     anchorFree: band(side('anchorFree')),
     crossedOnlyWithoutAnchors: rows.filter(r => !folds(side('anchored')(r)) && folds(side('anchorFree')(r))).length,
     embeddingsGenerated,
+    lexicalProfile: isLexicalEmbeddingProvider(provider),
+    note: isLexicalEmbeddingProvider(provider)
+      ? 'Built-in (TF-IDF) profile: anchor lines are never embedded, so both sides embed the same text; the comparison is not measurable here. Decisions show what admission would do.'
+      : null,
     rows,
   }
 

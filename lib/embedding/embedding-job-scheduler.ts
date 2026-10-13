@@ -8,10 +8,9 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { enqueueEmbeddingRefit } from '@/lib/background-jobs/queue-service';
 import type { EmbeddableEntityType } from '@/lib/schemas/types';
 import { processSingleton } from '@/lib/utils/process-singleton';
-import { assessBuiltinRefit, refitInHand } from './builtin-refit-policy';
+import { enqueueRefitIfDue } from './builtin-refit-policy';
 
 /**
  * Debounce state for refit scheduling
@@ -95,44 +94,21 @@ export async function scheduleRefit(
     const forced = forcedRefits.delete(debounceKey);
 
     try {
-      let reason: string | null = forced ? 'forced' : null;
-      if (!forced) {
-        const assessment = await assessBuiltinRefit(profile);
-        reason = assessment.reason;
-        if (!reason) {
-          logger.info('[EmbeddingScheduler] Refit not needed; the vocabulary is current', {
-            context: 'scheduleRefit',
-            userId,
-            profileId: profile.id,
-            newSinceFit: assessment.newSinceFit,
-            totalMemories: assessment.totalMemories,
-          });
-          return;
-        }
-        const inHand = await refitInHand();
-        if (inHand) {
-          logger.info('[EmbeddingScheduler] Refit due but one is already in hand; not enqueueing another', {
-            context: 'scheduleRefit',
-            userId,
-            profileId: profile.id,
-            reason,
-            inHand,
-          });
-          return;
-        }
+      const decision = await enqueueRefitIfDue(profile, { force: forced, source: 'scheduleRefit' });
+      if (!decision.reason) {
+        logger.info('[EmbeddingScheduler] Refit not needed; the vocabulary is current', {
+          context: 'scheduleRefit',
+          userId,
+          profileId: profile.id,
+        });
+      } else if (decision.enqueued) {
+        logger.info('[EmbeddingScheduler] Refit job scheduled (debounced)', {
+          context: 'scheduleRefit',
+          userId,
+          profileId: profile.id,
+          reason: decision.reason,
+        });
       }
-
-      await enqueueEmbeddingRefit(userId, {
-        profileId: profile.id,
-        triggerReindex: true,
-      });
-
-      logger.info('[EmbeddingScheduler] Refit job scheduled (debounced)', {
-        context: 'scheduleRefit',
-        userId,
-        profileId: profile.id,
-        reason,
-      });
     } catch (error) {
       logger.error('[EmbeddingScheduler] Failed to schedule refit job', {
         context: 'scheduleRefit',

@@ -42,7 +42,7 @@ import { logger } from '@/lib/logger'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { publishRealtime } from '@/lib/realtime/bus'
-import { embeddingTextFor, memoryIndex } from '../index-store'
+import { embeddingTextFor, lexicalEmbeddingTextFor, memoryIndex } from '../index-store'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
 import { ADMISSION_THRESHOLDS, admissionThresholdsForProvider } from '../settings-defaults'
 import { toAdmissionRow, type MemoryCandidate, type ResolvedCandidateTime } from '../candidate'
@@ -143,15 +143,16 @@ async function embedRow(
   notes: string[],
 ): Promise<{ embedding: Float32Array | null; provider: string | null; attempts: number }> {
   const text = embeddingTextFor(row, timeZone)
+  const call = { priority: 'background' as const, lexicalText: lexicalEmbeddingTextFor(row) }
   const describe = (e: unknown) => (e instanceof EmbeddingError ? e.message : String(e))
   try {
-    const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
+    const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, call)
     return { embedding, provider: provider ?? null, attempts: 1 }
   } catch (first) {
     notes.push(`embedding attempt 1 failed (${describe(first)})`)
     try {
       await new Promise((resolve) => setTimeout(resolve, EMBEDDING_RETRY_DELAY_MS))
-      const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, { priority: 'background' })
+      const { embedding, provider } = await generateEmbeddingForUser(text, opts.userId, undefined, call)
       return { embedding, provider: provider ?? null, attempts: 2 }
     } catch (second) {
       notes.push(`embedding failed after retry (${describe(second)})`)

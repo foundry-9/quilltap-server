@@ -4,7 +4,8 @@
  * The values come from the Zod schemas' `.default()`s (`lib/schemas/settings.types.ts`)
  * — this module only parses them once — plus the admission thresholds, which
  * are not user-settable and live here so there is one place to read them.
- * Imports nothing but schemas, so the settings cards can import it directly.
+ * Imports nothing but schemas and the pure cosine-scale predicate, so the
+ * settings cards can import it directly.
  *
  * @module memory/settings-defaults
  */
@@ -19,6 +20,7 @@ import {
   MEMORY_MAINTENANCE_CAP_MAX,
 } from '@/lib/schemas/settings.types'
 import type { MemoryConsolidationSettings } from '@/lib/schemas/settings.types'
+import { isLexicalEmbeddingProvider } from '@/lib/embedding/cosine-scale'
 import { MAX_REINFORCEMENT_FOOTNOTES } from './reinforcement-footnotes'
 
 /** Admission's cut-offs: the cosine bands plus the date guard and footnote cap. */
@@ -68,7 +70,7 @@ export const ADMISSION_THRESHOLDS_TFIDF: AdmissionThresholds = Object.freeze({
  * unknown or missing provider reads as neural.
  */
 export function admissionThresholdsForProvider(provider: string | null | undefined): AdmissionThresholds {
-  return provider === 'BUILTIN' ? ADMISSION_THRESHOLDS_TFIDF : ADMISSION_THRESHOLDS
+  return isLexicalEmbeddingProvider(provider) ? ADMISSION_THRESHOLDS_TFIDF : ADMISSION_THRESHOLDS
 }
 
 /**
@@ -83,7 +85,7 @@ export function resolveClusterThreshold(
   override?: number,
 ): number {
   if (typeof override === 'number') return override
-  return provider === 'BUILTIN' ? settings.tfidfClusterThreshold : settings.clusterThreshold
+  return isLexicalEmbeddingProvider(provider) ? settings.tfidfClusterThreshold : settings.clusterThreshold
 }
 
 /** The default value of every memory setting. */

@@ -23,6 +23,7 @@ jest.mock('@/lib/memory/index-store', () => ({
     entries: jest.fn(),
   },
   embeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').embeddingTextFor,
+  lexicalEmbeddingTextFor: jest.requireActual('@/lib/memory/index-store/embedding-text').lexicalEmbeddingTextFor,
 }))
 jest.mock('@/lib/memory/time/calendar-refresh', () => ({ refreshMemoryTimeZone: jest.fn(async () => 'UTC') }))
 jest.mock('@/lib/memory/recall/archive', () => ({ invalidateFrozenArchive: jest.fn() }))
@@ -127,7 +128,7 @@ describe('updateMemory (bug 203)', () => {
 
     expect(result.ok).toBe(true)
     // The edited text (not the stored one) is what gets embedded.
-    expect(generateEmbeddingForUser).toHaveBeenCalledWith('old\n\nnew text', 'u1')
+    expect(generateEmbeddingForUser).toHaveBeenCalledWith('old\n\nnew text', 'u1', undefined, { lexicalText: 'old\n\nnew text' })
     expect(memoryIndex.upsert).toHaveBeenCalledWith('holder', [
       { id: 'm1', embedding: NEW_VECTOR, alongside: { content: 'new text' } },
     ])

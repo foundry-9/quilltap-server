@@ -9,14 +9,14 @@
  * compares like with like (bug 204).
  *
  * The Built-in (TF-IDF) profile embeds the same text without its anchor line:
- * see {@link lexicalEmbeddingText}.
+ * see {@link lexicalEmbeddingTextFor}.
  *
  * Pure and I/O-free, so it is safe in the job child.
  *
  * @module memory/index-store/embedding-text
  */
 
-import { buildMemoryAnchorLine, isMemoryAnchorLine, type EpisodicAnchorView } from '../episodic'
+import { buildMemoryAnchorLine, type EpisodicAnchorView } from '../episodic'
 
 /** The fields a memory's embedded text is built from. Anchors are optional. */
 export interface EmbeddingTextSource extends EpisodicAnchorView {
@@ -36,7 +36,7 @@ export interface EmbeddingTextSource extends EpisodicAnchorView {
  * until they are next re-embedded; mixed rows are an accepted state.
  */
 export function embeddingTextFor(memory: EmbeddingTextSource, timeZone?: string): string {
-  const base = `${memory.summary}\n\n${memory.content}`
+  const base = lexicalEmbeddingTextFor(memory)
   const anchorLine = buildMemoryAnchorLine(
     {
       occurredAt: memory.occurredAt ?? null,
@@ -49,7 +49,7 @@ export function embeddingTextFor(memory: EmbeddingTextSource, timeZone?: string)
 }
 
 /**
- * The version of {@link lexicalEmbeddingText}'s shape, stamped on each TF-IDF
+ * The version of {@link lexicalEmbeddingTextFor}'s shape, stamped on each TF-IDF
  * vocabulary row (`tfidf_vocabularies.textShapeVersion`) by the refit. Bump it
  * whenever the text the BUILTIN path embeds changes, and the refit policy
  * re-fits and re-embeds once. 0 is the anchored shape from before version 1.
@@ -57,8 +57,10 @@ export function embeddingTextFor(memory: EmbeddingTextSource, timeZone?: string)
 export const LEXICAL_TEXT_SHAPE_VERSION = 1
 
 /**
- * The text a lexical (TF-IDF) embedder sees: `text` without a trailing
- * memory anchor line, any other text unchanged.
+ * The text a lexical (TF-IDF) embedder sees for a memory: `summary\n\ncontent`,
+ * the canonical text without its anchor line. Callers hand it to
+ * `generateEmbeddingForUser` as `lexicalText` beside {@link embeddingTextFor};
+ * only the BUILTIN path uses it, so neural vectors are unchanged.
  *
  * In a bag-of-words vector the anchor line's rare tokens — dates, place
  * names, and the bigrams joining them to the content — carry a large share of
@@ -66,11 +68,10 @@ export const LEXICAL_TEXT_SHAPE_VERSION = 1
  * score far apart and unrelated facts sharing a place score close. A neural
  * embedder reads the line as context; a lexical one cannot. Admission's date
  * guard reads `occurredAt` directly and recall finds entity names by text, so
- * nothing lexical needs the line. Applied by the BUILTIN embed path and the
- * vocabulary refit, never to a neural profile's text.
+ * nothing lexical needs the line. Built from the fields, never by trimming
+ * the canonical text, so content that happens to end in "(place: …)" keeps
+ * its last line.
  */
-export function lexicalEmbeddingText(text: string): string {
-  const cut = text.lastIndexOf('\n')
-  if (cut < 0) return text
-  return isMemoryAnchorLine(text.slice(cut + 1)) ? text.slice(0, cut) : text
+export function lexicalEmbeddingTextFor(memory: Pick<EmbeddingTextSource, 'summary' | 'content'>): string {
+  return `${memory.summary}\n\n${memory.content}`
 }

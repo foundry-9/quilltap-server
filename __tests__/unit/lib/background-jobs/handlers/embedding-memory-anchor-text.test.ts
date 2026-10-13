@@ -92,7 +92,11 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
 
     const expected = embeddingTextFor(anchoredMemory)
     expect(expected).toContain('place: Gullhaven')
-    expect(mockGenerate).toHaveBeenCalledWith(expected, 'user-1', 'p-1', { priority: 'background' })
+    // The canonical text, plus the anchor-free text a lexical profile embeds instead.
+    expect(mockGenerate).toHaveBeenCalledWith(expected, 'user-1', 'p-1', {
+      priority: 'background',
+      lexicalText: 'Lighthouse picnic\n\nWe ate sandwiches at the lighthouse.',
+    })
     // The vector lands through the index (row + cache), hot by default.
     expect(memoryIndex.upsert).toHaveBeenCalledWith('char-1', [
       { id: 'mem-1', embedding: new Float32Array([1, 0]), tier: 'hot' },

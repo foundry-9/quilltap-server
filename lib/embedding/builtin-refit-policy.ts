@@ -16,13 +16,15 @@
  *  - `drift` — the memories created since the fit reach
  *    max({@link REFIT_MIN_NEW_MEMORIES}, {@link REFIT_DRIFT_FRACTION} × all).
  *
- * The counts read the corpus the refit fits on — memories by
- * `findDistinctCharacterIds`, as `handleEmbeddingRefit` enumerates them — so a
- * due refit always has something to fit and clears its own reason.
+ * The counts read the corpus the refit fits on — every memory row
+ * (`countCorpusSince`); `handleEmbeddingRefit` fits every memory of every
+ * character holding one — so a due refit always has something to fit and
+ * clears its own reason.
  *
  * `evaluateRefitNeed` is the pure rule; `assessBuiltinRefit` reads the
- * counts; `checkBuiltinRefit` runs it for the default profile (boot and the
- * scheduled maintenance pass) and enqueues the refit when one is due.
+ * counts; `enqueueRefitIfDue` is the one serialised check-then-enqueue, used
+ * by the debounced `scheduleRefit` and by `checkBuiltinRefit` (the default
+ * profile, from boot and the scheduled maintenance pass).
  * Design of record: docs/developer/features/builtin-tfidf-memory-tuning.md §6.
  *
  * @module embedding/builtin-refit-policy
@@ -31,6 +33,8 @@
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
+import { processSingleton } from '@/lib/utils/process-singleton'
+import { isLexicalEmbeddingProvider } from './cosine-scale'
 // Direct module, not the index-store barrel (it imports the embedding service).
 import { LEXICAL_TEXT_SHAPE_VERSION } from '@/lib/memory/index-store/embedding-text'
 
@@ -80,13 +84,7 @@ export async function assessBuiltinRefit(profile: Pick<EmbeddingProfile, 'id'>):
   const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
   const fittedAt = vocabulary?.fittedAt ?? null
   const textShapeVersion = vocabulary?.textShapeVersion ?? 0
-  let newSinceFit = 0
-  let totalMemories = 0
-  const characterIds = await repos.memories.findDistinctCharacterIds()
-  for (const characterId of characterIds) {
-    totalMemories += await repos.memories.countByCharacterId(characterId)
-    if (fittedAt) newSinceFit += await repos.memories.countCreatedSince(characterId, fittedAt)
-  }
+  const { total: totalMemories, createdSince: newSinceFit } = await repos.memories.countCorpusSince(fittedAt)
   const input = { fittedAt, textShapeVersion, newSinceFit, totalMemories }
   const reason = evaluateRefitNeed(input)
   log.debug('Assessed the TF-IDF vocabulary', {
@@ -98,18 +96,79 @@ export async function assessBuiltinRefit(profile: Pick<EmbeddingProfile, 'id'>):
   return { ...input, reason }
 }
 
+export interface RefitInHand {
+  type: 'EMBEDDING_REFIT' | 'EMBEDDING_REINDEX_ALL'
+  status: 'PENDING' | 'PROCESSING'
+}
+
 /**
- * The job type of a refit or full reindex already pending or running, if any.
- * A due reason stays due until that job finishes, so a second enqueue would
- * only repeat it.
+ * A refit or full reindex already pending or running, if any (queried by
+ * status, so a pending job in backoff is always seen). A due reason stays due
+ * until that job finishes, so a second enqueue would only repeat it.
  */
-export async function refitInHand(): Promise<'EMBEDDING_REFIT' | 'EMBEDDING_REINDEX_ALL' | null> {
+export async function refitInHand(): Promise<RefitInHand | null> {
   const repos = getRepositories()
   for (const type of ['EMBEDDING_REFIT', 'EMBEDDING_REINDEX_ALL'] as const) {
-    const recent = await repos.backgroundJobs.findRecentByType(type, 10)
-    if (recent.some((job) => job.status === 'PENDING' || job.status === 'PROCESSING')) return type
+    const active = await repos.backgroundJobs.findActiveByType(type)
+    const job = active.find((j) => j.status === 'PENDING') ?? active.find((j) => j.status === 'PROCESSING')
+    if (job) return { type, status: job.status as RefitInHand['status'] }
   }
   return null
+}
+
+export interface RefitDecision {
+  reason: BuiltinRefitReason | 'forced' | null
+  enqueued: boolean
+  /** Why nothing was enqueued for a due reason. */
+  heldBy?: 'nothing-to-fit' | RefitInHand
+}
+
+/** The tail of the check-then-enqueue chain (process-wide, so concurrent callers queue). */
+const refitChain = processSingleton('embedding.builtinRefitChain', () => ({ tail: Promise.resolve() as Promise<unknown> }))
+
+/**
+ * Enqueue a refit-with-reindex for `profile` when one is due — or always,
+ * with `force` — unless a refit is already in hand. Serialised process-wide:
+ * the check and the enqueue are one step, so boot, the maintenance pass and a
+ * debounced memory edit firing together enqueue one refit, not three.
+ *
+ * A forced request (an import) is held only by a *pending* refit, which will
+ * read the grown corpus when it runs; a running one may have read it already.
+ */
+export async function enqueueRefitIfDue(
+  profile: Pick<EmbeddingProfile, 'id' | 'userId'>,
+  opts: { force?: boolean; source: string },
+): Promise<RefitDecision> {
+  const run = async (): Promise<RefitDecision> => {
+    let reason: RefitDecision['reason'] = opts.force ? 'forced' : null
+    if (!opts.force) {
+      const assessment = await assessBuiltinRefit(profile)
+      reason = assessment.reason
+      if (!reason) return { reason: null, enqueued: false }
+      // No memories: the refit has nothing to fit and would leave the reason standing.
+      if (assessment.totalMemories === 0) {
+        log.debug('TF-IDF refit due but there are no memories to fit', { profileId: profile.id, reason, source: opts.source })
+        return { reason, enqueued: false, heldBy: 'nothing-to-fit' }
+      }
+    }
+    const inHand = await refitInHand()
+    if (inHand && (!opts.force || inHand.status === 'PENDING')) {
+      log.info('TF-IDF refit due but one is already in hand; not enqueueing another', {
+        profileId: profile.id,
+        reason,
+        inHand,
+        source: opts.source,
+      })
+      return { reason, enqueued: false, heldBy: inHand }
+    }
+    const { enqueueEmbeddingRefit } = await import('@/lib/background-jobs/queue-service')
+    await enqueueEmbeddingRefit(profile.userId, { profileId: profile.id, triggerReindex: true })
+    log.info('TF-IDF vocabulary refit enqueued', { profileId: profile.id, reason, source: opts.source })
+    return { reason, enqueued: true }
+  }
+  const result = refitChain.tail.then(run, run)
+  refitChain.tail = result.catch(() => undefined)
+  return result
 }
 
 export interface BuiltinRefitCheck {
@@ -119,40 +178,22 @@ export interface BuiltinRefitCheck {
 }
 
 /**
- * Refit the default profile's vocabulary when it is due (BUILTIN only), unless
- * a refit or full reindex is already queued or running. Runs in the parent.
+ * Refit the instance default profile's vocabulary when it is due (BUILTIN
+ * only). Boot and the scheduled maintenance pass call it; runs in the parent.
  * Never throws.
  */
 export async function checkBuiltinRefit(): Promise<BuiltinRefitCheck> {
   try {
-    const repos = getRepositories()
-    const profile = (await repos.embeddingProfiles.findAll()).find((p) => p.isDefault) ?? null
-    if (!profile || profile.provider !== 'BUILTIN') {
+    const profile = await getRepositories().embeddingProfiles.findInstanceDefault()
+    if (!profile || !isLexicalEmbeddingProvider(profile.provider)) {
       return { profileId: profile?.id ?? null, reason: null, enqueued: false }
     }
-    const { reason } = await assessBuiltinRefit(profile)
-    if (!reason) return { profileId: profile.id, reason: null, enqueued: false }
-
-    const inHand = await refitInHand()
-    if (inHand) {
-      log.info('TF-IDF refit due but one is already in hand; not enqueueing another', {
-        profileId: profile.id,
-        reason,
-        inHand,
-      })
-      return { profileId: profile.id, reason, enqueued: false }
+    const decision = await enqueueRefitIfDue(profile, { source: 'check' })
+    return {
+      profileId: profile.id,
+      reason: decision.reason === 'forced' ? null : decision.reason,
+      enqueued: decision.enqueued,
     }
-
-    // The characters with memories are the corpus a refit with no memories
-    // would skip; there is nothing to fit when the instance holds none.
-    if (reason === 'unfitted' && (await repos.memories.findDistinctCharacterIds()).length === 0) {
-      return { profileId: profile.id, reason, enqueued: false }
-    }
-
-    const { enqueueEmbeddingRefit } = await import('@/lib/background-jobs/queue-service')
-    await enqueueEmbeddingRefit(profile.userId, { profileId: profile.id, triggerReindex: true })
-    log.info('TF-IDF vocabulary refit enqueued', { profileId: profile.id, reason })
-    return { profileId: profile.id, reason, enqueued: true }
   } catch (error) {
     log.warn('TF-IDF refit check failed', {
       error: error instanceof Error ? error.message : String(error),

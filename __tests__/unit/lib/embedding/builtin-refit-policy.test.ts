@@ -44,10 +44,17 @@ function repos(opts: {
   jobs?: Array<{ status: string }>
 }) {
   const per = opts.perCharacter ?? [{ total: 100, newSince: 0 }]
-  const ids = per.map((_, i) => `c-${i}`)
+  const total = per.reduce((n, c) => n + c.total, 0)
+  const newSince = per.reduce((n, c) => n + c.newSince, 0)
+  // Jobs the "queue" holds: the given ones plus any refit this test enqueues.
+  const active: Array<{ status: string }> = [...(opts.jobs ?? [])]
+  mockEnqueue.mockImplementation(async () => {
+    active.push({ status: 'PENDING' })
+    return 'job-1'
+  })
   const r = {
     embeddingProfiles: {
-      findAll: jest.fn().mockResolvedValue(opts.profile === null ? [] : [opts.profile ?? builtin]),
+      findInstanceDefault: jest.fn().mockResolvedValue(opts.profile === null ? null : opts.profile ?? builtin),
       findById: jest.fn().mockResolvedValue(opts.profile === null ? null : opts.profile ?? builtin),
       findDefault: jest.fn().mockResolvedValue(opts.profile === null ? null : opts.profile ?? builtin),
     },
@@ -59,11 +66,11 @@ function repos(opts: {
       ),
     },
     memories: {
-      findDistinctCharacterIds: jest.fn().mockResolvedValue(ids),
-      countByCharacterId: jest.fn(async (id: string) => per[ids.indexOf(id)].total),
-      countCreatedSince: jest.fn(async (id: string) => per[ids.indexOf(id)].newSince),
+      countCorpusSince: jest.fn(async (since: string | null) => ({ total, createdSince: since ? newSince : 0 })),
     },
-    backgroundJobs: { findRecentByType: jest.fn().mockResolvedValue(opts.jobs ?? []) },
+    backgroundJobs: {
+      findActiveByType: jest.fn(async (type: string) => (type === 'EMBEDDING_REFIT' ? [...active] : [])),
+    },
   }
   mockGetRepositories.mockReturnValue(r as never)
   return r
@@ -117,6 +124,27 @@ describe('checkBuiltinRefit', () => {
     await expect(checkBuiltinRefit()).resolves.toMatchObject({ reason: 'text-shape', enqueued: true })
   })
 
+  it('does not enqueue a refit there is nothing to fit', async () => {
+    repos({ fittedAt: null, perCharacter: [] })
+    await expect(checkBuiltinRefit()).resolves.toMatchObject({ reason: 'unfitted', enqueued: false })
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('serialises the check: boot, the sweep and a debounced edit firing together enqueue one refit', async () => {
+    jest.useFakeTimers()
+    try {
+      repos({ textShapeVersion: 0 })
+      await scheduleRefit('u-1')
+      const timerFired = jest.advanceTimersByTimeAsync(5_000)
+      const results = await Promise.all([checkBuiltinRefit(), checkBuiltinRefit()])
+      await timerFired
+      expect(mockEnqueue).toHaveBeenCalledTimes(1)
+      expect(results.filter((r) => r.enqueued)).toHaveLength(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('does not stack a refit on one already in hand', async () => {
     repos({ textShapeVersion: 0, jobs: [{ status: 'PENDING' }] })
     await expect(checkBuiltinRefit()).resolves.toMatchObject({ reason: 'text-shape', enqueued: false })
@@ -154,6 +182,18 @@ describe('scheduleRefit (debounced, gated)', () => {
     await scheduleRefit('u-1')
     await fire()
     expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('a forced call is held by a pending refit but not by a running one', async () => {
+    repos({ jobs: [{ status: 'PENDING' }] })
+    await scheduleRefit('u-1', 'p-tf', { force: true })
+    await fire()
+    expect(mockEnqueue).not.toHaveBeenCalled()
+
+    repos({ jobs: [{ status: 'PROCESSING' }] })
+    await scheduleRefit('u-1', 'p-tf', { force: true })
+    await fire()
+    expect(mockEnqueue).toHaveBeenCalledTimes(1)
   })
 
   it('a forced call refits regardless, and a later unforced call in the window keeps it forced', async () => {

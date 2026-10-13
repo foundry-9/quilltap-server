@@ -14,8 +14,6 @@ import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { processSingleton } from '@/lib/utils/process-singleton'
-// Direct module, not the index-store barrel: the barrel's index imports this service.
-import { lexicalEmbeddingText } from '@/lib/memory/index-store/embedding-text'
 
 /**
  * Result of an embedding operation.
@@ -90,6 +88,18 @@ export const EMBEDDING_MAX_CHARS = 128 * 1024
  * non-interactive callers from piling into the queue while a chat is waiting.
  */
 export type EmbeddingPriority = 'interactive' | 'background'
+
+/** Per-call options for {@link generateEmbeddingForUser}. */
+export interface EmbeddingCallOptions {
+  priority?: EmbeddingPriority
+  /**
+   * What a lexical (BUILTIN, TF-IDF) profile embeds instead of `text`. Memory
+   * writers pass `lexicalEmbeddingTextFor(memory)` — the memory without its
+   * anchor line (builtin-tfidf-memory-tuning §2). Ignored by every other
+   * provider; absent, the BUILTIN path embeds `text`.
+   */
+  lexicalText?: string
+}
 
 /** Interactive embeddings in flight, process-wide so every bundle copy of this module agrees (bug 235). */
 const interactive = processSingleton('embedding.interactivePending', () => ({ pending: 0 }))
@@ -188,7 +198,8 @@ async function generateApiEmbedding(
  */
 async function generateBuiltinEmbedding(
   text: string,
-  profile: EmbeddingProfile
+  profile: EmbeddingProfile,
+  lexicalText?: string
 ): Promise<EmbeddingResult> {
   const repos = getRepositories()
 
@@ -225,18 +236,18 @@ async function generateBuiltinEmbedding(
       fittedAt: vocabulary.fittedAt,
     })
 
-    // A lexical embedder never sees a memory's anchor line (see
-    // `lexicalEmbeddingText`); every BUILTIN embed passes through here, so the
-    // stored rows, the admission candidate and the query agree on the shape.
-    const lexicalText = lexicalEmbeddingText(text)
-    if (lexicalText.length !== text.length) {
-      logger.debug('[Embedding] BUILTIN embed: memory anchor line left out', {
+    // A memory writer hands over its lexical text — the memory without its
+    // anchor line (`lexicalEmbeddingTextFor`) — and that is what a bag of
+    // words embeds; any other text is embedded as given.
+    if (lexicalText !== undefined) {
+      logger.debug('[Embedding] BUILTIN embed: using the caller\'s lexical text', {
         context: 'generateBuiltinEmbedding',
         profileId: profile.id,
-        strippedChars: text.length - lexicalText.length,
+        textChars: text.length,
+        lexicalChars: lexicalText.length,
       })
     }
-    const result = embeddingProvider.generateEmbedding(lexicalText)
+    const result = embeddingProvider.generateEmbedding(lexicalText ?? text)
 
     const embedding = applyEmbeddingProfile(result.embedding, profile)
 
@@ -264,12 +275,13 @@ async function generateBuiltinEmbedding(
 export async function generateEmbedding(
   text: string,
   profile: EmbeddingProfile,
-  userId: string
+  userId: string,
+  opts: Pick<EmbeddingCallOptions, 'lexicalText'> = {}
 ): Promise<EmbeddingResult> {
   try {
     // Built-in provider has special handling for vocabulary state
     if (profile.provider === 'BUILTIN') {
-      return generateBuiltinEmbedding(text, profile)
+      return generateBuiltinEmbedding(text, profile, opts.lexicalText)
     }
 
     // All other providers use the API-based flow
@@ -297,7 +309,7 @@ export async function generateEmbeddingForUser(
   text: string,
   userId: string,
   profileId?: string,
-  opts: { priority?: EmbeddingPriority } = {}
+  opts: EmbeddingCallOptions = {}
 ): Promise<EmbeddingResult> {
   // Lights the "Emb" chip for the whole call, including the wait for
   // interactive quiet — an embedding minted to answer a search counts as much
@@ -310,7 +322,7 @@ async function runEmbeddingForUser(
   text: string,
   userId: string,
   profileId?: string,
-  opts: { priority?: EmbeddingPriority } = {}
+  opts: EmbeddingCallOptions = {}
 ): Promise<EmbeddingResult> {
   const priority = opts.priority ?? 'interactive'
 
@@ -340,7 +352,7 @@ async function runEmbeddingForUser(
       throw new EmbeddingError('No embedding profile configured')
     }
 
-    return await generateEmbedding(text, profile, userId)
+    return await generateEmbedding(text, profile, userId, { lexicalText: opts.lexicalText })
   } finally {
     if (priority === 'interactive') {
       interactive.pending--

@@ -66,7 +66,7 @@ import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { memoryIndex, embeddingTextFor } from './index-store'
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from './index-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { resolveClusterThreshold } from './settings-defaults'
@@ -946,7 +946,7 @@ export async function runConsolidation(
           }, memoryTimeZone),
           userId,
           undefined,
-          { priority: 'background' },
+          { priority: 'background', lexicalText: lexicalEmbeddingTextFor(digest) },
         )
         const k = plan.digestsByCluster[digest.clusterIndex].findIndex((d) => d.id === digest.id)
         outcomes[digest.clusterIndex].embeddings[k] = result.embedding

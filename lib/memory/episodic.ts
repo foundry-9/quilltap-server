@@ -33,17 +33,6 @@ const ANCHOR_MAX_ENTITIES = 4
 /** The labels an anchor line's parts open with, in the order they are written. */
 const ANCHOR_LABELS = ['when', 'story time', 'place'] as const
 
-/**
- * True when `line` is an anchor line as {@link buildMemoryAnchorLine} writes
- * it: parenthesised, opening with one of its part labels. The one reader of
- * the line's grammar besides its writer (the BUILTIN embed path strips it —
- * `lexicalEmbeddingText` in `lib/memory/index-store`).
- */
-export function isMemoryAnchorLine(line: string): boolean {
-  const trimmed = line.trim()
-  if (!trimmed.startsWith('(') || !trimmed.endsWith(')')) return false
-  return ANCHOR_LABELS.some(label => trimmed.startsWith(`(${label}: `))
-}
 
 /**
  * Render the anchor line appended to a memory's embedded text, e.g.

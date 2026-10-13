@@ -26,7 +26,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { cosineSimilarity, generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
-import { memoryIndex, embeddingTextFor } from '../index-store'
+import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '../index-store'
 import type { AdmissionNeighbour } from './types'
 
 const log = logger.child({ module: 'memory:admission:neighbours' })
@@ -141,7 +141,7 @@ async function unindexedNeighbourHits(
         embeddingTextFor(memory, timeZone),
         probe.userId,
         undefined,
-        { priority: 'background' },
+        { priority: 'background', lexicalText: lexicalEmbeddingTextFor(memory) },
       )
       if (fresh.length !== embedding.length) continue
       hits.push({ id: memory.id, score: cosineSimilarity(embedding, fresh) })

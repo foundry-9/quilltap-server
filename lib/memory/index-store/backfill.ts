@@ -12,7 +12,7 @@ import type { Memory } from '@/lib/schemas/types'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { logger } from '@/lib/logger'
 import { memoryIndex } from './memory-index'
-import { embeddingTextFor } from './embedding-text'
+import { embeddingTextFor, lexicalEmbeddingTextFor } from './embedding-text'
 import { refreshMemoryTimeZone } from '../time/calendar-refresh'
 
 /** Who is asking, and with which embedding profile. */
@@ -55,7 +55,7 @@ export async function generateMissingEmbeddings(
         embeddingTextFor(memory, memoryTimeZone),
         options.userId,
         options.embeddingProfileId,
-        { priority: 'background' }
+        { priority: 'background', lexicalText: lexicalEmbeddingTextFor(memory) }
       )
 
       // Row and index in one call; the row's tier rides with the vector.
