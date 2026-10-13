@@ -41,7 +41,7 @@ import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embeddin
 import { handleEmbeddingRefit } from '@/lib/background-jobs/handlers/embedding-refit'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
-import { embeddingTextFor, memoryIndex } from '@/lib/memory/index-store'
+import { embeddingTextFor, memoryIndex, LEXICAL_TEXT_SHAPE_VERSION } from '@/lib/memory/index-store'
 import type { BackgroundJob } from '@/lib/schemas/types'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
@@ -103,8 +103,13 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
     const upsertByProfileId = jest.fn().mockResolvedValue(undefined)
     mockGetRepositories.mockReturnValue({
       embeddingProfiles: { findById: jest.fn().mockResolvedValue({ id: 'p-1', provider: 'BUILTIN' }) },
-      characters: { findByUserId: jest.fn().mockResolvedValue([{ id: 'char-1' }]) },
-      memories: { findByCharacterId: jest.fn().mockResolvedValue([anchoredMemory]) },
+      // The corpus is every memory by the characters that hold one — the same
+      // corpus the refit policy counts — not the user's readable characters.
+      characters: { findByUserId: jest.fn().mockResolvedValue([]) },
+      memories: {
+        findDistinctCharacterIds: jest.fn().mockResolvedValue(['char-1']),
+        findByCharacterId: jest.fn().mockResolvedValue([anchoredMemory]),
+      },
       helpDocs: { findAll: jest.fn().mockResolvedValue([]) },
       tfidfVocabularies: { upsertByProfileId },
     } as never)
@@ -118,5 +123,7 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
     expect(terms).toContain('"sandwich"')
     expect(terms).not.toContain('"gullhaven"')
     expect(terms).not.toContain('"place"')
+    // Stamped with the text shape it was fitted on, so the policy stops asking.
+    expect(upsertByProfileId.mock.calls[0][1]).toMatchObject({ textShapeVersion: LEXICAL_TEXT_SHAPE_VERSION })
   })
 })

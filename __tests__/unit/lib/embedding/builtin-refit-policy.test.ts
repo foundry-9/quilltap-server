@@ -19,7 +19,7 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
 }))
 
 import {
-  BUILTIN_TEXT_SHAPE_EPOCH,
+  LEXICAL_TEXT_SHAPE_VERSION,
   REFIT_MIN_NEW_MEMORIES,
   checkBuiltinRefit,
   driftThreshold,
@@ -32,12 +32,14 @@ import { enqueueEmbeddingRefit } from '@/lib/background-jobs/queue-service'
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockEnqueue = enqueueEmbeddingRefit as jest.MockedFunction<typeof enqueueEmbeddingRefit>
 
-const AFTER_EPOCH = '2026-10-20T00:00:00.000Z'
+const FITTED = '2026-10-13T20:00:00.000Z'
+const CURRENT = LEXICAL_TEXT_SHAPE_VERSION
 const builtin = { id: 'p-tf', userId: 'u-1', provider: 'BUILTIN', isDefault: true }
 
 function repos(opts: {
   profile?: Record<string, unknown> | null
   fittedAt?: string | null
+  textShapeVersion?: number
   perCharacter?: Array<{ total: number; newSince: number }>
   jobs?: Array<{ status: string }>
 }) {
@@ -51,7 +53,9 @@ function repos(opts: {
     },
     tfidfVocabularies: {
       findByProfileId: jest.fn().mockResolvedValue(
-        opts.fittedAt === null ? null : { fittedAt: opts.fittedAt ?? AFTER_EPOCH },
+        opts.fittedAt === null
+          ? null
+          : { fittedAt: opts.fittedAt ?? FITTED, textShapeVersion: opts.textShapeVersion ?? CURRENT },
       ),
     },
     memories: {
@@ -70,18 +74,20 @@ describe('evaluateRefitNeed', () => {
     expect(evaluateRefitNeed({ fittedAt: null, newSinceFit: 0, totalMemories: 0 })).toBe('unfitted')
   })
 
-  it('refits a vocabulary fitted before the anchor-free text shape, once', () => {
-    expect(evaluateRefitNeed({ fittedAt: '2026-10-13T15:00:00.000Z', newSinceFit: 0, totalMemories: 10 })).toBe('text-shape')
-    expect(evaluateRefitNeed({ fittedAt: BUILTIN_TEXT_SHAPE_EPOCH, newSinceFit: 0, totalMemories: 10 })).toBeNull()
+  it('refits a vocabulary stamped with an older text shape, whatever its date', () => {
+    expect(evaluateRefitNeed({ fittedAt: FITTED, textShapeVersion: 0, newSinceFit: 0, totalMemories: 10 })).toBe('text-shape')
+    expect(evaluateRefitNeed({ fittedAt: FITTED, newSinceFit: 0, totalMemories: 10 })).toBe('text-shape')
+    expect(evaluateRefitNeed({ fittedAt: '2099-01-01T00:00:00.000Z', textShapeVersion: 0, newSinceFit: 0, totalMemories: 10 })).toBe('text-shape')
+    expect(evaluateRefitNeed({ fittedAt: '2020-01-01T00:00:00.000Z', textShapeVersion: CURRENT, newSinceFit: 0, totalMemories: 10 })).toBeNull()
   })
 
   it('refits on drift: max(25, 10% of the corpus) new memories', () => {
     expect(driftThreshold(100)).toBe(REFIT_MIN_NEW_MEMORIES)
     expect(driftThreshold(1000)).toBe(100)
-    expect(evaluateRefitNeed({ fittedAt: AFTER_EPOCH, newSinceFit: 24, totalMemories: 100 })).toBeNull()
-    expect(evaluateRefitNeed({ fittedAt: AFTER_EPOCH, newSinceFit: 25, totalMemories: 100 })).toBe('drift')
-    expect(evaluateRefitNeed({ fittedAt: AFTER_EPOCH, newSinceFit: 99, totalMemories: 1000 })).toBeNull()
-    expect(evaluateRefitNeed({ fittedAt: AFTER_EPOCH, newSinceFit: 100, totalMemories: 1000 })).toBe('drift')
+    expect(evaluateRefitNeed({ fittedAt: FITTED, textShapeVersion: CURRENT, newSinceFit: 24, totalMemories: 100 })).toBeNull()
+    expect(evaluateRefitNeed({ fittedAt: FITTED, textShapeVersion: CURRENT, newSinceFit: 25, totalMemories: 100 })).toBe('drift')
+    expect(evaluateRefitNeed({ fittedAt: FITTED, textShapeVersion: CURRENT, newSinceFit: 99, totalMemories: 1000 })).toBeNull()
+    expect(evaluateRefitNeed({ fittedAt: FITTED, textShapeVersion: CURRENT, newSinceFit: 100, totalMemories: 1000 })).toBe('drift')
   })
 })
 
@@ -107,12 +113,12 @@ describe('checkBuiltinRefit', () => {
   })
 
   it('enqueues the one-time text-shape refit for a vocabulary fitted with anchor lines', async () => {
-    repos({ fittedAt: '2026-10-09T00:00:00.000Z' })
+    repos({ textShapeVersion: 0 })
     await expect(checkBuiltinRefit()).resolves.toMatchObject({ reason: 'text-shape', enqueued: true })
   })
 
   it('does not stack a refit on one already in hand', async () => {
-    repos({ fittedAt: '2026-10-09T00:00:00.000Z', jobs: [{ status: 'PENDING' }] })
+    repos({ textShapeVersion: 0, jobs: [{ status: 'PENDING' }] })
     await expect(checkBuiltinRefit()).resolves.toMatchObject({ reason: 'text-shape', enqueued: false })
     expect(mockEnqueue).not.toHaveBeenCalled()
   })
@@ -144,7 +150,7 @@ describe('scheduleRefit (debounced, gated)', () => {
   })
 
   it('a due refit is not enqueued again while one is pending', async () => {
-    repos({ fittedAt: '2026-10-09T00:00:00.000Z', jobs: [{ status: 'PROCESSING' }] })
+    repos({ textShapeVersion: 0, jobs: [{ status: 'PROCESSING' }] })
     await scheduleRefit('u-1')
     await fire()
     expect(mockEnqueue).not.toHaveBeenCalled()

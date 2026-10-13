@@ -1,7 +1,7 @@
 # Built-in TF-IDF profile: tuning the memory system for a lexical embedder
 
 **Status:** Implemented (4.10-dev, 2026-10-13). Thresholds in §3 were calibrated offline; §7 lists the live checks still owed on `V4test`.
-**Scope:** quilltap-server core only. No change to the `qtap-plugin-builtin-embeddings` plugin, no schema or DDL change, no migration. One new consolidation setting (`tfidfClusterThreshold`).
+**Scope:** quilltap-server core only. No change to the `qtap-plugin-builtin-embeddings` plugin. One new column (`tfidf_vocabularies.textShapeVersion`, migration `add-tfidf-text-shape-version-v1`) and one new consolidation setting (`tfidfClusterThreshold`).
 **Provider:** `BUILTIN`, model `tfidf-bm25-v1`, plugin `plugins/dist/qtap-plugin-builtin-embeddings/` (TF-IDF with BM25 term weighting, Porter stemming, unigrams + bigrams, dense L2-normalised vectors one dimension per vocabulary term).
 **Source:** the 2026-10-13 dogfood session on `V4test` (bugs 235–241, commit 93c5af6ad).
 
@@ -50,7 +50,7 @@ Why not a provider argument on `embeddingTextFor`: nine writers build the text b
 
 Why it costs nothing: the anchor line's two jobs are covered elsewhere for a lexical embedder. "Different occasion" is admission's structural date guard (`occasionsAreDistinct`, `dateGuardDays`), which reads `occurredAt` directly; entity names are found by recall's R4 anchor search, which is a text search. Entity names that matter usually also appear in the content.
 
-**Reindex path.** Vectors already stored on a BUILTIN instance were embedded with anchors. `checkBuiltinRefit` (§6) reports `text-shape` for any vocabulary fitted before `BUILTIN_TEXT_SHAPE_EPOCH` (2026-10-14T00:00Z), and the boot pass enqueues one refit-with-reindex. The new `fittedAt` clears it; a restore of an older vocabulary triggers it again, which is correct.
+**Reindex path.** Vectors already stored on a BUILTIN instance were embedded with anchors. Each vocabulary row carries `textShapeVersion`, the shape it was fitted on and its memories embedded with; `LEXICAL_TEXT_SHAPE_VERSION` (`embedding-text.ts`, now 1) is the current one, and the refit stamps it. Rows from before the column read 0. `checkBuiltinRefit` (§6) reports `text-shape` for any row below the current version, and the boot pass enqueues one refit-with-reindex, which clears it. A restore of an older backup brings a 0 back and triggers it again, which is correct. A version, not a date: a date cut-off would keep re-fitting vocabularies fitted on the day it shipped, and would wave through ones the old code fitted after it (review of PR 96). Bump the version whenever the BUILTIN text changes.
 
 ## 3. Admission thresholds per provider
 
@@ -81,11 +81,11 @@ A memory written between refits is embedded against the current vocabulary; its 
 `lib/embedding/builtin-refit-policy.ts` holds the policy. `evaluateRefitNeed` is pure:
 
 - `unfitted` — no vocabulary row;
-- `text-shape` — fitted before `BUILTIN_TEXT_SHAPE_EPOCH` (§2);
+- `text-shape` — `textShapeVersion` below `LEXICAL_TEXT_SHAPE_VERSION` (§2);
 - `drift` — memories created since `fittedAt` ≥ max(25, 10% of all memories);
 - otherwise nothing.
 
-`scheduleRefit(userId, profileId?, { force? })` keeps its debounce and now evaluates the need when the timer fires; without one it logs and enqueues nothing. Import passes `force: true` (imported rows keep their original `createdAt`, so the drift count would not see them). `checkBuiltinRefit()` runs the same evaluation for the default profile from boot and from the scheduled maintenance pass, so AUTO growth refits too. Neither path enqueues while a refit or full reindex is already pending or running (`refitInHand`): a due reason stays due until that job lands. The profile routes' and the system tool's direct `enqueueEmbeddingRefit` calls are explicit requests and are untouched.
+`scheduleRefit(userId, profileId?, { force? })` keeps its debounce and now evaluates the need when the timer fires; without one it logs and enqueues nothing. Import passes `force: true` (imported rows keep their original `createdAt`, so the drift count would not see them). `checkBuiltinRefit()` runs the same evaluation for the default profile from boot and from the scheduled maintenance pass, so AUTO growth refits too. Neither path enqueues while a refit or full reindex is already pending or running (`refitInHand`): a due reason stays due until that job lands. The policy and the refit read one corpus — memories by `findDistinctCharacterIds` — so a due refit always fits something and clears its reason; the refit used to enumerate the user's readable characters, which skips a character whose vault cannot be read and would have left the policy asking forever (review of PR 96). The profile routes' and the system tool's direct `enqueueEmbeddingRefit` calls are explicit requests and are untouched.
 
 Help docs still re-embed on a refit: a new vocabulary changes the dimension, and a help vector of the old width cannot be compared. The saving is that refits are now rare.
 

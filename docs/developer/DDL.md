@@ -1653,6 +1653,7 @@ CREATE TABLE "tfidf_vocabularies" (
   "fittedAt" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
+  "textShapeVersion" INTEGER DEFAULT 0,  -- text shape fitted on (LEXICAL_TEXT_SHAPE_VERSION); 0 = anchored, refit once
   FOREIGN KEY ("profileId") REFERENCES "embedding_profiles"("id") ON DELETE CASCADE
 );
 

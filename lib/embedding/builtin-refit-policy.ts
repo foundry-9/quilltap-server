@@ -10,11 +10,15 @@
  * a reason to refit. The vocabulary is refit when it is:
  *
  *  - `unfitted` — there is no vocabulary row;
- *  - `text-shape` — fitted before {@link BUILTIN_TEXT_SHAPE_EPOCH}, when the
- *    BUILTIN path stopped embedding memory anchor lines (stored vectors and
- *    the vocabulary still carry them);
+ *  - `text-shape` — stamped with an older `textShapeVersion` than
+ *    {@link LEXICAL_TEXT_SHAPE_VERSION} (0: fitted, and its memories embedded,
+ *    with anchor lines before the BUILTIN path left them out);
  *  - `drift` — the memories created since the fit reach
  *    max({@link REFIT_MIN_NEW_MEMORIES}, {@link REFIT_DRIFT_FRACTION} × all).
+ *
+ * The counts read the corpus the refit fits on — memories by
+ * `findDistinctCharacterIds`, as `handleEmbeddingRefit` enumerates them — so a
+ * due refit always has something to fit and clears its own reason.
  *
  * `evaluateRefitNeed` is the pure rule; `assessBuiltinRefit` reads the
  * counts; `checkBuiltinRefit` runs it for the default profile (boot and the
@@ -27,14 +31,12 @@
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { EmbeddingProfile } from '@/lib/schemas/types'
+// Direct module, not the index-store barrel (it imports the embedding service).
+import { LEXICAL_TEXT_SHAPE_VERSION } from '@/lib/memory/index-store/embedding-text'
+
+export { LEXICAL_TEXT_SHAPE_VERSION }
 
 const log = logger.child({ module: 'embedding:builtin-refit-policy' })
-
-/**
- * Vocabularies fitted before this instant were fitted (and their vectors
- * embedded) with memory anchor lines; they are refit once.
- */
-export const BUILTIN_TEXT_SHAPE_EPOCH = '2026-10-14T00:00:00.000Z'
 
 /** Fewest new memories that count as drift, however small the corpus. */
 export const REFIT_MIN_NEW_MEMORIES = 25
@@ -47,6 +49,8 @@ export type BuiltinRefitReason = 'unfitted' | 'text-shape' | 'drift'
 export interface RefitNeedInput {
   /** The vocabulary's `fittedAt`, or null when there is none. */
   fittedAt: string | null
+  /** The vocabulary's `textShapeVersion` (absent on rows from before the column reads 0). */
+  textShapeVersion?: number | null
   /** Memories created at or after `fittedAt`. */
   newSinceFit: number
   /** All memories. */
@@ -61,8 +65,7 @@ export function driftThreshold(totalMemories: number): number {
 /** Why the vocabulary needs a refit, or null when it does not. Pure. */
 export function evaluateRefitNeed(input: RefitNeedInput): BuiltinRefitReason | null {
   if (!input.fittedAt) return 'unfitted'
-  const fitted = Date.parse(input.fittedAt)
-  if (!Number.isFinite(fitted) || fitted < Date.parse(BUILTIN_TEXT_SHAPE_EPOCH)) return 'text-shape'
+  if ((input.textShapeVersion ?? 0) < LEXICAL_TEXT_SHAPE_VERSION) return 'text-shape'
   if (input.newSinceFit >= driftThreshold(input.totalMemories)) return 'drift'
   return null
 }
@@ -76,6 +79,7 @@ export async function assessBuiltinRefit(profile: Pick<EmbeddingProfile, 'id'>):
   const repos = getRepositories()
   const vocabulary = await repos.tfidfVocabularies.findByProfileId(profile.id)
   const fittedAt = vocabulary?.fittedAt ?? null
+  const textShapeVersion = vocabulary?.textShapeVersion ?? 0
   let newSinceFit = 0
   let totalMemories = 0
   const characterIds = await repos.memories.findDistinctCharacterIds()
@@ -83,7 +87,7 @@ export async function assessBuiltinRefit(profile: Pick<EmbeddingProfile, 'id'>):
     totalMemories += await repos.memories.countByCharacterId(characterId)
     if (fittedAt) newSinceFit += await repos.memories.countCreatedSince(characterId, fittedAt)
   }
-  const input = { fittedAt, newSinceFit, totalMemories }
+  const input = { fittedAt, textShapeVersion, newSinceFit, totalMemories }
   const reason = evaluateRefitNeed(input)
   log.debug('Assessed the TF-IDF vocabulary', {
     profileId: profile.id,

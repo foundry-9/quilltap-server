@@ -64,6 +64,14 @@ describe('child plugin readiness', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(25)
   })
 
+  it('latches the timeout: after one job waited it out, later jobs do not wait', async () => {
+    startPluginInitialization(() => new Promise(() => {}))
+    await whenPluginsReady(30)
+    const started = Date.now()
+    await whenPluginsReady(5_000)
+    expect(Date.now() - started).toBeLessThan(100)
+  })
+
   it('starts the load only once', async () => {
     const init = jest.fn().mockResolvedValue(undefined)
     await startPluginInitialization(init)

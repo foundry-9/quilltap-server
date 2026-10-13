@@ -12,7 +12,8 @@
  * `startPluginInitialization` begins the load once; `whenPluginsReady`
  * resolves when it has settled (success or failure — a failed load is logged
  * by the caller and handlers then fail as they always did), or after
- * {@link PLUGIN_READY_TIMEOUT_MS}, so a hung load cannot stall the queue.
+ * {@link PLUGIN_READY_TIMEOUT_MS}, so a hung load cannot stall the queue. The
+ * timeout is latched: after it fires once, no later job waits.
  *
  * @module background-jobs/child/plugin-readiness
  */
@@ -60,7 +61,10 @@ export async function whenPluginsReady(timeoutMs: number = PLUGIN_READY_TIMEOUT_
   const outcome = await Promise.race([settled.then(() => 'ready' as const), timedOut]);
   if (timer) clearTimeout(timer);
   if (outcome === 'timeout') {
-    log.warn('Plugin registry still loading; running the job anyway', { timeoutMs });
+    // Latch: once one job has waited the full budget, later jobs do not wait
+    // again — a hung load must cost one delay, not one per job.
+    done = true;
+    log.warn('Plugin registry still loading; running the job anyway, and not waiting for it again', { timeoutMs });
   } else {
     log.debug('Plugin registry loaded; running the job');
   }

@@ -49,6 +49,14 @@ export function embeddingTextFor(memory: EmbeddingTextSource, timeZone?: string)
 }
 
 /**
+ * The version of {@link lexicalEmbeddingText}'s shape, stamped on each TF-IDF
+ * vocabulary row (`tfidf_vocabularies.textShapeVersion`) by the refit. Bump it
+ * whenever the text the BUILTIN path embeds changes, and the refit policy
+ * re-fits and re-embeds once. 0 is the anchored shape from before version 1.
+ */
+export const LEXICAL_TEXT_SHAPE_VERSION = 1
+
+/**
  * The text a lexical (TF-IDF) embedder sees: `text` without a trailing
  * memory anchor line, any other text unchanged.
  *

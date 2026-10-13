@@ -52,7 +52,7 @@ finish first.
 `plugin-readiness.ts` owns the load's promise. `child-entry.ts` starts it through
 `startPluginInitialization` and `runJob` awaits `whenPluginsReady()` before entering the job
 scope. A failed load still releases jobs (the handlers then fail as before, with the existing
-error log); a load that hangs releases them after 60 s with a warning.
+error log); a load that hangs releases them after 60 s with a warning, and the timeout is latched so later jobs do not wait again.
 
 ## Verify
 
