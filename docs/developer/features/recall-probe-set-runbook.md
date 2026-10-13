@@ -16,7 +16,7 @@ stopped.
 
 ## 1. Where things stand
 
-- **[memory-recall-and-housekeeping-fixes.md](./memory-recall-and-housekeeping-fixes.md)
+- **[memory-recall-and-housekeeping-fixes.md](./complete/memory-recall-and-housekeeping-fixes.md)
   (F1–F9) is implemented and merged** (foundry-9/quilltap-server#83). Among
   other things it made the dynamic memory head scale with the model's memory
   budget (F7: up to 15 entries, 30 on a retrospective turn), and added

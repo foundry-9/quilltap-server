@@ -1,6 +1,6 @@
 /**
  * Memory recall and housekeeping fixes
- * (docs/developer/features/memory-recall-and-housekeeping-fixes.md)
+ * (docs/developer/features/complete/memory-recall-and-housekeeping-fixes.md)
  *
  * (F1 — near-duplicates count, F3 — the footnote cap and F9 — dedup folds
  * are pinned with the one combine in admission-fold.test.ts and

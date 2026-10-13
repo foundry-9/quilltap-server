@@ -11,8 +11,14 @@ const {
   resolveChat,
   resolveProject,
 } = require('./db-helpers');
-const { scanDanglingEdges } = require('./graph-integrity');
-const { cmdConsolidate } = require('./memories-consolidate-command');
+const {
+  scanDanglingEdges,
+  scanDigestIntegrity,
+  loadMemoryIds,
+  memoryColumns,
+} = require('./graph-integrity');
+const { cmdMaintain } = require('./memories-maintain-command');
+const { postMemoriesAction, resolveMemoriesServerPort } = require('./memories-server');
 
 // ---------- colour & marker helpers ----------
 
@@ -89,13 +95,19 @@ function parseFlags(args) {
     noRelated: false,
     // validate
     list: false,
+    repair: false,
+    write: false,
     // semantic search
     semantic: false,
     top: 0,
     threshold: -1,
-    port: 3000,
-    // consolidate
+    // Undefined unless --port is given, so the instance lock can supply it
+    // (resolveServerPort in lock-helpers).
+    port: undefined,
+    // maintain
     dryRun: false,
+    phases: '',
+    cap: null,
   };
   const positional = [];
   let i = 0;
@@ -138,6 +150,19 @@ function parseFlags(args) {
       case '--no-related': flags.noRelated = true; break;
 
       case '--list': flags.list = true; break;
+      case '--repair': flags.repair = true; break;
+      case '--write': flags.write = true; break;
+
+      case '--phases': flags.phases = args[++i] || ''; break;
+      case '--cap': {
+        const v = Number(args[++i]);
+        if (!Number.isInteger(v)) {
+          console.error('Error: --cap must be an integer');
+          process.exit(1);
+        }
+        flags.cap = v;
+        break;
+      }
 
       case '--semantic': flags.semantic = true; break;
       case '--dry-run': flags.dryRun = true; break;
@@ -151,7 +176,7 @@ function parseFlags(args) {
         flags.threshold = v;
         break;
       }
-      case '--port': {
+      case '-p': case '--port': {
         const p = parseInt(args[++i], 10);
         if (isNaN(p) || p < 1 || p > 65535) {
           console.error('Error: --port must be between 1 and 65535');
@@ -641,7 +666,7 @@ async function cmdSemanticGrep(flags, query) {
 
   const top = flags.top > 0 ? flags.top : 20;
   const threshold = flags.threshold >= 0 ? flags.threshold : 0.5;
-  const port = flags.port || 3000;
+  const { port } = resolveMemoriesServerPort(flags);
   const url = `http://localhost:${port}/api/v1/memories?action=search`;
 
   const body = { characterId, query, limit: top, minScore: threshold };
@@ -1102,7 +1127,11 @@ async function cmdStatus(flags) {
     // The parent's maintenance ledger (last run per phase, last demotion's
     // effectiveness) lives in the running server; ask it, briefly. Without a
     // server the job rows still say when maintenance last ran.
-    const ledger = await fetchMaintenanceLedger(flags.port || 3000);
+    let ledgerPort = 3000;
+    try {
+      ledgerPort = resolveMemoriesServerPort(flags, { quiet: true }).port;
+    } catch { /* openDb already validated the instance; fall back to the default */ }
+    const ledger = await fetchMaintenanceLedger(ledgerPort);
 
     const report = [];
     for (const holder of holderRows) {
@@ -1282,10 +1311,11 @@ function renderStatusBlock(holder, stats) {
 function renderMaintenance(m) {
   console.log(`  Maintenance:`);
   if (m.ledger) {
-    const phases = ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'];
-    for (const phase of phases) {
-      const run = m.ledger.lastRun && m.ledger.lastRun[phase];
-      console.log(`    ${(phase + ':').padEnd(22)}${run ? `${run.at} (${run.reason})` : 'never (this session)'}`);
+    // The phases are the server's; print the ones it reports a run for.
+    const runs = Object.entries(m.ledger.lastRun || {});
+    if (runs.length === 0) console.log('    no phase has run since the server started');
+    for (const [phase, run] of runs) {
+      console.log(`    ${(phase + ':').padEnd(22)}${run.at} (${run.reason})`);
     }
     const d = m.ledger.lastDemotion;
     if (d) {
@@ -1307,77 +1337,169 @@ function renderMaintenance(m) {
 // ---------- validate ----------
 
 async function cmdValidate(flags) {
+  let characterId = null;
+  let local;
   const { db, openMounts } = await openDb(flags);
   try {
-    let holderIds = null;
     let holderRows;
     if (flags.character && flags.character !== 'all') {
       const c = resolveCharacter(db, flags.character, openMounts);
       holderRows = [{ id: c.id, name: c.name }];
-      holderIds = [c.id];
+      characterId = c.id;
     } else {
+      // Every holder in the memories table — including one whose character
+      // row is gone — so the local scan covers the same rows the server's
+      // unscoped repair scans and scrubs (review of PR 98).
       holderRows = db.prepare(`
-        SELECT c.id, c.name FROM characters c
-        WHERE EXISTS (SELECT 1 FROM memories m WHERE m.characterId = c.id)
-        ORDER BY c.name
+        SELECT h.characterId AS id, COALESCE(c.name, '(missing character ' || substr(h.characterId, 1, 8) || ')') AS name
+          FROM (SELECT DISTINCT characterId FROM memories) h
+          LEFT JOIN characters c ON c.id = h.characterId
+         ORDER BY c.name IS NULL, c.name
       `).all();
     }
-
-    const includePairs = Boolean(flags.list);
-    let totalDangling = 0;
-    let totalEdges = 0;
-    let totalNodes = 0;
-    const perHolder = [];
-    for (const holder of holderRows) {
-      const stats = scanDanglingEdges(db, {
-        characterId: holder.id,
-        includePairs,
-      });
-      totalDangling += stats.danglingEdges;
-      totalEdges += stats.totalEdges;
-      totalNodes += stats.nodes;
-      perHolder.push({ holder, stats });
-    }
-
-    if (flags.json) {
-      renderJson({
-        scanned: holderIds ? 'single' : 'all',
-        characterIds: holderRows.map(h => h.id),
-        totals: {
-          nodes: totalNodes,
-          edges: totalEdges,
-          danglingEdges: totalDangling,
-        },
-        holders: perHolder.map(({ holder, stats }) => ({
-          holder: { id: holder.id, name: holder.name },
-          ...stats,
-        })),
-      });
-    } else {
-      const scope = holderIds ? `holder ${holderRows[0].name}` : `${holderRows.length} holders`;
-      const drift = totalEdges > 0 ? ((totalDangling / totalEdges) * 100).toFixed(2) : '0.00';
-      console.log(`Scanned ${scope}: ${totalNodes} memories, ${totalEdges} edges, ${totalDangling} dangling (${drift}%).`);
-      if (totalDangling === 0) {
-        console.log(colorize('Graph is clean.', GREEN));
-      } else if (flags.list) {
-        console.log('');
-        for (const { holder, stats } of perHolder) {
-          if (!stats.danglingPairs || stats.danglingPairs.length === 0) continue;
-          console.log(colorize(`${holder.name}  (${shortId(holder.id)})`, BOLD));
-          for (const pair of stats.danglingPairs) {
-            console.log(`  ${shortId(pair.sourceId)}  →  ${pair.targetIds.map(shortId).join(', ')}`);
-          }
-        }
-      } else {
-        console.log(colorize('Run with --list to see offending source memory IDs and dangling targets.', YELLOW));
-      }
-    }
-
-    if (totalDangling > 0) {
-      process.exitCode = 1;
-    }
+    local = scanForValidate(db, holderRows, Boolean(flags.list));
   } finally {
     db.close();
+  }
+
+  // --repair hands the fix (or its rehearsal) to the running server, which is
+  // the only database writer; --write is the explicit opt-in to the real thing.
+  let repair = null;
+  if (flags.repair) {
+    const body = { dryRun: !flags.write };
+    if (characterId) body.characterId = characterId;
+    const payload = await postMemoriesAction(flags, 'repair', body, {
+      why: 'The repair runs inside the server (it is the only database writer, and it queues the embedding jobs).',
+      announce: flags.json ? undefined : (url) => process.stderr.write(
+        `${body.dryRun ? 'Rehearsing' : 'Running'} graph repair via ${url}\n`
+      ),
+    });
+    repair = (payload && payload.report) || null;
+  }
+
+  if (flags.json) {
+    renderJson({
+      scanned: characterId ? 'single' : 'all',
+      characterIds: local.perHolder.map(({ holder }) => holder.id),
+      totals: local.totals,
+      holders: local.perHolder.map(({ holder, stats, digests }) => ({
+        holder: { id: holder.id, name: holder.name },
+        ...stats,
+        ...digests,
+      })),
+      ...(flags.repair ? { repair } : {}),
+    });
+  } else {
+    renderValidateText(local, characterId, flags);
+    if (flags.repair) renderRepairText(repair);
+  }
+
+  // Exit 1 while dangling links remain: always after a read-only validate or
+  // a rehearsal; after a --write repair only if the server reported nothing
+  // repaired (a missing embedding alone is a warning, never a failure).
+  const t = local.totals;
+  const dangling = t.danglingEdges + t.danglingConsolidatedFrom + t.danglingSupersededBy;
+  const repaired = Boolean(flags.repair && flags.write && repair && repair.repaired);
+  if (dangling > 0 && !repaired) {
+    process.exitCode = 1;
+  }
+}
+
+/** Run every read-only integrity scan over the holders. */
+function scanForValidate(db, holderRows, includePairs) {
+  const allIds = loadMemoryIds(db);
+  const columns = memoryColumns(db);
+  const totals = {
+    nodes: 0,
+    edges: 0,
+    danglingEdges: 0,
+    danglingConsolidatedFrom: 0,
+    digestsWithDanglingMembers: 0,
+    danglingSupersededBy: 0,
+    missingEmbeddings: 0,
+  };
+  const perHolder = [];
+  for (const holder of holderRows) {
+    const stats = scanDanglingEdges(db, { characterId: holder.id, includePairs, allIds });
+    const digests = scanDigestIntegrity(db, { characterId: holder.id, includePairs, allIds, columns });
+    totals.nodes += stats.nodes;
+    totals.edges += stats.totalEdges;
+    totals.danglingEdges += stats.danglingEdges;
+    totals.danglingConsolidatedFrom += digests.consolidatedFrom.links;
+    totals.digestsWithDanglingMembers += digests.consolidatedFrom.digests;
+    totals.danglingSupersededBy += digests.supersededBy;
+    totals.missingEmbeddings += digests.missingEmbeddings;
+    perHolder.push({ holder, stats, digests });
+  }
+  return { totals, perHolder };
+}
+
+function renderValidateText(local, characterId, flags) {
+  const { totals: t, perHolder } = local;
+  const scope = characterId ? `holder ${perHolder[0].holder.name}` : `${perHolder.length} holders`;
+  const drift = t.edges > 0 ? ((t.danglingEdges / t.edges) * 100).toFixed(2) : '0.00';
+  console.log(`Scanned ${scope}: ${t.nodes} memories, ${t.edges} edges, ${t.danglingEdges} dangling (${drift}%).`);
+  console.log(`Digests: ${t.danglingConsolidatedFrom} dangling consolidatedFrom member(s) across ` +
+    `${t.digestsWithDanglingMembers} digest(s); ${t.danglingSupersededBy} dangling supersededById.`);
+  if (t.missingEmbeddings > 0) {
+    console.log(colorize(`Warning: ${t.missingEmbeddings} memories have no embedding and cannot be recalled by meaning.`, YELLOW));
+  }
+
+  const dangling = t.danglingEdges + t.danglingConsolidatedFrom + t.danglingSupersededBy;
+  if (dangling === 0) {
+    console.log(colorize('Graph is clean.', GREEN));
+  } else if (flags.list) {
+    console.log('');
+    for (const { holder, stats, digests } of perHolder) {
+      const related = stats.danglingPairs || [];
+      const members = digests.consolidatedFromPairs || [];
+      const superseded = digests.supersededByPairs || [];
+      if (related.length + members.length + superseded.length === 0) continue;
+      console.log(colorize(`${holder.name}  (${shortId(holder.id)})`, BOLD));
+      for (const pair of related) {
+        console.log(`  related     ${shortId(pair.sourceId)}  →  ${pair.targetIds.map(shortId).join(', ')}`);
+      }
+      for (const pair of members) {
+        console.log(`  digest      ${shortId(pair.digestId)}  ⊃  ${pair.memberIds.map(shortId).join(', ')}`);
+      }
+      for (const pair of superseded) {
+        console.log(`  superseded  ${shortId(pair.memberId)}  →  ${shortId(pair.digestId)}`);
+      }
+    }
+  } else {
+    console.log(colorize('Run with --list to see the offending memory IDs and dangling targets.', YELLOW));
+  }
+  if ((dangling > 0 || t.missingEmbeddings > 0) && !flags.repair) {
+    console.log(colorize('Run with --repair to rehearse the fix on the running server (add --write to apply it).', YELLOW));
+  }
+}
+
+function renderRepairText(report) {
+  if (!report) {
+    console.log(colorize('The server returned no repair report.', YELLOW));
+    return;
+  }
+  const f = report.found || {};
+  const related = f.related || { links: 0, rows: 0 };
+  const cf = f.consolidatedFrom || { links: 0, digests: 0 };
+  console.log('');
+  console.log(colorize(`Server graph repair (${report.dryRun ? 'dry run' : 'applied'}${report.characterId ? '' : ', every memory'}):`, BOLD));
+  console.log(`  found: ${related.links} dangling related link(s) on ${related.rows} row(s); ` +
+    `${cf.links} dangling consolidatedFrom member(s) on ${cf.digests} digest(s); ` +
+    `${f.supersededBy || 0} dangling supersededById; ${f.missingEmbeddings || 0} row(s) without an embedding.`);
+  if (report.dryRun) {
+    const anything = related.links + cf.links + (f.supersededBy || 0) + (f.missingEmbeddings || 0);
+    console.log(anything > 0
+      ? colorize('  Nothing was changed. Add --write to scrub the links and queue the embedding jobs.', YELLOW)
+      : colorize('  Nothing to repair.', GREEN));
+    return;
+  }
+  const r = report.repaired || {};
+  console.log(`  repaired: ${r.relatedRowsTouched || 0} row(s) relinked, ${r.digestsTouched || 0} digest(s) touched, ` +
+    `${r.membersCut || 0} member(s) cut loose, ${r.charactersAffected || 0} character(s) affected; ` +
+    `${r.embeddingJobsQueued || 0} embedding job(s) queued.`);
+  if (r.embeddingSkippedReason) {
+    console.log(colorize(`  Embedding jobs not queued: ${r.embeddingSkippedReason} (set a default embedding profile, then run again).`, YELLOW));
   }
 }
 
@@ -1410,18 +1532,50 @@ Subcommands:
   tree     <id|prefix> [--depth N] [--max-nodes N] [--json]
                                              ASCII walk of the
                                              related-memory graph.
-  status   [--character <name|id>] [--json] [--port <n>]  Per-holder rollup, maintenance ledger + dangling-
-                                             edge check.
-  validate [--character <name|id>] [--list]  Read-only memory-graph health
-                                  [--json]   check. Exits 1 if any
-                                             dangling edges remain.
-  consolidate --character <name|id> [--dry-run] [--max N] [--threshold 0..1]
-                                  [--port N] Fold clusters of hot memories
-                                             into digests (cold originals).
-                                             Asks the running server: a dry
-                                             run prints the proposed digests
-                                             and writes nothing; otherwise a
-                                             background job is queued.
+  status   [--character <name|id>] [--json] [--port <n>]
+                                             Per-holder rollup, maintenance
+                                             ledger + dangling-edge check.
+  validate [--character <name|id>] [--list] [--json]
+                                             Read-only memory-graph health
+                                             check: dangling relatedMemoryIds,
+                                             consolidatedFrom members and
+                                             supersededById links, plus rows
+                                             with no embedding (a warning).
+                                             Exits 1 if any dangling link
+                                             remains.
+  validate --repair [--write] [--character <name|id>] [--port N]
+                                             Ask the running server to repair
+                                             the graph. Without --write it is
+                                             a dry run: it reports what would
+                                             be repaired and changes nothing.
+                                             With --write the server scrubs
+                                             the dangling links and queues
+                                             embedding jobs for unembedded
+                                             rows. The write runs inside the
+                                             server (the only database
+                                             writer, holder of the instance
+                                             lock), so the server must be up.
+  maintain --character <name|id|all> [--phases a,b,…] [--dry-run]
+           [--max N] [--threshold 0..1] [--cap N] [--port N] [--json]
+                                             Run memory maintenance by hand on
+                                             the running server. Phases, in
+                                             run order: fold-near-duplicates,
+                                             consolidate, demote, retire,
+                                             mirror (default: all; naming
+                                             consolidate brings mirror).
+                                             --dry-run prints what each phase
+                                             would do and writes nothing;
+                                             otherwise one background job per
+                                             character is queued. 'all' runs
+                                             every character (a dry run over
+                                             'all' must leave out consolidate).
+                                             --max caps clusters consolidated,
+                                             --threshold sets the cluster
+                                             cosine (neural embedding
+                                             profiles), --cap the hot-row cap
+                                             for demotion (100-100000).
+                                             To consolidate only:
+                                             maintain --phases consolidate.
 
 Shared filter flags:
   --character <name|id|all>   Holder. Default: all.
@@ -1448,6 +1602,10 @@ Global flags (may appear before or after the subcommand):
   -d, --data-dir <path>       Override data directory.
   --instance <name>           Use a registered instance.
   --passphrase <pass>         Decrypt .dbkey if peppered.
+  -p, --port <n>              Server port for the verbs that call the running
+                              server (default: the port in the instance's
+                              lock when --instance/--data-dir is given, else
+                              3000).
   --json                      Machine-readable output.
   -h, --help                  Show this help.
 
@@ -1455,8 +1613,9 @@ Note: -i is reserved here for 'grep --ignore-case'. Use the long --instance
 form to target a registered instance.
 
 All memories verbs are read-only. They open the main encrypted database
-(quilltap.db) and never write to it; 'consolidate' leaves the writing to the
-running server.
+(quilltap.db) and never write to it. 'maintain' and 'validate --repair' leave
+the writing to the running server; 'validate --repair' changes data only with
+--write.
 
 Examples:
   quilltap memories ls
@@ -1469,8 +1628,12 @@ Examples:
   quilltap memories status --character Ariadne
   quilltap memories validate
   quilltap memories validate --list
-  quilltap memories consolidate --instance Friday --character Friday --dry-run
-  quilltap memories consolidate --instance Friday --character Friday --max 100
+  quilltap memories validate --repair                 # rehearse the repair
+  quilltap memories validate --repair --write         # apply it
+  quilltap memories maintain --instance Friday --character Friday --dry-run
+  quilltap memories maintain --instance Friday --character Friday --phases consolidate --max 100
+  quilltap memories maintain --character all --phases demote,retire --dry-run
+  quilltap memories maintain --character all
 `);
 }
 
@@ -1501,6 +1664,12 @@ async function memoriesCommand(args) {
     printMemoriesHelp();
     return;
   }
+  if (flags.repair && verb !== 'validate') {
+    throw new Error('--repair applies only to memories validate.');
+  }
+  if (flags.write && !(verb === 'validate' && flags.repair)) {
+    throw new Error('--write applies only to memories validate --repair.');
+  }
   switch (verb) {
     case 'ls': await cmdLs(flags); break;
     case 'find': await cmdFind(flags, positional); break;
@@ -1509,7 +1678,7 @@ async function memoriesCommand(args) {
     case 'tree': await cmdTree(flags, positional); break;
     case 'status': await cmdStatus(flags); break;
     case 'validate': await cmdValidate(flags); break;
-    case 'consolidate': await cmdConsolidate(flags, resolveCharacterIdForServer); break;
+    case 'maintain': await cmdMaintain(flags, resolveCharacterIdForServer); break;
     default:
       console.error(`Unknown memories subcommand: ${verb}`);
       console.error("Run 'quilltap memories --help' for a list.");
@@ -1522,6 +1691,7 @@ module.exports = {
   // Exported for unit tests:
   parseFlags,
   resolveCharacterIdForServer,
+  renderRepairText,
   buildWhereClause,
   buildOrderBy,
   traverseMemoryGraph,

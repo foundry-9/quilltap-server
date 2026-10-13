@@ -4294,7 +4294,7 @@ them, even after a manual request has been merged into the same waiting job. `re
 `coldRetentionDays`.
 
 **Request Body**: `{ characterId?, phases?, dryRun?, settings? }`. `phases` is a non-empty list of
-the five names; `settings` is `{ consolidation?: Partial<MemoryConsolidationSettings>,
+the five names; naming `consolidate` brings `mirror` with it (`withImpliedPhases`). `settings` is `{ consolidation?: Partial<MemoryConsolidationSettings>,
 maxClustersPerRun?, cap? }` (`cap` an integer 100–100,000; otherwise the character's own).
 
 - `dryRun: true` runs **in-process**, writes nothing, and is bounded like the consolidate dry run
@@ -4312,7 +4312,34 @@ maxClustersPerRun?, cap? }` (`cap` an integer 100–100,000; otherwise the chara
   dryRun: false, jobId, jobIds }`.
 
 `404` for an unknown character; `400` for a malformed body or a user-wide dry run that would
-consolidate.
+consolidate. `settings.consolidation` is a patch: only the knobs sent override the stored ones (bug
+244). `clusterThreshold` there applies dry or real (a real run carries it in the job payload, bug
+223), whichever embedding provider is the default.
+
+The Phase F aliases `?action=housekeep` (GET and POST), `housekeep-sweep`, `consolidate` and
+`housekeeping-config` were removed in Phase G; each is now `400 Unknown action`. Their equivalents:
+`maintain` with `phases: ['demote', 'retire']` (with or without `characterId`), `maintain` with
+`phases: ['consolidate']`, and `maintenance-config`.
+
+#### `POST /api/v1/memories?action=repair`
+
+The memory graph repair behind `quilltap memories validate --repair` (`repairMemoryGraph`,
+`lib/memory/repair.ts`). Finds links that name a row which no longer exists — in
+`relatedMemoryIds`, digests' `consolidatedFrom`, and members' `supersededById` — and rows with no
+embedding. A live run scrubs the links with the retirement's own removal deltas
+(`scrubDanglingMemoryLinks`; a member whose digest is gone keeps its tier; a digest every one of
+whose members is gone is retired through `retireMemories`, invariant 8) and queues up to 2,000
+`EMBEDDING_GENERATE` jobs under the default embedding profile, in one batch (a row that already has
+a pending job is skipped and not counted). With `characterId`, only that holder's rows are written.
+A scan that fails is a `500`, never an empty report.
+
+**Request Body**: `{ characterId?, dryRun? }` (omitted `characterId`: every memory in the instance;
+`dryRun` defaults to false).
+
+**Response**: `200 OK` — `{ success, report: { dryRun, characterId, found: { related: { links, rows },
+consolidatedFrom: { links, digests }, supersededBy, missingEmbeddings }, repaired?: {
+relatedRowsTouched, digestsTouched, digestsRetired, membersCut, charactersAffected, embeddingJobsQueued,
+embeddingSkippedReason? } } }`. `404` for an unknown character, `400` for a malformed body.
 
 #### `GET /api/v1/memories?action=maintenance-status`
 
@@ -4321,44 +4348,6 @@ character the ledger knows). **Response**: `{ success, ledger: [{ characterId, l
 { at, reason } }, lastSummary, lastDemotion: { at, demoted, excess, effective } | null }] }`. The
 ledger lives in server memory and is seeded once per process from recent `MEMORY_MAINTENANCE` job
 rows.
-
-#### `GET /api/v1/memories?action=housekeep`
-
-Preview the `demote` and `retire` phases for one character (a dry run of `maintain`).
-
-**Query Parameters**:
-- `characterId` (required) - Character to preview
-- `maxMemories` - Cap on demotable memories, an integer 100–100,000 (default: the character's cap from the `memoryMaintenance` instance setting, `capFor(characterId)`)
-
-The old `maxAgeMonths` / `minImportance` knobs were dropped in 4.10 (age and inactivity live in
-the protection score).
-
-#### `POST /api/v1/memories?action=housekeep`
-
-The `demote` and `retire` phases on one character. With `dryRun: true` the plan is computed
-in-process and returned; otherwise a `MEMORY_MAINTENANCE` job with those two phases is enqueued
-(deduped per character like any other) and `{ success, dryRun: false, queued: true, jobId }`
-returned, so a live run never overlaps a maintenance job already working on the character.
-
-**Request Body**:
-
-```json
-{
-  "characterId": "char-uuid",
-  "maxMemories": 2000,
-  "dryRun": false
-}
-```
-
-**Response** (`GET`): `{ success, preview: { wouldDemote, wouldDelete, wouldKeep, totalBefore,
-totalAfter, coldCount, capUsed, details } }` — `capUsed` is the cap applied: `maxMemories` when
-given, else the character's configured cap.
-
-**Response** (`POST`, dry run): `{ success, dryRun: true, result: { demoted, deleted, kept,
-totalBefore, totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds,
-deletedIds, details } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
-MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,
-exactly the excess is demoted, lowest protection score first.
 
 #### `POST /api/v1/memories?action=embeddings`
 
@@ -4406,21 +4395,10 @@ crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`. Each row carries `a
 `anchorFreeBest` (best cosine) and `anchoredAction` / `anchorFreeAction` (admission's action kind);
 `crossedOnlyWithoutAnchors` counts rows that fold only anchor-free.
 
-#### `POST /api/v1/memories?action=housekeep-sweep`
-
-Enqueue the `demote` and `retire` phases for every character this user owns (`reason: 'manual'`)
-rather than running them inline. Takes no body. One `MEMORY_MAINTENANCE` job per character, each
-deduped per character against any in-flight maintenance job (watermark, scheduled or manual), so
-two runs never work on one character at once.
-
-**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" | null, "jobIds": ["job-uuid", …] }`
-(`jobId` is the first of `jobIds`, kept for older callers).
-
 #### `GET` / `POST /api/v1/memories?action=maintenance-config`
 
 Read and write the **instance-wide** memory maintenance settings (the `memoryMaintenance` instance
 setting). `POST` merges the fields you send over the stored ones; both return `{ success, settings }`.
-`?action=housekeeping-config` is the old name and still answers.
 
 **Settings**: `enabled` (default false), `perCharacterCap` (default 2000),
 `perCharacterCapOverrides` (`{ [characterId]: cap }`), `phases` (`{ foldNearDuplicates, demote,
@@ -4431,9 +4409,13 @@ integer 100–100,000 (`MemoryMaintenanceCapSchema`). The retired `mergeSimilar`
 #### `GET` / `POST /api/v1/memories?action=extraction-limits-config`
 
 Read and write the **instance-wide** memory-extraction rate limits. `POST` merges over the stored
-values; both return `{ success, settings }`.
+values; both return `{ success, settings }`. Shown on the Extraction Grain card since Phase G.
 
-**Settings**: `enabled`, `maxPerHour`, `softStartFraction`, `softFloor`.
+**Settings**: `enabled` (false), `maxPerHour` (integer 1–10,000, 20), `softStartFraction` (0–1, 0.7),
+`softFloor` (0–1, 0.7).
+
+Every `*-config` write validates through the façade's own schema as a patch (`patchSchemaOf`): an
+omitted field keeps its stored value (bug 244).
 
 #### `GET` / `POST /api/v1/memories?action=recall-config`
 
@@ -4443,27 +4425,6 @@ return `{ success, settings }`.
 **Settings**: `scopePolicy`, `expandRelated`, `perTurnConversationSummaries` (the Settings →
 Memory → Recall Relevance switch that re-runs the past-conversation search every turn, reusing the
 vector the turn's memory search already embedded).
-
-#### `POST /api/v1/memories?action=consolidate`
-
-The `consolidate` phase of `maintain` on its own: fold clusters of one character's hot memories
-into digest rows and send the originals cold (see
-`docs/developer/features/memory-consolidation-and-tiers.md`). Manual runs ignore the
-`memoryConsolidation.enabled` master switch.
-
-**Request Body**: `{ characterId, dryRun?, maxClustersPerRun?, clusterThreshold? }`. `characterId`
-is a UUID; `clusterThreshold` is 0–1 and overrides the stored threshold for this run, dry or real
-(a real run carries it in the job payload), whichever embedding provider is the default.
-
-- `dryRun: true` runs **in-process** (dry-run jobs only log, so the report is returned directly),
-  writes nothing, and is bounded: `maxClustersPerRun` defaults to 10 and is capped at 40, with a
-  120 s time budget. **Response**: `200 OK` — `{ success, dryRun: true, report }`, where `report` is a
-  `ConsolidationReport` (`clusters[]` with `bucket`, `memberIds`, `memberContents`, `digests`,
-  `keepStandalone`, `contradictions`, `status`; plus `stats`, `settings`, `skippedReason`).
-- otherwise a `MEMORY_MAINTENANCE` job with phases `consolidate` and `mirror` is enqueued (deduped
-  per character while in flight). **Response**: `200 OK` — `{ success, dryRun: false, jobId }`.
-
-`404` for an unknown character; `400` for a malformed body, or a dry run on an archived character.
 
 #### `GET` / `POST /api/v1/memories?action=consolidation-config`
 
@@ -4496,7 +4457,7 @@ sets the batch size.
 
 #### `GET /api/v1/memories?action=character-memory-counts`
 
-Every character owned by this user with its memory counts as the housekeeping cap sees them,
+Every character owned by this user with its memory counts as the maintenance cap sees them,
 sorted by `demotable` descending so the characters nearest their cap surface first. Returns
 `{ success, characters: [{ id, name, memoryCount, hotTotal, demotable, protected, cold }] }`.
 `demotable` is hot AUTO rows — the only number the cap is measured against; `protected` is hot

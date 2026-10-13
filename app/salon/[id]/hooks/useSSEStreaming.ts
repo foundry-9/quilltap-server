@@ -753,7 +753,11 @@ export function useSSEStreaming({
       // Handle turn start (chained character about to respond)
       // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
       if (data.turnStart) {
-        inChain = true
+        // Only a chained turn (depth > 0) enters a chain. The server also
+        // sends a depth-0 turnStart before every first turn so the bubble
+        // shows the right responder; that one must leave the turn's `done`
+        // on the ordinary end-of-turn path (bug 242).
+        if ((data.chainDepth || 0) > 0) inChain = true
         turnClosed = false
         fullContent = ''
         hasStartedStreaming = false

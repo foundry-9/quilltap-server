@@ -5,7 +5,7 @@
  * This service folds clusters of a character's hot memories about one subject
  * into **digest** rows (`source: 'CONSOLIDATED'`) and sends the members to the
  * cold tier, superseded by the digest that replaced them
- * (docs/developer/features/memory-consolidation-and-tiers.md §4).
+ * (docs/developer/features/complete/memory-consolidation-and-tiers.md §4).
  *
  * This module is the planner and the model route; the maintenance job's
  * `consolidate` phase (`maintenance/consolidate.ts`) feeds it and announces

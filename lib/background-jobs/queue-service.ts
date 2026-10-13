@@ -1117,6 +1117,62 @@ export async function enqueueEmbeddingGenerate(
 }
 
 /**
+ * Enqueue `EMBEDDING_GENERATE` jobs for many entities at once: one read of the
+ * active embedding jobs, one batch insert. An entity that already has a
+ * PENDING or PROCESSING job is skipped, as `enqueueEmbeddingGenerate` skips it
+ * one at a time. Returns the ids of the jobs created (skipped entities add
+ * none), so its length is the number actually queued.
+ */
+export async function enqueueEmbeddingGenerateMany(
+  userId: string,
+  payloads: readonly EmbeddingGeneratePayload[],
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  if (payloads.length === 0) return [];
+  const repos = getRepositories();
+  const active = await repos.backgroundJobs.findActiveByType('EMBEDDING_GENERATE');
+  const busy = new Set(
+    active.map((job) => (job.payload as { entityId?: unknown } | null)?.entityId).filter((id): id is string => typeof id === 'string')
+  );
+  const seen = new Set<string>();
+  const fresh = payloads.filter((p) => {
+    if (busy.has(p.entityId) || seen.has(p.entityId)) return false;
+    seen.add(p.entityId);
+    return true;
+  });
+  if (fresh.length === 0) {
+    logger.debug('Embedding batch: every entity already has a job', { requested: payloads.length });
+    return [];
+  }
+  const now = new Date().toISOString();
+  const jobIds = await repos.backgroundJobs.createBatch(
+    fresh.map((payload) => ({
+      userId,
+      type: 'EMBEDDING_GENERATE' as const,
+      status: 'PENDING' as const,
+      payload: payload as unknown as Record<string, unknown>,
+      priority: options?.priority ?? EMBEDDING_ENTITY_PRIORITIES[payload.entityType] ?? 0,
+      attempts: 0,
+      maxAttempts: options?.maxAttempts ?? 3,
+      lastError: null,
+      scheduledAt: options?.scheduledAt?.toISOString() ?? now,
+      startedAt: null,
+      completedAt: null,
+    }))
+  );
+  logger.info('Embedding generate batch enqueued', {
+    requested: payloads.length,
+    queued: jobIds.length,
+    alreadyQueued: payloads.length - fresh.length,
+  });
+  if (jobIds.length > 0) {
+    publishRealtime('jobs');
+    ensureProcessorRunning();
+  }
+  return jobIds;
+}
+
+/**
  * Enqueue an embedding refit job (TF-IDF vocabulary rebuild)
  */
 export async function enqueueEmbeddingRefit(

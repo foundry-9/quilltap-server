@@ -1,12 +1,13 @@
 /**
  * /api/v1/memories — consolidation surfaces:
- *  - POST ?action=consolidate (dry run runs in-process and returns the report;
- *    a real run enqueues a job; input is validated; the dry run is bounded)
+ *  - POST ?action=maintain naming consolidate (dry run runs in-process and is
+ *    bounded; a real run enqueues a job with the mirror; input is validated)
  *  - GET/POST ?action=consolidation-config and ?action=extraction-mode-config
  *  - GET list honours ?tier= and ?source=CONSOLIDATED
  *  - a real consolidate carries clusterThreshold into the job (bug 223)
+ *  - a one-field settings write leaves the other fields alone (bug 244)
  *  - GET ?action=character-memory-counts reports the cap breakdown (bug 210)
- *  - POST ?action=housekeep-sweep fans out per character (bug 221)
+ *  - POST ?action=repair scans, and scrubs only on a live run
  *  - POST ?action=maintain (dry run in-process; real runs enqueue per character)
  *  - GET ?action=maintenance-status reads the parent's ledger
  *
@@ -44,6 +45,12 @@ jest.mock('@/lib/memory/maintenance', () => ({
   runMaintenance: (...args: unknown[]) => mockRunMaintenance(...args),
   getMaintenanceLedgerStatus: (...args: unknown[]) => mockLedger(...args),
   MAINTENANCE_PHASES: ['fold-near-duplicates', 'consolidate', 'demote', 'retire', 'mirror'],
+  withImpliedPhases: jest.requireActual('@/lib/memory/maintenance/types').withImpliedPhases,
+}))
+
+const mockRepair = jest.fn()
+jest.mock('@/lib/memory/repair', () => ({
+  repairMemoryGraph: (...args: unknown[]) => mockRepair(...args),
 }))
 
 const mockEnqueue = jest.fn()
@@ -72,6 +79,7 @@ jest.mock('@/lib/instance-settings', () => ({
 
 jest.mock('@/lib/memory/recall/search', () => ({}))
 jest.mock('@/lib/memory/index-store/backfill', () => ({}))
+jest.mock('@/lib/memory/retire', () => ({}))
 jest.mock('@/lib/memory/anchor-gate-probe', () => ({}))
 jest.mock('@/lib/embedding/embedding-job-scheduler', () => ({}))
 jest.mock('@/lib/embedding/embedding-service', () => ({}))
@@ -106,43 +114,38 @@ beforeEach(() => {
   }
 })
 
-describe('POST ?action=consolidate', () => {
+describe('POST ?action=maintain, the consolidate phase', () => {
   it('dry run runs in-process with a bounded cluster count and returns the report', async () => {
-    mockAction = 'consolidate'
+    mockAction = 'maintain'
     mockRunMaintenance.mockResolvedValue({ consolidation: { clusters: [], dryRun: true } })
-    const res: any = await POST(req({ characterId: CHAR_ID, dryRun: true, clusterThreshold: 0.8 }))
-    expect(res.body).toEqual({ success: true, dryRun: true, report: { clusters: [], dryRun: true } })
+    const res: any = await POST(
+      req({ characterId: CHAR_ID, dryRun: true, phases: ['consolidate'], settings: { consolidation: { clusterThreshold: 0.8 } } }),
+    )
+    expect(res.body).toEqual({ success: true, dryRun: true, report: { consolidation: { clusters: [], dryRun: true } } })
     expect(mockEnqueue).not.toHaveBeenCalled()
     const [request, ctx] = mockRunMaintenance.mock.calls[0]
     expect(request).toEqual({
       characterId: CHAR_ID,
       reason: 'manual',
       dryRun: true,
-      phases: ['consolidate'],
+      phases: ['consolidate', 'mirror'],
       settings: { maxClustersPerRun: 10, consolidation: { clusterThreshold: 0.8 } },
     })
     expect(ctx).toEqual({ userId: 'user-1', timeBudgetMs: 120000 })
   })
 
   it('caps a dry run at 40 clusters', async () => {
-    mockAction = 'consolidate'
+    mockAction = 'maintain'
     mockRunMaintenance.mockResolvedValue({ consolidation: { clusters: [] } })
-    await POST(req({ characterId: CHAR_ID, dryRun: true, maxClustersPerRun: 500 }))
+    await POST(req({ characterId: CHAR_ID, dryRun: true, phases: ['consolidate'], settings: { maxClustersPerRun: 500 } }))
     expect(mockRunMaintenance.mock.calls[0][0].settings.maxClustersPerRun).toBe(40)
   })
 
-  it('a dry run that never reached the phase (archived character) is a 400, not a null report', async () => {
-    mockAction = 'consolidate'
-    mockRunMaintenance.mockResolvedValue({ skippedReason: 'archived' })
-    const res: any = await POST(req({ characterId: CHAR_ID, dryRun: true }))
-    expect(res.status).toBe(400)
-  })
-
-  it('a real run enqueues a job and returns its id', async () => {
-    mockAction = 'consolidate'
+  it('a real run enqueues a job with the mirror and returns its id', async () => {
+    mockAction = 'maintain'
     mockEnqueue.mockResolvedValue('job-9')
-    const res: any = await POST(req({ characterId: CHAR_ID, maxClustersPerRun: 100 }))
-    expect(res.body).toEqual({ success: true, dryRun: false, jobId: 'job-9' })
+    const res: any = await POST(req({ characterId: CHAR_ID, phases: ['consolidate'], settings: { maxClustersPerRun: 100 } }))
+    expect(res.body).toEqual({ success: true, dryRun: false, jobId: 'job-9', jobIds: ['job-9'] })
     expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
       characterId: CHAR_ID,
       reason: 'manual',
@@ -152,10 +155,11 @@ describe('POST ?action=consolidate', () => {
     expect(mockRunMaintenance).not.toHaveBeenCalled()
   })
 
-  it('bug 223: a real run carries the requested clusterThreshold into the job', async () => {
-    mockAction = 'consolidate'
+  it('bug 223: a real run carries the requested clusterThreshold, and only it, into the job', async () => {
+    mockAction = 'maintain'
     mockEnqueue.mockResolvedValue('job-10')
-    await POST(req({ characterId: CHAR_ID, clusterThreshold: 0.65 }))
+    await POST(req({ characterId: CHAR_ID, phases: ['consolidate'], settings: { consolidation: { clusterThreshold: 0.65 } } }))
+    // Bug 244: no other consolidation knob rides along at its default.
     expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
       characterId: CHAR_ID,
       reason: 'manual',
@@ -165,19 +169,27 @@ describe('POST ?action=consolidate', () => {
   })
 
   it('rejects a malformed body', async () => {
-    mockAction = 'consolidate'
+    mockAction = 'maintain'
     const res: any = await POST(req({ characterId: 'not-a-uuid' }))
     expect(res.status).toBe(400)
-    const res2: any = await POST(req({ characterId: CHAR_ID, clusterThreshold: 3 }))
+    const res2: any = await POST(req({ characterId: CHAR_ID, settings: { consolidation: { clusterThreshold: 3 } } }))
     expect(res2.status).toBe(400)
     expect(mockEnqueue).not.toHaveBeenCalled()
     expect(mockRunMaintenance).not.toHaveBeenCalled()
   })
 
   it('404s an unknown character', async () => {
-    mockAction = 'consolidate'
+    mockAction = 'maintain'
     const res: any = await POST(req({ characterId: '22222222-2222-4222-8222-222222222222' }))
     expect(res.status).toBe(404)
+  })
+
+  it('the retired alias actions are gone', async () => {
+    for (const action of ['consolidate', 'housekeep', 'housekeep-sweep', 'housekeeping-config']) {
+      mockAction = action
+      const res: any = await POST(req({ characterId: CHAR_ID }))
+      expect(res.status).toBe(400)
+    }
   })
 })
 
@@ -191,6 +203,18 @@ describe('consolidation / extraction-mode settings round-trip', () => {
     // null clears a nullable field
     await POST(req({ coldRetentionDays: null }))
     expect(storedConsolidation.coldRetentionDays).toBeNull()
+  })
+
+  it('bug 244: a one-field write leaves every other stored field alone', async () => {
+    mockAction = 'consolidation-config'
+    storedConsolidation = { ...storedConsolidation, enabled: true, connectionProfileId: 'profile-1', coldRetentionDays: 90 }
+    await POST(req({ watermark: 200 }))
+    expect(storedConsolidation).toMatchObject({ enabled: true, connectionProfileId: 'profile-1', coldRetentionDays: 90, watermark: 200 })
+
+    mockAction = 'extraction-mode-config'
+    storedMode = { otherPass: 'fold', perTurnOtherFloor: 0.5, foldCandidatesPerSubject: 7 }
+    await POST(req({ perTurnOtherFloor: 0.6 }))
+    expect(storedMode).toEqual({ otherPass: 'fold', perTurnOtherFloor: 0.6, foldCandidatesPerSubject: 7 })
   })
 
   it('rejects out-of-range consolidation values', async () => {
@@ -248,67 +272,6 @@ describe('GET ?action=character-memory-counts (bug 210)', () => {
   })
 })
 
-describe('POST ?action=housekeep-sweep (bug 221)', () => {
-  it('fans out one job per character and returns every id', async () => {
-    mockAction = 'housekeep-sweep'
-    mockSweep.mockResolvedValue(['job-a', 'job-b'])
-    const res: any = await POST(req({}))
-    const body = res.body ?? (await res.json())
-    expect(mockSweep).toHaveBeenCalledWith('user-1', { reason: 'manual', phases: ['demote', 'retire'] })
-    expect(body).toEqual({ success: true, jobId: 'job-a', jobIds: ['job-a', 'job-b'] })
-  })
-})
-
-describe('POST ?action=housekeep (the demote and retire phases)', () => {
-  it('runs demote + retire in-process at the requested cap and reports in the old shape', async () => {
-    mockAction = 'housekeep'
-    mockCtx.repos.memories.countCapBreakdown = jest.fn(async () => ({ hotTotal: 7, demotable: 5, protected: 2, cold: 4 }))
-    mockRunMaintenance.mockResolvedValue({
-      demote: { cap: 3, hotTotal: 7, demotable: 5, protected: 2, excess: 2, demoted: 2, demotedIds: ['x', 'y'], highestScoreDemoted: 0.2 },
-      retire: { retentionDays: 30, retired: 1, retiredIds: ['z'] },
-    })
-    const res: any = await POST(req({ characterId: CHAR_ID, maxMemories: 100, dryRun: true, maxAgeMonths: 6 }))
-    const body = res.body ?? (await res.json())
-    expect(mockRunMaintenance.mock.calls[0][0]).toEqual({
-      characterId: CHAR_ID,
-      reason: 'manual',
-      dryRun: true,
-      phases: ['demote', 'retire'],
-      settings: { cap: 100 },
-    })
-    expect(body.result).toMatchObject({
-      demoted: 2,
-      deleted: 1,
-      kept: 5,
-      hotTotal: 7,
-      demotable: 5,
-      protected: 2,
-      capUsed: 3,
-      coldCount: 4,
-      demotedIds: ['x', 'y'],
-      deletedIds: ['z'],
-    })
-    expect(body.result.details).toHaveLength(3)
-  })
-})
-
-describe('POST ?action=housekeep, live', () => {
-  it('enqueues a maintenance job instead of writing in-process (bug 221)', async () => {
-    mockAction = 'housekeep'
-    mockEnqueue.mockResolvedValue('job-hk')
-    const res: any = await POST(req({ characterId: CHAR_ID, maxMemories: 500 }))
-    const body = res.body ?? (await res.json())
-    expect(mockRunMaintenance).not.toHaveBeenCalled()
-    expect(mockEnqueue).toHaveBeenCalledWith('user-1', {
-      characterId: CHAR_ID,
-      reason: 'manual',
-      phases: ['demote', 'retire'],
-      settings: { cap: 500 },
-    })
-    expect(body).toEqual({ success: true, dryRun: false, queued: true, jobId: 'job-hk' })
-  })
-})
-
 describe('POST ?action=maintain', () => {
   it('a dry run for one character runs in-process and returns the report', async () => {
     mockAction = 'maintain'
@@ -337,7 +300,7 @@ describe('POST ?action=maintain', () => {
     mockEnqueue.mockResolvedValue('job-1')
     const one: any = await POST(req({ characterId: CHAR_ID, phases: ['consolidate'] }))
     expect((one.body ?? (await one.json())).jobIds).toEqual(['job-1'])
-    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: CHAR_ID, reason: 'manual', phases: ['consolidate'] })
+    expect(mockEnqueue).toHaveBeenCalledWith('user-1', { characterId: CHAR_ID, reason: 'manual', phases: ['consolidate', 'mirror'] })
 
     mockSweep.mockResolvedValue(['j-a', 'j-b'])
     const all: any = await POST(req({}))
@@ -360,5 +323,25 @@ describe('GET ?action=maintenance-status', () => {
     const body = res.body ?? (await res.json())
     expect(mockLedger).toHaveBeenCalledWith(CHAR_ID)
     expect(body).toEqual({ success: true, ledger: [{ characterId: CHAR_ID, lastRun: {} }] })
+  })
+})
+
+describe('POST ?action=repair', () => {
+  it('passes the scope and dry-run flag through, defaulting to a live run', async () => {
+    mockAction = 'repair'
+    mockRepair.mockResolvedValue({ dryRun: true, found: {} })
+    const dry: any = await POST(req({ characterId: CHAR_ID, dryRun: true }))
+    expect(dry.body).toEqual({ success: true, report: { dryRun: true, found: {} } })
+    expect(mockRepair).toHaveBeenLastCalledWith({ userId: 'user-1', characterId: CHAR_ID, dryRun: true })
+
+    await POST(req({}))
+    expect(mockRepair).toHaveBeenLastCalledWith({ userId: 'user-1', characterId: undefined, dryRun: false })
+  })
+
+  it('404s an unknown character and 400s a malformed body', async () => {
+    mockAction = 'repair'
+    expect((await POST(req({ characterId: '22222222-2222-4222-8222-222222222222' })) as any).status).toBe(404)
+    expect((await POST(req({ dryRun: 'yes' })) as any).status).toBe(400)
+    expect(mockRepair).not.toHaveBeenCalled()
   })
 })

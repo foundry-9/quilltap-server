@@ -1,5 +1,7 @@
 # Memory Recall and Housekeeping Fixes — The Small Repairs
 
+> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (the F7 before/after replay) is carried by the refactor's replay harness and probe fixture (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
+
 **Status:** Implemented 2026-10-08 (F1–F9). F2 is decided: no gate change (see
 [F2 result](#f2-result-2026-10-08)). One item still waits on live data: the F7 before/after replay
 on Friday probes. See [Implementation notes](#implementation-notes).
@@ -249,7 +251,7 @@ What shipped, and where it differs from or sharpens the text above.
 - **Atomic reinforcement increments (done later, as bug 182).** F1 (like the existing REINFORCE
   path) originally wrote an absolute count computed from the gate's snapshot, so two extraction
   jobs absorbing the same row at the same moment could lose one observation. Filed and fixed
-  (2026-10-08) as [bug 182](../bugs/fixed/bug-182-reinforcement-count-race.md): both paths now
+  (2026-10-08) as [bug 182](../../bugs/fixed/bug-182-reinforcement-count-race.md): both paths now
   count through `MemoriesRepository.incrementReinforcement`.
 
 ## F2 result (2026-10-08)
@@ -291,7 +293,7 @@ carry an anchor line; 309 embeddings).
 - Anything needing a schema change (tiers, digests, extraction watermarks) — see
   the companion spec.
 - Retuning `RECALL_MULTIPLIERS` — do it with the replay harness after F4–F7. Now specified in
-  [recall-multiplier-retuning.md](./recall-multiplier-retuning.md), from the F7 replays.
+  [recall-multiplier-retuning.md](../recall-multiplier-retuning.md), from the F7 replays.
 
 ## Chores
 

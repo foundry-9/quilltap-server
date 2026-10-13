@@ -206,8 +206,9 @@ export const queryKeys = {
         : (['custom-tools', 'file', 'new'] as const),
   },
   /**
-   * The Commonplace Book's housekeeping reads (`/api/v1/memories?action=…`):
-   * fan-out job status plus the two config documents the settings cards edit.
+   * The Commonplace Book's settings-tab reads (`/api/v1/memories?action=…`):
+   * fan-out job status, the config documents the cards edit, and the
+   * maintenance ledger.
    */
   memories: {
     all: ['memories'] as const,
@@ -217,6 +218,9 @@ export const queryKeys = {
     consolidationConfig: ['memories', 'consolidation-config'] as const,
     extractionModeConfig: ['memories', 'extraction-mode-config'] as const,
     maintenanceConfig: ['memories', 'maintenance-config'] as const,
+    extractionLimitsConfig: ['memories', 'extraction-limits-config'] as const,
+    /** The maintenance ledger (parent memory); the `memories` topic refreshes it after a run. */
+    maintenanceStatus: ['memories', 'maintenance-status'] as const,
     characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
     /** The per-chat row count the Salon sidebar renders beside its delete control. */
     chatCount: (chatId: string) => ['memories', 'chat-count', chatId] as const,

@@ -14,7 +14,7 @@
  *
  * `ADD COLUMN ... DEFAULT 'hot'` stamps every existing row hot, so there is no
  * backfill loop. Design of record:
- * docs/developer/features/memory-consolidation-and-tiers.md.
+ * docs/developer/features/complete/memory-consolidation-and-tiers.md.
  *
  * Migration ID: add-memory-tiers-v1
  */

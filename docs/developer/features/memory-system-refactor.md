@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7). **Phase F done 2026-10-13** (see the Phase F amendment in §7); Phase G not started. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). **Phase A done 2026-10-12** (see the Phase A amendment in §7 for where it departs from §3). **Phase B done 2026-10-13** (see the Phase B amendment in §7). **Phase C done 2026-10-13** (see the Phase C amendment in §7). **Phase D done 2026-10-13** (see the Phase D amendment in §7). **Phase E done 2026-10-13** (see the Phase E amendment in §7). **Phase F done 2026-10-13** (see the Phase F amendment in §7). **Phase G done 2026-10-13** (see the Phase G amendment in §7) — all seven phases landed; the one item left is the Friday backfill (E2), which must be run by Charlie against the live instance with the Maintenance card's dry run. **Bugs 203–226 fixed 2026-10-12 as targeted fixes on the current code**, ahead of their phases; the phases remain the structural work. Already landed and to be carried, not redone: the `reinforcedImportance` formula and its recompute migration (decision 6), the instance calendar in `lib/memory/memory-calendar.ts` (decision 10), `memories.supersededAt` (Phase B), the cap on demotable rows (decision 3), no access stamp on GET and no `skipGate` on the API (decisions 7, 13), and a chat episode watermark column (`episodeExtractionWatermarkMessageId`) that Phase D's cursor table should absorb.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -9,10 +9,10 @@ half of `lib/chat/context-manager.ts`, `lib/embedding/vector-store.ts`, `lib/too
 Memories API, the Memory settings tab, and the `quilltap memories` / `recall-replay` /
 `memory-diff` / `anchor-probe` CLI commands.
 **Supersedes, once built:** the open items in
-[memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md) (E2/E3),
-[memory-recall-and-housekeeping-fixes.md](./memory-recall-and-housekeeping-fixes.md) (F7 replay),
-[commonplace-relevance-fix.md](./commonplace-relevance-fix.md) (F3c, tuning harness) and
-[episodic-recall-overhaul.md](./episodic-recall-overhaul.md) (§3 step 2). Those four move to
+[memory-consolidation-and-tiers.md](./complete/memory-consolidation-and-tiers.md) (E2/E3),
+[memory-recall-and-housekeeping-fixes.md](./complete/memory-recall-and-housekeeping-fixes.md) (F7 replay),
+[commonplace-relevance-fix.md](./complete/commonplace-relevance-fix.md) (F3c, tuning harness) and
+[episodic-recall-overhaul.md](./complete/episodic-recall-overhaul.md) (§3 step 2). Those four move to
 `complete/` at the end of Phase G with a one-line pointer here.
 
 This is a handoff spec in the manner of
@@ -759,6 +759,8 @@ comment at `memory-service.ts:874` intends; read it and pick). Tests for each.
 
 ### Phase G — surfaces, docs, retirement of the old specs
 
+**Done 2026-10-13** (see the Phase G amendment in §7). The Friday backfill below is still owed.
+
 - API, settings tab, CLI and help per §3.11. DDL.md and `qtap-export.schema.json` final pass.
   CLAUDE.md: rewrite the memory-deletion chokepoint line; add chokepoint lines for
   `admitCandidate` / `foldInto`, `memoryIndex`, `MemoryClock`, `salience` / `protection`,
@@ -1185,6 +1187,70 @@ departures:
   `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN=1` (honoured outside production only), and the dispatcher suite pins that a failed batch
   writes no mirror and records nothing in the ledger. Friday's first run should still be a dry run
   reviewed by Charlie (§8).
+
+**Amendment (2026-10-13, Phase G).** Phase G landed as §3.11 describes, with these departures:
+
+- **The aliases are gone, not kept.** `?action=housekeep` (GET and POST), `housekeep-sweep`,
+  `consolidate` and `housekeeping-config` are removed (now `400 Unknown action`); their callers —
+  the three retired cards, the character page's dialog and the CLI — moved to `maintain` and
+  `maintenance-config` in the same phase. `maintain` brings `mirror` along whenever `consolidate` is
+  named (`withImpliedPhases`, `maintenance/types.ts`), as the `consolidate` alias did.
+  `extraction-concurrency` was already gone.
+- **`validate --repair` runs in the server**, as `POST ?action=repair` (`repairMemoryGraph`,
+  `lib/memory/repair.ts`), because the scrub must go through the retirement's removal deltas and
+  `memoryIndex.setTier` in the process that owns the index. `findDanglingLinks` (repository) is one
+  `NOT EXISTS` scan per link column; `scrubDanglingMemoryLinks` (`retire.ts`) removes what it
+  finds — a member whose digest is gone keeps its tier and loses its `supersededById`, rather than
+  §3.10's "cold", since a hot row with a dead digest pointer was never demoted. Rows without
+  embeddings are queued through `enqueueMissingEmbeddings` (`index-store/backfill.ts`, now shared
+  with `?action=backfill-embeddings`), at most 2,000 per call. The CLI asks for a dry run unless
+  `--write` is given (the repo's rule for CLI writes), as `characters archive` does.
+  Review of PR 98: the scrub writes only the rows the scan named (per-row `removeRelatedMemoryIds`,
+  so a repair scoped to one holder touches that holder alone and announces exactly the holders it
+  wrote); a digest every one of whose members is gone is retired through `retireMemories`
+  (`reason: 'graph-repair'`) rather than left empty; `findDanglingLinks` has no fallback, so a
+  failed scan is a 500; the embedding jobs are queued in one batch (`enqueueEmbeddingGenerateMany`:
+  one read of the active jobs, one insert; `findIdsWithoutEmbedding` selects two columns); and the
+  CLI's unscoped scan covers every holder in `memories`, orphans included, as the server's does.
+- **Bug 244 was found here and fixed in the phase.** Moving the `*-config` actions onto the
+  façade's schemas showed that Zod 4's `.partial()` re-applies every default, so every one-field
+  settings write (the Consolidation card saved one field per change) reset the others.
+  `patchSchemaOf` (`lib/schemas/patch-schema.ts`) is now the only way a partial write is
+  validated; the CLAUDE.md line says so.
+- **The Maintenance card** (`memory-maintenance-card.tsx`) also absorbed the consolidation
+  particulars and the archive retention (stored in `memoryConsolidation`, shown beside the
+  `retire` switch it governs). "Run now" is one dialog (`components/memory/maintenance-dialog.tsx`)
+  shared with the character page, so there is no separate per-character Maintenance dialog
+  component; the dry-run report view (`maintenance-report.tsx`) absorbed the old consolidation
+  report dialog. The ledger reads `?action=maintenance-status` under the `memories` query
+  namespace, so the existing realtime topic refreshes it — no polling. `memory-list.tsx` has no
+  over-cap figure of its own; the cap comparison on demotable rows lives in the card's overrides
+  list, the dialog's picker and the report's demote section.
+- **Settings stored values.** `MemoryExtractionLimitsSchema.maxPerHour` gained the API's old
+  10,000 upper bound, so the façade is the only bound.
+- **The CLI** also resolves the server port from `--instance` for every memory verb that calls the
+  server. After review it keeps no copy of the server's phase list or bounds: `maintain` sends what
+  was typed and prints the server's 400. `--threshold` sets `clusterThreshold` only, which the
+  Built-in TF-IDF profile does not read; the help says so.
+- **Specs.** The four superseded specs moved to `complete/` with a pointer here; this spec stays in
+  `features/` until the Friday backfill is recorded below. `memory_management.md` §9 was rewritten;
+  its other sections are kept as April history.
+- **DDL.md / export schema final pass:** Phase G changed no schema. The passes confirmed
+  `memory_extraction_cursors`, `supersededAt`, the retired `vector_entries` and the dropped
+  `chat_settings` columns are documented, and the cursors ride exports under their old chat field
+  names.
+- **Not run in this environment:** the V4test walkthrough of the card, dialog and CLI against a
+  live server, and the Friday backfill. Both need a real instance; the surfaces are covered by
+  `memory-maintenance-card.test.tsx`, `maintenance-dialog.test.tsx`,
+  `memories-consolidation-actions.test.ts`, `memory-graph-repair.test.ts` and the CLI's
+  `memories-maintain-command.test.js`.
+
+### Friday backfill (E2) — owed
+
+To be run by Charlie after Phase G merges, on a backup of Friday: on the Commonplace Book tab,
+**Maintenance → Run maintenance…**, choose Friday, untick nothing, **Dry run**; review the fold sets,
+the proposed digests and the demote count; then lower Friday's cap override toward 2,000–2,500
+(decision 3) and **Run for real**. Record the dry run's figures and the outcome here.
 
 ## 8. Risks
 

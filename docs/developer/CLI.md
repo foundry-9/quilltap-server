@@ -56,6 +56,33 @@ Modules: `lib/mount-index/sync/{index,walk-store,walk-disk,manifest,planner,appl
 CLI `packages/quilltap/lib/{sync-command,sync-report}.js`. The planner is pure and table-tested;
 `sync-report.js` is pure and unit-tested.
 
+## Memories: maintenance and repair are server-side too
+
+`quilltap memories` opens the main database read-only for every verb. The two that change data —
+`maintain` and `validate --repair --write` — are thin clients of the running server, for the same
+reason as sync: the work runs through chokepoints that live in TypeScript (`admitCandidate`,
+`retireMemories`, `memoryIndex`, the maintenance job), and the server is the only database writer.
+
+- `maintain` → `POST /api/v1/memories?action=maintain` (`{ characterId?, phases?, dryRun?,
+  settings? }`). `--character all` omits `characterId`; `--phases` is sent as typed (trimmed,
+  de-duplicated); `--max` → `settings.maxClustersPerRun`, `--threshold` →
+  `settings.consolidation.clusterThreshold`, `--cap` → `settings.cap`. The CLI keeps no copy of the
+  server's phase list or bounds (review of PR 98): an unknown phase, an out-of-range cap and a
+  user-wide dry run that would consolidate are the server's 400, printed with its details. `memories
+  status` prints the ledger's phases as the server reports them. The old
+  `consolidate` verb is gone (no alias): it is `maintain --phases consolidate`.
+- `validate` scans locally (`graph-integrity.js`: dangling `relatedMemoryIds`, dangling
+  `consolidatedFrom` members, dangling `supersededById`, rows with `embedding IS NULL`; the columns
+  are probed with `PRAGMA table_info` so a pre-tier instance still validates). `--repair` posts
+  `?action=repair` (`lib/memory/repair.ts`) with `dryRun: true` unless `--write` is given — the
+  CLI's `--write` opt-in, as for `db characters archive`, with the lock held by the server.
+- The port comes from `resolveServerPort` (`lock-helpers.js`): `--port`, else the port recorded in
+  the `--instance`/`--data-dir` lock, else 3000. `memories-server.js` is the one POST helper.
+
+Modules: `packages/quilltap/lib/{memories-commands,memories-maintain-command,memories-server,graph-integrity}.js`.
+Rendering, phase parsing and the body builder are unit-tested in
+`__tests__/memories-maintain-command.test.js`.
+
 ## Shell-completion internals
 
 User-facing install instructions are in the package README. What follows is for whoever edits the
