@@ -242,7 +242,7 @@ export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
 /**
  * Controls for the consolidation job, which folds clusters of hot memories
  * into digest rows and sends the members cold (see
- * docs/developer/features/memory-consolidation-and-tiers.md, §4).
+ * docs/developer/features/complete/memory-consolidation-and-tiers.md, §4).
  *
  * Stored instance-wide in `instance_settings['memoryConsolidation']` (same
  * class as `memoryRecall`), so adding it needs no migration. Accessors:

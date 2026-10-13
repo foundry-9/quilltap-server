@@ -295,4 +295,4 @@ migration set must include (each is additive/nullable on the TS side):
   `chats.timelineMode` (TEXT, `'realtime' | 'narrative'`, NULL = realtime).
   Prompt-side counterparts (extraction clock, retrospective retrieval
   multipliers, fold Timeline section, gate date guard) live in
-  `docs/developer/features/episodic-recall-overhaul.md`.
+  `docs/developer/features/complete/episodic-recall-overhaul.md`.

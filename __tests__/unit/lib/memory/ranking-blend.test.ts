@@ -1,6 +1,6 @@
 /**
  * Regression guard for the Commonplace Book recall ranking math
- * (docs/developer/features/commonplace-relevance-fix.md).
+ * (docs/developer/features/complete/commonplace-relevance-fix.md).
  *
  * These tests pin the behaviors that the 4.8 relevance fix established, so the
  * coefficients can't silently drift back to importance-dominates-relevance:

@@ -1,5 +1,7 @@
 # Episodic Recall Overhaul — Remember the Visit, the Place, and the Week
 
+> **Superseded 2026-10-13** by the [memory system refactor](../memory-system-refactor.md) (Phase G moved this spec to `complete/`): its open item (§3 step 2, replaying real turns) is carried by the refactor's replay harness (Phase E). The text below is kept as written; its file and function names predate the refactor's layout.
+
 **Status:** Implemented 2026-07-21 (all five workstreams + §3 harness). Awaiting
 §3 step 2 — Charlie replaying real "forgot / confabulated" turns via
 `quilltap recall-replay` — before the constants are considered tuned and the
@@ -30,7 +32,7 @@ spec moves to `complete/`.
    (`lib/memory/recall-replay.ts`) wrapped by `quilltap recall-replay`,
    following the `memory-diff` CLI pattern. The replay anchors the
    distillation clock to the replayed turn's own timestamp.
-**Builds on:** [commonplace-whisper-overhaul.md](./complete/commonplace-whisper-overhaul.md), [commonplace-relevance-fix.md](./commonplace-relevance-fix.md)
+**Builds on:** [commonplace-whisper-overhaul.md](commonplace-whisper-overhaul.md), [commonplace-relevance-fix.md](./commonplace-relevance-fix.md)
 
 A handoff spec for Claude Code. The 4.7 whisper overhaul fixed where recall
 material comes *from*; the relevance fix (F1–F5) made per-turn recall *topical*.

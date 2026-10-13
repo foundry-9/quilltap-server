@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase G: surfaces, docs, retirement of the old specs
+
+Final structural phase of `docs/developer/features/memory-system-refactor.md`. No migration.
+
+- API: `?action=housekeep` (GET and POST), `housekeep-sweep`, `consolidate` and `housekeeping-config` are removed; use `maintain` (naming `consolidate` now implies `mirror`) and `maintenance-config`. New `POST ?action=repair` (`{ characterId?, dryRun? }`): finds links in `relatedMemoryIds`, `consolidatedFrom` and `supersededById` that name missing rows, and rows without embeddings; a live run scrubs the links (`scrubDanglingMemoryLinks`, through the retirement's removal deltas) and queues up to 2,000 embedding jobs. `MemoriesRepository.findDanglingLinks`; `enqueueMissingEmbeddings` is shared with `backfill-embeddings`. `extraction-limits-config` and `recall-config` validate through the façade's schemas; `maxPerHour` keeps its 10,000 bound in `MemoryExtractionLimitsSchema`.
+- Settings tab: the Housekeeping, Consolidation and Near-Duplicate Folding cards are replaced by one Maintenance card: the master switch, per-phase switches (fold, consolidate, demote, retire), archive retention, the cap and per-character overrides, consolidation particulars, "Run maintenance…" and the ledger (`?action=maintenance-status`, refreshed by the `memories` realtime topic). `section=memory-housekeeping`, `memory-consolidation` and `memory-deduplication` deep links open it. The Extraction Grain card gains the extraction rate limits. New `useMemorySettingsDocument` hook.
+- `MaintenanceDialog`: pick a character (or every character from the card), pick phases, optional cap for the run; dry run shows a per-phase report (consolidation clusters included), or a per-character table for a user-wide run; real runs are queued. The character page's Memories tab opens it from a **Maintenance** button, replacing the Memory Cleanup dialog.
+- CLI (quilltap 4.10.0-dev.173): `memories maintain --character <name|id|all> [--phases …] [--dry-run] [--max N] [--threshold] [--cap N]` replaces `memories consolidate`. `memories validate` also checks `consolidatedFrom`, `supersededById` and missing embeddings; `--repair` asks the server (dry run unless `--write`). `db memories --tier hot|cold`. Memory verbs that call the server resolve the port from `--instance`.
+- Help: `memory-housekeeping.md` and `memory-consolidation.md` (and the dedup section of `system-tools.md`) merged into `help/memory-maintenance.md`; links and the help category updated.
+- Docs: CLAUDE.md gains a chokepoint line for `resolveMemorySettings` / `patchSchemaOf`, `MemoryClock`, `salience` / `protection`, `assembleRecall` / `deliverRecall`, `runMaintenance` and `scrubDanglingMemoryLinks`. `memory-consolidation-and-tiers.md`, `memory-recall-and-housekeeping-fixes.md`, `commonplace-relevance-fix.md` and `episodic-recall-overhaul.md` moved to `features/complete/` with a pointer to the refactor spec. `memory_management.md` §9 rewritten for the new layout. API.md, DDL.md updated. The Friday backfill (E2) is still to be run on the live instance.
+
+#### Bug 244: a one-field settings write reset every other field
+
+- Zod 4's `.partial()` keeps each field's `.default()`, so `consolidation-config`, `extraction-mode-config`, the maintenance phase toggles, `maintain`'s `settings.consolidation` and the text-replacement PATCH turned a one-field body into a full object of defaults and wrote it over the stored values. Switching consolidation on cleared its connection profile, thresholds and archive retention. New `patchSchemaOf` (`lib/schemas/patch-schema.ts`) strips defaults before making keys optional; every partial write schema uses it.
+
 #### Bug 242: single-character turns skipped the end-of-turn work
 
 - The Salon's stream reader treated the depth-0 `turnStart` that precedes every first turn as entering a chain, so a single-character reply finished through the chain's intermediate path: no transcript refetch, no queue notification, no "empty response" toast. Only a `turnStart` with `chainDepth > 0` now enters a chain. Test: `useSSEStreaming-single-turn-done.test.tsx`.
