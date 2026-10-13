@@ -203,12 +203,12 @@ describe('handleEmbeddingReindexAll', () => {
     expect(repos.embeddingStatus.listFailedEntityIds).toHaveBeenCalledWith('MEMORY', PROFILE_ID);
   });
 
-  it('all scope: drops every cached memory index once and enqueues every memory-holding character (vaults not consulted)', async () => {
+  it('all scope: leaves the memory index to the per-character commits and enqueues every memory-holding character (vaults not consulted)', async () => {
     const { repos, createBatch } = makeRepos();
 
     await handleEmbeddingReindexAll(makeJob('all'));
 
-    expect(memoryIndex.reloadAll).toHaveBeenCalledTimes(1);
+    expect(memoryIndex.reloadAll).not.toHaveBeenCalled();
     expect(repos.memories.findByCharacterId).toHaveBeenCalledWith('char-ok');
     expect(repos.memories.findByCharacterId).toHaveBeenCalledWith('char-vaultless');
     expect(repos.embeddingStatus.markAllPendingByProfileId).toHaveBeenCalledWith(PROFILE_ID);

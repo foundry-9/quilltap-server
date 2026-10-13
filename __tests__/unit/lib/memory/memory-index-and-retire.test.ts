@@ -214,6 +214,21 @@ describe('memoryIndex — the rows are the index', () => {
     expect(await memoryIndex.search(CHAR, vec(1, 0), { limit: 5, hotOnly: true })).toEqual([])
   })
 
+  it('does not cache the vector of a row that vanished before the write (bug 200 shape)', async () => {
+    seed([{ id: 'a', embedding: vec(1, 0) }])
+    installRepos()
+    await memoryIndex.search(CHAR, vec(1, 0), { limit: 1, hotOnly: false }) // load
+
+    // Retired between the caller's read and this upsert: the repository answers null.
+    db.prepare('DELETE FROM memories WHERE id = ?').run('a')
+    memoryIndex.reload(CHAR)
+    await memoryIndex.search(CHAR, vec(1, 0), { limit: 1, hotOnly: false }) // reload, now empty
+    const rows = await memoryIndex.upsert(CHAR, [{ id: 'a', embedding: vec(1, 0) }])
+
+    expect(rows).toEqual([null])
+    expect(await memoryIndex.search(CHAR, vec(1, 0), { limit: 5, hotOnly: false })).toEqual([])
+  })
+
   it('does not load a cache just to take a write', async () => {
     seed([{ id: 'a' }])
     const repos = installRepos()

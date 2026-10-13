@@ -237,12 +237,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // vault is unavailable, and a dropped character's memories would then be
   // left permanently un-re-embedded. Memories are the ground truth here.
   const memoryCharacterIds = await repos.memories.findDistinctCharacterIds();
-  // The index is the memory rows themselves, and EMBEDDING_GENERATE rewrites
-  // each row's vector in place through `memoryIndex`, so there is nothing to
-  // clear: drop the cached copies so no search runs on vectors this reindex
-  // is about to replace. A search mid-reindex scores the vectors that already
-  // match the query's length and skips the rest.
-  memoryIndex.reloadAll();
+  // Nothing to clear: the memory index is the rows themselves, and each
+  // EMBEDDING_GENERATE rewrites its row's vector through `memoryIndex`; the
+  // parent drops a character's cache as each of those batches commits. Until
+  // then the cache matches the rows. A search mid-reindex scores the vectors
+  // that match the query's length and skips the rest.
 
   const failedMemoryIds = await failedIdsFor('MEMORY');
   for (const characterId of memoryCharacterIds) {

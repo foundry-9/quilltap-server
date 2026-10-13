@@ -168,14 +168,24 @@ class ProcessMemoryIndex implements MemoryIndex {
     }
 
     const cached = await withLoadedStore(characterId, 'upsert', async (store) => {
+      let n = 0
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i]
+        // An explicit null is the repository saying the row is gone (retired
+        // between the caller's read and this write): caching its vector would
+        // be the orphan-at-rank-1 of bug 200. A buffered write in the job
+        // child returns undefined, not null, and is cached.
+        if (rows[i] === null) {
+          log.debug('Upsert found no row; vector not cached', { characterId, memoryId: entry.id })
+          continue
+        }
         // The tier the caller states, else the row's as written, else the
         // cached entry's (a buffered write in the job child returns no row).
         const tier: MemoryTier = entry.tier ?? rows[i]?.tier ?? store.tierOf(entry.id) ?? 'hot'
         await store.addVector(entry.id, entry.embedding, metadataFor(characterId, entry.id, tier))
+        n++
       }
-      return entries.length
+      return n
     })
 
     log.debug('Upserted memory vectors', {
