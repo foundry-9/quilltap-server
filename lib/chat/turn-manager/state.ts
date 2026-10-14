@@ -10,6 +10,7 @@ import type { ChatEvent, ChatParticipantBase, MessageEvent } from '@/lib/schemas
 import { hasWhisperTargets } from '@/lib/schemas/chat.types';
 import { isTurnPassMessage } from './skip-signal';
 import { getPresentCharacterSeats } from './utils';
+import { parseCycleOrder } from './cycle-order';
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
@@ -22,6 +23,7 @@ export function createInitialTurnState(): TurnState {
     currentTurnParticipantId: null,
     queue: [],
     lastSpeakerId: null,
+    cycleOrder: [],
   };
 }
 
@@ -37,8 +39,13 @@ export function createInitialTurnState(): TurnState {
 export function calculateTurnStateFromHistory(
   options: CalculateTurnStateOptions
 ): TurnState {
-  const { messages, spokenThisCycleParticipantIds } = options;
+  const { messages, spokenThisCycleParticipantIds, cycleOrderParticipantIds } = options;
   const state = createInitialTurnState();
+
+  // The cycle's drawn rotation, straight off the chat row. Never drawn here —
+  // `calculateTurnStateFromHistory` is pure and runs on the client too; drawing
+  // and persisting is `resolveCycleOrder`'s job alone.
+  state.cycleOrder = parseCycleOrder(cycleOrderParticipantIds);
 
   // Source spokenThisCycle from persisted state (defaults to empty).
   if (spokenThisCycleParticipantIds) {
@@ -102,6 +109,7 @@ export function updateTurnStateAfterMessage(
 
   newState.lastSpeakerId = participantId;
   newState.queue = newState.queue.filter(id => id !== participantId);
+  newState.cycleOrder = newState.cycleOrder.filter(id => id !== participantId);
   newState.currentTurnParticipantId = null;
 
   return newState;
@@ -197,4 +205,49 @@ export function computeSpokenThisCycleAfterSkip(
   currentSpokenJson: string | null | undefined,
 ): string | null {
   return advanceSpokenThisCycle(skippedParticipantId, participants, currentSpokenJson);
+}
+
+/**
+ * Returns the next value for `chat.cycleOrderParticipantIds` after the given
+ * message is persisted, or `null` if the field should not change.
+ *
+ * Consuming the rotation is pure bookkeeping — strike the speaker from the list
+ * of who has yet to go — so it rides along at the same write chokepoints that
+ * advance `spokenThisCycleParticipantIds`, needing neither talkativeness nor a
+ * characters read. Drawing the *next* rotation, which does need both, is
+ * `resolveCycleOrder`'s job and happens lazily at the following selection: an
+ * emptied list is exactly the signal that the cycle is spent.
+ */
+export function computeCycleOrderAfterMessage(
+  message: ChatEvent,
+  currentCycleOrderJson: string | null | undefined,
+): string | null {
+  if (message.type !== 'message') return null;
+  if (message.role !== 'USER' && message.role !== 'ASSISTANT') return null;
+  if (!message.participantId) return null;
+  if (hasWhisperTargets(message)) return null;
+
+  return removeFromCycleOrder(message.participantId, currentCycleOrderJson);
+}
+
+/**
+ * Returns the next value for `chat.cycleOrderParticipantIds` after a
+ * skip-user-turn action: the skipped seat has had its turn for cycle purposes,
+ * so it leaves the rotation exactly as a posted message would take it out.
+ * Mirrors {@link computeSpokenThisCycleAfterSkip}.
+ */
+export function computeCycleOrderAfterSkip(
+  skippedParticipantId: string,
+  currentCycleOrderJson: string | null | undefined,
+): string | null {
+  return removeFromCycleOrder(skippedParticipantId, currentCycleOrderJson);
+}
+
+function removeFromCycleOrder(
+  participantId: string,
+  currentCycleOrderJson: string | null | undefined,
+): string | null {
+  const current = parseCycleOrder(currentCycleOrderJson);
+  if (!current.includes(participantId)) return null; // no-op
+  return JSON.stringify(current.filter(id => id !== participantId));
 }

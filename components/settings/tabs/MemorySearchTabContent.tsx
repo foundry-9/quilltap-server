@@ -3,17 +3,28 @@
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
-import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
-import { MemoryHousekeepingCard } from '@/components/tools/memory-housekeeping-card'
+import { MemoryMaintenanceCard } from '@/components/tools/memory-maintenance-card'
+import { MemoryExtractionGrainCard } from '@/components/tools/memory-extraction-grain-card'
 import { MemoryRecallCard } from '@/components/tools/memory-recall-card'
 import { MemoryBackfillCard } from '@/components/tools/memory-backfill-card'
 import { MemoryRegenerateCard } from '@/components/tools/memory-regenerate-card'
 import { ConversationSummaryRegenerateCard } from '@/components/tools/conversation-summary-regenerate-card'
 import { useSettingsSection } from './useSettingsSection'
 
+/**
+ * Deep links to the three cards the Maintenance card replaced (decision 11)
+ * open it instead, so old help pages and bookmarks still land somewhere.
+ */
+const RETIRED_SECTIONS: Record<string, string> = {
+  'memory-housekeeping': 'memory-maintenance',
+  'memory-consolidation': 'memory-maintenance',
+  'memory-deduplication': 'memory-maintenance',
+}
+
 export function MemorySearchTabContent() {
   const info = useSubsystemInfo('commonplace-book')
-  const activeSection = useSettingsSection()
+  const requestedSection = useSettingsSection()
+  const activeSection = requestedSection ? (RETIRED_SECTIONS[requestedSection] ?? requestedSection) : null
 
   return (
     <div>
@@ -28,16 +39,16 @@ export function MemorySearchTabContent() {
           <MemoryBackfillCard />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Memory Housekeeping" description="Automatically prune stale, low-importance memories as characters approach their cap" sectionId="memory-housekeeping" forceOpen={activeSection === 'memory-housekeeping'}>
-          <MemoryHousekeepingCard />
+        <CollapsibleCard title="Maintenance" description="Fold repetitions, consolidate into digests, keep each character under the cap, and let old archive notes go" sectionId="memory-maintenance" forceOpen={activeSection === 'memory-maintenance'}>
+          <MemoryMaintenanceCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Extraction Grain" description="Choose how often a character's observations of other characters are noted" sectionId="memory-extraction-grain" forceOpen={activeSection === 'memory-extraction-grain'}>
+          <MemoryExtractionGrainCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Recall Relevance" description="Keep project-specific memories from wandering into unrelated chats" sectionId="memory-recall" forceOpen={activeSection === 'memory-recall'}>
           <MemoryRecallCard />
-        </CollapsibleCard>
-
-        <CollapsibleCard title="Memory Deduplication" description="Find and remove duplicate memories" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>
-          <MemoryDedupCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Regenerate Memories" description="Wipe and rebuild every chat-linked memory using the current extraction pipeline" sectionId="memory-regenerate" forceOpen={activeSection === 'memory-regenerate'}>

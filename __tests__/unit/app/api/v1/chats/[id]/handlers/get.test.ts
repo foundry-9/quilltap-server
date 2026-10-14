@@ -114,6 +114,11 @@ describe('chats [id] GET handler', () => {
         chats: {
           findById: jest.fn().mockResolvedValue(chatMetadata),
           getMessages: jest.fn().mockResolvedValue([assistantMessage]),
+          // The transcript counter is read off the row, not through the entity
+          // schema — see ChatMessagesOps.announceTranscriptChange.
+          getTranscriptVersion: jest.fn().mockResolvedValue(0),
+          // The Concierge's refusal tally, for the helper text under the state.
+          getModerationRefusalLedger: jest.fn().mockResolvedValue({ count: 0, lastAt: null }),
         },
         files: {
           findByLinkedTo: jest.fn().mockResolvedValue([]),
@@ -245,5 +250,90 @@ describe('chats [id] GET handler', () => {
 
     expect(response.status).toBe(200)
     expect(body.chat.allLLMPauseTurnCount).toBe(0)
+  })
+
+  // Bug 147. The Salon recomputes "whose turn is it" locally from these two
+  // columns; omitting them put an empty rotation and an empty spoken-set into
+  // `calculateTurnStateFromHistory`, which is indistinguishable from a fresh
+  // chat, so the client re-rolled the speaker instead of following the
+  // rotation the server had drawn. They must stay on the wire, as the JSON
+  // strings the turn manager's parsers expect.
+  it('projects the cycle rotation and the spoken-this-cycle set (Bug 147)', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      cycleOrderParticipantIds: '["part-2","part-1"]',
+      spokenThisCycleParticipantIds: '["part-3"]',
+    })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.cycleOrderParticipantIds).toBe('["part-2","part-1"]')
+    expect(body.chat.spokenThisCycleParticipantIds).toBe('["part-3"]')
+  })
+
+  it('defaults the cycle columns to an empty JSON array when unset (Bug 147)', async () => {
+    // A legacy row predating the columns must read as "no rotation on file",
+    // never as `undefined` — the client parses these, and the parsers take a
+    // string.
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.cycleOrderParticipantIds).toBe('[]')
+    expect(body.chat.spokenThisCycleParticipantIds).toBe('[]')
+  })
+
+  // Concierge phase 3: the chat carries a three-state posture plus its
+  // provenance and the refusal tally, and the retired override column is gone.
+  it('projects the Concierge state, provenance and refusal tally, and no conciergeOverride', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      conciergeMode: 'unmoderated',
+      conciergeModeSetBy: 'concierge',
+      conciergeModeReason: 'refusals',
+      conciergeOverride: 'UNCENSORED',
+    })
+    ctx.repos.chats.getModerationRefusalLedger.mockResolvedValueOnce({ count: 2, lastAt: '2026-01-01T00:00:00Z' })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(ctx.repos.chats.getModerationRefusalLedger).toHaveBeenCalledWith(chatId)
+    expect(body.chat.conciergeState).toBe('unmoderated')
+    expect(body.chat.conciergeSetBy).toBe('concierge')
+    expect(body.chat.conciergeReason).toBe('refusals')
+    expect(body.chat.conciergeRefusalCount).toBe(2)
+    expect(body.chat).not.toHaveProperty('conciergeOverride')
+  })
+
+  it('reads a chat with no Concierge columns as Moderated with no provenance', async () => {
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.conciergeState).toBe('moderated')
+    expect(body.chat.conciergeSetBy).toBeNull()
+    expect(body.chat.conciergeReason).toBeNull()
+    expect(body.chat.conciergeRefusalCount).toBe(0)
+    expect(body.chat).not.toHaveProperty('conciergeOverride')
   })
 })

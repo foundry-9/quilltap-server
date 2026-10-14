@@ -2,112 +2,129 @@
  * Document Mount Points Repository
  *
  * Backend-agnostic repository for DocMountPoint entities.
- * Overrides getCollection() to route all operations to the dedicated
- * mount index database (quilltap-mount-index.db), isolating document
- * mount tracking data from the main database.
+ * Lives in the dedicated mount index database (quilltap-mount-index.db)
+ * via `AbstractDedicatedDbRepository`, isolating document mount tracking
+ * data from the main database.
  *
  * When the mount index DB is in degraded mode (corruption, permissions, etc.),
  * getCollection() throws and all safeQuery fallbacks kick in — returning
  * empty arrays, null, etc. The rest of the app continues normally.
  */
 
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { DocMountPoint, DocMountPointSchema } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
-import { repairMountPointNameCollisions } from './mount-index-case-repair';
+import { ensureMountPointNameUniqueIndex } from './mount-index-case-repair';
+
+/**
+ * Thrown when a create or rename would give a store a name another store
+ * already holds. Store names are one case-insensitive namespace.
+ */
+export class MountPointNameTakenError extends Error {
+  readonly code = 'MOUNT_POINT_NAME_TAKEN';
+  constructor(
+    readonly requestedName: string,
+    readonly holder: Pick<DocMountPoint, 'id' | 'name'>,
+  ) {
+    super(
+      `A document store named "${holder.name}" already exists. Names are matched without regard to case — please choose a different name.`,
+    );
+    this.name = 'MountPointNameTakenError';
+  }
+}
 
 /**
  * Document Mount Points Repository
  * Implements CRUD operations and queries for document mount points.
  * Uses the mount index database instead of the main database.
  */
-export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoint> {
-  private mountIndexCollectionInitialized = false;
-
+export class DocMountPointsRepository extends AbstractDedicatedDbRepository<DocMountPoint> {
   constructor() {
-    super('doc_mount_points', DocMountPointSchema);
+    super('doc_mount_points', DocMountPointSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
   /**
-   * Override getCollection to return a collection from the dedicated mount index
-   * database instead of the main database.
+   * Inline column migrations and the name-collision repair, run once after
+   * the generated DDL on first access.
    */
-  protected async getCollection(): Promise<DatabaseCollection<DocMountPoint>> {
-    const db = requireMountIndexDb();
-
-    // Ensure the table exists in the mount index DB on first access
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-
-        // Migration: add totalSizeBytes column if missing (added after initial schema)
-        const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
-        if (!columns.some(c => c.name === 'totalSizeBytes')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "totalSizeBytes" INTEGER NOT NULL DEFAULT 0`);
-          logger.info('Migrated doc_mount_points: added totalSizeBytes column');
-        }
-
-        // Migration: add conversionStatus / conversionError for storage-backend
-        // conversion tracking (filesystem ↔ database). Default 'idle' preserves
-        // existing behaviour for rows created before this feature shipped.
-        if (!columns.some(c => c.name === 'conversionStatus')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionStatus" TEXT NOT NULL DEFAULT 'idle'`);
-          logger.info('Migrated doc_mount_points: added conversionStatus column');
-        }
-        if (!columns.some(c => c.name === 'conversionError')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionError" TEXT DEFAULT NULL`);
-          logger.info('Migrated doc_mount_points: added conversionError column');
-        }
-
-        // Migration: add storeType to classify stores by content kind
-        // ('documents' | 'character'). Default 'documents' preserves existing rows.
-        if (!columns.some(c => c.name === 'storeType')) {
-          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "storeType" TEXT NOT NULL DEFAULT 'documents'`);
-          logger.info('Migrated doc_mount_points: added storeType column');
-        }
-
-        // Repair: mount-point names form one case-insensitive namespace.
-        // Runs every init (cheap no-op scan when the invariant holds) so
-        // duplicates that slip in through a backup restore of legacy data
-        // get suffixed on the next boot. No DB unique index here — restore
-        // must be able to recreate legacy rows verbatim before this runs.
-        repairMountPointNameCollisions(db);
-
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure doc_mount_points table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
+  protected override onTableEnsured(db: DatabaseType): void {
+    // Migration: add totalSizeBytes column if missing (added after initial schema)
+    const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
+    if (!columns.some(c => c.name === 'totalSizeBytes')) {
+      db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "totalSizeBytes" INTEGER NOT NULL DEFAULT 0`);
+      logger.info('Migrated doc_mount_points: added totalSizeBytes column');
     }
 
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
+    // Migration: add conversionStatus / conversionError for storage-backend
+    // conversion tracking (filesystem ↔ database). Default 'idle' preserves
+    // existing behaviour for rows created before this feature shipped.
+    if (!columns.some(c => c.name === 'conversionStatus')) {
+      db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionStatus" TEXT NOT NULL DEFAULT 'idle'`);
+      logger.info('Migrated doc_mount_points: added conversionStatus column');
+    }
+    if (!columns.some(c => c.name === 'conversionError')) {
+      db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionError" TEXT DEFAULT NULL`);
+      logger.info('Migrated doc_mount_points: added conversionError column');
+    }
 
-    return new SQLiteCollection<DocMountPoint>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    // Migration: add storeType to classify stores by content kind
+    // ('documents' | 'character'). Default 'documents' preserves existing rows.
+    if (!columns.some(c => c.name === 'storeType')) {
+      db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "storeType" TEXT NOT NULL DEFAULT 'documents'`);
+      logger.info('Migrated doc_mount_points: added storeType column');
+    }
+
+    // Store names form one case-insensitive namespace (a name is an address
+    // in qtap:// URIs and every doc tool). Repair any surviving collisions,
+    // then keep the unique index in place. Runs every init; a no-op scan when
+    // the invariant holds.
+    ensureMountPointNameUniqueIndex(db);
   }
 
   // ============================================================================
   // Abstract method implementations
   // ============================================================================
 
+  /**
+   * Create a store. Refuses a name another store already holds, ignoring case
+   * ({@link MountPointNameTakenError}); a caller that wants a free name picks
+   * one with `nextUniqueMountPointName` first.
+   */
   async create(
     data: Omit<DocMountPoint, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<DocMountPoint> {
+    await this.assertNameFree(data.name, null);
     return this._create(data, options);
   }
 
+  /** Update a store. A rename is refused when another store holds the name. */
   async update(id: string, data: Partial<DocMountPoint>): Promise<DocMountPoint | null> {
+    if (data.name !== undefined) await this.assertNameFree(data.name, id);
     return this._update(id, data);
+  }
+
+  /** The store, other than `exceptId`, that holds this name (ignoring case), if any. */
+  async findNameHolder(name: string, exceptId: string | null): Promise<DocMountPoint | null> {
+    const needle = name.trim().toLowerCase();
+    const all = await this.findAll();
+    return all.find((mp) => mp.id !== exceptId && mp.name.trim().toLowerCase() === needle) ?? null;
+  }
+
+  private async assertNameFree(name: string, exceptId: string | null): Promise<void> {
+    const holder = await this.findNameHolder(name, exceptId);
+    if (holder) {
+      logger.warn('Refused a document-store name another store holds', {
+        name,
+        mountPointId: exceptId,
+        holderId: holder.id,
+      });
+      throw new MountPointNameTakenError(name, holder);
+    }
   }
 
   async delete(id: string): Promise<boolean> {

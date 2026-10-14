@@ -2,7 +2,6 @@ import { handleContextSummary } from '@/lib/background-jobs/handlers/context-sum
 import { getRepositories } from '@/lib/repositories/factory';
 import { generateContextSummary } from '@/lib/chat/context-summary';
 import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -30,14 +29,10 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueChatDangerClassification: jest.fn(),
 }));
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
-}));
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
 const mockGenerateContextSummary = generateContextSummary as jest.MockedFunction<typeof generateContextSummary>;
 const mockEnqueueDangerClassification = enqueueChatDangerClassification as jest.MockedFunction<typeof enqueueChatDangerClassification>;
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 
 const buildJob = (overrides: Record<string, unknown> = {}) => ({
   id: 'job-1',
@@ -61,10 +56,30 @@ const buildJob = (overrides: Record<string, unknown> = {}) => ({
   updatedAt: new Date().toISOString(),
 });
 
+/** Global Concierge settings: on duty, summary classifier opted in (or not). */
+function conciergeSettings(overrides: { enabled?: boolean; summaryClassification?: boolean } = {}) {
+  return {
+    enabled: overrides.enabled ?? true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: overrides.summaryClassification ?? true,
+    },
+  };
+}
+
+let repositories: any;
+
 beforeEach(() => {
   jest.clearAllMocks();
 
-  const repositories = {
+  repositories = {
     chats: {
       findById: jest.fn().mockResolvedValue({
         id: 'chat-1',
@@ -83,9 +98,7 @@ beforeEach(() => {
           strategy: 'PROVIDER_CHEAPEST',
           fallbackToLocal: true,
         },
-        dangerousContentSettings: {
-          mode: 'DETECT_ONLY',
-        },
+        conciergeSettings: conciergeSettings(),
       }),
     },
     connections: {
@@ -111,19 +124,6 @@ beforeEach(() => {
     usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
   });
 
-  mockResolveDangerousContentSettings.mockReturnValue({
-    settings: {
-      mode: 'DETECT_ONLY',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    },
-    source: 'global',
-  });
-
   mockEnqueueDangerClassification.mockResolvedValue({
     jobId: 'chained-job-1',
     isNew: true,
@@ -141,18 +141,32 @@ describe('Context Summary → Danger Classification Chaining', () => {
     );
   });
 
-  it('does not chain if danger mode is OFF', async () => {
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
-      },
-      source: 'default',
+  it('does not chain if summary classification is off', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ summaryClassification: false }),
+    });
+
+    await handleContextSummary(buildJob());
+
+    expect(mockEnqueueDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it('does not chain if the Concierge is off duty', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ enabled: false }),
+    });
+
+    await handleContextSummary(buildJob());
+
+    expect(mockEnqueueDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it.each(['unmoderated', 'locked'] as const)('does not chain for a %s chat', async (conciergeMode) => {
+    repositories.chats.findById.mockResolvedValue({
+      id: 'chat-1',
+      contextSummary: '',
+      lastRenameCheckInterchange: 0,
+      conciergeMode,
     });
 
     await handleContextSummary(buildJob());

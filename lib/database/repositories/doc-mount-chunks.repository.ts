@@ -13,18 +13,16 @@
  * all safeQuery fallbacks kick in.
  */
 
-import { logger } from '@/lib/logger';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import {
   DocMountChunk,
   DocMountChunkSchema,
   EDITABLE_TEXT_FILE_TYPES,
 } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
 
@@ -44,50 +42,29 @@ export interface DocMountChunkTextMatch {
   headingContext: string | null;
 }
 
-export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChunk> {
-  private mountIndexCollectionInitialized = false;
-
+export class DocMountChunksRepository extends AbstractDedicatedDbRepository<DocMountChunk> {
   constructor() {
-    super('doc_mount_chunks', DocMountChunkSchema);
+    super('doc_mount_chunks', DocMountChunkSchema, {
+      dbTarget: 'mountIndex',
+      acquireDb: requireMountIndexDb,
+      // Float32 BLOBs in the embedding column need explicit blob-column
+      // handling so they're deserialized to Float32Array instead of being
+      // run through JSON.parse.
+      blobColumns: ['embedding'],
+    });
   }
 
-  protected async getCollection(): Promise<DatabaseCollection<DocMountChunk>> {
-    const db = requireMountIndexDb();
-
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_linkId" ` +
-          `ON "${this.collectionName}" ("linkId")`
-        );
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp" ` +
-          `ON "${this.collectionName}" ("mountPointId")`
-        );
-
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure doc_mount_chunks table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    // Float32 BLOBs in the embedding column need explicit blob-column
-    // handling so they're deserialized to Float32Array instead of being
-    // run through JSON.parse.
-    const blobColumns = ['embedding'];
-
-    return new SQLiteCollection<DocMountChunk>(
-      db, this.collectionName, jsonColumns, arrayColumns, booleanColumns, blobColumns
+  /**
+   * Extra DDL, run once after the generated statements on first access.
+   */
+  protected override onTableEnsured(db: DatabaseType): void {
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_linkId" ` +
+      `ON "${this.collectionName}" ("linkId")`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp" ` +
+      `ON "${this.collectionName}" ("mountPointId")`
     );
   }
 
@@ -154,12 +131,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
     const result = new Map<string, number>();
     if (mountPointIds.length === 0) return result;
 
-    return this.safeQuery(
-      async () => {
-        if (isMountIndexDegraded()) return result;
-        const db = getRawMountIndexDatabase();
-        if (!db) return result;
-
+    return this.withRawDb(
+      result,
+      async (db) => {
         const placeholders = mountPointIds.map(() => '?').join(',');
         const rows = db.prepare(
           `SELECT mountPointId, COUNT(*) AS count
@@ -174,8 +148,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         return result;
       },
       'Error counting embedded chunks by mount point IDs',
-      { mountPointIdCount: mountPointIds.length },
-      result
+      { mountPointIdCount: mountPointIds.length }
     );
   }
 
@@ -202,13 +175,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
     limit: number
   ): Promise<DocMountChunkTextMatch[]> {
     if (mountPointIds.length === 0 || query.length === 0) return [];
-    return this.safeQuery(
-      async () => {
-        if (isMountIndexDegraded()) return [];
-        const db = getRawMountIndexDatabase();
-        if (!db) return [];
-        await this.getCollection();
-
+    return this.withRawDb(
+      [],
+      async (db) => {
         const placeholders = mountPointIds.map(() => '?').join(',');
         const typePlaceholders = EDITABLE_TEXT_FILE_TYPES.map(() => '?').join(',');
         const pattern = likeContainsPattern(query);
@@ -241,8 +210,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         return rows;
       },
       'Error searching chunk content',
-      { mountPointIdCount: mountPointIds.length, queryLength: query.length },
-      []
+      { mountPointIdCount: mountPointIds.length, queryLength: query.length }
     );
   }
 
@@ -286,12 +254,9 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
    * actually clears anything.
    */
   async clearEmbeddingsByLinkId(linkId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        if (isMountIndexDegraded()) return 0;
-        const db = getRawMountIndexDatabase();
-        if (!db) return 0;
-
+    return this.withRawDb(
+      0,
+      async (db) => {
         const mp = db.prepare(
           'SELECT mountPointId FROM doc_mount_chunks WHERE linkId = ? LIMIT 1'
         ).get(linkId) as { mountPointId: string } | undefined;
@@ -306,8 +271,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         return res.changes;
       },
       'Error clearing embeddings by link ID',
-      { linkId },
-      0
+      { linkId }
     );
   }
 

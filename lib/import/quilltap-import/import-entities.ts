@@ -7,6 +7,7 @@
  * @module import/quilltap-import/import-entities
  */
 
+import { takeBundleCursors, restoreBundleCursors } from '@/lib/memory/extraction/cursor-bundle';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
@@ -19,7 +20,10 @@ import type {
   Project,
   Group,
 } from '@/lib/schemas/types';
+import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
+import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
+import { remintChatMessageIds, remapImportedMessageId, type RemintedChatMessages } from './message-id-remap';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -314,6 +318,56 @@ export async function importGroups(
   return { imported, skipped };
 }
 
+/**
+ * Insert a chat's bundle messages, under the reminted ids when `reminted` is
+ * given, or under their source ids otherwise. For a reminted chat each
+ * source → new pair is recorded in `idMaps.messages` only once its insert
+ * succeeds, so a sidecar can never be pointed at a message that is not here.
+ * Returns the count inserted.
+ */
+async function addImportedMessages(
+  newChatId: string,
+  chat: ChatMetadata & { messages: MessageEvent[] },
+  reminted: RemintedChatMessages | null,
+  idMaps: IdMappingState,
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
+): Promise<number> {
+  const toInsert = reminted ? reminted.messages : chat.messages;
+  const landed = reminted ? new Map<string, string>() : null;
+  if (landed) idMaps.messages.set(chat.id, landed);
+  moduleLogger.debug('Importing chat messages', {
+    sourceChatId: chat.id,
+    newChatId,
+    messageCount: toInsert.length,
+    remintedMessageIds: Boolean(reminted),
+    droppedMessageRefs: reminted?.droppedRefs ?? 0,
+    summaryCleared: reminted?.summaryCleared ?? false,
+  });
+
+  let added = 0;
+  for (const [index, message] of toInsert.entries()) {
+    try {
+      await repos.chats.addMessage(newChatId, message);
+      added++;
+      const sourceId = chat.messages[index]?.id;
+      if (landed && sourceId && !landed.has(sourceId)) landed.set(sourceId, message.id);
+    } catch (msgError) {
+      warnings.push(
+        `Failed to import message in chat "${chat.title}": ${
+          msgError instanceof Error ? msgError.message : String(msgError)
+        }`
+      );
+      moduleLogger.warn('Failed to import chat message', {
+        newChatId,
+        messageId: message.id,
+        error: msgError instanceof Error ? msgError.message : String(msgError),
+      });
+    }
+  }
+  return added;
+}
+
 export async function importChats(
   userId: string,
   chats: (ChatMetadata & { messages: MessageEvent[] })[],
@@ -340,54 +394,43 @@ export async function importChats(
         if (options.conflictStrategy === 'overwrite') {
           await repos.chats.delete(chat.id, { syncVaults: false });
         }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.chats.set(chat.id, newId);
-          const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-          const newChat = await repos.chats.create({
-            ...chatData,
-            title: `${chatData.title} (imported)`,
-          });
-
-          // Add messages
-          for (const message of chat.messages) {
-            try {
-              await repos.chats.addMessage(newChat.id, message);
-              messages++;
-            } catch (msgError) {
-              warnings.push(
-                `Failed to import message in chat "${chat.title}": ${
-                  msgError instanceof Error ? msgError.message : String(msgError)
-                }`
-              );
-            }
-          }
-
-          imported++;
-          continue;
-        }
       }
+
+      // Duplicate creates a copy beside the original under a fresh id; every
+      // other strategy reaching here inserts the bundle's chat.
+      const isDuplicate = Boolean(existing) && options.conflictStrategy === 'duplicate';
+      const keepsSourceIds = Boolean(options.preserveIds) && !isDuplicate;
 
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-      const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
-      const createOptions = getPreserveIdsCreateOptions(chat.id, options);
+      // Only a chat that keeps its source id keeps its message ids. A chat
+      // created under a fresh id gets fresh message ids too: `chat_messages.id`
+      // is global, so the duplicate's original — or an earlier import of the
+      // same bundle — already holds them (bug 228).
+      const reminted = keepsSourceIds ? null : remintChatMessageIds(chatData, chat.messages);
+      // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
+      // well as `scenarioText`; the migration that cleared those rows has long
+      // since run in this instance, so the import is the only thing standing
+      // between a stale bundle and the bug coming back.
+      // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
+      // the chat's three-state posture is derived from it here.
+      // The fold passes' cursors travel on the chat under their legacy names
+      // (already remapped to the new message ids); they are written once the
+      // chat exists.
+      const { chat: bundledChat, cursors } = takeBundleCursors(
+        reminted ? { ...chatData, ...reminted.chatPatch } : chatData
+      );
+      const cleaned = withConciergeModeFromLegacy(stripScenarioSeededSummary(bundledChat));
+      const createData = keepsSourceIds
+        ? { ...cleaned, id: chat.id }
+        : isDuplicate
+          ? { ...cleaned, title: `${chatData.title} (imported)` }
+          : cleaned;
+      const createOptions = keepsSourceIds ? getPreserveIdsCreateOptions(chat.id, options) : undefined;
       const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);
+      await restoreBundleCursors(newChat.id, cursors);
 
-      // Add messages
-      for (const message of chat.messages) {
-        try {
-          await repos.chats.addMessage(newChat.id, message);
-          messages++;
-        } catch (msgError) {
-          warnings.push(
-            `Failed to import message in chat "${chat.title}": ${
-              msgError instanceof Error ? msgError.message : String(msgError)
-            }`
-          );
-        }
-      }
+      messages += await addImportedMessages(newChat.id, chat, reminted, idMaps, repos, warnings);
 
       imported++;
     } catch (error) {
@@ -409,8 +452,8 @@ export async function importChats(
 /**
  * Insert imported memories, remapping every FK through the id maps.
  *
- * Deliberately uses the raw repository rather than `createMemoryWithGate`:
- * the gate can silently skip near-duplicates, reinforce an existing row
+ * Deliberately uses the raw repository rather than admission (`admitCandidate`):
+ * admission can silently absorb near-duplicates, reinforce an existing row
  * instead of inserting, or lose rows entirely when the embedding provider is
  * down — none of which is acceptable for an import, where the user asked for
  * exactly these rows.
@@ -431,6 +474,34 @@ export async function importMemories(
   let skipped = 0;
   const createdIds: Array<{ id: string; characterId: string }> = [];
 
+  // Memory ids are minted up front so digest <-> cold-member references
+  // (`supersededById`, `consolidatedFrom`) can follow their targets even when
+  // the target appears later in the bundle. With `preserveIds` the source id
+  // is kept, so the map is the identity.
+  const memoryIdMap = new Map<string, string>();
+  for (const memory of memories) {
+    memoryIdMap.set(memory.id, options.preserveIds ? memory.id : randomUUID());
+  }
+  const remapMemoryRef = (ref: string): string => memoryIdMap.get(ref) ?? ref;
+
+  // Characters the bundle does not carry resolve to the instance's own row of
+  // that id when one exists and is not an archived tombstone (bug 240).
+  const localCharacters = new Map<string, string | null>();
+  const resolveMemoryCharacter = async (id: string): Promise<string | null> => {
+    const mapped = idMaps.characters.get(id);
+    if (mapped) return mapped;
+    if (!localCharacters.has(id)) {
+      // Raw read: a character whose vault is unreadable still owns its memories.
+      const local = await getRepositories().characters.findByIdRaw(id);
+      const usable = local && !local.archivedAt ? local.id : null;
+      if (local && !usable) {
+        moduleLogger.debug('Memory names an archived local character; not reviving it', { characterId: id });
+      }
+      localCharacters.set(id, usable);
+    }
+    return localCharacters.get(id) ?? null;
+  };
+
   for (const memory of memories) {
     try {
       // Skip-if-present rehydrate (spec §6/F4): the memory is already back —
@@ -440,8 +511,10 @@ export async function importMemories(
         continue;
       }
 
-      // Remap character ID
-      const newCharacterId = idMaps.characters.get(memory.characterId);
+      // Remap character ID: a character in the bundle, else one this instance
+      // already holds (a chats-only export carries its memories but not its
+      // cast — bug 240).
+      const newCharacterId = await resolveMemoryCharacter(memory.characterId);
       if (!newCharacterId) {
         warnings.push(
           `Memory references non-existent character ${memory.characterId}`
@@ -454,7 +527,7 @@ export async function importMemories(
       let newAboutCharacterId = memory.aboutCharacterId;
       if (memory.aboutCharacterId) {
         // Try to map as a character first
-        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) || null;
+        newAboutCharacterId = (await resolveMemoryCharacter(memory.aboutCharacterId)) || null;
       }
 
       // Remap chat ID if present
@@ -485,18 +558,35 @@ export async function importMemories(
       // than discarding it. Import time is the only correct place to drop it.
       // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
       const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
+      const newMemoryId = memoryIdMap.get(memory.id) ?? memory.id;
       const createData = options.preserveIds ? { ...memoryData, id: memory.id } : memoryData;
-      const createOptions = getPreserveIdsCreateOptions(memory.id, options);
+      // Always create under the pre-minted id so consolidation references line up.
+      const createOptions = { id: newMemoryId };
+      // Consolidation fields: bundles from before tiers lack them and read as
+      // hot / null / []; a CONSOLIDATED digest and its cold members keep their
+      // links, remapped through the same id map.
       const payload = {
         ...createData,
+        relatedMemoryIds: (memory.relatedMemoryIds ?? []).map(remapMemoryRef),
+        tier: memory.tier ?? 'hot',
+        supersededById: memory.supersededById ? remapMemoryRef(memory.supersededById) : null,
+        // The cold-retention clock travels with the link (bug 225).
+        supersededAt: memory.supersededById ? (memory.supersededAt ?? null) : null,
+        consolidatedFrom: (memory.consolidatedFrom ?? []).map(remapMemoryRef),
+        consolidatedAt: memory.consolidatedAt ?? null,
         characterId: newCharacterId,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
         projectId: newProjectId,
         tags: newTags,
+        // Follows its message when the chat import reminted message ids.
+        sourceMessageId: memory.sourceMessageId
+          ? remapImportedMessageId(idMaps, memory.chatId, memory.sourceMessageId)
+          : memory.sourceMessageId,
       };
       const created = await repos.memories.create(payload, createOptions);
       createdIds.push({ id: created.id, characterId: newCharacterId });
+      moduleLogger.debug('Imported memory', { memoryId: created.id, tier: payload.tier, source: memory.source });
       imported++;
     } catch (error) {
       warnings.push(

@@ -15,7 +15,7 @@ import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
@@ -252,17 +252,15 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
 /**
  * POST /api/v1/system/restore
  */
-export const POST = createContextHandler(async (req, { user }) => {
-  const action = getActionParam(req);
-
-  if (action === 'upload') {
-    return handleUpload(req, user.id);
-  }
-
-  if (action === 'preview') {
-    return handlePreview(req, user.id);
-  }
-
-  // Default: restore
-  return handleRestore(req, user.id);
-});
+export const POST = createContextHandler(async (req, { user }) =>
+  // The fallback runs a full restore, so an unknown action must be a 400
+  // rather than falling through to it — `dispatchAction` guarantees that.
+  dispatchAction(
+    req,
+    {
+      upload: () => handleUpload(req, user.id),
+      preview: () => handlePreview(req, user.id),
+    },
+    () => handleRestore(req, user.id)
+  )
+);

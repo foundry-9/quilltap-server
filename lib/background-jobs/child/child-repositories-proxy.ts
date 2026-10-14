@@ -27,6 +27,10 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChildWritePayload } from '../ipc-types';
 import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
+import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
+import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
 const log = logger.child({ module: 'jobs:child:proxy' });
 
@@ -53,6 +57,71 @@ interface JobScope {
    * Surfaced once per job in {@link flushPendingWrites} for observability.
    */
   sanitizedArgs: number;
+  /**
+   * Read-your-writes overlay for equipped outfits, keyed `chatId:characterId`.
+   * Each buffered outfit write records the slots it will leave behind, and
+   * `chats.getEquippedOutfitForCharacter` answers from here before the
+   * snapshot — otherwise two outfit changes in one job compute from the same
+   * stale baseline and the parent's replay keeps only the last (bug 179).
+   */
+  equippedOutfits: Map<string, EquippedSlots>;
+  /**
+   * Read-your-writes overlay for memory rows, keyed by memory id. A later step
+   * of a job must see the job's own buffered inserts, links, footnotes, counts,
+   * tier moves and deletes (bug 209). Admission no longer writes from here —
+   * it runs in the parent over host-RPC (`admitMemory`) — but consolidation,
+   * housekeeping, the fold passes and `retireMemories` still do.
+   */
+  memories: Map<string, MemoryOverlayEntry>;
+  /**
+   * Ids buffered `removeRelatedMemoryIdsEverywhere` calls scrub from every
+   * row. Applied to every memories row a later read returns, whether or not
+   * the job touched that row otherwise (bug 234).
+   */
+  memoryRelatedScrubs: Set<string>;
+  /**
+   * How many times this job attempt has admitted each candidate (by content
+   * key). With the job id it makes admission's idempotency key: a retry of
+   * the job is a new scope, so its counts restart and its candidates map to
+   * the keys the failed attempt already admitted.
+   */
+  admissionOccurrences: Map<string, number>;
+  /**
+   * What the handler hands back to the parent beside its writes (see
+   * {@link setJobResult}). Structured-clone safe; undefined for most jobs.
+   */
+  result?: unknown;
+}
+
+/** One memory row's buffered changes this job (see {@link JobScope.memories}). */
+interface MemoryOverlayEntry {
+  /** The whole row, when this job buffered its `create`. */
+  created?: Record<string, unknown>;
+  /** Absolute field patches, folded in order (last write wins, as on replay). */
+  patch: Record<string, unknown>;
+  /** Observations counted by buffered `incrementReinforcement` calls. */
+  reinforcementDelta: number;
+  lastReinforcedAt?: string;
+  /**
+   * Members buffered `removeConsolidatedMembers` calls took out of the row's
+   * `consolidatedFrom` since its last absolute `consolidatedFrom` patch — a
+   * delta applied to whatever list the row reads with.
+   */
+  consolidatedFromRemoved?: Set<string>;
+  /**
+   * Ids buffered `addRelatedMemoryIds` / `removeRelatedMemoryIds` calls add to
+   * or take out of the row's `relatedMemoryIds` since its last absolute
+   * `relatedMemoryIds` patch — deltas applied to whatever list the row reads
+   * with (bug 231).
+   */
+  relatedAdded?: string[];
+  relatedRemoved?: Set<string>;
+  /**
+   * Details buffered `appendReinforcementFootnotes` calls append, in order,
+   * since the row's last absolute `content` patch (bug 231).
+   */
+  footnotes?: string[];
+  deleted: boolean;
 }
 
 const jobScopeStore = new AsyncLocalStorage<JobScope>();
@@ -64,12 +133,45 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     recentlyWrittenKeys: new Set(),
     warnedReads: new Set(),
     sanitizedArgs: 0,
+    equippedOutfits: new Map(),
+    memories: new Map(),
+    memoryRelatedScrubs: new Set(),
+    admissionOccurrences: new Map(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
   // getJobFolderEnsureCache without importing this heavy proxy (and the
   // repositories barrel it pulls in). See job-folder-cache.ts.
   return jobScopeStore.run(scope, () => runWithJobFolderCache(fn));
+}
+
+/**
+ * The idempotency key for one admission in the running job attempt:
+ * `jobId:contentKey:n`, where `n` counts earlier admissions of the same
+ * content in this attempt. Null outside a job scope.
+ */
+export function nextAdmissionKey(contentKey: string): string | null {
+  const scope = jobScopeStore.getStore();
+  if (!scope) return null;
+  const n = scope.admissionOccurrences.get(contentKey) ?? 0;
+  scope.admissionOccurrences.set(contentKey, n + 1);
+  return `${scope.jobId}:${contentKey}:${n}`;
+}
+
+/**
+ * Hand the parent a result for the running job, delivered with its writes in
+ * the `job-result` message and read by the dispatcher's commit hooks once the
+ * batch has landed. A no-op outside a job scope. The value must be
+ * structured-clone safe; the last call wins.
+ */
+export function setJobResult(value: unknown): void {
+  const scope = jobScopeStore.getStore();
+  if (scope) scope.result = value;
+}
+
+/** The running job's result (see {@link setJobResult}). */
+export function takeJobResult(): unknown {
+  return jobScopeStore.getStore()?.result;
 }
 
 export function flushPendingWrites(): ChildWritePayload[] {
@@ -157,6 +259,328 @@ export function appendWrite(method: string, args: unknown[]): void {
 }
 
 // ============================================================================
+// Equipped-outfit read-your-writes overlay (bug 179)
+// ============================================================================
+
+function equippedOutfitKey(chatId: unknown, characterId: unknown): string | null {
+  return typeof chatId === 'string' && typeof characterId === 'string'
+    ? `${chatId}:${characterId}`
+    : null;
+}
+
+/**
+ * Record the slots a buffered `wardrobeWear.commitEquippedOutfit` leaves
+ * behind, so later reads in the same job see them. The chokepoint is the only
+ * slot writer (the equip-chokepoint fence enforces it), so it is the only
+ * write this overlay needs to follow.
+ */
+function recordBufferedOutfitWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn !== 'wardrobeWear.commitEquippedOutfit') return;
+  const input = args[0] as { chatId?: unknown; characterId?: unknown; nextSlots?: unknown } | undefined;
+  const key = equippedOutfitKey(input?.chatId, input?.characterId);
+  const slots = input?.nextSlots;
+  if (!key || !slots || typeof slots !== 'object') return;
+  scope.equippedOutfits.set(key, cloneEquippedSlots(slots as EquippedSlots));
+  log.debug('Recorded buffered outfit write for in-job reads', { jobId: scope.jobId, key });
+}
+
+/** The job's own buffered slots for a character, or undefined to read the snapshot. */
+function bufferedOutfitFor(scope: JobScope | undefined, args: unknown[]): EquippedSlots | undefined {
+  if (!scope || scope.equippedOutfits.size === 0) return undefined;
+  const key = equippedOutfitKey(args[0], args[1]);
+  const slots = key ? scope.equippedOutfits.get(key) : undefined;
+  return slots ? cloneEquippedSlots(slots) : undefined;
+}
+
+// ============================================================================
+// Memory read-your-writes overlay (bug 209)
+// ============================================================================
+
+function memoryOverlayEntry(scope: JobScope, id: string): MemoryOverlayEntry {
+  let entry = scope.memories.get(id);
+  if (!entry) {
+    entry = { patch: {}, reinforcementDelta: 0, deleted: false };
+    scope.memories.set(id, entry);
+  }
+  return entry;
+}
+
+function asId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Record what a buffered memory write will leave behind, so later reads in the
+ * same job see it. Covers every memories write consolidation, housekeeping,
+ * the fold passes and the delete chokepoint issue; the parent's replay is
+ * unchanged.
+ */
+function recordBufferedMemoryWrite(
+  scope: JobScope,
+  methodName: string,
+  args: unknown[],
+  result: unknown,
+): void {
+  switch (methodName) {
+    case 'create': {
+      const row = result as Record<string, unknown> | undefined;
+      const id = asId(row?.id);
+      if (!id || !row) return;
+      const entry = memoryOverlayEntry(scope, id);
+      entry.created = {
+        tier: 'hot',
+        consolidatedFrom: [],
+        relatedMemoryIds: [],
+        reinforcementCount: 1,
+        ...row,
+      };
+      entry.deleted = false;
+      break;
+    }
+    case 'update':
+    case 'updateForCharacter': {
+      const id = asId(methodName === 'update' ? args[0] : args[1]);
+      const patch = methodName === 'update' ? args[1] : args[2];
+      if (!id || !patch || typeof patch !== 'object') return;
+      const entry = memoryOverlayEntry(scope, id);
+      Object.assign(entry.patch, patch);
+      // An absolute list replaces any deltas buffered before it.
+      if ('consolidatedFrom' in patch) entry.consolidatedFromRemoved = undefined;
+      if ('relatedMemoryIds' in patch) {
+        entry.relatedAdded = undefined;
+        entry.relatedRemoved = undefined;
+      }
+      if ('content' in patch) entry.footnotes = undefined;
+      break;
+    }
+    case 'addRelatedMemoryIds':
+    case 'removeRelatedMemoryIds': {
+      const id = asId(args[1]);
+      const ids = Array.isArray(args[2]) ? args[2].filter((m): m is string => typeof m === 'string') : [];
+      if (!id || ids.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      const added = entry.relatedAdded ?? [];
+      const removed = entry.relatedRemoved ?? new Set<string>();
+      if (methodName === 'addRelatedMemoryIds') {
+        for (const m of ids) {
+          removed.delete(m);
+          if (m !== id && !added.includes(m)) added.push(m);
+        }
+      } else {
+        for (const m of ids) {
+          removed.add(m);
+          const at = added.indexOf(m);
+          if (at !== -1) added.splice(at, 1);
+        }
+      }
+      entry.relatedAdded = added;
+      entry.relatedRemoved = removed;
+      break;
+    }
+    case 'removeRelatedMemoryIdsEverywhere': {
+      const ids = Array.isArray(args[0]) ? args[0].filter((m): m is string => typeof m === 'string') : [];
+      for (const m of ids) scope.memoryRelatedScrubs.add(m);
+      break;
+    }
+    case 'appendReinforcementFootnotes': {
+      const id = asId(args[1]);
+      const details = Array.isArray(args[2]) ? args[2].filter((d): d is string => typeof d === 'string') : [];
+      if (!id || details.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      entry.footnotes = [...(entry.footnotes ?? []), ...details];
+      break;
+    }
+    case 'removeConsolidatedMembers': {
+      const id = asId(args[1]);
+      const members = Array.isArray(args[2]) ? args[2].filter((m): m is string => typeof m === 'string') : [];
+      if (!id || members.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      const removed = entry.consolidatedFromRemoved ?? new Set<string>();
+      for (const m of members) removed.add(m);
+      entry.consolidatedFromRemoved = removed;
+      break;
+    }
+    case 'incrementReinforcement': {
+      const id = asId(args[1]);
+      if (!id) return;
+      const entry = memoryOverlayEntry(scope, id);
+      const by = typeof args[3] === 'number' ? args[3] : 1;
+      entry.reinforcementDelta += by;
+      const at = asId(args[2]);
+      if (at && (!entry.lastReinforcedAt || at > entry.lastReinforcedAt)) entry.lastReinforcedAt = at;
+      break;
+    }
+    case 'updateTierBulk': {
+      const ids = Array.isArray(args[1]) ? args[1] : [];
+      const extra = args[3] && typeof args[3] === 'object' ? args[3] : {};
+      for (const raw of ids) {
+        const id = asId(raw);
+        if (!id) continue;
+        const supersededById = (extra as { supersededById?: unknown }).supersededById;
+        const supersession = supersededById === undefined
+          ? {}
+          : { supersededAt: supersededById ? new Date().toISOString() : null };
+        Object.assign(memoryOverlayEntry(scope, id).patch, { tier: args[2] }, extra, supersession);
+      }
+      break;
+    }
+    case 'bulkDeleteUnsafe': {
+      const ids = Array.isArray(args[1]) ? args[1] : [];
+      for (const raw of ids) {
+        const id = asId(raw);
+        if (id) memoryOverlayEntry(scope, id).deleted = true;
+      }
+      break;
+    }
+    default:
+      return;
+  }
+  log.debug('Recorded buffered memory write for in-job reads', { jobId: scope.jobId, method: methodName });
+}
+
+/** A row as this job will leave it, or null when the job deleted it. */
+function readIdList(value: unknown): unknown[] | null {
+  let list: unknown = value;
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list); } catch { list = []; }
+  }
+  if (list === null || list === undefined) return [];
+  return Array.isArray(list) ? list : null;
+}
+
+/** Apply the job's buffered link scrubs to a row read this job (bug 234). */
+function scrubRelatedLinks(scope: JobScope, row: Record<string, unknown>): Record<string, unknown> {
+  const scrubbed = scope.memoryRelatedScrubs;
+  if (scrubbed.size === 0) return row;
+  const list = readIdList(row.relatedMemoryIds);
+  if (!list || !list.some((m) => scrubbed.has(m as string))) return row;
+  return { ...row, relatedMemoryIds: list.filter((m) => !scrubbed.has(m as string)) };
+}
+
+function overlayMemoryRow(
+  base: Record<string, unknown>,
+  entry: MemoryOverlayEntry | undefined,
+  scope: JobScope,
+): Record<string, unknown> | null {
+  if (!entry) return scrubRelatedLinks(scope, base);
+  if (entry.deleted) return null;
+  const row: Record<string, unknown> = { ...base, ...entry.patch };
+  if (entry.relatedAdded?.length || entry.relatedRemoved?.size) {
+    const removed = entry.relatedRemoved ?? new Set<string>();
+    const list = (readIdList(row.relatedMemoryIds) ?? []).filter((m) => !removed.has(m as string));
+    for (const m of entry.relatedAdded ?? []) if (!list.includes(m)) list.push(m);
+    row.relatedMemoryIds = list;
+  }
+  if (entry.footnotes?.length && typeof row.content === 'string') {
+    row.content = appendCappedFootnotes(row.content, entry.footnotes).content;
+  }
+  if (entry.consolidatedFromRemoved && entry.consolidatedFromRemoved.size > 0) {
+    const removed = entry.consolidatedFromRemoved;
+    let list: unknown = row.consolidatedFrom;
+    if (typeof list === 'string') {
+      try { list = JSON.parse(list); } catch { list = []; }
+    }
+    if (Array.isArray(list)) row.consolidatedFrom = list.filter((m) => !removed.has(m as string));
+  }
+  if (entry.reinforcementDelta > 0) {
+    const baseCount = typeof base.reinforcementCount === 'number' ? base.reinforcementCount : 1;
+    const reinforcementCount = baseCount + entry.reinforcementDelta;
+    const importance = typeof row.importance === 'number' ? row.importance : 0.5;
+    row.reinforcementCount = reinforcementCount;
+    row.reinforcedImportance = calculateReinforcedImportance(importance, reinforcementCount);
+    const prior = typeof base.lastReinforcedAt === 'string' ? base.lastReinforcedAt : null;
+    if (entry.lastReinforcedAt && (!prior || entry.lastReinforcedAt > prior)) {
+      row.lastReinforcedAt = entry.lastReinforcedAt;
+    }
+  }
+  return scrubRelatedLinks(scope, row);
+}
+
+/**
+ * Memories reads that answer from the overlay. The id-addressed reads also
+ * return rows this job created; the source-message read (the fold episode
+ * pass's fragment lookup) returns this job's matching creates too. Other
+ * reads have their returned rows patched, never extended.
+ */
+const MEMORY_OVERLAY_READS = new Set([
+  'findById',
+  'findByIdForCharacter',
+  'findByIds',
+  'findByCharacterAndSourceMessageIds',
+]);
+
+function looksLikeRow(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { id?: unknown }).id === 'string';
+}
+
+/** Rows this job created that a read should add, given its arguments. */
+function createdRowsFor(scope: JobScope, methodName: string, args: unknown[]): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const [id, entry] of scope.memories) {
+    const created = entry.created;
+    if (!created) continue;
+    let wanted = false;
+    switch (methodName) {
+      case 'findById':
+        wanted = args[0] === id;
+        break;
+      case 'findByIdForCharacter':
+        wanted = args[1] === id && created.characterId === args[0];
+        break;
+      case 'findByIds':
+        wanted = Array.isArray(args[0]) && args[0].includes(id);
+        break;
+      case 'findByCharacterAndSourceMessageIds': {
+        const sources = Array.isArray(args[1]) ? args[1] : [];
+        const patchedSource = 'sourceMessageId' in entry.patch ? entry.patch.sourceMessageId : created.sourceMessageId;
+        wanted = created.characterId === args[0] && typeof patchedSource === 'string' && sources.includes(patchedSource);
+        break;
+      }
+      default:
+        wanted = false;
+    }
+    if (wanted) out.push(created);
+  }
+  return out;
+}
+
+/** Apply the job's memory overlay to a memories read's result. */
+function applyMemoryOverlay(scope: JobScope, methodName: string, args: unknown[], result: unknown): unknown {
+  const adds = MEMORY_OVERLAY_READS.has(methodName);
+  if (Array.isArray(result)) {
+    const seen = new Set<string>();
+    const out: unknown[] = [];
+    for (const item of result) {
+      if (!looksLikeRow(item)) {
+        out.push(item);
+        continue;
+      }
+      seen.add(item.id as string);
+      const entry = scope.memories.get(item.id as string);
+      const row = overlayMemoryRow(entry?.created ?? item, entry, scope);
+      if (row) out.push(row);
+    }
+    if (adds) {
+      for (const created of createdRowsFor(scope, methodName, args)) {
+        if (seen.has(created.id as string)) continue;
+        const row = overlayMemoryRow(created, scope.memories.get(created.id as string), scope);
+        if (row) out.push(row);
+      }
+    }
+    return out;
+  }
+  if (looksLikeRow(result)) {
+    const entry = scope.memories.get(result.id as string);
+    return overlayMemoryRow(entry?.created ?? result, entry, scope);
+  }
+  if ((result === null || result === undefined) && adds) {
+    const [created] = createdRowsFor(scope, methodName, args);
+    if (created) return overlayMemoryRow(created, scope.memories.get(created.id as string), scope);
+  }
+  return result;
+}
+
+// ============================================================================
 // Method classification
 // ============================================================================
 
@@ -175,7 +599,6 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'conversationChunks.findByInterchangeIndex': 'read',
   'backgroundJobs.findByUserId': 'read',
   'backgroundJobs.findDistinctChatIds': 'read',
-  'vectorIndices.entryExists': 'read',
 
   // ---- Writes with non-conforming names ------------------------------------
   // folders: find-or-create. Buffered *whole* so the parent replays it on its
@@ -189,8 +612,26 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'folders.ensureByPath': 'write',
   // memories
   'memories.updateForCharacter': 'write',
+  // Footnote delta applied against the live row at commit (bug 231).
+  'memories.appendReinforcementFootnotes': 'write',
   // chats
   'chats.updateMessage': 'write',
+  // The transcript counter's bump and its realtime hint. A write, so the parent
+  // replays it on its RW connection; the child's own publish would be a no-op
+  // anyway. Callers discard the return.
+  'chats.announceTranscriptChange': 'write',
+  // Wardrobe wear ledger. `commitEquippedOutfit` is the equip chokepoint: it
+  // writes a character's slots and credits the wears the write represents,
+  // diffing against the prior slots. Buffered whole so the parent replays it
+  // on its RW connection, where the prior state is true — the child's
+  // snapshot is stale within a job and blind to its own earlier writes, so a
+  // child-side diff would double-count. Callers discard the return. The slots
+  // it carries feed the job's equipped-outfit overlay, so a later
+  // `chats.getEquippedOutfitForCharacter` in the same job sees them (bug 179).
+  'wardrobeWear.commitEquippedOutfit': 'write',
+  // Character-delete cleanup: folds rows into the unattributed row. Not
+  // reached from a job today; classified so it can never be mistaken for a read.
+  'wardrobeWear.foldWearerIntoUnattributed': 'write',
   // background jobs
   'backgroundJobs.cancelByType': 'write',
   'backgroundJobs.createBatch': 'write',
@@ -209,11 +650,6 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'helpDocChunks.replaceForDoc': 'write',
   // llm logs
   'llmLogs.cleanupOldLogs': 'write',
-  // vector indices
-  'vectorIndices.addEntry': 'write',
-  'vectorIndices.updateEntryEmbedding': 'write',
-  'vectorIndices.saveMeta': 'write',
-  'vectorIndices.deleteStore': 'write',
   // conversation chunks
   'conversationChunks.upsert': 'write',
   // doc mount points
@@ -417,7 +853,18 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
         // table rather than the repository object.
         return (...args: unknown[]) => {
           const scope = jobScopeStore.getStore();
-          if (scope && scope.recentlyWrittenKeys.size > 0) {
+          if (repoKey === 'chats' && key === 'getEquippedOutfitForCharacter') {
+            const buffered = bufferedOutfitFor(scope, args);
+            if (buffered) return Promise.resolve(buffered);
+          }
+          // Bug 209: memories reads see the job's own buffered writes. The
+          // id-addressed reads in MEMORY_OVERLAY_READS are answered in full,
+          // so the read-your-writes warning below would be a false alarm for
+          // them; other memories reads still warn (a buffered create cannot
+          // join a filtered query) but have the rows they return patched.
+          const overlaid = repoKey === 'memories' && !!scope
+            && (scope.memories.size > 0 || scope.memoryRelatedScrubs.size > 0);
+          if (scope && scope.recentlyWrittenKeys.size > 0 && !(overlaid && MEMORY_OVERLAY_READS.has(key))) {
             const readKey = `${repoKey}.${key}`;
             if (!scope.warnedReads.has(readKey)) {
               const readGroup = tableGroup(repoKey, key);
@@ -435,7 +882,12 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
               }
             }
           }
-          return (real as (...a: unknown[]) => unknown).apply(target, args);
+          const answered = (real as (...a: unknown[]) => unknown).apply(target, args);
+          // Async iterators (the batched corpus reads) pass through untouched.
+          if (overlaid && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
+            return (answered as Promise<unknown>).then((res) => applyMemoryOverlay(scope!, key, args, res));
+          }
+          return answered;
         };
       }
 
@@ -447,6 +899,9 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           // caller now has.
           const result = syntheticWriteResult(key, args);
           appendWrite(`${repoKey}.${key}`, args);
+          const scope = jobScopeStore.getStore();
+          if (scope) recordBufferedOutfitWrite(scope, `${repoKey}.${key}`, args);
+          if (scope && repoKey === 'memories') recordBufferedMemoryWrite(scope, key, args, result);
           // Real repository write methods are async; mirror that here so
           // callers that chain `.then` / `.catch` / `Promise.all` against
           // the proxy don't trip on a synchronous `undefined`.
@@ -493,7 +948,7 @@ export function getChildRepositoriesProxy(): RepositoryContainer {
   // Build a wrapping object whose own keys mirror the real container, but
   // whose values are repo-Proxy wrappers. We can't Proxy the container
   // itself because property access patterns inside Quilltap include
-  // `repos.memories.create(...)` — and we want the inner Proxy to be
+  // `repos.memories.create` called directly — and we want the inner Proxy to be
   // returned synchronously.
   const wrapped: Record<string, unknown> = {};
   for (const key of Object.keys(real) as Array<keyof RepositoryContainer>) {

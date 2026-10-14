@@ -842,4 +842,38 @@ describe('LLMLogsRepository', () => {
       expect(mockDb.exec).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('getStatsByProfile — image spend (bug 196)', () => {
+    function withPrepare() {
+      const all = jest.fn().mockReturnValue([]);
+      const prepare = jest.fn().mockReturnValue({ all });
+      mockGetRawLLMLogsDatabase.mockReturnValue({ ...mockDb, prepare });
+      return { prepare, all };
+    }
+
+    it('filters on every type it is given, wardrobe pictures included', async () => {
+      const { IMAGE_SPEND_LOG_TYPES } = jest.requireActual('@/lib/schemas/llm-log.types') as typeof import('@/lib/schemas/llm-log.types');
+      const { prepare, all } = withPrepare();
+
+      await repo.getStatsByProfile(USER_ID, 'imageProfileId', { type: IMAGE_SPEND_LOG_TYPES });
+
+      expect(IMAGE_SPEND_LOG_TYPES).toEqual(expect.arrayContaining(['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE']));
+      expect(prepare.mock.calls[0][0]).toContain('AND "type" IN (?, ?)');
+      expect(all).toHaveBeenCalledWith(USER_ID, 'IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE');
+    });
+
+    it('still takes a single type', async () => {
+      const { prepare, all } = withPrepare();
+      await repo.getStatsByProfile(USER_ID, 'imageProfileId', { type: 'IMAGE_GENERATION' });
+      expect(prepare.mock.calls[0][0]).toContain('AND "type" IN (?)');
+      expect(all).toHaveBeenCalledWith(USER_ID, 'IMAGE_GENERATION');
+    });
+
+    it('applies no type filter when none is given', async () => {
+      const { prepare, all } = withPrepare();
+      await repo.getStatsByProfile(USER_ID, 'connectionProfileId');
+      expect(prepare.mock.calls[0][0]).not.toContain('"type" IN');
+      expect(all).toHaveBeenCalledWith(USER_ID);
+    });
+  });
 });

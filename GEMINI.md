@@ -86,6 +86,6 @@ The project uses a set of themed names for its various features and subsystems.
 | **Calliope** | UI/UX, appearance, and theme settings. | `/settings?tab=appearance` |
 | **The Commonplace Book**| The character memory system (self-managed RAG). | `/settings?tab=memory` |
 | **The Lantern** | Image generation subsystem. | `/settings?tab=images` |
-| **The Concierge** | Dangerous content tracking and rerouting system. | `/settings?tab=chat` |
+| **The Concierge** | Refusal failover to an uncensored desk, per-chat Moderated / Unmoderated / Locked, opt-in pre-screen. | `/settings?tab=concierge` |
 | **The Librarian** | A synthetic author for Document Mode file events. | (In-chat messages) |
 | **The Host** | A synthetic author for chat participation events. | (In-chat messages) |

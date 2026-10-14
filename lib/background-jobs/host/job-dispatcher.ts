@@ -28,6 +28,7 @@ import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-c
 import type { BackgroundJob } from '@/lib/schemas/types';
 import type { ChildJobResultMessage, ChildWritePayload } from '../ipc-types';
 import { sendToChild, notifyChild } from './processor-host';
+import { memoryIdsNeedingOwnerLookup, vectorStoreKeysForWrites } from './vector-store-invalidation';
 import {
   partitionWrites,
   isMainPrimaryJobType,
@@ -38,6 +39,7 @@ import {
 } from './write-partition';
 import fs from 'fs';
 import path from 'path';
+import type { ConciergeDangerDetails } from '@/lib/services/concierge-notifications/writer';
 
 const log = logger.child({ module: 'jobs:dispatcher' });
 
@@ -252,6 +254,16 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     for (const hint of topicsForCompletedJob(job?.type, job?.payload as Record<string, unknown> | undefined)) {
       publishRealtime(hint.topic, hint.id);
     }
+    void invalidateFrozenArchivesForCompletedJob(job);
+    // Maintenance watermark: the counts must see the rows this batch just
+    // committed, so it runs here.
+    void checkMaintenanceWatermarkAfterCommit(job, msg.writes);
+    // A maintenance run's outcome goes into the parent's ledger only once its
+    // writes have landed.
+    void recordMaintenanceAfterCommit(job, msg.result);
+    // The Commonplace vault mirror describes committed digests only, so it is
+    // written here, after the batch lands — never from the child (bug 208).
+    void mirrorCommonplaceAfterCommit(job, msg.writes);
   } catch (err) {
     const errorMessage = getErrorMessage(err);
     log.error('Failed to apply child writes; marking job failed', {
@@ -363,6 +375,12 @@ export async function applyWritesUnsafe(
   jobType?: string,
 ): Promise<void> {
   const parts = partitionWrites(writes);
+  // Memory-id-keyed writes (`memories.update`) name no character; resolve
+  // their owners now, while the row still exists to be read (bug 217).
+  const memoryOwners = lookupMemoryOwners(memoryIdsNeedingOwnerLookup(writes), jobId);
+  // Likewise the subject buckets of any digest the batch deletes, so their
+  // Commonplace mirror can be refreshed once the delete has committed.
+  const deletedDigestBuckets = await lookupDeletedDigestBuckets(writes, jobId);
 
   if (isMainPrimaryJobType(jobType)) {
     await applyPartition('main', getRawDatabase(), parts.main, jobId);
@@ -379,7 +397,120 @@ export async function applyWritesUnsafe(
   // fire cache invalidations across the whole batch. Both are idempotent and
   // safe even when a best-effort secondary partition was dropped.
   cleanupStagingDirs(writes, jobId);
-  dispatchInvalidations(writes);
+  dispatchInvalidations(writes, memoryOwners);
+  void mirrorDeletedDigestsAfterCommit(deletedDigestBuckets, jobId);
+
+  // The Concierge's refusal ledger: a child can buffer an increment but can
+  // neither read the resulting count nor act on it, so the auto-switch check
+  // runs here, where the count is authoritative. Still inside the apply chain,
+  // so the flip's own writes cannot land in another job's open transaction.
+  await runRefusalLedgerChecks(writes, jobId);
+  await runClassifierSwitchChecks(writes, jobId);
+}
+
+/** The buffered write that records a moderation refusal on a chat. */
+export const REFUSAL_LEDGER_INCREMENT = 'chats.incrementModerationRefusalCount';
+
+/**
+ * Every chat whose refusal ledger this batch incremented, once each, with the
+ * last refusing provider the batch named for it (the increment's optional
+ * third argument). Pure; exported for tests.
+ */
+export function chatsWithRecordedRefusals(
+  writes: ChildWritePayload[],
+): Map<string, { provider: string; modelName?: string | null } | null> {
+  const chats = new Map<string, { provider: string; modelName?: string | null } | null>();
+  for (const w of writes) {
+    if (w.method !== REFUSAL_LEDGER_INCREMENT) continue;
+    const [chatId, , refusedBy] = w.args as [unknown, unknown, unknown];
+    if (typeof chatId !== 'string' || !chatId) continue;
+    const who = refusedBy && typeof refusedBy === 'object' && typeof (refusedBy as { provider?: unknown }).provider === 'string'
+      ? refusedBy as { provider: string; modelName?: string | null }
+      : null;
+    // Later increments overwrite earlier ones: the announcement names the last.
+    chats.set(chatId, who ?? chats.get(chatId) ?? null);
+  }
+  return chats;
+}
+
+/**
+ * Run the auto-switch check once per chat whose ledger a committed child batch
+ * changed. Best-effort: the writes are already committed, so a failure here is
+ * logged and never fails the job. The ledger module is imported dynamically to
+ * keep the Concierge's service graph out of the dispatcher's static imports.
+ */
+async function runRefusalLedgerChecks(writes: ChildWritePayload[], jobId: string): Promise<void> {
+  const chats = chatsWithRecordedRefusals(writes);
+  if (chats.size === 0) return;
+  log.debug('Child batch recorded moderation refusals; running the auto-switch check', {
+    jobId,
+    chatIds: [...chats.keys()],
+  });
+  try {
+    const { maybeAutoSwitchAfterRefusal } = await import(
+      '@/lib/services/dangerous-content/refusal-ledger'
+    );
+    for (const [chatId, lastRefusal] of chats) {
+      await maybeAutoSwitchAfterRefusal(chatId, lastRefusal);
+    }
+  } catch (err) {
+    log.error('Refusal-ledger auto-switch check failed after a committed batch', {
+      jobId,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/** The buffered write that records the chat-level danger classifier's verdict. */
+export const DANGER_CLASSIFICATION_WRITE = 'chats.setDangerClassification';
+
+/**
+ * Every chat this batch classified dangerous, once each, with the verdict the
+ * write carried (its optional third argument; the last one wins). Pure;
+ * exported for tests.
+ */
+export function chatsWithDangerVerdicts(
+  writes: ChildWritePayload[],
+): Map<string, ConciergeDangerDetails | null> {
+  const chats = new Map<string, ConciergeDangerDetails | null>();
+  for (const w of writes) {
+    if (w.method !== DANGER_CLASSIFICATION_WRITE) continue;
+    const [chatId, telemetry, verdict] = w.args as [unknown, unknown, unknown];
+    if (typeof chatId !== 'string' || !chatId) continue;
+    const dangerous = !!telemetry && typeof telemetry === 'object'
+      && (telemetry as { isDangerousChat?: unknown }).isDangerousChat === true;
+    if (!dangerous) continue;
+    chats.set(chatId, verdict && typeof verdict === 'object' ? verdict as ConciergeDangerDetails : null);
+  }
+  return chats;
+}
+
+/**
+ * Ask whether each chat a committed child batch classified dangerous should
+ * move to Unmoderated — decided here, in the parent, against the chat as it
+ * stands now. Best-effort like the refusal-ledger check: the batch is already
+ * committed, so a failure is logged and never fails the job.
+ */
+async function runClassifierSwitchChecks(writes: ChildWritePayload[], jobId: string): Promise<void> {
+  const chats = chatsWithDangerVerdicts(writes);
+  if (chats.size === 0) return;
+  log.debug('Child batch recorded a dangerous classification; running the classifier switch', {
+    jobId,
+    chatIds: [...chats.keys()],
+  });
+  try {
+    const { maybeSwitchAfterClassification } = await import(
+      '@/lib/services/dangerous-content/classifier-switch'
+    );
+    for (const [chatId, verdict] of chats) {
+      await maybeSwitchAfterClassification(chatId, verdict);
+    }
+  } catch (err) {
+    log.error('Classifier switch failed after a committed batch', {
+      jobId,
+      error: getErrorMessage(err),
+    });
+  }
 }
 
 /**
@@ -521,7 +652,177 @@ async function applyFolderCreateIdempotent(
   }
 }
 
-function dispatchInvalidations(writes: ChildWritePayload[]): void {
+/**
+ * Corpus-wide memory jobs change what a character's frozen memory archive
+ * should hold. The archive cache lives here in the parent (the context builder
+ * runs here), so a sweep that ran in the child is announced at this, its
+ * commit moment. Ordinary per-turn memory writes deliberately do NOT
+ * invalidate — that would rebuild the archive every turn and defeat the
+ * prefix cache it exists for.
+ */
+const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_MAINTENANCE']);
+
+/**
+ * After a batch commits, let the maintenance watermark look at every character
+ * the batch created memories for. Best-effort and off the result path: the
+ * helper reads the settings and returns at once when maintenance and
+ * consolidation are both off.
+ */
+async function checkMaintenanceWatermarkAfterCommit(
+  job: BackgroundJob | undefined,
+  writes: ChildWritePayload[],
+): Promise<void> {
+  try {
+    const mod = await import('@/lib/memory/maintenance/triggers');
+    await mod.maybeEnqueueMaintenanceAfterCommit(job?.type, writes);
+  } catch (err) {
+    log.debug('Maintenance watermark check skipped after job', {
+      jobId: job?.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/**
+ * After a MEMORY_MAINTENANCE batch commits, record the summary its handler
+ * handed back in the parent's ledger (the archive invalidation, the realtime
+ * hints and the mirror have their own hooks). Best-effort.
+ */
+async function recordMaintenanceAfterCommit(job: BackgroundJob | undefined, result: unknown): Promise<void> {
+  if (job?.type !== 'MEMORY_MAINTENANCE' || !result || typeof result !== 'object') return;
+  try {
+    const mod = await import('@/lib/memory/maintenance/ledger');
+    mod.recordMaintenanceOutcome(result as Parameters<typeof mod.recordMaintenanceOutcome>[0]);
+  } catch (err) {
+    log.debug('Maintenance outcome not recorded after job', {
+      jobId: job.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/**
+ * After a consolidation batch commits, rewrite the holder's `Commonplace/`
+ * files for the buckets it touched, from the committed rows. A batch that
+ * failed to commit never reaches this, so the vault never describes a digest
+ * that was not saved. Best-effort and off the result path.
+ */
+async function mirrorCommonplaceAfterCommit(
+  job: BackgroundJob | undefined,
+  writes: ChildWritePayload[],
+): Promise<void> {
+  try {
+    const mod = await import('@/lib/memory/commonplace-mirror');
+    await mod.mirrorCommonplaceAfterCommit(job?.type, job?.payload as Record<string, unknown> | undefined, writes);
+  } catch (err) {
+    log.warn('Commonplace mirror skipped after job', {
+      jobId: job?.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/**
+ * Before a batch commits: the holders and subjects of the digests it deletes.
+ * Reads nothing when the batch deletes no memories.
+ */
+async function lookupDeletedDigestBuckets(
+  writes: ChildWritePayload[],
+  jobId: string,
+): Promise<Map<string, Set<string>>> {
+  try {
+    const mod = await import('@/lib/memory/commonplace-mirror');
+    return await mod.digestBucketsDeletedByWrites(writes);
+  } catch (err) {
+    log.debug('Deleted-digest lookup skipped before commit', { jobId, error: getErrorMessage(err) });
+    return new Map();
+  }
+}
+
+/**
+ * After a batch that deleted digests commits, rewrite those buckets'
+ * `Commonplace/` files from what remains, so the vault stops presenting a
+ * deleted digest as canon. Best-effort and off the result path.
+ */
+async function mirrorDeletedDigestsAfterCommit(
+  buckets: Map<string, Set<string>>,
+  jobId: string,
+): Promise<void> {
+  if (buckets.size === 0) return;
+  try {
+    const mod = await import('@/lib/memory/commonplace-mirror');
+    await mod.mirrorCommonplaceForDeletedDigests(buckets);
+  } catch (err) {
+    log.warn('Commonplace mirror after digest delete skipped', { jobId, error: getErrorMessage(err) });
+  }
+}
+
+export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob | undefined): Promise<void> {
+  if (!job || !JOBS_INVALIDATING_FROZEN_ARCHIVE.has(job.type)) return;
+  const payload = job.payload as Record<string, unknown> | undefined;
+  if (payload?.dryRun === true) return;
+  try {
+    const mod = await import('@/lib/memory/recall/archive');
+    const characterId = typeof payload?.characterId === 'string' ? payload.characterId : null;
+    if (!characterId) return;
+    mod.invalidateFrozenArchive(characterId);
+    log.debug('Invalidated frozen memory archives after job', {
+      jobId: job.id,
+      type: job.type,
+      characterId,
+    });
+  } catch (err) {
+    log.warn('Failed to invalidate frozen memory archives after job', {
+      jobId: job.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/**
+ * Map memory ids to their owning character, read from the main database before
+ * a batch commits. The memory rows are the only copy (the `vector_entries`
+ * mirror was retired in 4.10), and a row the batch deletes is keyed by its
+ * `characterArg`, so only memory-id-keyed writes to live rows need this.
+ * Best-effort: a failed read resolves nothing, and says so.
+ */
+function lookupMemoryOwners(memoryIds: string[], jobId: string): Map<string, string> {
+  const owners = new Map<string, string>();
+  if (memoryIds.length === 0) return owners;
+  try {
+    const db = getRawDatabase();
+    if (!db) return owners;
+    const CHUNK = 500;
+    for (let i = 0; i < memoryIds.length; i += CHUNK) {
+      const chunk = memoryIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = db
+        .prepare(
+          `SELECT "id", "characterId" FROM "memories" WHERE "id" IN (${placeholders})`,
+        )
+        .all(...chunk) as Array<{ id: string; characterId: string | null }>;
+      for (const row of rows) {
+        if (row.characterId) owners.set(row.id, row.characterId);
+      }
+    }
+    log.debug('Resolved memory owners for vector-store invalidation', {
+      jobId,
+      requested: memoryIds.length,
+      resolved: owners.size,
+    });
+  } catch (err) {
+    log.warn('Memory owner lookup for vector-store invalidation failed', {
+      jobId,
+      error: getErrorMessage(err),
+    });
+  }
+  return owners;
+}
+
+function dispatchInvalidations(
+  writes: ChildWritePayload[],
+  memoryOwners: ReadonlyMap<string, string> = new Map(),
+): void {
   // Realtime hints for whatever entities this batch touched. Separate from the
   // server-side cache invalidation below — that one is about *this* process's
   // in-memory caches, this one is about every open tab's query cache — but they
@@ -532,16 +833,12 @@ function dispatchInvalidations(writes: ChildWritePayload[]): void {
 
   // Collect unique invalidation targets up front so we don't fire duplicates
   // when a single batch touches the same character/mount-point repeatedly.
-  const vectorStoreKeys = new Set<string>();
+  // Vector stores are keyed by character; each write method's argument shape
+  // is stated once in vector-store-invalidation.ts (bug 217).
+  const vectorStoreKeys = vectorStoreKeysForWrites(writes, memoryOwners);
   const mountPointKeys = new Set<string>();
 
   for (const w of writes) {
-    // Many of the listed methods take the id as a top-level field on the
-    // first arg, or as the first positional arg; firstIdArg probes both shapes.
-    const charId = firstIdArg(w.args, 'characterId');
-    if (charId && WRITES_INVALIDATING_VECTOR_STORE.has(w.method)) {
-      vectorStoreKeys.add(charId);
-    }
     const mountId = firstIdArg(w.args, 'mountPointId');
     if (mountId && WRITES_INVALIDATING_MOUNT_CACHE.has(w.method)) {
       mountPointKeys.add(mountId);
@@ -566,10 +863,9 @@ async function invalidateLocalCachesAsync(
 ): Promise<void> {
   if (vectorStoreKeys.size > 0) {
     try {
-      const mod = await import('@/lib/embedding/vector-store');
-      const mgr = mod.getVectorStoreManager();
+      const { memoryIndex } = await import('@/lib/memory/index-store');
       for (const key of vectorStoreKeys) {
-        try { mgr.unloadStore(key); }
+        try { memoryIndex.reload(key); }
         catch { /* best effort */ }
       }
     } catch { /* best effort */ }
@@ -585,17 +881,6 @@ async function invalidateLocalCachesAsync(
     } catch { /* best effort */ }
   }
 }
-
-const WRITES_INVALIDATING_VECTOR_STORE = new Set<string>([
-  'vectorIndices.deleteStore',
-  'vectorIndices.addEntry',
-  'vectorIndices.updateEntryEmbedding',
-  'vectorIndices.saveMeta',
-  'memories.updateForCharacter',
-  'memories.delete',
-  'memories.create',
-  'memories.upsert',
-]);
 
 const WRITES_INVALIDATING_MOUNT_CACHE = new Set<string>([
   'docMountChunks.upsert',

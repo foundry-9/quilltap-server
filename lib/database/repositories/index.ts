@@ -37,7 +37,6 @@ export { ProviderModelsRepository } from './provider-models.repository';
 export { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 export { TagsRepository } from './tags.repository';
 export { UsersRepository } from './users.repository';
-export { VectorIndicesRepository } from './vector-indices.repository';
 export { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
@@ -57,6 +56,9 @@ export { ProjectDocMountLinksRepository } from './project-doc-mount-links.reposi
 export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
 export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
+export { ChatInformsRepository } from './chat-informs.repository';
+export { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
+export { WardrobeWearRepository } from './wardrobe-wear.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
 
@@ -80,7 +82,6 @@ import { ProviderModelsRepository } from './provider-models.repository';
 import { RoleplayTemplatesRepository } from './roleplay-templates.repository';
 import { TagsRepository } from './tags.repository';
 import { UsersRepository } from './users.repository';
-import { VectorIndicesRepository } from './vector-indices.repository';
 import { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
@@ -100,6 +101,9 @@ import { ProjectDocMountLinksRepository } from './project-doc-mount-links.reposi
 import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
 import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
+import { ChatInformsRepository } from './chat-informs.repository';
+import { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
+import { WardrobeWearRepository } from './wardrobe-wear.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
 
@@ -128,7 +132,6 @@ export interface RepositoryContainer {
   roleplayTemplates: RoleplayTemplatesRepository;
   tags: TagsRepository;
   users: UsersRepository;
-  vectorIndices: VectorIndicesRepository;
   tfidfVocabularies: TfidfVocabularyRepository;
   embeddingStatus: EmbeddingStatusRepository;
   wardrobe: WardrobeRepository;
@@ -148,6 +151,9 @@ export interface RepositoryContainer {
   groupDocMountLinks: GroupDocMountLinksRepository;
   groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
+  chatInforms: ChatInformsRepository;
+  memoryExtractionCursors: MemoryExtractionCursorsRepository;
+  wardrobeWear: WardrobeWearRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
 }
@@ -166,11 +172,12 @@ let repositoryInstance: RepositoryContainer | null = null;
 export function createRepositories(): RepositoryContainer {
   try {
     const filesRepo = new FilesRepository();
+    const chatsRepo = new ChatsRepository();
 
     const repositories: RepositoryContainer = {
       backgroundJobs: new BackgroundJobsRepository(),
       characters: new CharactersRepository(),
-      chats: new ChatsRepository(),
+      chats: chatsRepo,
       chatSettings: new ChatSettingsRepository(),
       connections: new ConnectionProfilesRepository(),
       embeddingProfiles: new EmbeddingProfilesRepository(),
@@ -188,7 +195,6 @@ export function createRepositories(): RepositoryContainer {
       roleplayTemplates: new RoleplayTemplatesRepository(),
       tags: new TagsRepository(),
       users: new UsersRepository(),
-      vectorIndices: new VectorIndicesRepository(),
       tfidfVocabularies: new TfidfVocabularyRepository(),
       embeddingStatus: new EmbeddingStatusRepository(),
       wardrobe: new WardrobeRepository(),
@@ -208,6 +214,10 @@ export function createRepositories(): RepositoryContainer {
       groupDocMountLinks: new GroupDocMountLinksRepository(),
       groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
+      chatInforms: new ChatInformsRepository(),
+      memoryExtractionCursors: new MemoryExtractionCursorsRepository(),
+      // The wear ledger's chokepoint writes equipped slots through this chats repo.
+      wardrobeWear: new WardrobeWearRepository(chatsRepo),
       terminalSessions: new TerminalSessionsRepository(),
       textReplacementRules: new TextReplacementRulesRepository(),
     };

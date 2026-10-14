@@ -724,9 +724,13 @@ export interface TextProviderPlugin {
    * `parameters` bag the values land in.
    *
    * Field keys must match what the plugin reads off
-   * `ImageGenParams.profileParameters` at call time, with two exceptions the
-   * host owns outright: `size` and `aspectRatio` keep their existing storage
-   * keys so profiles written by the old hand-rolled panel keep working.
+   * `ImageGenParams.profileParameters` at call time, with three exceptions the
+   * host owns outright: `size`, `aspectRatio` and `quality` keep their existing
+   * storage keys so profiles written by the old hand-rolled panel keep working.
+   * The host lifts those three out of the residual bag onto the named
+   * `ImageGenParams` fields, so a plugin declaring them here reads them from
+   * `params.size` / `params.aspectRatio` / `params.quality`, not from
+   * `profileParameters`.
    *
    * Unlike the text hook, `context.modelName` here is *not* advisory: image
    * providers routing to hundreds of models legitimately return a different

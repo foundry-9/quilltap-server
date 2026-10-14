@@ -1,0 +1,140 @@
+/**
+ * Tests for the Commonplace digest vault bridge (memory-consolidation-and-tiers.md §C6):
+ * the archived-character tombstone, the job-child refusal (bug 208: the mirror
+ * is parent-only, written after commit), and the skip-when-unchanged rewrite.
+ *
+ * `@/lib/repositories/factory` and `@/lib/file-storage/character-vault-bridge`
+ * are mocked app-wide in jest.setup.ts — configured per-test here.
+ */
+
+jest.mock('@/lib/mount-index/database-store', () => ({
+  writeDatabaseDocument: jest.fn().mockResolvedValue({ mtime: 0 }),
+  readDatabaseDocumentIfExists: jest.fn().mockResolvedValue(null),
+  deleteDatabaseDocumentIfExists: jest.fn().mockResolvedValue(false),
+}))
+
+jest.mock('@/lib/mount-index/folder-paths', () => ({
+  ensureFolderPath: jest.fn().mockResolvedValue('folder-id'),
+}))
+
+jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
+  callHost: jest.fn(),
+}))
+
+import { writeCommonplaceDigestsToVault, type WriteCommonplaceDigestsInput } from '@/lib/file-storage/commonplace-digest-vault-bridge'
+import { getRepositories } from '@/lib/repositories/factory'
+import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge'
+import {
+  deleteDatabaseDocumentIfExists,
+  readDatabaseDocumentIfExists,
+  writeDatabaseDocument,
+} from '@/lib/mount-index/database-store'
+import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
+import { callHost } from '@/lib/background-jobs/child/host-rpc-client'
+
+const mockGetRepositories = jest.mocked(getRepositories)
+const mockVault = jest.mocked(getCharacterVaultStore)
+const mockRead = jest.mocked(readDatabaseDocumentIfExists)
+const mockWrite = jest.mocked(writeDatabaseDocument)
+const mockCallHost = jest.mocked(callHost)
+const mockDelete = jest.mocked(deleteDatabaseDocumentIfExists)
+
+const input: WriteCommonplaceDigestsInput = {
+  holderCharacterId: 'friday-1',
+  updatedAt: '2026-10-08T00:00:00.000Z',
+  files: [
+    {
+      subjectCharacterId: 'laura-1',
+      subjectName: 'Laura',
+      isSelf: false,
+      digests: [{ content: 'Laura keeps the charts.', kind: 'semantic', occurredAt: null, reinforcedImportance: 0.8 }],
+    },
+    {
+      subjectCharacterId: 'friday-1',
+      subjectName: 'Friday',
+      isSelf: true,
+      digests: [{ content: 'I keep the ledgers.', kind: 'semantic', occurredAt: null, reinforcedImportance: 0.7 }],
+    },
+  ],
+}
+
+function withHolder(holder: Record<string, unknown> | null): void {
+  mockGetRepositories.mockReturnValue({
+    characters: { findByIdRaw: jest.fn(async () => holder) },
+  } as unknown as ReturnType<typeof getRepositories>)
+}
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  delete process.env.QUILLTAP_JOB_CHILD
+  withHolder({ id: 'friday-1', name: 'Friday', archivedAt: null })
+  mockVault.mockResolvedValue({ mountPointId: 'vault-1', mountPointName: 'Friday Vault' })
+  mockRead.mockResolvedValue(null)
+})
+
+afterAll(() => {
+  delete process.env.QUILLTAP_JOB_CHILD
+})
+
+describe('writeCommonplaceDigestsToVault', () => {
+  it('writes Commonplace/<Subject>.md and Commonplace/Self.md into the holder vault', async () => {
+    const result = await writeCommonplaceDigestsToVault(input)
+    expect(ensureFolderPath).toHaveBeenCalledWith('vault-1', 'Commonplace')
+    expect(mockWrite.mock.calls.map((c) => c[1])).toEqual(['Commonplace/Laura.md', 'Commonplace/Self.md'])
+    expect(mockWrite.mock.calls[0][2]).toContain('type: commonplace-digest')
+    expect(result.written).toBe(2)
+  })
+
+  it('skips an archived holder without touching its vault', async () => {
+    withHolder({ id: 'friday-1', name: 'Friday', archivedAt: '2026-09-01T00:00:00.000Z' })
+    const result = await writeCommonplaceDigestsToVault(input)
+    expect(result.skippedReason).toBe('archived')
+    expect(mockVault).not.toHaveBeenCalled()
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('does not rewrite a file whose digests are unchanged (only the stamp moved)', async () => {
+    await writeCommonplaceDigestsToVault(input)
+    const firstLaura = mockWrite.mock.calls[0][2]
+    mockWrite.mockClear()
+    mockRead.mockImplementation(async (_mp, path) =>
+      path === 'Commonplace/Laura.md' ? firstLaura.replace('2026-10-08', '2026-10-01') : null,
+    )
+    const result = await writeCommonplaceDigestsToVault({ ...input, updatedAt: '2026-10-09T00:00:00.000Z' })
+    expect(result.unchanged).toBe(1)
+    expect(mockWrite.mock.calls.map((c) => c[1])).toEqual(['Commonplace/Self.md'])
+  })
+
+  it('refuses in the job child: no host-RPC, no vault write (bug 208)', async () => {
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    const result = await writeCommonplaceDigestsToVault(input)
+    expect(result.skippedReason).toBe('job-child')
+    expect(result.skipped).toBe(2)
+    expect(mockCallHost).not.toHaveBeenCalled()
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('removes the file of a bucket whose last hot digest was deleted', async () => {
+    mockDelete.mockResolvedValueOnce(true)
+    const result = await writeCommonplaceDigestsToVault({
+      ...input,
+      files: [{ ...input.files[0], digests: [] }, input.files[1]],
+    })
+    expect(mockDelete).toHaveBeenCalledWith('vault-1', 'Commonplace/Laura.md')
+    expect(mockWrite.mock.calls.map((c) => c[1])).toEqual(['Commonplace/Self.md'])
+    expect(result.removed).toBe(1)
+  })
+
+  it('an emptied bucket with no file is a no-op, and touches nothing in the child', async () => {
+    const emptied = { ...input, files: [{ ...input.files[0], digests: [] }] }
+    const result = await writeCommonplaceDigestsToVault(emptied)
+    expect(result.removed ?? 0).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(ensureFolderPath).not.toHaveBeenCalled()
+
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    mockDelete.mockClear()
+    await writeCommonplaceDigestsToVault(emptied)
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+})

@@ -14,7 +14,13 @@ import {
   getPropertiesSuggestionPrompt,
   getNewSystemPromptsSuggestionPrompt,
   coerceSuggestionArray,
+  SUGGESTION_SCHEMA_PREAMBLE,
 } from '@/lib/services/character-optimizer.service'
+import {
+  TRUST_SAFEGUARDS_DIRECTION,
+  COMPANION_TRUST_DISPOSITION,
+  COMMITTEE_DRIFT_GUARDRAIL,
+} from '@/lib/services/character-field-semantics'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
 import type { CharacterScenario, CharacterSystemPrompt, PhysicalDescription } from '@/lib/schemas/types'
@@ -321,6 +327,57 @@ describe('per-item suggestion prompts', () => {
     it('instructs at most one suggestion', () => {
       const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
       expect(result.toLowerCase()).toContain('at most one suggestion')
+    })
+
+    it('keeps the interaction-style, listening, and repetition guardrails', () => {
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      expect(result).toContain("Do NOT change the prompt's evident interaction style")
+      expect(result).toContain("Never remove or weaken the prompt's direction about listening")
+      expect(result).toContain('Do NOT codify repetition')
+    })
+
+    it('carries the trust safeguards and the committee guardrail', () => {
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      expect(result).toContain(TRUST_SAFEGUARDS_DIRECTION)
+      expect(result).toContain(COMMITTEE_DRIFT_GUARDRAIL)
+      expect(result).toContain("Never remove or weaken the prompt's trust safeguards")
+    })
+
+    it('gates the companion trust disposition on the prompt framing', () => {
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const gate = result.indexOf('If the prompt under review frames the character as {{user}}')
+      expect(gate).toBeGreaterThan(-1)
+      expect(result.indexOf(COMPANION_TRUST_DISPOSITION)).toBeGreaterThan(gate)
+    })
+  })
+
+  describe('SUGGESTION_SCHEMA_PREAMBLE', () => {
+    it("forbids suggestions that constrain the user's persona", () => {
+      expect(SUGGESTION_SCHEMA_PREAMBLE).toContain(
+        "Never propose a trait, rule, or condition that constrains what {{user}}'s persona may do",
+      )
+      expect(SUGGESTION_SCHEMA_PREAMBLE).toMatch(/drift to correct, not behaviour to capture/)
+    })
+
+    it('rides into every suggestion pass', () => {
+      expect(getGeneralFieldsSuggestionsPrompt(mockAnalysis)).toContain(SUGGESTION_SCHEMA_PREAMBLE)
+      expect(getNewSystemPromptsSuggestionPrompt(mockAnalysis)).toContain(SUGGESTION_SCHEMA_PREAMBLE)
+    })
+  })
+
+  describe('committee drift in the analysis and new-prompt passes', () => {
+    it('analysis prompt looks for committee drift and carries the guardrail', () => {
+      const result = getAnalysisPrompt()
+      expect(result).toMatch(/Committee drift/)
+      expect(result).toContain(COMMITTEE_DRIFT_GUARDRAIL)
+    })
+
+    it('new-prompt pass carries the trust safeguards and gated disposition', () => {
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
+      expect(result).toContain(TRUST_SAFEGUARDS_DIRECTION)
+      const gate = result.indexOf('If the existing prompts frame the character as {{user}}')
+      expect(gate).toBeGreaterThan(-1)
+      expect(result.indexOf(COMPANION_TRUST_DISPOSITION)).toBeGreaterThan(gate)
     })
   })
 

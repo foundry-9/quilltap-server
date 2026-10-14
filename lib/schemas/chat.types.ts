@@ -108,6 +108,36 @@ export function isModerationExemptChatType(chatType: string | null | undefined):
   return chatType === 'help' || chatType === 'brahma';
 }
 
+/**
+ * Whether the operator speaks in a chat of this type even without a seat of
+ * their own — in which case an unseated persona (the system-wide sole
+ * user-controlled character) is the voice of every USER message, and so is
+ * "in the room". False only for autonomous rooms: every seat there is a
+ * character, the operator watches, and an Inform is a record, never a voice.
+ * An unseated persona in an autonomous room is off the scene like anyone else
+ * (bug 172).
+ */
+export function operatorSpeaksWithoutSeat(chatType: string | null | undefined): boolean {
+  return chatType !== 'autonomous';
+}
+
+/**
+ * The three Concierge postures a chat can be in (`chats.conciergeMode`):
+ * `'moderated'` (ordinary providers first, uncensored on refusal),
+ * `'unmoderated'` (the uncensored desk only) and `'locked'` (ordinary only,
+ * never failover). These are also the wire values of `conciergeState`.
+ */
+export const ConciergeModeSchema = z.enum(['moderated', 'unmoderated', 'locked']);
+export type ConciergeMode = z.infer<typeof ConciergeModeSchema>;
+
+/** Who put a chat in its Concierge posture (`chats.conciergeModeSetBy`). */
+export const ConciergeModeSetBySchema = z.enum(['operator', 'concierge']);
+export type ConciergeModeSetBy = z.infer<typeof ConciergeModeSetBySchema>;
+
+/** Why a chat is in its Concierge posture (`chats.conciergeModeReason`). */
+export const ConciergeModeReasonSchema = z.enum(['manual', 'refusals', 'classifier', 'migration']);
+export type ConciergeModeReason = z.infer<typeof ConciergeModeReasonSchema>;
+
 // ============================================================================
 // AUTONOMOUS-ROOM RUN STATE
 // ============================================================================
@@ -165,6 +195,71 @@ export const SystemSenderEnum = z.enum([
 ]);
 export type SystemSender = z.infer<typeof SystemSenderEnum>;
 
+/**
+ * How a connection profile came to be asked for a turn.
+ *
+ * - `primary` — the profile the chat was configured with (or the one the
+ *   Concierge's *pre-call* reroute installed before anything was tried).
+ * - `retry` — the same profile, asked a second time after an empty body.
+ * - `concierge` — the uncensored profile the Concierge sent the turn to after
+ *   the first answer came back empty.
+ * - `understudy` — the profile's own named `fallbackProfileId`.
+ * - `tier-pick` — a stand-in the fallback engine drafted from the company.
+ */
+export const RouteAttemptViaEnum = z.enum(['primary', 'retry', 'concierge', 'understudy', 'tier-pick']);
+export type RouteAttemptVia = z.infer<typeof RouteAttemptViaEnum>;
+
+/**
+ * What became of one attempt. `failed` means the profile fell over on its own
+ * (timeout, auth, rate limit, 5xx, an empty body with no stated reason);
+ * `refused` means it declined on content grounds.
+ */
+export const RouteAttemptOutcomeEnum = z.enum(['answered', 'failed', 'refused']);
+export type RouteAttemptOutcome = z.infer<typeof RouteAttemptOutcomeEnum>;
+
+/**
+ * One call (or one skipped-before-calling candidate) against one connection
+ * profile, as recorded on an assistant message's `routeTrail`.
+ *
+ * `profileId` is stored for the record and is never dereferenced by the UI: a
+ * profile can be deleted, and an imported trail may name one that never
+ * existed in this instance. The name and model are what a reader needs.
+ */
+export const RouteAttemptSchema = z.object({
+  profileId: UUIDSchema,
+  profileName: z.string(),
+  provider: z.string(),
+  modelName: z.string(),
+  via: RouteAttemptViaEnum,
+  outcome: RouteAttemptOutcomeEnum,
+  /**
+   * The engine's trigger class for a failure or refusal; absent when answered.
+   *
+   * Duplicates `FallbackTrigger` (`lib/llm/fallback/types.ts`) BY VALUE on
+   * purpose: this module is client-safe and the engine's is not. A parity
+   * assertion in `__tests__/unit/lib/llm/fallback/engine.test.ts` keeps the two
+   * unions identical, so a new trigger cannot be added to one alone.
+   */
+  trigger: z.enum(['auth', 'rate-limit', 'network', 'model-missing', 'provider-error', 'empty-response', 'moderation-refusal']).optional(),
+  /**
+   * How a refusal was established, in the order of trust `classifyRefusal`
+   * (`lib/services/dangerous-content/refusal.ts`) ranks them: the plugin threw
+   * a typed moderation error, the provider's own error code, a stated finish
+   * reason, refusal wording in the error text, or an inference from an empty
+   * body on a Concierge-flagged turn.
+   */
+  evidence: z.enum(['typed-error', 'provider-code', 'finish-reason', 'message-pattern', 'inferred']).optional(),
+  /**
+   * What kind of profile was asked. Absent means `'connection'` — every trail
+   * written before image calls had trails. `'image'` rows name an image
+   * profile, whose `modelName` is the image model.
+   */
+  profileKind: z.enum(['connection', 'image']).optional(),
+  /** Short human-readable reason, ≤ 200 chars (the error message truncated, or the finish reason). Never the full error body. */
+  detail: z.string().max(200).optional(),
+});
+export type RouteAttempt = z.infer<typeof RouteAttemptSchema>;
+
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
   id: UUIDSchema,
@@ -216,6 +311,26 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /**
+   * The route trail: every connection profile tried for this turn, in the order
+   * tried, with why each one stepped aside. Rendered as the list under the
+   * avatar, first tried at the top.
+   *
+   * **NULL unless the turn had at least one failure.** A trail of length one
+   * says nothing `provider`/`modelName` don't already say, and assistant rows
+   * are the largest table in the instance — so the common turn writes nothing
+   * and the renderer treats NULL as "the badge, exactly as before".
+   *
+   * `provider`/`modelName` stay authoritative for *who answered*; on an
+   * assistant turn the trail's last entry always agrees with them.
+   *
+   * Image-bearing rows carry an *image* trail (`profileKind: 'image'`) when a
+   * picture was refused on the way: the TOOL row of a `generate_image` call,
+   * and the Lantern / Aurora bubble that announces a picture. Written by
+   * `generateImageWithConciergeFailover`
+   * (`lib/services/dangerous-content/image-failover.ts`).
+   */
+  routeTrail: RouteAttemptSchema.array().nullable().optional(),
   /**
    * Answer-confirmation result. true = consistent (or successfully revised),
    * false = character affirmed a flagged answer unchanged, null = the check
@@ -603,6 +718,9 @@ export const ChatParticipantSchema = z.object({
 
   // Per-chat customization
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
+  // Ids (vault file names sans `.md`) of the character's `Subprompts/*.md`
+  // in play for this chat. Absent/empty → none. See lib/subprompts.
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).optional(),
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
@@ -643,6 +761,9 @@ export const ChatParticipantBaseSchema = z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
+  // Ids (vault file names sans `.md`) of the character's `Subprompts/*.md`
+  // in play for this chat. Absent/empty → none. See lib/subprompts.
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).optional(),
   displayOrder: z.number().default(0),
   /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
   isActive: z.boolean().default(true),
@@ -666,6 +787,33 @@ export type ChatParticipantBaseInput = z.input<typeof ChatParticipantBaseSchema>
 // CHAT METADATA
 // ============================================================================
 
+/**
+ * A chat's scenario source: the file a preset was read from and the SHA-256
+ * of its body at pick time, so the in-chat control can say where the scene
+ * came from and notice when the shelf copy has since been revised.
+ */
+export const ScenarioSourceSchema = z.object({
+  mountPointId: UUIDSchema,
+  /** `Scenarios/<file>.md` inside that mount. */
+  path: z.string().min(1).max(500),
+  /** Hex SHA-256 of the body as resolved (frontmatter stripped, before notes are layered on). */
+  bodySha256: z.string().length(64),
+});
+
+export type ScenarioSource = z.infer<typeof ScenarioSourceSchema>;
+
+/**
+ * The universal pointer to one scenario file, wherever it lives — a
+ * `scenarioRef` in a create or `?action=scenario` payload. `path` is
+ * `Scenarios/<file>.md`; the server validates it and the mount before reading.
+ */
+export const ScenarioRefSchema = z.object({
+  mountPointId: UUIDSchema,
+  path: z.string().min(1).max(500),
+});
+
+export type ScenarioRef = z.infer<typeof ScenarioRefSchema>;
+
 export const ChatMetadataSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -684,6 +832,16 @@ export const ChatMetadataSchema = z.object({
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
+  // NOTE: the `chats` table also carries a `transcriptVersion` column, and it is
+  // deliberately NOT declared here. Every repository update rewrites the whole
+  // validated row from a snapshot it read moments earlier, so a counter inside
+  // this schema could be rewound by any concurrent chat-row write — which is
+  // precisely the "answered unchanged while a message is missing" failure the
+  // counter exists to prevent. Keeping it out of the schema means Zod strips it
+  // from every write, so the column is touched only by the atomic `$inc` in
+  // `ChatMessagesOps.announceTranscriptChange`. Read it with
+  // `ChatsRepository.getTranscriptVersion`. See DDL.md and
+  // docs/developer/features/complete/salon-realtime-transcript.md.
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
   /**
@@ -727,6 +885,14 @@ export const ChatMetadataSchema = z.object({
    * spoken at least once). Cleared automatically when the cycle completes.
    */
   spokenThisCycleParticipantIds: z.string().default('[]'),
+  /**
+   * The rotation drawn for the current cycle: participants who have yet to
+   * speak, in the order they will, as a JSON array of participant IDs. Drawn
+   * once per cycle by `resolveCycleOrder` (weighted by talkativeness, sampled
+   * without replacement) and struck from as each seat takes its turn; an empty
+   * list means the cycle is spent and the next selection draws a fresh one.
+   */
+  cycleOrderParticipantIds: z.string().default('[]'),
 
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -751,6 +917,16 @@ export const ChatMetadataSchema = z.object({
 
   /** Resolved scenario text selected at chat creation (preset or custom) */
   scenarioText: z.string().nullable().optional(),
+
+  /**
+   * Where the preset under `scenarioText` came from — the recipe, not the
+   * text. Written only beside `scenarioText` by `resolveScenarioSelection`'s
+   * two callers. Null for a custom scene and for chats from before it existed.
+   */
+  scenarioSource: ScenarioSourceSchema.nullable().optional(),
+
+  /** The free-text notes layered beneath the preset in `scenarioText`. */
+  scenarioNotes: z.string().nullable().optional(),
 
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */
@@ -820,18 +996,20 @@ export const ChatMetadataSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * Per-chat Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
-   * Vouched Safe: the operator vouches for the chat, disabling every
-   * Concierge effect (no classification, no scanning, no uncensored reroute,
-   * no synthetic Concierge messages) while the ordinary providers still
-   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
-   * spicy: every uncensored route the Flagged state takes, with zero
-   * classification and zero danger styling. Both operator states preserve
-   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
-   * where the classifier left off.
+   * The chat's Concierge posture (Concierge overhaul phase 3), and the only
+   * stored field any routing or display decision reads. NULL reads as
+   * `'moderated'`. Read it through `getConciergeState`
+   * (`lib/services/dangerous-content/chat-override.ts`), write it only through
+   * `applyConciergeFlip` (`manual-flip.ts`). The legacy `conciergeOverride`
+   * column was dropped in 4.10 (`drop-chat-concierge-override-v1`); old
+   * bundles and backups that still carry it are derived through
+   * `withConciergeModeFromLegacy` before the row reaches this schema.
    */
-  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
+  conciergeMode: ConciergeModeSchema.nullable().optional(),
+  /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeSetBy: ConciergeModeSetBySchema.nullable().optional(),
+  /** Why the chat is in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeReason: ConciergeModeReasonSchema.nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's
@@ -843,9 +1021,6 @@ export const ChatMetadataSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
-
-  /** Scriptorium: deterministic Markdown rendering of the full conversation */
-  renderedMarkdown: z.string().nullable().optional(),
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
@@ -902,7 +1077,7 @@ export const ChatMetadataSchema = z.object({
    *   { [targetKey]: { [characterId]: { actionHash, clothingHash, emittedAt } } }
    * where `targetKey` is the recipient participant ID (or the sentinel
    * `"__public__"` for untargeted whispers in single-character chats).
-   * `formatCurrentSceneState` consults this map per target before emitting
+   * `formatCurrentSceneState` (`lib/chat/context/scene-state.ts`) consults this map per target before emitting
    * the `Current State` block; when a character's action+clothing hash
    * matches what was last sent to the same target, the character's section
    * collapses to a single `### Name — _unchanged_` line so the LLM (or the
@@ -919,7 +1094,7 @@ export const ChatMetadataSchema = z.object({
    *   string[][]  — one inner array of whispered memory IDs per recent turn,
    *   most recent last, capped to the last few turns. The recall path unions
    *   these IDs into a "recently whispered" set and applies a bounded
-   *   penalty (see lib/memory/recall-tags.ts `recentlyWhispered`) so the same
+   *   penalty (see lib/memory/recall/tags.ts `recentlyWhispered`) so the same
    *   memory doesn't get whispered turn after turn. Ephemeral per-chat UX
    *   state — NOT part of .qtap export. Null until the first whisper.
    */
@@ -935,6 +1110,9 @@ export const ChatMetadataSchema = z.object({
    *    time-range resolution prefers in-story phrasing over wall-clock dates.
    */
   timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
+
+  // The fold-grain extraction passes' read positions live in
+  // `memory_extraction_cursors` (memory refactor Phase D), not on the chat.
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
@@ -1065,6 +1243,16 @@ export const ChatMetadataBaseSchema = z.object({
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
+  // NOTE: the `chats` table also carries a `transcriptVersion` column, and it is
+  // deliberately NOT declared here. Every repository update rewrites the whole
+  // validated row from a snapshot it read moments earlier, so a counter inside
+  // this schema could be rewound by any concurrent chat-row write — which is
+  // precisely the "answered unchanged while a message is missing" failure the
+  // counter exists to prevent. Keeping it out of the schema means Zod strips it
+  // from every write, so the column is touched only by the atomic `$inc` in
+  // `ChatMessagesOps.announceTranscriptChange`. Read it with
+  // `ChatsRepository.getTranscriptVersion`. See DDL.md and
+  // docs/developer/features/complete/salon-realtime-transcript.md.
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
   /** Triple-gate summarization tracking. See ChatMetadataSchema for details. */
@@ -1091,6 +1279,14 @@ export const ChatMetadataBaseSchema = z.object({
    * spoken at least once). Cleared automatically when the cycle completes.
    */
   spokenThisCycleParticipantIds: z.string().default('[]'),
+  /**
+   * The rotation drawn for the current cycle: participants who have yet to
+   * speak, in the order they will, as a JSON array of participant IDs. Drawn
+   * once per cycle by `resolveCycleOrder` (weighted by talkativeness, sampled
+   * without replacement) and struck from as each seat takes its turn; an empty
+   * list means the cycle is spent and the next selection draws a fresh one.
+   */
+  cycleOrderParticipantIds: z.string().default('[]'),
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 
@@ -1114,6 +1310,16 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Resolved scenario text selected at chat creation (preset or custom) */
   scenarioText: z.string().nullable().optional(),
+
+  /**
+   * Where the preset under `scenarioText` came from — the recipe, not the
+   * text. Written only beside `scenarioText` by `resolveScenarioSelection`'s
+   * two callers. Null for a custom scene and for chats from before it existed.
+   */
+  scenarioSource: ScenarioSourceSchema.nullable().optional(),
+
+  /** The free-text notes layered beneath the preset in `scenarioText`. */
+  scenarioNotes: z.string().nullable().optional(),
 
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */
@@ -1179,18 +1385,20 @@ export const ChatMetadataBaseSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * Per-chat Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
-   * Vouched Safe: the operator vouches for the chat, disabling every
-   * Concierge effect (no classification, no scanning, no uncensored reroute,
-   * no synthetic Concierge messages) while the ordinary providers still
-   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
-   * spicy: every uncensored route the Flagged state takes, with zero
-   * classification and zero danger styling. Both operator states preserve
-   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
-   * where the classifier left off.
+   * The chat's Concierge posture (Concierge overhaul phase 3), and the only
+   * stored field any routing or display decision reads. NULL reads as
+   * `'moderated'`. Read it through `getConciergeState`
+   * (`lib/services/dangerous-content/chat-override.ts`), write it only through
+   * `applyConciergeFlip` (`manual-flip.ts`). The legacy `conciergeOverride`
+   * column was dropped in 4.10 (`drop-chat-concierge-override-v1`); old
+   * bundles and backups that still carry it are derived through
+   * `withConciergeModeFromLegacy` before the row reaches this schema.
    */
-  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
+  conciergeMode: ConciergeModeSchema.nullable().optional(),
+  /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeSetBy: ConciergeModeSetBySchema.nullable().optional(),
+  /** Why the chat is in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeReason: ConciergeModeReasonSchema.nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's
@@ -1202,9 +1410,6 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
-
-  /** Scriptorium: deterministic Markdown rendering of the full conversation */
-  renderedMarkdown: z.string().nullable().optional(),
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),

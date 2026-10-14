@@ -50,6 +50,35 @@ export class ProviderApiError extends PluginError {
 }
 
 /**
+ * Moderation rejection error
+ *
+ * Thrown when the provider declined a request on content-moderation grounds
+ * (a safety filter, a content policy, a "sensitive content" stop) — as
+ * distinct from any other failure. The host reroutes these to the user's
+ * uncensored profile (the Concierge); it never reroutes a rate limit or an
+ * auth failure, so a provider that can tell the difference **must** throw
+ * this, or any error carrying `code: 'MODERATION_REJECTED'`.
+ *
+ * The host detects it by the `code` string, **never** by `instanceof`:
+ * plugins bundle their own copy of this package, so the class a plugin throws
+ * is not the class the host would compare against.
+ */
+export class ModerationRejectionError extends ProviderApiError {
+  public override readonly code = 'MODERATION_REJECTED';
+
+  constructor(
+    message: string,
+    statusCode?: number,
+    /** The provider's own reason, when it gave one (e.g. `IMAGE_SAFETY`, `moderation_blocked`, `1301`). */
+    public readonly providerReason?: string,
+    pluginName?: string
+  ) {
+    super(message, statusCode, undefined, pluginName);
+    this.name = 'ModerationRejectionError';
+  }
+}
+
+/**
  * Rate limit error
  *
  * Thrown when the provider rate limits the request.

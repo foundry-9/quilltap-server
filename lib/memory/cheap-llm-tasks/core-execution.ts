@@ -17,12 +17,16 @@ import { classifyFallbackTrigger } from '@/lib/llm/fallback'
 import { buildCheapFallbackSelections } from './fallback'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import type { ActivityKind } from '@/lib/background-jobs/activity-kinds'
+import { classifyRefusal, type RefusalVerdict } from '@/lib/services/dangerous-content/refusal'
+import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
 
 /**
  * Internal type for provider response
  */
 interface ProviderResponse {
   content: string
+  /** The provider's stated stop reason, when it gave one. */
+  finishReason?: string | null
   usage?: {
     promptTokens: number
     completionTokens: number
@@ -243,12 +247,21 @@ const profilesWithoutCustomTemp = new Set<string>()
 /**
  * Maps a cheap LLM task type to an LLM log type for logging
  */
-function mapTaskTypeToLogType(taskType?: string): LLMLogType {
+/**
+ * Map a cheap-LLM task type onto the `llm_logs.type` it is filed under.
+ *
+ * A CLOSED allowlist: an unmapped task type falls through to SUMMARIZATION and
+ * becomes indistinguishable from a chat summary in the Wire Records and the
+ * LLM inspector. Add a row here whenever you add a task type worth telling
+ * apart. Exported for testing.
+ */
+export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
   const mapping: Record<string, LLMLogType> = {
     'memory-extraction-self': 'MEMORY_EXTRACTION',
     'memory-extraction-other': 'MEMORY_EXTRACTION',
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
     'memory-keyword-extraction': 'MEMORY_EXTRACTION',
+    'memory-consolidation': 'MEMORY_EXTRACTION',
     'title-chat': 'TITLE_GENERATION',
     'title-from-summary': 'TITLE_GENERATION',
     'consider-title-update': 'TITLE_GENERATION',
@@ -270,6 +283,11 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'answer-confirmation': 'ANSWER_CONFIRMATION',
     'answer-reaffirmation': 'ANSWER_CONFIRMATION',
     'custom-tool-consult': 'CUSTOM_TOOL_CONSULT',
+    // Both "say it in the character's own voice" rehearsals. Unmapped, these
+    // fell through to the SUMMARIZATION default and were indistinguishable
+    // from a chat summary in the Wire Records and the LLM inspector.
+    'announcement-rewrite': 'VOICE_REWRITE',
+    'impersonation-voice-rewrite': 'VOICE_REWRITE',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -359,7 +377,7 @@ async function sendToProvider(
     const startedAt = Date.now()
     const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
     logCall(response, undefined, Date.now() - startedAt)
-    return { content: response.content, usage: response.usage }
+    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
   }
 
   // Try with lower temperature for more consistent outputs
@@ -367,7 +385,7 @@ async function sendToProvider(
   try {
     const response: LLMResponse = await provider.sendMessage({ ...baseParams, temperature: 0.3 }, apiKey)
     logCall(response, 0.3, Date.now() - firstAttemptStartedAt)
-    return { content: response.content, usage: response.usage }
+    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
     const errorMessage = getErrorMessage(error, '')
@@ -377,7 +395,7 @@ async function sendToProvider(
       const retryStartedAt = Date.now()
       const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
       logCall(response, undefined, Date.now() - retryStartedAt)
-      return { content: response.content, usage: response.usage }
+      return { content: response.content, usage: response.usage, finishReason: response.finishReason }
     }
     throw error
   }
@@ -398,13 +416,13 @@ function shouldAttemptUncensoredFallback(
   // No fallback options provided
   if (!uncensoredFallback) return null
 
-  const { dangerSettings, availableProfiles } = uncensoredFallback
+  const { conciergePolicy, availableProfiles } = uncensoredFallback
 
-  // Only attempt in AUTO_ROUTE mode
-  if (dangerSettings.mode !== 'AUTO_ROUTE') return null
+  // Only attempt when the Concierge policy allows a refusal to fail over
+  if (!conciergePolicy.failoverAllowed) return null
 
   // Need an uncensored text profile configured
-  if (!dangerSettings.uncensoredTextProfileId) return null
+  if (!conciergePolicy.desk.textProfileId) return null
 
   // Check if current profile is already dangerous-compatible
   // For dangerous chats, allow uncensored→uncensored fallback on empty (the configured
@@ -413,7 +431,7 @@ function shouldAttemptUncensoredFallback(
   if (currentProfile?.isDangerousCompatible && !uncensoredFallback?.isDangerousChat) return null
 
   // Find the uncensored profile
-  const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
+  const uncensoredProfile = availableProfiles.find(p => p.id === conciergePolicy.desk.textProfileId)
   if (!uncensoredProfile) return null
 
   // Build a CheapLLMSelection for the uncensored profile
@@ -445,6 +463,7 @@ const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
   'batch-memory-extraction': 'memory',
   'fold-episode-extraction': 'memory',
   'memory-keyword-extraction': 'memory',
+  'memory-consolidation': 'memory',
   'memory-recap-summarization': 'memory',
 
   // Summarization and post-turn processing
@@ -557,6 +576,30 @@ async function runCheapLLMTask<T>(
       response = await attempt(selection)
     }
 
+    // An empty body the provider *said* was a moderation stop goes on the
+    // chat's refusal ledger. Only a stated finish reason qualifies — an empty
+    // cheap-LLM body with no reason given is not evidence of a refusal.
+    const emptyVerdict: RefusalVerdict | null = response.content.trim() === ''
+      ? classifyRefusal({ finishReason: response.finishReason, emptyBody: true })
+      : null
+    const recordCheapRefusal = async (rerouted: boolean): Promise<void> => {
+      if (!chatId || !emptyVerdict?.refused) return
+      const profile = selection.connectionProfileId
+        ? uncensoredFallback?.availableProfiles.find(p => p.id === selection.connectionProfileId)
+        : undefined
+      await recordModerationRefusal({
+        chatId,
+        kind: 'text',
+        purpose: 'cheap',
+        refusedProfileId: selection.connectionProfileId ?? '',
+        refusedProfileName: profile?.name ?? `${selection.provider} ${selection.modelName}`,
+        provider: selection.provider,
+        modelName: selection.modelName,
+        evidence: emptyVerdict.evidence,
+        rerouted,
+      })
+    }
+
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
     if (uncensoredSelection) {
@@ -569,9 +612,16 @@ async function runCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await attempt(uncensoredSelection)
+      let retryResponse: ProviderResponse
+      try {
+        retryResponse = await attempt(uncensoredSelection)
+      } catch (retryError) {
+        await recordCheapRefusal(false)
+        throw retryError
+      }
 
       if (retryResponse.content.trim() === '') {
+        await recordCheapRefusal(false)
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)
       }
 
@@ -583,7 +633,10 @@ async function runCheapLLMTask<T>(
         responseLength: retryResponse.content.length,
       })
 
+      await recordCheapRefusal(true)
       response = retryResponse
+    } else {
+      await recordCheapRefusal(false)
     }
 
     const result = parseResponse(response.content)

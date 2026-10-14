@@ -45,12 +45,15 @@ jest.mock('../writer', () => ({
   postCarinaResponse: jest.fn(),
 }));
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn(),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: jest.fn(),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: jest.fn(),
 }));
 
-jest.mock('@/lib/chat/context/memory-injector', () => ({
-  formatMemoriesForContext: jest.fn(),
+jest.mock('@/lib/memory/recall/render', () => ({
+  renderRelevant: jest.fn(),
 }));
 
 jest.mock('@/lib/background-jobs/queue-service', () => ({
@@ -74,8 +77,8 @@ import {
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
 import { postCarinaResponse } from '../writer';
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
-import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
+import { searchMemories } from '@/lib/memory/recall/search';
+import { renderRelevant } from '@/lib/memory/recall/render';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { runBrahmaQuery } from '@/lib/services/brahma-console/one-shot.service';
 import { BRAHMA_CARINA_ANSWERER_ID } from '../brahma-answerer';
@@ -189,11 +192,12 @@ beforeEach(() => {
 
   // By default no memories are recalled, so the system prompt is unchanged and
   // the existing assertions hold. Specific tests override these.
-  jest.mocked(searchMemoriesSemantic).mockResolvedValue([]);
-  jest.mocked(formatMemoriesForContext).mockReturnValue({
+  jest.mocked(searchMemories).mockResolvedValue([]);
+  jest.mocked(renderRelevant).mockReturnValue({
     content: '',
     tokenCount: 0,
     memoriesUsed: 0,
+    lines: [],
     debugMemories: [],
   } as never);
   jest.mocked(enqueueCarinaMemoryExtraction).mockResolvedValue('job-mem-1' as never);
@@ -1113,13 +1117,14 @@ describe('runCarinaQuery', () => {
   // ── Memory recall into the call (Commonplace Book whisper) ────────────────
   describe('memory recall', () => {
     function withRecalledMemories() {
-      jest.mocked(searchMemoriesSemantic).mockResolvedValue([
+      jest.mocked(searchMemories).mockResolvedValue([
         { memory: { id: 'm1' }, score: 0.9, usedEmbedding: true },
       ] as never);
-      jest.mocked(formatMemoriesForContext).mockReturnValue({
+      jest.mocked(renderRelevant).mockReturnValue({
         content: '## Relevant Memories\n- [today] Aria prefers terse answers.',
         tokenCount: 20,
         memoriesUsed: 1,
+        lines: [{ memoryId: 'm1', line: '- [today] Aria prefers terse answers.', body: 'Aria prefers terse answers.' }],
         debugMemories: [],
       } as never);
     }
@@ -1128,8 +1133,8 @@ describe('runCarinaQuery', () => {
       withRecalledMemories();
       await runCarinaQuery(BASE_OPTS);
 
-      expect(searchMemoriesSemantic).toHaveBeenCalledTimes(1);
-      const [characterId, query, opts] = jest.mocked(searchMemoriesSemantic).mock.calls[0];
+      expect(searchMemories).toHaveBeenCalledTimes(1);
+      const [characterId, query, opts] = jest.mocked(searchMemories).mock.calls[0];
       expect(characterId).toBe('char-1');
       expect(query).toBe('What is the capital of France?');
       expect(opts).toMatchObject({ userId: 'user-1', embeddingProfileId: undefined });
@@ -1157,7 +1162,7 @@ describe('runCarinaQuery', () => {
     });
 
     it('answers anyway when memory recall throws', async () => {
-      jest.mocked(searchMemoriesSemantic).mockRejectedValue(new Error('vector store down'));
+      jest.mocked(searchMemories).mockRejectedValue(new Error('vector store down'));
       const result = await runCarinaQuery(BASE_OPTS);
       expect(result).toMatchObject({ ok: true, answer: 'Paris.' });
     });
@@ -1237,7 +1242,7 @@ describe('runCarinaQuery', () => {
 
       // Brahma is memory-free: no recall, no extraction job, no identity stack.
       expect(enqueueCarinaMemoryExtraction).not.toHaveBeenCalled();
-      expect(searchMemoriesSemantic).not.toHaveBeenCalled();
+      expect(searchMemories).not.toHaveBeenCalled();
       expect(buildIdentityStack).not.toHaveBeenCalled();
     });
 

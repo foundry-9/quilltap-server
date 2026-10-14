@@ -6,7 +6,7 @@
  * Presentational home dashboard, extracted from `app/page.tsx` so the same
  * dashboard can render both at `/` (fed by the server route's data fetch) and
  * as the workspace's home tab (fed by a client fetch). Purely props-driven —
- * no data fetching of its own. See `docs/developer/features/tabbed-workspace.md`.
+ * no data fetching of its own. See `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/homepage/HomeView
  */

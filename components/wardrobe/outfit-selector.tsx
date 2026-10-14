@@ -17,20 +17,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type {
   OutfitSelectionMode,
-  WardrobeItem,
   WardrobeItemType,
   EquippedSlots,
 } from '@/lib/schemas/wardrobe.types'
 import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
-import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
-import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
-import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
-import {
-  breakApartBundleInSlots,
-  takeOffBundleFromSlots,
-} from '@/lib/wardrobe/bundle-mutations'
+import { buildDefaultOutfit, buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit'
+import { appendWornBundleIds, type StagedGesture } from '@/lib/wardrobe/staged-live-outfits'
 import { OutfitComposer } from './outfit-composer'
+import { useComposerHandlers } from './hooks/useComposerHandlers'
 
 // ============================================================================
 // TYPES
@@ -40,6 +35,12 @@ export interface OutfitSelection {
   characterId: string
   mode: OutfitSelectionMode
   slots?: EquippedSlots
+  /**
+   * `manual` only: outfits (bundles) the composer put on — dissolved into
+   * `slots` client-side — so the wear ledger can credit them as worn. Ids
+   * only; the server validates and expands them.
+   */
+  wornBundleIds?: string[]
 }
 
 export interface OutfitSelectorCharacter {
@@ -243,9 +244,14 @@ function CharacterOutfitSection({
       seededRef.current = true
       return
     }
-    const defaults = buildDefaultOutfit(wardrobeItems)
+    const defaults = buildDefaultOutfitWithCredit(wardrobeItems)
     seededRef.current = true
-    onChange({ characterId: character.id, mode: 'manual', slots: defaults })
+    onChange({
+      characterId: character.id,
+      mode: 'manual',
+      slots: defaults.slots,
+      wornBundleIds: defaults.wornBundles.map((b) => b.id),
+    })
   }, [internalMode, wardrobeItems, selection.slots, character.id, onChange])
 
   const handleModeChange = useCallback(
@@ -261,66 +267,31 @@ function CharacterOutfitSection({
           mode === 'manual'
             ? selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
             : undefined,
+        wornBundleIds: mode === 'manual' ? selection.wornBundleIds : undefined,
       }
       onChange(updated)
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
 
-  // Wearing an item from the per-slot picker fills *every* slot it covers,
-  // honoring its `replace` flag (layer when off, replace when on) — the same
-  // rule the live chat uses. Picking a dress (top+bottom) or an outfit bundle
-  // no longer lands in just the one slot the picker was opened from.
-  const handleAddToSlot = useCallback(
-    (slot: WardrobeItemType, itemId: string) => {
-      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      const item = itemsById.get(itemId)
-      const next = item
-        ? wearItemIntoSlots(currentSlots, item, itemsById)
-        : { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+  // The composer's six slot handlers, shared with the wardrobe dialog. Every
+  // gesture lands on this character's selection; an outfit put on (dissolved
+  // into the slots) carries its id beside them for the wear ledger.
+  const applyGesture = useCallback(
+    (gesture: StagedGesture) => {
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: gesture.mutate(selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }),
+        wornBundleIds:
+          gesture.wornBundleIds.length > 0
+            ? appendWornBundleIds(selection.wornBundleIds, gesture.wornBundleIds)
+            : selection.wornBundleIds,
+      })
     },
-    [character.id, selection.slots, itemsById, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
-
-  const handleRemoveFromSlot = useCallback(
-    (slot: WardrobeItemType, itemId: string) => {
-      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      const next = {
-        ...currentSlots,
-        [slot]: (currentSlots[slot] ?? []).filter((id) => id !== itemId),
-      }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
-    },
-    [character.id, selection.slots, onChange],
-  )
-
-  const handleClearSlot = useCallback(
-    (slot: WardrobeItemType) => {
-      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      const next = { ...currentSlots, [slot]: [] }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
-    },
-    [character.id, selection.slots, onChange],
-  )
-
-  const handleTakeOffBundle = useCallback(
-    (bundle: EquippedBundle) => {
-      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      const next = takeOffBundleFromSlots(currentSlots, bundle)
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
-    },
-    [character.id, selection.slots, onChange],
-  )
-
-  const handleBreakApartBundle = useCallback(
-    (bundle: EquippedBundle) => {
-      const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
-      const next = breakApartBundleInSlots(currentSlots, bundle, itemsById)
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
-    },
-    [character.id, selection.slots, itemsById, onChange],
-  )
+  const composerHandlers = useComposerHandlers({ itemsById, apply: applyGesture })
 
   const handleClearAll = useCallback(() => {
     onChange({
@@ -463,16 +434,7 @@ function CharacterOutfitSection({
                       Clear all
                     </button>
                   </div>
-                  <OutfitComposer
-                    items={wardrobeItems}
-                    slots={stagedSlots}
-                    onAddToSlot={handleAddToSlot}
-                    onRemoveFromSlot={handleRemoveFromSlot}
-                    onClearSlot={handleClearSlot}
-                    showBundleActions
-                    onTakeOffBundle={handleTakeOffBundle}
-                    onBreakApartBundle={handleBreakApartBundle}
-                  />
+                  <OutfitComposer items={wardrobeItems} slots={stagedSlots} {...composerHandlers} />
                 </>
               )}
             </div>

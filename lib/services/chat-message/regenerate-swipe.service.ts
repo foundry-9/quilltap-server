@@ -11,16 +11,23 @@
  * attributed to the *same participant* as the message being regenerated, grouped
  * in place rather than appended as a stray new message.
  *
- * Generation itself is a single non-streaming provider call (no tools): a swipe
- * is one alternative line, and keeping it off the streaming/turn-chain path means
- * the live send path is untouched.
+ * Generation itself is a single provider call with no tools — a swipe is one
+ * alternative line — so it stays off the streaming/turn-chain path and the live
+ * send path is untouched. It *is* read as a stream: the caller can hand in
+ * `onProgress` and watch the re-roll arrive token by token (that is what puts
+ * live text under the Salon's "Regenerating..." overlay). With no callback the
+ * chunks are simply accumulated, so a non-streaming caller sees the same
+ * finished swipe it always did. Every field the swipe persists — usage, raw
+ * response, thought signature, reasoning — rides the chunks, so reading the
+ * response as a stream costs the record nothing.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
+import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
-import { deleteMemoriesBySourceMessageWithVectors } from '@/lib/memory/memory-service'
+import { retireMemories } from '@/lib/memory/retire'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
@@ -29,10 +36,25 @@ import {
 import { buildMessageContext } from './context-builder.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { ChatMetadataBase, MessageEvent } from '@/lib/schemas/types'
+import type { ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('RegenerateSwipeService')
+
+/**
+ * A step of a regeneration, reported live so the Salon can narrate it exactly
+ * the way it narrates a first-time turn: a status line above the composer, then
+ * prose arriving under the dimmed original.
+ *
+ * `content` is a DELTA (append it); `reasoning` is CUMULATIVE (replace it) —
+ * the same contract the send path's SSE events use, so the client-side handling
+ * is identical in both places.
+ */
+export type RegenerateSwipeProgress =
+  | { kind: 'status'; stage: string; message: string; characterName?: string; characterId?: string }
+  | { kind: 'delta'; content: string }
+  | { kind: 'reasoning'; reasoning: string }
 
 export interface RegenerateSwipeOptions {
   repos: ReturnType<typeof getRepositories>
@@ -45,6 +67,21 @@ export interface RegenerateSwipeOptions {
   allMessages: MessageEvent[]
   /** The user-controlled participant the human is "Speaking As" (optional override) */
   activeUserParticipantId?: string | null
+  /**
+   * Live progress for a caller that is showing the re-roll as it happens.
+   * Optional: with no callback the generation is identical, just silent.
+   */
+  onProgress?: (event: RegenerateSwipeProgress) => void
+  /**
+   * Generate on this profile instead of the responder's own. "Try uncensored"
+   * passes the Concierge's uncensored understudy here — resolved by the caller
+   * (`resolveTextRetryUnderstudy`) so a missing one can be refused before any
+   * stream opens. The context is formatted for this profile, not the
+   * responder's.
+   */
+  profileOverride?: { profile: ConnectionProfile; apiKey: string }
+  /** Route trail to persist on the new swipe (NULL / absent for a plain re-roll). */
+  routeTrail?: RouteAttempt[] | null
 }
 
 /**
@@ -58,6 +95,9 @@ export async function regenerateMessageAsSwipe({
   targetMessage,
   allMessages,
   activeUserParticipantId,
+  onProgress,
+  profileOverride,
+  routeTrail,
 }: RegenerateSwipeOptions): Promise<MessageEvent> {
   if (targetMessage.role !== 'ASSISTANT') {
     throw new Error('Only assistant messages can be regenerated')
@@ -82,10 +122,19 @@ export async function regenerateMessageAsSwipe({
   const {
     characterParticipant,
     character,
-    connectionProfile,
-    apiKey,
     isMultiCharacter,
   } = participantResult
+  const connectionProfile = profileOverride?.profile ?? participantResult.connectionProfile
+  const apiKey = profileOverride?.apiKey ?? participantResult.apiKey
+  if (profileOverride) {
+    logger.info('[RegenerateSwipe] Regenerating on an override profile', {
+      chatId: chat.id,
+      targetMessageId: targetMessage.id,
+      responderProfileId: participantResult.connectionProfile.id,
+      overrideProfileId: profileOverride.profile.id,
+      overrideProfileName: profileOverride.profile.name,
+    })
+  }
 
   // User identity (honors "Speaking As") + per-character map + template + settings.
   const speakingAsId = activeUserParticipantId ?? chat.activeTypingParticipantId ?? null
@@ -107,6 +156,34 @@ export async function regenerateMessageAsSwipe({
       m.type === 'message' && new Date(m.createdAt).getTime() < targetTime
   )
 
+  // Informs re-apply on a swipe. A swipe re-rolls a line that has already been
+  // spoken, so it must see exactly the passages THAT generation saw — the
+  // target message and every sibling in its swipe group, since any of them may
+  // have been the generation that consumed a row. Pending informs are
+  // deliberately excluded: it would be surprising for a brand-new passage to
+  // land in a re-roll of an old line and be spent there. Nothing here consumes
+  // — `buildInformBlock` returns no row ids for a regeneration, and the swipe
+  // path never calls `markConsumed`.
+  const existingSwipeGroupId = targetMessage.swipeGroupId || null
+  const regenerationOfMessageIds = [
+    ...new Set([
+      targetMessage.id,
+      ...(existingSwipeGroupId
+        ? allMessages
+            .filter(m => m.type === 'message' && m.swipeGroupId === existingSwipeGroupId)
+            .map(m => m.id)
+        : []),
+    ]),
+  ]
+
+  onProgress?.({
+    kind: 'status',
+    stage: 'gathering',
+    message: `Regenerating — gathering ${character.name}'s memories and context...`,
+    characterName: character.name,
+    characterId: character.id,
+  })
+
   // Build the full provider-ready context (system prompt, multi-char attribution,
   // memory recall) — continue mode, no new user message.
   const { formattedMessages } = await buildMessageContext(
@@ -126,31 +203,97 @@ export async function regenerateMessageAsSwipe({
       activeUserParticipantId: speakingAsId,
       isContinueMode: true,
       contextCompressionSettings: null,
+      regenerationOfMessageIds,
     },
     previousMessages,
     []
   )
 
-  // Single non-streaming generation.
+  // Single generation, no tools. Read as a stream so `onProgress` can hand the
+  // re-roll to the Salon token by token; a caller that passes no callback just
+  // gets the accumulated result. The stall watchdog is not optional on any
+  // `streamMessage` consumer (bug 141): an SDK timeout stops at the response
+  // headers, so a provider that answers and then goes quiet would hang this
+  // call — and with it the operator's disabled composer — indefinitely.
+  onProgress?.({
+    kind: 'status',
+    stage: 'sending',
+    message: `Regenerating — sending to ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  })
+
   const provider = await createLLMProvider(connectionProfile.provider, connectionProfile.baseUrl || undefined)
   const params = profileParams(connectionProfile) ?? {}
-  const response = await provider.sendMessage(
+
+  let content = ''
+  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+  let rawResponse: unknown = null
+  let reasoningContent: string | undefined
+  let thoughtSignature: string | undefined
+  let announcedStreaming = false
+
+  for await (const chunk of withStallWatchdog(
+    provider.streamMessage(
+      {
+        messages: formattedMessages.map(m => ({
+          role: m.role.toLowerCase() as 'system' | 'user' | 'assistant' | 'tool',
+          content: m.content,
+          name: m.name,
+          attachments: m.attachments as never,
+          toolCallId: m.toolCallId,
+          toolCalls: m.toolCalls,
+        })),
+        model: connectionProfile.modelName,
+        ...resolveSamplingParams(params),
+        profileParameters: params,
+        cacheKey: character.id,
+      },
+      apiKey
+    ),
     {
-      messages: formattedMessages.map(m => ({
-        role: m.role.toLowerCase() as 'system' | 'user' | 'assistant' | 'tool',
-        content: m.content,
-        name: m.name,
-        attachments: m.attachments as never,
-        toolCallId: m.toolCallId,
-        toolCalls: m.toolCalls,
-      })),
-      model: connectionProfile.modelName,
-      ...resolveSamplingParams(params),
-      profileParameters: params,
-      cacheKey: character.id,
-    },
-    apiKey
-  )
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      logContext: {
+        context: 'regenerate-swipe.service',
+        userId,
+        chatId: chat.id,
+        characterId: character.id,
+        messageId: targetMessage.id,
+      },
+    }
+  )) {
+    if (chunk.content) {
+      if (!announcedStreaming) {
+        announcedStreaming = true
+        onProgress?.({
+          kind: 'status',
+          stage: 'regenerating',
+          message: `Regenerating ${character.name}'s reply...`,
+          characterName: character.name,
+          characterId: character.id,
+        })
+      }
+      content += chunk.content
+      onProgress?.({ kind: 'delta', content: chunk.content })
+    }
+    // Reasoning arrives cumulatively — keep the latest, never concatenate.
+    if (chunk.reasoningContent) {
+      reasoningContent = chunk.reasoningContent
+      onProgress?.({ kind: 'reasoning', reasoning: chunk.reasoningContent })
+    }
+    if (chunk.usage) usage = chunk.usage
+    if (chunk.rawResponse) rawResponse = chunk.rawResponse
+    if (chunk.thoughtSignature) thoughtSignature = chunk.thoughtSignature
+  }
+
+  onProgress?.({
+    kind: 'status',
+    stage: 'saving',
+    message: 'Regenerating — filing the new line...',
+    characterName: character.name,
+    characterId: character.id,
+  })
 
   // Persist the grouping. The original anchors the group at index 0; on the first
   // regeneration its swipeGroupId must be written back (the legacy path only
@@ -171,23 +314,24 @@ export async function regenerateMessageAsSwipe({
     type: 'message',
     id: crypto.randomUUID(),
     role: 'ASSISTANT',
-    content: response.content,
+    content,
     // Attribute to the same participant that authored the original — this is the
     // fix for the regenerated-message-shows-the-wrong-character bug.
     participantId: characterParticipant.id,
     swipeGroupId,
     swipeIndex: newSwipeIndex,
-    tokenCount: response.usage?.totalTokens ?? null,
-    promptTokens: response.usage?.promptTokens ?? null,
-    completionTokens: response.usage?.completionTokens ?? null,
-    rawResponse: (response.raw as Record<string, unknown>) ?? null,
-    reasoningContent: response.reasoningContent ?? null,
-    thoughtSignature: response.thoughtSignature ?? null,
+    tokenCount: usage?.totalTokens ?? null,
+    promptTokens: usage?.promptTokens ?? null,
+    completionTokens: usage?.completionTokens ?? null,
+    rawResponse: (rawResponse as Record<string, unknown>) ?? null,
+    reasoningContent: reasoningContent ?? null,
+    thoughtSignature: thoughtSignature ?? null,
     provider: connectionProfile.provider,
     modelName: connectionProfile.modelName,
     attachments: [],
     // Keep the original's timestamp so the group stays in place in the transcript.
     createdAt: targetMessage.createdAt,
+    ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
   } as MessageEvent
 
   await repos.chats.addMessage(chat.id, newSwipe)
@@ -198,9 +342,9 @@ export async function regenerateMessageAsSwipe({
     chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES'
   if (cascadeAction !== 'KEEP_MEMORIES') {
     try {
-      const memoryCount = await repos.memories.countBySourceMessageId(targetMessage.id)
-      if (memoryCount > 0) {
-        await deleteMemoriesBySourceMessageWithVectors(targetMessage.id)
+      const memories = await repos.memories.findBySourceMessageId(targetMessage.id)
+      if (memories.length > 0) {
+        await retireMemories(memories.map((m) => m.id), { reason: 'swipe-regenerate' })
       }
     } catch (error) {
       logger.warn('[RegenerateSwipe] Memory cascade failed; swipe kept', {

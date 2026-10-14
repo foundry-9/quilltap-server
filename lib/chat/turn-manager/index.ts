@@ -22,10 +22,26 @@ export {
   updateTurnStateAfterMessage,
   computeSpokenThisCycleAfterMessage,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterMessage,
+  computeCycleOrderAfterSkip,
 } from './state';
 
 // Turn selection
 export { selectNextSpeaker, selectNextSpeakerAfterUserMessage } from './selection';
+
+// Cycle rotation — drawn once per cycle, then followed
+export {
+  parseCycleOrder,
+  cycleCandidates,
+  drawCycleOrder,
+  pickFromCycleOrder,
+  resolveCycleOrder,
+} from './cycle-order';
+export type { CycleOrderChat, CycleOrderRepos } from './cycle-order';
+
+// Room characters — the one batched read behind every talkativeness map
+export { loadRoomCharacters } from './room-characters';
+export type { RoomCharacterRepos, LoadRoomCharactersOptions } from './room-characters';
 
 // "Nothing to add" turn-skipping — shared pure logic
 export {
@@ -64,6 +80,7 @@ export {
   findUserParticipant,
   findActiveUserParticipant,
   isUserDrivenSeat,
+  resolveFloorSeatId,
   findUserControlledParticipants,
   getPresentCharacterSeats,
   getActiveCharacterParticipants,

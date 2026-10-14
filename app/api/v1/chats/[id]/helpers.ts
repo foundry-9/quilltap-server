@@ -292,10 +292,18 @@ export async function handleParticipantUpdate(
   // recompile all stacks. Failures are non-fatal (read-through fallback).
   if (finalChat) {
     try {
-      if (
+      const promptChanged =
         participantData.selectedSystemPromptId !== undefined &&
-        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId
-      ) {
+        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId;
+      // Subprompts are baked into the stack too, so a change to the set in
+      // play recompiles the same way (order-insensitive compare).
+      const subpromptsChanged =
+        participantData.selectedSubpromptIds !== undefined &&
+        !sameIdSet(oldParticipant?.selectedSubpromptIds ?? [], participantData.selectedSubpromptIds);
+      if (promptChanged || subpromptsChanged) {
+        logger.debug('[Chats v1] Recompiling identity stack after participant prompt change', {
+          chatId, participantId, promptChanged, subpromptsChanged,
+        });
         await compileIdentityStackForParticipant(finalChat, participantId);
       }
       if (participantData.controlledBy !== undefined) {
@@ -310,6 +318,13 @@ export async function handleParticipantUpdate(
   }
 
   return { chat: finalChat || result };
+}
+
+/** Order-insensitive equality of two id lists. */
+function sameIdSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
 }
 
 /**
@@ -493,18 +508,8 @@ export async function processChatUpdates(
           return { error: 'Project not found', status: 404 };
         }
 
-        if (!project.allowAnyCharacter) {
-          const characterIds = updatedChat.participants
-            .filter((p) => p.type === 'CHARACTER' && p.characterId)
-            .map((p) => p.characterId as string);
-
-          const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-          if (newCharacterIds.length > 0) {
-            await repos.projects.update(validatedData.chat.projectId, {
-              characterRoster: [...project.characterRoster, ...newCharacterIds],
-            });
-          }
-        }
+        // Moving a chat into a project never edits the roster — it is a
+        // hand-curated access list (lib/projects/roster-access.ts).
       }
     }
 
@@ -581,9 +586,9 @@ export async function processChatUpdates(
     }
   }
 
-  // Per-chat Concierge tri-state. Routed through the manual-flip helper so
-  // each transition does the right combination of DB updates + Concierge
-  // announcement in one place.
+  // Per-chat Concierge state (Moderated / Unmoderated / Locked). Routed
+  // through the one transition chokepoint so each change does the right DB
+  // writes and posts the Concierge's announcement in one place.
   if (validatedData.conciergeState) {
     const flipResult = await applyConciergeFlip(chatId, validatedData.conciergeState, updatedChat);
     if (flipResult.changed) {

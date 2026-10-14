@@ -7,13 +7,15 @@
  * Supports:
  * - Size variants (xs, sm, md, lg, xl, or custom dimensions)
  * - Style variants (circular, rectangular with 4:5 aspect ratio)
- * - Image display with fallback to initial letter
+ * - Image display with fallback to initial letter (also used when the
+ *   surrounding subtree hides images — see images-hidden-context)
  * - Optional name and title display below
  * - Active state ring indicator
  * - Queue position badge overlay
  */
 
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'chat'
 export type AvatarStyle = 'CIRCULAR' | 'RECTANGULAR'
@@ -106,6 +108,7 @@ export function Avatar({
   onClick,
 }: AvatarProps) {
   const { style: globalStyle } = useAvatarDisplay()
+  const imagesHidden = useImagesHidden()
   const style = styleOverride ?? globalStyle
 
   // Get dimensions
@@ -123,7 +126,7 @@ export function Avatar({
     ? width
     : height
 
-  const avatarSrc = getAvatarSrc(src)
+  const avatarSrc = imagesHidden ? null : getAvatarSrc(src)
   const initial = name.charAt(0).toUpperCase()
 
   // Build wrapper classes

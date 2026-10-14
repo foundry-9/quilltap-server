@@ -352,11 +352,6 @@ export interface DatabaseBackend {
   ensureCollection(name: string, schema: z.ZodType): Promise<void>;
 
   /**
-   * Drop a collection/table
-   */
-  dropCollection(name: string): Promise<void>;
-
-  /**
    * List all collection/table names
    */
   listCollections(): Promise<string[]>;

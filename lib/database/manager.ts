@@ -116,10 +116,26 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
       // regardless of which repository is accessed first.
       if (backend instanceof SQLiteBackend) {
         backend.registerBlobColumns('memories', ['embedding']);
-        backend.registerBlobColumns('vector_entries', ['embedding']);
         backend.registerBlobColumns('conversation_chunks', ['embedding']);
+        // The rendered interchange text is a second copy of the transcript
+        // and is never SQL-searched — only fetched by id/chatId or ranked by
+        // embedding similarity. Raw SQL that measures or reads it must go
+        // through qt_text(); see reconcile-conversation-rendering.ts.
+        backend.registerCompressedColumns('conversation_chunks', ['content']);
         backend.registerBlobColumns('help_docs', ['embedding']);
         backend.registerBlobColumns('help_doc_chunks', ['embedding']);
+        // The transcript itself — the largest text in the schema. `content`
+        // is the one column here that is SQL-searched, and only became safe
+        // to compress once `create-chat-message-fts-v1` replaced the LIKE
+        // scan with an FTS5 index that tokenizes through qt_text(). Raw SQL
+        // that reads inside any of the four must wrap it in qt_text();
+        // see lib/database/backends/sqlite/chat-message-fts.ts.
+        backend.registerCompressedColumns('chat_messages', [
+          'content',
+          'opaqueContent',
+          'description',
+          'context',
+        ]);
       }
 
       setDatabaseBackend(backend);
@@ -167,24 +183,6 @@ export async function getDatabaseAsync(): Promise<DatabaseBackend> {
     return backend;
   }
   return initializeDatabase();
-}
-
-/**
- * Check if the database is initialized
- */
-export function isDatabaseInitialized(): boolean {
-  return isDbInitialized() && getDatabaseBackend() !== null;
-}
-
-/**
- * Check if the database is connected
- */
-export async function isDatabaseConnected(): Promise<boolean> {
-  const backend = getDatabaseBackend();
-  if (!backend) {
-    return false;
-  }
-  return backend.isConnected();
 }
 
 // ============================================================================
@@ -302,14 +300,6 @@ export async function registerBlobColumns(tableName: string, columns: string[]):
   }
 }
 
-/**
- * Get all collection names
- */
-export async function listCollections(): Promise<string[]> {
-  const backend = await getDatabaseAsync();
-  return backend.listCollections();
-}
-
 // ============================================================================
 // Capabilities
 // ============================================================================
@@ -322,13 +312,6 @@ export function getBackendType(): DatabaseBackendType | null {
 }
 
 /**
- * Get the current backend capabilities
- */
-export function getBackendCapabilities(): DatabaseCapabilities | null {
-  return getDatabaseBackend()?.capabilities || null;
-}
-
-/**
  * Check if the current backend supports a specific capability
  */
 export function supportsCapability(capability: keyof DatabaseCapabilities): boolean {
@@ -337,37 +320,6 @@ export function supportsCapability(capability: keyof DatabaseCapabilities): bool
     return false;
   }
   return Boolean(backend.capabilities[capability]);
-}
-
-// ============================================================================
-// Health Check
-// ============================================================================
-
-/**
- * Run a health check on the database
- */
-export async function healthCheck(): Promise<{
-  healthy: boolean;
-  backend: string;
-  latencyMs: number;
-  message?: string;
-}> {
-  const backend = getDatabaseBackend();
-  if (!backend) {
-    return {
-      healthy: false,
-      backend: 'none',
-      latencyMs: 0,
-      message: 'Database not initialized',
-    };
-  }
-
-  const result = await backend.healthCheck();
-
-  return {
-    ...result,
-    backend: backend.type,
-  };
 }
 
 // ============================================================================
@@ -424,12 +376,4 @@ export function _resetForTesting(): void {
   setDatabaseBackend(null);
   setInitPromise(null);
   setDbInitialized(false);
-}
-
-/**
- * Set a mock backend (for testing only)
- */
-export function _setBackendForTesting(backend: DatabaseBackend): void {
-  setDatabaseBackend(backend);
-  setDbInitialized(true);
 }

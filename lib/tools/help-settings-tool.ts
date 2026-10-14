@@ -21,15 +21,16 @@ export type HelpSettingsCategory =
   | 'appearance'
   | 'templates'
   | 'system'
+  | 'concierge'
 
 /**
  * Zod schema for the help settings tool's input.
  */
 export const helpSettingsToolInputSchema = z.object({
   category: z
-    .enum(['overview', 'chat', 'connections', 'embeddings', 'images', 'appearance', 'templates', 'system'])
+    .enum(['overview', 'chat', 'concierge', 'connections', 'embeddings', 'images', 'appearance', 'templates', 'system'])
     .describe(
-      'Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.'
+      'Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, and agent mode settings. "concierge" returns the Concierge settings: whether he is on duty, the uncensored desk profiles, the refusal auto-switch, display of flagged content, and the optional classifier pre-screen. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.'
     ),
 })
 

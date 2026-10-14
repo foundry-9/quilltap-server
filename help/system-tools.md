@@ -54,31 +54,19 @@ For detailed instructions, see [Backup & Restore](system-backup-restore.md).
 
 For detailed instructions, see [Import & Export Data](system-import-export.md).
 
-### 3. Memory Deduplication
+### 3. Memory Maintenance
 
-**Purpose:** Find and merge semantically duplicate memories across all your characters.
+**Purpose:** Fold repeated memories into one, consolidate related notes into digests, and keep each character under the cap. It lives on the Commonplace Book tab, as the **Maintenance** card; the old Near-Duplicate Folding tool is now the first step of its round.
 
-**What it does:**
-
-- Analyzes all character memories using cosine similarity on their embeddings
-- Clusters duplicate memories and selects the best version to keep
-- Extracts unique details from duplicates and preserves them as footnotes in surviving memories
-- Removes duplicate memories and cleans up the vector store
-- Provides a preview before making any changes
-
-**How to use it:**
-
-1. Adjust the **Similarity Threshold** slider (default 0.80). Lower values are more aggressive (find more duplicates), higher values are more conservative.
-2. Click **Analyze Memories** to see a preview of what would be deduplicated.
-3. Review the per-character results table showing clusters found, removable memories, and details to merge.
-4. Click **Run Deduplication** to execute the cleanup, or **Cancel** to abort.
+**How to use it:** press **Run maintenance…**, choose a character or *Every character*, tick the steps, and press **Dry run** to see what each would do — the folding and cap steps can be rehearsed across every character at once and cost nothing, as no model is consulted. **Run for real** queues the round in the background.
 
 **When to use it:**
 
 - After importing large character exports that may contain duplicates
-- Periodically to keep memory databases clean and efficient
-- When characters have accumulated many similar memories over time
+- Before switching on automatic maintenance for the first time on an instance with a long history
 - After changing embedding providers (which may cause duplicate entries)
+
+For the whole round, the switches and the ledger, see [Memory Maintenance](memory-maintenance.md).
 
 ### 4. Tasks Queue
 

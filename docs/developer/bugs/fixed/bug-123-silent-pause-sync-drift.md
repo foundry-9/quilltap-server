@@ -25,6 +25,16 @@ is offered whenever the composer will take words as a seat — the user's own
 character or one they are impersonating — not only when the rotation has
 formally landed on it; skipping lifts a pause first, the way a nudge does.
 
+> **Superseded in part (2026-09-13).** The last clause no longer holds:
+> [bug 137](bug-137-paused-chat-still-answers.md) made a pause hold the turn
+> server-side, so neither Skip nor Nudge lifts it — each buys exactly one turn
+> and leaves the pause standing. The pause-sync reconciliation and the `paused`
+> chain-complete announcement above are untouched, and 137 extends the latter:
+> a message *held* by a pause carries `heldUserTurn` so the Salon can say so.
+> The symptom below — "every message draws exactly one reply" — is what a paused
+> room did by design until 137; it is now the description of a bug that was
+> fixed rather than of the state of the code.
+
 ### Symptom
 
 At 00:59:16 UTC a chained turn for Laura failed: her NanoGPT GLM 5.3 Flash

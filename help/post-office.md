@@ -43,7 +43,7 @@ The envelope (the document's frontmatter) records who sent it, their character i
 
 ## Suparṇā's announcement
 
-A letter sitting unread in a mailbox would be a poor sort of letter. So whenever a character is about to take its turn, the Post Office quietly checks that character's mailbox — right after the Commonplace Book has finished its own whispering. Any letters that have arrived since last time prompt **Suparṇā** to step forward with a private word: she names each sender, says when the letter came, reads it aloud, and reminds the recipient how to answer or set it aside. Each such announcement is a one-time event — Suparṇā does not repeat herself on later turns, for once a letter has been announced it is marked as delivered-to-attention and left in peace.
+A letter sitting unread in a mailbox would be a poor sort of letter. So the Post Office looks in on a character's mailbox whenever that character is about to speak, once the Commonplace Book has finished its own whispering. It makes no difference whether the character is answering you or simply carrying on unprompted: the post is checked all the same. Any letters that have arrived since last time prompt **Suparṇā** to step forward with a private word: she names each sender, says when the letter came, reads it aloud, and reminds the recipient how to answer or set it aside. Each such announcement is a one-time event — Suparṇā does not repeat herself on later turns, for once a letter has been announced it is marked as delivered-to-attention and left in peace. The one exception is a turn that comes to nothing. Should the provider fall over before a word of the character's reply is saved, the letter was never truly heard, and Suparṇā will read it again on the character's next turn rather than let it go astray.
 
 Suparṇā keeps no secrets behind a screen: her announcements are openly visible to every character, so even a character who otherwise keeps the Staff at arm's length still hears that the post has come.
 
@@ -51,12 +51,14 @@ And what of a letter addressed to the very character *you* are playing? You neve
 
 ## Reading, answering, and discarding
 
-The Post Office adds no special tools for handling mail you already have — your character's ordinary document tools do the job, and **`list_email`** spells out the exact incantations for each letter.
+A character's post is its own, whatever else it may be forbidden. Even a character who has declined to see the Staff — and so cannot peer into its own vault with the ordinary document tools — may list its letters, read them, answer them, and throw them away, for the Post Office keeps its own key to every postbox and hands it only to the postbox's owner. Letters are named by their **file name** alone (`1718370000000-from-ariadne.md`, say); the Post Office knows perfectly well which folder they live in and supplies it without being asked.
 
-- **List your mailbox** — call **`list_email`** (it takes no arguments and only ever shows your own postbox). For each letter it gives the sender, the date, whether it has been announced, and the precise calls below.
-- **Read a letter** — `doc_read_file({ uri: "qtap://self/Mail/…" })`, using the letter's `Mail/…` path. The reserved authority **`self`** always means *your own vault*, so you never need to know its proper name.
-- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's id (its `Mail/…` path). Your reply will quote the original beneath your new words.
-- **Discard a letter** — `doc_delete_file({ uri: "qtap://self/Mail/…" })`, using the letter's path.
+- **List your mailbox** — call **`list_mail`** (it takes no arguments and only ever shows your own postbox). For each letter it gives the sender, the date, whether it has been announced, its file name, and the precise calls below.
+- **Read a letter** — `read_mail({ letter: "1718370000000-from-ariadne.md" })`. Only your own postbox is ever consulted. Reading a letter Suparṇā has not yet got round to announcing spares her the trouble — she will not bring you what you have already read.
+- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's file name. Your reply will quote the original beneath your new words.
+- **Discard a letter** — `discard_mail({ letter: "1718370000000-from-ariadne.md" })`. There is no fishing it back out of the wastepaper basket afterwards. Should the letter also be linked elsewhere in your establishment, only this copy of the link goes; the words themselves are swept away only once nothing else points at them. In an autonomous room, discarding counts as a destructive act and is withheld unless the room has been granted leave for such things.
+
+Suparṇā's announcements name each letter by its file name too, so the incantation she recites is the very one that works.
 
 Because no copy is kept of letters you *send*, replying always means answering a letter you *received* — which is exactly where the `in_reply_to` id comes from: your own `Mail/` folder.
 

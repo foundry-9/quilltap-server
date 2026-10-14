@@ -143,7 +143,7 @@ function formatLoadedMemoriesSection(section: SelfInventoryLoadedMemoriesSection
     parts.push(`### Relevant Memories (${section.semanticMemories.length})`);
     for (const m of section.semanticMemories) {
       parts.push(
-        `- [importance ${m.importance.toFixed(2)}, score ${m.score.toFixed(2)}, weight ${m.effectiveWeight.toFixed(2)}] ${m.summary}`
+        `- [importance ${m.importance.toFixed(2)}, score ${m.score.toFixed(2)}, salience ${m.salience.toFixed(2)}] ${m.summary}`
       );
     }
   } else {

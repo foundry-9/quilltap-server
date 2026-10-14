@@ -26,22 +26,23 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
-import {
-  ensureGroupScenariosFolder,
-  ensureGroupKnowledgeFolder,
-} from '@/lib/mount-index/group-scenarios';
+import { SINGLE_USER_ID } from '@/lib/auth/single-user';
+import { resolveScenarioLocation } from '@/lib/scenarios/location';
+import { ensureGroupKnowledgeFolder } from '@/lib/mount-index/group-knowledge';
 
 export async function ensureGroupScenariosForAllGroups(): Promise<{
   total: number;
+  /** A store was found, adopted or created for an owner that recorded none. */
+  provisioned: number;
+  /** The recorded store pointer was stale and has been replaced. */
   healed: number;
-  created: number;
+  /** No store could be resolved, or a folder could not be created. */
   failed: number;
 }> {
   const repos = getRepositories();
   let total = 0;
+  let provisioned = 0;
   let healed = 0;
-  let created = 0;
   let failed = 0;
 
   let groups;
@@ -53,25 +54,27 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
     logger.error('ensure-group-scenarios: failed to list groups', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { total: 0, healed: 0, created: 0, failed: 1 };
+    return { total: 0, provisioned: 0, healed: 0, failed: 1 };
   }
 
   total = groups.length;
 
   for (const group of groups) {
     try {
-      const result = await ensureGroupOfficialStore(group.id, group.name);
-      if (!result) {
+      // `ensure: true` finds, adopts or creates the official store and heals
+      // the `Scenarios/` folder inside it; a folder failure throws, and is
+      // counted as a failure below rather than reported as healthy.
+      const location = await resolveScenarioLocation('group', group.id, repos, SINGLE_USER_ID, { ensure: true });
+      if (!location) {
         failed++;
         continue;
       }
-      if (result.created) {
-        created++;
-      } else if (group.officialMountPointId !== result.mountPointId) {
+      if (!group.officialMountPointId) {
+        provisioned++;
+      } else if (group.officialMountPointId !== location.mountPointId) {
         healed++;
       }
-      await ensureGroupScenariosFolder(result.mountPointId);
-      await ensureGroupKnowledgeFolder(result.mountPointId);
+      await ensureGroupKnowledgeFolder(location.mountPointId);
     } catch (error) {
       failed++;
       logger.warn('ensure-group-scenarios: failed for group; continuing', {
@@ -82,6 +85,6 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
     }
   }
 
-  logger.info('ensure-group-scenarios: complete', { total, healed, created, failed });
-  return { total, healed, created, failed };
+  logger.info('ensure-group-scenarios: complete', { total, provisioned, healed, failed });
+  return { total, provisioned, healed, failed };
 }

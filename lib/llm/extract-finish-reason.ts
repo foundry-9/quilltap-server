@@ -16,10 +16,21 @@ export function extractFinishReason(raw: unknown): string | null {
     const first = choices[0] as Record<string, unknown> | undefined;
     const fr = first?.finish_reason;
     if (typeof fr === 'string') return fr;
+    // OpenRouter's streamed raw response used the camelCase key before its
+    // plugin learned to write both; still read it for older builds.
+    const camel = first?.finishReason;
+    if (typeof camel === 'string') return camel;
   }
 
   // Anthropic
   if (typeof r.stop_reason === 'string') return r.stop_reason;
+
+  // Google: a prompt blocked before any candidate was made states why only in
+  // `promptFeedback.blockReason` — the refusal outranks whatever else is here.
+  const feedback = r.promptFeedback as Record<string, unknown> | undefined;
+  if (feedback && typeof feedback.blockReason === 'string' && feedback.blockReason) {
+    return feedback.blockReason;
+  }
 
   // Google
   const candidates = r.candidates;

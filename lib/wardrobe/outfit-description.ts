@@ -26,7 +26,7 @@ import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
  */
 export type OutfitSlotValues = Record<WardrobeItemType, string[]>
 
-export type OutfitSlotName = keyof OutfitSlotValues
+type OutfitSlotName = keyof OutfitSlotValues
 
 /** Build a full OutfitSlotValues by asking fn for each slot's strings. */
 export function buildOutfitSlotValues(

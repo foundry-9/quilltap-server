@@ -1,0 +1,222 @@
+'use strict';
+
+const { resolveServerPort } = require('./lock-helpers');
+
+/**
+ * `quilltap anchor-probe <characterId>` — measure whether the episodic anchor
+ * line embedded with each memory suppresses reinforcement at admission.
+ *
+ * Thin wrapper over POST /api/v1/memories?action=anchor-gate-probe.
+ * Read-only; nothing is persisted server-side, but it costs embedding calls.
+ */
+
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const DIM = '\x1b[2m';
+const GREEN = '\x1b[32m';
+const RED = '\x1b[31m';
+const YELLOW = '\x1b[33m';
+const CYAN = '\x1b[36m';
+
+function printAnchorProbeHelp() {
+  console.log(`
+Quilltap anchor-probe Tool
+
+Usage: quilltap anchor-probe <characterId> [options]
+
+Measures whether the episodic anchor line embedded with each memory suppresses
+reinforcement at admission. Re-embeds the character's most recent memories with
+and without the anchor line, compares each against older rows, asks admission's
+own decider what it would do each way, and reports how many rows would fold
+into an older one (reinforce or better) and how many would be absorbed as
+near-duplicates.
+
+Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
+
+Options:
+  -d, --data-dir <path>      Instance root; used to find the server's port
+  -i, --instance <name>      Registered instance whose server to call (see 'quilltap instances')
+      --passphrase <pass>    Accepted and ignored (this tool never opens the database)
+      --limit <number>       Recent memories to sample (default: 50, max: 200)
+      --port <number>        Server port for API calls. Default: the port recorded in the
+                             --instance/--data-dir server's lock file, else 3000
+      --json                 Print the raw JSON result instead of tables
+  -h, --help                 Show this help
+
+Examples:
+  quilltap anchor-probe <characterId>
+  quilltap anchor-probe <characterId> --limit 20
+  quilltap anchor-probe <characterId> --json > probe.json
+`);
+}
+
+function parseFlags(args) {
+  const flags = { limit: undefined, port: undefined, dataDir: '', instance: '', json: false, help: false };
+  const positional = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    switch (a) {
+      case '--limit': {
+        const n = parseInt(args[++i], 10);
+        if (isNaN(n) || n < 1 || n > 200) {
+          console.error('Error: --limit must be between 1 and 200');
+          process.exit(1);
+        }
+        flags.limit = n;
+        break;
+      }
+      case '-d':
+      case '--data-dir':
+        flags.dataDir = args[++i];
+        break;
+      case '-i':
+      case '--instance':
+        flags.instance = args[++i];
+        break;
+      case '--passphrase':
+        // Accepted so universal flags never error; these tools talk to the
+        // running server and never open the database themselves.
+        i++;
+        break;
+      case '--port': {
+        const p = parseInt(args[++i], 10);
+        if (isNaN(p) || p < 1 || p > 65535) {
+          console.error('Error: --port must be between 1 and 65535');
+          process.exit(1);
+        }
+        flags.port = p;
+        break;
+      }
+      case '--json':
+        flags.json = true;
+        break;
+      case '-h':
+      case '--help':
+        flags.help = true;
+        break;
+      default:
+        if (a.startsWith('-')) {
+          console.error(`Unknown option: ${a}`);
+          process.exit(1);
+        }
+        positional.push(a);
+    }
+    i++;
+  }
+  return { flags, positional };
+}
+
+function fmt(n, digits = 3) {
+  if (n === null || n === undefined) return DIM + '—' + RESET;
+  return n.toFixed(digits);
+}
+
+// Pad a possibly colour-wrapped string to a visible width.
+function pad(s, width) {
+  const visible = String(s).replace(/\x1b\[[0-9;]*m/g, '').length;
+  return String(s) + ' '.repeat(Math.max(0, width - visible));
+}
+
+function printRows(rows, thresholds) {
+  console.log(`\n${BOLD}Rows${RESET} (${rows.length})`);
+  if (rows.length === 0) {
+    console.log(`  ${DIM}(none)${RESET}`);
+    return;
+  }
+  console.log(
+    `  ${DIM}${'anchored'.padEnd(10)}${'free'.padEnd(10)}${'delta'.padEnd(9)}${'anchor'.padEnd(8)}summary${RESET}`
+  );
+  const folds = (kind) => kind === 'reinforce' || kind === 'absorb' || kind === 'promote-and-reinforce';
+  for (const row of rows) {
+    const a = row.anchoredBest;
+    const f = row.anchorFreeBest;
+    const delta = typeof a === 'number' && typeof f === 'number' ? f - a : null;
+    const onlyFree = folds(row.anchorFreeAction) && !folds(row.anchoredAction);
+    const deltaStr = delta === null ? DIM + '—' + RESET : (delta >= 0 ? '+' : '') + delta.toFixed(3);
+    const anchorStr = row.hasAnchorLine ? 'yes' : `${DIM}no${RESET}`;
+    const summary = (row.summary || '').replace(/\s+/g, ' ').slice(0, 60);
+    const line = `${pad(fmt(a), 10)}${pad(fmt(f), 10)}${pad(deltaStr, 9)}${pad(anchorStr, 8)}${summary}`;
+    console.log(onlyFree ? `${YELLOW}▸ ${RESET}${line}` : `  ${line}`);
+  }
+  console.log(`\n  ${YELLOW}▸${RESET} ${DIM}= would fold into an older row only without the anchor line (reinforce ≥ ${fmt(thresholds?.reinforce, 2)})${RESET}`);
+}
+
+async function anchorProbeCommand(args) {
+  const { flags, positional } = parseFlags(args);
+
+  if (flags.help || positional.length === 0) {
+    printAnchorProbeHelp();
+    process.exit(flags.help ? 0 : 1);
+  }
+  if (positional.length > 1) {
+    console.error('Error: only one characterId may be specified');
+    process.exit(1);
+  }
+  const characterId = positional[0];
+
+  let target;
+  try {
+    target = resolveServerPort({ port: flags.port, instance: flags.instance, dataDir: flags.dataDir });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const port = target.port;
+  if (target.note) process.stderr.write(`${DIM}${target.note}${RESET}\n`);
+
+  const url = `http://localhost:${port}/api/v1/memories?action=anchor-gate-probe`;
+  const body = { characterId };
+  if (flags.limit !== undefined) body.limit = flags.limit;
+
+  process.stderr.write(`${BOLD}Probing anchor gate${RESET} for character ${DIM}${characterId}${RESET} via ${DIM}${url}${RESET}\n`);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.error(`${RED}Could not reach Quilltap server at http://localhost:${port}: ${err.message}${RESET}`);
+    console.error(target.hint);
+    process.exit(1);
+  }
+
+  let payload;
+  try {
+    payload = await res.json();
+  } catch {
+    console.error(`${RED}Server returned a non-JSON response (status ${res.status})${RESET}`);
+    process.exit(1);
+  }
+  if (!res.ok || payload?.success === false) {
+    console.error(`${RED}Probe failed (status ${res.status}): ${payload?.error || payload?.message || 'unknown error'}${RESET}`);
+    process.exit(1);
+  }
+
+  const result = payload.data ?? payload;
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  const t = result.thresholds || {};
+  const anchored = result.anchored || {};
+  const free = result.anchorFree || {};
+  console.log(`\n${BOLD}Character${RESET}  ${result.characterId}`);
+  console.log(`${BOLD}Sampled${RESET}    ${result.sampled} rows, ${result.anchoredRows} with an anchor line`);
+  console.log(`${BOLD}Embeddings${RESET} ${result.embeddingsGenerated} generated`);
+  if (result.note) console.log(`${YELLOW}${result.note}${RESET}`);
+  console.log(`\n${DIM}${''.padEnd(22)}${'anchored'.padEnd(11)}anchor-free${RESET}`);
+  console.log(`${BOLD}${'would fold'.padEnd(22)}${RESET}${String(anchored.reinforce).padEnd(11)}${CYAN}${free.reinforce}${RESET}`);
+  console.log(`${BOLD}${'near-dup absorbed'.padEnd(22)}${RESET}${String(anchored.nearDuplicate).padEnd(11)}${CYAN}${free.nearDuplicate}${RESET}`);
+  const only = result.crossedOnlyWithoutAnchors;
+  console.log(`${BOLD}Fold only without anchors${RESET}  ${only > 0 ? YELLOW : GREEN}${only}${RESET}`);
+
+  printRows(result.rows || [], t);
+  console.log('');
+}
+
+module.exports = { anchorProbeCommand, printAnchorProbeHelp, parseFlags };

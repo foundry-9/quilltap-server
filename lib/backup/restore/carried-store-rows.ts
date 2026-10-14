@@ -14,6 +14,10 @@
  * so the archived rows restore intact. It is deliberately a small, pure check
  * (the fix the v4 notes deferred, ported without any phase reorder).
  *
+ * It applies to project-bound files as well (bug 185): a project restored
+ * bound to its archived official store would otherwise take a replayed link in
+ * that very store, colliding with the archived link the restore writes later.
+ *
  * @module backup/restore/carried-store-rows
  */
 

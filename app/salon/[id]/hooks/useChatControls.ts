@@ -87,7 +87,6 @@ interface UseChatControlsParams {
   setIsPaused: (paused: boolean) => void
   fetchChat: () => Promise<void>
   setTurnState: React.Dispatch<React.SetStateAction<TurnState>>
-  triggerContinueModeRef: React.MutableRefObject<(participantId: string, nudge?: boolean) => Promise<void>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
   startBackgroundPolling: () => void
 }
@@ -108,7 +107,6 @@ export function useChatControls({
   setIsPaused,
   fetchChat,
   setTurnState,
-  triggerContinueModeRef,
   setChat,
   startBackgroundPolling,
 }: UseChatControlsParams) {
@@ -142,7 +140,6 @@ export function useChatControls({
   )
 
   // Refs
-  const userStoppedStreamRef = useRef<boolean>(false)
   const lastAllLLMPauseTurnCountRef = useRef<number>(0)
 
   // Sync agentModeEnabled state when chat loads, using the resolved cascade value
@@ -167,9 +164,6 @@ export function useChatControls({
   useEffect(() => {
     if (chat?.isPaused !== undefined) {
       setIsPaused(chat.isPaused)
-      if (chat.isPaused) {
-        userStoppedStreamRef.current = true
-      }
     }
   }, [chat, setIsPaused])
 
@@ -221,7 +215,6 @@ export function useChatControls({
   // too, so it never disagrees with the local flag between fetches (bug 123).
   const setPauseState = useCallback(async (paused: boolean) => {
     setIsPaused(paused)
-    userStoppedStreamRef.current = paused
     setChat((prev) => (prev ? { ...prev, isPaused: paused } : prev))
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused, setChat])
@@ -461,6 +454,36 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Replace the set of subprompts in play for one participant. The server
+  // recompiles the cached identity stack when the set actually changes.
+  const handleSubpromptsChange = useCallback(async (
+    participantId: string,
+    subpromptIds: string[]
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            selectedSubpromptIds: subpromptIds,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update subprompts')
+      }
+
+      showSuccessToast('Subprompts updated')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update subprompts')
+    }
+  }, [chatId, fetchChat])
+
   // Force-rebuild the cached system-prompt prefix for one participant —
   // picks up edits made to the underlying character record (manifesto,
   // personality, named systemPrompts, etc.) since the cache was last built.
@@ -544,15 +567,6 @@ export function useChatControls({
     }, 400)
   }, [chatId, fetchChat])
 
-  // All-LLM pause handlers
-  const handleAllLLMContinue = useCallback(() => {
-    // The caller should close the modal
-  }, [])
-
-  const handleAllLLMStop = useCallback(() => {
-    setPauseState(true)
-  }, [setPauseState])
-
   return {
     documentEditingMode,
     agentModeEnabled,
@@ -570,7 +584,6 @@ export function useChatControls({
     answerConfirmationOverride,
     handleSetAnswerConfirmationOverride,
     connectionProfiles,
-    userStoppedStreamRef,
     setPauseState,
     togglePause,
     handleToggleDocumentEditingMode,
@@ -583,9 +596,8 @@ export function useChatControls({
     handleConnectionProfileChange,
     handleSystemPromptChange,
     handleRebuildSystemPrompt,
+    handleSubpromptsChange,
     handleParticipantSettingsChange,
     handleTalkativenessChange,
-    handleAllLLMContinue,
-    handleAllLLMStop,
   }
 }

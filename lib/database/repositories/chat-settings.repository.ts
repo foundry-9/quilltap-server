@@ -7,6 +7,7 @@
 
 import { logger } from '@/lib/logger';
 import { ChatSettings, ChatSettingsSchema } from '@/lib/schemas/types';
+import { DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
 
@@ -120,19 +121,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   }
 
   /**
-   * Create chat settings for a user
-   * @param userId The user ID
-   * @param data The chat settings data (without id, userId, createdAt, updatedAt)
-   * @returns Promise<ChatSettings> The created chat settings
-   */
-  async createForUser(
-    userId: string,
-    data: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
-  ): Promise<ChatSettings> {
-    return this.create({ ...data, userId });
-  }
-
-  /**
    * Update chat settings for a user (creates if not exists)
    * @param userId The user ID
    * @param data Partial chat settings data to update
@@ -177,19 +165,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               onMessageDelete: 'ASK_EVERY_TIME',
               onSwipeRegenerate: 'DELETE_MEMORIES',
             },
-            autoHousekeepingSettings: {
-              enabled: false,
-              perCharacterCap: 2000,
-              perCharacterCapOverrides: {},
-              autoMergeSimilarThreshold: 0.90,
-              mergeSimilar: false,
-            },
-            memoryExtractionLimits: {
-              enabled: false,
-              maxPerHour: 20,
-              softStartFraction: 0.7,
-              softFloor: 0.7,
-            },
             autonomousRoomSettings: {
               dailyTokenBudget: null,
               defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
@@ -220,6 +195,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             composerSpellcheck: true,
             composerEmoji: true,
             composerUnicode: true,
+            impersonationVoiceMode: 'off',
             textReplacementsEnabled: true,
             autoScrollOnResponseComplete: false,
             agentModeSettings: {
@@ -230,15 +206,11 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               enabled: false,
               defaultImageProfileId: null,
             },
-            dangerousContentSettings: {
-              mode: 'OFF',
-              threshold: 0.7,
-              scanTextChat: true,
-              scanImagePrompts: true,
-              scanImageGeneration: false,
-              displayMode: 'SHOW',
-              showWarningBadges: true,
+            wardrobeImageSettings: {
+              imageProfileId: null,
+              generateFromTools: false,
             },
+            conciergeSettings: DEFAULT_CONCIERGE_SETTINGS,
             autoLockSettings: {
               enabled: false,
               idleMinutes: 15,

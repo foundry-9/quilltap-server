@@ -39,6 +39,7 @@ export function useModalState() {
   const [standaloneGenerateImageOpen, setStandaloneGenerateImageOpen] = useState(false)
   const [insertAnnouncementOpen, setInsertAnnouncementOpen] = useState(false)
   const [composeMailOpen, setComposeMailOpen] = useState(false)
+  const [informOpen, setInformOpen] = useState(false)
   const [editEnclaveModalOpen, setEditEnclaveModalOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
@@ -82,6 +83,8 @@ export function useModalState() {
   const closeInsertAnnouncement = useCallback(() => setInsertAnnouncementOpen(false), [])
   const openComposeMail = useCallback(() => setComposeMailOpen(true), [])
   const closeComposeMail = useCallback(() => setComposeMailOpen(false), [])
+  const openInform = useCallback(() => setInformOpen(true), [])
+  const closeInform = useCallback(() => setInformOpen(false), [])
   const openEditEnclave = useCallback(() => setEditEnclaveModalOpen(true), [])
   const closeEditEnclave = useCallback(() => setEditEnclaveModalOpen(false), [])
 
@@ -129,6 +132,8 @@ export function useModalState() {
     openInsertAnnouncement, closeInsertAnnouncement,
     composeMailOpen,
     openComposeMail, closeComposeMail,
+    informOpen,
+    openInform, closeInform,
     editEnclaveModalOpen,
     openEditEnclave, closeEditEnclave,
   }

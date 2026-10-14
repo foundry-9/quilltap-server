@@ -245,3 +245,114 @@ describe('applyWritesUnsafe — __finalizeFile', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
+  maybeAutoSwitchAfterRefusal: jest.fn(async () => ({ switched: false })),
+}));
+
+describe('applyWritesUnsafe — refusal-ledger commit hook', () => {
+  // Imported lazily so the mock above is the module the dispatcher's dynamic
+  // import resolves to.
+  let maybeAutoSwitchAfterRefusal: jest.Mock;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawMountIndexDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawLLMLogsDatabase).mockReturnValue(fakeDb() as never);
+    const { repos } = makeRepos();
+    const incrementModerationRefusalCount = jest.fn().mockResolvedValue(1);
+    jest.mocked(getRepositories).mockReturnValue({
+      ...repos,
+      chats: { ...repos.chats, incrementModerationRefusalCount },
+    } as never);
+    ({ maybeAutoSwitchAfterRefusal } = jest.requireMock('@/lib/services/dangerous-content/refusal-ledger'));
+  });
+
+  it('runs the auto-switch check once per chat whose ledger the batch incremented, after commit', async () => {
+    const writes: ChildWritePayload[] = [
+      { method: 'chats.incrementModerationRefusalCount', args: ['c1', '2026-09-25T00:00:00Z', { provider: 'GOOGLE', modelName: 'a' }] },
+      { method: 'chats.update', args: ['c1', { title: 'x' }] },
+      { method: 'chats.incrementModerationRefusalCount', args: ['c1', '2026-09-25T00:00:01Z', { provider: 'OPENAI', modelName: 'b' }] },
+      { method: 'chats.incrementModerationRefusalCount', args: ['c2', '2026-09-25T00:00:02Z'] },
+    ];
+
+    await applyWritesUnsafe('job-ledger', writes, 'STORY_BACKGROUND_GENERATION');
+
+    expect(maybeAutoSwitchAfterRefusal).toHaveBeenCalledTimes(2);
+    expect(maybeAutoSwitchAfterRefusal).toHaveBeenCalledWith('c1', { provider: 'OPENAI', modelName: 'b' });
+    expect(maybeAutoSwitchAfterRefusal).toHaveBeenCalledWith('c2', null);
+  });
+
+  it('does not run for a batch that recorded no refusal', async () => {
+    await applyWritesUnsafe('job-plain', [{ method: 'chats.update', args: ['c1', {}] }], 'TITLE_UPDATE');
+    expect(maybeAutoSwitchAfterRefusal).not.toHaveBeenCalled();
+  });
+
+  it('does not run when the main partition fails to commit', async () => {
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb({ failCommit: 'main boom' }) as never);
+    await expect(applyWritesUnsafe('job-fail', [
+      { method: 'chats.incrementModerationRefusalCount', args: ['c1', '2026-09-25T00:00:00Z'] },
+    ], 'STORY_BACKGROUND_GENERATION')).rejects.toThrow('main boom');
+    expect(maybeAutoSwitchAfterRefusal).not.toHaveBeenCalled();
+  });
+
+  it('a failing check never fails the committed job', async () => {
+    maybeAutoSwitchAfterRefusal.mockRejectedValueOnce(new Error('flip failed'));
+    await expect(applyWritesUnsafe('job-flip-fails', [
+      { method: 'chats.incrementModerationRefusalCount', args: ['c1', '2026-09-25T00:00:00Z'] },
+    ], 'STORY_BACKGROUND_GENERATION')).resolves.toBeUndefined();
+  });
+});
+
+jest.mock('@/lib/services/dangerous-content/classifier-switch', () => ({
+  maybeSwitchAfterClassification: jest.fn(async () => ({ switched: false })),
+}));
+
+describe('applyWritesUnsafe — classifier-switch commit hook', () => {
+  let maybeSwitchAfterClassification: jest.Mock;
+  const telemetry = (dangerous: boolean) => ({
+    isDangerousChat: dangerous, dangerScore: 0.5, dangerCategories: [],
+    dangerClassifiedAt: '2026-09-25T00:00:00Z', dangerClassifiedAtMessageCount: 4,
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawMountIndexDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawLLMLogsDatabase).mockReturnValue(fakeDb() as never);
+    const { repos } = makeRepos();
+    const setDangerClassification = jest.fn().mockResolvedValue(null);
+    jest.mocked(getRepositories).mockReturnValue({
+      ...repos,
+      chats: { ...repos.chats, setDangerClassification },
+    } as never);
+    ({ maybeSwitchAfterClassification } = jest.requireMock('@/lib/services/dangerous-content/classifier-switch'));
+  });
+
+  it('asks the switch, after commit, for each chat the batch classified dangerous, with its verdict', async () => {
+    const verdict = { score: 0.9, threshold: 0.7, categories: [] };
+    await applyWritesUnsafe('job-classify', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), verdict] },
+      { method: 'chats.setDangerClassification', args: ['c2', telemetry(false), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION');
+
+    expect(maybeSwitchAfterClassification).toHaveBeenCalledTimes(1);
+    expect(maybeSwitchAfterClassification).toHaveBeenCalledWith('c1', verdict);
+  });
+
+  it('does not run when the main partition fails to commit', async () => {
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb({ failCommit: 'main boom' }) as never);
+    await expect(applyWritesUnsafe('job-fail', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION')).rejects.toThrow('main boom');
+    expect(maybeSwitchAfterClassification).not.toHaveBeenCalled();
+  });
+
+  it('a failing switch never fails the committed job', async () => {
+    maybeSwitchAfterClassification.mockRejectedValueOnce(new Error('flip failed'));
+    await expect(applyWritesUnsafe('job-switch-fails', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION')).resolves.toBeUndefined();
+  });
+});

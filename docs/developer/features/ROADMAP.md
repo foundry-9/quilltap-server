@@ -48,6 +48,7 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
+- [X] In Their Own Words — restate impersonated lines in the character's voice before posting (design: [complete/impersonation-voice-rewrite.md](complete/impersonation-voice-rewrite.md))
 - [X] Four-state character participation system (active/silent/absent/removed) with status change notifications
 - [X] Memory recap at chat start — characters receive first-person narrative summaries from their Commonplace Book when joining a chat
 - [X] Image generation can not only select characters but also different physical descriptions if they have them
@@ -57,9 +58,13 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Some way of flagging such content needs to be surfaced in the system
   - [X] Based on flags, things are either not allowed, not displayed, or allowed and displayed
   - [X] Implies a new quick-hide just for dangerous content
+  - [x] Concierge overhaul: refusal-driven failover, refusal ledger, three states, own Settings tab — see [concierge-overhaul.md](complete/concierge-overhaul.md)
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
+- [x] Scenarios from anywhere — browse every character, project, group and General scenario from either picker; a chat keeps a source pointer; one `resolveScenarioLocation` (design: [complete/scenarios-from-anywhere.md](complete/scenarios-from-anywhere.md))
+- [X] Wardrobe folders — user-defined folders under each tier's `Wardrobe/`, breadcrumb browser, move-to-folder and bulk move; the path is the truth (design: [complete/wardrobe-folders.md](complete/wardrobe-folders.md))
+- [X] Scenario Builder — The Host researches (web for a real place, the chat's visible stores for an in-world one) and drafts a cast-agnostic starting scene, editable and revisable, usable at once or saved to General, a project, a group, or a character's scenarios (design: [scenario-builder.md](complete/scenario-builder.md))
 
 ### LLM Integration (The Foundry)
 
@@ -75,6 +80,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Content & Worldbuilding (The Commonplace Book)
 
+- [x] Memory system refactor — one candidate shape, one extraction context, parent-side admission, three named scores, one clock, one recall pipeline with delivery, one maintenance job, one deletion chokepoint; `vector_entries` retired for memories (design: [memory-system-refactor.md](complete/memory-system-refactor.md))
 - [ ] Worldbook/Lore system
 - [X] Complete embedding of files
   - [X] Text files

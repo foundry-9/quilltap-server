@@ -11,7 +11,7 @@
  * This module is **client-safe** — it contains only pure functions over
  * already-fetched store rows. The runtime helper that creates / adopts a
  * project's official store lives in
- * `lib/mount-index/ensure-project-store.ts` and pulls in repository code
+ * `lib/mount-index/ensure-owner-store.ts` and pulls in repository code
  * (Node-only). Keep that split: anything that needs `getRepositories()`
  * MUST NOT live here, or the FileBrowser bundle picks up `child_process`.
  *

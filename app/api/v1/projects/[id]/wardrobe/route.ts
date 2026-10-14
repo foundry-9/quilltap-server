@@ -1,44 +1,23 @@
 /**
  * Project Wardrobe — collection endpoint.
  *
- * GET  /api/v1/projects/[id]/wardrobe          — list every wardrobe item in the
- *                                                 project's `Wardrobe/` folder.
- * POST /api/v1/projects/[id]/wardrobe          — create a new project wardrobe
- *                                                 item. Body: { title, description?,
- *                                                 types, appropriateness?, isDefault?,
- *                                                 componentItemIds?, replace? }.
- * GET  /api/v1/projects/[id]/wardrobe?action=instructions — read the store's
- *                                                 `Wardrobe/instructions.md`
- *                                                 dressing instructions.
- * POST /api/v1/projects/[id]/wardrobe?action=instructions — write (or clear,
- *                                                 with null/blank) them.
- *                                                 Body: { instructions }.
+ * GET  /api/v1/projects/[id]/wardrobe                     — every item in the project's `Wardrobe/` folder
+ * POST /api/v1/projects/[id]/wardrobe                     — create an item there
+ * GET  /api/v1/projects/[id]/wardrobe?action=instructions — read `Wardrobe/instructions.md`
+ * POST /api/v1/projects/[id]/wardrobe?action=instructions — write (or clear) it
  *
- * Project wardrobe is the project tier of the tri-tier wardrobe model (character
- * vault + project stores + Quilltap General), mirroring project scenarios. Both
- * routes ensure the project's official store and its `Wardrobe/` folder first so
- * callers don't have to wait for a startup heal pass.
+ * The project tier of the wardrobe (character > group > project > General).
+ * The project's official store and its `Wardrobe/` folder are provisioned on
+ * the way, so nothing waits for a startup heal pass.
  *
- * The handler bodies live in the shared factory
- * (`lib/mount-index/mount-wardrobe-route-factory.ts`); this file only
- * supplies the project tier's config.
- *
- * @module app/api/v1/projects/[id]/wardrobe
+ * Handler bodies: `lib/wardrobe/routes/wardrobe-route-factory.ts`.
  */
 
-import { createMountWardrobeHandlers } from '@/lib/mount-index/mount-wardrobe-route-factory';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
-import {
-  ensureProjectWardrobeFolder,
-  readProjectWardrobe,
-} from '@/lib/mount-index/project-wardrobe';
+import { createWardrobeCollectionHandlers } from '@/lib/wardrobe/routes/wardrobe-route-factory';
 
-export const { GET, POST } = createMountWardrobeHandlers({
-  ownerLabel: 'Project',
+export const { GET, POST } = createWardrobeCollectionHandlers<{ id: string }>({
+  scope: 'project',
+  paramsToId: ({ id }) => id,
   logTag: '[Projects v1]',
   logIdKey: 'projectId',
-  findOwner: (repos, id) => repos.projects.findById(id),
-  ensureOfficialStore: ensureProjectOfficialStore,
-  readWardrobe: readProjectWardrobe,
-  ensureWardrobeFolder: ensureProjectWardrobeFolder,
 });

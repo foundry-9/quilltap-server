@@ -52,16 +52,19 @@ import {
   type StreamController,
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
+import { searchMemories } from '@/lib/memory/recall/search';
+import { stampAccessed } from '@/lib/memory/recall/deliver';
 import { findCharactersByName } from '@/lib/services/character-resolver';
-import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
-import { buildMemorySubjectContext } from '@/lib/memory/memory-subject';
+import { renderRelevant } from '@/lib/memory/recall/render';
+import { buildMemorySubjectContext } from '@/lib/memory/recall/subject';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
 import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
+import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -70,8 +73,6 @@ const MAX_TOOL_ITERATIONS = 5;
 const CARINA_MEMORY_TOKEN_BUDGET = 1200;
 /** Upper bound on how many recalled memories to consider for the budget. */
 const CARINA_MEMORY_LIMIT = 12;
-/** Floor on memory importance for Carina recall (mirrors the per-turn head). */
-const CARINA_MEMORY_MIN_IMPORTANCE = 0.3;
 
 export interface RunCarinaQueryOptions {
   userId: string;
@@ -214,12 +215,12 @@ async function loadCarinaMemoryRecall(
   const trimmed = question.trim();
   if (!trimmed) return null;
   try {
-    const results = await searchMemoriesSemantic(characterId, trimmed, {
+    const results = await searchMemories(characterId, trimmed, {
       userId,
       // Always the default embedding profile, as the per-turn recall does.
       embeddingProfileId: undefined,
       limit: CARINA_MEMORY_LIMIT,
-      minImportance: CARINA_MEMORY_MIN_IMPORTANCE,
+      minImportance: RECALL_MIN_IMPORTANCE,
     });
     if (results.length === 0) return null;
 
@@ -230,14 +231,12 @@ async function loadCarinaMemoryRecall(
       characterId,
       results.map(r => r.memory),
     );
-    const formatted = formatMemoriesForContext(
-      results,
-      CARINA_MEMORY_TOKEN_BUDGET,
-      provider,
-      subject,
-    );
+    const formatted = renderRelevant(results, CARINA_MEMORY_TOKEN_BUDGET, provider, subject);
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
+    // The block goes into the answerer's call whole: every rendered line is
+    // delivered.
+    stampAccessed(characterId, formatted.lines.map(l => l.memoryId));
     return buildCommonplaceLLMContext({ relevant: formatted.content });
   } catch (error) {
     logger.warn('[Carina] Memory recall failed; answering without it', {
@@ -579,11 +578,25 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       systemPrompt += `\n\n${memoryRecall}`;
     }
 
+    // Character progressions — the answerer's own timed conditions, forced
+    // (a Carina call is a one-shot with no turn history to derive a cadence
+    // from). It rides on the USER message rather than the system one: this
+    // single system block carries the Anthropic cache breakpoint at index 0,
+    // and a per-turn clock inside it would bisect the cache on every query.
+    const progressionsSection = await buildProgressionsSection({
+      character: answerer,
+      nowMs: Date.now(),
+      force: true,
+    });
+    const questionWithProgressions = progressionsSection
+      ? `${question}\n\n---\n\n${progressionsSection}`
+      : question;
+
     const priorExchanges = await loadPriorCarinaExchanges(repos, chatId, answerer.id);
     let currentMessages: StreamOptions['messages'] = [
       { role: 'system', content: systemPrompt },
       ...priorExchanges,
-      { role: 'user', content: question },
+      { role: 'user', content: questionWithProgressions },
     ];
 
     // 5. Build the chat's tool slate, minus `ask_carina` (recursion guard).
@@ -622,7 +635,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       answerer.defaultHelpToolsEnabled === true, // helpToolsEnabled
       false, // canDressThemselves — Carina does not dress the answerer
       false, // canCreateOutfits
-      documentEditingEnabled,
+      documentEditingEnabled ? 'full' : 'off',
     );
     const tools = built.tools.filter((t) => {
       const name =

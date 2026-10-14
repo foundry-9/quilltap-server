@@ -31,6 +31,7 @@ export {
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import type { LibrarianActorOrigin } from '@/lib/services/librarian-notifications/writer';
+import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
 export const logger = createServiceLogger('DocEdit:Handler');
 
@@ -120,6 +121,12 @@ export interface DocEditToolContext {
    * resolver's `operatorOverride`.
    */
   operatorOverride?: boolean;
+  /**
+   * A pre-built accessible set (the Scenario Builder's "what this chat could
+   * see", built by `resolveScenarioBuilderMountPool`). Passed straight through
+   * to the path resolver's `mountPool`; never combined with `operatorOverride`.
+   */
+  mountPool?: TieredMountPool;
 }
 
 /**
@@ -153,7 +160,12 @@ export async function collectPeerCharacterIdsForReads(
  * of trust — every character vault (their own and peers') is hidden from
  * doc_* tools. Returns true if the acting character is opaque; falls back to
  * "opaque" on lookup failure so a transient repo error doesn't accidentally
- * grant access. Project-linked document stores remain accessible regardless.
+ * grant access.
+ *
+ * Only the two VAULT tiers are hidden. The group, project and global tiers
+ * remain accessible regardless — including the stores of the character's own
+ * groups, which the callers express via `hideCharacterVaults` rather than by
+ * withholding `characterId`, since the group tier is keyed on it (bug 152).
  */
 export async function actingCharacterIsOpaqueToVaults(
   context: DocEditToolContext
@@ -369,12 +381,18 @@ export async function buildReadResolutionContext(
   input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
-    // No characterId / characterIds → resolver admits only project document
-    // stores. Mount-point name lookups for character vaults won't resolve.
+    // `hideCharacterVaults` subtracts the two vault tiers and leaves group,
+    // project and global reachable. The character is still passed: group
+    // membership is derived from `characterId` and from nothing else, so the
+    // old shape — withholding it — also hid every group store she belongs to
+    // (bug 152).
     return {
       projectId: context.projectId,
+      characterId: context.characterId,
+      hideCharacterVaults: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
+      mountPool: context.mountPool,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -384,6 +402,7 @@ export async function buildReadResolutionContext(
     characterIds: peerCharacterIds.length > 0 ? peerCharacterIds : undefined,
     mountPoint: input.mount_point,
     operatorOverride: context.operatorOverride,
+    mountPool: context.mountPool,
   };
 }
 
@@ -400,10 +419,15 @@ export async function buildWriteResolutionContext(
   input = applyQtapUriToInput(input);
   const opaque = await actingCharacterIsOpaqueToVaults(context);
   if (opaque) {
+    // See the read builder: hide the vault tiers by naming them, not by
+    // withholding the character the group tier is keyed on (bug 152).
     return {
       projectId: context.projectId,
+      characterId: context.characterId,
+      hideCharacterVaults: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
+      mountPool: context.mountPool,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -413,6 +437,7 @@ export async function buildWriteResolutionContext(
     characterId: context.characterId,
     mountPoint: input.mount_point,
     operatorOverride: context.operatorOverride,
+    mountPool: context.mountPool,
   };
 }
 

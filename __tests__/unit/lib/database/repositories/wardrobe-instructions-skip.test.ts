@@ -27,7 +27,6 @@ jest.mock('@/lib/repositories/factory', () => ({
       findManyByMountPointsInFolder: (...args: unknown[]) =>
         findManyByMountPointsInFolderMock(...args),
     },
-    wardrobe: { findArchetypes: jest.fn(async () => []) },
   }),
 }));
 

@@ -26,12 +26,12 @@ import { handleSendMessage } from '@/lib/services/chat-message/orchestrator.serv
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
-  getActiveCharacterParticipants,
+  resolveCycleOrder,
+  loadRoomCharacters,
 } from '@/lib/chat/turn-manager';
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary';
 import type {
   AutonomousRunState,
-  Character,
   ChatMetadataBase,
   MessageEvent,
 } from '@/lib/schemas/types';
@@ -572,14 +572,10 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
   }
 
   // 5. Speaker selection
-  const activeParticipants = getActiveCharacterParticipants(chat.participants);
-  const charactersMap = new Map<string, Character>();
-  for (const p of activeParticipants) {
-    if (p.characterId) {
-      const char = await repos.characters.findById(p.characterId);
-      if (char) charactersMap.set(p.characterId, char);
-    }
-  }
+  // Every present seat. An autonomous room is all-LLM by definition, so this is
+  // the same cast either way — but it is one batched read instead of one vault
+  // overlay per seat, on the hottest path the room has.
+  const charactersMap = await loadRoomCharacters(repos, chat.participants);
   const messages = await repos.chats.getMessages(chatId);
   const messageEvents = messages.filter(
     (m): m is typeof m & { type: 'message' } => m.type === 'message',
@@ -590,7 +586,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     // Autonomous rooms have no user participant by definition.
     userParticipantId: null,
     spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
   });
+  // Draw this cycle's rotation if the last one is spent. The write buffers
+  // through IPC like every other write in a job child — the parent commits it,
+  // and this turn uses the returned order in memory regardless.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  );
   const selection = selectNextSpeaker(chat.participants, charactersMap, turnState, null);
 
   if (!selection.nextSpeakerId) {

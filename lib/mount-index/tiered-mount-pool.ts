@@ -181,6 +181,93 @@ export async function resolveProjectMountPointIds(
 }
 
 /**
+ * One group's name and stores. Throws on lookup failure — the public wrappers
+ * below decide how to fail soft.
+ */
+async function readGroupStores(
+  groupId: string,
+): Promise<{ name: string; mountPointIds: string[] }> {
+  const repos = getRepositories();
+  const ids = new Set<string>();
+  // findByIdRaw avoids a store read on this hot path — we only need the
+  // group's name and officialMountPointId pointer, not its hydrated content.
+  const group = await repos.groups.findByIdRaw(groupId);
+  if (group?.officialMountPointId) ids.add(group.officialMountPointId);
+  const links = await repos.groupDocMountLinks.findByGroupId(groupId);
+  for (const link of links) ids.add(link.mountPointId);
+  return { name: group?.name ?? '', mountPointIds: [...ids] };
+}
+
+/**
+ * One group's stores: its official store plus every store linked to it. For a
+ * caller that holds a group rather than a member (the Scenario Builder launched
+ * from a group's page). Returns `[]` on any lookup failure (fails soft).
+ */
+export async function resolveMountPointIdsForGroup(
+  groupId: string | null | undefined,
+): Promise<string[]> {
+  if (!groupId) return [];
+  try {
+    return (await readGroupStores(groupId)).mountPointIds;
+  } catch (error) {
+    logger.warn('Group store lookup failed', { groupId, error: errMsg(error) });
+    return [];
+  }
+}
+
+/** One group's share of a character's group tier. */
+export interface GroupMounts {
+  group: { id: string; name: string };
+  mountPointIds: string[];
+}
+
+/**
+ * The group tier for a character, kept grouped: one entry per group the
+ * character belongs to, in membership order, each carrying that group's
+ * official store first and its linked stores after. A store linked to two of
+ * the character's groups is credited to the first only, so every mount appears
+ * exactly once across the result. Groups left with no stores are dropped.
+ *
+ * Callers that need to say *which* group a shared item hangs in (the wardrobe
+ * dialog's origin chip) use this; everyone else uses the flat
+ * {@link resolveGroupMountPointIdsForCharacter}, which is defined over this
+ * function so the two orders cannot drift. Fails soft to `[]`; a single
+ * group's lookup failure drops that group alone.
+ */
+export async function resolveGroupMountsForCharacter(
+  characterId: string | null | undefined,
+): Promise<GroupMounts[]> {
+  if (!characterId) return [];
+  try {
+    const repos = getRepositories();
+    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+    if (memberships.length === 0) return [];
+    const claimed = new Set<string>();
+    const result: GroupMounts[] = [];
+    for (const membership of memberships) {
+      let stores: { name: string; mountPointIds: string[] };
+      try {
+        stores = await readGroupStores(membership.groupId);
+      } catch (error) {
+        logger.warn('Group store lookup failed', {
+          groupId: membership.groupId,
+          error: errMsg(error),
+        });
+        continue;
+      }
+      const mountPointIds = stores.mountPointIds.filter((id) => !claimed.has(id));
+      for (const id of mountPointIds) claimed.add(id);
+      if (mountPointIds.length === 0) continue;
+      result.push({ group: { id: membership.groupId, name: stores.name }, mountPointIds });
+    }
+    return result;
+  } catch (error) {
+    logger.warn('Group mount lookup failed', { characterId, error: errMsg(error) });
+    return [];
+  }
+}
+
+/**
  * Resolve just the group tier — the union of the official store and every linked
  * store across all groups the given character is a member of. Keyed on the
  * RESPONDING character (never the chat): a character only ever sees its own
@@ -190,33 +277,8 @@ export async function resolveProjectMountPointIds(
 export async function resolveGroupMountPointIdsForCharacter(
   characterId: string | null | undefined,
 ): Promise<string[]> {
-  if (!characterId) return [];
-  try {
-    const repos = getRepositories();
-    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-    if (memberships.length === 0) return [];
-    const ids = new Set<string>();
-    for (const membership of memberships) {
-      try {
-        // findByIdRaw avoids a store read on this hot path — we only need the
-        // group's officialMountPointId pointer, not its hydrated content.
-        const group = await repos.groups.findByIdRaw(membership.groupId);
-        if (group?.officialMountPointId) ids.add(group.officialMountPointId);
-        const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
-        for (const link of links) ids.add(link.mountPointId);
-      } catch (error) {
-        logger.warn('Group store lookup failed for membership', {
-          groupId: membership.groupId,
-          characterId,
-          error: errMsg(error),
-        });
-      }
-    }
-    return [...ids];
-  } catch (error) {
-    logger.warn('Group mount lookup failed', { characterId, error: errMsg(error) });
-    return [];
-  }
+  const groups = await resolveGroupMountsForCharacter(characterId);
+  return groups.flatMap((g) => g.mountPointIds);
 }
 
 /**
@@ -352,14 +414,28 @@ export async function resolveTieredMountPool(
  * way the scriptorium search tool does ('character' | 'project' | 'all').
  * `includeParticipants` folds the participant tier into the result (the
  * document path resolver wants it; search does not).
+ *
+ * `includeCharacterTier` (default true) drops the acting character's OWN vault,
+ * the sibling of `includeParticipants`. Set both false to express "every store
+ * this character can reach EXCEPT a character vault" — what the doc-tool
+ * opacity covenant means (see `actingCharacterIsOpaqueToVaults`). It must be
+ * spelled that way rather than by withholding `characterId` from the pool,
+ * because the group tier is derived from `characterId` and from nothing else:
+ * dropping the character to hide her vault would silently take every group
+ * store she belongs to with it (bug 152).
  */
 export function flattenTierPool(
   pool: TieredMountPool,
-  opts: { scope?: 'all' | 'character' | 'group' | 'project'; includeParticipants?: boolean } = {},
+  opts: {
+    scope?: 'all' | 'character' | 'group' | 'project';
+    includeParticipants?: boolean;
+    includeCharacterTier?: boolean;
+  } = {},
 ): string[] {
-  const { scope = 'all', includeParticipants = false } = opts;
+  const { scope = 'all', includeParticipants = false, includeCharacterTier = true } = opts;
   const ids = new Set<string>();
   const addCharacterTier = () => {
+    if (!includeCharacterTier) return;
     if (pool.characterMountPointId) ids.add(pool.characterMountPointId);
     if (includeParticipants) {
       for (const id of pool.participantMountPointIds) ids.add(id);

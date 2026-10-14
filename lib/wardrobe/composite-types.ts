@@ -21,3 +21,17 @@ export function unionTypes(components: readonly Pick<WardrobeItem, 'types'>[]): 
   }
   return WARDROBE_SLOT_TYPES.filter((s) => set.has(s));
 }
+
+/**
+ * A composite's `types`: every slot its components cover plus any extra slots
+ * it designates (a "Naked" composite that clears accessories it holds nothing
+ * for). Widens, never narrows — the one rule for create and update, client and
+ * server, so an edit can never silently drop a slot the composite claimed.
+ */
+export function buildCompositeTypes(
+  components: readonly Pick<WardrobeItem, 'types'>[],
+  designated: readonly WardrobeItemType[] = [],
+): WardrobeItemType[] {
+  const set = new Set<WardrobeItemType>([...unionTypes(components), ...designated]);
+  return WARDROBE_SLOT_TYPES.filter((s) => set.has(s));
+}

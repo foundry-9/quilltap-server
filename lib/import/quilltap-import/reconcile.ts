@@ -16,9 +16,102 @@ import type {
   Project,
 } from '@/lib/schemas/types';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
+import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
+import { remapImportedMessageId } from './message-id-remap';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+/**
+ * What one imported `chat_informs` row resolved to: either an insertable
+ * payload with every FK rewritten, or the reason it was dropped.
+ */
+export type ChatInformRemapResult =
+  | {
+      ok: true;
+      data: Omit<ChatInform, 'id' | 'createdAt' | 'updatedAt'>;
+      /**
+       * True when the row's `consumedByMessageId` named a message the
+       * destination does not have and was nulled. The row is still a real
+       * historical inform, so it is kept — it simply loses its swipe anchor.
+       */
+      consumedByMessageIdCleared: boolean;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Rewrite one Inform row's FKs for the destination instance.
+ *
+ * Three of the four references are identity maps in practice rather than
+ * lookups, and that is exactly why they have to be *checked* here:
+ *
+ * - `chatId` goes through `idMaps.chats` like every other chat sidecar.
+ * - `participantId` is a chat PARTICIPANT id. Participants ride inside the
+ *   chat row, so `chats.create` preserves their ids verbatim — but a chat the
+ *   conflict strategy skipped, or one whose roster was edited in the
+ *   destination, may not have the seat at all.
+ * - `recordMessageId` and `consumedByMessageId` are message ids. They go
+ *   through `remapImportedMessageId`, which is the identity unless the chat
+ *   was created under a fresh id and its messages reminted (bug 228) — and a
+ *   message import that warned and continued leaves a hole either way.
+ *
+ * A row whose seat or whose Host record is missing is **dropped**: an inform
+ * aimed at nobody would sit pending forever, and a record pointer into empty
+ * space is a transcript lie. A missing `consumedByMessageId` only costs the
+ * row its swipe anchor, so the row is kept with the field nulled.
+ */
+export function remapChatInform(
+  inform: ChatInform,
+  idMaps: IdMappingState,
+  known: { participantIds: ReadonlySet<string>; messageIds: ReadonlySet<string> }
+): ChatInformRemapResult {
+  const chatId = idMaps.chats.get(inform.chatId) ?? inform.chatId;
+
+  if (!known.participantIds.has(inform.participantId)) {
+    return {
+      ok: false,
+      reason: `participant ${inform.participantId} is not a seat in chat ${chatId}`,
+    };
+  }
+
+  // `null` back from the remap means the chat was reminted and this message
+  // never landed — treated exactly like a pointer the destination lacks.
+  const sourceRecordId = inform.recordMessageId ?? null;
+  const recordMessageId = sourceRecordId
+    ? remapImportedMessageId(idMaps, inform.chatId, sourceRecordId)
+    : null;
+  if (sourceRecordId && (!recordMessageId || !known.messageIds.has(recordMessageId))) {
+    return {
+      ok: false,
+      reason: `record message ${sourceRecordId} is missing from chat ${chatId}`,
+    };
+  }
+
+  const sourceConsumedById = inform.consumedByMessageId ?? null;
+  const consumedByMessageId = sourceConsumedById
+    ? remapImportedMessageId(idMaps, inform.chatId, sourceConsumedById)
+    : null;
+  const consumedByMessageIdCleared = Boolean(
+    sourceConsumedById && (!consumedByMessageId || !known.messageIds.has(consumedByMessageId))
+  );
+
+  return {
+    ok: true,
+    consumedByMessageIdCleared,
+    data: {
+      chatId,
+      batchId: inform.batchId,
+      participantId: inform.participantId,
+      contentMarkdown: inform.contentMarkdown,
+      recordMessageId,
+      // Bundles written before standing informs existed carry no flag.
+      permanent: inform.permanent === true,
+      consumedAt: inform.consumedAt ?? null,
+      consumedByMessageId: consumedByMessageIdCleared ? null : consumedByMessageId,
+    },
+  };
+}
 
 /**
  * Tear down the scaffold vault `characters.create()` provisioned, now that the
@@ -328,6 +421,25 @@ export async function reconcileRelationships(
         if (newProjectId) {
           updates.projectId = newProjectId;
           hasUpdates = true;
+        }
+      }
+
+      // Re-point the scenario source at the imported copy of its store. A
+      // source whose mount did not come across (and is not already in this
+      // instance) is dropped rather than left dangling.
+      if (chat.scenarioSource) {
+        const source = chat.scenarioSource;
+        const mapped = idMaps.mountPoints.get(source.mountPointId)
+          ?? ((await getRepositories().docMountPoints.findById(source.mountPointId)) ? source.mountPointId : null);
+        const remapped = remapScenarioSource(source, () => mapped);
+        if (!remapped || remapped.mountPointId !== source.mountPointId) {
+          updates.scenarioSource = remapped;
+          hasUpdates = true;
+          moduleLogger.debug('Remapped chat scenario source', {
+            chatId: newId,
+            fromMountPointId: source.mountPointId,
+            toMountPointId: remapped?.mountPointId ?? null,
+          });
         }
       }
 

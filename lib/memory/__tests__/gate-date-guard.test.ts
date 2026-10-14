@@ -1,12 +1,15 @@
 /**
- * Episodic gate date guard: same activity, different occasion must yield two
- * rows (§3 acceptance: "Two visits to the same place, months apart → both rows
- * exist"). `occasionsAreDistinct` is the pure core; the runMemoryGate
- * integration is asserted through the decision it produces.
+ * Episodic admission date guard: same activity, different occasion must yield
+ * two rows (§3 acceptance: "Two visits to the same place, months apart → both
+ * rows exist"). `occasionsAreDistinct` is the pure core; `decideAdmission`'s
+ * use of it is pinned in admission-decide.test.ts.
  */
 
-import { occasionsAreDistinct, DATE_GUARD_DAYS } from '../memory-gate'
-import { appendRecallTurn, appendRetroSignature, parseRetroSignatures } from '../recall-history'
+import { occasionsAreDistinct as distinct } from '../admission/decide'
+import { ADMISSION_THRESHOLDS } from '../settings-defaults'
+const DATE_GUARD_DAYS = ADMISSION_THRESHOLDS.dateGuardDays
+const occasionsAreDistinct = (a: string | null | undefined, b: string | null | undefined) => distinct(a, b, DATE_GUARD_DAYS)
+import { appendRecallTurn, appendRetroSignature, parseRetroSignatures } from '../recall/history'
 
 describe('occasionsAreDistinct', () => {
   it('is true when occurredAt differ by more than the guard window', () => {

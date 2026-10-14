@@ -26,12 +26,26 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
+import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { isLanternImageAlertEnabled } from './resolver';
 
 export type LanternNotificationKind =
   | { kind: 'avatar'; characterName: string }
   | { kind: 'background' }
   | { kind: 'character-image'; requesterName: string };
+
+/**
+ * The Lantern's painter refused the scene and nobody painted it instead. No
+ * image, so it has its own writer (`postLanternRefusalNotification`) rather
+ * than a branch of the image announcement.
+ */
+export interface LanternRefusalKind {
+  kind: 'background-refused';
+  /** Provider of the image profile that refused (e.g. 'GOOGLE'). */
+  provider: string;
+  /** Its image model. */
+  modelName: string;
+}
 
 interface PostParams {
   chatId: string;
@@ -41,6 +55,12 @@ interface PostParams {
   // because the file row is typically a still-buffered write in the
   // background-job child and not yet readable from the DB.
   prompt?: string | null;
+  /**
+   * The Concierge's call sheet when the picture was refused on the way and
+   * rerouted (`generateImageWithConciergeFailover`). Rendered under the
+   * bubble's avatar. Omitted or empty when the first profile answered.
+   */
+  routeTrail?: RouteAttempt[] | null;
 }
 
 function buildContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
@@ -86,7 +106,7 @@ function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
 }
 
 export async function postLanternImageNotification(params: PostParams): Promise<void> {
-  const { chatId, fileId, kind, prompt = null } = params;
+  const { chatId, fileId, kind, prompt = null, routeTrail = null } = params;
 
   try {
     const repos = getRepositories();
@@ -118,6 +138,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       participantId: null,
       systemSender: senderForKind(kind),
       systemKind: kind.kind,
+      ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -140,6 +161,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       fileId,
       messageId,
       kind: kind.kind,
+      routeTrailLength: routeTrail?.length ?? 0,
     });
   } catch (error) {
     logger.error('[LanternNotification] Failed to post announcement', {
@@ -149,5 +171,77 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       kind: kind.kind,
       error: getErrorMessage(error),
     }, error as Error);
+  }
+}
+
+export function buildLanternRefusalContent(refusal: LanternRefusalKind): string {
+  return `The Lantern's usual painter (${refusal.provider} ${refusal.modelName}) would not take the scene — called it improper and downed brushes. The backdrop stays as it was.`;
+}
+
+export function buildLanternRefusalOpaqueContent(refusal: LanternRefusalKind): string {
+  return `Story background refused by ${refusal.provider} ${refusal.modelName} on content grounds; the previous backdrop is unchanged.`;
+}
+
+interface PostRefusalParams {
+  chatId: string;
+  refusal: LanternRefusalKind;
+  /** What was tried, ending in the refusal (or the understudy's failure). */
+  routeTrail?: RouteAttempt[] | null;
+}
+
+/**
+ * Tell the operator the Lantern's painter refused the backdrop.
+ *
+ * Not gated by the image-alert setting: that setting decides whether
+ * *characters* are shown new pictures, and this is a report to the operator
+ * — the Salon's "Try uncensored" button rides on it (identified by
+ * `systemKind: 'background-refused'`). It replaces the Concierge's own
+ * `refusal-*` bubble for the Lantern (one bubble per refusal). Never throws.
+ */
+export async function postLanternRefusalNotification(params: PostRefusalParams): Promise<MessageEvent | null> {
+  const { chatId, refusal, routeTrail = null } = params;
+  try {
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('[LanternNotification] Refusal bubble skipped: chat not found', {
+        context: 'lantern-notifications',
+        chatId,
+      });
+      return null;
+    }
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: randomUUID(),
+      role: 'ASSISTANT',
+      content: buildLanternRefusalContent(refusal),
+      opaqueContent: buildLanternRefusalOpaqueContent(refusal),
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      participantId: null,
+      systemSender: 'lantern',
+      systemKind: refusal.kind,
+      ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    logger.info('[LanternNotification] Background refusal posted', {
+      context: 'lantern-notifications',
+      chatId,
+      messageId: message.id,
+      provider: refusal.provider,
+      modelName: refusal.modelName,
+      routeTrailLength: routeTrail?.length ?? 0,
+    });
+    return message;
+  } catch (error) {
+    logger.error('[LanternNotification] Failed to post background refusal', {
+      context: 'lantern-notifications',
+      chatId,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
   }
 }

@@ -7,6 +7,7 @@ import {
   buildConversationMessages,
   collectLanternImageFileIdsForCharacter,
   collectUnseenUserAttachmentsForCharacter,
+  isRecordOnlyMessage,
   normalizeWhisperRoles,
 } from '@/lib/services/chat-message/context-builder.service'
 
@@ -20,6 +21,44 @@ jest.mock('@/lib/logging/create-logger', () => ({
 }))
 
 describe('context-builder.service', () => {
+  // The one hard invariant of the transcript side of Inform: the record
+  // documents a delivery for the operator and must never reach a model. It is
+  // the single gate `buildMessageContext` applies to every generation — fresh
+  // turn or swipe, single- or multi-character, transparent or opaque roster —
+  // which is why the predicate takes no argument describing any of those.
+  describe('isRecordOnlyMessage', () => {
+    it('strips the inform record, which otherwise passes as an ordinary assistant turn', () => {
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'inform' })).toBe(true)
+    })
+
+    it('strips an inform record even if a future writer omits the sender', () => {
+      expect(isRecordOnlyMessage({ systemKind: 'inform' })).toBe(true)
+    })
+
+    it('keeps every other Host announcement', () => {
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'announcement' })).toBe(false)
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'roster' })).toBe(false)
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'nudge' })).toBe(false)
+    })
+
+    it('strips Commonplace Book recall whispers, which are recomputed per turn', () => {
+      expect(isRecordOnlyMessage({ systemSender: 'commonplaceBook', systemKind: 'relevant-memories' })).toBe(true)
+      expect(isRecordOnlyMessage({ systemSender: 'commonplaceBook', systemKind: 'memory-recap' })).toBe(true)
+      expect(isRecordOnlyMessage({ systemSender: 'commonplaceBook' })).toBe(true)
+    })
+
+    it('keeps the relevant-conversations whisper, which is meant to persist', () => {
+      expect(
+        isRecordOnlyMessage({ systemSender: 'commonplaceBook', systemKind: 'relevant-conversations' }),
+      ).toBe(false)
+    })
+
+    it('keeps ordinary conversation, which carries neither field', () => {
+      expect(isRecordOnlyMessage({})).toBe(false)
+      expect(isRecordOnlyMessage({ systemSender: null, systemKind: null })).toBe(false)
+    })
+  })
+
   describe('buildConversationMessages', () => {
     it('should build conversation from USER and ASSISTANT messages', () => {
       const existingMessages = [

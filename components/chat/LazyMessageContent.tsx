@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import MessageContent from './MessageContent'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 interface LazyMessageContentProps {
@@ -40,12 +41,17 @@ function LazyMessageContentInner({
   renderedHtml,
 }: LazyMessageContentProps) {
   const hasQtapUri = content.includes('qtap://')
+  // Quick-hide "Salon Images": pre-rendered HTML carries its <img> tags
+  // verbatim, so a message with an image takes the full render, where
+  // MessageContent swaps each image for a placeholder.
+  const imagesHidden = useImagesHidden()
+  const htmlHasImage = !!renderedHtml && /<img\b/i.test(renderedHtml)
 
   // Fast path: server pre-rendered HTML for simple messages. Cheap and already
   // height-stable, so render it directly. Messages mentioning qtap:// must use
   // MessageContent so links are interactive via QtapLink (server-rendered HTML
   // anchors have no React click handler for in-app open behavior).
-  if (renderedHtml && !hasQtapUri) {
+  if (renderedHtml && !hasQtapUri && !(imagesHidden && htmlHasImage)) {
     return (
       <div
         className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}

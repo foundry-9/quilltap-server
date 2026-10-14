@@ -46,7 +46,7 @@ Attach files to individual messages:
 - Can be promoted to permanent files
 
 **A word on pictures.** An image attached to a chat is quietly shown to a
-describing model shortly after it lands (see [Chat Settings](chat-settings.md)),
+describing model shortly after it lands (see [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#image-description-settings)),
 and the description is filed in three places: on the file's own record, on
 every shelf in the [Scriptorium](scriptorium.md) where those same bytes appear,
 and in the search index — so *"the photograph of the kettle on the windowsill"*

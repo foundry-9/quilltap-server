@@ -46,6 +46,8 @@ When a profile is selected, the **Preview in character** button takes the place 
 
 From there: post it as it stands, polish it with a small edit, click **Regenerate** to try the recall again, or click **Edit seed** to unlock your original prompt and start over. Nothing is posted to the chat until you click **Post Announcement** — the preview is a private rehearsal between you and the character.
 
+This rehearsal has an in-scene cousin: turn on **Impersonated lines in the character's own words** (Settings → Chat → Composer) and a line you type while *impersonating* a character is restated the same way — except that the character is told they are in the room, shown the recent conversation, and given the scene's roleplay template, because the line is about to be played rather than announced. See [In their own words](/settings?tab=chat&section=composer-spellcheck).
+
 ## What characters see
 
 The bubble's *content* — the Markdown body you typed — is what the audience's LLM receives (every character, when the announcement is public; only those you named, when it is whispered).
@@ -55,6 +57,10 @@ The bubble's *content* — the Markdown body you typed — is what the audience'
 It did have to guess, once. Before this, the name and avatar on the bubble were for the human audience alone, and the LLM read the prose by itself: a whispered aside written in one character's voice arrived at its recipient as anonymous prose, and the character — reasonably, and quite wrongly — concluded it had been a different member of the Staff entirely, then went on speaking as though the matter were settled. A name is now attached at the source.
 
 Staff announcements are unaffected: they have always named themselves in their own prose. *"The Host raises a glass and says…"* reads clearly to any character, and still does.
+
+## When you want it known rather than said
+
+Not every intervention wants to be *heard.* If what you actually need is for a character to have noticed something, or to have remembered something, without a word of it being spoken in the room, an announcement is the wrong instrument — even a whispered one, which still arrives as a remark somebody made. Reach instead for **Inform**, the small *i* further down the gutter: it hands a character a short out-of-character passage before their next turn, delivers it verbatim, and spends it once they have spoken. An announcement is *said*; an inform is *known*. See [Informing the cast](/salon).
 
 ## A note on permanence
 

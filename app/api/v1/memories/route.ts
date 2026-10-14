@@ -9,50 +9,83 @@
  *
  * Actions (via ?action= query parameter):
  * - POST ?action=search - Semantic/keyword search (characterId in body)
- * - POST ?action=housekeep - Run memory cleanup synchronously (characterId in body)
- * - POST ?action=housekeep-sweep - Enqueue a background sweep across every character owned by the user
+ * - POST ?action=maintain - Memory maintenance ({ characterId?, phases?, dryRun?, settings? }); naming `consolidate` implies `mirror`. A dry run runs in-process and returns the report (`reports` for a user-wide dry run, allowed only for the LLM-free phases); otherwise one MEMORY_MAINTENANCE job per character (or for every character the user owns) is enqueued and `{ jobIds }` returned
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
- * - POST ?action=housekeeping-config - Update auto-housekeeping settings
+ * - POST ?action=maintenance-config - Update memory maintenance settings (enabled, per-phase toggles, per-character cap and overrides; instance-wide)
+ * - POST ?action=repair - Graph repair ({ characterId?, dryRun? }): find links to rows that no longer exist and rows without embeddings; a live run scrubs the links and queues embedding jobs
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
+ * - POST ?action=consolidation-config - Update consolidation settings (instance-wide)
+ * - POST ?action=extraction-mode-config - Update the extraction grain of the OTHER pass (instance-wide)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
- * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
+ * - POST ?action=anchor-gate-probe - Measure whether the embedded anchor line suppresses gate reinforcement (read-only dev tool; characterId in body)
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
- * - GET ?action=housekeep&characterId= - Get housekeeping preview
+ * - GET ?action=maintenance-status[&characterId=] - The maintenance ledger: last run per phase, last outcome, last demotion's effectiveness
  * - GET ?action=embeddings&characterId= - Get embedding status
- * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
+ * - GET ?action=maintenance-config - Read memory maintenance settings
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
  * - GET ?action=recall-config - Read current recall relevance settings
+ * - GET ?action=consolidation-config - Read consolidation settings
+ * - GET ?action=extraction-mode-config - Read the extraction grain settings
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
- * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
- * - GET ?action=extraction-concurrency - Read current MEMORY_EXTRACTION concurrency cap
+ * - GET ?action=character-memory-counts - List user's characters with memory counts (for the Maintenance card)
  * - GET ?action=regenerate-all - Report whether a regenerate sweep is in flight
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createContextHandler,
-  getActionParam,
+  dispatchAction,
+  type RequestContext,
 } from '@/lib/api/middleware';
-import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
-import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
-import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
-import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
-import { setMemoryExtractionConcurrencyOverride } from '@/lib/background-jobs/processor';
+import { searchMemories } from '@/lib/memory/recall/search';
+import { generateMissingEmbeddings, rebuildVectorIndex, enqueueMissingEmbeddings } from '@/lib/memory/index-store/backfill';
+import { admitCandidate, admissionInserted } from '@/lib/memory/admission';
+import { retireChatMemories } from '@/lib/memory/retire';
+import { repairMemoryGraph } from '@/lib/memory/repair';
 import {
-  getMemoryExtractionConcurrency,
-  setMemoryExtractionConcurrency,
+  runMaintenance,
+  getMaintenanceLedgerStatus,
+  MAINTENANCE_PHASES,
+  withImpliedPhases,
+  type MaintenanceReport,
+} from '@/lib/memory/maintenance';
+import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
+import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
+import { MemoryCandidateSchema, MEMORY_ENTITY_CAP } from '@/lib/memory/candidate';
+import {
+  MemoryMaintenanceCapSchema,
+  MemoryMaintenanceCapOverridesSchema,
+  MemoryMaintenancePhaseTogglesSchema,
+} from '@/lib/schemas/settings.types';
+import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
+import { enqueueMemoryMaintenance, enqueueMemoryMaintenanceForUser, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
+import {
+  getMemoryMaintenanceSettings,
+  setMemoryMaintenanceSettings,
   getMemoryExtractionLimits,
   setMemoryExtractionLimits,
   getMemoryRecallSettings,
   setMemoryRecallSettings,
+  getMemoryConsolidationSettings,
+  setMemoryConsolidationSettings,
+  getMemoryExtractionModeSettings,
+  setMemoryExtractionModeSettings,
 } from '@/lib/instance-settings';
+import {
+  MemoryConsolidationSettingsSchema,
+  MemoryExtractionLimitsSchema,
+  MemoryExtractionModeSettingsSchema,
+  MemoryRecallSettingsSchema,
+} from '@/lib/schemas/settings.types';
+import { patchSchemaOf } from '@/lib/schemas/patch-schema';
+import { MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError, successResponse, errorResponse } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 
 // =============================================================================
 // Validation Schemas
@@ -60,16 +93,26 @@ import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types'
 
 const createMemorySchema = z.object({
   characterId: z.uuid('Character ID is required'),
-  content: z.string().min(1, 'Memory content is required'),
-  summary: z.string().min(1, 'Memory summary is required'),
+  // Trimmed: blank text is the client's 400, never an admission reject (bug 236).
+  content: z.string().trim().min(1, 'Memory content is required'),
+  summary: z.string().trim().min(1, 'Memory summary is required'),
   keywords: z.array(z.string()).prefault([]),
   tags: z.array(z.uuid()).prefault([]),
   importance: z.number().min(0).max(1).prefault(0.5),
   aboutCharacterId: z.uuid().nullable().optional(),
   chatId: z.uuid().nullable().optional(),
-  source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
+  /** Explicit project; otherwise derived from `chatId`'s chat when it has one. */
+  projectId: z.uuid().nullable().optional(),
   sourceMessageId: z.uuid().nullable().optional(),
-  skipGate: z.boolean().optional(),
+  kind: MemoryKindEnum.optional(),
+  /** ISO wall-clock time of the event the memory records. */
+  occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  /** The candidate schema's bound (`MEMORY_ENTITY_CAP`). */
+  entities: z.array(z.string().min(1)).max(MEMORY_ENTITY_CAP).optional(),
+  // Deliberately absent (bug 218, refactor decision 13): `source` is always
+  // MANUAL here — a client-claimed AUTO would switch on the extractor-only
+  // heuristics — and `skipGate` has left the API, so every manual write goes
+  // through the gate. Zod strips both if a caller still sends them.
 });
 
 const searchMemorySchema = z.object({
@@ -78,23 +121,34 @@ const searchMemorySchema = z.object({
   limit: z.number().min(1).max(100).prefault(20),
   minImportance: z.number().min(0).max(1).optional(),
   minScore: z.number().min(0).max(1).optional(),
-  source: z.enum(['AUTO', 'MANUAL']).optional(),
+  source: z.enum(['AUTO', 'MANUAL', 'CONSOLIDATED']).optional(),
 });
 
-const housekeepingOptionsSchema = z.object({
-  characterId: z.uuid('Character ID is required'),
-  maxMemories: z.number().min(10).max(10000).optional(),
-  maxAgeMonths: z.number().min(1).max(120).optional(),
-  maxInactiveMonths: z.number().min(1).max(120).optional(),
-  minImportance: z.number().min(0).max(1).optional(),
-  mergeSimilar: z.boolean().optional(),
-  mergeThreshold: z.number().min(0.8).max(1).optional(),
+
+/** `?action=maintain`. */
+const maintainSchema = z.object({
+  /** One character; omitted, every character the user owns (not for a dry run). */
+  characterId: z.uuid().optional(),
+  phases: z.array(z.enum(MAINTENANCE_PHASES)).min(1).optional(),
+  dryRun: z.boolean().optional(),
+  settings: z
+    .object({
+      consolidation: patchSchemaOf(MemoryConsolidationSettingsSchema).optional(),
+      maxClustersPerRun: z.number().int().min(1).max(1000).optional(),
+      cap: MemoryMaintenanceCapSchema.optional(),
+    })
+    .optional(),
+});
+
+/** `?action=repair`. */
+const repairSchema = z.object({
+  /** One character; omitted, every memory in the instance. */
+  characterId: z.uuid().optional(),
   dryRun: z.boolean().optional(),
 });
 
 const generateEmbeddingsSchema = z.object({
   characterId: z.uuid('Character ID is required'),
-  batchSize: z.number().min(1).max(50).prefault(10),
 });
 
 const rebuildIndexSchema = z.object({
@@ -104,26 +158,26 @@ const rebuildIndexSchema = z.object({
   }),
 });
 
-const housekeepingConfigSchema = z.object({
+// The maintenance settings validate through their own schema (bounds included,
+// overrides too); unknown keys such as the retired merge knobs are stripped.
+const maintenanceConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  perCharacterCap: z.number().int().min(100).max(100000).optional(),
-  perCharacterCapOverrides: z.record(z.string(), z.number().int().positive()).optional(),
-  autoMergeSimilarThreshold: z.number().min(0).max(1).optional(),
-  mergeSimilar: z.boolean().optional(),
+  phases: patchSchemaOf(MemoryMaintenancePhaseTogglesSchema).optional(),
+  perCharacterCap: MemoryMaintenanceCapSchema.optional(),
+  perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.optional(),
 });
 
-const extractionLimitsConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  maxPerHour: z.number().int().min(1).max(10000).optional(),
-  softStartFraction: z.number().min(0).max(1).optional(),
-  softFloor: z.number().min(0).max(1).optional(),
-});
+// Every settings write validates through the façade's own schemas, as a patch:
+// an omitted key stays omitted, so a card that sends one field changes one
+// field (bug 244 — `.partial()` alone re-applies every default).
+const extractionLimitsConfigSchema = patchSchemaOf(MemoryExtractionLimitsSchema);
 
-const recallConfigSchema = z.object({
-  scopePolicy: z.enum(['down-weight', 'exclude']).optional(),
-  expandRelated: z.boolean().optional(),
-  perTurnConversationSummaries: z.boolean().optional(),
-});
+const recallConfigSchema = patchSchemaOf(MemoryRecallSettingsSchema);
+
+const consolidationConfigSchema = patchSchemaOf(MemoryConsolidationSettingsSchema);
+
+const extractionModeConfigSchema = patchSchemaOf(MemoryExtractionModeSettingsSchema);
+
 
 const backfillStartSchema = z.object({
   /** Restrict backfill to one character; omit to backfill all of user's characters. */
@@ -132,58 +186,39 @@ const backfillStartSchema = z.object({
   batchSize: z.number().int().min(1).max(2000).prefault(500),
 });
 
-const extractionConcurrencySchema = z.object({
-  concurrency: z.number().int().min(1).max(32),
-});
-
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
 
 export const GET = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
   const { searchParams } = req.nextUrl;
   const characterId = searchParams.get('characterId');
   const chatId = searchParams.get('chatId');
   const messageId = searchParams.get('messageId');
 
-  // Handle action-based GET requests
-  if (action === 'housekeep') {
-    return handleHousekeepPreview(req, { user, repos }, characterId);
-  }
+  return dispatchAction(
+    req,
+    {
+      'maintenance-status': () => handleMaintenanceStatus(req, { user, repos }),
+      embeddings: () => handleEmbeddingStatus(req, { user, repos }, characterId),
+      'maintenance-config': () => handleReadMaintenanceConfig(req, { user, repos }),
+      'extraction-limits-config': () => handleReadExtractionLimitsConfig(req, { user, repos }),
+      'recall-config': () => handleReadRecallConfig(req, { user, repos }),
+      'consolidation-config': () => handleReadConsolidationConfig(),
+      'extraction-mode-config': () => handleReadExtractionModeConfig(),
+      'backfill-embeddings': () => handleBackfillProgress(req, { user, repos }),
+      'character-memory-counts': () => handleCharacterMemoryCounts(req, { user, repos }),
+      'regenerate-all': () => handleRegenerateAllStatus(req, { user, repos }),
+    },
+    () => handleListMemories(req, { user, repos }, { characterId, chatId, messageId })
+  );
+});
 
-  if (action === 'embeddings') {
-    return handleEmbeddingStatus(req, { user, repos }, characterId);
-  }
-
-  if (action === 'housekeeping-config') {
-    return handleReadHousekeepingConfig(req, { user, repos });
-  }
-
-  if (action === 'extraction-limits-config') {
-    return handleReadExtractionLimitsConfig(req, { user, repos });
-  }
-
-  if (action === 'recall-config') {
-    return handleReadRecallConfig(req, { user, repos });
-  }
-
-  if (action === 'backfill-embeddings') {
-    return handleBackfillProgress(req, { user, repos });
-  }
-
-  if (action === 'character-memory-counts') {
-    return handleCharacterMemoryCounts(req, { user, repos });
-  }
-
-  if (action === 'extraction-concurrency') {
-    return handleReadExtractionConcurrency(req, { user, repos });
-  }
-
-  if (action === 'regenerate-all') {
-    return handleRegenerateAllStatus(req, { user, repos });
-  }
-
+async function handleListMemories(
+  req: NextRequest,
+  { user, repos }: Pick<RequestContext, 'user' | 'repos'>,
+  { characterId, chatId, messageId }: { characterId: string | null; chatId: string | null; messageId: string | null }
+): Promise<NextResponse> {
   // Standard list operations - require a filter
   if (!characterId && !chatId && !messageId) {
     return badRequest('Query parameter required: characterId, chatId, or messageId');
@@ -210,73 +245,40 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
     logger.error('[Memories API] Error listing memories', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to list memories');
   }
-});
+}
 
 // =============================================================================
 // POST /api/v1/memories - Create memory or perform action
 // =============================================================================
 
-export const POST = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-
-  // Action-based operations
-  if (action === 'search') {
-    return handleSearch(req, { user, repos });
-  }
-
-  if (action === 'housekeep') {
-    return handleHousekeep(req, { user, repos });
-  }
-
-  if (action === 'housekeep-sweep') {
-    return handleHousekeepSweep(req, { user });
-  }
-
-  if (action === 'embeddings') {
-    return handleGenerateEmbeddings(req, { user, repos });
-  }
-
-  if (action === 'housekeeping-config') {
-    return handleWriteHousekeepingConfig(req, { user, repos });
-  }
-
-  if (action === 'extraction-limits-config') {
-    return handleWriteExtractionLimitsConfig(req, { user, repos });
-  }
-
-  if (action === 'recall-config') {
-    return handleWriteRecallConfig(req, { user, repos });
-  }
-
-  if (action === 'backfill-embeddings') {
-    return handleBackfillStart(req, { user, repos });
-  }
-
-  if (action === 'regenerate-all') {
-    return handleRegenerateAll(req, { user, repos });
-  }
-
-  if (action === 'extraction-concurrency') {
-    return handleWriteExtractionConcurrency(req, { user, repos });
-  }
-
-  // Default: Create memory
-  return handleCreateMemory(req, { user, repos });
-});
+export const POST = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(
+    req,
+    {
+      search: () => handleSearch(req, { user, repos }),
+      maintain: () => handleMaintain(req, { user, repos }),
+      repair: () => handleRepair(req, { user, repos }),
+      embeddings: () => handleGenerateEmbeddings(req, { user, repos }),
+      'maintenance-config': () => handleWriteMaintenanceConfig(req, { user, repos }),
+      'extraction-limits-config': () => handleWriteExtractionLimitsConfig(req, { user, repos }),
+      'recall-config': () => handleWriteRecallConfig(req, { user, repos }),
+      'consolidation-config': () => handleWriteConsolidationConfig(req),
+      'extraction-mode-config': () => handleWriteExtractionModeConfig(req),
+      'backfill-embeddings': () => handleBackfillStart(req, { user, repos }),
+      'regenerate-all': () => handleRegenerateAll(req, { user, repos }),
+      'anchor-gate-probe': () => handleAnchorGateProbe(req, { user, repos }),
+    },
+    () => handleCreateMemory(req, { user, repos })
+  )
+);
 
 // =============================================================================
 // PUT /api/v1/memories - Bulk operations (action-based only)
 // =============================================================================
 
-export const PUT = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-
-  if (action === 'embeddings') {
-    return handleRebuildIndex(req, { user, repos });
-  }
-
-  return badRequest('PUT requires ?action=embeddings parameter');
-});
+export const PUT = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(req, { embeddings: () => handleRebuildIndex(req, { user, repos }) })
+);
 
 // =============================================================================
 // DELETE /api/v1/memories - Delete memories by filter
@@ -311,7 +313,9 @@ async function listMemoriesByCharacter(
   const { searchParams } = req.nextUrl;
   const search = searchParams.get('search') || undefined;
   const minImportanceParam = searchParams.get('minImportance');
-  const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | null;
+  const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | 'CONSOLIDATED' | null;
+  const tierParam = searchParams.get('tier');
+  const tier: 'hot' | 'cold' | undefined = tierParam === 'hot' || tierParam === 'cold' ? tierParam : undefined;
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
 
@@ -332,8 +336,9 @@ async function listMemoriesByCharacter(
       sortBy,
       sortOrder,
       search,
-      source: source && (source === 'AUTO' || source === 'MANUAL') ? source : undefined,
+      source: source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED') ? source : undefined,
       minImportance: minImportance !== undefined && !isNaN(minImportance) ? minImportance : undefined,
+      tier,
     });
 
     // Enrich with tag names
@@ -366,11 +371,15 @@ async function listMemoriesByCharacter(
   }
 
   if (minImportance !== undefined && !isNaN(minImportance)) {
-    memories = memories.filter((m: any) => m.importance >= minImportance);
+    memories = memories.filter((m: any) => filterImportance(m) >= minImportance);
   }
 
-  if (source && (source === 'AUTO' || source === 'MANUAL')) {
+  if (source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED')) {
     memories = memories.filter((m: any) => m.source === source);
+  }
+
+  if (tier) {
+    memories = memories.filter((m: any) => (m.tier ?? 'hot') === tier);
   }
 
   // Sort
@@ -499,7 +508,19 @@ async function handleCreateMemory(
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json();
-  const validatedData = createMemorySchema.parse(body);
+  const parsed = createMemorySchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const validatedData = parsed.data;
+
+  if (body && typeof body === 'object' && ('skipGate' in body || ('source' in body && body.source !== 'MANUAL'))) {
+    logger.debug('[Memories API] Ignoring client-supplied source/skipGate on manual create', {
+      characterId: validatedData.characterId,
+      source: body.source,
+      skipGate: body.skipGate,
+    });
+  }
 
   // Verify character ownership
   const character = await repos.characters.findById(validatedData.characterId);
@@ -507,29 +528,101 @@ async function handleCreateMemory(
     return notFound('Character');
   }
 
-  // Create memory with embedding generation
-  const memory = await createMemoryWithEmbedding(
-    {
-      characterId: validatedData.characterId,
-      content: validatedData.content,
-      summary: validatedData.summary,
-      keywords: validatedData.keywords,
-      tags: validatedData.tags,
-      importance: validatedData.importance,
-      aboutCharacterId: validatedData.aboutCharacterId,
-      chatId: validatedData.chatId,
-      source: validatedData.source,
-      sourceMessageId: validatedData.sourceMessageId,
+  // Resolve the project: an explicit one must exist; otherwise the source
+  // chat's project (if any) is the memory's, as it is for extracted rows.
+  let projectId: string | null = null;
+  if (validatedData.projectId) {
+    const project = await repos.projects.findById(validatedData.projectId);
+    if (!project) {
+      return notFound('Project');
+    }
+    projectId = project.id;
+  }
+  if (validatedData.chatId) {
+    const chat = await repos.chats.findById(validatedData.chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+    if (!projectId) {
+      projectId = chat.projectId ?? null;
+    }
+  }
+
+  // Every manual write goes through the gate (decision 13): source forced to
+  // MANUAL, provenance stamped 'manual'. A hand-written memory carries no
+  // targeting tags (it reads as the defaults) and its event time is given,
+  // not phrased.
+  const parsedCandidate = MemoryCandidateSchema.safeParse({
+    content: validatedData.content,
+    summary: validatedData.summary,
+    keywords: validatedData.keywords,
+    targeting: null,
+    importance: validatedData.importance,
+    kind: validatedData.kind ?? 'semantic',
+    when: null,
+    entities: validatedData.entities ?? [],
+    tags: validatedData.tags,
+    subject: { holderId: validatedData.characterId, aboutId: validatedData.aboutCharacterId ?? null },
+    provenance: {
+      source: 'MANUAL',
+      witnessedContext: 'manual',
+      chatId: validatedData.chatId ?? null,
+      projectId,
+      sourceMessageId: validatedData.sourceMessageId ?? null,
+      anchorTimeMs: Date.now(),
+      pass: 'manual',
     },
-    { userId: user.id, skipGate: validatedData.skipGate }
+  });
+  if (!parsedCandidate.success) {
+    // The request schema should already have refused anything the candidate
+    // refuses; a gap between the two is still the client's 400, never a 500.
+    logger.debug('[Memories API] Manual memory refused by the candidate schema', {
+      characterId: validatedData.characterId,
+      issues: parsedCandidate.error.issues.length,
+    });
+    return validationError(parsedCandidate.error);
+  }
+  const candidate = parsedCandidate.data;
+  // A hand-written memory never folds into an extracted row (it is inserted
+  // and linked instead); folded into a MANUAL row or a digest, it raises that
+  // row's importance to the one asked for.
+  const outcome = await admitCandidate(
+    candidate,
+    { occurredAt: validatedData.occurredAt ?? null, narrativeTime: null },
+    { userId: user.id }
   );
 
+  const memory = outcome.memory;
   if (!memory) {
-    // Embedding generation failed after retry; no row was written because a
-    // memory without an embedding would be invisible to every future gate
-    // check. Surface this to the client so the UI can show the real reason.
-    return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
+    // Nothing was written. Say why: only an embedding failure is the
+    // provider's fault (bug 236).
+    const reason = outcome.action.kind === 'reject' ? outcome.action.reason : 'unknown';
+    logger.debug('[Memories API] Manual memory not admitted', {
+      characterId: validatedData.characterId,
+      reason,
+    });
+    if (reason === 'empty') {
+      return badRequest('Memory content and summary must not be blank.');
+    }
+    if (reason === 'embedding-failed') {
+      // A memory without an embedding would be invisible to every future
+      // admission, so none was kept. The edit route answers the same way.
+      return errorResponse(
+        'The memory was not saved because its text could not be embedded. Check the configured embedding profile.',
+        502
+      );
+    }
+    return serverError('The memory was not saved.');
   }
+
+  const inserted = admissionInserted(outcome);
+  logger.debug('[Memories API] Manual memory create resolved', {
+    characterId: validatedData.characterId,
+    memoryId: memory.id,
+    action: outcome.action.kind,
+    inserted,
+    projectId,
+  });
 
   // Schedule vocabulary refit for BUILTIN profiles (debounced)
   // This runs in the background and doesn't block the response
@@ -539,7 +632,9 @@ async function handleCreateMemory(
     });
   });
 
-  return NextResponse.json({ memory }, { status: 201 });
+  // 201 only when a row was created; a reinforcement or near-duplicate
+  // absorption returns 200 with the existing row, and `action` says which.
+  return successResponse({ memory, action: outcome.action.kind }, inserted ? 201 : 200);
 }
 
 async function handleSearch(
@@ -556,12 +651,16 @@ async function handleSearch(
   }
 
   // Semantic search
-  const searchResults = await searchMemoriesSemantic(characterId, query, {
+  // The Memories API search returns rows to a person browsing, not to a model:
+  // it stamps nothing (only `deliver` writes lastAccessedAt).
+  const searchResults = await searchMemories(characterId, query, {
     userId: user.id,
     limit,
     minScore,
-    minImportance,
+    minImportance: minImportance ?? TOOL_MIN_IMPORTANCE,
     source,
+    // The Commonplace Book browses the whole archive, cold rows included.
+    includeCold: true,
   });
 
   // Enrich with tag names
@@ -575,9 +674,6 @@ async function handleSearch(
     tagDetails: result.memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
   }));
 
-  // Access times are bumped inside searchMemoriesSemantic (single source of
-  // truth for retrieval-time access updates).
-
   return NextResponse.json({
     memories: memoriesWithTags,
     count: memoriesWithTags.length,
@@ -586,187 +682,220 @@ async function handleSearch(
   });
 }
 
-async function handleHousekeep(
+const anchorGateProbeSchema = z.object({
+  characterId: z.string().uuid(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+/**
+ * POST ?action=anchor-gate-probe — re-embed a character's most recent rows with
+ * and without the episodic anchor line and report how many would have crossed
+ * the gate's reinforce / near-duplicate thresholds each way. Read-only; costs
+ * up to ~(limit × 7) embedding calls. Wrapped by `quilltap anchor-probe`.
+ */
+async function handleAnchorGateProbe(
   req: NextRequest,
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json().catch(() => ({}));
-  const optionsResult = housekeepingOptionsSchema.safeParse(body);
-
-  if (!optionsResult.success) {
-    return validationError(optionsResult.error);
-  }
-
-  const { characterId, ...optionData } = optionsResult.data;
-
-  // Verify character ownership
-  const character = await repos.characters.findById(characterId);
-  if (!character) {
-    return notFound('Character');
-  }
-
-  const options: HousekeepingOptions = {
-    ...optionData,
-    userId: user.id,
-  };
-
-  // Embedding profile is always the system default — no per-chat override
-
-  // Run housekeeping (or preview if dryRun)
-  const result = options.dryRun
-    ? await getHousekeepingPreview(characterId, options)
-    : await runHousekeeping(characterId, options);
-
-  return NextResponse.json({
-    success: true,
-    dryRun: !!options.dryRun,
-    result: {
-      deleted: result.deleted,
-      merged: result.merged,
-      kept: result.kept,
-      totalBefore: result.totalBefore,
-      totalAfter: result.totalAfter,
-      deletedIds: result.deletedIds,
-      mergedIds: result.mergedIds,
-      details: options.dryRun ? result.details : undefined,
-    },
-  });
-}
-
-async function handleHousekeepSweep(
-  _req: NextRequest,
-  { user }: { user: { id: string } }
-) {
-  try {
-    const jobId = await enqueueMemoryHousekeeping(user.id, { reason: 'manual' });
-    logger.info('[Memories API] Enqueued manual housekeeping sweep', {
-      userId: user.id,
-      jobId,
-    });
-    return NextResponse.json({ success: true, jobId });
-  } catch (error) {
-    logger.error('[Memories API] Failed to enqueue housekeeping sweep', {
-      userId: user.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to enqueue housekeeping sweep');
-  }
-}
-
-async function handleHousekeepPreview(
-  req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any },
-  characterId: string | null
-) {
-  if (!characterId) {
-    return badRequest('characterId query parameter required for housekeep preview');
-  }
-
-  // Verify character ownership
-  const character = await repos.characters.findById(characterId);
-  if (!character) {
-    return notFound('Character');
-  }
-
-  // Parse options from query params
-  const { searchParams } = req.nextUrl;
-  const options: HousekeepingOptions = { userId: user.id };
-
-  if (searchParams.has('maxMemories')) {
-    const val = parseInt(searchParams.get('maxMemories')!, 10);
-    if (isNaN(val) || val < 1 || val > 100000) {
-      return badRequest('maxMemories must be an integer between 1 and 100000');
-    }
-    options.maxMemories = val;
-  }
-  if (searchParams.has('maxAgeMonths')) {
-    const val = parseInt(searchParams.get('maxAgeMonths')!, 10);
-    if (isNaN(val) || val < 1 || val > 1200) {
-      return badRequest('maxAgeMonths must be an integer between 1 and 1200');
-    }
-    options.maxAgeMonths = val;
-  }
-  if (searchParams.has('minImportance')) {
-    const val = parseFloat(searchParams.get('minImportance')!);
-    if (isNaN(val) || val < 0 || val > 1) {
-      return badRequest('minImportance must be a number between 0 and 1');
-    }
-    options.minImportance = val;
-  }
-  if (searchParams.has('mergeSimilar')) {
-    options.mergeSimilar = searchParams.get('mergeSimilar') === 'true';
-  }
-
-  // Embedding profile is always the system default — no per-chat override
-
-  const preview = await getHousekeepingPreview(characterId, options);
-
-  return NextResponse.json({
-    success: true,
-    preview: {
-      wouldDelete: preview.deleted,
-      wouldMerge: preview.merged,
-      wouldKeep: preview.kept,
-      totalBefore: preview.totalBefore,
-      totalAfter: preview.totalAfter,
-      details: preview.details,
-    },
-  });
-}
-
-async function handleReadHousekeepingConfig(
-  _req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
-) {
-  const settings = await repos.chatSettings.findByUserId(user.id);
-  const autoHousekeepingSettings = settings?.autoHousekeepingSettings ?? {
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  };
-  return NextResponse.json({ success: true, settings: autoHousekeepingSettings });
-}
-
-async function handleWriteHousekeepingConfig(
-  req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
-) {
-  const body = await req.json();
-  const parsed = housekeepingConfigSchema.safeParse(body);
+  const parsed = anchorGateProbeSchema.safeParse(body);
   if (!parsed.success) {
     return validationError(parsed.error);
   }
 
-  const existing = await repos.chatSettings.findByUserId(user.id);
-  const currentSettings = existing?.autoHousekeepingSettings ?? {
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  };
+  const character = await repos.characters.findById(parsed.data.characterId);
+  if (!character) {
+    return notFound('Character');
+  }
 
-  const merged = {
-    enabled: parsed.data.enabled ?? currentSettings.enabled,
-    perCharacterCap: parsed.data.perCharacterCap ?? currentSettings.perCharacterCap,
-    perCharacterCapOverrides: parsed.data.perCharacterCapOverrides ?? currentSettings.perCharacterCapOverrides,
-    autoMergeSimilarThreshold: parsed.data.autoMergeSimilarThreshold ?? currentSettings.autoMergeSimilarThreshold,
-    mergeSimilar: parsed.data.mergeSimilar ?? currentSettings.mergeSimilar,
-  };
+  logger.debug('[Memories API] Running anchor gate probe', {
+    characterId: parsed.data.characterId,
+    limit: parsed.data.limit,
+  });
+  try {
+    const result = await runAnchorGateProbe({
+      characterId: parsed.data.characterId,
+      userId: user.id,
+      limit: parsed.data.limit,
+    });
+    return successResponse(result);
+  } catch (error) {
+    logger.error('[Memories API] Anchor gate probe failed', {
+      characterId: parsed.data.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Anchor gate probe failed');
+  }
+}
 
-  await repos.chatSettings.updateForUser(user.id, {
-    autoHousekeepingSettings: merged,
+/** In-process dry runs are bounded: each consolidation cluster is one model call. */
+const MAINTAIN_DRY_RUN_DEFAULT_CLUSTERS = 10;
+const MAINTAIN_DRY_RUN_MAX_CLUSTERS = 40;
+const MAINTAIN_DRY_RUN_TIME_BUDGET_MS = 120_000;
+
+async function handleMaintain(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = maintainSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, dryRun, settings } = parsed.data;
+  const phases = parsed.data.phases ? withImpliedPhases(parsed.data.phases) : undefined;
+
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+
+  if (dryRun) {
+    // A dry run that may call the model (consolidation) names one character;
+    // the LLM-free phases may dry-run across every character the user owns.
+    const mayCallModel = !phases || phases.includes('consolidate');
+    if (!characterId && mayCallModel) {
+      return badRequest('A dry run that includes consolidation names one character (characterId)');
+    }
+    const maxClustersPerRun = Math.min(
+      settings?.maxClustersPerRun ?? MAINTAIN_DRY_RUN_DEFAULT_CLUSTERS,
+      MAINTAIN_DRY_RUN_MAX_CLUSTERS
+    );
+    const targets: Array<{ id: string }> = characterId
+      ? [{ id: characterId }]
+      : (await repos.characters.findByUserId(user.id)).filter((c: { archivedAt?: string | null }) => !c.archivedAt);
+    logger.debug('[Memories API] Maintenance dry run (in-process)', {
+      characterId: characterId ?? 'all',
+      characters: targets.length,
+      phases: phases ?? 'all',
+      maxClustersPerRun,
+    });
+    try {
+      const reports: MaintenanceReport[] = [];
+      for (const target of targets) {
+        reports.push(
+          await runMaintenance(
+            {
+              characterId: target.id,
+              reason: 'manual',
+              dryRun: true,
+              ...(phases ? { phases } : {}),
+              settings: { ...settings, maxClustersPerRun },
+            },
+            { userId: user.id, timeBudgetMs: MAINTAIN_DRY_RUN_TIME_BUDGET_MS }
+          )
+        );
+      }
+      return successResponse(
+        characterId
+          ? { success: true, dryRun: true, report: reports[0] }
+          : { success: true, dryRun: true, reports }
+      );
+    } catch (error) {
+      logger.error('[Memories API] Maintenance dry run failed', { characterId }, error instanceof Error ? error : undefined);
+      return serverError('Maintenance dry run failed');
+    }
+  }
+
+  try {
+    const payload = {
+      reason: 'manual' as const,
+      ...(phases ? { phases } : {}),
+      ...(settings ? { settings } : {}),
+    };
+    const jobIds = characterId
+      ? [await enqueueMemoryMaintenance(user.id, { ...payload, characterId })]
+      : await enqueueMemoryMaintenanceForUser(user.id, payload);
+    logger.info('[Memories API] Maintenance enqueued', { userId: user.id, characterId: characterId ?? 'all', phases: phases ?? 'all', jobs: jobIds.length });
+    return successResponse({ success: true, dryRun: false, jobId: jobIds[0] ?? null, jobIds });
+  } catch (error) {
+    logger.error('[Memories API] Failed to enqueue maintenance', { characterId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to enqueue maintenance');
+  }
+}
+
+async function handleMaintenanceStatus(
+  req: NextRequest,
+  { repos }: { user: { id: string }; repos: any }
+) {
+  const characterId = req.nextUrl.searchParams.get('characterId');
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+  const ledger = await getMaintenanceLedgerStatus(characterId ?? undefined);
+  logger.debug('[Memories API] Maintenance status read', { characterId: characterId ?? 'all', entries: ledger.length });
+  return successResponse({ success: true, ledger });
+}
+
+async function handleRepair(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = repairSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, dryRun = false } = parsed.data;
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+  try {
+    const report = await repairMemoryGraph({ userId: user.id, characterId, dryRun });
+    return successResponse({ success: true, report });
+  } catch (error) {
+    logger.error('[Memories API] Memory graph repair failed', { characterId }, error instanceof Error ? error : undefined);
+    return serverError('Memory graph repair failed');
+  }
+}
+
+
+
+
+
+async function handleReadMaintenanceConfig(
+  _req: NextRequest,
+  _ctx: { user: { id: string }; repos: any }
+) {
+  const settings = await getMemoryMaintenanceSettings();
+  return successResponse({ success: true, settings });
+}
+
+async function handleWriteMaintenanceConfig(
+  req: NextRequest,
+  { user }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = maintenanceConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  // Per-phase toggles merge into the stored ones, so a card can send one.
+  const { phases, ...rest } = parsed.data;
+  const current = phases ? await getMemoryMaintenanceSettings() : null;
+  const settings = await setMemoryMaintenanceSettings({
+    ...rest,
+    ...(phases && current ? { phases: { ...current.phases, ...phases } } : {}),
   });
 
-  logger.info('[Memories API] Auto-housekeeping settings updated', {
+  logger.info('[Memories API] Memory maintenance settings updated', {
     userId: user.id,
-    enabled: merged.enabled,
-    perCharacterCap: merged.perCharacterCap,
+    enabled: settings.enabled,
+    perCharacterCap: settings.perCharacterCap,
+    capOverrides: Object.keys(settings.perCharacterCapOverrides).length,
+    phases: settings.phases,
   });
 
-  return NextResponse.json({ success: true, settings: merged });
+  return successResponse({ success: true, settings });
 }
 
 async function handleReadExtractionLimitsConfig(
@@ -842,20 +971,83 @@ async function handleWriteRecallConfig(
   return NextResponse.json({ success: true, settings: merged });
 }
 
+async function handleReadConsolidationConfig() {
+  const settings = await getMemoryConsolidationSettings();
+  return successResponse({ success: true, settings });
+}
+
+async function handleWriteConsolidationConfig(req: NextRequest) {
+  const body = await req.json();
+  const parsed = consolidationConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  // Drop undefined keys so a partial write never clobbers stored values.
+  const patch = Object.fromEntries(
+    Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+  );
+  await setMemoryConsolidationSettings(patch);
+  const settings = await getMemoryConsolidationSettings();
+  logger.info('[Memories API] Consolidation settings updated (instance-wide)', {
+    enabled: settings.enabled,
+    fields: Object.keys(patch),
+  });
+  return successResponse({ success: true, settings });
+}
+
+async function handleReadExtractionModeConfig() {
+  const settings = await getMemoryExtractionModeSettings();
+  return successResponse({ success: true, settings });
+}
+
+async function handleWriteExtractionModeConfig(req: NextRequest) {
+  const body = await req.json();
+  const parsed = extractionModeConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const patch = Object.fromEntries(
+    Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+  );
+  await setMemoryExtractionModeSettings(patch);
+  const settings = await getMemoryExtractionModeSettings();
+  logger.info('[Memories API] Extraction-mode settings updated (instance-wide)', {
+    otherPass: settings.otherPass,
+    fields: Object.keys(patch),
+  });
+  return successResponse({ success: true, settings });
+}
+
+
 async function handleCharacterMemoryCounts(
   _req: NextRequest,
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const characters = await repos.characters.findByUserId(user.id);
+  // The housekeeping cap measures demotable rows only (hot AUTO; bug 210), so
+  // the card compares `demotable` to the cap. `memoryCount` stays the total
+  // across both tiers for older readers.
   const results = await Promise.all(
-    characters.map(async (c: { id: string; name: string }) => ({
-      id: c.id,
-      name: c.name,
-      memoryCount: await repos.memories.countByCharacterId(c.id),
-    }))
+    characters.map(async (c: { id: string; name: string }) => {
+      const breakdown: { hotTotal: number; demotable: number; protected: number; cold: number } =
+        await repos.memories.countCapBreakdown(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        memoryCount: breakdown.hotTotal + breakdown.cold,
+        hotTotal: breakdown.hotTotal,
+        demotable: breakdown.demotable,
+        protected: breakdown.protected,
+        cold: breakdown.cold,
+      };
+    })
   );
-  // Sort by memory count descending so busy characters surface first
-  results.sort((a, b) => b.memoryCount - a.memoryCount);
+  // Sort by the cap-measured count descending so characters nearest their cap surface first
+  results.sort((a, b) => b.demotable - a.demotable || b.memoryCount - a.memoryCount);
+  logger.debug('[Memories API] Character memory counts computed', {
+    userId: user.id,
+    characters: results.length,
+  });
   return NextResponse.json({ success: true, characters: results });
 }
 
@@ -906,9 +1098,14 @@ async function handleBackfillStart(
     }
   }
 
-  // Find memories missing embeddings (up to batchSize)
-  const missing = await repos.memories.findIdsWithoutEmbedding({ characterId, limit: batchSize });
-  if (missing.length === 0) {
+  const queued = await enqueueMissingEmbeddings({ userId: user.id, characterId, limit: batchSize });
+  if (queued.status === 'no-profile') {
+    return badRequest(
+      'No default embedding profile is configured. Set one in the Commonplace Book tab before running the backfill.'
+    );
+  }
+  const { enqueued, remaining } = queued;
+  if (enqueued === 0 && remaining === 0) {
     return NextResponse.json({
       success: true,
       enqueued: 0,
@@ -916,35 +1113,6 @@ async function handleBackfillStart(
       message: 'No memories missing embeddings — nothing to backfill.',
     });
   }
-
-  // Resolve the user's active embedding profile — the plan assumes a single
-  // profile is in use per instance, so we just use the default.
-  const profile = await getDefaultEmbeddingProfile(user.id);
-  if (!profile) {
-    return badRequest(
-      'No default embedding profile is configured. Set one in the Commonplace Book tab before running the backfill.'
-    );
-  }
-
-  let enqueued = 0;
-  for (const memory of missing) {
-    try {
-      await enqueueEmbeddingGenerate(user.id, {
-        entityType: 'MEMORY',
-        entityId: memory.id,
-        characterId: memory.characterId,
-        profileId: profile.id,
-      });
-      enqueued++;
-    } catch (error) {
-      logger.warn('[Memories API] Failed to enqueue backfill embedding job', {
-        memoryId: memory.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  const remaining = await repos.memories.countWithoutEmbedding(characterId);
 
   logger.info('[Memories API] Embedding backfill batch enqueued', {
     userId: user.id,
@@ -969,7 +1137,7 @@ async function handleGenerateEmbeddings(
   { user, repos }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json().catch(() => ({}));
-  const { characterId, batchSize } = generateEmbeddingsSchema.parse(body);
+  const { characterId } = generateEmbeddingsSchema.parse(body);
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
@@ -1002,7 +1170,6 @@ async function handleGenerateEmbeddings(
   // Generate embeddings
   const result = await generateMissingEmbeddings(characterId, {
     userId: user.id,
-    batchSize,
   });
 
   return NextResponse.json({
@@ -1062,7 +1229,7 @@ async function handleRebuildIndex(
   }
 
   // Rebuild the vector index
-  const result = await rebuildVectorIndex(characterId, { userId: user.id });
+  const result = await rebuildVectorIndex(characterId);
 
   return NextResponse.json({
     message: 'Vector index rebuilt successfully',
@@ -1081,12 +1248,23 @@ async function handleDeleteByChatId(
     return notFound('Chat');
   }
 
-  const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
+  // Manual rows, cold rows and digests with surviving members are spared (bug 201).
+  const { retired: deleted, spared } = await retireChatMemories(chatId);
+
+  // No publish here. This path runs through `retireMemories`, which already
+  // announces `memories` collection-wide
+  // — which a chat-scoped subscriber takes, since `useRealtimeTopic`'s id filter
+  // only discards an event that names a *different* id. A second, chat-scoped
+  // hint would cost every subscriber a duplicate refetch, and would fire on the
+  // one case where the gate correctly stays silent: a chat with no memories,
+  // where nothing was deleted and nothing changed.
+  logger.debug('[Memories API] Wiped a chat\'s extracted memories', { chatId, deleted, spared });
 
   return NextResponse.json({
     success: true,
     chatId,
     deletedCount: deleted,
+    sparedCount: spared,
   });
 }
 
@@ -1106,7 +1284,6 @@ async function handleRegenerateAll(
       'MEMORY_REGENERATE_ALL',
       'MEMORY_REGENERATE_CHAT',
       'MEMORY_EXTRACTION',
-      'INTER_CHARACTER_MEMORY',
     ],
     ['PENDING', 'PROCESSING'],
   );
@@ -1136,7 +1313,7 @@ async function handleRegenerateAll(
   }
 
   const uncensoredTextProfileId =
-    settings?.dangerousContentSettings?.uncensoredTextProfileId ?? null;
+    readConciergeSettings(settings).uncensoredTextProfileId ?? null;
   const uncensoredCheap = uncensoredTextProfileId
     ? profiles.find(
         (p: { id: string; isCheap?: boolean }) =>
@@ -1208,31 +1385,4 @@ async function handleRegenerateAllStatus(
     inFlightExtractions,
     inFlight: inFlightFanOut + inFlightWipes + inFlightExtractions,
   });
-}
-
-async function handleReadExtractionConcurrency(
-  _req: NextRequest,
-  _ctx: { user: { id: string }; repos: any },
-) {
-  const concurrency = await getMemoryExtractionConcurrency();
-  return NextResponse.json({ success: true, concurrency });
-}
-
-async function handleWriteExtractionConcurrency(
-  req: NextRequest,
-  _ctx: { user: { id: string }; repos: any },
-) {
-  const body = await req.json();
-  const parsed = extractionConcurrencySchema.safeParse(body);
-  if (!parsed.success) {
-    return validationError(parsed.error);
-  }
-  await setMemoryExtractionConcurrency(parsed.data.concurrency);
-  // Push the new value into the processor's runtime cache so it takes effect
-  // on the next claim tick rather than waiting for the next cache refresh.
-  setMemoryExtractionConcurrencyOverride(parsed.data.concurrency);
-  logger.info('[Memories API] Memory extraction concurrency updated (instance-wide)', {
-    concurrency: parsed.data.concurrency,
-  });
-  return NextResponse.json({ success: true, concurrency: parsed.data.concurrency });
 }

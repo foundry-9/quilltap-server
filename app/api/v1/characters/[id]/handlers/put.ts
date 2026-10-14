@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { exists } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
 import { JsonSchema } from '@/lib/schemas/common.types';
@@ -114,29 +114,51 @@ export async function handlePut(
     return notFound('Character');
   }
 
-  // Action dispatch: the depiction-guidelines (Ariel Clause) file lives in the
-  // character's vault root, not the character row.
-  if (getActionParam(req) === 'depiction-guidelines') {
-    const mountId = existingCharacter.characterDocumentMountPointId;
-    if (!mountId) {
-      return badRequest('Character has no document vault to store depiction guidelines');
-    }
-    const aestheticBody = await req.json().catch(() => ({}));
-    const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
-    await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
-    logger.info('[Characters v1] Depiction guidelines updated', {
-      characterId: id,
-      length: content.trim().length,
-      deleted: content.trim().length === 0,
-    });
-    return successResponse({ success: true });
-  }
+  return dispatchAction(
+    req,
+    {
+      // The depiction-guidelines (Ariel Clause) file lives in the character's
+      // vault root, not the character row.
+      'depiction-guidelines': async () => {
+        const mountId = existingCharacter.characterDocumentMountPointId;
+        if (!mountId) {
+          return badRequest('Character has no document vault to store depiction guidelines');
+        }
+        const aestheticBody = await req.json().catch(() => ({}));
+        const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
+        await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
+        logger.info('[Characters v1] Depiction guidelines updated', {
+          characterId: id,
+          length: content.trim().length,
+          deleted: content.trim().length === 0,
+        });
+        return successResponse({ success: true });
+      },
+    },
+    () => handleUpdateCharacter(req, ctx, id, existingCharacter)
+  );
+}
 
+async function handleUpdateCharacter(
+  req: NextRequest,
+  ctx: RequestContext,
+  id: string,
+  existingCharacter: Character
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
   const body = await req.json();
   const validatedData = updateCharacterSchema.parse(body);
 
   // Normalize scenarios: fill in missing id/createdAt/updatedAt
-  const { scenarios: rawScenarios, physicalDescription: rawPhysical, ...restValidatedData } = validatedData;
+  const {
+    scenarios: rawScenarios,
+    physicalDescription: rawPhysical,
+    // Pulled out of the generic payload: the default prompt is recorded both as
+    // this column and as the `isDefault` flag on the prompt itself, so it goes
+    // through the repository chokepoint below instead of being written raw.
+    defaultSystemPromptId: rawDefaultSystemPromptId,
+    ...restValidatedData
+  } = validatedData;
   const updatePayload: Partial<Character> = { ...restValidatedData };
   if (rawScenarios) {
     const now = new Date().toISOString();
@@ -169,7 +191,21 @@ export async function handlePut(
     }
   }
 
-  const character = await repos.characters.update(id, updatePayload);
+  // A PUT carrying nothing but the default prompt leaves an empty payload, and
+  // an empty patch is not a write anyone asked for — the archive guard reads one
+  // as an unsanctioned edit.
+  let character =
+    Object.keys(updatePayload).length > 0
+      ? await repos.characters.update(id, updatePayload)
+      : await repos.characters.findById(id);
+
+  if (rawDefaultSystemPromptId !== undefined) {
+    const updated = await repos.characters.setDefaultSystemPrompt(id, rawDefaultSystemPromptId);
+    if (!updated) {
+      return badRequest('System prompt not found on this character');
+    }
+    character = updated;
+  }
 
   revalidatePath('/');
 

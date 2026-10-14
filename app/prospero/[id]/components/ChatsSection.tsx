@@ -43,6 +43,8 @@ function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
     project: null,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     conciergeState: chat.conciergeState,
+    conciergeSetBy: chat.conciergeSetBy,
+    conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
   }
 }

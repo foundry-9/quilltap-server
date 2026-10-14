@@ -37,9 +37,9 @@ const mockCharactersFindAll = jest.fn();
 const mockMemoriesFindByCharacterId = jest.fn();
 const mockMemoriesDelete = jest.fn();
 
-const mockDeleteMemoriesBatch = jest.fn();
-jest.mock('@/lib/memory/memory-gate', () => ({
-  deleteMemoriesWithUnlinkBatch: (...args: unknown[]) => mockDeleteMemoriesBatch(...args),
+const mockRetireMemories = jest.fn();
+jest.mock('@/lib/memory/retire', () => ({
+  retireMemories: (...args: unknown[]) => mockRetireMemories(...args),
 }));
 
 jest.mock('@/lib/repositories/user-scoped', () => ({
@@ -114,10 +114,10 @@ describe('delete-service keepArchivedCharacterBundles', () => {
     mockRawQuery.mockResolvedValue(undefined);
     mockCharactersFindAll.mockResolvedValue([]);
     mockMemoriesFindByCharacterId.mockResolvedValue([]);
-    mockDeleteMemoriesBatch.mockResolvedValue(0);
+    mockRetireMemories.mockResolvedValue({ retired: 0 });
   });
 
-  it('routes memory deletion through the memory-gate batch chokepoint', async () => {
+  it('routes memory deletion through the retireMemories chokepoint', async () => {
     mockCharactersFindAll.mockResolvedValue([{ id: 'char-1' }, { id: 'char-2' }]);
     mockMemoriesFindByCharacterId
       .mockResolvedValueOnce([{ id: 'mem-1' }, { id: 'mem-2' }])
@@ -125,10 +125,13 @@ describe('delete-service keepArchivedCharacterBundles', () => {
 
     await deleteUserData(USER);
 
-    expect(mockDeleteMemoriesBatch).toHaveBeenCalledTimes(1);
-    expect(mockDeleteMemoriesBatch).toHaveBeenCalledWith(['mem-1', 'mem-2', 'mem-3']);
+    expect(mockRetireMemories).toHaveBeenCalledTimes(1);
+    expect(mockRetireMemories).toHaveBeenCalledWith(['mem-1', 'mem-2', 'mem-3'], { reason: 'restore-replace' });
     // The repository's per-row delete must never be hit directly.
     expect(mockMemoriesDelete).not.toHaveBeenCalled();
+    // Vectors live on the memory rows now: there are no vector tables to truncate.
+    const sql = mockRawQuery.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(sql).not.toMatch(/vector_entries|vector_indices/);
   });
 
   it('spares ARCHIVE bundles (row and bytes) by default', async () => {

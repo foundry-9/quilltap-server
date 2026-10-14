@@ -2,34 +2,41 @@
  * Chats API v1 - Collection Endpoint
  *
  * GET /api/v1/chats - List all chats for current user
- * GET /api/v1/chats?action=has-dangerous - Check if any dangerous chats exist
  * POST /api/v1/chats - Create a new chat
  * POST /api/v1/chats?action=import - Import a SillyTavern chat
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
-import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
+import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
+import {
+  resolveScenarioSelection,
+  ScenarioRefRefusedError,
+  type ResolvedScenario,
+} from '@/lib/chat/scenario-selection';
+import { ScenarioRefSchema } from '@/lib/schemas/chat.types';
 import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
+import { LLMStreamStalledError } from '@/lib/llm/stream-watchdog';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
-import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { mayFailOver, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
-import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
+import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/recall/recap';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatMetadata, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
+import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
@@ -42,7 +49,7 @@ import {
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
+import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { createCreationProgressEmitter, type CreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
@@ -63,7 +70,7 @@ import {
   postHostUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { refreshAvatarForOutfit } from '@/lib/wardrobe/outfit-change-effects';
 import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
@@ -76,10 +83,6 @@ import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonom
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 type Repos = RepositoryContainer;
-const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
-type ChatGetAction = typeof CHAT_GET_ACTIONS[number];
-const CHAT_POST_ACTIONS = ['import'] as const;
-type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -93,6 +96,8 @@ const createParticipantSchema = z.object({
   imageProfileId: z.uuid().optional(), // Legacy: kept for backwards compatibility but ignored
   controlledBy: z.enum(['llm', 'user']).optional(),
   selectedSystemPromptId: z.uuid().optional(),
+  /** Ids of the character's `Subprompts/*.md` to put in play for this chat. */
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).max(100).optional(),
 });
 
 const createChatSchema = z.object({
@@ -100,6 +105,13 @@ const createChatSchema = z.object({
   title: z.string().optional(),
   scenario: z.string().optional(), // Free-text scenario notes; appended beneath any resolved preset body, or used as the whole scenario when no preset is chosen.
   scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
+  /**
+   * A scenario from anywhere in the instance — `{ mountPointId, path }` — as picked in
+   * the scenario browser. Resolved first; a ref naming a mount that holds no scenarios
+   * (anything but a character vault, a project's or group's official store, or General)
+   * is a 400.
+   */
+  scenarioRef: ScenarioRefSchema.optional(),
   /**
    * Relative path of a project scenario file (`Scenarios/<filename>.md`) inside the
    * project's official document store. Server resolves the body from frontmatter +
@@ -137,14 +149,16 @@ const createChatSchema = z.object({
   roleplayTemplateId: z.uuid().nullable().optional(),
   /**
    * Per-chat Concierge state to set at creation, using the same enum as the
-   * sidebar's PUT `conciergeState`. Omitted or 'monitored' → the chat is created
-   * Monitored exactly as today (no write, no announcement). Any other value is
+   * sidebar's PUT `conciergeState` ('moderated' | 'unmoderated' | 'locked').
+   * Omitted → the operator's `conciergeSettings.newChatsStartAs` default
+   * (when the Concierge is on duty). 'moderated' → the chat is created
+   * Moderated (no write, no announcement). The retired four-state values are rejected with 400. Any other value is
    * applied through `applyConciergeFlip` after the system-prompt message and
    * before any staff announcement or greeting, so the Concierge's bubble sits
    * where the history says the state was set and the opening greeting is
    * generated under the chosen state.
    */
-  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
+  conciergeState: ConciergeModeSchema.optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -201,7 +215,12 @@ type BuildParticipantsResult =
   | {
       participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[];
       tags: Set<string>;
-      firstCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string };
+      firstCharacter: {
+        characterId: string;
+        userCharacterId?: string;
+        selectedSystemPromptId?: string;
+        selectedSubpromptIds?: string[];
+      };
       firstImageProfileId: string | null;
     }
   | { error: string };
@@ -254,6 +273,7 @@ async function buildCharacterParticipant(
       connectionProfileId: isUserControlled ? null : data.connectionProfileId || null,
       imageProfileId: data.imageProfileId || null,
       selectedSystemPromptId: data.selectedSystemPromptId || null,
+      selectedSubpromptIds: isUserControlled ? [] : (data.selectedSubpromptIds ?? []),
       displayOrder,
       isActive: true,
     },
@@ -270,7 +290,12 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   const allTagIds = new Set<string>();
-  const llmCandidates: Array<{ characterId: string; selectedSystemPromptId?: string; talkativeness: number }> = [];
+  const llmCandidates: Array<{
+    characterId: string;
+    selectedSystemPromptId?: string;
+    selectedSubpromptIds?: string[];
+    talkativeness: number;
+  }> = [];
   let firstUserCharacterId: string | null = null;
   let firstImageProfileId: string | null = null;
 
@@ -297,6 +322,7 @@ async function buildAllParticipants(
       llmCandidates.push({
         characterId: participantData.characterId,
         selectedSystemPromptId: participantData.selectedSystemPromptId || undefined,
+        selectedSubpromptIds: participantData.selectedSubpromptIds,
         talkativeness: result.talkativeness ?? 0.5,
       });
     }
@@ -320,6 +346,7 @@ async function buildAllParticipants(
   const firstLLMCharacter = {
     characterId: chosen.characterId,
     selectedSystemPromptId: chosen.selectedSystemPromptId,
+    selectedSubpromptIds: chosen.selectedSubpromptIds,
     userCharacterId: firstUserCharacterId || undefined,
   };
 
@@ -352,19 +379,29 @@ async function writeSystemPromptMessage(
  * Apply a Concierge state requested at creation. Runs after the system-prompt
  * message and before any staff announcement or greeting, so the Concierge's
  * bubble is the first thing in the history after the prompt and the greeting is
- * generated under the chosen state. Monitored (or absence) is a no-op:
+ * generated under the chosen state. Moderated (or absence) is a no-op:
  * `applyConciergeFlip` compares against the fresh row and does nothing.
  *
  * The route runs in the parent process, so the announcement's write lands
  * immediately — every later reader (the greeting's own `findById`, the
- * scheduled danger scan, memory extraction, story backgrounds) sees the pair.
+ * scheduled danger scan, memory extraction, story backgrounds) sees the state.
+ *
+ * Returns the chat's Concierge columns as they stand afterwards, re-read when
+ * the flip wrote anything, so the create response reports the state that was
+ * actually applied rather than the row as it was first inserted.
  */
 async function applyRequestedConciergeState(
   chat: ChatMetadata,
   requested: ConciergeState | undefined,
   progress: CreationProgressEmitter,
-): Promise<void> {
-  if (!requested || requested === 'monitored') return;
+  repos: RepositoryContainer,
+): Promise<ConciergeColumns> {
+  const asCreated: ConciergeColumns = {
+    conciergeMode: chat.conciergeMode ?? null,
+    conciergeModeSetBy: chat.conciergeModeSetBy ?? null,
+    conciergeModeReason: chat.conciergeModeReason ?? null,
+  };
+  if (!requested || requested === 'moderated') return asCreated;
   progress.status('Briefing the Concierge…');
   const result = await applyConciergeFlip(chat.id, requested, chat);
   logger.debug('[Chats v1] Applied Concierge state at creation', {
@@ -372,7 +409,56 @@ async function applyRequestedConciergeState(
     requested,
     changed: result.changed,
   });
+  if (!result.changed) return asCreated;
+  const fresh = await repos.chats.findById(chat.id);
+  return fresh
+    ? {
+        conciergeMode: fresh.conciergeMode ?? null,
+        conciergeModeSetBy: fresh.conciergeModeSetBy ?? null,
+        conciergeModeReason: fresh.conciergeModeReason ?? null,
+      }
+    : asCreated;
 }
+
+/**
+ * The Concierge state a new chat should start in. The request's own
+ * `conciergeState` wins; absent, the operator's `newChatsStartAs` default
+ * applies — but only where the Concierge is on duty for this chat (enabled
+ * globally and not a moderation-exempt chat type), so an off-duty Concierge
+ * never posts an announcement on a brand-new chat.
+ */
+function requestedConciergeStateAtCreation(
+  requested: ConciergeState | undefined,
+  chatSettings: Parameters<typeof resolveConciergeSettings>[0],
+  chat: ChatMetadata,
+): ConciergeState | undefined {
+  const policy = resolveConciergeSettings(chatSettings, chat);
+  if (requested) {
+    // Off duty, the per-chat select is disabled; a request that still names a
+    // state (a form opened before the switch was thrown) is not honoured, so
+    // an off-duty Concierge never stamps a new chat.
+    if (!policy.onDuty && requested !== 'moderated') {
+      logger.warn('[Chats v1] Ignoring a requested Concierge state: the Concierge is off duty', {
+        chatId: chat.id,
+        requested,
+        conciergeSource: policy.source,
+      });
+      return undefined;
+    }
+    return requested;
+  }
+  const fallback = policy.onDuty ? policy.newChatsStartAs : undefined;
+  logger.debug('[Chats v1] No Concierge state requested at creation; using the default', {
+    chatId: chat.id,
+    newChatsStartAs: policy.newChatsStartAs,
+    conciergeSource: policy.source,
+    applied: fallback ?? 'none',
+  });
+  return fallback;
+}
+
+/** The chat's stored Concierge columns, as the create response carries them. */
+type ConciergeColumns = Pick<ChatMetadata, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>;
 
 interface ScenarioAndStaffOptions {
   /**
@@ -508,14 +594,10 @@ async function createInitialMessagesScenarioAndStaff(
 
       const equippedItemIds = allEquippedItemIds(equippedSlots)
         .filter((id) => typeof id === 'string' && id.length > 0);
-      const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(
-            characterId,
-            equippedItemIds,
-            await sharedWardrobeTiersForCharacter(characterId, equippedProjectMountPointIds),
-          )
-        : [];
-      const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
+      const pool = equippedItemIds.length > 0
+        ? await loadWearablePool(repos, characterId, equippedProjectMountPointIds)
+        : null;
+      const equippedItemsMap = new Map(pool ? pool.getMany(equippedItemIds).map((item) => [item.id, item]) : []);
 
       const titlesFor = (slot: keyof typeof equippedSlots): string[] => {
         const ids = equippedSlots[slot];
@@ -536,12 +618,7 @@ async function createInitialMessagesScenarioAndStaff(
         outfit,
       });
 
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId,
-        chatId,
-        characterId,
-        callerContext: '[Chats v1] chat-open',
-      });
+      await refreshAvatarForOutfit(repos, { userId, chatId, characterId }, '[Chats v1] chat-open');
     } catch (error) {
       logger.warn('[Chats v1] Failed to post opening outfit whisper', {
         chatId,
@@ -659,7 +736,10 @@ async function autoGenerateFirstMessage(
   }
 
   // Compute the Recent Conversations block once and reuse across retry attempts.
-  // The new chat has no contextSummary yet, so excluding it is defensive only.
+  // The new chat has no contextSummary yet, so excluding it is defensive only —
+  // true since bug 158; before that the chat was created carrying its own
+  // scenario in that column, and this exclusion was the only thing keeping the
+  // greeting from being handed its own stage direction twice.
   let recentConversationsBlock = '';
   try {
     const maxContext =
@@ -700,35 +780,52 @@ async function autoGenerateFirstMessage(
   };
 
   // The chat's own Concierge state decides which desk this greeting goes to.
-  // `applyRequestedConciergeState` has already written the pair by the time the
-  // scenario-and-staff phase reaches the greeting, so a chat created Uncensored
+  // `applyRequestedConciergeState` has already written the state by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
   // asks the frank desk first instead of discovering it after a refusal.
   const chatRow = await repos.chats.findById(chatId);
 
+  // The resolver is asked WITH the chat: an Unmoderated chat routes direct,
+  // a Locked chat never fails over, and an off-duty Concierge does neither.
+  const conciergePolicy = resolveConciergeSettings(
+    await repos.chatSettings.findByUserId(userId),
+    chatRow,
+  );
+  logger.debug('[Chats v1] Resolved Concierge policy for greeting', {
+    chatId,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    routeDirect: conciergePolicy.routeDirect,
+    failoverAllowed: conciergePolicy.failoverAllowed,
+  });
+
   /**
    * Generate the greeting on the Concierge's uncensored desk. Returns null when
-   * there is nothing to reroute to (the resolved mode isn't `AUTO_ROUTE`, no
-   * uncensored profile is configured, its key is unusable) or the attempt came
-   * back empty, so the caller falls through to the participant's own profile.
-   *
-   * The resolver is asked WITH the chat: a Vouched Safe chat collapses to
-   * `mode: 'OFF'` and never reroutes, and an Uncensored chat reroutes even when
-   * the global mode is `OFF`.
+   * there is nothing to reroute to (the policy does not permit this trigger —
+   * `routeDirect` for the chat's own state, `failoverAllowed` for a content
+   * filter — no uncensored profile is configured, its key is unusable) or the
+   * attempt came back empty, so the caller falls through to the participant's
+   * own profile.
    */
   const generateViaUncensoredDesk = async (
     trigger: 'chat-state' | 'content-filter',
   ): Promise<GeneratedGreeting | null> => {
-    const chatSettings = await repos.chatSettings.findByUserId(userId);
-    const resolved = resolveDangerousContentSettings(chatSettings, chatRow);
-
-    if (resolved.settings.mode !== 'AUTO_ROUTE') {
+    const permitted = trigger === 'chat-state'
+      ? conciergePolicy.routeDirect
+      : conciergePolicy.failoverAllowed;
+    if (!permitted) {
+      logger.debug('[Chats v1] Concierge policy does not permit the uncensored desk for this greeting', {
+        chatId,
+        trigger,
+        conciergeSource: conciergePolicy.source,
+      });
       return null;
     }
 
     const routeResult = await resolveProviderForDangerousContent(
       connectionProfile,
       apiKey,
-      resolved.settings,
+      conciergePolicy,
       userId
     );
 
@@ -739,7 +836,7 @@ async function autoGenerateFirstMessage(
     logger.info('[Chats v1] Generating greeting on the Concierge uncensored provider', {
       characterId: context.character.id,
       trigger,
-      settingsSource: resolved.source,
+      conciergeSource: conciergePolicy.source,
       uncensoredProfile: routeResult.connectionProfile.name,
       uncensoredProvider: routeResult.connectionProfile.provider,
       uncensoredModel: routeResult.connectionProfile.modelName,
@@ -780,11 +877,37 @@ async function autoGenerateFirstMessage(
     return { content: result.content, reasoningContent: result.reasoningContent };
   };
 
-  // Attempt 0: a Flagged or Uncensored chat opens at the uncensored desk. The
+  /**
+   * A stall on the participant's OWN profile ends the ladder. Attempts 1, 2 and
+   * 4 are the same profile three times over, and one that has answered with
+   * headers and then gone silent will not start speaking inside the next
+   * budget — spending two more on the same silence is the whole of the wedge
+   * this guards against. The scripted greeting takes over instead, which is
+   * where an exhausted ladder ends up anyway.
+   *
+   * Deliberately NOT set by the two uncensored-desk attempts: that is a
+   * different profile on a different provider, and its going quiet says nothing
+   * about whether this character's own one will.
+   */
+  let ownProfileStalled = false;
+  const noteOwnProfileOutcome = (error: unknown): void => {
+    if (error instanceof LLMStreamStalledError) ownProfileStalled = true;
+  };
+  const giveUpOnStall = (): GeneratedGreeting => {
+    logger.warn('[Chats v1] Greeting abandoned — the provider accepted the request and then went quiet', {
+      characterId: context.character.id,
+      chatId,
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+    });
+    return NO_GREETING;
+  };
+
+  // Attempt 0: an Unmoderated chat opens at the uncensored desk. The
   // three-attempt ladder below (with memories → without → uncensored on a
-  // content filter) stays the path for Monitored and Vouched Safe chats.
+  // content filter) stays the path for Moderated and Locked chats.
   let uncensoredDeskTried = false;
-  if (shouldUseUncensoredRoute(chatRow)) {
+  if (conciergePolicy.routeDirect) {
     uncensoredDeskTried = true;
     try {
       const rerouted = await generateViaUncensoredDesk('chat-state');
@@ -823,12 +946,15 @@ async function autoGenerateFirstMessage(
       contentFilterHit = true;
     }
   } catch (error) {
+    noteOwnProfileOutcome(error);
     logger.warn('[Chats v1] Greeting generation attempt failed', {
       characterId: context.character.id,
       attempt: 'full context',
       error: error instanceof Error ? error.message : String(error),
     });
   }
+
+  if (ownProfileStalled) return giveUpOnStall();
 
   // Attempt 2: Strip memories (they may be triggering content filter)
   if (participantMemories.length > 0) {
@@ -855,6 +981,7 @@ async function autoGenerateFirstMessage(
         contentFilterHit = true;
       }
     } catch (error) {
+      noteOwnProfileOutcome(error);
       logger.warn('[Chats v1] Greeting generation attempt failed', {
         characterId: context.character.id,
         attempt: 'without memories',
@@ -863,11 +990,11 @@ async function autoGenerateFirstMessage(
     }
   }
 
-  // Attempt 3: If a content filter was detected, try the Concierge uncensored
-  // provider — unless the chat's own state already sent us there first, in which
-  // case there is nothing new to try. A Vouched Safe chat resolves to
-  // `mode: 'OFF'` inside the helper and never reroutes, whatever the globe says.
-  if (contentFilterHit && !uncensoredDeskTried) {
+  // Attempt 3: If a content filter was detected on a Moderated chat, try the
+  // Concierge uncensored provider — unless the chat's own state already sent us
+  // there first, in which case there is nothing new to try. A Locked chat's
+  // refusal stands: it never reaches the uncensored desk, whatever the globe says.
+  if (contentFilterHit && !uncensoredDeskTried && mayFailOver(chatRow)) {
     try {
       logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
         characterId: context.character.id,
@@ -884,6 +1011,8 @@ async function autoGenerateFirstMessage(
     }
   }
 
+  if (ownProfileStalled) return giveUpOnStall();
+
   // Attempt 4: Final plain retry with delay for transient failures
   try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -896,11 +1025,14 @@ async function autoGenerateFirstMessage(
       return { content: result.content, reasoningContent: result.reasoningContent };
     }
   } catch (error) {
+    noteOwnProfileOutcome(error);
     logger.warn('[Chats v1] Final greeting generation retry failed', {
       characterId: context.character.id,
       error: error instanceof Error ? error.message : String(error),
     });
   }
+
+  if (ownProfileStalled) return giveUpOnStall();
 
   logger.warn('[Chats v1] All greeting generation attempts exhausted, falling back to static greeting', {
     characterId: context.character.id,
@@ -956,26 +1088,6 @@ async function handleList(req: NextRequest, context: RequestContext) {
   }
 }
 
-/**
- * Does the user have anything for "Dangerous Chats" to hide?
- *
- * The toggle hides whatever takes the uncensored route — Flagged (the
- * Concierge's verdict) and Uncensored (the operator's) — so the affordance
- * appears on exactly that set, not on every chat carrying a preserved label.
- */
-async function handleHasDangerous(context: RequestContext) {
-  const { user, repos } = context;
-
-  try {
-    const allChats = await repos.chats.findByUserId(user.id);
-    const hasDangerous = allChats.some((c) => shouldUseUncensoredRoute(c));
-    return successResponse({ hasDangerous });
-  } catch (error) {
-    logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to check dangerous chats');
-  }
-}
-
 type CreateChatInput = z.infer<typeof createChatSchema>;
 
 /**
@@ -1024,15 +1136,16 @@ interface ProjectChatDefaults {
 
 /**
  * The defaults a new chat inherits from its project — tool settings, avatar
- * generation, image profile, roleplay template — and, as a side effect, the
- * roster update: a project that does not `allowAnyCharacter` adopts every
- * character participant it has not met before. Without a project every
+ * generation, image profile, roleplay template. Without a project every
  * default is empty/null. A missing project is the caller's 404.
+ *
+ * The character roster is never touched here: it is a hand-curated access
+ * list (project file tools + shared wardrobe), edited only from the project's
+ * Characters card, so joining a chat must not grant access.
  */
 async function resolveProjectDefaults(
   repos: Repos,
   projectId: string | undefined,
-  participants: ChatParticipantBaseInput[],
 ): Promise<({ ok: true } & ProjectChatDefaults) | { ok: false; response: NextResponse }> {
   if (!projectId) {
     return {
@@ -1047,19 +1160,6 @@ async function resolveProjectDefaults(
   const project = await repos.projects.findById(projectId);
   if (!project) {
     return { ok: false, response: notFound('Project') };
-  }
-
-  if (!project.allowAnyCharacter) {
-    const characterIds = participants
-      .filter((p) => p.type === 'CHARACTER' && p.characterId)
-      .map((p) => p.characterId as string);
-
-    const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-    if (newCharacterIds.length > 0) {
-      await repos.projects.update(projectId, {
-        characterRoster: [...project.characterRoster, ...newCharacterIds],
-      });
-    }
   }
 
   return {
@@ -1127,27 +1227,42 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // notes beneath it. The precedence chain lives in `resolveScenarioSelection`
   // so the in-chat scenario picker resolves a selection exactly the way the New
   // Chat dialog does.
-  const resolvedScenario = await resolveScenarioSelection(
-    {
-      scenario: validatedData.scenario,
-      scenarioId: validatedData.scenarioId,
-      projectScenarioPath: validatedData.projectScenarioPath,
-      groupScenarioPath: validatedData.groupScenarioPath,
-      groupScenarioGroupId: validatedData.groupScenarioGroupId,
-      generalScenarioPath: validatedData.generalScenarioPath,
-    },
-    {
-      repos,
-      projectId: validatedData.projectId,
-      character: primaryCharacter,
-      logTag: '[Chats v1]',
-    },
+  let resolvedScenario: ResolvedScenario;
+  try {
+    resolvedScenario = await resolveScenarioSelection(
+      {
+        scenario: validatedData.scenario,
+        scenarioRef: validatedData.scenarioRef,
+        scenarioId: validatedData.scenarioId,
+        projectScenarioPath: validatedData.projectScenarioPath,
+        groupScenarioPath: validatedData.groupScenarioPath,
+        groupScenarioGroupId: validatedData.groupScenarioGroupId,
+        generalScenarioPath: validatedData.generalScenarioPath,
+      },
+      {
+        repos,
+        userId: user.id,
+        projectId: validatedData.projectId,
+        characterId: primaryCharacter?.id ?? null,
+        logTag: '[Chats v1]',
+      },
+    );
+  } catch (error) {
+    if (error instanceof ScenarioRefRefusedError) return badRequest(error.message);
+    throw error;
+  }
+  // The greeting is composed with the opener's subprompts in play, the same
+  // as every later turn. Resolved here (fails soft to none).
+  const openerSubprompts = await resolveSelectedSubprompts(
+    buildResult.firstCharacter.characterId,
+    buildResult.firstCharacter.selectedSubpromptIds ?? [],
   );
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
-    resolvedScenario,
-    buildResult.firstCharacter.selectedSystemPromptId
+    resolvedScenario.scenarioText ?? undefined,
+    buildResult.firstCharacter.selectedSystemPromptId,
+    openerSubprompts,
   );
 
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
@@ -1160,7 +1275,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }));
 
   // Default tool settings and avatar generation from project (if creating chat within a project)
-  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId, participantsWithTimestamps);
+  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId);
   if (!projectDefaults.ok) {
     return projectDefaults.response;
   }
@@ -1206,7 +1321,14 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     userId: user.id,
     participants: participantsWithTimestamps,
     title: validatedData.title || `Chat with ${chatContext.character.name}`,
-    contextSummary: resolvedScenario || null,
+    // A scenario is a stage direction for a conversation that has not happened;
+    // `contextSummary` is a record of one that has. Seeding the summary with the
+    // scenario — which this did until bug 158, from before `scenarioText` had a
+    // column of its own — makes every reader of `contextSummary` believe a brand
+    // new chat has already been summarized, and hands the greeting's "Recent
+    // Conversations" block a stage direction to open from. The scenario goes in
+    // `scenarioText` below, and stays there; only the summarizer writes this.
+    contextSummary: null,
     tags: Array.from(buildResult.tags),
     roleplayTemplateId: defaultRoleplayTemplateId,
     timestampConfig: resolvedTimestampConfig,
@@ -1214,7 +1336,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     lastMessageAt: null,
     lastRenameCheckInterchange: 0,
     projectId: validatedData.projectId || null,
-    scenarioText: resolvedScenario || null,
+    // The recipe travels together: the text the prompt reads, the file the
+    // preset came from, and the notes layered beneath it.
+    scenarioText: resolvedScenario.scenarioText,
+    scenarioSource: resolvedScenario.scenarioSource,
+    scenarioNotes: resolvedScenario.scenarioNotes,
     disabledTools: projectToolDefaults.disabledTools,
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
@@ -1252,10 +1378,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
     projectMountPointIds,
-    scenarioText: resolvedScenario,
+    scenarioText: resolvedScenario.scenarioText ?? undefined,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
     progress,
+    source: 'chat-start',
   };
   progress.status('Consulting the wardrobe…');
   try {
@@ -1312,7 +1439,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }
 
   // One opening sequence for every flavour of chat: system prompt → the
-  // Concierge's note (when a non-Monitored state was picked on the New Chat
+  // Concierge's note (when a non-Moderated state was picked on the New Chat
   // form) → [continuation only: backfill from source + turn-state replication
   // + cross-link bubbles] → scenario/staff (Prospero, Host scenario, Host adds,
   // Aurora outfits, avatar gen) and, for an ordinary chat, the greeting
@@ -1327,7 +1454,12 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     progress.status('Setting the opening scene…');
   }
   await writeSystemPromptMessage(chat.id, chatContext, repos);
-  await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  const conciergeColumns = await applyRequestedConciergeState(
+    chat,
+    requestedConciergeStateAtCreation(validatedData.conciergeState, chatSettings, chat),
+    progress,
+    repos,
+  );
   if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({
@@ -1351,7 +1483,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     user.id,
     repos,
     validatedData.projectId || null,
-    resolvedScenario || null,
+    resolvedScenario.scenarioText,
     { skipFirstMessage: isContinuation || isAutonomous, projectMountPointIds },
   );
 
@@ -1389,7 +1521,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   progress.status('The players are ready.');
   progress.finish();
 
-  return created({ chat: { ...chat, participants: enrichedParticipants } });
+  return created({ chat: { ...chat, ...conciergeColumns, participants: enrichedParticipants } });
 }
 
 /**
@@ -1480,43 +1612,16 @@ async function handleImport(req: NextRequest, context: RequestContext) {
 // ============================================================================
 
 /**
- * GET /api/v1/chats - Action dispatch or list
+ * GET /api/v1/chats - List (the collection has no GET actions)
  */
-export const GET = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  if (!action) {
-    return handleList(req, context);
-  }
-
-  if (!isValidAction(action, CHAT_GET_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_GET_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<ChatGetAction, () => Promise<NextResponse>> = {
-    'has-dangerous': () => handleHasDangerous(context),
-  };
-
-  return actionHandlers[action]();
-});
+export const GET = createContextHandler(async (req, context) =>
+  // An empty map: any `?action=` (a bare `?action=` included) is a 400.
+  dispatchAction(req, {}, () => handleList(req, context))
+);
 
 /**
  * POST /api/v1/chats - Action dispatch or create
  */
-export const POST = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  if (!action) {
-    return handleCreate(req, context);
-  }
-
-  if (!isValidAction(action, CHAT_POST_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_POST_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
-    import: () => handleImport(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+export const POST = createContextHandler(async (req, context) =>
+  dispatchAction(req, { import: () => handleImport(req, context) }, () => handleCreate(req, context))
+);

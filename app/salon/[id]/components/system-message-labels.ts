@@ -46,11 +46,14 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-halfway': 'halfway through',
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
+  inform: 'out of character',
   'custom-tool-result': 'roll outcome',
   'custom-tool-error': "the table couldn't deal",
   'turn-pass': 'nothing to add',
   nudge: 'invited to speak',
   timestamp: 'time',
+  refusal: 'provider refusal',
+  'background-refused': 'backdrop refused',
 }
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
@@ -85,6 +88,7 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       return 'announcement'
     case 'lantern':
       if (c.includes('projected a new backdrop')) return 'background'
+      if (c.includes('would not take the scene')) return 'background-refused'
       if (c.includes('acting upon the instructions of')) return 'character-image'
       return 'image'
     case 'aurora':
@@ -93,6 +97,7 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.includes('pronounces upon their attire')) return 'opening-outfit'
       return 'wardrobe'
     case 'concierge':
+      if (c.includes('on grounds of propriety')) return 'refusal'
       return 'danger'
     case 'prospero':
       if (c.startsWith('Prospero notes that')) return 'connection-profile-change'
@@ -285,8 +290,8 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     nudge: 'medium',
     '*': 'medium',
   },
-  concierge: { danger: 'high', '*': 'high' },
-  lantern: { background: 'medium', 'character-image': 'medium', image: 'medium', '*': 'medium' },
+  concierge: { danger: 'high', refusal: 'high', '*': 'high' },
+  lantern: { background: 'medium', 'background-refused': 'high', 'character-image': 'medium', image: 'medium', '*': 'medium' },
   aurora: { avatar: 'medium', 'outfit-change': 'medium', 'opening-outfit': 'medium', wardrobe: 'medium', '*': 'medium' },
   ariel: { 'session-opened': 'medium', 'session-closed': 'medium', terminal: 'medium', '*': 'medium' },
   prospero: {

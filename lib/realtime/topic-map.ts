@@ -32,6 +32,7 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.projects.all,
   queryKeys.characters.all,
   queryKeys.mountPoints.all,
+  queryKeys.memories.all,
 ]
 
 /**
@@ -59,6 +60,23 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             queryKeys.chats.detail(id),
             queryKeys.chats.state(id),
             queryKeys.chats.background(id),
+            // The story-background and avatar jobs already publish
+            // `{topic:'chats', id: chatId}` on completion, so a Lantern
+            // backdrop or an Aurora repaint refreshes the gallery for free.
+            queryKeys.chats.gallery(id),
+            // Pending Informs. A post inserts the Host record (which publishes
+            // `chats`), a consumed row rides the assistant-message insert, and
+            // a cancel publishes the topic explicitly — so the composer chips
+            // stay honest without a poll.
+            queryKeys.chats.informs(id),
+            // What everyone in the chat is wearing. An LLM's wardrobe_* call
+            // or an Aurora announcement lands as a message, which publishes
+            // `chats` — without this a tool-driven outfit change left the
+            // wardrobe dialog's cached snapshot stale (bug 198).
+            queryKeys.wardrobe.outfit(id),
+            // Where the scene came from. A scenario change posts the Host's
+            // revision announcement, which publishes `chats`.
+            queryKeys.chats.scenarioSource(id),
           ]
         : [queryKeys.chats.all]
 
@@ -76,9 +94,16 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
         ? [
             queryKeys.characters.detail(id),
             queryKeys.characters.prompts(id),
+            queryKeys.characters.subprompts(id),
             queryKeys.characters.photos(id),
           ]
         : [queryKeys.characters.all]
+
+    case 'memories':
+      // Scoped by chat id, not by memory id — see REALTIME_TOPICS. The bare
+      // topic sweeps the namespace, which is what a batch delete spanning
+      // several chats has to fall back to.
+      return id ? [queryKeys.memories.chatCount(id)] : [queryKeys.memories.all]
 
     case 'mountPoints':
       // No per-store detail key exists yet; the namespace prefix is the

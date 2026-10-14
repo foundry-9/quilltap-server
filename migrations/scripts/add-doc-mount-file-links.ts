@@ -29,8 +29,8 @@
  *
  * No dedup at migration time — existing duplicate sha rows stay as distinct
  * file rows (each with one link). The sha256 INDEX is not UNIQUE for the
- * same reason. Application-level findOrCreateByContent dedups going
- * forward.
+ * same reason. Writers dedup going forward by checking `findBySha256`
+ * before creating a file row.
  *
  * Migration ID: add-doc-mount-file-links-v1
  */

@@ -6,6 +6,7 @@
 
 export { handleAddTag, handleRemoveTag } from './tags';
 export { handleRegenerateTitle } from './title';
+export { handleRebuildSummary } from './rebuild-summary';
 export {
   handleImpersonate,
   handleStopImpersonate,
@@ -25,7 +26,7 @@ export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
-export { handleRegenerateBackground } from './story-background';
+export { handleGetStoryBackground, handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
@@ -46,12 +47,16 @@ export {
 } from './documents';
 export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget } from './documents';
 export { handleInsertAnnouncement } from './announcement';
+export { handleInform, handleGetInforms, handleCancelInform } from './inform';
 export { handleAnnouncementPreview } from './announcement-preview';
+export { handleImpersonationVoicePreview } from './impersonation-voice-preview';
 export { handleSendMail } from './send-mail';
 export { handleMergeConversation } from './merge';
 export { handleGetMailbox } from './mailbox';
+export { handleSaveGalleryImage } from './save-image';
 export { handleGetPhotoAlbums } from './photo-albums';
 export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
 export { handleGetGroupStores } from './group-stores';
 export { handleExportMarkdown } from './export-markdown';
-export { handleSetScenario } from './scenario';
+export { handleSetScenario, handleGetScenarioSource } from './scenario';
+export { handleRetryImageUncensored } from './retry-image-uncensored';

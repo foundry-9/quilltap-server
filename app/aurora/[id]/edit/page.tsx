@@ -2,7 +2,7 @@
  * Character Edit Route — thin wrapper around {@link CharacterEditView}. When the
  * tabbed workspace is enabled, redirects into it preserving the character id and
  * `?tab=` deep-link; otherwise renders the view.
- * See `docs/developer/features/tabbed-workspace.md`.
+ * See `docs/developer/features/complete/tabbed-workspace.md`.
  */
 
 import { CharacterEditView } from './CharacterEditView'

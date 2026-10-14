@@ -213,7 +213,7 @@ async function processBrahmaResponse(
     false,  // helpToolsEnabled
     false,  // canDressThemselves
     false,  // canCreateOutfits
-    true,   // documentEditingEnabled
+    'full', // docToolsMode
     false,  // askCarinaEnabled
     false,  // includeWorkspaceTools — stripped for the console
     true,   // excludeMemorySearch — no memory source

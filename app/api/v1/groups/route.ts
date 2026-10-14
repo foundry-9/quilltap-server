@@ -2,6 +2,8 @@
  * Groups API v1 - Collection Endpoint
  *
  * GET /api/v1/groups - List all groups
+ * GET /api/v1/groups?characterIds=<id,id,...> - Only groups any of those
+ *     characters belongs to (the Scenario Builder's save targets)
  * POST /api/v1/groups - Create a new group
  */
 
@@ -32,6 +34,26 @@ const createGroupSchema = z.object({
 export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
   let groups = await repos.groups.findAll();
 
+  // Optional membership filter. Only character ids this user can read are
+  // trusted (`repos.characters` is user-scoped), mirroring groups/scenarios.
+  const rawCharacterIds = req.nextUrl.searchParams.get('characterIds');
+  if (rawCharacterIds !== null) {
+    const requested = rawCharacterIds.split(',').map((s) => s.trim()).filter(Boolean);
+    const memberGroupIds = new Set<string>();
+    for (const characterId of requested) {
+      const character = await repos.characters.findById(characterId);
+      if (!character) continue;
+      const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+      for (const m of memberships) memberGroupIds.add(m.groupId);
+    }
+    groups = groups.filter((g) => memberGroupIds.has(g.id));
+    logger.debug('[Groups v1] Filtered groups by character membership', {
+      userId: user.id,
+      requested: requested.length,
+      matched: groups.length,
+    });
+  }
+
   // Sort by createdAt descending
   groups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -55,7 +77,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
 // POST Handler
 // ============================================================================
 
-export const POST = createContextHandler(async (req: NextRequest, { repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createGroupSchema.parse(body);
 
@@ -80,8 +102,9 @@ export const POST = createContextHandler(async (req: NextRequest, { repos }) => 
   // endpoint and the startup hook also ensure them.
   try {
     if (group.officialMountPointId) {
-      const { ensureGroupScenariosFolder, ensureGroupKnowledgeFolder } = await import('@/lib/mount-index/group-scenarios');
-      await ensureGroupScenariosFolder(group.officialMountPointId);
+      const { resolveScenarioLocation } = await import('@/lib/scenarios/location');
+      const { ensureGroupKnowledgeFolder } = await import('@/lib/mount-index/group-knowledge');
+      await resolveScenarioLocation('group', group.id, repos, user.id, { ensure: true });
       await ensureGroupKnowledgeFolder(group.officialMountPointId);
     }
   } catch (ensureError) {

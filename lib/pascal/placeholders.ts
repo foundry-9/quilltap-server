@@ -25,14 +25,17 @@ export type PlaceholderRef =
   | { kind: 'roll' }
   | { kind: 'dice' }
   | { kind: 'llm' }
+  | { kind: 'now' }
   | { kind: 'params'; name: string }
   | { kind: 'metadata'; key: string }
   | { kind: 'state'; path: string }
+  | { kind: 'progress'; id: string; field: string }
   | { kind: 'unknown'; key: string };
 
 const PARAMS_PREFIX = 'params.';
 const METADATA_PREFIX = 'metadata.';
 const STATE_PREFIX = 'state.';
+const PROGRESS_PREFIX = 'progress.';
 
 /**
  * Classify one (already trimmed) placeholder key. A family prefix with nothing
@@ -44,6 +47,10 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
   if (key === 'roll') return { kind: 'roll' };
   if (key === 'dice') return { kind: 'dice' };
   if (key === 'llm') return { kind: 'llm' };
+  // `now` is epoch milliseconds at run start, one value for the whole run —
+  // what lets an effect express "ten minutes from now" as {{now}} + 600000
+  // without the format growing a date grammar.
+  if (key === 'now') return { kind: 'now' };
   if (key.startsWith(PARAMS_PREFIX) && key.length > PARAMS_PREFIX.length) {
     return { kind: 'params', name: key.slice(PARAMS_PREFIX.length) };
   }
@@ -52,6 +59,19 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
   }
   if (key.startsWith(STATE_PREFIX) && key.length > STATE_PREFIX.length) {
     return { kind: 'state', path: key.slice(STATE_PREFIX.length) };
+  }
+  // `progress.<id>.<field>` — a derived field of one of the rolling
+  // character's timed progressions. Unlike `metadata.`, whose remainder is
+  // taken WHOLE because a metadata key is the user's own vocabulary, this
+  // splits at the first dot: `<id>` is an identifier the format defines, and
+  // `<field>` is drawn from a closed set the engine publishes. A key naming
+  // only an id, or only a field, names nothing.
+  if (key.startsWith(PROGRESS_PREFIX)) {
+    const rest = key.slice(PROGRESS_PREFIX.length);
+    const dot = rest.indexOf('.');
+    if (dot > 0 && dot < rest.length - 1) {
+      return { kind: 'progress', id: rest.slice(0, dot), field: rest.slice(dot + 1) };
+    }
   }
   return { kind: 'unknown', key };
 }

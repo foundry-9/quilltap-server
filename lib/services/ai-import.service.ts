@@ -24,6 +24,10 @@ import {
   PROMPT_SEMANTICS,
   PROPERTIES_SEMANTICS,
   PHYSICAL_DESCRIPTION_SEMANTICS,
+  CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  GATED_COMPANION_TRUST_DISPOSITION,
+  EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
   WARDROBE_ITEMS_GENERATION_PROMPT,
@@ -32,6 +36,7 @@ import {
   type GeneratedWardrobeItem,
 } from '@/lib/wardrobe/generated-items';
 import { logger } from '@/lib/logger';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -190,9 +195,11 @@ Respond with JSON:
 {
   "firstMessage": "An engaging opening message from the character (1-3 paragraphs). Include *actions* and dialogue. This is how the character introduces themselves or sets the scene when first meeting someone.",
   "exampleDialogues": "2-3 example dialogue exchanges showing the character's voice.\\nFormat:\\n{{char}}: [dialogue and *actions*]\\n{{user}}: [response]\\n{{char}}: [follow-up]\\n\\nSeparate exchanges with a blank line."
-}`;
+}
 
-const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
+For exampleDialogues: ${EXAMPLE_DIALOGUE_COVERAGE}`;
+
+export const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
 
 Create system prompts that instruct an AI how to roleplay as this character.
 
@@ -200,12 +207,19 @@ Respond with JSON array:
 [
   {
     "name": "Main",
-    "content": "A comprehensive system prompt (300-500 words) covering identity, speech patterns, behaviors, boundaries, and relationship dynamics. Write in second person ('You are...', 'You always...').",
+    "content": "A comprehensive system prompt (300-600 words) covering identity, speech patterns, behaviors, boundaries, and relationship dynamics. Write in second person ('You are...', 'You always...').",
     "isDefault": true
   }
 ]
 
-The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.`;
+The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.
+
+${CONVERSATIONAL_VOICE_DIRECTION}
+
+${TRUST_SAFEGUARDS_DIRECTION}
+
+${GATED_COMPANION_TRUST_DISPOSITION}
+Use the relationships array in the Prior Analysis, where one is given, as evidence for that decision.`;
 
 const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
 
@@ -566,7 +580,7 @@ export function assembleQtapExport(
         source: 'MANUAL',
         reinforcementCount: 1,
         relatedMemoryIds: [],
-        reinforcedImportance: Math.max(0, Math.min(1, mem.importance)),
+        reinforcedImportance: calculateReinforcedImportance(Math.max(0, Math.min(1, mem.importance)), 1),
         createdAt: now,
         updatedAt: now,
       });

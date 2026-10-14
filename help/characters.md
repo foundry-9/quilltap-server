@@ -228,8 +228,11 @@ View associated memories:
 - Memories about this character
 - Memory details and dates
 - Search and filter
-- **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected from housekeeping cleanup
+- **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected when maintenance trims a character to the cap
 - **Related memories** — memories that are thematically linked are connected together. When a new memory is similar but distinct from an existing one, both are linked for context
+- **Adding a memory by hand** — a memory you write yourself is filed as **MANUAL** and passes the same doorman as any other. Should the character already hold the very thing you have written *in your own hand* (another MANUAL memory) or in a consolidated digest, no duplicate is made: that memory is reinforced instead, takes whichever importance is the higher, yours or its own, and the confirmation says as much. Should the near-twin be something the character merely picked up in conversation, however, your words are never quietly swallowed by it — yours is filed as a memory of its own, linked to the extracted one so the two are found together. A hand-written memory is never archived or swept away by housekeeping
+- **Looking is not touching** — opening or reading a memory here does not count as the character recalling it, so a curious glance never props up a memory that would otherwise be eligible for the archive
+- **Editing a memory** — revise a memory's words and the Commonplace Book re-files it under what it now says, not what it said before: the character finds it, and the doorman weighs new arrivals against it, by the new text. Raise or lower its importance and its standing moves at once. A link you add to a related memory is fastened at both ends (and only to memories of the same character), and an edited consolidated digest is copied afresh into the character's `Commonplace/` notes. Should the embedding service be indisposed when you save new words, nothing is saved at all — the memory keeps its old text and you are told why, rather than left with new words filed under the old ones
 
 ### Tags Tab
 

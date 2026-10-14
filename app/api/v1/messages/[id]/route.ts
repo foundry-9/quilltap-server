@@ -5,14 +5,18 @@
  * PUT /api/v1/messages/[id] - Edit a message
  * DELETE /api/v1/messages/[id] - Delete a message (with optional memory cascade)
  * POST /api/v1/messages/[id]?action=swipe - Generate alternative response
+ *   (add &stream=1 for a text/event-stream narration of the regeneration)
  * POST /api/v1/messages/[id]?action=reattribute - Re-attribute to different participant
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, getActionParam } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
-import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
-import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import {
+  regenerateMessageAsSwipe,
+  streamSwipeRegeneration,
+} from '@/lib/services/chat-message';
+import { retireMemories } from '@/lib/memory/retire';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -175,12 +179,16 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
       let memoriesDeleted = 0;
       if (memoryCount > 0 && memoryAction && memoryAction !== 'KEEP_MEMORIES') {
         if (memoryAction === 'DELETE_MEMORIES' || memoryAction === 'REGENERATE_MEMORIES') {
-          const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessagesWithVectors(messageIdsToDelete);
-          memoriesDeleted = deleted;
+          const memoryIds: string[] = [];
+          for (const sourceMessageId of messageIdsToDelete) {
+            memoryIds.push(...(await repos.memories.findBySourceMessageId(sourceMessageId)).map((m) => m.id));
+          }
+          const report = await retireMemories(memoryIds, { reason: 'message-cascade' });
+          memoriesDeleted = report.retired;
           logger.info('[Messages API v1] Cascade deleted memories with message', {
             messageId,
-            memoriesDeleted: deleted,
-            vectorsRemoved,
+            memoriesDeleted: report.retired,
+            vectorsRemoved: report.vectorsRemoved,
           });
         }
       }
@@ -220,19 +228,11 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
 // =============================================================================
 
 export const POST = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: messageId }) => {
-    const action = getActionParam(req);
-
-    if (action === 'swipe') {
-      return handleSwipeAction(req, { user, repos }, messageId);
-    }
-
-    if (action === 'reattribute') {
-      return handleReattributeAction(req, { user, repos }, messageId);
-    }
-
-    return badRequest('Action parameter required: swipe or reattribute');
-  }
+  async (req, { user, repos }, { id: messageId }) =>
+    dispatchAction(req, {
+      swipe: () => handleSwipeAction(req, { user, repos }, messageId),
+      reattribute: () => handleReattributeAction(req, { user, repos }, messageId),
+    })
 );
 
 // =============================================================================
@@ -252,8 +252,79 @@ async function handleSwipeAction(
     return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
   }
 
-  // Otherwise, generate a new swipe
-  return handleGenerateSwipe(repos, user.id, messageId);
+  // Otherwise, generate a new swipe. `stream=1` narrates it as it happens —
+  // the Salon shows the re-roll arriving in place of the line being replaced.
+  const wantsStream = req.nextUrl.searchParams.get('stream') === '1';
+  return wantsStream
+    ? handleGenerateSwipeStreaming(repos, user.id, messageId)
+    : handleGenerateSwipe(repos, user.id, messageId);
+}
+
+/**
+ * Everything a regeneration needs, or the error response that says why it can't
+ * happen. Shared by the JSON and SSE handlers so both refuse the same things
+ * for the same reasons.
+ */
+async function resolveSwipeTarget(
+  repos: any,
+  userId: string,
+  messageId: string
+): Promise<
+  | { ok: true; result: MessageSearchResult }
+  | { ok: false; response: NextResponse }
+> {
+  const result = await findMessageInUserChats(repos, userId, messageId);
+  if (!result) {
+    return { ok: false, response: notFound('Message') };
+  }
+
+  // Only character-authored assistant messages can be regenerated. Staff/system
+  // messages share the ASSISTANT role but have no responder to regenerate from.
+  if (result.message.role !== 'ASSISTANT') {
+    return { ok: false, response: badRequest('Only assistant messages can be swiped') };
+  }
+  if (result.message.systemSender) {
+    return { ok: false, response: badRequest('Staff and system messages cannot be regenerated') };
+  }
+
+  return { ok: true, result };
+}
+
+/**
+ * The regeneration as a live narration.
+ *
+ * Same generation as the JSON handler — the service does the work either way —
+ * but each step is reported as it happens: a `status` line, `content` deltas
+ * (append) and cumulative `reasoning` (replace), then a final `done` carrying
+ * the persisted swipe. That is what lets the Salon dim the line being replaced
+ * and fill it back in as the new one arrives, instead of freezing on a spinner
+ * until the whole thing lands.
+ *
+ * A failure that happens before the stream opens is an ordinary JSON error; one
+ * that happens after it is an `error` event, because the headers are long gone.
+ */
+async function handleGenerateSwipeStreaming(
+  repos: any,
+  userId: string,
+  messageId: string
+): Promise<NextResponse> {
+  const target = await resolveSwipeTarget(repos, userId, messageId);
+  if (!target.ok) return target.response;
+  const { result } = target;
+
+  return streamSwipeRegeneration(
+    {
+      repos,
+      userId,
+      chat: result.chat,
+      targetMessage: result.message,
+      allMessages: result.allMessages.filter(
+        (m): m is MessageEvent => m.type === 'message'
+      ),
+      activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
+    },
+    '[Messages API v1]'
+  );
 }
 
 async function handleGenerateSwipe(
@@ -261,19 +332,9 @@ async function handleGenerateSwipe(
   userId: string,
   messageId: string
 ): Promise<NextResponse> {
-  const result = await findMessageInUserChats(repos, userId, messageId);
-  if (!result) {
-    return notFound('Message');
-  }
-
-  // Only character-authored assistant messages can be regenerated. Staff/system
-  // messages share the ASSISTANT role but have no responder to regenerate from.
-  if (result.message.role !== 'ASSISTANT') {
-    return badRequest('Only assistant messages can be swiped');
-  }
-  if (result.message.systemSender) {
-    return badRequest('Staff and system messages cannot be regenerated');
-  }
+  const target = await resolveSwipeTarget(repos, userId, messageId);
+  if (!target.ok) return target.response;
+  const { result } = target;
 
   try {
     // Run the regeneration through the same context engine a normal turn uses,
@@ -359,18 +420,20 @@ async function handleReattributeAction(
     return badRequest('Target participant not found in chat');
   }
 
-  // Find and delete memories associated with this message
+  // Find and delete memories associated with this message: they were
+  // extracted for the old speaker.
   const memoriesFromMessage = await repos.memories.findBySourceMessageId(messageId);
   let memoriesDeleted = 0;
-  for (const memory of memoriesFromMessage) {
+  if (memoriesFromMessage.length > 0) {
     try {
-      const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
-      if (deleted) {
-        memoriesDeleted++;
-      }
+      const report = await retireMemories(memoriesFromMessage.map((memory: { id: string }) => memory.id), {
+        reason: 'message-reattribution',
+      });
+      memoriesDeleted = report.retired;
     } catch (error) {
-      logger.error('[Messages API v1] Failed to delete memory during re-attribution', {
-        memoryId: memory.id,
+      logger.error('[Messages API v1] Failed to delete memories during re-attribution', {
+        messageId,
+        memoryCount: memoriesFromMessage.length,
         error: error instanceof Error ? error.message : String(error),
       });
     }

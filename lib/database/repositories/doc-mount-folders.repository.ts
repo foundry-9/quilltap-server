@@ -9,13 +9,13 @@
  * safeQuery fallbacks kick in — matching the pattern used by other mount-index repos.
  */
 
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { DocMountFolder, DocMountFolderSchema } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { ensureFolderNocaseUniqueIndex } from './mount-index-case-repair';
 
 /**
@@ -23,100 +23,75 @@ import { ensureFolderNocaseUniqueIndex } from './mount-index-case-repair';
  * Implements CRUD operations and queries for document mount folders.
  * Uses the mount index database instead of the main database.
  */
-export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFolder> {
-  private mountIndexCollectionInitialized = false;
-
+export class DocMountFoldersRepository extends AbstractDedicatedDbRepository<DocMountFolder> {
   constructor() {
-    super('doc_mount_folders', DocMountFolderSchema);
+    super('doc_mount_folders', DocMountFolderSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
   /**
-   * Override getCollection to return a collection from the dedicated mount index
-   * database instead of the main database.
+   * Extra indexes, run once after the generated DDL on first access.
    */
-  protected async getCollection(): Promise<DatabaseCollection<DocMountFolder>> {
-    const db = requireMountIndexDb();
+  protected override onTableEnsured(db: DatabaseType): void {
+    // Case-insensitive unique constraint on (mountPointId, parentId, name):
+    // sibling folders may never differ only by casing. Runs a repair scan
+    // every init (catching out-of-band edits, and swapping out the legacy
+    // case-sensitive index on older databases) before guaranteeing the
+    // NOCASE index.
+    ensureFolderNocaseUniqueIndex(db);
 
-    // Ensure the table exists in the mount index DB on first access.
-    // CRITICAL: set `mountIndexCollectionInitialized = true` after DDL but
-    // BEFORE the folder backfill runs. The backfill calls `ensureFolderPath`,
-    // which calls back into this repo's `getCollection`; if the flag isn't
-    // set yet, the recursive call re-enters the init block and re-runs the
-    // backfill, recursively forever. Setting the flag first lets the
-    // recursive calls get a valid `SQLiteCollection` and proceed.
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
+    // Fast path lookup by (mountPointId, path)
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_path" ` +
+      `ON "${this.collectionName}" ("mountPointId", "path")`
+    );
+  }
 
-        // Case-insensitive unique constraint on (mountPointId, parentId, name):
-        // sibling folders may never differ only by casing. Runs a repair scan
-        // every init (catching out-of-band edits, and swapping out the legacy
-        // case-sensitive index on older databases) before guaranteeing the
-        // NOCASE index.
-        ensureFolderNocaseUniqueIndex(db);
+  /**
+   * One-time folder backfill for database-backed mounts.
+   *
+   * CRITICAL: this runs from `afterTableReady`, i.e. AFTER the base class has
+   * marked the table ensured. The backfill calls `ensureFolderPath`, which
+   * calls back into this repo's `getCollection`; were the flag not set yet,
+   * the recursive call would re-enter the init block and re-run the
+   * backfill, recursively forever. With the flag set, the recursive calls
+   * get a valid collection and proceed.
+   */
+  protected override async afterTableReady(db: DatabaseType): Promise<void> {
+    // Check PRAGMA user_version to determine if backfill is needed.
+    // The user_version bump is the source of truth for "backfill has run on
+    // this DB" across process restarts.
+    try {
+      const versionResult = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
+      const currentVersion = versionResult?.user_version ?? 0;
 
-        // Fast path lookup by (mountPointId, path)
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_path" ` +
-          `ON "${this.collectionName}" ("mountPointId", "path")`
-        );
+      if (currentVersion < 1) {
+        // Optimistically bump user_version FIRST so that even if this
+        // process is killed mid-backfill, the next start doesn't repeat
+        // the same partial work. A missed-folder backfill row is a
+        // tolerable downside; an infinite-loop OOM is not.
+        db.exec('PRAGMA user_version = 1');
 
-        // Mark the collection initialized BEFORE the backfill so re-entrant
-        // calls from inside `ensureFolderPath` (which the backfill invokes)
-        // skip this entire block and don't recurse into the backfill.
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure doc_mount_folders table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
+        const repos = await import('@/lib/repositories/factory').then(m => m.getRepositories());
+        const mounts = await repos.docMountPoints.findAll();
+        const dbBackedMounts = mounts.filter(m => m.mountType === 'database');
 
-      // Check PRAGMA user_version to determine if backfill is needed.
-      // Run AFTER the init flag is set so any recursion (via ensureFolderPath)
-      // sees a ready collection. The user_version bump is the source of truth
-      // for "backfill has run on this DB" across process restarts.
-      try {
-        const versionResult = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
-        const currentVersion = versionResult?.user_version ?? 0;
-
-        if (currentVersion < 1) {
-          // Optimistically bump user_version FIRST so that even if this
-          // process is killed mid-backfill, the next start doesn't repeat
-          // the same partial work. A missed-folder backfill row is a
-          // tolerable downside; an infinite-loop OOM is not.
-          db.exec('PRAGMA user_version = 1');
-
-          const repos = await import('@/lib/repositories/factory').then(m => m.getRepositories());
-          const mounts = await repos.docMountPoints.findAll();
-          const dbBackedMounts = mounts.filter(m => m.mountType === 'database');
-
-          for (const mount of dbBackedMounts) {
-            try {
-              const { backfillFolderRowsForMountPoint } = await import('@/lib/mount-index/database-store');
-              await backfillFolderRowsForMountPoint(mount.id);
-            } catch (err) {
-              logger.warn('Failed to backfill folder rows for mount point', {
-                mountPointId: mount.id,
-                error: err instanceof Error ? err.message : String(err),
-              });
-            }
+        for (const mount of dbBackedMounts) {
+          try {
+            const { backfillFolderRowsForMountPoint } = await import('@/lib/mount-index/database-store');
+            await backfillFolderRowsForMountPoint(mount.id);
+          } catch (err) {
+            logger.warn('Failed to backfill folder rows for mount point', {
+              mountPointId: mount.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         }
-      } catch (err) {
-        logger.warn('Failed to run folder backfill', {
-          error: err instanceof Error ? err.message : String(err),
-        });
       }
+    } catch (err) {
+      logger.warn('Failed to run folder backfill', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<DocMountFolder>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }
 
   // ============================================================================

@@ -29,8 +29,11 @@ import {
   RateLimitError,
   TokenLimitError,
 } from '@/lib/llm/errors'
+import { LLMStreamStalledError } from '@/lib/llm/stream-watchdog'
 import type { ConnectionProfile } from '@/lib/schemas/types'
-import type { FallbackContext } from '@/lib/llm/fallback'
+import type { FallbackContext, FallbackTrigger } from '@/lib/llm/fallback'
+import { RouteAttemptSchema } from '@/lib/schemas/chat.types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const {
   buildFallbackChain,
@@ -120,6 +123,36 @@ describe('classifyFallbackTrigger', () => {
     const timeout = new Error('Cheap LLM task exceeded its 45000ms budget')
     timeout.name = 'CheapLLMTimeoutError'
     expect(classifyFallbackTrigger(timeout)).toBe('network')
+  })
+
+  it('recognises a stalled stream as a network failure (bug 141)', () => {
+    expect(classifyFallbackTrigger(new LLMStreamStalledError(240000, 0, 'DEEPSEEK', 'deepseek-v4-flash')))
+      .toBe('network')
+    expect(classifyFallbackTrigger(new LLMStreamStalledError(120000, 37)))
+      .toBe('network')
+  })
+
+  describe('content-moderation refusals (Concierge overhaul, phase 1)', () => {
+    it('reads a thrown OpenAI content_policy_violation as a moderation refusal, not a malformed 4xx', () => {
+      const err = Object.assign(new Error('400 Your request was rejected as a result of our safety system.'), {
+        status: 400,
+        code: 'content_policy_violation',
+      })
+      expect(classifyFallbackTrigger(err)).toBe('moderation-refusal')
+    })
+
+    it('reads a plugin\'s typed moderation rejection', () => {
+      const err = Object.assign(new Error('blocked'), { code: 'MODERATION_REJECTED' })
+      expect(classifyFallbackTrigger(err)).toBe('moderation-refusal')
+    })
+
+    it('reads refusal wording without a status', () => {
+      expect(classifyFallbackTrigger(new Error('Generated image rejected by content moderation.'))).toBe('moderation-refusal')
+    })
+
+    it('leaves an ambiguous 400 alone', () => {
+      expect(classifyFallbackTrigger(new Error('400 Please try a different prompt'))).toBeNull()
+    })
   })
 
   describe('non-triggers', () => {
@@ -359,5 +392,34 @@ describe('summarizeFallbackAttempts', () => {
 
   it('is empty when nothing was attempted', () => {
     expect(summarizeFallbackAttempts([], false)).toBe('')
+  })
+})
+
+/**
+ * `RouteAttemptSchema.trigger` (lib/schemas/chat.types.ts) duplicates
+ * `FallbackTrigger` by value, because the schema module is client-safe and this
+ * engine's module is not. Nothing at runtime keeps them together, so this is
+ * what does: a new trigger added to one and not the other fails to compile.
+ */
+describe('the route trail duplicates FallbackTrigger by value', () => {
+  it('holds exactly the same string union in both directions', () => {
+    type Engine = FallbackTrigger
+    type Schema = NonNullable<RouteAttempt['trigger']>
+    // Two total assignments — either direction failing means one union grew.
+    const engineToSchema: (t: Engine) => Schema = (t) => t
+    const schemaToEngine: (t: Schema) => Engine = (t) => t
+    expect(engineToSchema('moderation-refusal')).toBe('moderation-refusal')
+    expect(schemaToEngine('moderation-refusal')).toBe('moderation-refusal')
+  })
+
+  it('lists every engine trigger in the schema enum, so the column can store any of them', () => {
+    const engineTriggers: FallbackTrigger[] = [
+      'auth', 'rate-limit', 'network', 'model-missing',
+      'provider-error', 'empty-response', 'moderation-refusal',
+    ]
+    for (const trigger of engineTriggers) {
+      expect(RouteAttemptSchema.shape.trigger.safeParse(trigger).success).toBe(true)
+    }
+    expect(RouteAttemptSchema.shape.trigger.safeParse('made-up').success).toBe(false)
   })
 })

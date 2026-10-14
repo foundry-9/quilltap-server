@@ -1,5 +1,5 @@
 /**
- * Character-voiced announcement rewriter.
+ * Character-voiced announcement rewriter — the OFF-SCENE rehearsal.
  *
  * Given a seed text the operator typed for an off-scene character and a
  * chosen connection profile, this rewrites the seed in the character's own
@@ -16,6 +16,10 @@
  * that audience and the character is told the remark is private. A line pitched
  * to a full room reads wrong when only one person hears it, so the audience has
  * to reach the rewrite rather than being applied after the fact.
+ *
+ * The recall, the provider call and the result shape are shared with the
+ * IN-SCENE rehearsal (`in-scene-voiced.ts`) through `voice-rewrite-core.ts`;
+ * only the framing below is this module's own.
  */
 
 import { logger } from '@/lib/logger'
@@ -24,12 +28,13 @@ import { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile } from '@/lib/schemas/types'
 import { selectionFromProfile } from '@/lib/llm/cheap-llm'
 import type { LLMMessage } from '@/lib/llm/base'
-import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { buildSystemPrompt } from '@/lib/chat/context/system-prompt-builder'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
-import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
-import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
-import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
+import {
+  executeVoiceRewrite,
+  formatNameList,
+  recallForSeed,
+  type VoiceRewriteResult,
+} from './voice-rewrite-core'
 
 export interface CharacterVoicedAnnouncementParams {
   chatId: string
@@ -46,20 +51,14 @@ export interface CharacterVoicedAnnouncementParams {
   audienceNames?: string[]
 }
 
-export interface CharacterVoicedAnnouncementResult {
-  success: boolean
-  proposedMarkdown: string
-  error?: string
-}
+export type CharacterVoicedAnnouncementResult = VoiceRewriteResult
 
 const TASK_TYPE = 'announcement-rewrite'
 
-/** "Alice", "Alice and Bob", "Alice, Bob, and Carol". */
-function formatNameList(names: string[]): string {
-  if (names.length === 1) return names[0]
-  if (names.length === 2) return `${names[0]} and ${names[1]}`
-  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
-}
+/** Token ceiling for a proclamation. Flat — an announcement is short by nature. */
+const ANNOUNCEMENT_MAX_TOKENS = 2048
+
+const LOG_CONTEXT = '[CharacterVoicedAnnouncement]'
 
 /**
  * Build the present-roster block from a chat's participants. Includes only
@@ -112,41 +111,14 @@ export async function generateCharacterVoicedAnnouncement(
     })
 
     // Commonplace recall against the seed text.
-    let recallText = ''
-    try {
-      const memoryResults = await searchMemoriesSemantic(
-        character.id,
-        seedMarkdown,
-        {
-          userId,
-          limit: 20,
-          minImportance: 0.3,
-        },
-      )
-
-      if (memoryResults.length > 0) {
-        // The recall spans the character's whole store, so it carries their
-        // memories about other people too; attribute them or the rewrite reads
-        // someone else's life as its own (bug 122).
-        const subject = await buildMemorySubjectContext(
-          character.id,
-          memoryResults.map(r => r.memory),
-        )
-        const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, subject, {
-          maxEntries: 12,
-        })
-        if (formatted.content) {
-          recallText = buildCommonplaceLLMContext({ relevant: formatted.content })
-        }
-      }
-    } catch (err) {
-      // Memory recall failure should not block the rewrite — proceed without.
-      logger.warn('[CharacterVoicedAnnouncement] Memory recall failed; proceeding without', {
-        chatId,
-        characterId: character.id,
-        error: getErrorMessage(err),
-      })
-    }
+    const recallText = await recallForSeed(
+      character,
+      seedMarkdown,
+      profile,
+      userId,
+      chatId,
+      LOG_CONTEXT,
+    )
 
     // Who's listening. A whisper's audience is the audience — the room's wider
     // roster is not merely irrelevant to it, it would mislead the rewrite into
@@ -174,33 +146,17 @@ export async function generateCharacterVoicedAnnouncement(
       { role: 'user', content: userParts.join('\n\n') },
     ]
 
-    const llmResult = await executeCheapLLMTask<string>(
+    return await executeVoiceRewrite({
       selection,
       messages,
       userId,
-      (content: string) => content.trim(),
-      TASK_TYPE,
+      taskType: TASK_TYPE,
       chatId,
-      undefined,
-      undefined,
-      2048,
-      character.id,
-    )
-
-    if (!llmResult.success || !llmResult.result) {
-      return {
-        success: false,
-        proposedMarkdown: '',
-        error: llmResult.error || 'The LLM returned no content.',
-      }
-    }
-
-    return {
-      success: true,
-      proposedMarkdown: llmResult.result,
-    }
+      characterId: character.id,
+      maxTokens: ANNOUNCEMENT_MAX_TOKENS,
+    })
   } catch (error) {
-    logger.error('[CharacterVoicedAnnouncement] Unexpected failure', {
+    logger.error(`${LOG_CONTEXT} Unexpected failure`, {
       chatId,
       characterId: character.id,
       error: getErrorMessage(error),

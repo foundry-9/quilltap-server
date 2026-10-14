@@ -6,9 +6,14 @@
  * prompt crafter did not, so an uncensored provider still received a scene with
  * a sheet draped over it.
  *
- * Also locks the moderation-reroute path: a prompt crafted for a moderated
- * provider that the provider then rejects is re-crafted candidly for the
- * reroute target rather than resent as-is.
+ * Also locks the moderation-reroute path. Since the Concierge overhaul (phase
+ * 1) a refused background is retried once on an uncensored understudy while
+ * the Concierge is on duty, in any chat state but Locked — the old bug-133
+ * gate that barred a Moderated chat is gone — but the prompt is never
+ * re-crafted: a moderated chat's concealed prompt is resent concealed, and an
+ * Unmoderated chat's candid prompt is resent as-is. With the Concierge off
+ * duty nothing reroutes and the prompt stays concealed even for an
+ * Unmoderated chat, and the Concierge says why.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -18,7 +23,7 @@ import { handleStoryBackgroundGeneration } from '@/lib/background-jobs/handlers/
 import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
@@ -26,11 +31,17 @@ import {
   deriveSceneContext,
   extractVisibleConversation,
 } from '@/lib/memory/cheap-llm-tasks'
+import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
+import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import {
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service'
+  postLanternImageNotification,
+  postLanternRefusalNotification,
+} from '@/lib/services/lantern-notifications/writer'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
+import {
+  resolveCharacterAppearances,
+  sanitizeAppearancesIfNeeded,
+} from '@/lib/image-gen/appearance-resolution'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = () => ({
@@ -43,16 +54,22 @@ jest.mock('@/lib/logger', () => {
 jest.mock('@/lib/llm/plugin-factory', () => ({ createImageProvider: jest.fn() }))
 jest.mock('@/lib/files/webp-conversion', () => ({ convertToWebP: jest.fn() }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  ...jest.requireActual('@/lib/services/dangerous-content/resolver.service'),
+  resolveConciergeSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
+  // The real derivation and failover gates (anything but Locked may fail
+  // over), read by the resolver and the image failover chokepoint the handler
+  // calls through; only the route question is steered per test.
+  ...jest.requireActual('@/lib/services/dangerous-content/chat-override'),
   shouldUseUncensoredRoute: jest.fn(),
-  // The real derivation, for tests that wire the real resolver through.
-  getConciergeState: jest.requireActual('@/lib/services/dangerous-content/chat-override').getConciergeState,
 }))
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  isImageModerationError: jest.fn(),
-  resolveUncensoredImageProfileForReroute: jest.fn(),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredImageUnderstudy: jest.fn(),
+  resolveUncensoredTextUnderstudy: jest.fn(),
+}))
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -61,6 +78,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
+  CONCEALMENT_MARKER: 'Undressed in this scene; depict with cinematic concealment.',
   craftStoryBackgroundPrompt: jest.fn(),
   deriveSceneContext: jest.fn(),
   extractVisibleConversation: jest.fn(),
@@ -75,6 +93,7 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
 }))
 jest.mock('@/lib/services/lantern-notifications/writer', () => ({
   postLanternImageNotification: jest.fn().mockResolvedValue(undefined),
+  postLanternRefusalNotification: jest.fn().mockResolvedValue(null),
 }))
 
 const USER = 'user-1'
@@ -87,33 +106,75 @@ const CANDID_PROMPT = 'a shuttered bedroom, a woman lying nude in tousled sheets
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
+
+const actualResolver = jest.requireActual(
+  '@/lib/services/dangerous-content/resolver.service',
+) as typeof import('@/lib/services/dangerous-content/resolver.service')
+
+/** A real policy, from the real resolver, for the given global settings and chat state. */
+function policyFor(
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked',
+  settings: Record<string, unknown> = {},
+) {
+  return actualResolver.resolveConciergeSettings(
+    { conciergeSettings: { ...actualResolver.DEFAULT_CONCIERGE_SETTINGS, ...settings } } as never,
+    { conciergeMode },
+  )
+}
 const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelection)
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
 const mockExtractConversation = jest.mocked(extractVisibleConversation)
 const mockDeriveScene = jest.mocked(deriveSceneContext)
-const mockIsModerationError = jest.mocked(isImageModerationError)
-const mockResolveReroute = jest.mocked(resolveUncensoredImageProfileForReroute)
+const mockResolveReroute = jest.mocked(resolveUncensoredImageUnderstudy)
+const mockAnnounceRefusal = jest.mocked(postConciergeRefusalAnnouncement)
+const mockPostLantern = jest.mocked(postLanternImageNotification)
+const mockPostLanternRefusal = jest.mocked(postLanternRefusalNotification)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
+const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
+const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
 
 const SELECTION = {
   provider: 'openai', modelName: 'm', connectionProfileId: 'p1', isLocal: false,
 } as never
 
-function makeJob() {
+function makeJob(characterIds: string[] = [], extra: Record<string, unknown> = {}) {
   return {
     id: 'job-1',
     userId: USER,
     payload: {
       chatId: CHAT_ID,
-      characterIds: [],
+      characterIds,
       imageProfileId: 'profile-1',
       sceneContext: 'the morning after',
       projectId: null,
+      ...extra,
     },
   } as never
+}
+
+const CHARACTER = {
+  id: 'char-1',
+  name: 'Amy',
+  physicalDescription: 'a young woman',
+  pronouns: { subject: 'she', object: 'her', possessive: 'her' },
+}
+
+const APPEARANCE = {
+  characterId: 'char-1',
+  characterName: 'Amy',
+  physicalDescription: 'a young woman',
+  physicalDescriptionName: 'Default',
+  clothingDescription: 'naked, barefoot, wearing pearls',
+  clothingSource: 'narrative',
+  wasSanitized: false,
+}
+
+/** The `routesDangerousToUncensored` argument of the sanitization call. */
+function sanitizeRoutesFlag(): boolean {
+  return mockSanitizeAppearances.mock.calls[0][3] as boolean
 }
 
 /** The `uncensoredImageTarget` flag on the nth craft call. */
@@ -125,13 +186,9 @@ function craftTargetFlag(call = 0): boolean | undefined {
 /** Wire the Concierge to a dangerous chat, with or without an uncensored image profile. */
 function markDangerous(withUncensoredImageProfile: boolean) {
   mockShouldUseUncensoredRoute.mockReturnValue(true)
-  mockResolveDanger.mockReturnValue({
-    settings: {
-      mode: 'AUTO_ROUTE',
-      scanImagePrompts: true,
-      uncensoredImageProfileId: withUncensoredImageProfile ? 'uncensored-image-profile' : null,
-    },
-  } as never)
+  mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
+    uncensoredImageProfileId: withUncensoredImageProfile ? 'uncensored-image-profile' : null,
+  }))
   // Dangerous chats swap the cheap LLM for the uncensored text profile.
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
 }
@@ -175,15 +232,18 @@ beforeEach(() => {
     files: { create: jest.fn().mockResolvedValue({ id: 'file-1' }) },
   } as never)
 
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as never)
+  mockResolveDanger.mockReturnValue(policyFor('moderated', { enabled: false }))
   mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue(SELECTION)
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
   mockExtractConversation.mockReturnValue([])
   mockDeriveScene.mockResolvedValue(null as never)
   mockCraftPrompt.mockResolvedValue({ success: true, result: CONCEALED_PROMPT } as never)
-  mockIsModerationError.mockReturnValue(false)
   mockResolveReroute.mockResolvedValue(null as never)
+  mockResolveAppearances.mockResolvedValue({
+    appearances: [APPEARANCE], llmResolved: true,
+  } as never)
+  mockSanitizeAppearances.mockImplementation(async (a: never) => a)
 
   mockCreateImageProvider.mockImplementation(() => ({
     generateImage: jest.fn().mockResolvedValue({
@@ -227,15 +287,14 @@ describe('story-background handler — uncensoredImageTarget', () => {
     expect(craftTargetFlag()).toBe(true)
   })
 
-  it('crafts candidly for an operator-Uncensored chat even under a global OFF (real predicate + resolver)', async () => {
-    // The regression that motivated the four-state control: the operator
-    // asserts the chat spicy, the global Concierge mode is OFF, and the
-    // prompt must still go out candid and bound for the uncensored profile —
-    // with every scan disabled (nothing left to classify).
+  it('crafts candidly for an operator-Unmoderated chat with the pre-screen off (real predicate + resolver)', async () => {
+    // The regression that motivated the operator's own state control: the operator
+    // asserts the chat spicy, the pre-screen is off, and the prompt must still
+    // go out candid and bound for the uncensored profile — with every scan
+    // disabled (nothing left to classify).
     const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
-    const actualResolver = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
     mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
-    mockResolveDanger.mockImplementation(actualResolver.resolveDangerousContentSettings)
+    mockResolveDanger.mockImplementation(actualResolver.resolveConciergeSettings)
 
     const repos = mockGetRepositories() as never as {
       chats: { findById: jest.Mock }
@@ -244,17 +303,11 @@ describe('story-background handler — uncensoredImageTarget', () => {
     repos.chats.findById.mockResolvedValue({
       id: CHAT_ID, projectId: null, title: 'The Morning After',
       sceneState: null, messageCount: 0, contextSummary: null,
-      conciergeOverride: 'UNCENSORED', isDangerousChat: false,
+      conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', isDangerousChat: false,
     })
     repos.chatSettings.findByUserId.mockResolvedValue({
-      dangerousContentSettings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
+      conciergeSettings: {
+        ...actualResolver.DEFAULT_CONCIERGE_SETTINGS,
         uncensoredImageProfileId: 'uncensored-image-profile',
       },
     })
@@ -262,35 +315,130 @@ describe('story-background handler — uncensoredImageTarget', () => {
     await handleStoryBackgroundGeneration(makeJob())
 
     expect(craftTargetFlag()).toBe(true)
-    // The resolver's settings actually reached the handler with the forced
-    // AUTO_ROUTE and every scan off.
-    const resolved = mockResolveDanger.mock.results[0].value as {
-      settings: { mode: string; scanImagePrompts: boolean }
-      source: string
+    // The resolver's policy actually reached the handler routing direct,
+    // with every scan off.
+    const resolved = mockResolveDanger.mock.results[0].value as ReturnType<typeof resolveConciergeSettings>
+    expect(resolved.source).toBe('chat-unmoderated')
+    expect(resolved.routeDirect).toBe(true)
+    expect(resolved.preScreen.scanImagePrompts).toBe(false)
+  })
+
+  it('conceals even an Unmoderated chat while the Concierge is off duty (real predicate + resolver)', async () => {
+    const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
+    mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
+    mockResolveDanger.mockImplementation(actualResolver.resolveConciergeSettings)
+
+    const repos = mockGetRepositories() as never as {
+      chats: { findById: jest.Mock }
+      chatSettings: { findByUserId: jest.Mock }
     }
-    expect(resolved.source).toBe('chat-uncensored')
-    expect(resolved.settings.mode).toBe('AUTO_ROUTE')
-    expect(resolved.settings.scanImagePrompts).toBe(false)
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID, projectId: null, title: 'The Morning After',
+      sceneState: null, messageCount: 0, contextSummary: null,
+      conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', isDangerousChat: false,
+    })
+    repos.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: {
+        ...actualResolver.DEFAULT_CONCIERGE_SETTINGS,
+        enabled: false,
+        uncensoredImageProfileId: 'uncensored-image-profile',
+      },
+    })
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(false)
+    const resolved = mockResolveDanger.mock.results[0].value as ReturnType<typeof resolveConciergeSettings>
+    expect(resolved.source).toBe('off-duty')
+  })
+})
+
+describe('story-background handler — appearance sanitization gate', () => {
+  /** Put a character in the job so appearance resolution actually runs. */
+  function withCharacter() {
+    const repos = mockGetRepositories() as unknown as Record<string, unknown>
+    mockGetRepositories.mockReturnValue({
+      ...repos,
+      characters: {
+        findById: jest.fn().mockResolvedValue(CHARACTER),
+        findByUserId: jest.fn().mockResolvedValue([CHARACTER]),
+      },
+    } as never)
+  }
+
+  // Bug 133. The handler used to hand sanitization "an uncensored profile is
+  // configured", but story backgrounds never route up front — so a moderated
+  // chat's raw "naked, barefoot" appearance text sailed past the sanitizer and
+  // into a prompt crafter working for a provider that promptly refused it.
+  it('asks the sanitizer about routing, not about mere configuration', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false) // ...but this chat is moderated
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(mockSanitizeAppearances).toHaveBeenCalledTimes(1)
+    expect(sanitizeRoutesFlag()).toBe(false)
+  })
+
+  it('leaves an Unmoderated chat bound for the uncensored provider accurate', async () => {
+    markDangerous(true)
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(sanitizeRoutesFlag()).toBe(true)
+  })
+
+  // The re-dressing sanitizer ("wearing nothing" → "casual clothes") used to
+  // run here, handing the concealment-trained crafter a different scene.
+  it('asks the sanitizer to flag undressed characters rather than re-dress them', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false)
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(mockSanitizeAppearances.mock.calls[0][7]).toBe('conceal')
+  })
+
+  it('marks a flagged character for concealment in the crafter input', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false)
+    withCharacter()
+    mockSanitizeAppearances.mockImplementation(async (a: never) =>
+      (a as Array<Record<string, unknown>>).map(x => ({
+        ...x,
+        physicalDescription: 'a young woman, unclothed, wearing pearls',
+        clothingDescription: '',
+        wasSanitized: true,
+        needsConcealment: true,
+      })) as never,
+    )
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    const ctx = mockCraftPrompt.mock.calls[0][0] as { characters: Array<{ description: string }> }
+    expect(ctx.characters[0].description).toMatch(/unclothed, wearing pearls\. Undressed in this scene; depict with cinematic concealment\.$/)
+    expect(ctx.characters[0].description).not.toMatch(/Wearing:/)
   })
 })
 
 describe('story-background handler — moderation reroute', () => {
+  const UNCENSORED = {
+    id: 'uncensored-image-profile', provider: 'openai', name: 'Kestrel Studio',
+    modelName: 'uncensored-model', parameters: {},
+  }
+
   /** First provider instance rejects for moderation; the reroute target accepts. */
   function rejectThenReroute() {
-    mockIsModerationError.mockReturnValue(true)
-    mockResolveReroute.mockResolvedValue({
-      profile: {
-        id: 'uncensored-image-profile', provider: 'openai',
-        modelName: 'uncensored-model', parameters: {},
-      },
-      apiKey: 'sk-uncensored',
-    } as never)
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
 
     let call = 0
     mockCreateImageProvider.mockImplementation(() => {
       call += 1
       return (call === 1
-        ? { generateImage: jest.fn().mockRejectedValue(new Error('content moderation')) }
+        ? { generateImage: jest.fn().mockRejectedValue(new Error('Generated image rejected by content moderation.')) }
         : {
             generateImage: jest.fn().mockResolvedValue({
               images: [{ b64Json: Buffer.from('png').toString('base64'), mimeType: 'image/png', revisedPrompt: null }],
@@ -299,43 +447,144 @@ describe('story-background handler — moderation reroute', () => {
     })
   }
 
-  it('re-crafts the prompt candidly before resending to the uncensored provider', async () => {
+  function firstSentPrompt(): string {
+    const first = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    return (first.generateImage.mock.calls[0][0] as { prompt: string }).prompt
+  }
+
+  it('reroutes a Moderated chat while the Concierge is on duty, resending the concealed prompt unchanged', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
     rejectThenReroute()
-    mockCraftPrompt
-      .mockResolvedValueOnce({ success: true, result: CONCEALED_PROMPT } as never)
-      .mockResolvedValueOnce({ success: true, result: CANDID_PROMPT } as never)
 
     await handleStoryBackgroundGeneration(makeJob())
 
-    expect(mockCraftPrompt).toHaveBeenCalledTimes(2)
+    expect(mockResolveReroute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER, exclude: ['profile-1'] }),
+    )
+    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
     expect(craftTargetFlag(0)).toBe(false)
-    expect(craftTargetFlag(1)).toBe(true)
+    const second = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
+    expect(second.prompt).toContain(CONCEALED_PROMPT)
+
+    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: CHAT_ID,
+      kind: 'refusal-rerouted',
+      details: expect.objectContaining({ purpose: 'lantern', answeringProfileName: 'Kestrel Studio' }),
+    }))
+    // The Lantern's bubble carries the call sheet: refused, then answered.
+    const lanternCall = mockPostLantern.mock.calls[0][0] as { routeTrail?: Array<{ outcome: string; profileKind?: string }> }
+    expect(lanternCall.routeTrail?.map(a => a.outcome)).toEqual(['refused', 'answered'])
+    expect(lanternCall.routeTrail?.every(a => a.profileKind === 'image')).toBe(true)
+    // The file records the model that actually drew it.
+    const repos = mockGetRepositories() as never as { files: { create: jest.Mock } }
+    expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
+  })
+
+  it('does not reroute while the Concierge is off duty, keeps even an Unmoderated chat\'s prompt concealed, and the Lantern says so', async () => {
+    mockShouldUseUncensoredRoute.mockReturnValue(true)
+    mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
+      enabled: false,
+      uncensoredImageProfileId: 'uncensored-image-profile',
+    }))
+    rejectThenReroute()
+
+    // A refusal is an outcome: the job completes and the backdrop stays.
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag(0)).toBe(false)
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+    expect(mockPostLanternRefusal).toHaveBeenCalledTimes(1)
+    expect(mockPostLantern).not.toHaveBeenCalled()
+  })
+
+  it('completes the job with one Lantern refusal bubble, and no Concierge bubble, when there is no uncensored understudy', async () => {
+    markDangerous(false)
+    rejectThenReroute()
+    mockResolveReroute.mockResolvedValue(null as never)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+    expect(mockPostLanternRefusal).toHaveBeenCalledTimes(1)
+    const bubble = mockPostLanternRefusal.mock.calls[0][0] as {
+      chatId: string
+      refusal: { kind: string }
+      routeTrail?: Array<{ outcome: string }>
+    }
+    expect(bubble.chatId).toBe(CHAT_ID)
+    expect(bubble.refusal.kind).toBe('background-refused')
+    expect(bubble.routeTrail?.map(a => a.outcome)).toEqual(['refused'])
+    // No new backdrop was set.
+    const repos = mockGetRepositories() as never as { chats: { update: jest.Mock } }
+    expect(repos.chats.update).not.toHaveBeenCalledWith(CHAT_ID, expect.objectContaining({ storyBackgroundImageId: expect.anything() }))
+  })
+
+  it('"Try uncensored" paints on the understudy first, crafts candidly, and marks the trail via the Concierge', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
+
+    await handleStoryBackgroundGeneration(makeJob([], { forceUncensored: true }))
+
+    expect(mockResolveReroute).toHaveBeenCalledWith(expect.objectContaining({ exclude: ['profile-1'] }))
+    expect(craftTargetFlag(0)).toBe(true)
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    const [, key] = imageProviderMock().generateImage.mock.calls[0] as [unknown, string]
+    expect(key).toBe('sk-uncensored')
+    const lanternCall = mockPostLantern.mock.calls[0][0] as { routeTrail?: Array<{ via: string; outcome: string }> }
+    expect(lanternCall.routeTrail).toEqual([expect.objectContaining({ via: 'concierge', outcome: 'answered', profileId: UNCENSORED.id })])
+  })
+
+  it('"Try uncensored" abandons quietly when there is no understudy at run time', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    mockResolveReroute.mockResolvedValue(null as never)
+
+    await handleStoryBackgroundGeneration(makeJob([], { forceUncensored: true }))
+
+    expect(mockCreateImageProvider).not.toHaveBeenCalled()
+    expect(mockCraftPrompt).not.toHaveBeenCalled()
+  })
+
+  it('resends the already-candid prompt for an Unmoderated chat, without re-crafting', async () => {
+    markDangerous(true)
+    rejectThenReroute()
+    mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    // One craft, made candidly up front — the reroute has nothing to un-drape.
+    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
+    expect(craftTargetFlag(0)).toBe(true)
+    expect(firstSentPrompt()).toContain(CANDID_PROMPT)
 
     const sent = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
     expect(sent.prompt).toContain(CANDID_PROMPT)
-    expect(sent.prompt).not.toContain('sheet draped')
   })
 
-  it('falls back to the already-crafted prompt when the candid re-craft fails', async () => {
-    rejectThenReroute()
-    mockCraftPrompt
-      .mockResolvedValueOnce({ success: true, result: CONCEALED_PROMPT } as never)
-      .mockRejectedValueOnce(new Error('cheap LLM unavailable'))
-
-    await handleStoryBackgroundGeneration(makeJob())
-
-    // The reroute still happens — a failed re-craft must not lose the image.
-    const sent = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
-    expect(sent.prompt).toContain(CONCEALED_PROMPT)
-  })
-
-  it('does not re-craft when the prompt was already crafted candidly', async () => {
+  it('sends an Unmoderated chat straight to the uncensored desk: the ordinary painter never sees the candid prompt', async () => {
     markDangerous(true)
-    rejectThenReroute()
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
+    mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)
 
     await handleStoryBackgroundGeneration(makeJob())
 
-    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
-    expect(craftTargetFlag(0)).toBe(true)
+    // One provider built, and it is the desk's — no refusal needed to get there.
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    const first = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    const [params, key] = first.generateImage.mock.calls[0] as [{ prompt: string; model?: string }, string]
+    expect(key).toBe('sk-uncensored')
+    expect(params.prompt).toContain(CANDID_PROMPT)
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+  })
+
+  it('leaves a non-moderation failure alone: no reroute, no announcement', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    mockCreateImageProvider.mockImplementation(() => ({
+      generateImage: jest.fn().mockRejectedValue(new Error('429 Too Many Requests')),
+    }) as never)
+
+    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/429/)
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
   })
 })

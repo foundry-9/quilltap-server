@@ -150,6 +150,14 @@ bookmarked. The address for starting a new chat (`/salon/new`) raises the
 familiar New Chat dialog over the workspace, and a terminal's old full-page
 address seats the conversation and its terminal side by side as tabs.
 
+## A conversation left in a background tab
+
+A tab you are not looking at is not asleep; it is merely out of the room. A chat
+tab keeps itself current the whole time it is open, so a reply written while you
+were reading something else is waiting in place when you return, rather than the
+tab being frozen at the hour you left it. See
+[The Room Keeps Itself Current](chats.md#the-room-keeps-itself-current).
+
 ## A note on the Help and the Wardrobe
 
 This Help remains a floating window, so it may follow you wherever you roam and

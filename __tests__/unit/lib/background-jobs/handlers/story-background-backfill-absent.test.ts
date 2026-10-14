@@ -16,7 +16,7 @@ import { handleStoryBackgroundGeneration } from '@/lib/background-jobs/handlers/
 import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
@@ -24,10 +24,7 @@ import {
   deriveSceneContext,
   extractVisibleConversation,
 } from '@/lib/memory/cheap-llm-tasks'
-import {
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
 import {
   resolveCharacterAppearances,
@@ -46,14 +43,17 @@ jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/llm/plugin-factory', () => ({ createImageProvider: jest.fn() }))
 jest.mock('@/lib/files/webp-conversion', () => ({ convertToWebP: jest.fn() }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  resolveConciergeSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
 }))
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  isImageModerationError: jest.fn(),
-  resolveUncensoredImageProfileForReroute: jest.fn(),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredImageUnderstudy: jest.fn(),
+  resolveUncensoredTextUnderstudy: jest.fn(),
+}))
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -62,6 +62,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
+  CONCEALMENT_MARKER: 'Undressed in this scene; depict with cinematic concealment.',
   craftStoryBackgroundPrompt: jest.fn(),
   deriveSceneContext: jest.fn(),
   extractVisibleConversation: jest.fn(),
@@ -90,15 +91,14 @@ const CRAFTED_PROMPT =
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
 const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelection)
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
 const mockExtractConversation = jest.mocked(extractVisibleConversation)
 const mockDeriveScene = jest.mocked(deriveSceneContext)
-const mockIsModerationError = jest.mocked(isImageModerationError)
-const mockResolveReroute = jest.mocked(resolveUncensoredImageProfileForReroute)
+const mockResolveReroute = jest.mocked(resolveUncensoredImageUnderstudy)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
 const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
 const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
@@ -178,14 +178,13 @@ beforeEach(() => {
     files: { create: jest.fn().mockResolvedValue({ id: 'file-1' }) },
   } as never)
 
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as never)
+  mockResolveDanger.mockReturnValue({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' } as never)
   mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue(SELECTION)
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
   mockExtractConversation.mockReturnValue([])
   mockDeriveScene.mockResolvedValue(null as never)
   mockCraftPrompt.mockResolvedValue({ success: true, result: CRAFTED_PROMPT } as never)
-  mockIsModerationError.mockReturnValue(false)
   mockResolveReroute.mockResolvedValue(null as never)
 
   // Only the present participant is resolved — the payload carries just Alice.

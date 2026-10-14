@@ -8,7 +8,7 @@ Imagine, if you will, a tireless scribe seated in the corner of every conversati
 
 ## How It Works
 
-After each turn in a conversation, the Scriptorium automatically renders the entire exchange into a clean Markdown document. This is not a rough sketch on a cocktail napkin — it is a precise, reproducible rendering where every message receives a sequential number and every back-and-forth is gathered into tidy interchanges. Each rendered conversation is crowned with a metadata header — a brief dossier listing the conversation's title, creation date, participants, and vital statistics — ensuring that even the most casual reader can determine precisely what they are looking at before committing to the full text.
+After each turn in a conversation, the Scriptorium renders the entire exchange into a clean Markdown document, files each interchange away for searching, and then — being a scribe of rare economy — sets the full manuscript aside rather than keeping a second copy of words already held in the conversation itself. Whenever the whole document is wanted, it is simply written out afresh from the conversation, identically every time. This is not a rough sketch on a cocktail napkin — it is a precise, reproducible rendering where every message receives a sequential number and every back-and-forth is gathered into tidy interchanges. Each rendered conversation is crowned with a metadata header — a brief dossier listing the conversation's title, creation date, participants, and vital statistics — ensuring that even the most casual reader can determine precisely what they are looking at before committing to the full text.
 
 ### Message Numbering
 
@@ -21,6 +21,18 @@ Messages are grouped into **interchanges** — logical clusters that represent a
 ### Searchable Chunks
 
 Each interchange is embedded as a searchable chunk through the existing embedding pipeline. This means that the substance of your conversations becomes discoverable — one can search not merely for keywords but for the semantic meaning of what was discussed, like a librarian who actually read every book in the collection rather than just filing them by spine color.
+
+These indexed chunks are kept for **every** conversation, however long it has been gathering dust. A chat you have not touched in a twelvemonth is every bit as findable by meaning as the one you left this morning; the index costs a thousand-odd bytes a chunk, a trifle no sensible household would economise on at the expense of its memory.
+
+### The Scriptorium Badge
+
+Each conversation's card — in the Salon's list and on a character's **Conversations** tab — carries a small document badge reporting the scribe's progress. Hover over it for the particulars:
+
+- **Green** — transcribed and indexed; every word is findable.
+- **Amber** — transcribed, with the indexing still under way (or waiting on an embedding provider that has stepped out).
+- **Red** — not yet transcribed at all.
+
+Clicking the badge asks the scribe to render and index the conversation again from the top. There is seldom any need: Quilltap takes an inventory at every startup and finishes whatever was left undone.
 
 ### Editing Beside the Conversation
 
@@ -58,7 +70,7 @@ The Scriptorium provides three tools that characters can use during conversation
 
 ### read_conversation
 
-This tool allows a character to read the full rendered conversation document. It can be called with or without annotations included, giving the character a complete view of everything that has transpired — every message, every interchange, every dramatic revelation and quiet aside.
+This tool allows a character to read the full rendered conversation document, written out fresh from the conversation at the moment of asking — so even a long-quiet chat is always legible. It can be called with or without annotations included, giving the character a complete view of everything that has transpired — every message, every interchange, every dramatic revelation and quiet aside.
 
 When supplied with a `conversationId` — perhaps one unearthed by the `search` tool — it can read any conversation in the archive, not merely the one currently in progress. Without a `conversationId`, it reads the present conversation, as one would naturally expect.
 
@@ -112,6 +124,34 @@ Each filed summary wears a small dossier at its head — frontmatter, in the ver
 
 Like every other page in a character's vault, these summaries are embedded into searchable chunks — which is precisely the point. A character may thus recall the gist of a long-finished conversation without re-reading every line of it, and the Commonplace Book has one more well-indexed shelf to consult when it goes looking for what a character ought to remember.
 
+## Mirroring a Store to a Directory
+
+A database-backed store may be kept in step with an ordinary directory on disk
+by way of `quilltap sync` — edit a chapter in your own text editor, and the
+next run carries it into the store; edit it here, and the next run carries it
+back out. The full account lives in
+[Keeping a Store and a Directory in Step](cli-sync.md), but two conventions
+are worth knowing wherever document stores are discussed, because you will
+meet both the moment you look inside such a directory.
+
+**Anything beginning with a dot is invisible to the sync, in both
+directions.** A file or folder whose name starts with `.` — or that sits
+anywhere beneath one — is never read, never copied, and never deleted, on
+either side. Your `.git` directory and your editor's scratch files stay out of
+your store; a dot-named file in your store stays off your disk. The single
+exception is `.quilltap-sync.json`, a small record the verb keeps in the
+directory of what the last run left on both sides. It is what allows the sync
+to tell "this file is new here" from "this file was deleted there", it never
+enters the store, and `--no-manifest` makes the verb disregard it.
+
+**A binary's description travels beside it.** An image or PDF that carries a
+description keeps it, on disk, in a small Markdown file named after the whole
+file with `.description.md` appended — so `harbour.png` is accompanied by
+`harbour.png.description.md`. Edit that file and the caption changes in the
+store; delete it and the caption is cleared. Text documents' descriptions are
+not mirrored this way, on the reasonable grounds that a Markdown file's
+contents are already its own description.
+
 ## Why It Matters
 
 The Scriptorium transforms ephemeral chat messages into structured, searchable documents. Characters can review what has been said with perfect fidelity, annotate the record with their own perspectives, and the entire corpus becomes discoverable through semantic search. It is, in short, the difference between a conversation that evaporates like morning fog and one that is preserved in the archives for future reference — indexed, annotated, and ready for consultation at a moment's notice.
@@ -128,3 +168,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Using Tools in Chat](tools-usage.md)
 - [Scene State Tracker](scene-state-tracker.md)
 - [Embedding Profiles](embedding-profiles.md)
+- [Keeping a Store and a Directory in Step](cli-sync.md)

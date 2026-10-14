@@ -21,6 +21,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
+import { registerTextCodecFunction } from './text-codec-function';
 
 let readonlyDatabase: DatabaseType | null = null;
 
@@ -44,6 +45,7 @@ export function getReadonlyChildSQLiteClient(config: SQLiteConfig): DatabaseType
 
   // The pepper is guaranteed present by the guard above.
   applySqlcipherKey(db);
+  registerTextCodecFunction(db);
 
   if (config.foreignKeys) {
     db.pragma('foreign_keys = ON');
@@ -55,27 +57,4 @@ export function getReadonlyChildSQLiteClient(config: SQLiteConfig): DatabaseType
 
   readonlyDatabase = db;
   return readonlyDatabase;
-}
-
-export function closeReadonlyChildSQLiteClient(): void {
-  if (readonlyDatabase) {
-    try {
-      readonlyDatabase.close();
-    } catch (error) {
-      log.warn('Error closing readonly child SQLite connection', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    readonlyDatabase = null;
-  }
-}
-
-export function isReadonlyChildSQLiteConnected(): boolean {
-  if (!readonlyDatabase) return false;
-  try {
-    readonlyDatabase.prepare('SELECT 1').get();
-    return true;
-  } catch {
-    return false;
-  }
 }

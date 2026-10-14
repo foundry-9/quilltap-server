@@ -71,6 +71,10 @@ describe('handleRegenerateAvatar', () => {
       callerContext: '[Chats v1] regenerate-avatar',
       imageProfileIdOverride: null,
       equippedSlotsOverride: null,
+      // A manual click is a reroll: it must bypass the avatar configuration
+      // cache, or pressing the button on an outfit already drawn would silently
+      // hand back the portrait the user is asking to replace.
+      force: true,
     })
   })
 

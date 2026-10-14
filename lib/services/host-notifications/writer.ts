@@ -776,7 +776,7 @@ export async function postHostTimestampAnnouncement(
 
 const HOST_KIND_OFF_SCENE_CHARACTERS = 'off-scene-characters';
 
-interface OffSceneCharacterCard {
+export interface OffSceneCharacterCard {
   id: string;
   name: string;
   aliases?: string[];
@@ -807,16 +807,37 @@ function renderOffSceneCard(
   return lines.join('\n');
 }
 
+/**
+ * Why the Host is introducing these characters:
+ *
+ * - `'mentioned'` — named in the conversation but never seated here (the
+ *   per-turn scan in the context builder).
+ * - `'left-behind'` — seated in the chat this one continues from, but not
+ *   brought along. The carried-over transcript still has the cast talking to
+ *   them, and their own lines were dropped in the replay, so without this they
+ *   read as present and silent (bug 171).
+ */
+export type OffSceneIntroductionReason = 'mentioned' | 'left-behind';
+
 export function buildOffSceneCharactersContent(
   characters: OffSceneCharacterCard[],
   userCharacterName?: string | null,
+  reason: OffSceneIntroductionReason = 'mentioned',
 ): string {
   const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
 
-  const intro =
-    sorted.length === 1
-      ? `The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`
-      : `The Host begs leave to introduce certain persons spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`;
+  let intro: string;
+  if (reason === 'left-behind') {
+    intro =
+      sorted.length === 1
+        ? `The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`
+        : `The Host observes that certain members of the previous company did not make the journey. These persons remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`;
+  } else {
+    intro =
+      sorted.length === 1
+        ? `The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`
+        : `The Host begs leave to introduce certain persons spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`;
+  }
 
   return [intro, '', ...sorted.map((c) => renderOffSceneCard(c, userCharacterName))].join('\n\n');
 }
@@ -824,13 +845,22 @@ export function buildOffSceneCharactersContent(
 export function buildOffSceneCharactersOpaqueContent(
   characters: OffSceneCharacterCard[],
   userCharacterName?: string | null,
+  reason: OffSceneIntroductionReason = 'mentioned',
 ): string {
   const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
 
-  const intro =
-    sorted.length === 1
-      ? `A person spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`
-      : `Persons spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`;
+  let intro: string;
+  if (reason === 'left-behind') {
+    intro =
+      sorted.length === 1
+        ? `A person from the previous scene who did not come along. They are not in this room, cannot hear what is said here, and cannot answer — for accurate reference only; not a summons to the scene:`
+        : `Persons from the previous scene who did not come along. They are not in this room, cannot hear what is said here, and cannot answer — for accurate reference only; not a summons to the scene:`;
+  } else {
+    intro =
+      sorted.length === 1
+        ? `A person spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`
+        : `Persons spoken of in this conversation but not presently in the scene — for accurate reference only; not a summons to the scene:`;
+  }
 
   return [intro, '', ...sorted.map((c) => renderOffSceneCard(c, userCharacterName))].join('\n\n');
 }
@@ -879,6 +909,12 @@ export function findIntroducedOffSceneCharacterIds(
 export interface HostOffSceneCharactersAnnouncement {
   chatId: string;
   characters: OffSceneCharacterCard[];
+  /**
+   * Defaults to `'mentioned'`. Either way the IDs are stamped onto
+   * `hostEvent.introducedCharacterIds`, so a left-behind notice also stops
+   * the per-turn scan from introducing the same people a second time.
+   */
+  reason?: OffSceneIntroductionReason;
 }
 
 /**
@@ -904,8 +940,9 @@ export async function postHostOffSceneCharactersAnnouncement(
     }
 
     const userCharacterName = await resolveUserCharacterName(chat.participants);
-    const content = buildOffSceneCharactersContent(params.characters, userCharacterName);
-    const opaqueContent = buildOffSceneCharactersOpaqueContent(params.characters, userCharacterName);
+    const reason = params.reason ?? 'mentioned';
+    const content = buildOffSceneCharactersContent(params.characters, userCharacterName, reason);
+    const opaqueContent = buildOffSceneCharactersOpaqueContent(params.characters, userCharacterName, reason);
     const messageId = randomUUID();
     const now = new Date().toISOString();
     const introducedCharacterIds = params.characters.map((c) => c.id);
@@ -932,6 +969,7 @@ export async function postHostOffSceneCharactersAnnouncement(
       messageId,
       introducedCharacterIds,
       characterCount: params.characters.length,
+      reason,
     });
 
     return message;

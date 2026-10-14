@@ -24,6 +24,17 @@ interface MessageActionBarProps {
   onEditStart: (message: Message) => void
   onDelete: (messageId: string) => void
   onGenerateSwipe: (messageId: string) => void
+  /**
+   * The Concierge's "Try uncensored": re-roll this line on the uncensored
+   * desk. Offered on character lines only, and absent on a Locked chat.
+   */
+  onTryUncensored?: (messageId: string) => void
+  /**
+   * Inert while the line is being re-rolled: nothing here is safe to press at a
+   * message whose content is mid-replacement (deleting it, or asking for a
+   * second re-roll, most of all).
+   */
+  disabled?: boolean
   onReattribute?: (messageId: string) => void
   onViewLLMLogs?: (messageId: string) => void
   onResend: (message: Message) => void
@@ -54,13 +65,15 @@ export function MessageActionBar({
   onEditStart,
   onDelete,
   onGenerateSwipe,
+  onTryUncensored,
+  disabled = false,
   onReattribute,
   onViewLLMLogs,
   onResend,
   onSwitchSwipe,
 }: MessageActionBarProps) {
   return (
-    <div className="qt-chat-message-action-bar">
+    <div className={`qt-chat-message-action-bar${disabled ? ' qt-chat-message-action-bar-disabled' : ''}`}>
       <div className="qt-chat-message-action-bar-icons">
         {/* Collapse (Staff-authored messages only) */}
         {message.systemSender && onToggleSystemMessageExpanded && (
@@ -157,6 +170,19 @@ export function MessageActionBar({
               aria-label="Regenerate response"
             >
               <Icon name="refresh" />
+            </button>
+          </Tooltip>
+        )}
+        {/* Try uncensored (character lines only; absent on a Locked chat) */}
+        {message.role === 'ASSISTANT' && !message.systemSender && onTryUncensored && (
+          <Tooltip content="Try uncensored — regenerate on the Concierge's uncensored desk">
+            <button
+              type="button"
+              onClick={() => onTryUncensored(message.id)}
+              className="qt-chat-message-action-icon"
+              aria-label="Try uncensored"
+            >
+              <Icon name="shield" />
             </button>
           </Tooltip>
         )}

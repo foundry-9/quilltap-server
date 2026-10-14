@@ -17,17 +17,75 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 // Import the module under test AFTER mocking
 import {
-  extractOtherMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
   describeAttachment,
-  batchExtractMemories,
-  type MemoryCandidate,
+  type MemoryDraft,
   type ChatMessage,
-  type OtherSubjectInput,
 } from '@/lib/memory/cheap-llm-tasks'
+import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
+import { buildOtherTurnMessages, type OtherSubjectInput } from '@/lib/memory/extraction/prompts/other'
+import { parseOtherDraftsBySubject, passCap, HARD_CANDIDATE_CAP } from '@/lib/memory/extraction/parse'
+import { otherTurnPass } from '@/lib/memory/extraction/passes/other-turn'
+import type { CastMember, ExtractionContext } from '@/lib/memory/extraction/context'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
+
+/**
+ * One per-turn OTHER call, as the `other-turn` pass hands it to the runner:
+ * the observer's messages from the pure builder, run through the real
+ * `executeCheapLLMTask` (provider mocked) with the multi-subject parser.
+ * (Phase D retired the `extractOtherMemoriesFromTurn` wrapper; this is its
+ * composition, so provider/parse behaviour stays pinned end to end.)
+ */
+function runOtherTurnCall(
+  transcript: TurnTranscript,
+  observerId: string,
+  subjects: OtherSubjectInput[],
+  selection: CheapLLMSelection,
+  userId: string,
+  maxTokens?: number,
+) {
+  const observer = transcript.characterSlices.find(s => s.characterId === observerId)!
+  const cap = passCap(HARD_CANDIDATE_CAP, maxTokens)
+  const messages = buildOtherTurnMessages({
+    transcript,
+    observer: { name: observer.characterName, pronouns: observer.characterPronouns ?? null },
+    subjects,
+    cap,
+    inAutonomousRoom: false,
+  })
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (raw: string) => parseOtherDraftsBySubject(raw, subjects.map(s => s.id), cap),
+    'memory-extraction-other',
+    undefined,
+    undefined,
+    undefined,
+    maxTokens,
+    observerId,
+  )
+}
+
+/** The slice of an ExtractionContext the `other-turn` pass's planner reads. */
+function fakeOtherTurnContext(cast: CastMember[], userCharacter: CastMember | null): ExtractionContext {
+  return {
+    settings: { mode: { otherPass: 'turn' } },
+    route: { maxTokens: 8000 },
+    clock: { timeZone: 'UTC', nowMs: 0, timelineMode: 'realtime' },
+    cast: new Map(cast.map(m => [m.characterId, m])),
+    userCharacter,
+    canonFor: async () => ({ block: 'CANON', source: 'identity' }),
+    inAutonomousRoom: false,
+    orienting: {},
+  } as unknown as ExtractionContext
+}
+
+function castMember(characterId: string, name: string, isUser: boolean): CastMember {
+  return { characterId, participantId: `p-${characterId}`, name, pronouns: null, isUser, present: true, character: {} as never }
+}
 
 /**
  * Build a TurnTranscript fixture for the user-pass extraction tests.
@@ -124,7 +182,7 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
-  describe('extractOtherMemoriesFromTurn (multi-subject)', () => {
+  describe('per-turn OTHER call (multi-subject)', () => {
     const userSubject: OtherSubjectInput = {
       id: 'user-char-id',
       name: 'John',
@@ -138,13 +196,7 @@ describe('Cheap LLM Tasks Service', () => {
       subjects: OtherSubjectInput[] = [userSubject],
       selection = testSelection,
     ) =>
-      extractOtherMemoriesFromTurn(
-        transcript,
-        'char-1',
-        subjects,
-        selection,
-        testUserId,
-      )
+      runOtherTurnCall(transcript, 'char-1', subjects, selection, testUserId)
 
     it('routes a single-subject extraction back to the subject id', async () => {
       mockSendMessage.mockResolvedValue({
@@ -168,12 +220,13 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([{
         content: 'User mentioned they have a cat named Whiskers',
         summary: 'User has a cat named Whiskers',
         // Free keywords, then the three defaulted targeting tags (no tags in input).
-        keywords: ['cat', 'pet', 'Whiskers', 'present', 'scope: wide', 'information'],
+        keywords: ['cat', 'pet', 'Whiskers'],
+        targeting: { temporal: 'present', scope: 'wide', context: 'information' },
         importance: 0.7,
         // Episodic spine defaults (no EVENT fields in input).
         kind: 'semantic',
@@ -207,16 +260,10 @@ describe('Cheap LLM Tasks Service', () => {
         characterText: 'Welcome.',
       })
 
-      const result = await extractOtherMemoriesFromTurn(
-        transcript,
-        'char-1',
-        [userSubject, otherSubject],
-        testSelection,
-        testUserId,
-      )
+      const result = await runOtherTurnCall(transcript, 'char-1', [userSubject, otherSubject], testSelection, testUserId)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')?.[0]?.content).toBe('About John')
       expect(map.get('char-2')?.[0]?.content).toBe('About Beatrice')
     })
@@ -240,12 +287,13 @@ describe('Cheap LLM Tasks Service', () => {
 
       const result = await callExtract(transcript)
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([
         {
           content: 'ok',
           summary: 'c',
-          keywords: ['present', 'scope: wide', 'information'],
+          keywords: [],
+          targeting: { temporal: 'present', scope: 'wide', context: 'information' },
           importance: 0.6,
           kind: 'semantic',
           when: undefined,
@@ -270,7 +318,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([])
     })
 
@@ -290,7 +338,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toHaveLength(1)
       expect(map.get('user-char-id')?.[0]?.content).toBe('Test')
     })
@@ -311,7 +359,7 @@ describe('Cheap LLM Tasks Service', () => {
       const result = await callExtract(transcript)
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toEqual([])
     })
 
@@ -350,47 +398,57 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.error).toContain('No API key')
     })
 
-    it('returns empty (no LLM call) when the observer is not in the transcript', async () => {
+    it('plans no call (no LLM call) for a speaker who is not in the cast', async () => {
       const transcript = makeTurnTranscript({
         userMessage: 'Hello',
         userCharacterName: 'John',
         characterName: 'TestChar',
         characterText: 'Hi',
       })
-
-      const result = await extractOtherMemoriesFromTurn(
-        transcript,
-        'unknown-observer',
-        [userSubject],
-        testSelection,
-        testUserId,
+      // char-1 spoke, but only the user character is in the cast.
+      const john = castMember('user-char-id', 'John', true)
+      const calls = await otherTurnPass().calls(
+        fakeOtherTurnContext([john], john),
+        { kind: 'turn', transcript, nowIso: '2026-01-01T00:00:00.000Z' },
       )
-
-      expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
-      expect(map.get('user-char-id')).toEqual([])
+      expect(calls).toEqual([])
       expect(mockSendMessage).not.toHaveBeenCalled()
     })
 
-    it('returns empty (no LLM call) when the subjects list is empty', async () => {
+    it('plans one call per cast speaker that has subjects (control for the two guards below and above)', async () => {
       const transcript = makeTurnTranscript({
         userMessage: 'Hello',
         userCharacterName: 'John',
         characterName: 'TestChar',
         characterText: 'Hi',
       })
-
-      const result = await extractOtherMemoriesFromTurn(
-        transcript,
-        'char-1',
-        [],
-        testSelection,
-        testUserId,
+      const john = castMember('user-char-id', 'John', true)
+      const calls = await otherTurnPass().calls(
+        fakeOtherTurnContext([castMember('char-1', 'TestChar', false), john], john),
+        { kind: 'turn', transcript, nowIso: '2026-01-01T00:00:00.000Z' },
       )
-
-      expect(result.success).toBe(true)
-      expect((result.result as Map<string, MemoryCandidate[]>).size).toBe(0)
+      expect(calls).toHaveLength(1)
+      const system = calls[0].messages.find(m => m.role === 'system')!.content as string
+      expect(system).toContain('SUBJECT 1: John (the user-controlled character)')
       expect(mockSendMessage).not.toHaveBeenCalled()
+    })
+
+    it('plans no call (no LLM call) when the observer has no subjects', async () => {
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+      const calls = await otherTurnPass().calls(
+        fakeOtherTurnContext([castMember('char-1', 'TestChar', false)], null),
+        { kind: 'turn', transcript, nowIso: '2026-01-01T00:00:00.000Z' },
+      )
+      expect(calls).toEqual([])
+      expect(mockSendMessage).not.toHaveBeenCalled()
+    })
+
+    it('the multi-subject parser yields an empty map for an empty subject list', () => {
+      expect(parseOtherDraftsBySubject('[{"subjectIndex":1,"content":"x"}]', [], 2).size).toBe(0)
     })
 
     it('caps candidates per subject when the LLM overshoots', async () => {
@@ -416,19 +474,17 @@ describe('Cheap LLM Tasks Service', () => {
         characterText: 'Assistant message',
       })
 
-      const result = await extractOtherMemoriesFromTurn(
+      const result = await runOtherTurnCall(
         transcript,
         'char-1',
         [userSubject],
         testSelection,
         testUserId,
-        undefined,
-        undefined,
         128000, // large output budget would otherwise raise the cap
       )
 
       expect(result.success).toBe(true)
-      const map = result.result as Map<string, MemoryCandidate[]>
+      const map = result.result as Map<string, MemoryDraft[]>
       expect(map.get('user-char-id')).toHaveLength(2)
     })
 
@@ -453,7 +509,7 @@ describe('Cheap LLM Tasks Service', () => {
         canonBlock: 'ALREADY ESTABLISHED about Beatrice\nReads philosophy.',
       }
 
-      await extractOtherMemoriesFromTurn(
+      await runOtherTurnCall(
         transcript,
         'char-1',
         [
@@ -661,63 +717,6 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
-  describe('batchExtractMemories', () => {
-    it('should extract memories from multiple exchanges', async () => {
-      const exchanges = [
-        {
-          userMessage: 'My favorite color is blue',
-          assistantMessage: 'Blue is a lovely color!',
-        },
-        {
-          userMessage: 'Just saying hello',
-          assistantMessage: 'Hello to you too!',
-        },
-      ]
-
-      const batchResponse: MemoryCandidate[] = [
-        {
-          content: 'User favorite color is blue',
-          summary: 'Favorite color: blue',
-          keywords: ['color', 'blue', 'favorite'],
-          importance: 0.6,
-        },
-      ]
-
-      mockSendMessage.mockResolvedValue({
-        content: JSON.stringify(batchResponse),
-        usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
-      })
-
-      const result = await batchExtractMemories(
-        exchanges,
-        'Character: Luna',
-        testSelection,
-        testUserId
-      )
-
-      expect(result.success).toBe(true)
-      expect(result.result).toHaveLength(1)
-      expect(result.result![0].content).toBe('User favorite color is blue')
-    })
-
-    it('should handle malformed batch response', async () => {
-      mockSendMessage.mockResolvedValue({
-        content: 'Invalid response',
-        usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 },
-      })
-
-      const result = await batchExtractMemories(
-        [{ userMessage: 'Test', assistantMessage: 'Response' }],
-        'Context',
-        testSelection,
-        testUserId
-      )
-
-      expect(result.success).toBe(true)
-      expect(result.result).toEqual([])
-    })
-  })
-
   describe('Error handling', () => {
     it('should handle LLM provider errors gracefully', async () => {
       mockSendMessage.mockRejectedValue(new Error('API rate limit exceeded'))
@@ -729,7 +728,7 @@ describe('Cheap LLM Tasks Service', () => {
         characterText: 'Response',
       })
 
-      const result = await extractOtherMemoriesFromTurn(
+      const result = await runOtherTurnCall(
         transcript,
         'char-1',
         [{

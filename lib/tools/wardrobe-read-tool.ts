@@ -41,6 +41,11 @@ export interface WardrobeReadToolOutput {
   description: string | null;
   /** Portrait Cue — the visual phrase steering image generation (null = falls back to title). */
   image_prompt: string | null;
+  /**
+   * The item's current picture: an image file uuid that `describe_image`
+   * looks at and `keep_image` files. null = no picture yet.
+   */
+  image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
   /** Whether this item is part of the character's default outfit. */
@@ -57,11 +62,45 @@ export interface WardrobeReadToolOutput {
   archived: boolean;
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
   is_own: boolean;
+  /**
+   * The operator's folder for the item under its wardrobe (e.g. `Formal/Evening`),
+   * null at the root. Filing only — it says nothing about when to wear it.
+   */
+  folder: string | null;
   /** True when the item is currently equipped in any slot. */
   is_equipped: boolean;
   /** Every slot the item currently occupies. */
   equipped_slots: string[];
+  /** The item's wear history (absent on failure). */
+  wear?: WardrobeReadWearResult;
   error?: string;
+}
+
+/**
+ * One wearer's share of an item's wear history, named for the reader.
+ */
+export interface WardrobeReadWearerResult {
+  /** null = the unattributed row (a wearer since deleted). */
+  character_id: string | null;
+  /** Display name; a placeholder label when the wearer is gone. */
+  name: string;
+  /** True when this wearer is the character calling the tool. */
+  is_you: boolean;
+  /** True when the wearer is no longer in the household (deleted, unreadable, or unattributed). */
+  departed: boolean;
+  wear_count: number;
+  first_worn_at: string;
+  last_worn_at: string;
+}
+
+/**
+ * How often an item has been worn, when, and by whom (most recent wearer first).
+ */
+export interface WardrobeReadWearResult {
+  wear_count: number;
+  first_worn_at: string | null;
+  last_worn_at: string | null;
+  wearers: WardrobeReadWearerResult[];
 }
 
 /**
@@ -75,8 +114,11 @@ export const wardrobeReadToolDefinition = {
       'Read the full detail of ONE wardrobe item by id (preferred) or title. ' +
       'Returns everything wardrobe_list omits: the Portrait Cue (image_prompt), ' +
       'default-outfit membership, composite/replace behaviour, the full ' +
-      'component list, archived status, whether you own it, and the slots it is ' +
-      'currently equipped in. Items from your own wardrobe, the project, and ' +
+      'component list, archived status, whether you own it, the folder the operator ' +
+      'filed it in (their browsing aid, not a hint about when to wear it), the slots it is ' +
+      'currently equipped in, its wear history (how often you have worn it, ' +
+      'then how often the whole household has and by whom), and its picture\'s image_file_id when it has one ' +
+      '(pass that to describe_image to see what it looks like). Items from your own wardrobe, the project, and ' +
       'Quilltap General all resolve.',
     parameters: zodToOpenAISchema(wardrobeReadToolInputSchema),
   },

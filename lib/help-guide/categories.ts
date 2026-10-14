@@ -44,6 +44,8 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
       'chat-message-actions',
       'chat-state',
       'chat-settings',
+      'chat-settings-composer',
+      'chat-settings-ai-services',
       'math-notation',
       'answer-confirmation',
       'templates-in-chats',
@@ -67,7 +69,7 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
   {
     id: 'memory-search',
     label: 'Commonplace Book',
-    documents: ['embedding-profiles', 'memory-housekeeping', 'search'],
+    documents: ['embedding-profiles', 'memory-maintenance', 'search'],
   },
   {
     id: 'ai-providers',
@@ -124,13 +126,14 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
   {
     id: 'content-routing',
     label: 'Content Routing (The Concierge)',
-    documents: ['dangerous-content', 'story-backgrounds', 'scene-state-tracker'],
+    documents: ['the-concierge', 'story-backgrounds', 'scene-state-tracker'],
   },
 ];
 
 export const URL_CATEGORY_MAP: readonly { pattern: string; categoryId: string }[] = [
   { pattern: '/settings?tab=system', categoryId: 'settings-system' },
   { pattern: '/settings?tab=templates', categoryId: 'settings-system' },
+  { pattern: '/settings?tab=concierge', categoryId: 'content-routing' },
   { pattern: '/settings?tab=images', categoryId: 'content-routing' },
   { pattern: '/settings?tab=memory', categoryId: 'memory-search' },
   { pattern: '/settings?tab=appearance', categoryId: 'appearance' },

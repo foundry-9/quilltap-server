@@ -6,13 +6,16 @@
  *
  * Slots hold arrays of wardrobe item IDs — multiple items per slot are allowed
  * (e.g. a t-shirt under a sweater). Wardrobe items can also be composites
- * (referencing other items via `componentItemIds`); composites are stored
- * as their own ID in equipped state and expanded only at read time.
+ * ("outfits" to the user — items referencing other items via
+ * `componentItemIds`). A composite dissolves into its leaves as it goes on,
+ * so equipped state holds garments; an outfit worn before 4.8.1 may still
+ * sit there as its own id, which read-time expansion covers.
  *
  * @module schemas/wardrobe.types
  */
 
 import { z } from 'zod';
+import { isValidWardrobeFolderPath, WARDROBE_FOLDER_MAX_DEPTH } from '@/lib/wardrobe/folders';
 import {
   UUIDSchema,
   TimestampSchema,
@@ -87,6 +90,17 @@ export const CLOTHING_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => WARDROBE_SLOT_META[s].isClothing);
 
 /**
+ * "Top, Bottom, Footwear" — a slot list as display labels, in canonical slot
+ * order. Every garment list that prints a slot list calls this, so they agree
+ * on labels rather than raw keys. Unknown entries are ignored.
+ */
+export function formatSlotLabels(types: readonly string[]): string {
+  return WARDROBE_SLOT_TYPES.filter((s) => types.includes(s))
+    .map((s) => WARDROBE_SLOT_META[s].label)
+    .join(', ');
+}
+
+/**
  * True when an empty `slot` should still be reported (as a phrase, a label, or
  * an "(empty)" marker). False for unreported-if-blank slots — skip them.
  *
@@ -102,6 +116,31 @@ export function isSlotReportedWhenEmpty(slot: WardrobeItemType): boolean {
  */
 export const UNREPORTED_IF_BLANK_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => !WARDROBE_SLOT_META[s].reportWhenEmpty);
+
+// ============================================================================
+// WARDROBE FOLDERS
+// ============================================================================
+
+/**
+ * A folder path relative to `Wardrobe/` in normal form: `''` for the root,
+ * otherwise sanitised segments joined by `/`, at most
+ * {@link WARDROBE_FOLDER_MAX_DEPTH} deep, never `images`. Rules and helpers
+ * live in `lib/wardrobe/folders.ts`. Request bodies take any string and
+ * normalise it there (`normalizeWardrobeFolderPath`); this schema states the
+ * shape an item carries.
+ */
+export const WardrobeFolderPathSchema = z
+  .string()
+  .max(900)
+  .refine(isValidWardrobeFolderPath, {
+    message: `Wardrobe folder must be a clean path of at most ${WARDROBE_FOLDER_MAX_DEPTH} segments, none named "images"`,
+  });
+
+/**
+ * A folder as a request body carries it: any string up to the path cap,
+ * normalised (and refused when it can't be) by `normalizeWardrobeFolderPath`.
+ */
+const WardrobeFolderInputSchema = z.string().max(900);
 
 // ============================================================================
 // WARDROBE ITEM API SCHEMAS (single source for create + update routes)
@@ -123,8 +162,13 @@ export const wardrobeItemFieldsSchema = z.object({
   isDefault: z.boolean().optional(),
   /** IDs of other items this composite bundles. Empty/omitted = leaf item. */
   componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
+  /** Clear the designated slots on wear instead of layering (composites and leaves alike). */
   replace: z.boolean().optional(),
+  /**
+   * Folder under `Wardrobe/` to file the item in. Create defaults to the root;
+   * update leaves the folder unchanged when omitted.
+   */
+  folder: WardrobeFolderInputSchema.optional(),
 });
 
 /** Body schema for creating a project wardrobe item (required fields). */
@@ -137,6 +181,55 @@ export const createWardrobeSchema = wardrobeItemFieldsSchema;
  */
 export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   archived: z.boolean().optional(),
+  /**
+   * Choose the item's current picture among its OWN images. Update-only — a
+   * create body never carries it — and the item routes refuse a file that is
+   * not linked to the item (`assertItemImageChoice`, `lib/wardrobe/item-images.ts`).
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
+});
+
+/** `POST …/wardrobe?action=create-folder` body. */
+export const createWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+});
+
+/** `POST …/wardrobe?action=rename-folder` body: the folder, and its new last segment. */
+export const renameWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+  name: z.string().min(1, 'A folder name is required').max(200),
+});
+
+/** `POST …/wardrobe?action=delete-folder` body. */
+export const deleteWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+});
+
+/**
+ * What travels with an outfit filed into a folder (`move-items` / `copy-items`):
+ * its same-wardrobe components moved, copied, or left where they are.
+ */
+export const WardrobeFolderComponentModeSchema = z.enum(['move', 'copy', 'none']);
+
+/**
+ * `POST …/wardrobe?action=move-items` body: file every item into `folder`
+ * (`''` = root). `components` (default `none`) brings composites' components along.
+ */
+export const moveWardrobeItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
+  folder: WardrobeFolderInputSchema,
+  components: WardrobeFolderComponentModeSchema.optional(),
+});
+
+/**
+ * `POST …/wardrobe?action=copy-items` body: copy every item into `folder`.
+ * `components` is `copy` or `none` (default) — a copy cannot move the pieces
+ * its original still wears.
+ */
+export const copyWardrobeItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
+  folder: WardrobeFolderInputSchema,
+  components: z.enum(['copy', 'none']).optional(),
 });
 
 // ============================================================================
@@ -164,7 +257,8 @@ export const WardrobeItemSchema = z.object({
   /**
    * Other wardrobe items this item is composed of. Empty = leaf item.
    * Cycles (direct or transitive self-reference) are rejected at save time
-   * by `WardrobeRepository.create`/`update` and the vault overlay materializer.
+   * by the folder writer (`wardrobe-writes.ts`) and dropped at read time by
+   * the vault parser.
    */
   componentItemIds: z.array(UUIDSchema).default([]),
   /** Context tags for when this item is appropriate (e.g., "casual", "formal", "intimate") */
@@ -172,18 +266,31 @@ export const WardrobeItemSchema = z.object({
   /** Whether this item is part of the character's default outfit */
   isDefault: z.boolean().default(false),
   /**
-   * Composite behaviour on equip. `false`/absent (the default) = additive:
-   * the composite's components layer onto whatever already occupies the slots
-   * it designates, clearing nothing. `true` = the composite clears every slot
-   * it designates (its `types`) and then places only its own components — used
-   * for full-outfit swaps and "clear everything" composites like Naked. Has no
-   * effect on leaf (non-composite) items, which always replace their slots.
+   * Behaviour on wear. `false`/absent (the default) = additive: the item (or
+   * a composite's components) layers onto whatever already occupies its
+   * slots, clearing nothing. `true` = the item clears every slot it
+   * designates (its `types`) first — a full-outfit swap, a "clear everything"
+   * composite like Naked, or a leaf that always replaces what's there.
    */
   replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
+  /**
+   * The item's current picture — a `files` row linked to this item. The
+   * history is every IMAGE file `linkedTo` the item, never a frontmatter list.
+   * Written only by the images route (generate / upload / set-current /
+   * delete-image) or a PUT that chooses among the item's own images.
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */
   archivedAt: TimestampSchema.nullable().optional(),
+  /**
+   * Folder path relative to `Wardrobe/`; `''` = root. Derived from the file's
+   * path on read and written back as the path on projection — never stored
+   * in frontmatter. The operator's filing only: it carries no meaning for
+   * what a character can wear.
+   */
+  folder: WardrobeFolderPathSchema.default(''),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -196,8 +303,9 @@ export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
 
 /**
  * Per-character equipped slots. Each slot holds an array of wardrobe item IDs;
- * multiple items per slot represent layering (t-shirt + sweater). Composite
- * items appear as a single ID and are expanded at read time.
+ * multiple items per slot represent layering (t-shirt + sweater). Composites
+ * dissolve into their leaves as they go on; a legacy composite id is expanded
+ * at read time.
  */
 const equippedSlotArray = () => z.array(UUIDSchema).default([]);
 
@@ -226,6 +334,12 @@ export const OutfitSelectionSchema = z.object({
   mode: OutfitSelectionModeEnum,
   /** Manual slot selections — only used when mode is 'manual' */
   slots: EquippedSlotsSchema.optional(),
+  /**
+   * 'manual' only: bundles the composer dissolved into `slots` (an outfit
+   * picked from the quick-pick), so the wear ledger can credit the outfit as
+   * worn. Validated and expanded server-side.
+   */
+  wornBundleIds: z.array(z.string().min(1)).optional(),
 });
 
 export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;
@@ -289,3 +403,40 @@ export function normalizeEquippedSlots(raw: unknown): EquippedSlots {
   });
 }
 
+
+/**
+ * True when the item is a composite (an outfit): it gathers other items via
+ * `componentItemIds`. The one spelling of the check — client and server.
+ */
+export function isComposite(item: { componentItemIds?: readonly string[] | null }): boolean {
+  return (item.componentItemIds?.length ?? 0) > 0;
+}
+
+/**
+ * A copy of `slots` with `itemId` appended to `slot` (layering). No-op copy
+ * when the id is already there.
+ */
+export function addIdToSlot(slots: EquippedSlots, slot: WardrobeItemType, itemId: string): EquippedSlots {
+  const next = cloneEquippedSlots(slots);
+  if (!next[slot].includes(itemId)) next[slot] = [...next[slot], itemId];
+  return next;
+}
+
+/**
+ * A copy of `slots` with `itemId` filtered out of `slot`; with `itemId`
+ * omitted, the slot is cleared.
+ */
+export function removeIdFromSlot(slots: EquippedSlots, slot: WardrobeItemType, itemId?: string): EquippedSlots {
+  const next = cloneEquippedSlots(slots);
+  next[slot] = itemId === undefined ? [] : next[slot].filter((id) => id !== itemId);
+  return next;
+}
+
+/** True when two slot bags hold the same ids in the same order, slot by slot. */
+export function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
+  return WARDROBE_SLOT_TYPES.every((slot) => {
+    const x = a[slot] ?? [];
+    const y = b[slot] ?? [];
+    return x.length === y.length && x.every((id, i) => id === y[i]);
+  });
+}

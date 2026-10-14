@@ -27,7 +27,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({ settings: { mode: 'reroute' } })),
+  resolveConciergeSettings: jest.fn(() => ({ routeDirect: true, source: 'global' })),
 }))
 
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
@@ -38,14 +38,15 @@ import { buildCustomToolLlmInvoker, CONSULT_TIMEOUT_MS } from '@/lib/pascal/llm-
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 
 const mockRepos = getRepositories as jest.Mock
 const mockGetCheap = getCheapLLMProvider as jest.Mock
 const mockUncensored = resolveUncensoredCheapLLMSelection as jest.Mock
 const mockExecute = executeCheapLLMTask as jest.Mock
-const mockResolveDanger = resolveDangerousContentSettings as jest.Mock
+const mockResolveConcierge = resolveConciergeSettings as jest.Mock
+const POLICY = { routeDirect: true, source: 'global' }
 const mockShouldUseUncensoredRoute = shouldUseUncensoredRoute as jest.Mock
 
 type AnyRecord = Record<string, unknown>
@@ -70,7 +71,7 @@ beforeEach(() => {
   primeRepos()
   mockGetCheap.mockReturnValue(SAFE_SELECTION)
   mockUncensored.mockReturnValue(UNCENSORED_SELECTION)
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'reroute' } })
+  mockResolveConcierge.mockReturnValue(POLICY)
   mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockExecute.mockResolvedValue({ success: true, result: 'The oracle speaks.' })
 })
@@ -138,7 +139,7 @@ describe('buildCustomToolLlmInvoker — Concierge rerouting', () => {
     expect(mockUncensored).toHaveBeenCalledWith(
       SAFE_SELECTION,
       true,
-      { mode: 'reroute' },
+      POLICY,
       PROFILES
     )
     expect(mockExecute.mock.calls[0][0]).toBe(UNCENSORED_SELECTION)
@@ -163,17 +164,17 @@ describe('buildCustomToolLlmInvoker — Concierge rerouting', () => {
     await invoke('prompt')
 
     expect(findChatById).not.toHaveBeenCalled()
-    expect(mockResolveDanger).toHaveBeenCalledWith({ id: 'cs-1' }, undefined)
+    expect(mockResolveConcierge).toHaveBeenCalledWith({ id: 'cs-1' }, undefined)
     expect(mockExecute.mock.calls[0][5]).toBeUndefined()
   })
 
-  it('hands the resolved danger settings and profile list to the executor', async () => {
+  it('hands the resolved Concierge policy and profile list to the executor', async () => {
     const invoke = buildCustomToolLlmInvoker({ userId: 'u1', chatId: 'chat-1' })
 
     await invoke('prompt')
 
     expect(mockExecute.mock.calls[0][7]).toEqual({
-      dangerSettings: { mode: 'reroute' },
+      conciergePolicy: POLICY,
       availableProfiles: PROFILES,
       isDangerousChat: false,
     })

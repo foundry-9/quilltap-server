@@ -86,7 +86,7 @@ describe('MemoriesRepository.findByCharacterAboutCharacters', () => {
     // ties — falling back to createdAt when never reinforced).
     expect(sql).toMatch(/ROW_NUMBER\(\)\s+OVER\s*\(/)
     expect(sql).toMatch(/PARTITION BY aboutCharacterId/)
-    expect(sql).toMatch(/ORDER BY importance DESC,\s*COALESCE\(lastReinforcedAt, createdAt\) DESC/)
+    expect(sql).toMatch(/ORDER BY COALESCE\(reinforcedImportance, importance\) DESC,\s*COALESCE\(lastReinforcedAt, createdAt\) DESC/)
     expect(sql).toMatch(/WHERE rn <= \?/)
 
     // One placeholder per about-id, no IN-list shortcuts that would skip

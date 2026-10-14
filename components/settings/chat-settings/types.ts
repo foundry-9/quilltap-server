@@ -3,8 +3,17 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
-import type { LLMLoggingSettings as LLMLoggingSettingsType, DangerousContentSettings as DangerousContentSettingsType } from '@/lib/schemas/settings.types'
+import type {
+  LLMLoggingSettings as LLMLoggingSettingsType,
+  ConciergeSettings as ConciergeSettingsType,
+  ConciergeDisplaySettings,
+  ConciergePreScreenSettings,
+  ImpersonationVoiceMode,
+  WardrobeImageSettings as WardrobeImageSettingsType,
+} from '@/lib/schemas/settings.types'
+import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
 
+export type { ImpersonationVoiceMode }
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
 export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
@@ -36,8 +45,6 @@ export interface CheapLLMSettings {
    */
   allowCheapFallback?: boolean
   embeddingProvider: EmbeddingProvider
-  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
-  imagePromptProfileId?: string | null
 }
 
 export interface TimestampConfig {
@@ -67,6 +74,13 @@ export interface StoryBackgroundsSettings {
   defaultImageProfileId?: string | null
 }
 
+/**
+ * Wardrobe Image Settings
+ * The designated image profile that draws pictures of wardrobe items.
+ * Re-exported from schema types; `imageProfileId: null` = the default image profile.
+ */
+export type WardrobeImageSettings = WardrobeImageSettingsType
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -74,7 +88,6 @@ export interface ChatSettings {
   avatarDisplayStyle: AvatarDisplayStyle
   cheapLLMSettings: CheapLLMSettings
   imageDescriptionProfileId?: string | null
-  uncensoredImageDescriptionProfileId?: string | null
   defaultTimestampConfig?: TimestampConfig
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
@@ -92,6 +105,8 @@ export interface ChatSettings {
   composerEmoji?: boolean
   /** Whether the `\` Unicode typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
   composerUnicode?: boolean
+  /** What happens to a line typed while impersonating a character: posts as typed ('off'), opens the review dialog without a model call ('ask'), or opens it and restates at once ('always') */
+  impersonationVoiceMode?: ImpersonationVoiceMode
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
   textReplacementsEnabled?: boolean
   /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */
@@ -100,8 +115,10 @@ export interface ChatSettings {
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings?: StoryBackgroundsSettings
-  /** Dangerous content handling settings */
-  dangerousContentSettings?: DangerousContentSettings
+  /** The image profile that draws wardrobe item pictures */
+  wardrobeImageSettings?: WardrobeImageSettings
+  /** The Concierge: failover, the uncensored desk, display, and the optional pre-screen */
+  conciergeSettings?: ConciergeSettings
   /** Default IANA timezone for timestamp formatting */
   timezone?: string | null
   /** 4.6 Private Character Rooms — user-level defaults */
@@ -522,20 +539,31 @@ export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
 }
 
 /**
- * Dangerous Content Settings
- * Re-exported from schema types for use in chat settings components
+ * Default wardrobe image settings — no designated profile, so the default image profile draws;
+ * the wardrobe tools do not queue pictures.
  */
-export type DangerousContentSettings = DangerousContentSettingsType
+export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = {
+  imageProfileId: null,
+  generateFromTools: false,
+}
 
 /**
- * Default dangerous content settings
+ * The Concierge's settings.
+ * Re-exported from schema types for use in chat settings components
  */
-export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+export type ConciergeSettings = ConciergeSettingsType
+
+/**
+ * A partial Concierge update: top-level fields replace, `display` and
+ * `preScreen` deep-merge (see `handleConciergeUpdate` in `useChatSettings`).
+ */
+export type ConciergeSettingsUpdate =
+  Partial<Omit<ConciergeSettings, 'display' | 'preScreen'>> & {
+    display?: Partial<ConciergeDisplaySettings>
+    preScreen?: Partial<ConciergePreScreenSettings>
+  }
+
+/**
+ * Default Concierge settings — the server's defaults, single-sourced.
+ */
+export const DEFAULT_CONCIERGE_SETTINGS: ConciergeSettings = SERVER_DEFAULT_CONCIERGE_SETTINGS

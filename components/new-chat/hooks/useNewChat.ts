@@ -20,8 +20,15 @@ import type {
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
-import { toScenarioOption, type ScenarioOption } from '@/components/scenario/types'
+import {
+  scenarioSelectionToPayload,
+  scenarioSelectionToValue,
+  toScenarioOption,
+  type ScenarioOption,
+} from '@/components/scenario/types'
+import { seedScenarioSelection } from '../scenario-seed'
 import { toAutonomousSettingsHint } from '../autonomous-settings-hint'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -108,21 +115,56 @@ interface UseNewChatReturn {
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
   state: NewChatFormState
   setState: React.Dispatch<React.SetStateAction<NewChatFormState>>
+  /**
+   * Re-read the general, project and group scenario tiers (e.g. after the
+   * Scenario Builder files a new one). These lists ride plain `fetch`, not
+   * TanStack, so invalidating `queryKeys.scenarios.all` does not reach them.
+   */
+  refetchScenarioTiers: () => Promise<RefetchedScenarioTiers>
   // Actions
   handleCreateChat: () => Promise<{ chatId: string } | null>
+  /**
+   * False when the Concierge is off duty globally
+   * (`conciergeSettings.enabled === false`): the form's Concierge select is
+   * then disabled and points at Settings → The Concierge.
+   */
+  conciergeOnDuty: boolean
+  /** The state the server gives a new chat that names none (`newChatsStartAs`). */
+  conciergeDefaultState: ConciergeState
+}
+
+/**
+ * The tiers as re-read by `refetchScenarioTiers`, so a caller can check what
+ * the picker now offers without waiting for a re-render. `null` = not re-read
+ * (tier not applicable, or the fetch failed).
+ */
+export interface RefetchedScenarioTiers {
+  general: ScenarioOption[] | null
+  project: ScenarioOption[] | null
+  group: GroupScenarioOption[] | null
+}
+
+/** Flatten `/api/v1/groups/scenarios`' grouped payload into picker options. */
+function flattenGroupScenarios(data: {
+  groupScenarios?: Array<{ groupId: string; groupName: string; scenarios?: ScenarioOption[] }>
+}): GroupScenarioOption[] {
+  const flat: GroupScenarioOption[] = []
+  for (const group of data.groupScenarios || []) {
+    for (const s of group.scenarios || []) {
+      flat.push({ ...toScenarioOption(s), groupId: group.groupId, groupName: group.groupName })
+    }
+  }
+  return flat
 }
 
 const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
-  conciergeState: 'monitored',
+  conciergeState: 'moderated',
   roleplayTemplateId: null,
   roleplayTemplateTouched: false,
   scenario: '',
-  scenarioId: null,
-  projectScenarioPath: null,
-  generalScenarioPath: null,
-  groupScenarioPath: null,
-  groupScenarioGroupId: null,
+  scenarioSelection: { kind: 'custom' },
+  scenarioTouched: false,
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
@@ -201,6 +243,13 @@ export function useNewChat({
 
   const seededRef = useRef(false)
   const prevLlmIdsRef = useRef<string>('')
+  // The Concierge's global posture, read from chat settings: whether he is on
+  // duty, and the state the server gives a new chat whose request names none.
+  const [conciergeOnDuty, setConciergeOnDuty] = useState(true)
+  const [conciergeServerDefault, setConciergeServerDefault] = useState<ConciergeState>('moderated')
+  // `newChatsStartAs` pre-selects the form once; later reference-data loads
+  // (a project change, a cast change) must not undo the user's own choice.
+  const conciergeSeededRef = useRef(false)
 
   // Memoise the joined character-ID list so the fetchData useEffect doesn't
   // churn when the parent passes a fresh array reference each render.
@@ -355,19 +404,7 @@ export function useNewChat({
 
         let loadedGroupScenarios: GroupScenarioOption[] = []
         if (groupScenariosRes && groupScenariosRes.ok) {
-          const data = await groupScenariosRes.json()
-          const groupScenariosByGroup = data.groupScenarios || []
-          // Flatten the grouped scenarios into a single array with groupId/groupName metadata
-          for (const group of groupScenariosByGroup) {
-            const scenarios = group.scenarios || []
-            for (const s of scenarios) {
-              loadedGroupScenarios.push({
-                ...toScenarioOption(s),
-                groupId: group.groupId,
-                groupName: group.groupName,
-              })
-            }
-          }
+          loadedGroupScenarios = flattenGroupScenarios(await groupScenariosRes.json())
         } else if (groupScenariosRes && !groupScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load group scenarios', {
             status: groupScenariosRes.status,
@@ -394,10 +431,18 @@ export function useNewChat({
         // The user's global roleplay-template default; the project default (read
         // below) outranks it, mirroring the server's resolution at create time.
         let userDefaultRoleplayTemplateId: string | null = null
+        let conciergeNewChatsStartAs: ConciergeState | null = null
         if (chatSettingsRes && chatSettingsRes.ok) {
           try {
             const settings = await chatSettingsRes.json()
             userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
+            const onDuty = settings?.conciergeSettings?.enabled !== false
+            // Off duty the server ignores `newChatsStartAs` and every chat is
+            // created Moderated, so that is the default the form shows too.
+            conciergeNewChatsStartAs =
+              onDuty && settings?.conciergeSettings?.newChatsStartAs === 'unmoderated' ? 'unmoderated' : 'moderated'
+            setConciergeServerDefault(conciergeNewChatsStartAs)
+            setConciergeOnDuty(onDuty)
             const hint = toAutonomousSettingsHint(settings)
             autonomousSeedFreshnessHours = hint?.defaultFreshnessHours ?? null
             autonomousSeedDestructivePolicyAlwaysRefuse = hint?.destructiveToolPolicy === 'always_refuse'
@@ -438,21 +483,6 @@ export function useNewChat({
             (!selectedProjectId || Boolean(projectRes?.ok))
         )
 
-        // Project default wins over general default for pre-selection. When a
-        // project default exists, seed `projectScenarioPath`; otherwise fall
-        // back to the general default.
-        // `!s.archived` is belt-and-braces: the server already refuses to let
-        // an archived file win default resolution, but with "Show archived"
-        // ticked an archived row carrying a stale `isDefault: true` would
-        // otherwise be a candidate for auto-selection here.
-        const projectDefaultScenarioPath =
-          loadedProjectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
-        const generalDefaultScenarioPath =
-          loadedGeneralScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
-        const seededGeneralScenarioPath = projectDefaultScenarioPath
-          ? null
-          : generalDefaultScenarioPath
-
         // Continuation mode: seed multi-character + form state from the
         // source chat's roster, bypassing the single-character seed branch.
         if (
@@ -467,9 +497,7 @@ export function useNewChat({
             if (!char) continue
             const connectionProfileId =
               char.defaultConnectionProfileId || loadedProfiles[0]?.id || ''
-            const defaultPromptId = char.defaultSystemPromptId
-              ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
-              : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
+            const defaultPromptId = resolveDefaultSystemPromptId(char)
             seededSelected.push({
               character: char,
               connectionProfileId,
@@ -499,11 +527,6 @@ export function useNewChat({
           setState((prev) => ({
             ...prev,
             timestampConfig: initialTimestampConfig ?? prev.timestampConfig,
-            // Continuation mode intentionally does NOT pre-fill scenario:
-            // the whole point is to pick a new one.
-            scenarioId: null,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               initialImageProfileId ||
               loadedProject?.defaultImageProfileId ||
@@ -521,9 +544,7 @@ export function useNewChat({
           const char = seededChar
           const connectionProfileId =
             char.defaultConnectionProfileId || loadedProfiles[0]?.id || ''
-          const defaultPromptId = char.defaultSystemPromptId
-            ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
-            : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
+          const defaultPromptId = resolveDefaultSystemPromptId(char)
           const seededSelected: SelectedCharacter[] = [
             {
               character: char,
@@ -550,16 +571,11 @@ export function useNewChat({
           }
           setSelectedCharacters(seededSelected)
 
-          // Scenario default: project default wins over character default.
-          // The character default still rides on `state.scenarioId` so the form
-          // can render the override-visibility note offering a one-click switch.
-          // General default fills in only when no project default exists.
+          // The scenario default is seeded by the effect below, once the cast
+          // and the tiers have both landed.
           setState((prev) => ({
             ...prev,
             timestampConfig: char.defaultTimestampConfig ?? null,
-            scenarioId: char.defaultScenarioId ?? null,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId:
               loadedProject?.defaultImageProfileId ||
               char.defaultImageProfileId ||
@@ -570,18 +586,9 @@ export function useNewChat({
           // Project-only seeding (page mode)
           setState((prev) => ({
             ...prev,
-            projectScenarioPath: projectDefaultScenarioPath,
-            generalScenarioPath: seededGeneralScenarioPath,
             imageProfileId: loadedProject.defaultImageProfileId || prev.imageProfileId,
             avatarGenerationEnabled:
               loadedProject.defaultAvatarGenerationEnabled ?? prev.avatarGenerationEnabled,
-          }))
-        } else if (generalDefaultScenarioPath) {
-          // No project, no initial character — still pre-select the general
-          // default so the dropdown lands on something meaningful.
-          setState((prev) => ({
-            ...prev,
-            generalScenarioPath: generalDefaultScenarioPath,
           }))
         }
 
@@ -590,8 +597,15 @@ export function useNewChat({
         // available even before the user flips the toggle on. The roleplay
         // template rides along: re-seeded on every reference-data load (a new
         // project, a changed cast) until the user picks one by hand.
+        // Continuation mode's inherited state outranks the global default.
+        const seedConciergeState =
+          conciergeNewChatsStartAs !== null && !conciergeSeededRef.current && initialConciergeState == null
+            ? conciergeNewChatsStartAs
+            : null
+        if (conciergeNewChatsStartAs !== null) conciergeSeededRef.current = true
         setState((prev) => ({
           ...prev,
+          conciergeState: seedConciergeState ?? prev.conciergeState,
           roleplayTemplateId: prev.roleplayTemplateTouched
             ? prev.roleplayTemplateId
             : defaultTemplateStillExists
@@ -643,6 +657,36 @@ export function useNewChat({
     showArchivedScenarios,
   ])
 
+  // The scenario default, re-seeded whenever the cast or the tiers change —
+  // until the user picks one by hand (`scenarioTouched`). Character default >
+  // project default > general default, the order the server has always
+  // applied; continuation mode skips the character's (the point is a new
+  // scene). `!s.archived` is belt-and-braces: the server already refuses to
+  // let an archived file win default resolution, but with "Show archived"
+  // ticked an archived row carrying a stale `isDefault: true` would otherwise
+  // be a candidate here.
+  const singleLlmCharacter = useMemo(() => {
+    const llm = selectedCharacters.filter((sc) => sc.controlledBy === 'llm')
+    return llm.length === 1 ? llm[0].character : null
+  }, [selectedCharacters])
+  const characterDefaultScenarioId = continuationFromChatId ? null : singleLlmCharacter?.defaultScenarioId ?? null
+  const projectDefaultScenarioPath = projectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
+  const generalDefaultScenarioPath = generalScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the seed is form state the user then edits; it follows reference data (cast, tiers) that loads asynchronously, and stops once the picker is touched
+    setState((prev) => {
+      const next = seedScenarioSelection(prev, {
+        characterDefaultScenarioId,
+        projectDefaultPath: projectDefaultScenarioPath,
+        generalDefaultPath: generalDefaultScenarioPath,
+      })
+      return next === prev.scenarioSelection ||
+        scenarioSelectionToValue(next) === scenarioSelectionToValue(prev.scenarioSelection)
+        ? prev
+        : { ...prev, scenarioSelection: next }
+    })
+  }, [characterDefaultScenarioId, projectDefaultScenarioPath, generalDefaultScenarioPath])
+
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
   // Matches behavior of the former /salon/new page for multi-char mode.
   useEffect(() => {
@@ -659,7 +703,6 @@ export function useNewChat({
       setState((prev) => ({
         ...prev,
         timestampConfig: char.defaultTimestampConfig ?? prev.timestampConfig,
-        scenarioId: char.defaultScenarioId ?? prev.scenarioId,
         imageProfileId:
           project?.defaultImageProfileId ||
           char.defaultImageProfileId ||
@@ -751,12 +794,18 @@ export function useNewChat({
         characterId: string
         connectionProfileId?: string
         selectedSystemPromptId?: string
+        selectedSubpromptIds?: string[]
         controlledBy?: 'llm' | 'user'
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.controlledBy === 'llm' ? sc.connectionProfileId : undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
+        // Omitted when empty so a plain create stays byte-identical.
+        selectedSubpromptIds:
+          sc.controlledBy === 'llm' && sc.selectedSubpromptIds && sc.selectedSubpromptIds.length > 0
+            ? sc.selectedSubpromptIds
+            : undefined,
         controlledBy: sc.controlledBy,
       }))
 
@@ -769,10 +818,11 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Omitted when Monitored so a plain create stays byte-identical to what it
-      // has always been; the server treats absence and 'monitored' the same way
-      // (no write, no Concierge bubble).
-      if (state.conciergeState !== 'monitored') {
+      // Omitted when Moderated and Moderated is also what the server would
+      // choose (`newChatsStartAs`), so a plain create stays byte-identical to
+      // what it has always been. When the global default is Unmoderated,
+      // absence would mean Unmoderated, so an explicit Moderated is sent.
+      if (state.conciergeState !== 'moderated' || conciergeServerDefault !== 'moderated') {
         requestBody.conciergeState = state.conciergeState
       }
 
@@ -791,18 +841,9 @@ export function useNewChat({
         requestBody.scenario = state.scenario
       }
 
-      // Preset selection (mutually exclusive among the four sources):
-      // character scenarioId > projectScenarioPath > groupScenarioPath > generalScenarioPath.
-      if (state.scenarioId) {
-        requestBody.scenarioId = state.scenarioId
-      } else if (state.projectScenarioPath) {
-        requestBody.projectScenarioPath = state.projectScenarioPath
-      } else if (state.groupScenarioPath) {
-        requestBody.groupScenarioPath = state.groupScenarioPath
-        requestBody.groupScenarioGroupId = state.groupScenarioGroupId
-      } else if (state.generalScenarioPath) {
-        requestBody.generalScenarioPath = state.generalScenarioPath
-      }
+      // The one preset pointer the dropdown shows — exactly one field (or
+      // none, for Custom), so what is sent is what was seen.
+      Object.assign(requestBody, scenarioSelectionToPayload(state.scenarioSelection))
 
       if (state.timestampConfig && state.timestampConfig.mode !== 'NONE') {
         requestBody.timestampConfig = state.timestampConfig
@@ -901,6 +942,40 @@ export function useNewChat({
     }
   }
 
+  const refetchScenarioTiers = useCallback(async () => {
+    const readScenarios = async (url: string): Promise<ScenarioOption[] | null> => {
+      const res = await fetch(withArchivedParam(url, showArchivedScenarios))
+      if (!res.ok) {
+        console.warn('[useNewChat] Failed to refetch scenarios', { url, status: res.status })
+        return null
+      }
+      const data = await res.json()
+      return (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
+    }
+    try {
+      const [general, projectTier, groupRes] = await Promise.all([
+        readScenarios('/api/v1/scenarios'),
+        selectedProjectId ? readScenarios(`/api/v1/projects/${selectedProjectId}/scenarios`) : Promise.resolve(null),
+        selectedLlmCharacterIds.length > 0
+          ? fetch(withArchivedParam(
+              `/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`,
+              showArchivedScenarios,
+            ))
+          : Promise.resolve(null),
+      ])
+      const group = groupRes && groupRes.ok ? flattenGroupScenarios(await groupRes.json()) : null
+      if (general) setGeneralScenarios(general)
+      if (projectTier) setProjectScenarios(projectTier)
+      if (group) setGroupScenarios(group)
+      return { general, project: projectTier, group }
+    } catch (error) {
+      console.warn('[useNewChat] Scenario tier refetch failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { general: null, project: null, group: null }
+    }
+  }, [showArchivedScenarios, selectedProjectId, selectedLlmCharacterIds])
+
   return {
     loading,
     creating,
@@ -919,10 +994,13 @@ export function useNewChat({
     setSelectedProjectId,
     showArchivedScenarios,
     setShowArchivedScenarios,
+    refetchScenarioTiers,
     selectedCharacters,
     setSelectedCharacters,
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState: conciergeServerDefault,
   }
 }

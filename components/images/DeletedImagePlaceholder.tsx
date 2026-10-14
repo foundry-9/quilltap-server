@@ -8,6 +8,13 @@ interface DeletedImagePlaceholderProps {
   imageId: string
   filename: string
   onCleanup?: () => void
+  /**
+   * Remove the dangling reference some other way than the generic
+   * `DELETE /api/v1/images/{id}` — a picture that belongs to a record (a
+   * wardrobe item's history) is removed through that record's own route, so
+   * its links and pointers go with it. Throw to report failure.
+   */
+  onRemove?: () => Promise<void>
   width?: number
   height?: number
   className?: string
@@ -17,6 +24,7 @@ export default function DeletedImagePlaceholder({
   imageId,
   filename,
   onCleanup,
+  onRemove,
   width = 400,
   height = 300,
   className = '',
@@ -31,13 +39,17 @@ export default function DeletedImagePlaceholder({
     }
 
     try {
-      const response = await fetch(`/api/v1/images/${imageId}`, {
-        method: 'DELETE',
-      })
+      if (onRemove) {
+        await onRemove()
+      } else {
+        const response = await fetch(`/api/v1/images/${imageId}`, {
+          method: 'DELETE',
+        })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to remove image reference')
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to remove image reference')
+        }
       }
 
       onCleanup?.()

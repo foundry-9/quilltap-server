@@ -21,7 +21,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 2. For each **new or changed** route since the last release, confirm it:
    - Lives under `/api/v1/` with the collection/item/system shape from CLAUDE.md.
    - Uses `createContextHandler` / `withContext` from `@/lib/api/middleware`.
-   - Uses `withActionDispatch` / `withCollectionActionDispatch` for non-CRUD verbs via `?action=` rather than per-action route segments.
+   - Uses `withActionDispatch` / `withCollectionActionDispatch` / `dispatchAction` for non-CRUD verbs via `?action=` rather than per-action route segments, and never reads `getActionParam` / `searchParams.get('action')` by hand — an unknown action must be a 400, never a fall-through to the default CRUD verb.
    - Uses response helpers from `@/lib/api/responses` (`successResponse`, `badRequest`, `notFound`, …).
    - Handles async request APIs correctly (`await params`, `await cookies()`, `await headers()`).
    ```bash

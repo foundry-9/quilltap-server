@@ -11,21 +11,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exists, enrichWithDefaultImage, getFilePath, resolveEditorTags } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
-import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { isCharacterAlbumRelativePath } from '@/lib/photos/photos-paths';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
-import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { deriveScriptoriumStatus } from '@/lib/scriptorium/status';
 
-const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
-type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
 export async function handleGet(
   req: NextRequest,
@@ -33,7 +32,6 @@ export async function handleGet(
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
-  const action = getActionParam(req);
 
   // First verify ownership for all actions
   const character = await repos.characters.findById(id);
@@ -41,7 +39,7 @@ export async function handleGet(
     return notFound('Character');
   }
 
-  if (!action || !isValidAction(action, CHARACTER_GET_ACTIONS)) {
+  const handleGetDefault = async (): Promise<NextResponse> => {
     try {
       const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
       const chats = await repos.chats.findByCharacterId(id);
@@ -59,9 +57,9 @@ export async function handleGet(
       logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character');
     }
-  }
+  };
 
-  const actionHandlers: Record<CharacterGetAction, () => Promise<NextResponse>> = {
+  return dispatchAction(req, {
     export: async () => {
       try {
         // A tombstone export would be a pruned shell, and the full bundle
@@ -160,6 +158,11 @@ export async function handleGet(
           }
         }
 
+        // Scriptorium status for the whole page in one grouped count.
+        const chunkCounts = await repos.conversationChunks.countByChatIds(
+          paginatedChats.map(({ chat }) => chat.id),
+        );
+
         const enrichedChats = await Promise.all(
           paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
             const tagData = await Promise.all(
@@ -171,16 +174,6 @@ export async function handleGet(
 
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
             const memoryCount = await repos.memories.countByChatId(chat.id);
-
-            // Scriptorium status: check rendered markdown and embedded chunks
-            const hasRenderedMarkdown = !!chat.renderedMarkdown;
-            let embeddedChunkCount = 0;
-            let totalChunkCount = 0;
-            if (hasRenderedMarkdown) {
-              const chunks = await repos.conversationChunks.findByChatId(chat.id);
-              totalChunkCount = chunks.length;
-              embeddedChunkCount = chunks.filter(c => c.embedding !== null && c.embedding !== undefined).length;
-            }
 
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
@@ -221,14 +214,14 @@ export async function handleGet(
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               conciergeState: getConciergeState(chat),
+              conciergeSetBy: getConciergeProvenance(chat),
+              conciergeReason: getConciergeReason(chat),
               dangerCategories: chat.dangerCategories ?? [],
               _count: {
                 messages: messageCount,
                 memories: memoryCount,
               },
-              scriptoriumStatus: hasRenderedMarkdown
-                ? (embeddedChunkCount >= totalChunkCount && totalChunkCount > 0 ? 'embedded' : 'rendered')
-                : 'none',
+              scriptoriumStatus: deriveScriptoriumStatus(chunkCounts.get(chat.id)),
             };
           })
         );
@@ -307,8 +300,10 @@ export async function handleGet(
           repos.groupCharacterMembers.findByCharacterId(id),
         ]);
 
-        // Photos mirrors the Photo Gallery tab's predicate (Phase-3 `photos/`
-        // plus the legacy `images/avatar.webp` + `images/history/` portraits).
+        // Photos counts through `isCharacterAlbumRelativePath`, the same
+        // predicate `listCharacterGallery` filters on, so this figure and the
+        // grid on the Photo Gallery tab cannot disagree. Avatar rolls
+        // (`images/history/`) are not album members and are not counted here.
         // Knowledge = files under the `Knowledge/` folder; Core = files under
         // the `Core/` packet folder (the periodically re-offered core whisper).
         // All three count link rows.
@@ -319,7 +314,7 @@ export async function handleGet(
         for (const link of fileLinks) {
           const rel = link.relativePath.toLowerCase();
           presentPaths.add(rel);
-          if (isPhotosRelativePath(link.relativePath) || rel === 'images/avatar.webp' || rel.startsWith('images/history/')) {
+          if (isCharacterAlbumRelativePath(link.relativePath)) {
             photos++;
           }
           if (rel.startsWith('knowledge/')) knowledge++;
@@ -376,7 +371,5 @@ export async function handleGet(
       const content = await readStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME);
       return successResponse({ content: content ?? '' });
     },
-  };
-
-  return actionHandlers[action]();
+  }, handleGetDefault);
 }

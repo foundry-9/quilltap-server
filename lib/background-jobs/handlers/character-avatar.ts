@@ -11,46 +11,86 @@
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
 } from '@/lib/file-storage/character-vault-bridge';
-import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
-import { convertToWebP } from '@/lib/files/webp-conversion';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
-  resolveImageProviderForDangerousContent,
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service';
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
+import { buildCharacterAvatarPrompt } from '@/lib/image-gen/avatar-prompt';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
+import { decodeProviderImage, makeLoggedImageAttempt } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { deriveAvatarCacheKeys, lookupCachedAvatar } from '@/lib/image-gen/avatar-cache';
+
+/**
+ * Point a chat (and the character's per-chat override) at an avatar image.
+ *
+ * Shared by the generation path and the configuration-cache hit path: a reused
+ * avatar must bind exactly the way a freshly drawn one does, or the two paths
+ * drift and a cached avatar shows up in one surface but not the other.
+ */
+async function bindAvatarToChat(
+  repos: ReturnType<typeof getRepositories>,
+  args: {
+    chat: { characterAvatars?: unknown; messageCount?: number | null };
+    character: { id: string; avatarOverrides?: Array<{ chatId: string; imageId: string }> | null };
+    chatId: string;
+    fileId: string;
+  },
+): Promise<void> {
+  const { chat, character, chatId, fileId } = args;
+
+  const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
+    ? chat.characterAvatars as Record<string, unknown>
+    : {};
+
+  await repos.chats.update(chatId, {
+    characterAvatars: {
+      ...existingAvatars,
+      [character.id]: {
+        imageId: fileId,
+        generatedAt: new Date().toISOString(),
+        afterMessageCount: chat.messageCount ?? 0,
+      },
+    },
+  });
+
+  const existingOverrides = character.avatarOverrides || [];
+  const filteredOverrides = existingOverrides.filter(o => o.chatId !== chatId);
+  filteredOverrides.push({ chatId, imageId: fileId });
+
+  await repos.characters.update(character.id, {
+    avatarOverrides: filteredOverrides,
+  });
+}
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
  *
  * 1. Load character + equipped wardrobe items
  * 2. Build appearance description from physical descriptions + equipped items
- * 3. Run prompt through Concierge (dangerous content classification + provider rerouting)
- * 4. Generate portrait image
- * 5. Store image and update chat.characterAvatars
+ * 3. Look the configuration up in the avatar cache — a hit binds and stops here
+ * 4. Run prompt through Concierge (dangerous content classification + provider rerouting)
+ * 5. Generate portrait image
+ * 6. Store image in the character's vault and update chat.characterAvatars
  */
 export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as CharacterAvatarGenerationPayload;
@@ -129,15 +169,89 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 6. Concierge check — classify the prompt for dangerous content (Off-duty chats skip everything)
+  // 5. Avatar configuration cache.
+  //
+  // Built from the ORIGINAL profile, before the Concierge classification below,
+  // so a hit skips that LLM call as well as the image call, the WebP transcode
+  // and the file write. A Concierge reroute therefore stores its image under
+  // the originally-requested key — correct (same inputs, same outcome), though
+  // it means a cached row's generationModel need not match its key's model.
+  //
+  // These params are reused verbatim for generation on a miss; only a reroute
+  // rebuilds them, since the fallback provider's shape mechanism, LoRA support
+  // and stored options are all its own.
+  const { params: avatarParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt,
+    overrides: { n: 1, style: 'natural' },
+    orientation: 'portrait',
+    logContext: { context: 'background-jobs.character-avatar', jobId: job.id },
+  });
+  const cacheKeys = deriveAvatarCacheKeys({
+    provider: imageProfile.provider,
+    imageProfileId: imageProfile.id,
+    params: avatarParams,
+  });
+
+  if (!payload.force) {
+    const cached = await lookupCachedAvatar(repos, cacheKeys, payload.characterId);
+    if (cached) {
+      await bindAvatarToChat(repos, {
+        chat,
+        character,
+        chatId: payload.chatId,
+        fileId: cached.id,
+      });
+
+      // No Lantern notification: nothing was produced. The avatar still reaches
+      // the Salon through the normal realtime path.
+      logger.info('[CharacterAvatar] Reused cached avatar for this configuration', {
+        context: 'background-jobs.character-avatar',
+        jobId: job.id,
+        chatId: payload.chatId,
+        characterId: payload.characterId,
+        fileId: cached.id,
+        leafCounts,
+      });
+      return;
+    }
+  }
+
+  // 6. Concierge check — classify the prompt for dangerous content when the
+  // chat's pre-screen is on (off duty, Locked and Unmoderated chats skip it)
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
+  logger.debug('[CharacterAvatar] Concierge policy resolved', {
+    context: 'background-jobs.character-avatar',
+    jobId: job.id,
+    conciergeSource: conciergePolicy.source,
+    preScreen: conciergePolicy.preScreen.enabled,
+    scanImagePrompts: conciergePolicy.preScreen.scanImagePrompts,
+  });
 
   let effectiveImageProfile = imageProfile;
-  let effectiveApiKey = apiKey.key_value;
+  let effectiveApiKey: string = apiKey.key_value;
 
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
+  if (conciergePolicy.routeDirect) {
+    // An Unmoderated chat goes straight to the uncensored desk: the verdict is
+    // already in, so there is no pre-screen to wait on.
+    const routeResult = await resolveImageProviderForDangerousContent(
+      imageProfile,
+      apiKey.key_value,
+      conciergePolicy,
+      job.userId
+    );
+    if (routeResult.rerouted) {
+      effectiveImageProfile = routeResult.imageProfile;
+      effectiveApiKey = routeResult.apiKey;
+    }
+    logger.info('[CharacterAvatar] Unmoderated chat: routed direct to the uncensored desk', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      rerouted: routeResult.rerouted,
+      profile: effectiveImageProfile.name,
+    });
+  } else if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts) {
     let cheapLLMSelection: CheapLLMSelection | null = null;
     try {
       const resolved = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
@@ -156,7 +270,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
           prompt,
           cheapLLMSelection,
           job.userId,
-          dangerSettings,
+          conciergePolicy,
           payload.chatId
         );
 
@@ -166,14 +280,14 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
             jobId: job.id,
             score: classification.score,
             categories: classification.categories.map(c => c.category),
-            mode: dangerSettings.mode,
+            conciergeSource: conciergePolicy.source,
           });
 
-          if (dangerSettings.mode === 'AUTO_ROUTE') {
+          if (conciergePolicy.failoverAllowed) {
             const routeResult = await resolveImageProviderForDangerousContent(
               imageProfile,
               apiKey.key_value,
-              dangerSettings,
+              conciergePolicy,
               job.userId
             );
 
@@ -207,306 +321,146 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     }
   }
 
-  // 7. Generate portrait image
-  let generationResponse;
-  const genStartTime = Date.now();
-  try {
-    const provider = createImageProvider(effectiveImageProfile.provider);
-    // Avatars default to portrait; the shared builder maps that onto the
-    // provider's own size / aspect ratio / prompt wording and attaches the
-    // profile's LoRAs and residual options — the same params the Salon's
-    // `generate_image` gets, so a LoRA configured for a profile does not work
-    // in chat and quietly vanish here.
-    const { params: avatarParams } = buildImageGenParams({
-      profile: effectiveImageProfile,
-      prompt,
+  // 7. Generate portrait image — through the Concierge's failover chokepoint,
+  // which retries a content refusal once on an uncensored understudy.
+  //
+  // Avatars default to portrait; the shared builder maps that onto each
+  // provider's own size / aspect ratio / prompt wording and attaches the
+  // profile's LoRAs and residual options — the same params the Salon's
+  // `generate_image` gets. The params the cache key was derived from are
+  // reused for the requested profile; any other profile (a pre-generation
+  // Concierge reroute, or the post-hoc understudy) has a shape mechanism, LoRA
+  // support and stored options of its own, so that case rebuilds.
+  const attemptPortrait = makeLoggedImageAttempt({
+    userId: job.userId,
+    logType: 'IMAGE_GENERATION',
+    prompt,
+    primaryProfileId: effectiveImageProfile.id,
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    params: {
       overrides: { n: 1, style: 'natural' },
       orientation: 'portrait',
       logContext: { context: 'background-jobs.character-avatar', jobId: job.id },
-    });
-    generationResponse = await provider.generateImage(avatarParams, effectiveApiKey);
+    },
+    prebuilt: { profileId: imageProfile.id, params: avatarParams },
+  });
 
-    const genDurationMs = Date.now() - genStartTime;
-    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      provider: effectiveImageProfile.provider,
-      modelName: effectiveImageProfile.modelName,
-      imageProfileId: effectiveImageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: prompt }],
+  let failover;
+  try {
+    failover = await generateImageWithConciergeFailover(
+      { profile: effectiveImageProfile, apiKey: effectiveApiKey },
+      attemptPortrait,
+      {
+        userId: job.userId,
+        chatId: payload.chatId,
+        purpose: 'avatar',
+        conciergePolicy,
+        chat,
+        primaryVia: effectiveImageProfile.id !== imageProfile.id ? 'concierge' : 'primary',
       },
-      response: {
-        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
-      },
-      durationMs: genDurationMs,
-    });
+    );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    const genDurationMs = Date.now() - genStartTime;
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      provider: effectiveImageProfile.provider,
-      modelName: effectiveImageProfile.modelName,
-      imageProfileId: effectiveImageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: prompt }],
-      },
-      response: {
-        content: '',
-        error: errorMessage,
-      },
-      durationMs: genDurationMs,
-    });
-
-    // Post-hoc Concierge reroute: if the provider rejected for content
-    // moderation and the user has AUTO_ROUTE on with a configured uncensored
-    // profile, take the second door. Mirrors the story-background handler.
-    const reroute = isImageModerationError(error)
-      ? await resolveUncensoredImageProfileForReroute(effectiveImageProfile.id, dangerSettings, job.userId)
-      : null;
-
-    if (!reroute) {
-      logger.error('[CharacterAvatar] Image generation failed', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        error: errorMessage,
-        moderationRejection: isImageModerationError(error),
-      }, error as Error);
-      throw new Error(`Avatar image generation failed: ${errorMessage}`);
-    }
-
-    logger.info('[CharacterAvatar] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
+    const trail = getConciergeTrail(error);
+    logger.error('[CharacterAvatar] Image generation failed', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,
-      originalProfileId: effectiveImageProfile.id,
-      originalProvider: effectiveImageProfile.provider,
-      fallbackProfileId: reroute.profile.id,
-      fallbackProvider: reroute.profile.provider,
-      originalError: errorMessage,
-    });
-
-    const rerouteProvider = createImageProvider(reroute.profile.provider);
-    const rerouteStartTime = Date.now();
-    // Rebuild for the reroute provider/model — its shape mechanism, its LoRA
-    // support, and its stored options are all its own.
-    const { params: rerouteParams } = buildImageGenParams({
-      profile: reroute.profile,
-      prompt,
-      overrides: { n: 1, style: 'natural' },
-      orientation: 'portrait',
-      logContext: {
-        context: 'background-jobs.character-avatar.concierge-reroute',
-        jobId: job.id,
-      },
-    });
-    try {
-      generationResponse = await rerouteProvider.generateImage(rerouteParams, reroute.apiKey);
-
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        characterId: payload.characterId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: prompt }],
-        },
-        response: {
-          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
-        },
-        durationMs: rerouteDurationMs,
-      });
-
-      // Swap in the rerouted profile so downstream file metadata records
-      // the provider that actually produced the image.
-      effectiveImageProfile = reroute.profile;
-      effectiveApiKey = reroute.apiKey;
-
-      logger.info('[CharacterAvatar] Concierge uncensored reroute succeeded', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        fallbackProvider: reroute.profile.provider,
-        fallbackModel: reroute.profile.modelName,
-        rerouteDurationMs,
-      });
-    } catch (rerouteError) {
-      const rerouteErrorMessage = getErrorMessage(rerouteError);
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        characterId: payload.characterId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: prompt }],
-        },
-        response: {
-          content: '',
-          error: rerouteErrorMessage,
-        },
-        durationMs: rerouteDurationMs,
-      });
-
-      logger.error('[CharacterAvatar] Image generation failed (Concierge reroute also failed)', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        originalError: errorMessage,
-        rerouteError: rerouteErrorMessage,
-      }, rerouteError as Error);
-      throw new Error(`Avatar image generation failed after Concierge reroute: ${rerouteErrorMessage}`);
-    }
+      error: errorMessage,
+      conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+    }, error as Error);
+    throw new Error(
+      trail && trail.length > 1
+        ? `Avatar image generation failed after Concierge reroute: ${errorMessage}`
+        : `Avatar image generation failed: ${errorMessage}`,
+    );
   }
 
-  if (!generationResponse.images || generationResponse.images.length === 0) {
-    logger.warn('[CharacterAvatar] No images returned from provider', {
+  const generationResponse = failover.result;
+  // Downstream file metadata records the provider that actually produced the image.
+  effectiveImageProfile = failover.profile;
+  if (failover.rerouted) {
+    logger.info('[CharacterAvatar] Concierge uncensored reroute succeeded', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,
+      fallbackProfileId: failover.profile.id,
+      fallbackProvider: failover.profile.provider,
+      fallbackModel: failover.profile.modelName,
     });
-    return;
   }
 
   // 8. Save generated image
-  const imageData = generationResponse.images[0];
-  const rawData = imageData.data || imageData.b64Json;
-  if (!rawData) {
-    logger.warn('[CharacterAvatar] Generated image has no data', {
+  const decoded = await decodeProviderImage(
+    generationResponse,
+    `avatar_${character.name.replace(/[^a-zA-Z0-9]/g, '_')}`,
+  );
+  if (!decoded) {
+    logger.warn('[CharacterAvatar] No image data returned from provider', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,
+      imageCount: generationResponse.images?.length ?? 0,
     });
     return;
   }
 
-  const rawBuffer = Buffer.from(rawData, 'base64');
-  const providerMimeType = imageData.mimeType || 'image/png';
-  const providerExt = providerMimeType.split('/')[1] || 'png';
-  const providerFilename = `avatar_${character.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.${providerExt}`;
-
-  // Convert to WebP for consistent storage
-  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
-  const buffer = converted.buffer;
-  const mimeType = converted.mimeType;
-  const originalFilename = converted.filename;
-
-  const sha256 = sha256OfBuffer(buffer);
   const fileId = crypto.randomUUID();
 
-  const category: FileCategory = 'IMAGE';
-  const source: FileSource = 'GENERATED';
-
-  const folderProjectId = chat.projectId ?? null;
-
   try {
-    // Route history avatars into the character vault when there's no project
-    // context to route them through. The vault is provisioned at character
-    // creation and re-asserted by startup backfill; if it is somehow missing
-    // we refuse to write rather than leak bytes into the catch-all _general/.
+    // Every avatar goes to the character's vault, project context or not.
     //
-    // The handler runs in the forked job child whose DB connection is readonly
-    // and whose writes are buffered (no read-your-writes), so we cannot
-    // ensureCharacterVault() inline here — the parent's character-create flow
-    // (or the startup backfill) is responsible for provisioning.
-    let storageKey: string;
-    let fileProjectId: string | null;
-    let fileFolderPath: string | null;
-    let usedVault = false;
-    // The storage bridges transcode bitmap uploads to WebP; the FileEntry
-    // must record the post-transcode mime/size or vision providers reject
-    // the bytes ("media_type X but image is Y").
-    let storedMimeType: string;
-    let storedSize: number;
-
-    if (!folderProjectId) {
-      const vault = await getCharacterVaultStore(payload.characterId);
-      if (!vault) {
-        throw new Error(
-          `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
-        );
-      }
-      const written = await writeCharacterAvatarToVault({
-        characterId: payload.characterId,
-        kind: 'history',
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-        description: `${character.name} — wardrobe portrait`,
-      });
-      storageKey = written.storageKey;
-      storedMimeType = written.storedMimeType;
-      storedSize = written.sizeBytes;
-      fileProjectId = null;
-      fileFolderPath = null;
-      usedVault = true;
-    } else {
-      const uploadResult = await fileStorageManager.uploadFile({
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-        projectId: folderProjectId,
-        folderPath: '/character-avatars/',
-      });
-      storageKey = uploadResult.storageKey;
-      storedMimeType = uploadResult.storedMimeType;
-      storedSize = uploadResult.sizeBytes;
-      fileProjectId = folderProjectId;
-      fileFolderPath = '/character-avatars/';
+    // Reading a mount blob is addressed by blob id with no project scoping and
+    // no permission check (an instance has one user), so a chat in any project
+    // can render a fileId whose bytes live in the vault. That is what lets the
+    // configuration cache be shared across projects without hard-linking
+    // anything: link groups exist to give write-through on mutable documents,
+    // and avatar bytes are never edited in place.
+    //
+    // The vault is provisioned at character creation and re-asserted by startup
+    // backfill; if it is somehow missing we refuse to write rather than leak
+    // bytes into the catch-all _general/. The handler runs in the forked job
+    // child whose DB connection is readonly and whose writes are buffered (no
+    // read-your-writes), so we cannot ensureCharacterVault() inline here — the
+    // parent's character-create flow (or the startup backfill) owns that.
+    const vault = await getCharacterVaultStore(payload.characterId);
+    if (!vault) {
+      throw new Error(
+        `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
+      );
     }
+    const written = await writeCharacterAvatarToVault({
+      characterId: payload.characterId,
+      kind: 'history',
+      filename: decoded.filename,
+      content: decoded.buffer,
+      contentType: decoded.mimeType,
+    });
 
-    // The legacy `folders` table backs the pre-Scriptorium file tree UI. It's
-    // only meaningful for disk-backed (or project-mount-backed) writes; vault
-    // writes own their folder structure inside doc_mount_folders.
-    // find-or-create at the repository chokepoint: this runs in the forked
-    // child, where the call is buffered whole and replayed on the parent's RW
-    // connection, so the return value is the synthetic `undefined` (bug 114).
-    if (!usedVault) {
-      await repos.folders.ensureByPath({
-        userId: job.userId,
-        path: '/character-avatars/',
-        name: 'character-avatars',
-        parentFolderId: null,
-        projectId: fileProjectId,
-      });
-    }
-
-    await repos.files.create({
+    // No legacy `folders` row: that table backs the pre-Scriptorium file tree
+    // UI and is only meaningful for disk-backed or project-mount-backed writes.
+    // Vault writes own their folder structure inside doc_mount_folders, so the
+    // avatar path no longer mints a folder row per image at all (cf. bug 114).
+    await createGeneratedFileRow(repos, {
+      id: fileId,
       userId: job.userId,
-      sha256,
-      originalFilename,
-      mimeType: storedMimeType,
-      size: storedSize,
-      // Actual dimensions measured from the stored bytes — providers often
-      // return a different shape than requested (see image-orientation-gating).
-      width: converted.width ?? null,
-      height: converted.height ?? null,
+      sha256: decoded.sha256,
+      originalFilename: decoded.filename,
+      stored: written,
+      width: decoded.width,
+      height: decoded.height,
       linkedTo: [payload.chatId, payload.characterId],
-      source,
-      category,
-      generationPrompt: prompt,
-      generationModel: effectiveImageProfile.modelName,
-      generationRevisedPrompt: imageData.revisedPrompt || null,
-      description: `${character.name} — wardrobe portrait`,
       tags: [payload.characterId],
-      storageKey,
-      projectId: fileProjectId,
-      folderPath: fileFolderPath,
-    }, { id: fileId });
+      generation: {
+        prompt,
+        // The profile that actually produced the image — the understudy after a reroute.
+        model: effectiveImageProfile.modelName,
+        revisedPrompt: decoded.revisedPrompt,
+      },
+      // Bind this configuration's cache key to the new image — last write wins,
+      // which is exactly what makes a forced reroll the new canonical portrait
+      // for this character in this outfit. Keyed on the requested profile, not
+      // the rerouted one.
+      generationKey: cacheKeys.key,
+    });
 
     logger.info('[CharacterAvatar] Avatar image saved', {
       context: 'background-jobs.character-avatar',
@@ -521,31 +475,12 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     throw new Error(`Failed to save avatar image: ${getErrorMessage(error)}`);
   }
 
-  // 9. Update chat.characterAvatars with the new avatar
-  const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
-    ? chat.characterAvatars as Record<string, unknown>
-    : {};
-
-  const updatedAvatars = {
-    ...existingAvatars,
-    [payload.characterId]: {
-      imageId: fileId,
-      generatedAt: new Date().toISOString(),
-      afterMessageCount: chat.messageCount ?? 0,
-    },
-  };
-
-  await repos.chats.update(payload.chatId, {
-    characterAvatars: updatedAvatars,
-  });
-
-  // 10. Also update character.avatarOverrides for this chat
-  const existingOverrides = character.avatarOverrides || [];
-  const filteredOverrides = existingOverrides.filter(o => o.chatId !== payload.chatId);
-  filteredOverrides.push({ chatId: payload.chatId, imageId: fileId });
-
-  await repos.characters.update(payload.characterId, {
-    avatarOverrides: filteredOverrides,
+  // 9. Bind the chat (and the character's per-chat override) to the new avatar
+  await bindAvatarToChat(repos, {
+    chat,
+    character,
+    chatId: payload.chatId,
+    fileId,
   });
 
   logger.info('[CharacterAvatar] Avatar generation completed', {
@@ -561,5 +496,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     fileId,
     kind: { kind: 'avatar', characterName: character.name },
     prompt,
+    routeTrail: failover.trail,
   });
 }

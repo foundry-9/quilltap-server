@@ -17,11 +17,16 @@ import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
 import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
+import MessageContent from '@/components/chat/MessageContent'
+import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
 import { getImageAttachments } from './message-row/helpers'
+import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
-import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
+import type { Message, TokenDisplaySettings, ConciergeSettings, CharacterData } from '../types'
+import type { RegenerationState } from '../hooks/useRegeneration'
+import { isLanternBackgroundRefusal, type ConciergeRetryHandlers } from '../concierge-retry'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -56,14 +61,20 @@ interface MessageRowProps {
   streaming: boolean
   waitingForResponse: boolean
   userParticipantId: string | null
-  isPaused?: boolean
-  onTogglePause?: () => void
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
-  /** Dangerous content display settings */
-  dangerousContentSettings?: DangerousContentSettings
+  /**
+   * How the Concierge shows flagged content. The list passes the plain
+   * display (SHOW, no badges) when the Concierge is off duty.
+   */
+  conciergeDisplay?: ConciergeSettings['display']
   /** Callback to override danger flags on a message */
   onOverrideDangerFlag?: (messageId: string) => void
+  /**
+   * The Concierge's "Try uncensored" handlers. Absent on a Locked chat, which
+   * hides every such button.
+   */
+  conciergeRetry?: ConciergeRetryHandlers
   /** Whether this message has LLM logs available */
   hasLLMLogs?: boolean
   /** Callback to view LLM logs */
@@ -121,6 +132,12 @@ interface MessageRowProps {
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
   thinkingCollapsedByDefault?: boolean
+  /**
+   * Set only on the one message currently being re-rolled. While it is here the
+   * row shows the regeneration instead of its own settled content: the old line
+   * dimmed under a "Regenerating..." plate, then the new one as it streams.
+   */
+  regeneration?: RegenerationState | null
 }
 
 function MessageRowInner({
@@ -142,11 +159,10 @@ function MessageRowInner({
   streaming,
   waitingForResponse,
   userParticipantId,
-  isPaused = false,
-  onTogglePause,
   tokenDisplaySettings,
-  dangerousContentSettings,
+  conciergeDisplay,
   onOverrideDangerFlag,
+  conciergeRetry,
   hasLLMLogs,
   onViewLLMLogs,
   character,
@@ -180,7 +196,9 @@ function MessageRowInner({
   attachedToolMessages,
   showThinking = false,
   thinkingCollapsedByDefault = true,
+  regeneration = null,
 }: MessageRowProps) {
+  const imagesHidden = useImagesHidden()
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
   // Silent message styling is based solely on the persisted flag set when the message
@@ -195,11 +213,15 @@ function MessageRowInner({
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
 
-  const hasDangerFlags = message.dangerFlags && message.dangerFlags.length > 0
-  const dangerDisplayMode = hasDangerFlags && dangerousContentSettings?.displayMode
-    ? dangerousContentSettings.displayMode
+  // "Not Dangerous" overrides a flag; only flags still standing blur or
+  // collapse the message. The chips themselves stay (struck through) as the
+  // record that the message was once flagged.
+  const hasDangerFlags = !!message.dangerFlags && message.dangerFlags.length > 0
+  const hasStandingDangerFlags = !!message.dangerFlags?.some(f => !f.userOverridden)
+  const dangerDisplayMode = hasStandingDangerFlags && conciergeDisplay?.mode
+    ? conciergeDisplay.mode
     : 'SHOW'
-  const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+  const showDangerBadges = hasDangerFlags && conciergeDisplay?.showWarningBadges !== false
 
   // Character-initiated tool calls folded into this assistant message
   // (group-tool-messages.ts) and reasoning ("thinking") segments are spliced
@@ -232,7 +254,7 @@ function MessageRowInner({
           <MessageDesktopAvatar
             messageAvatar={messageAvatar}
             dangerous={isDangerousChat}
-            badge={{ provider: message.provider, modelName: message.modelName }}
+            badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
           />
         )}
         <div className="qt-chat-message-body group">
@@ -278,7 +300,7 @@ function MessageRowInner({
         <MessageDesktopAvatar
           messageAvatar={messageAvatar}
           dangerous={isDangerousChat}
-          badge={{ provider: message.provider, modelName: message.modelName }}
+          badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
         />
       )}
       <div className="qt-chat-message-body group">
@@ -308,7 +330,8 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
+          aria-busy={regeneration ? true : undefined}
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -349,6 +372,53 @@ function MessageRowInner({
                   silent — inner thoughts and actions only
                 </div>
               )}
+              {/* A line being re-rolled shows the regeneration in place of its
+                  own settled content: the old text dimmed under a plate that
+                  says so, and — from the first token — the new text instead.
+                  The rest of the bubble (attachments, folded tool blocks) is
+                  left standing; it belongs to the line and the post-stream
+                  refetch reconciles it. */}
+              {regeneration ? (
+                <div className="qt-chat-regenerating">
+                  {regeneration.stage === 'preparing' ? (
+                    <>
+                      <div className="qt-chat-regenerating-original" aria-hidden="true">
+                        <LazyMessageContent
+                          content={message.content}
+                          renderingPatterns={renderingPatterns}
+                          dialogueDetection={dialogueDetection}
+                          forceRender
+                        />
+                      </div>
+                      <div className="qt-chat-regenerating-plate" role="status" aria-live="polite">
+                        <QuillAnimation size="sm" label={null} />
+                        <span className="qt-chat-regenerating-plate-text">Regenerating...</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {showThinking && regeneration.reasoning.trim().length > 0 && (
+                        <ThinkingBlock
+                          content={regeneration.reasoning}
+                          streaming
+                          collapsedByDefault={thinkingCollapsedByDefault}
+                          renderingPatterns={renderingPatterns}
+                          dialogueDetection={dialogueDetection}
+                        />
+                      )}
+                      {/* Not LazyMessageContent: this content changes every
+                          frame, and the lazy wrapper's whole purpose is to
+                          avoid re-rendering settled prose. */}
+                      <MessageContent
+                        content={regeneration.content}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
+                      />
+                      <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
+                    </>
+                  )}
+                </div>
+              ) : (
               <DangerContentWrapper displayMode={dangerDisplayMode}>
                 {isSourceView ? (
                   <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
@@ -389,6 +459,7 @@ function MessageRowInner({
                             message={toolMessage}
                             character={character}
                             onImageClick={onImageClick}
+                            onTryUncensored={conciergeRetry?.onRetryPicture}
                           />
                         ))}
                       </div>
@@ -398,11 +469,25 @@ function MessageRowInner({
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
               </DangerContentWrapper>
+              )}
               {/* Terminal embed for ariel session-opened messages */}
               {message.systemSender === 'ariel' && message.systemKind === 'session-opened' && chatId && (() => {
                 const terminalSessionId = extractTerminalSessionId(message.content)
                 return terminalSessionId ? <div className="mt-2"><TerminalEmbed sessionId={terminalSessionId} chatId={chatId} /></div> : null
               })()}
+              {/* The Lantern's painter refused the backdrop: offer the
+                  uncensored desk (hidden on a Locked chat). */}
+              {conciergeRetry && isLanternBackgroundRefusal(message) && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => conciergeRetry.onRetryBackground()}
+                    className="qt-button qt-button-secondary qt-button-sm"
+                  >
+                    Try uncensored
+                  </button>
+                </div>
+              )}
               {/* Danger flag badges */}
               {showDangerBadges && message.dangerFlags && (
                 <DangerFlagBadge
@@ -424,14 +509,19 @@ function MessageRowInner({
                       type="button"
                       className="qt-button qt-chat-attachment-button"
                     >
-                      { }
-                      <img
-                        src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
-                        alt={attachment.filename}
-                        width={80}
-                        height={80}
-                        className="qt-chat-attachment-image"
-                      />
+                      {imagesHidden ? (
+                        <span className="qt-chat-attachment-image block w-20 h-20">
+                          <HiddenImageTile label={attachment.filename} />
+                        </span>
+                      ) : (
+                        <img
+                          src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
+                          alt={attachment.filename}
+                          width={80}
+                          height={80}
+                          className="qt-chat-attachment-image"
+                        />
+                      )}
                       <div className="qt-chat-attachment-overlay">
                         <Icon name="zoom-in" />
                       </div>
@@ -452,6 +542,7 @@ function MessageRowInner({
                       message={toolMessage}
                       character={character}
                       onImageClick={onImageClick}
+                      onTryUncensored={conciergeRetry?.onRetryPicture}
                     />
                   ))}
                 </div>
@@ -459,6 +550,7 @@ function MessageRowInner({
 
               {/* Action bar - shows action icons at bottom of message */}
               <MessageActionBar
+                disabled={!!regeneration}
                 message={message}
                 viewSourceMessageIds={viewSourceMessageIds}
                 swipeState={swipeState}
@@ -473,6 +565,7 @@ function MessageRowInner({
                 onEditStart={onEditStart}
                 onDelete={onDelete}
                 onGenerateSwipe={onGenerateSwipe}
+                onTryUncensored={conciergeRetry?.onRetryTurn}
                 onReattribute={onReattribute}
                 onViewLLMLogs={onViewLLMLogs}
                 onResend={onResend}
@@ -521,7 +614,6 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Streaming/generation state
   if (prev.streaming !== next.streaming) return false
   if (prev.waitingForResponse !== next.waitingForResponse) return false
-  if (prev.isPaused !== next.isPaused) return false
 
   // Multi-char specific state
   if (prev.isMultiChar !== next.isMultiChar) return false
@@ -546,6 +638,19 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Pre-rendered HTML
   if (prev.message.renderedHtml !== next.message.renderedHtml) return false
 
+  // Route trail: an O(1) identity check, normalised so undefined and null agree
+  // (an untrailed row is `null` from the chat-GET projection and `?? null` from
+  // the optimistic push, but a Staff bubble surfaced mid-turn may carry neither).
+  // Every path that persists a trail also emits the same value on its own `done`
+  // event, so a row should never render untrailed and then acquire one — this is
+  // here so that if some future path ever does, the badge is not stuck on the
+  // plain provider/model badge. It costs a re-render per refetch only for the
+  // rare message that HAS a trail.
+  //
+  // Never widen this into a deep compare: the trail is immutable once saved, so
+  // walking the array could only ever confirm what identity already told us.
+  if ((prev.message.routeTrail ?? null) !== (next.message.routeTrail ?? null)) return false
+
   // Character data
   if (prev.character?.id !== next.character?.id) return false
 
@@ -566,8 +671,11 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevDangerFlags = prev.message.dangerFlags || []
   const nextDangerFlags = next.message.dangerFlags || []
   if (prevDangerFlags.length !== nextDangerFlags.length) return false
-  if (prev.dangerousContentSettings?.displayMode !== next.dangerousContentSettings?.displayMode) return false
-  if (prev.dangerousContentSettings?.showWarningBadges !== next.dangerousContentSettings?.showWarningBadges) return false
+  // "Not Dangerous" flips `userOverridden` without changing the count; the
+  // blur must lift when it does.
+  if (prevDangerFlags.some(f => !f.userOverridden) !== nextDangerFlags.some(f => !f.userOverridden)) return false
+  if (prev.conciergeDisplay?.mode !== next.conciergeDisplay?.mode) return false
+  if (prev.conciergeDisplay?.showWarningBadges !== next.conciergeDisplay?.showWarningBadges) return false
 
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
@@ -576,6 +684,8 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false
+  // "Try uncensored" appears and disappears with the chat's Locked state
+  if (prev.conciergeRetry !== next.conciergeRetry) return false
 
   // System-message collapse state
   if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false
@@ -600,6 +710,16 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prev.message.confirmationChecked !== next.message.confirmationChecked) return false
   if (prev.message.confirmationRevised !== next.message.confirmationRevised) return false
   if (prev.message.confirmationNotes !== next.message.confirmationNotes) return false
+
+  // Regeneration. This is the one prop that changes every animation frame, and
+  // only ever on the single row being re-rolled — every other row sees null on
+  // both sides and falls straight through.
+  if (!prev.regeneration !== !next.regeneration) return false
+  if (prev.regeneration && next.regeneration) {
+    if (prev.regeneration.stage !== next.regeneration.stage) return false
+    if (prev.regeneration.content !== next.regeneration.content) return false
+    if (prev.regeneration.reasoning !== next.regeneration.reasoning) return false
+  }
 
   // Props are equal, skip re-render
   return true

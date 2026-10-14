@@ -10,25 +10,21 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import {
+  applyAgentStreamEvent,
+  EMPTY_AGENT_TOOL_CALL_STATE,
+  parseAgentSseLine,
+  splitSseBuffer,
+  type AgentStreamToolCall,
+  type AgentToolCallState,
+} from '@/components/agent-stream/parse-agent-stream'
 
 /**
- * A tool call observed live on the stream this turn. Built up from the
- * `toolsDetected` event (name + arguments) and completed by the matching
- * `toolResult` event (success + result). Accumulates across the whole agent run
- * (not reset per turn) so the operator watches each query land; cleared when the
- * turn settles and the persisted transcript reloads.
+ * A tool call observed live on the stream this turn. Accumulates across the
+ * whole agent run (not reset per turn) so the operator watches each query land;
+ * cleared when the turn settles and the persisted transcript reloads.
  */
-export interface StreamingToolCall {
-  name: string
-  arguments: Record<string, unknown>
-  /** Result payload once it arrives (the run_sql envelope object, or null). */
-  result?: unknown
-  success?: boolean
-  /** Human-readable error text on failure (result is often null then). */
-  error?: string
-  /** True until the matching toolResult event fills this in. */
-  pending: boolean
-}
+export type StreamingToolCall = AgentStreamToolCall
 
 interface StreamingState {
   isStreaming: boolean
@@ -58,12 +54,10 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
-  // Live tool-call accumulator + the base offset of the current detection batch,
-  // so a `toolResult` event (indexed within its batch) maps back to the right
-  // entry even across multiple agent turns. Refs avoid stale-closure races as
-  // events arrive faster than React can flush state.
-  const toolCallsRef = useRef<StreamingToolCall[]>([])
-  const batchBaseRef = useRef(0)
+  // Live tool-call accumulator (calls + the current batch's base offset; see
+  // parse-agent-stream). A ref avoids stale-closure races as events arrive
+  // faster than React can flush state.
+  const toolStateRef = useRef<AgentToolCallState>(EMPTY_AGENT_TOOL_CALL_STATE)
 
   const onMessageCompleteRef = useRef(onMessageComplete)
   useEffect(() => { onMessageCompleteRef.current = onMessageComplete }, [onMessageComplete])
@@ -76,8 +70,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     const abortController = new AbortController()
     abortRef.current = abortController
 
-    toolCallsRef.current = []
-    batchBaseRef.current = 0
+    toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
 
     setState({
       isStreaming: true,
@@ -112,100 +105,66 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+        const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
+        buffer = split.rest
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const jsonStr = line.slice(6).trim()
-          if (!jsonStr) continue
+        for (const line of split.lines) {
+          const event = parseAgentSseLine(line)
+          if (!event) continue
 
-          try {
-            const event = JSON.parse(jsonStr)
+          // Content chunk
+          if (typeof event.content === 'string' && event.content) {
+            currentContent += event.content
+            setState(prev => ({
+              ...prev,
+              isExecutingTools: false,
+              streamingContent: currentContent,
+            }))
+          }
 
-            // Content chunk
-            if (event.content) {
-              currentContent += event.content
-              setState(prev => ({
-                ...prev,
-                isExecutingTools: false,
-                streamingContent: currentContent,
-              }))
+          // Reasoning ("thinking") chunk — cumulative chain so far; replace,
+          // not append. Left intact across tool-execution status so the
+          // chain stays visible between turns. DISPLAY ONLY.
+          if (typeof event.reasoning === 'string') {
+            const reasoning = event.reasoning
+            setState(prev => ({ ...prev, streamingReasoning: reasoning }))
+          }
+
+          // Tool batch detected / tool result — pending entries appear so the
+          // operator sees the query before its rows land, then settle.
+          const nextToolState = applyAgentStreamEvent(toolStateRef.current, event)
+          if (nextToolState !== toolStateRef.current) {
+            toolStateRef.current = nextToolState
+            setState(prev => ({ ...prev, streamingToolCalls: nextToolState.toolCalls }))
+          }
+
+          // Tool execution status — clear stale streamed text, show "working"
+          if (event.status) {
+            currentContent = ''
+            setState(prev => ({
+              ...prev,
+              isExecutingTools: true,
+              streamingContent: '',
+            }))
+          }
+
+          // Done — persisted message ready; reload the transcript. The reloaded
+          // transcript carries the settled tool cards, so the live ones clear.
+          if (event.done) {
+            const messageId = typeof event.messageId === 'string' ? event.messageId : null
+            currentContent = ''
+            toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
+            setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
+            if (messageId) {
+              onMessageCompleteRef.current?.(messageId)
             }
+          }
 
-            // Reasoning ("thinking") chunk — cumulative chain so far; replace,
-            // not append. Left intact across tool-execution status so the
-            // chain stays visible between turns. DISPLAY ONLY.
-            if (typeof event.reasoning === 'string') {
-              setState(prev => ({ ...prev, streamingReasoning: event.reasoning }))
-            }
-
-            // Tool batch detected — record each call (pending) so the operator
-            // sees the query before its rows land. Remember this batch's base
-            // offset so the indexed toolResult events that follow map back here.
-            if (typeof event.toolsDetected === 'number') {
-              const names: string[] = Array.isArray(event.toolNames) ? event.toolNames : []
-              const argsArr: Record<string, unknown>[] = Array.isArray(event.toolArguments) ? event.toolArguments : []
-              batchBaseRef.current = toolCallsRef.current.length
-              for (let i = 0; i < event.toolsDetected; i++) {
-                const a = argsArr[i]
-                toolCallsRef.current.push({
-                  name: names[i] ?? 'unknown',
-                  arguments: (a && typeof a === 'object') ? a : {},
-                  pending: true,
-                })
-              }
-              setState(prev => ({ ...prev, streamingToolCalls: [...toolCallsRef.current] }))
-            }
-
-            // Tool result — complete the matching pending entry by batch + index.
-            if (event.toolResult && typeof event.toolResult === 'object') {
-              const tr = event.toolResult as { index?: number; success?: boolean; result?: unknown; error?: string }
-              const gi = batchBaseRef.current + (typeof tr.index === 'number' ? tr.index : 0)
-              const entry = toolCallsRef.current[gi]
-              if (entry) {
-                toolCallsRef.current[gi] = {
-                  ...entry,
-                  result: tr.result,
-                  success: tr.success,
-                  error: typeof tr.error === 'string' ? tr.error : undefined,
-                  pending: false,
-                }
-                setState(prev => ({ ...prev, streamingToolCalls: [...toolCallsRef.current] }))
-              }
-            }
-
-            // Tool execution status — clear stale streamed text, show "working"
-            if (event.status) {
-              currentContent = ''
-              setState(prev => ({
-                ...prev,
-                isExecutingTools: true,
-                streamingContent: '',
-              }))
-            }
-
-            // Done — persisted message ready; reload the transcript. The reloaded
-            // transcript carries the settled tool cards, so the live ones clear.
-            if (event.done) {
-              const messageId = event.messageId
-              currentContent = ''
-              toolCallsRef.current = []
-              batchBaseRef.current = 0
-              setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
-              if (messageId) {
-                onMessageCompleteRef.current?.(messageId)
-              }
-            }
-
-            // Error
-            if (event.error) {
-              setState(prev => ({ ...prev, error: event.error, isStreaming: false, streamingReasoning: '', streamingToolCalls: [] }))
-              return
-            }
-          } catch {
-            // Ignore parse errors
+          // Error
+          if (event.error) {
+            const message = String(event.error)
+            setState(prev => ({ ...prev, error: message, isStreaming: false, streamingReasoning: '', streamingToolCalls: [] }))
+            return
           }
         }
       }
@@ -225,8 +184,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()
-    toolCallsRef.current = []
-    batchBaseRef.current = 0
+    toolStateRef.current = EMPTY_AGENT_TOOL_CALL_STATE
     setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
   }, [])
 

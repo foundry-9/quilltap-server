@@ -25,7 +25,7 @@ describe('foldChatSummary prompt', () => {
 
   it('includes the four-section structure in the system message', async () => {
     await foldChatSummary(
-      { priorSummary: null, newTurns: [{ role: 'user', content: 'hi' }] },
+      { priorSummary: null, newTurns: [{ speaker: 'Charlie', role: 'user', content: 'hi' }] },
       fakeSelection,
       'user-1',
     )
@@ -42,7 +42,13 @@ describe('foldChatSummary prompt', () => {
 
   it('uses placeholder text when no prior summary exists', async () => {
     await foldChatSummary(
-      { priorSummary: null, newTurns: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }] },
+      {
+        priorSummary: null,
+        newTurns: [
+          { speaker: 'Charlie', role: 'user', content: 'hi' },
+          { speaker: 'Friday', role: 'assistant', content: 'hello' },
+        ],
+      },
       fakeSelection,
       'user-1',
     )
@@ -51,15 +57,17 @@ describe('foldChatSummary prompt', () => {
     const userMsg = (llmMessages as any[]).find(m => m.role === 'user')
     expect(userMsg.content).toContain('Prior summary')
     expect(userMsg.content).toMatch(/this is the first fold/i)
-    expect(userMsg.content).toContain('USER: hi')
-    expect(userMsg.content).toContain('ASSISTANT: hello')
+    expect(userMsg.content).toContain('Charlie: hi')
+    expect(userMsg.content).toContain('Friday: hello')
+    expect(userMsg.content).not.toContain('USER:')
+    expect(userMsg.content).not.toContain('ASSISTANT:')
   })
 
   it('embeds the prior summary verbatim when present', async () => {
     await foldChatSummary(
       {
         priorSummary: 'Active threads: chase scene through London streets.',
-        newTurns: [{ role: 'user', content: 'next' }],
+        newTurns: [{ speaker: 'Charlie', role: 'user', content: 'next' }],
       },
       fakeSelection,
       'user-1',
@@ -73,7 +81,7 @@ describe('foldChatSummary prompt', () => {
 
   it('passes the task name "fold-chat-summary" so logs are filterable', async () => {
     await foldChatSummary(
-      { priorSummary: null, newTurns: [{ role: 'user', content: 'hi' }] },
+      { priorSummary: null, newTurns: [{ speaker: 'Charlie', role: 'user', content: 'hi' }] },
       fakeSelection,
       'user-1',
       'chat-123',
@@ -82,5 +90,40 @@ describe('foldChatSummary prompt', () => {
     const args = executeCheapLLMTask.mock.calls[0]
     expect(args[4]).toBe('fold-chat-summary')
     expect(args[5]).toBe('chat-123')
+  })
+
+  it('renders an unresolvable seat by its role fallback label, not its role', async () => {
+    await foldChatSummary(
+      {
+        priorSummary: null,
+        newTurns: [
+          { speaker: 'User', role: 'user', content: 'who is there' },
+          { speaker: 'Character', role: 'assistant', content: 'nobody' },
+        ],
+      },
+      fakeSelection,
+      'user-1',
+    )
+
+    const [, llmMessages] = executeCheapLLMTask.mock.calls[0]
+    const userMsg = (llmMessages as any[]).find(m => m.role === 'user')
+    expect(userMsg.content).toContain('User: who is there')
+    expect(userMsg.content).toContain('Character: nobody')
+    expect(userMsg.content).not.toContain('USER:')
+    expect(userMsg.content).not.toContain('ASSISTANT:')
+  })
+
+  it('tells the model to keep a role label rather than invent a name (bug 161)', async () => {
+    await foldChatSummary(
+      { priorSummary: null, newTurns: [{ speaker: 'Charlie', role: 'user', content: 'hi' }] },
+      fakeSelection,
+      'user-1',
+    )
+
+    const [, llmMessages] = executeCheapLLMTask.mock.calls[0]
+    const systemMsg = (llmMessages as any[]).find(m => m.role === 'system')
+    expect(systemMsg.content).toContain('Refer to each speaker by the name on their turns')
+    expect(systemMsg.content).toMatch(/never invent a name for anyone/i)
+    expect(systemMsg.content).not.toContain('Use character names, not roles.')
   })
 })

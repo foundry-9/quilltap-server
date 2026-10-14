@@ -71,9 +71,8 @@ export type DocMountFolder = z.infer<typeof DocMountFolderSchema>;
 
 // A doc_mount_files row is the content identity for a set of bytes. Writers
 // look up by sha256 (indexed, not UNIQUE — existing instances may carry
-// duplicate sha rows that pre-date the content/link split) and call
-// findOrCreateByContent to reuse the existing row when there's a match,
-// preserving its UUID. Location, filename, folder, and per-consumer
+// duplicate sha rows that pre-date the content/link split) via `findBySha256`
+// and reuse the existing row when there's a match, preserving its UUID. Location, filename, folder, and per-consumer
 // extraction state live on doc_mount_file_links — one file row may be
 // hard-linked from many mounts.
 export const DocMountFileSchema = z.object({

@@ -85,9 +85,11 @@ The **Turn Manager** controls this cycle. See [Turn Manager](chat-turn-manager.m
 The next speaker is determined by:
 
 1. **Manual Queue** — If you've queued a character, they speak next
-2. **Talkativeness** — Characters with higher talkativeness are more likely to speak
+2. **The Running Order** — Drawn once at the start of each cycle and then followed; talkativeness governs that draw, so a talkative character lands early far more often than a quiet one
 3. **Recent Speakers** — Characters who just spoke are skipped
 4. **Completion Check** — Once all have spoken, it's your turn
+
+Because the order is settled before the cycle begins, the numbered positions in the Participants drawer are the sequence that will actually occur. See [The Running Order](chat-turn-manager.md#the-running-order).
 
 ### Keeping a Character to Their Own Turn
 
@@ -104,6 +106,10 @@ The subtler hazard of a crowded room is not a model that writes everyone's turn 
 Quilltap now serves every speaker in a group scene a standing set of house rules against exactly this. A character is told not to open by summarizing the others (everyone present heard them), not to agree-and-append, not to borrow a phrase another character has already coined, not to re-read the plan into the record, and to speak only when speaking would *change* something — an objection, a question, a joke, an action, a refusal. Real conversational turns run a sentence or three; the long speech is reserved for occasions that have earned one.
 
 The rules are strongest paired with [turn skipping](turn-skipping.md), which gives a character with nothing new to offer a graceful exit instead of an obligation to perform. Stronger models take the instruction more faithfully than budget ones — if a scene still sounds like a chorus, the speaking characters' connection profiles are the next place to look.
+
+### Your Narration Stands
+
+By the time the third character in a round takes the floor, your message is no longer the freshest thing in the room — two replies sit on top of it, and occasionally one of them (a turn you stopped that finished anyway, say) contradicts what you narrated. So on every chained turn — the second responder onward, and any Continue or Nudge — each character is handed a brief **scene note**: your most recent message is the current state of the scene, and where any other speaker's line conflicts with what you narrated, your account is what happened. What the character *does* about it remains its own business. The note is never added on the first responder's turn (your message is already the last word there), and nothing is stored.
 
 ### Control Modes
 
@@ -285,17 +291,42 @@ Chats where all characters are LLM-controlled (no user input needed):
 
 To prevent runaway conversations:
 
-- After several character turns without user input, chat auto-pauses
-- You'll see a notification asking to continue or stop
-- Click **Resume** to continue the conversation
-- Click **Pause** to stop and take manual control
+- After several character turns without a word from you — at three, then six, twelve, twenty-four and
+  so on — the establishment calls a halt of its own accord
+- A dialogue appears asking whether the company should carry on
+- **Continue** lifts the pause and sets the room going again
+- **Stop** leaves it paused, the floor yours
+- Or take over one of the characters and speak in their place
 
-### Manual Pause Control
+## Pausing the Room
 
-- Click **Pause** in the Chat Sidebar header
-- Characters stop responding
-- Click **Resume** when ready to continue
-- Useful for reading or planning your next action
+**Pause** in the participants sidebar brings the room to a halt, and a halted room advances *only*
+at your invitation. Nothing happens by itself: no rotation, no chain of replies, not so much as a
+single answer to a remark of your own.
+
+While the room is paused:
+
+| You do this | The house does this |
+|---|---|
+| **Type a message** | Sets it down in the record in full — attachments, tool results, dice you asked for in passing, any `@Name:` query — and hands it to nobody. The room stays paused |
+| **Nudge** a character | That character takes exactly one turn. The room then falls quiet again, still paused, the floor back with you |
+| **Skip** your own seat | The seat the floor passes to takes exactly one turn, on the same terms |
+| **Queue** a character | Notes their place. They speak when a nudge or a resumption next calls for a speaker |
+| **Resume** | Returns the company to its ordinary rotation |
+
+A nudge does **not** lift the pause — it borrows a single turn against it. This is the whole use of
+a paused room: you may lay down three paragraphs of scene-setting, invite precisely one character to
+respond to them, read what they say at your leisure, and let the rest of the table wait.
+
+The first remark you enter into a paused room is answered with a quiet notice to that effect, lest
+the silence be mistaken for a message that never arrived. Later remarks pass without comment, the
+point having been made.
+
+The Pause button is also the establishment's own safety catch. It is pressed for you when a turn
+fails outright, when an all-LLM room reaches one of the thresholds above, and — briefly — when the
+Courier is holding a conversation while it waits for a reply you must paste in by hand. In every
+case **Resume** is the way out, and the button reads **Resume** whenever a pause is in force,
+whoever called it.
 
 ## Per-Character Settings
 

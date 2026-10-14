@@ -2,9 +2,9 @@
  * LLM Logs Repository
  *
  * Backend-agnostic repository for LLMLog entities.
- * Overrides getCollection() to route all operations to the dedicated
- * LLM logs database (quilltap-llm-logs.db), isolating high-churn debug
- * data from the main database.
+ * Lives in the dedicated LLM logs database (quilltap-llm-logs.db) via
+ * `AbstractDedicatedDbRepository`, isolating high-churn debug data from
+ * the main database.
  *
  * When the logs DB is in degraded mode (corruption, permissions, etc.),
  * getCollection() throws and all safeQuery fallbacks kick in — returning
@@ -13,11 +13,11 @@
 
 import { logger } from '@/lib/logger';
 import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter, QueryOptions } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 import { getRawLLMLogsDatabase, isLLMLogsDegraded } from '../backends/sqlite/llm-logs-client';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
+import { requireLLMLogsDb } from '../backends/sqlite/llm-logs-guard';
 
 /**
  * The usage/latency/failure projection shared by every per-group roll-up:
@@ -25,13 +25,29 @@ import { generateDDL, classifySchemaColumns } from '../schema-translator';
  * denominator, and the failure count. Column aliases are the row-type field
  * names ({@link LLMLogTypeStatsRow} / {@link LLMLogProfileStatsRow}).
  */
+/**
+ * Columns stored brotli-compressed (`lib/database/text-compression.ts`).
+ *
+ * `request` is the whole prompt payload re-serialized on every call, so the
+ * same system blocks and character sheets repeat across every row — the most
+ * compressible data in the instance (measured 6.7% of original across a
+ * corpus, ~34% per row in isolation). `response` rides along for consistency.
+ *
+ * Both are also JSON columns, so the codec sits OUTSIDE the JSON
+ * serialization: object → JSON text → brotli → BLOB, and back.
+ *
+ * Any RAW SQL in this file that reads inside these columns must wrap them in
+ * the `qt_text()` UDF — see {@link USAGE_AGGREGATE_COLUMNS}.
+ */
+const LLM_LOG_COMPRESSED_COLUMNS = ['request', 'response'];
+
 const USAGE_AGGREGATE_COLUMNS = `
          COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
          COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
          COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
          SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
          AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
-         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
+         SUM(CASE WHEN json_extract(qt_text("response"), '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
 
 /** The attribution keys a per-profile roll-up can group by. */
 type ProfileGroupBy = 'connectionProfileId' | 'imageProfileId' | 'providerModel';
@@ -51,49 +67,16 @@ function profileKey(groupBy: ProfileGroupBy): { keyExpr: string; notNullClause: 
 /**
  * LLM Logs Repository
  * Implements CRUD operations and advanced queries for LLM logs.
- * Uses AbstractBaseRepository since LLMLog schema uses Date type for timestamps.
+ * Extends AbstractDedicatedDbRepository (over AbstractBaseRepository, not the
+ * user-owned base) since LLMLog schema uses Date type for timestamps.
  */
-export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
-  private llmLogsCollectionInitialized = false;
-
+export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   constructor() {
-    super('llm_logs', LLMLogSchema);
-  }
-
-  /**
-   * Override getCollection to return a collection from the dedicated LLM logs
-   * database instead of the main database.
-   */
-  protected async getCollection(): Promise<DatabaseCollection<LLMLog>> {
-    if (isLLMLogsDegraded()) {
-      throw new Error('LLM logs database is in degraded mode');
-    }
-
-    const db = getRawLLMLogsDatabase();
-    if (!db) {
-      throw new Error('LLM logs database not initialized');
-    }
-
-    // Ensure the table exists in the logs DB on first access
-    if (!this.llmLogsCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-        this.llmLogsCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure llm_logs table in LLM logs database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<LLMLog>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    super('llm_logs', LLMLogSchema, {
+      dbTarget: 'llmLogs',
+      acquireDb: requireLLMLogsDb,
+      compressedColumns: LLM_LOG_COMPRESSED_COLUMNS,
+    });
   }
 
   /**
@@ -799,11 +782,17 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
   async getStatsByProfile(
     userId: string,
     groupBy: ProfileGroupBy,
-    options: { type?: LLMLogType } = {},
+    options: { type?: LLMLogType | readonly LLMLogType[] } = {},
   ): Promise<LLMLogProfileStatsRow[]> {
     const { keyExpr, notNullClause } = profileKey(groupBy);
-    const typeClause = options.type ? `AND "type" = ?` : '';
-    const params: unknown[] = options.type ? [userId, options.type] : [userId];
+    // One type or several (image spend is `IMAGE_SPEND_LOG_TYPES`, bug 196).
+    const types: readonly LLMLogType[] = options.type === undefined
+      ? []
+      : typeof options.type === 'string' ? [options.type] : options.type;
+    const typeClause = types.length > 0
+      ? `AND "type" IN (${types.map(() => '?').join(', ')})`
+      : '';
+    const params: unknown[] = [userId, ...types];
 
     return this.aggregate<LLMLogProfileStatsRow>(
       `SELECT

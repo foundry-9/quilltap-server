@@ -79,8 +79,19 @@ export async function importDocumentStores(
           await globalRepos.docMountChunks.deleteByMountPointId(existing.id);
           await globalRepos.docMountFiles.deleteByMountPointId(existing.id);
           await globalRepos.docMountFolders.deleteByMountPointId(existing.id);
+          // The archive's name, unless another store now holds it (the
+          // namespace is shared; this store's own current name never counts
+          // against it).
+          const overwriteName =
+            existing.name.trim().toLowerCase() === mp.name.trim().toLowerCase()
+              ? mp.name
+              : nextUniqueMountPointName(
+                  new Set([...takenNames].filter((n) => n.trim().toLowerCase() !== existing.name.trim().toLowerCase())),
+                  mp.name
+                );
+          takenNames.add(overwriteName);
           await globalRepos.docMountPoints.update(existing.id, {
-            name: mp.name,
+            name: overwriteName,
             basePath: mp.mountType === 'database' ? '' : mp.basePath,
             mountType: mp.mountType,
             storeType: mp.storeType ?? 'documents',
@@ -319,6 +330,11 @@ export async function importDocumentStores(
         sha256: blob.sha256,
         description: blob.description,
         data,
+        // Byte fidelity: an imported bundle must come back exactly as it was
+        // archived, so the write-side image normalization is skipped here.
+        // A character archived and rehydrated has to round-trip identically,
+        // and the bundle's recorded sha256 has to keep matching the bytes.
+        normalizeImages: false,
         ...(options.preserveIds
           ? {
               fileId: blob.fileId ?? undefined,
@@ -343,7 +359,7 @@ export async function importDocumentStores(
           extractedTextSha256: blob.extractedTextSha256 ?? null,
           extractionStatus: blob.extractionStatus ?? 'none',
           extractionError: blob.extractionError ?? null,
-        });
+        }, created.linkId);
       }
       counts.blobs++;
     } catch (error) {

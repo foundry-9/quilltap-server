@@ -61,10 +61,10 @@ The Turn Manager selects the next speaker in this order:
    - If you've manually queued someone, they speak next
    - Queue is first-in-first-out (FIFO)
 
-2. **Weighted Random Selection**
-   - Among eligible characters (those who haven't spoken this cycle)
-   - Based on talkativeness weights
-   - Higher talkativeness = higher chance of being selected
+2. **The Cycle's Running Order**
+   - Drawn once when the cycle begins, then followed to the letter
+   - Talkativeness decides the draw, not each individual turn
+   - See [The Running Order](#the-running-order) below
 
 3. **Your Turn**
    - When no eligible characters remain
@@ -93,6 +93,21 @@ Each character has a talkativeness setting (0 to 1):
 
 The selection formula considers all eligible characters' weights. A character with weight 0.8 is roughly four times more likely to be selected than one with weight 0.2.
 
+### The Running Order
+
+Quilltap draws up the evening's running order in advance, the way a decent host settles the seating before the guests arrive rather than deciding at each course who shall speak next.
+
+When a cycle begins, the Turn Manager draws the **whole order at once** — every character present, arranged into a sequence, with the talkativeness weights above governing the draw. That order is then written down and followed, seat by seat, until everyone has had their turn. Only when the cycle wraps is a fresh order drawn.
+
+**What this means for you:**
+
+- **The sidebar tells the truth.** The numbered positions are the sequence that will actually happen, not a polite guess at it. Position 3 means third.
+- **Your talkativeness settings work exactly as before.** They govern the draw instead of governing each pick, which comes to the same thing over a conversation — a talkative character still lands early far more often than a reticent one.
+- **The order holds for the cycle.** Adjust a character's talkativeness mid-cycle and the current order carries on unbothered; your change takes effect at the next draw.
+- **A latecomer waits at the back.** A character who joins a scene already under way is added to the end of the current order, and is dealt in properly when the next one is drawn.
+- **Departures cost nothing.** A character who leaves, or is archived, is simply passed over when their place comes up.
+- **Nudge and Queue still jump the line.** A summoned character speaks at once, and is then struck from the remaining order so they do not speak twice in one cycle.
+
 ## Manual Turn Control
 
 ### Nudge
@@ -117,6 +132,7 @@ The selection formula considers all eligible characters' weights. A character wi
 - Nudge takes priority over the queue
 - Only works for LLM-controlled characters
 - The Host announces the summons in the transcript ("The Host turns to _Name_ … and invites them to take the floor"), so the invitation is a permanent part of the conversation rather than a note that vanishes on reload
+- Reach for **Nudge** (or **Continue**, or **Skip**) whilst a reply is still arriving and the Salon declines aloud — *One moment — the room is still speaking* — rather than swallowing the click. Wait for the current turn to land and press again
 
 ### Queue
 
@@ -157,20 +173,20 @@ The selection formula considers all eligible characters' weights. A character wi
 
 ### Turn Order Display
 
-The participant sidebar shows a **predicted turn order** for all participants. Each participant has a numbered position badge indicating when they're expected to speak:
+The participant sidebar shows the **turn order** for all participants. Each participant has a numbered position badge saying when they will speak:
 
 **Position Badges:**
 
 1. **Generating (green, pulsing)** — Currently generating a response (#1 during generation)
 2. **Next (green, static)** — Selected as the next speaker
 3. **Queued (blue)** — Manually queued to speak
-4. **Eligible (neutral)** — Available to speak this cycle, sorted by talkativeness
+4. **Eligible (neutral)** — Still to come this cycle, in the order they will actually speak
 5. **Your Turn (amber)** — Indicates the user's position in the cycle
 6. **Spoken (dimmed)** — Already spoke this cycle
 7. **Silent (no badge, muted)** — Present but observing silently, still receives turns
 8. **Absent (no badge, dimmed)** — Away from the scene, turns skipped entirely
 
-Participants are automatically sorted in the sidebar by their predicted turn position, so you can see at a glance who's speaking, who's next, and who has already spoken.
+Participants are automatically sorted in the sidebar by their turn position, so you can see at a glance who's speaking, who follows, and who has already had their say. Since [the running order](#the-running-order) is drawn for the whole cycle before it begins, those positions are a schedule rather than a forecast — the sidebar and the turn banner both read that one stored running order, so what they tell you is what the house will actually do, and not a second opinion arrived at independently.
 
 ### Interrupt/Stop Button
 
@@ -195,9 +211,9 @@ The UI shows turn status in several ways:
 - Blue position badge with queue position
 - Queue position visible in both expanded and collapsed sidebar
 
-**Eligible Characters:**
-- Neutral position badge with predicted position
-- Sorted by talkativeness (higher talkativeness = earlier position)
+**Characters Still to Come:**
+- Neutral position badge with their place in the cycle
+- Ordered by the running order drawn at the start of the cycle
 
 **Silent Characters:**
 - Muted appearance with "Silent" badge
@@ -240,8 +256,11 @@ When everyone in the rotation (including any user-controlled characters) has tak
 
 Characters you're impersonating sit in the same weighted rotation as the LLM characters. When the rotation lands on one of them, the chat waits for you, and the banner above the composer says so — "Alice's turn — type as them, or skip…" The banner and its **Skip** button are present whenever you could speak as a character at all, not only on that character's turn; between turns it reads "Speaking as Alice — type, or skip to let someone else take the floor."
 
+**The banner always speaks for whoever holds the floor.** If you happen to be driving two characters at once — your own, say, and a guest whose pen you've taken up — the turn may belong to one of them whilst the composer is still poised over the other. In that case the banner names the character whose turn it is, and **Skip** passes *that* turn: "Bertram's turn — switch the speaker to them to type, or skip to let someone else respond." It will not quietly pass the turn of the character you were last writing as, which was never outstanding in the first place. Only when the floor belongs to one of the house's own characters does the banner fall back to the voice you're holding, and offer you the courtesy of declining early.
+
 - Type your character's response in the composer and send normally
-- Or hit **Skip** to record their turn as taken (no message) and let the next character respond — on their turn or off it. If the conversation was paused, Skip resumes it first
+- Or hit **Skip** to record their turn as taken (no message) and let the next character respond — on their turn or off it. In a paused room a Skip buys exactly one turn and leaves the pause standing
+- With two of your own characters in the room, a message from one of them hands the floor straight to the other rather than summoning an LLM to answer — so two turns in a row are yours, and the banner will name each in its proper order
 - Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
 - Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
 - When the rotation reaches a seat you're driving, the composer defaults the voice above the input to *that* seat, so you're already speaking as whoever's turn it is. Taking up a character's pen also hands them the floor at once, rather than making you wait for the rotation to come round. A voice you pick by hand for the turn still stands; the composer only re-defaults as the turn moves on.
@@ -275,24 +294,25 @@ If all eligible characters have zero talkativeness:
 
 ## Pause and Resume
 
-### For All-LLM Chats
-
 **Pause:**
 
-- Click **Pause** in sidebar header
-- Characters stop responding
-- Current generation (if any) completes
-- Use to read, think, or take a break
+- Click **Pause** in the sidebar header
+- The room stops dead: no rotation, no chain of replies
+- The turn already in flight (if any) completes
+- A message you type is set down in the record in full and answered by nobody — the floor waits
+  where you left it
+- **Nudge** or **Skip** borrows a single turn against the pause: one character answers and the room
+  falls quiet again. Neither lifts the pause
+- **Queue** notes a character's place against the next turn you call for
 
 **Resume:**
 
-- Click **Resume** to continue
-- Turn manager resumes normal operation
-- Next eligible character speaks
+- Click **Resume** to return the company to its ordinary rotation
+- The next eligible character speaks when you next send, nudge or skip
 
 ### When a Turn Fails
 
-If a character's turn fails outright — its connection profile errors and every understudy in the fallback chain comes back empty — the Turn Manager pauses the conversation rather than knock on the same broken door turn after turn. A notice says so, and the sidebar button reads **Resume**. Mend the profile (or pick another from the character's card), then press **Resume**, nudge someone, or Skip your own turn; any of the three lifts the pause. Until you do, each message you send draws a single reply and the rotation goes no further.
+If a character's turn fails outright — its connection profile errors and every understudy in the fallback chain comes back empty — the Turn Manager pauses the conversation rather than knock on the same broken door turn after turn. A notice says so, and the sidebar button reads **Resume**. Mend the profile (or pick another from the character's card), then press **Resume** to set the rotation going again — or nudge someone for a single turn, which leaves the pause where it is. Until the pause is lifted, each message you send is recorded and answered by nobody.
 
 ### Auto-Pause
 
@@ -304,8 +324,8 @@ Triggers automatically when:
 
 You'll see a notification with options:
 
-- **Resume** — Continue the conversation
-- **Stop** — End auto-responses, take manual control
+- **Continue** — Lifts the pause and sets the company going again
+- **Stop** — Leaves the room paused and the floor yours
 
 ## Configuration
 

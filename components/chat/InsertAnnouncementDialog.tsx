@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
-import { QuillAnimation } from '@/components/chat/QuillAnimation'
+import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 type StaffId =
   | 'lantern'
@@ -90,6 +92,7 @@ export default function InsertAnnouncementDialog({
   audienceCandidates = [],
   onPosted,
 }: InsertAnnouncementDialogProps) {
+  const imagesHidden = useImagesHidden()
   const [mode, setMode] = useState<Mode>('staff')
   const [staffId, setStaffId] = useState<StaffId>('host')
   const [characterId, setCharacterId] = useState<string>('')
@@ -176,14 +179,7 @@ export default function InsertAnnouncementDialog({
   // own resolution: explicit defaultSystemPromptId → isDefault flag → first.
   const defaultSystemPromptId = useMemo<string | null>(() => {
     if (mode !== 'character' || !selectedCharacter) return null
-    const prompts = selectedCharacter.systemPrompts || []
-    if (
-      selectedCharacter.defaultSystemPromptId
-      && prompts.some((p) => p.id === selectedCharacter.defaultSystemPromptId)
-    ) {
-      return selectedCharacter.defaultSystemPromptId
-    }
-    return prompts.find((p) => p.isDefault)?.id ?? prompts[0]?.id ?? null
+    return resolveDefaultSystemPromptId(selectedCharacter)
   }, [mode, selectedCharacter])
 
   const profileId = profileOverride ?? defaultProfileId
@@ -478,7 +474,7 @@ export default function InsertAnnouncementDialog({
                         }`}
                         disabled={isPosting || stage !== 'compose'}
                       >
-                        {c.avatarUrl ? (
+                        {c.avatarUrl && !imagesHidden ? (
                           <img
                             src={c.avatarUrl}
                             alt=""
@@ -601,7 +597,7 @@ export default function InsertAnnouncementDialog({
                         disabled={isPosting || stage === 'generating'}
                         className="qt-checkbox flex-shrink-0"
                       />
-                      {p.avatarUrl ? (
+                      {p.avatarUrl && !imagesHidden ? (
                         <img
                           src={p.avatarUrl}
                           alt=""
@@ -677,27 +673,17 @@ export default function InsertAnnouncementDialog({
             />
           </div>
 
-          {/* Preview panel */}
+          {/* Preview panel — shared with the in-scene rehearsal. */}
           {willRewrite && stage !== 'compose' && (
-            <div>
-              <label className="block text-sm qt-text-primary mb-2">
-                What {selectedCharacter?.name || 'the character'} will say
-              </label>
-              {stage === 'generating' ? (
-                <div className="qt-border-primary border rounded p-6 flex flex-col items-center justify-center gap-3 min-h-32">
-                  <QuillAnimation size="lg" />
-                  <div className="qt-text-secondary text-sm">Generating in character…</div>
-                </div>
-              ) : (
-                <MarkdownLexicalEditor
-                  value={proposedMarkdown}
-                  onChange={setProposedMarkdown}
-                  disabled={isPosting}
-                  namespace="InsertAnnouncementDialogPreview"
-                  ariaLabel="Proposed announcement"
-                />
-              )}
-            </div>
+            <VoiceRewriteReviewPanel
+              characterName={selectedCharacter?.name || 'the character'}
+              generating={stage === 'generating'}
+              value={proposedMarkdown}
+              onChange={setProposedMarkdown}
+              disabled={isPosting}
+              namespace="InsertAnnouncementDialogPreview"
+              ariaLabel="Proposed announcement"
+            />
           )}
         </div>
 

@@ -15,9 +15,11 @@ interface ImageUploadDialogProps {
   onSuccess?: () => void;
   contextType?: 'CHARACTER' | 'CHAT' | 'THEME';
   contextId?: string;
+  /** Shape for the Generate tab; the avatar picker passes `portrait`. */
+  generateOrientation?: 'portrait' | 'landscape' | 'square';
 }
 
-export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, contextId }: ImageUploadDialogProps) {
+export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, contextId, generateOrientation }: ImageUploadDialogProps) {
   const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
   const [showGeneration, setShowGeneration] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -117,6 +119,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
           onSuccess={handleGenerationSuccess}
           contextType={contextType as any}
           contextId={contextId}
+          orientation={generateOrientation}
         />
       )}
 

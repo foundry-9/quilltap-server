@@ -304,6 +304,25 @@ import { widenConciergeOverrideDomainMigration } from './widen-concierge-overrid
 import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
 // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
 import { addTextReplacementRulesTableMigration } from './add-text-replacement-rules-table';
+// Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
+import { addChatInformsTableMigration } from './add-chat-informs-table';
+import { clearScenarioSeededChatSummariesMigration } from './clear-scenario-seeded-chat-summaries';
+import { recompressOversizedMountBlobsMigration } from './recompress-oversized-mount-blobs';
+import { compressLlmLogPayloadsMigration } from './compress-llm-log-payloads';
+import { compressConversationChunkContentMigration } from './compress-conversation-chunk-content';
+import { createChatMessageFtsMigration } from './create-chat-message-fts';
+import { compressChatMessageTextMigration } from './compress-chat-message-text';
+// Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
+import { addChatRefusalLedgerMigration } from './add-chat-refusal-ledger';
+import { addChatConciergeModeMigration } from './add-chat-concierge-mode';
+// Concierge phase 4: the Concierge's own settings object, and the legacy override column dropped
+import { addConciergeSettingsMigration } from './add-concierge-settings';
+import { dropChatConciergeOverrideMigration } from './drop-chat-concierge-override';
+// Scriptorium: transcripts rendered on demand; drop the stored copy
+import { dropChatRenderedMarkdownMigration } from './drop-chat-rendered-markdown';
+import { addChatInformsPermanentMigration } from './add-chat-informs-permanent';
+// Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
+import { impersonationVoiceModeMigration } from './impersonation-voice-mode';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -384,6 +403,44 @@ import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-messa
 import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
 // files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
 import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
+// Message route trail: routeTrail column on chat_messages (every model tried, in order)
+import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
+// Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+import { addCycleOrderColumnMigration } from './add-cycle-order-column-v1';
+// Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+import { clearGeneratedImagePlaceholderDescriptionsMigration } from './clear-generated-image-placeholder-descriptions';
+// Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+import { addImpersonationVoiceRewriteFieldMigration } from './add-impersonation-voice-rewrite-field';
+import { addTranscriptVersionColumnMigration } from './add-transcript-version-column-v1';
+import { addFileGenerationKeyColumnMigration } from './add-file-generation-key-column-v1';
+import { collapseDuplicateAvatarRollsMigration } from './collapse-duplicate-avatar-rolls-v1';
+// Wardrobe wear ledger: wardrobe_wear_stats table, then a one-time seed from current outfits
+import { addWardrobeWearStatsTableMigration } from './add-wardrobe-wear-stats-table-v1';
+import { seedWardrobeWearStatsMigration } from './seed-wardrobe-wear-stats-v1';
+// Wardrobe item images: chat_settings.wardrobeImageSettings (the designated image profile)
+import { addWardrobeImageSettingsFieldMigration } from './add-wardrobe-image-settings-field-v1';
+// Memory consolidation and tiers: hot/cold tier + digest bookkeeping on memories, fold-grain OTHER watermark on chats
+import { addMemoryTiersMigration } from './add-memory-tiers-v1';
+// Memory: supersededAt, the cold-retention clock that link rewrites cannot reset (bug 225)
+import { addMemorySupersededAtMigration } from './add-memory-superseded-at-v1';
+// Scenarios from anywhere: chats.scenarioSource / scenarioNotes (where each chat's scene was found)
+import { addChatScenarioSourceMigration } from './add-chat-scenario-source-v1';
+// Memory: the fold-time episode pass watermark (bug 207)
+import { addEpisodeExtractionWatermarkMigration } from './add-episode-extraction-watermark-v1';
+// Memory: recompute reinforcedImportance with the count-1-equals-importance formula (bug 216)
+import { recomputeReinforcedImportanceMigration } from './recompute-reinforced-importance-v1';
+import { rezoneLegacyMemoryOccurredAtMigration } from './rezone-legacy-memory-occurred-at-v1';
+// Memory: partial supersededById index for the delete chokepoint's digest scrub
+import { addMemoriesSupersededByIndexMigration } from './add-memories-superseded-by-index-v1';
+// Memory: housekeeping settings into instance_settings.memoryMaintenance; dead knobs dropped (refactor phase A)
+import { moveMemoryMaintenanceSettingsMigration } from './move-memory-maintenance-settings-v1';
+import { retireMemoryVectorEntriesMigration } from './retire-memory-vector-entries-v1';
+// Memory: extraction cursors table; fold-pass watermark columns dropped (refactor phase D)
+import { addMemoryExtractionCursorsMigration } from './add-memory-extraction-cursors-v1';
+import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-memory-jobs-v1';
+import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-version-v1';
+// Memory: MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION folded into MEMORY_MAINTENANCE (refactor phase F)
+import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
 
 /**
  * All available migrations.
@@ -770,6 +827,80 @@ export const migrations: Migration[] = [
   collapseDuplicateFoldersMigration,
   // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
   realignFileEntrySha256Migration,
+  // Message route trail: routeTrail column on chat_messages (every model tried, in order)
+  addRouteTrailMessageColumnMigration,
+  // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+  addCycleOrderColumnMigration,
+  // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+  clearGeneratedImagePlaceholderDescriptionsMigration,
+  // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+  addImpersonationVoiceRewriteFieldMigration,
+  // Salon transcript as a subscribed read: transcriptVersion counter column on chats
+  addTranscriptVersionColumnMigration,
+  // Avatar configuration cache: generationKey column + index on files
+  addFileGenerationKeyColumnMigration,
+  // Avatar configuration cache: one image per character per configuration
+  collapseDuplicateAvatarRollsMigration,
+  // Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
+  addChatInformsTableMigration,
+  // Conversation summaries: clear the ones that are really the chat's own scenario (bug 158)
+  clearScenarioSeededChatSummariesMigration,
+  // Scriptorium images: re-encode untranscoded bitmaps and oversized lossless WebP
+  recompressOversizedMountBlobsMigration,
+  // LLM logs: store the prompt/response payloads brotli-compressed
+  compressLlmLogPayloadsMigration,
+  // Scriptorium transcripts: store the rendered chunk text brotli-compressed
+  compressConversationChunkContentMigration,
+  // Message search: the FTS5 index that replaces the LIKE scan (and unblocks
+  // compressing chat_messages.content — must come before it)
+  createChatMessageFtsMigration,
+  // Transcripts: store the four large chat_messages text columns compressed
+  compressChatMessageTextMigration,
+  // Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
+  addChatRefusalLedgerMigration,
+  // Concierge three states: conciergeMode / conciergeModeSetBy / conciergeModeReason on chats
+  addChatConciergeModeMigration,
+  // Concierge settings: chat_settings.conciergeSettings, backfilled from the retired mode
+  addConciergeSettingsMigration,
+  // Concierge: drop the legacy chats.conciergeOverride column
+  dropChatConciergeOverrideMigration,
+  // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
+  dropChatRenderedMarkdownMigration,
+  // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
+  addChatInformsPermanentMigration,
+  // Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
+  impersonationVoiceModeMigration,
+  // Wardrobe wear ledger: the table, then a one-time seed from current outfits
+  addWardrobeWearStatsTableMigration,
+  seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
+  // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
+  addMemoryTiersMigration,
+  // Memory: supersededAt, the cold-retention clock (bug 225)
+  addMemorySupersededAtMigration,
+  // Scenarios from anywhere: chats.scenarioSource / scenarioNotes
+  addChatScenarioSourceMigration,
+  // Memory: chats.episodeExtractionWatermarkMessageId (bug 207)
+  addEpisodeExtractionWatermarkMigration,
+  // Memory: recompute reinforcedImportance (count 1 equals importance, bug 216)
+  recomputeReinforcedImportanceMigration,
+  // Memory: re-stamp legacy UTC-midnight occurredAt at local midnight (PR 90 review)
+  rezoneLegacyMemoryOccurredAtMigration,
+  // Memory: partial supersededById index (delete chokepoint digest scrub)
+  addMemoriesSupersededByIndexMigration,
+  // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
+  moveMemoryMaintenanceSettingsMigration,
+  // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
+  retireMemoryVectorEntriesMigration,
+  // Memory: memory_extraction_cursors; chats watermark columns dropped (Phase D)
+  addMemoryExtractionCursorsMigration,
+  // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
+  dropInterCharacterMemoryJobsMigration,
+  // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
+  addTfidfTextShapeVersionMigration,
+  // Memory: the retired MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION job rows (Phase F)
+  dropHousekeepingConsolidationJobsMigration,
 ];
 
 export {
@@ -1135,5 +1266,77 @@ export {
   collapseDuplicateFoldersMigration,
   // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
   realignFileEntrySha256Migration,
+  // Message route trail: routeTrail column on chat_messages (every model tried, in order)
+  addRouteTrailMessageColumnMigration,
+  // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+  addCycleOrderColumnMigration,
+  // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+  clearGeneratedImagePlaceholderDescriptionsMigration,
+  // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+  addImpersonationVoiceRewriteFieldMigration,
+  // Salon transcript as a subscribed read: transcriptVersion counter column on chats
+  addTranscriptVersionColumnMigration,
+  // Avatar configuration cache: generationKey column + index on files
+  addFileGenerationKeyColumnMigration,
+  // Avatar configuration cache: one image per character per configuration
+  collapseDuplicateAvatarRollsMigration,
+  // Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
+  addChatInformsTableMigration,
+  // Conversation summaries: clear the ones that are really the chat's own scenario (bug 158)
+  clearScenarioSeededChatSummariesMigration,
+  // Scriptorium images: re-encode untranscoded bitmaps and oversized lossless WebP
+  recompressOversizedMountBlobsMigration,
+  // LLM logs: store the prompt/response payloads brotli-compressed
+  compressLlmLogPayloadsMigration,
+  // Scriptorium transcripts: store the rendered chunk text brotli-compressed
+  compressConversationChunkContentMigration,
+  // Message search: the FTS5 index that replaces the LIKE scan (and unblocks
+  // compressing chat_messages.content — must come before it)
+  createChatMessageFtsMigration,
+  // Transcripts: store the four large chat_messages text columns compressed
+  compressChatMessageTextMigration,
+  // Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
+  addChatRefusalLedgerMigration,
+  // Concierge three states: conciergeMode / conciergeModeSetBy / conciergeModeReason on chats
+  addChatConciergeModeMigration,
+  // Concierge settings: chat_settings.conciergeSettings, backfilled from the retired mode
+  addConciergeSettingsMigration,
+  // Concierge: drop the legacy chats.conciergeOverride column
+  dropChatConciergeOverrideMigration,
+  // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
+  dropChatRenderedMarkdownMigration,
+  // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
+  addChatInformsPermanentMigration,
+  impersonationVoiceModeMigration,
+  // Wardrobe wear ledger: the table, then a one-time seed from current outfits
+  addWardrobeWearStatsTableMigration,
+  seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
+  // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
+  addMemoryTiersMigration,
+  // Memory: supersededAt, the cold-retention clock (bug 225)
+  addMemorySupersededAtMigration,
+  // Scenarios from anywhere: chats.scenarioSource / scenarioNotes
+  addChatScenarioSourceMigration,
+  // Memory: chats.episodeExtractionWatermarkMessageId (bug 207)
+  addEpisodeExtractionWatermarkMigration,
+  // Memory: recompute reinforcedImportance (count 1 equals importance, bug 216)
+  recomputeReinforcedImportanceMigration,
+  // Memory: re-stamp legacy UTC-midnight occurredAt at local midnight (PR 90 review)
+  rezoneLegacyMemoryOccurredAtMigration,
+  // Memory: partial supersededById index (delete chokepoint digest scrub)
+  addMemoriesSupersededByIndexMigration,
+  // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
+  moveMemoryMaintenanceSettingsMigration,
+  // Memory: memories.embedding is the only copy; vector_entries / vector_indices dropped (Phase B)
+  retireMemoryVectorEntriesMigration,
+  // Memory: memory_extraction_cursors; chats watermark columns dropped (Phase D)
+  addMemoryExtractionCursorsMigration,
+  // Memory: the retired INTER_CHARACTER_MEMORY job rows (Phase D)
+  dropInterCharacterMemoryJobsMigration,
+  // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
+  addTfidfTextShapeVersionMigration,
+  dropHousekeepingConsolidationJobsMigration,
 };
 

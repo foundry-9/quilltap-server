@@ -6,8 +6,8 @@
  * `Wardrobe/` folder in some mount, holding items nobody owns
  * (`characterId: null`). Quilltap General is the instance-wide one, a project
  * store is the project-wide one, a group's official store is the group-wide
- * one. This module is that one shape; `general-wardrobe.ts`,
- * `project-wardrobe.ts` and `group-wardrobe.ts` are thin scoped façades over it.
+ * one. This module is that one shape; `general-wardrobe.ts` adds the General
+ * mount lookup, and `lib/wardrobe/location.ts` addresses every tier through it.
  *
  * The underlying reader (`readCharacterVaultWardrobe`) is already generic over
  * any mount point, so no new parsing is introduced here.
@@ -49,23 +49,15 @@ export async function ensureSharedWardrobeFolder(
  * coerced to `null` (shared items are not owned by a character). Returns `[]`
  * when the folder is empty or unreadable.
  *
- * Archetype seeding is disabled in the underlying reader: a shared composite
- * resolves its components within this same folder, not by recursing through
- * `findArchetypes` (which would loop back here).
- *
- * Consequence, and a known gap: a shared composite whose components live in a
- * *different* tier loses those refs at parse time — `resolveAndCheckComponentItems`
- * only sees this folder's items. Same-tier composites (the common case) are
- * fine. Read-time hydration in `lib/wardrobe/resolve-equipped.ts` recovers the
- * equipped case; the parse-time gap is tracked separately.
+ * A composite whose components live in a *different* tier keeps those refs as
+ * the UUIDs they were written as (bug 187); the per-request wearable pool
+ * (`lib/wardrobe/pool.ts`) resolves them.
  */
 export async function readSharedWardrobe(
   mountPointId: string,
   includeArchived = false,
 ): Promise<WardrobeItem[]> {
-  const vault = await readCharacterVaultWardrobe(mountPointId, undefined, {
-    seedArchetypes: false,
-  });
+  const vault = await readCharacterVaultWardrobe(mountPointId);
   if (!vault) return [];
 
   let items: WardrobeItem[] = vault.items.map((item) => ({ ...item, characterId: null }));

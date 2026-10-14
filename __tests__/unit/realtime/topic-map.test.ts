@@ -34,7 +34,47 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.detail('chat-1'),
       queryKeys.chats.state('chat-1'),
       queryKeys.chats.background('chat-1'),
+      queryKeys.chats.gallery('chat-1'),
+      queryKeys.chats.informs('chat-1'),
+      queryKeys.wardrobe.outfit('chat-1'),
+      queryKeys.chats.scenarioSource('chat-1'),
     ]);
+  });
+
+  it('refreshes the pending informs on the chats topic', () => {
+    // Every event that changes a pending inform already publishes `chats`: the
+    // post inserts the Host record, a consumed row rides the assistant-message
+    // insert, and a cancel publishes the topic by hand. This row is what keeps
+    // the composer chips honest without a poll of their own.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.chats.informs('chat-1'),
+    );
+    expect(queryKeysForTopic('chats', 'other-chat')).not.toContainEqual(
+      queryKeys.chats.informs('chat-1'),
+    );
+  });
+
+  it('refreshes the worn outfit on the chats topic (bug 198)', () => {
+    // A tool-driven wardrobe change lands as messages, which publish `chats`.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.wardrobe.outfit('chat-1'),
+    );
+    expect(queryKeysForTopic('chats', 'chat-2')).not.toContainEqual(
+      queryKeys.wardrobe.outfit('chat-1'),
+    );
+  });
+
+  it('refreshes the chat gallery on the chats topic', () => {
+    // The story-background and avatar jobs publish `{topic:'chats', id}` when
+    // they finish, and that is the whole realtime path the gallery has — no
+    // topic of its own, so this row is what keeps the count honest.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.chats.gallery('chat-1'),
+    );
+    // A hint for another chat must not touch this one's gallery.
+    expect(queryKeysForTopic('chats', 'chat-2')).not.toContainEqual(
+      queryKeys.chats.gallery('chat-1'),
+    );
   });
 
   it('sweeps the namespace when the event carries no id', () => {
@@ -42,10 +82,23 @@ describe('queryKeysForTopic', () => {
     expect(queryKeysForTopic('characters')).toEqual([queryKeys.characters.all]);
   });
 
+  /**
+   * Bug 128. The `memories` id is a *chat* id, not a memory id — the Salon
+   * sidebar's count is the only subscriber, and a memory's own id would mean
+   * nothing to it.
+   */
+  it('narrows a memories event to the count for that chat', () => {
+    expect(queryKeysForTopic('memories', 'chat-1')).toEqual([
+      queryKeys.memories.chatCount('chat-1'),
+    ]);
+    expect(queryKeysForTopic('memories')).toEqual([queryKeys.memories.all]);
+  });
+
   it('scopes character events to that character', () => {
     expect(queryKeysForTopic('characters', 'char-1')).toEqual([
       queryKeys.characters.detail('char-1'),
       queryKeys.characters.prompts('char-1'),
+      queryKeys.characters.subprompts('char-1'),
       queryKeys.characters.photos('char-1'),
     ]);
   });

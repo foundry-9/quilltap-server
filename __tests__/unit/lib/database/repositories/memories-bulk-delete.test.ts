@@ -1,5 +1,8 @@
 /**
- * Unit tests for MemoriesRepository.bulkDelete
+ * Unit tests for MemoriesRepository.bulkDeleteUnsafe
+ *
+ * (`retireMemories` is its only caller; the name says the row delete alone
+ * leaves links and vectors behind.)
  *
  * The method must chunk its `$in` filter: the query translator expands each
  * ID into one bind variable, and a full-wipe cascade (e.g. restoring over an
@@ -37,7 +40,7 @@ beforeAll(async () => {
   ;({ MemoriesRepository } = await import('@/lib/database/repositories/memories.repository'))
 })
 
-describe('MemoriesRepository.bulkDelete', () => {
+describe('MemoriesRepository.bulkDeleteUnsafe', () => {
   let repo: MemoriesRepositoryType
 
   beforeEach(() => {
@@ -50,7 +53,7 @@ describe('MemoriesRepository.bulkDelete', () => {
       .spyOn(repo as any, 'deleteMany')
       .mockImplementation(async () => 0)
 
-    const deleted = await repo.bulkDelete('char-1', [])
+    const deleted = await repo.bulkDeleteUnsafe('char-1', [])
 
     expect(deleted).toBe(0)
     expect(deleteManySpy).not.toHaveBeenCalled()
@@ -61,7 +64,7 @@ describe('MemoriesRepository.bulkDelete', () => {
       .spyOn(repo as any, 'deleteMany')
       .mockImplementation(async (filter: any) => filter.id.$in.length)
 
-    const deleted = await repo.bulkDelete('char-1', ['a', 'b', 'c'])
+    const deleted = await repo.bulkDeleteUnsafe('char-1', ['a', 'b', 'c'])
 
     expect(deleted).toBe(3)
     expect(deleteManySpy).toHaveBeenCalledTimes(1)
@@ -77,7 +80,7 @@ describe('MemoriesRepository.bulkDelete', () => {
       .mockImplementation(async (filter: any) => filter.id.$in.length)
 
     const ids = Array.from({ length: 2000 }, (_, i) => `mem-${i}`)
-    const deleted = await repo.bulkDelete('char-1', ids)
+    const deleted = await repo.bulkDeleteUnsafe('char-1', ids)
 
     expect(deleted).toBe(2000)
     expect(deleteManySpy).toHaveBeenCalledTimes(3)

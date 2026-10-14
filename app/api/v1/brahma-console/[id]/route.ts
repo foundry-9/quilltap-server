@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatMetadata } from '@/lib/schemas/types';
@@ -20,8 +20,6 @@ import { verifyBrahmaChat } from '../_shared';
 
 const logger = createServiceLogger('BrahmaConsoleItemRoute');
 
-const PATCH_ACTIONS = ['set-model'] as const;
-type PatchAction = typeof PATCH_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -160,23 +158,12 @@ export const GET = createContextParamsHandler<{ id: string }>(
 );
 
 export const PATCH = createContextParamsHandler<{ id: string }>(
-  async (req, context, { id }) => {
-    const action = getActionParam(req);
-
-    if (!action) {
-      return handleRename(req, context, id);
-    }
-
-    if (!isValidAction(action, PATCH_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}. Available actions: ${PATCH_ACTIONS.join(', ')}`);
-    }
-
-    const actionHandlers: Record<PatchAction, () => Promise<NextResponse>> = {
-      'set-model': () => handleSetModel(req, context, id),
-    };
-
-    return actionHandlers[action]();
-  }
+  async (req, context, { id }) =>
+    dispatchAction(
+      req,
+      { 'set-model': () => handleSetModel(req, context, id) },
+      () => handleRename(req, context, id)
+    )
 );
 
 export const DELETE = createContextParamsHandler<{ id: string }>(

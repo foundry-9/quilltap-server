@@ -36,9 +36,13 @@
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
+ * POST /api/v1/chats/[id]?action=retry-image-uncensored - Redraw a picture (or the story background) on the Concierge's uncensored desk
  * POST /api/v1/chats/[id]?action=render-conversation - Queue Scriptorium render with full re-embed
  * POST /api/v1/chats/[id]?action=announcement - Post an ad-hoc announcement bubble
  * POST /api/v1/chats/[id]?action=scenario - Change (or clear) the chat's scenario mid-conversation
+ * POST /api/v1/chats/[id]?action=save-image - Save any image in the chat's gallery to a photo album
+ * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
+ * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
  * POST /api/v1/chats/[id]?action=send-mail - Post a letter as a player-character (The Post Office)
  * GET /api/v1/chats/[id]?action=mailbox&characterId=… - List a player-character's mailbox letters
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)

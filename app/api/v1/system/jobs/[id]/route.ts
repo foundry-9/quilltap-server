@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { ensureProcessorRunning } from '@/lib/background-jobs';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -74,14 +74,20 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
  * POST /api/v1/system/jobs/[id]?action=pause|resume
  */
 export const POST = createContextParamsHandler<{ id: string }>(
-  async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
-    const action = getActionParam(req);
+  async (req: NextRequest, ctx: RequestContext, { id }) =>
+    dispatchAction(req, {
+      pause: () => handleJobStatusChange(ctx, id, 'pause'),
+      resume: () => handleJobStatusChange(ctx, id, 'resume'),
+    })
+);
 
-    if (!action || !['pause', 'resume'].includes(action)) {
-      return badRequest('Invalid action. Available actions: pause, resume');
-    }
-
-    try {const job = await repos.backgroundJobs.findById(id);
+async function handleJobStatusChange(
+  { user, repos }: RequestContext,
+  id: string,
+  action: 'pause' | 'resume'
+): Promise<NextResponse> {
+    try {
+      const job = await repos.backgroundJobs.findById(id);
 
       if (!job) {
         return notFound('Job');
@@ -123,5 +129,4 @@ export const POST = createContextParamsHandler<{ id: string }>(
       logger.error('[System Jobs v1] Error in action', { error: errorMessage, action });
       return serverError(errorMessage);
     }
-  }
-);
+}

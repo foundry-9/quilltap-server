@@ -367,6 +367,19 @@ export function notifyChild(target: 'vectorStore' | 'mountPoint', key: string): 
 }
 
 /**
+ * Hand the child the vectors and tiers of memory rows the parent just wrote,
+ * so its cache for the character is patched rather than dropped (dropping it
+ * would also discard in-place updates a running child job made).
+ */
+export function patchChildMemoryIndex(
+  characterId: string,
+  entries: Array<{ id: string; embedding: Float32Array; tier: 'hot' | 'cold' }>,
+): void {
+  if (entries.length === 0) return;
+  sendToChild({ type: 'memory-index-patch', characterId, entries });
+}
+
+/**
  * Send a message to the child. Returns false if the child isn't alive.
  */
 export function sendToChild(msg: ParentToChildMessage): boolean {

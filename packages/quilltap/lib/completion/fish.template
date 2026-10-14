@@ -19,7 +19,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion
         return 1
     end
   end
@@ -31,7 +31,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion
         test "$cmd[$i]" = "$target"
         return $status
     end
@@ -55,11 +55,13 @@ end
 
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'db' -d 'Query encrypted databases'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'docs' -d 'Inspect and read document mounts'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'sync' -d 'Mirror a database-backed store to a directory'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'themes' -d 'Manage theme bundles'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Register or inspect instances'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'recall-replay' -d 'Replay memory recall for a turn'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'anchor-probe' -d 'Probe anchor-line effect on admission'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'maintenance' -d 'Run retention/cleanup sweeps'
@@ -111,7 +113,8 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -l 'grep' -d 'Substring
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'character' -d 'Character name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'project' -d 'Project name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'about' -d 'Subject character' -x
-complete -c quilltap -n '__quilltap_using_subcommand db' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL CONSOLIDATED'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'tier' -d 'Memory tier' -x -a 'hot cold'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'chat' -d 'Chat name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'message' -d 'Message id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'rendered' -d 'Render rich content'
@@ -188,6 +191,22 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'uri' -d 'Show can
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'base64' -d 'Base64 transfer for binary files'
 complete -c quilltap -n '__quilltap_using_subverb docs docker-mounts' -l 'format' -d 'Output shape' -x -a 'args json'
 
+# ---------- sync ----------
+# `quilltap sync <store> <path>`: the first positional is a store, the second a
+# local directory — so the verb is not -f (file completion stays available).
+complete -c quilltap -n '__quilltap_using_subcommand sync' -f -a '(__quilltap_mount_names)' -d 'Document store'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'dry-run' -d 'Plan and print; change nothing'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'direction' -d 'Which side may change' -x -a 'both to-disk to-store'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'prefer' -d 'How to resolve a conflict' -x -a 'newer store disk'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'no-delete' -d 'Never propagate a deletion'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'no-manifest' -d 'Ignore .quilltap-sync.json'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'json' -d 'Machine-readable plan and results'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'port' -s 'p' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'instance' -s 'i' -d 'Registered instance' -x -a '(__quilltap_instance_names)'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'data-dir' -s 'd' -d 'Data directory' -x -a '(__fish_complete_directories)'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'passphrase' -d 'Database passphrase' -x
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'help' -s 'h' -d 'Show help'
+
 # ---------- themes verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'list' -d 'List themes'
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'install' -d 'Install theme'
@@ -254,11 +273,18 @@ complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'show' -d '
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'tree' -d 'Graph walk'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'status' -d 'Memory status'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'validate' -d 'Health check'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'maintain' -d 'Run memory maintenance'
 
 # memories flags
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'character' -d 'Character name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'about' -d 'Subject of memory' -x
-complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL CONSOLIDATED'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'tier' -d 'Memory tier' -x -a 'hot cold'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'dry-run' -d 'Maintain: rehearse and print the report, write nothing'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'phases' -d 'Maintain: comma-separated phases' -x -a 'fold-near-duplicates consolidate demote retire mirror'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'cap' -d 'Maintain: hot-row cap for demotion' -x
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'repair' -d 'Validate: repair the graph on the running server'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'write' -d 'Validate --repair: apply the repair'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'chat' -d 'Chat id or title' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'project' -d 'Project name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'since' -d 'Since timestamp' -x
@@ -294,7 +320,17 @@ complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'out' -d 'O
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'turn' -d 'Interchange to replay (1-based)' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'char' -d 'Character whose memories are searched' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'limit' -d 'Candidate rows per path' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'memory-budget' -d 'Memory token budget' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'tuning' -d 'New-path tuning JSON' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'tuning-file' -d 'New-path tuning JSON file' -r -F
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'signals-from' -d 'Reuse signals from a saved replay' -r -F
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'as-of' -d 'Search the corpus as it stood at the turn'
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'port' -d 'Server port' -x
+
+# ---------- anchor-probe flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'limit' -d 'Recent memories to sample' -x
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'port' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'json' -d 'Raw JSON output'
 
 # ---------- file-verify flags ----------
 complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'all' -d 'Read every top-level file, not just dataless ones'

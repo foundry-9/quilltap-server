@@ -5,10 +5,10 @@
 
 import {
   buildMemoryAnchorLine,
-  buildMemoryEmbeddingText,
-  resolveWhenPhrase,
   eventReferenceTimeMs,
 } from '../episodic'
+import { embeddingTextFor } from '../index-store/embedding-text'
+import { resolveWhenPhrase } from '../time/clock'
 
 describe('buildMemoryAnchorLine', () => {
   it('renders when + place from anchors', () => {
@@ -42,15 +42,17 @@ describe('buildMemoryAnchorLine', () => {
   })
 })
 
-describe('buildMemoryEmbeddingText', () => {
+describe('embeddingTextFor', () => {
   it('is byte-identical to the legacy form without anchors', () => {
-    expect(buildMemoryEmbeddingText('sum', 'content')).toBe('sum\n\ncontent')
-    expect(buildMemoryEmbeddingText('sum', 'content', {})).toBe('sum\n\ncontent')
+    expect(embeddingTextFor({ summary: 'sum', content: 'content' })).toBe('sum\n\ncontent')
+    expect(
+      embeddingTextFor({ summary: 'sum', content: 'content', occurredAt: null, narrativeTime: null, entities: [] }),
+    ).toBe('sum\n\ncontent')
   })
 
   it('appends the anchor line when anchors exist', () => {
     expect(
-      buildMemoryEmbeddingText('sum', 'content', { occurredAt: '2026-07-14T00:00:00.000Z' }),
+      embeddingTextFor({ summary: 'sum', content: 'content', occurredAt: '2026-07-14T00:00:00.000Z' }),
     ).toBe('sum\n\ncontent\n(when: 2026-07-14)')
   })
 })
@@ -81,7 +83,10 @@ describe('resolveWhenPhrase', () => {
   it('resolves relative phrases against the anchor', () => {
     expect(resolveWhenPhrase('yesterday', anchor)).toBe('2026-07-20T00:00:00.000Z')
     expect(resolveWhenPhrase('3 days ago', anchor)).toBe('2026-07-18T00:00:00.000Z')
-    expect(resolveWhenPhrase('last week', anchor)).toBe('2026-07-14T00:00:00.000Z')
+    // Bug 212: the previous Monday-anchored week, as the read side asks for it.
+    expect(resolveWhenPhrase('last week', anchor)).toBe('2026-07-13T00:00:00.000Z')
+    // Bug 212: the start of the read side's 18:00–06:00 window.
+    expect(resolveWhenPhrase('last night', anchor)).toBe('2026-07-20T18:00:00.000Z')
     expect(resolveWhenPhrase('two weeks ago', anchor)).toBe('2026-07-07T00:00:00.000Z')
     expect(resolveWhenPhrase('a couple of days ago', anchor)).toBe('2026-07-19T00:00:00.000Z')
   })
@@ -93,9 +98,10 @@ describe('resolveWhenPhrase', () => {
     expect(resolveWhenPhrase('last Tuesday', anchor)).toBe('2026-07-14T00:00:00.000Z')
   })
 
-  it('maps the anchor moment phrases to the anchor', () => {
-    expect(resolveWhenPhrase('today', anchor)).toBe(anchor)
-    expect(resolveWhenPhrase('this morning', anchor)).toBe(anchor)
+  it('stamps today-phrases at the start of the window the read side asks for (local midnight)', () => {
+    expect(resolveWhenPhrase('today', anchor)).toBe('2026-07-21T00:00:00.000Z')
+    expect(resolveWhenPhrase('this morning', anchor)).toBe('2026-07-21T00:00:00.000Z')
+    expect(resolveWhenPhrase('just now', anchor)).toBe(anchor)
   })
 
   it('returns null for unresolvable or in-story phrases', () => {

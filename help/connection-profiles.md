@@ -430,6 +430,18 @@ The same care is taken over the *Image Description Profile* itself: a profile wh
 
 You need do nothing about any of this. Tick the box when the model can see; Quilltap will decline to be reckless with it.
 
+### A travelling portrait packs light
+
+A picture bound for a model is not the picture in your album, and it was high time somebody said so.
+
+The Lantern and Aurora now produce work of genuinely handsome resolution — a portrait arrives at 1024 by 1536 and something near two megabytes, which is exactly what one wants hanging in the gallery. What one does *not* want is two megabytes of it strapped to the outside of a telegram. Encoded for transit an image swells by a third again, and a turn that has collected a fresh portrait or two since its character last spoke may present itself at the provider's door carrying four and a half megabytes of luggage. Certain providers — NanoGPT among them — take one look and decline the whole party at the threshold: *Request Entity Too Large*, and not another word. The turn fails, the chain stops, and the message names a size without naming what was oversized.
+
+Quilltap now packs a travelling case. Any image on its way to a model is quietly reduced to a thousand-odd pixels on its longest side and compressed until it fits comfortably under half a megabyte, and no single turn may carry more than two megabytes of pictures in total. Should a turn somehow have collected more than that, the most recent are the ones that travel — a portrait painted five minutes ago being rather more to the point than the one it replaced.
+
+Models, it turns out, are not connoisseurs. They downsample everything on arrival regardless, so a portrait trimmed this way arrives carrying every particular one could wish for: the face, the expression, the cut of the coat, the small print on a sign in the background. In practice the wire cost falls by a factor of twenty or more and nothing whatever is noticed at the far end.
+
+**Your own images are untouched.** The reduction happens to the travelling copy alone, which is discarded the moment the request is answered. What sits in the gallery, in a character's album, in your exports and in your backups is the full-resolution original, at full quality, exactly as it was generated. Nothing is re-saved, and nothing needs re-generating.
+
 ## The Understudies: Fallback
 
 Every performer, however reliable, is occasionally indisposed. A key is refused,
@@ -458,6 +470,13 @@ without setting anything spinning. It simply stops.
 Nor is the arrangement sticky. A successful fallback applies to that one call and
 no other: your next message tries the profile you actually chose, so a passing
 outage heals itself without you having to go and undo anything.
+
+And the transcript now keeps a record of it. Where an understudy stood in, the
+reply's placard becomes a short list beneath the avatar — every profile that was
+asked, in the order asked, the ones that could not oblige struck through and
+marked, the one that answered plain at the bottom. Hover any line and it names
+the profile, what it was, how it came to be asked, and what became of it. A reply
+with no list under it had no trouble at all.
 
 ### Naming an understudy
 
@@ -490,7 +509,22 @@ goes to the next candidate rather than being spent on a certainty.
 
 A fallback fires for problems of *availability*: a rejected key, a rate limit, a
 network failure, a model that no longer exists, a provider returning a 500, an
-empty reply, a moderation refusal.
+empty reply, a moderation refusal — and, since 4.10, a provider that simply
+stops talking.
+
+That last deserves a word. A provider may accept your request, acknowledge it
+handsomely, and then say nothing whatever — not a refusal, not an error, merely
+an open line and an unbroken silence. Formerly Quilltap would wait on such a
+line indefinitely, there being nothing in the acknowledgement to suggest
+anything was amiss. It now keeps a discreet watch on the clock: a stream is
+allowed four minutes to produce its first word, and two minutes between words
+thereafter, which is generous even for the most ruminative of thinking models.
+Past that, the line is abandoned and the understudy called for, exactly as
+though the provider had said no outright.
+
+Do not fear for a long answer: the allowance is *between* words, never on the
+total. A model may hold forth for an hour without troubling the watch, and a
+thinking model's deliberations count as words for this purpose.
 
 It pointedly does **not** fire for problems that would recur identically
 elsewhere:
@@ -516,7 +550,7 @@ The same arrangement covers the cheap-LLM tasks that run out of sight: titling,
 memory extraction, summarising, scene tracking and the rest. When those run
 through a connection profile, that profile's chain applies. When they don't —
 a local model, or a route Quilltap assembled on the spot — see the *Allow a
-Similar-Tier Stand-In* option in [Chat Settings](chat-settings.md).
+Similar-Tier Stand-In* option in [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#cheap-llm-configuration).
 
 Background work fails quietly, as it always has. Only chats speak up.
 

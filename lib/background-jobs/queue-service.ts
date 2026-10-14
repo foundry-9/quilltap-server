@@ -6,9 +6,10 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { BackgroundJobType } from '@/lib/schemas/types';
+import { BackgroundJobType, type BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { MAINTENANCE_PHASES, type MaintenancePhase, type MaintenanceReason, type MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
@@ -45,7 +46,7 @@ export interface EnqueueJobOptions {
  * The handler rebuilds the TurnTranscript from chat state at execution time
  * (the chat is the source of truth — pre-serialising the transcript into
  * the job would just stale faster than the job drains). Dedup is keyed on
- * (chatId, turnOpenerMessageId, extractionAnchorMessageId): the first
+ * (chatId, turnOpenerMessageId, extractionAnchorMessageId, pass, cursor): the first
  * response of a turn enqueues the job; subsequent responses in the same
  * turn no-op against the existing pending job. The anchor field lets
  * autonomous chats (no USER openers) key each character's turn distinctly
@@ -72,7 +73,53 @@ export interface MemoryExtractionPayload {
    * is unique per turn already.
    */
   extractionAnchorMessageId?: string | null;
+  /**
+   * Lines at or before this message are context, not material (bug 245).
+   * Set by a regenerate for an autonomous room (the previous speaker's
+   * anchor); a live job leaves it unset and reads the chat's `turn` cursor.
+   */
+  extractAfterMessageId?: string | null;
   connectionProfileId: string;
+  /**
+   * The grain (memory refactor §3.7): `'turn'` (the default) runs the turn
+   * passes over the turn the opener/anchor locate; `'other-fold'` and
+   * `'episode-fold'` are a fold pass's catch-up over the chat's backlog past
+   * that pass's cursor (enqueued by the daily maintenance sweep, a regenerate,
+   * or a catch-up job that left slices unread).
+   */
+  pass?: MemoryExtractionPass;
+  /**
+   * Catch-ups: the cursor position the job was enqueued at — part of its
+   * dedupe key, so a continuation never collapses into the job that enqueued
+   * it. The job always reads the live cursor.
+   */
+  cursor?: string | null;
+  /** Catch-ups: run even if the chat is not idle (a regenerate wants it now). */
+  ignoreIdle?: boolean;
+  /**
+   * A rebuild of history (regenerate, queue-memories, SillyTavern import), not
+   * live conversation: the extraction rate limit does not apply to it, and its
+   * inserts do not count towards it. Without this a 100-turn regenerate would
+   * hit the hourly cap after a handful of turns and lose every later turn.
+   */
+  backfill?: boolean;
+  /** @deprecated Rows queued before Phase D: `pass: 'other-fold'`. Read by {@link memoryExtractionPassOf} only. */
+  foldOtherCatchup?: boolean;
+  /** @deprecated Rows queued before Phase D: `ignoreIdle`. */
+  foldOtherIgnoreIdle?: boolean;
+  /** @deprecated Rows queued before Phase D: `pass: 'episode-fold'`. */
+  foldEpisodeCatchup?: boolean;
+}
+
+/** The grain a MEMORY_EXTRACTION job runs at. */
+export type MemoryExtractionPass = 'turn' | 'other-fold' | 'episode-fold';
+
+/** A payload's grain, reading the pre-Phase-D flags of rows still in the queue. */
+export function memoryExtractionPassOf(payload: MemoryExtractionPayload): MemoryExtractionPass {
+  if (payload.pass) return payload.pass;
+  if (payload.foldEpisodeCatchup) return 'episode-fold';
+  if (payload.foldOtherCatchup) return 'other-fold';
+  return 'turn';
 }
 
 /**
@@ -193,6 +240,13 @@ export interface StoryBackgroundGenerationPayload {
   sceneContext?: string;
   /** Optional project ID if the chat belongs to a project */
   projectId?: string | null;
+  /**
+   * "Try uncensored": paint on the Concierge's uncensored understudy instead
+   * of `imageProfileId` (which is then only excluded from the lookup). Set by
+   * `POST /api/v1/chats/[id]?action=retry-image-uncensored` with
+   * `{ kind: 'background' }`. Never changes the chat's state.
+   */
+  forceUncensored?: boolean;
 }
 
 /**
@@ -212,6 +266,27 @@ export interface CharacterAvatarGenerationPayload {
    * not match what the character is actually wearing in the chat.
    */
   equippedSlotsOverride?: EquippedSlots | null;
+  /**
+   * Reroll: skip the avatar configuration cache and generate unconditionally,
+   * rebinding the configuration's cache key to the new image. Set by the manual
+   * regenerate button; automatic wardrobe-change triggers leave it unset so a
+   * configuration that has already been drawn costs nothing to re-enter.
+   */
+  force?: boolean;
+}
+
+/**
+ * Payload for a wardrobe item picture queued by a wardrobe tool. Tools only
+ * create and edit character-owned items, so the container is always the
+ * owning character's wardrobe.
+ */
+export interface WardrobeItemImageGenerationPayload {
+  /** Chat the tool ran in — scopes the pending-job dedupe and the realtime hint, and its Concierge state governs the picture */
+  chatId: string;
+  /** The character whose wardrobe holds the item (the recipient, for a gift) */
+  characterId: string;
+  /** The wardrobe item to draw */
+  itemId: string;
 }
 
 /**
@@ -248,22 +323,23 @@ export interface ConversationRenderEnqueueResult {
 }
 
 /**
- * Payload for memory-housekeeping job.
- * Leave every field undefined to fall back to the per-user autoHousekeepingSettings.
+ * Payload for a memory-maintenance job (memory refactor §3.9). One job per
+ * character; the phases run in their fixed order.
  */
-export interface MemoryHousekeepingPayload {
-  /** Character to housekeep. If omitted, handler sweeps every character owned by userId. */
-  characterId?: string;
-  /** Override the per-character cap (otherwise uses the user's autoHousekeepingSettings). */
-  maxMemories?: number;
-  /** Override the merge-similar threshold. */
-  mergeThreshold?: number;
-  /** Override whether to merge semantically similar memories. */
-  mergeSimilar?: boolean;
-  /** Dry run — preview deletions without applying. Default false. */
-  dryRun?: boolean;
-  /** Why the job was enqueued (for debug logs). */
-  reason?: 'watermark' | 'scheduled' | 'manual';
+export interface MemoryMaintenancePayload {
+  characterId: string;
+  /** Phases asked for; omitted, every phase the settings allow. */
+  phases?: MaintenancePhase[];
+  /** Why the job was enqueued (for the ledger and logs). */
+  reason: MaintenanceReason;
+  /**
+   * Phases asked for by hand, which run whatever the enabled switches and
+   * per-phase toggles say. Set at enqueue: a manual request's phases (all of
+   * them when it names none); empty for an automatic request.
+   */
+  exemptPhases?: MaintenancePhase[];
+  /** Per-run overrides (a manual run's cluster threshold, say — bug 223). */
+  settings?: MaintenanceRunSettings;
 }
 
 /**
@@ -466,8 +542,8 @@ export async function enqueueJob(
  * Enqueue a per-turn memory extraction job.
  *
  * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
- * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId)
- * triple, this is a no-op that returns the existing job ID. The first
+ * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId,
+ * pass, cursor) key, this is a no-op that returns the existing job ID. The first
  * character to finalize in a multi-character turn creates the job; later
  * characters' finalize calls fall through to dedup. Greeting / continue
  * turns (where turnOpenerMessageId is null and no anchor is set) dedupe
@@ -497,7 +573,9 @@ export async function enqueueMemoryExtraction(
       const existingAnchor = existingPayload.extractionAnchorMessageId ?? null;
       return existingPayload.chatId === payload.chatId
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
-        && existingAnchor === incomingAnchor;
+        && existingAnchor === incomingAnchor
+        && memoryExtractionPassOf(existingPayload) === memoryExtractionPassOf(payload)
+        && (existingPayload.cursor ?? null) === (payload.cursor ?? null);
     });
     if (existing) {
       return existing.id;
@@ -554,50 +632,158 @@ export async function enqueueCarinaMemoryExtraction(
   return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
 }
 
+/** Union two phase lists; `undefined` (every phase) absorbs anything. */
+function unionPhases(a: MaintenancePhase[] | undefined, b: MaintenancePhase[] | undefined): MaintenancePhase[] | undefined {
+  if (!a || !b) return undefined;
+  return Array.from(new Set([...a, ...b]));
+}
+
 /**
- * Enqueue a memory-housekeeping job for a character (or all characters of a user).
- *
- * Dedupes: if there's already a PENDING or PROCESSING MEMORY_HOUSEKEEPING job
- * for the same (userId, characterId) pair, this is a no-op returning the
- * existing job ID.
+ * The phases a request asks for by hand: they run whatever the enabled
+ * switches and per-phase toggles say. A manual request exempts what it names
+ * (every phase when it names none); an automatic one exempts nothing.
  */
-export async function enqueueMemoryHousekeeping(
+function exemptPhasesOf(payload: MemoryMaintenancePayload): MaintenancePhase[] {
+  if (payload.exemptPhases) return payload.exemptPhases;
+  if (payload.reason !== 'manual') return [];
+  return payload.phases ?? [...MAINTENANCE_PHASES];
+}
+
+/** Fold `payload` into a waiting job's payload. Each phase keeps its own exemption. */
+function widenPayload(prior: MemoryMaintenancePayload, payload: MemoryMaintenancePayload): MemoryMaintenancePayload {
+  const phases = unionPhases(prior.phases, payload.phases);
+  const exemptPhases = Array.from(new Set([...exemptPhasesOf(prior), ...exemptPhasesOf(payload)]));
+  const widened: MemoryMaintenancePayload = {
+    ...prior,
+    ...(phases ? { phases } : {}),
+    // For the ledger and the logs only: what may skip the switches is `exemptPhases`.
+    reason: payload.reason === 'manual' ? 'manual' : prior.reason,
+    exemptPhases,
+    ...(payload.settings ? { settings: { ...prior.settings, ...payload.settings } } : {}),
+  };
+  if (!phases) delete widened.phases;
+  return widened;
+}
+
+/**
+ * Enqueue (or widen) one character's maintenance job against an already-read
+ * list of the user's PENDING maintenance jobs, which it keeps up to date.
+ */
+async function enqueueMaintenanceAgainst(
   userId: string,
-  payload: MemoryHousekeepingPayload = {},
+  payload: MemoryMaintenancePayload,
+  pending: BackgroundJob[] | null,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  const repos = getRepositories();
-
-  // De-dupe against in-flight jobs for the same (userId, characterId)
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'MEMORY_HOUSEKEEPING') return false;
-      const existingCharId = (j.payload as Record<string, unknown>).characterId;
-      return existingCharId === payload.characterId;
+  const normalized: MemoryMaintenancePayload = { ...payload, exemptPhases: exemptPhasesOf(payload) };
+  const existing = pending?.find(
+    j => (j.payload as Record<string, unknown>).characterId === payload.characterId
+  );
+  if (existing) {
+    const widened = widenPayload(existing.payload as unknown as MemoryMaintenancePayload, normalized);
+    await getRepositories().backgroundJobs.update(existing.id, { payload: widened as unknown as Record<string, unknown> });
+    existing.payload = widened as unknown as Record<string, unknown>;
+    logger.debug('[Maintenance] Pending job widened to the requested phases', {
+      characterId: payload.characterId,
+      existingJobId: existing.id,
+      phases: widened.phases ?? 'all',
+      exemptPhases: widened.exemptPhases,
+      reason: widened.reason,
     });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[Housekeeping] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through to enqueue anyway — double work is better than none.
+    return existing.id;
   }
-
-  // Housekeeping is retry-hostile: each retry re-runs the whole sweep from
-  // scratch, and a single sweep on a character with tens of thousands of
-  // memories can burn minutes of main-thread time. The daily scheduler
-  // re-enqueues anyway, so we cap attempts at 1 and let failures wait for
-  // the next natural pass rather than thrashing.
-  return enqueueJob(
+  const id = await enqueueJob(
     userId,
-    'MEMORY_HOUSEKEEPING',
-    payload as unknown as Record<string, unknown>,
+    'MEMORY_MAINTENANCE',
+    normalized as unknown as Record<string, unknown>,
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );
+  pending?.push({ id, payload: normalized } as unknown as BackgroundJob);
+  return id;
+}
+
+/** The user's PENDING maintenance jobs, or null when they cannot be read. */
+async function findPendingMaintenance(userId: string, characterId?: string): Promise<BackgroundJob[] | null> {
+  try {
+    const pending = await getRepositories().backgroundJobs.findByUserId(userId, 'PENDING');
+    return pending.filter(j => j.type === 'MEMORY_MAINTENANCE');
+  } catch (error) {
+    logger.warn('[Maintenance] Failed to check for pending jobs during enqueue', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // A duplicate run is wasteful, not harmful.
+    return null;
+  }
+}
+
+/**
+ * Enqueue memory maintenance for one character.
+ *
+ * Dedupe key is the character, whatever the reason (bug 221): a PENDING
+ * maintenance job for the same character absorbs the request — it widens to
+ * the phases asked for and adopts the requested overrides — so the daily
+ * sweep, a watermark run and a manual run collapse into one job. Each phase
+ * keeps its own exemption (`exemptPhases`): a manual request's phases run
+ * whatever the switches say, an automatic request's never do, so merging
+ * the two never lends a scheduled phase the manual exemption.
+ *
+ * A PROCESSING job never absorbs a request: it has already read the corpus
+ * and may be past the phase asked for. A new PENDING job is created instead,
+ * and the handler defers it while the running one finishes, so two runs
+ * never work on one character at once.
+ *
+ * Retry-hostile: a rerun redoes every model call, and the next scheduled or
+ * watermark pass picks up whatever this one left, so attempts default to 1.
+ */
+export async function enqueueMemoryMaintenance(
+  userId: string,
+  payload: MemoryMaintenancePayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const pending = await findPendingMaintenance(userId, payload.characterId);
+  return enqueueMaintenanceAgainst(userId, payload, pending, options);
+}
+
+/**
+ * One maintenance job per listed character, each deduped per character, with
+ * one read of the user's pending jobs for the whole batch. Returns every job
+ * id, new or widened, without duplicates.
+ */
+export async function enqueueMemoryMaintenanceMany(
+  userId: string,
+  characterIds: readonly string[],
+  payload: Omit<MemoryMaintenancePayload, 'characterId'>,
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  const pending = await findPendingMaintenance(userId);
+  const ids: string[] = [];
+  for (const characterId of characterIds) {
+    const id = await enqueueMaintenanceAgainst(userId, { ...payload, characterId }, pending, options);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * One maintenance job per live character the user owns (each deduped per
+ * character). Returns every job id, new or widened.
+ */
+export async function enqueueMemoryMaintenanceForUser(
+  userId: string,
+  payload: Omit<MemoryMaintenancePayload, 'characterId'>,
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  const characters = await getRepositories().characters.findByUserId(userId);
+  const live = characters.filter(c => !c.archivedAt).map(c => c.id);
+  const ids = await enqueueMemoryMaintenanceMany(userId, live, payload, options);
+  logger.debug('[Maintenance] User-wide run fanned out per character', {
+    userId,
+    reason: payload.reason,
+    characters: live.length,
+    jobs: ids.length,
+  });
+  return ids;
 }
 
 /**
@@ -937,6 +1123,62 @@ export async function enqueueEmbeddingGenerate(
 }
 
 /**
+ * Enqueue `EMBEDDING_GENERATE` jobs for many entities at once: one read of the
+ * active embedding jobs, one batch insert. An entity that already has a
+ * PENDING or PROCESSING job is skipped, as `enqueueEmbeddingGenerate` skips it
+ * one at a time. Returns the ids of the jobs created (skipped entities add
+ * none), so its length is the number actually queued.
+ */
+export async function enqueueEmbeddingGenerateMany(
+  userId: string,
+  payloads: readonly EmbeddingGeneratePayload[],
+  options?: EnqueueJobOptions
+): Promise<string[]> {
+  if (payloads.length === 0) return [];
+  const repos = getRepositories();
+  const active = await repos.backgroundJobs.findActiveByType('EMBEDDING_GENERATE');
+  const busy = new Set(
+    active.map((job) => (job.payload as { entityId?: unknown } | null)?.entityId).filter((id): id is string => typeof id === 'string')
+  );
+  const seen = new Set<string>();
+  const fresh = payloads.filter((p) => {
+    if (busy.has(p.entityId) || seen.has(p.entityId)) return false;
+    seen.add(p.entityId);
+    return true;
+  });
+  if (fresh.length === 0) {
+    logger.debug('Embedding batch: every entity already has a job', { requested: payloads.length });
+    return [];
+  }
+  const now = new Date().toISOString();
+  const jobIds = await repos.backgroundJobs.createBatch(
+    fresh.map((payload) => ({
+      userId,
+      type: 'EMBEDDING_GENERATE' as const,
+      status: 'PENDING' as const,
+      payload: payload as unknown as Record<string, unknown>,
+      priority: options?.priority ?? EMBEDDING_ENTITY_PRIORITIES[payload.entityType] ?? 0,
+      attempts: 0,
+      maxAttempts: options?.maxAttempts ?? 3,
+      lastError: null,
+      scheduledAt: options?.scheduledAt?.toISOString() ?? now,
+      startedAt: null,
+      completedAt: null,
+    }))
+  );
+  logger.info('Embedding generate batch enqueued', {
+    requested: payloads.length,
+    queued: jobIds.length,
+    alreadyQueued: payloads.length - fresh.length,
+  });
+  if (jobIds.length > 0) {
+    publishRealtime('jobs');
+    ensureProcessorRunning();
+  }
+  return jobIds;
+}
+
+/**
  * Enqueue an embedding refit job (TF-IDF vocabulary rebuild)
  */
 export async function enqueueEmbeddingRefit(
@@ -1042,6 +1284,8 @@ export type MemoryExtractionBatchEntry =
   | {
       turnOpenerMessageId: string | null;
       extractionAnchorMessageId?: string | null;
+      /** Read past this message (an autonomous room's previous anchor; bug 245). */
+      extractAfterMessageId?: string | null;
     };
 
 export async function enqueueMemoryExtractionBatch(
@@ -1063,6 +1307,8 @@ export async function enqueueMemoryExtractionBatch(
       typeof entry === 'object' && entry !== null ? entry.turnOpenerMessageId : entry;
     const extractionAnchorMessageId =
       typeof entry === 'object' && entry !== null ? entry.extractionAnchorMessageId ?? null : null;
+    const extractAfterMessageId =
+      typeof entry === 'object' && entry !== null ? entry.extractAfterMessageId ?? null : null;
     return {
       userId,
       type: 'MEMORY_EXTRACTION' as const,
@@ -1071,7 +1317,10 @@ export async function enqueueMemoryExtractionBatch(
         chatId,
         turnOpenerMessageId,
         extractionAnchorMessageId,
+        ...(extractAfterMessageId ? { extractAfterMessageId } : {}),
         connectionProfileId,
+        // Every batch rebuilds history (queue-memories, SillyTavern import).
+        backfill: true,
       },
       priority: options?.priority ?? 0,
       attempts: 0,
@@ -1203,6 +1452,54 @@ export async function enqueueCharacterAvatarGeneration(
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
+    jobId,
+  });
+
+  return { jobId, isNew: true };
+}
+
+/**
+ * Enqueue a picture of one wardrobe item, on behalf of a wardrobe tool.
+ * Collapses against a still-PENDING job for the same item: the handler reads
+ * the item when it runs, so one queued job already covers any later edit. A
+ * PROCESSING job has already built its prompt, so a fresh one is enqueued.
+ */
+export async function enqueueWardrobeItemImageGeneration(
+  userId: string,
+  payload: WardrobeItemImageGenerationPayload,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(
+    job => job.type === 'WARDROBE_ITEM_IMAGE_GENERATION'
+      && job.status === 'PENDING'
+      && (job.payload as unknown as WardrobeItemImageGenerationPayload).itemId === payload.itemId
+  );
+
+  if (existingJob) {
+    logger.info('[WardrobeItemImage] Reusing existing pending job', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      itemId: payload.itemId,
+      existingJobId: existingJob.id,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  // One try: a refusal or a provider failure would only be paid for again.
+  const jobId = await enqueueJob(
+    userId,
+    'WARDROBE_ITEM_IMAGE_GENERATION',
+    payload as unknown as Record<string, unknown>,
+    { maxAttempts: 1 },
+  );
+
+  logger.info('[WardrobeItemImage] Wardrobe item image job enqueued', {
+    context: 'background-jobs.queue',
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    itemId: payload.itemId,
     jobId,
   });
 

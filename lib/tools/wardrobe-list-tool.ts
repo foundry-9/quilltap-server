@@ -33,12 +33,6 @@ export const wardrobeListToolInputSchema = z.object({
       'Whether to include currently equipped items in the results. Defaults to true.'
     )
     .optional(),
-  include_presets: z
-    .boolean()
-    .describe(
-      'Whether to include saved outfit presets in the response. Defaults to true.'
-    )
-    .optional(),
 })
 
 /**
@@ -55,10 +49,20 @@ export interface WardrobeListItemResult {
   description: string | null;
   /** Portrait Cue — the visual phrase steering image generation (null = falls back to title). */
   image_prompt: string | null;
+  /**
+   * The item's current picture: an image file uuid that `describe_image`
+   * looks at and `keep_image` files. null = no picture yet.
+   */
+  image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
   is_own: boolean;
+  /**
+   * The operator's folder for the item under its wardrobe (e.g. `Formal/Evening`),
+   * null at the root. Filing only — it says nothing about when to wear it.
+   */
+  folder: string | null;
   is_equipped: boolean;
   /**
    * Which slot the item is currently equipped in (the first if multi-slot
@@ -73,6 +77,18 @@ export interface WardrobeListItemResult {
   component_item_ids?: string[];
   /** Resolved component titles (best-effort; missing components are dropped). */
   component_titles?: string[];
+  /**
+   * Times worn by the whole household — every wearer, the calling character
+   * included. Context, not the caller's own record: that is `worn_by_you`.
+   * 0 = nobody has worn it.
+   */
+  wear_count: number;
+  /** When anyone last put it on (ISO), or null when nobody has. */
+  last_worn_at: string | null;
+  /** Times the calling character has worn it. 0 = never by them. */
+  worn_by_you: number;
+  /** When the calling character last put it on (ISO), or null when never. */
+  last_worn_by_you_at: string | null;
 }
 
 /**
@@ -111,9 +127,16 @@ export const wardrobeListToolDefinition = {
       'Supports optional filtering by item type and appropriateness context. ' +
       'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
       'a composite flag indicating whether it bundles other items, and an is_own ' +
-      'flag (shared archetypes can be worn but not edited). ' +
+      'flag (shared archetypes can be worn but not edited), how often YOU have ' +
+      'worn it and when you last did (worn_by_you / last_worn_by_you_at), with ' +
+      'the whole household\'s total beside it as context (wear_count / ' +
+      'last_worn_at — other characters\' wears included, so not your own), and, ' +
+      'when the item has a picture, its ' +
+      'image_file_id — pass that to describe_image to see what the item looks like. ' +
       'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
       'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +
+      'An item\'s folder is how the operator has filed it for their own browsing; it ' +
+      'carries no meaning for when or how to wear it. ' +
       'Archived items are excluded from results.',
     parameters: zodToOpenAISchema(wardrobeListToolInputSchema),
   },

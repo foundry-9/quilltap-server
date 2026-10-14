@@ -1,0 +1,38 @@
+/**
+ * List Mail Tool Definition (The Post Office)
+ *
+ * Lists the letters in the CALLER's own mailbox and spells out exactly how to
+ * read, answer, or discard each one. Takes no parameters — it only ever lists
+ * the caller's own postbox. The Zod schema (an empty object) is the single
+ * source of truth for the derived OpenAI-format `parameters`.
+ */
+
+import { z } from 'zod';
+import { zodToOpenAISchema } from './zod-to-openai-schema';
+
+export const listMailToolInputSchema = z.object({});
+
+export type ListMailToolInput = z.infer<typeof listMailToolInputSchema>;
+
+export interface ListMailToolOutput {
+  success: boolean;
+  /** Human-readable, in-voice listing for the calling LLM. */
+  listing: string;
+  count: number;
+  error?: string;
+}
+
+export const listMailToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'list_mail',
+    description:
+      'List the letters waiting in your own mailbox, newest first, with the exact way to read, answer, or discard each. Takes no arguments — it always lists your postbox and no one else’s.',
+    parameters: zodToOpenAISchema(listMailToolInputSchema),
+  },
+};
+
+export function validateListMailInput(input: unknown): ListMailToolInput | null {
+  const parsed = listMailToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
+}

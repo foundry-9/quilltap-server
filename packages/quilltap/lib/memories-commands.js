@@ -11,7 +11,14 @@ const {
   resolveChat,
   resolveProject,
 } = require('./db-helpers');
-const { scanDanglingEdges } = require('./graph-integrity');
+const {
+  scanDanglingEdges,
+  scanDigestIntegrity,
+  loadMemoryIds,
+  memoryColumns,
+} = require('./graph-integrity');
+const { cmdMaintain } = require('./memories-maintain-command');
+const { postMemoriesAction, resolveMemoriesServerPort } = require('./memories-server');
 
 // ---------- colour & marker helpers ----------
 
@@ -88,11 +95,19 @@ function parseFlags(args) {
     noRelated: false,
     // validate
     list: false,
+    repair: false,
+    write: false,
     // semantic search
     semantic: false,
     top: 0,
     threshold: -1,
-    port: 3000,
+    // Undefined unless --port is given, so the instance lock can supply it
+    // (resolveServerPort in lock-helpers).
+    port: undefined,
+    // maintain
+    dryRun: false,
+    phases: '',
+    cap: null,
   };
   const positional = [];
   let i = 0;
@@ -108,6 +123,7 @@ function parseFlags(args) {
       case '--character': flags.character = args[++i]; break;
       case '--about': flags.about = args[++i]; break;
       case '--source': flags.source = args[++i]; break;
+      case '--tier': flags.tier = args[++i]; break;
       case '--chat': flags.chat = args[++i]; break;
       case '--project': flags.project = args[++i]; break;
       case '--since': flags.since = args[++i]; break;
@@ -134,8 +150,22 @@ function parseFlags(args) {
       case '--no-related': flags.noRelated = true; break;
 
       case '--list': flags.list = true; break;
+      case '--repair': flags.repair = true; break;
+      case '--write': flags.write = true; break;
+
+      case '--phases': flags.phases = args[++i] || ''; break;
+      case '--cap': {
+        const v = Number(args[++i]);
+        if (!Number.isInteger(v)) {
+          console.error('Error: --cap must be an integer');
+          process.exit(1);
+        }
+        flags.cap = v;
+        break;
+      }
 
       case '--semantic': flags.semantic = true; break;
+      case '--dry-run': flags.dryRun = true; break;
       case '--top': flags.top = parseInt(args[++i], 10) || 0; break;
       case '--threshold': {
         const v = parseFloat(args[++i]);
@@ -146,7 +176,7 @@ function parseFlags(args) {
         flags.threshold = v;
         break;
       }
-      case '--port': {
+      case '-p': case '--port': {
         const p = parseInt(args[++i], 10);
         if (isNaN(p) || p < 1 || p > 65535) {
           console.error('Error: --port must be between 1 and 65535');
@@ -220,11 +250,20 @@ function buildWhereClause(db, flags, openMounts = null) {
 
   if (flags.source) {
     const s = String(flags.source).toUpperCase();
-    if (s !== 'AUTO' && s !== 'MANUAL') {
-      throw new Error(`--source must be AUTO or MANUAL (got '${flags.source}')`);
+    if (s !== 'AUTO' && s !== 'MANUAL' && s !== 'CONSOLIDATED') {
+      throw new Error(`--source must be AUTO, MANUAL or CONSOLIDATED (got '${flags.source}')`);
     }
     clauses.push('m.source = ?');
     params.push(s);
+  }
+
+  if (flags.tier) {
+    const t = String(flags.tier).toLowerCase();
+    if (t !== 'hot' && t !== 'cold') {
+      throw new Error(`--tier must be hot or cold (got '${flags.tier}')`);
+    }
+    // Legacy instances without the column read every row as hot.
+    clauses.push(t === 'hot' ? "COALESCE(m.tier, 'hot') = 'hot'" : "m.tier = 'cold'");
   }
 
   if (flags.chat) {
@@ -313,7 +352,7 @@ function buildOrderBy(sortFlag, reverse) {
 // SELECT fragment that pulls every column the renderers need, including the
 // joined-in character / chat names. `m.*` is followed by aliases for the joins
 // so callers don't have to re-resolve UUIDs.
-const SELECT_BASE = `
+const SELECT_BASE_TEMPLATE = `
   SELECT
     m.id,
     m.characterId,
@@ -331,6 +370,7 @@ const SELECT_BASE = `
     m.lastReinforcedAt,
     m.lastAccessedAt,
     m.source,
+    __TIER_COLUMNS__
     m.relatedMemoryIds,
     m.createdAt,
     m.updatedAt,
@@ -345,6 +385,20 @@ const SELECT_BASE = `
   LEFT JOIN chats ON chats.id = m.chatId
   LEFT JOIN projects ON projects.id = m.projectId
 `;
+
+// Instances that haven't yet run add-memory-tiers-v1 lack the tier columns;
+// substitute constants so the CLI still reads them (rows read as hot).
+function selectBase(db) {
+  let hasTier = false;
+  try {
+    hasTier = db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === 'tier');
+  } catch { /* fall through: treat as legacy */ }
+  const cols = hasTier
+    ? 'm.tier, m.supersededById, m.consolidatedFrom, m.consolidatedAt,'
+    : "'hot' AS tier, NULL AS supersededById, '[]' AS consolidatedFrom, NULL AS consolidatedAt,";
+  return SELECT_BASE_TEMPLATE.replace('__TIER_COLUMNS__', cols);
+}
+
 
 // ---------- output helpers ----------
 
@@ -404,7 +458,7 @@ async function cmdLs(flags) {
     const { where, params, meta } = buildWhereClause(db, flags, openMounts);
     const { order, impField } = buildOrderBy(flags.sort, flags.reverse);
     const limit = flags.limit > 0 ? flags.limit : 50;
-    const sql = `${SELECT_BASE} ${where} ORDER BY ${order} LIMIT ?`;
+    const sql = `${selectBase(db)} ${where} ORDER BY ${order} LIMIT ?`;
     const rows = db.prepare(sql).all(...params, limit);
 
     if (flags.json) {
@@ -441,6 +495,10 @@ function rowToJson(row) {
     projectName: row.projectName,
     sourceMessageId: row.sourceMessageId,
     source: row.source,
+    tier: row.tier || 'hot',
+    supersededById: row.supersededById || null,
+    consolidatedFrom: (() => { try { return JSON.parse(row.consolidatedFrom || '[]'); } catch { return []; } })(),
+    consolidatedAt: row.consolidatedAt || null,
     importance: row.importance,
     reinforcedImportance: row.reinforcedImportance,
     reinforcementCount: row.reinforcementCount,
@@ -469,7 +527,7 @@ function renderTable(rows, { showHolder, impField, fullTitles }) {
     showHolder ? 'holder'.padEnd(14) : null,
     impHeader.padStart(4),
     'rein'.padStart(4),
-    'src'.padEnd(6),
+    'src'.padEnd(7),
     'about'.padEnd(20),
     'chat'.padEnd(fullTitles ? 24 : 32),
     'links'.padStart(5),
@@ -483,7 +541,7 @@ function renderTable(rows, { showHolder, impField, fullTitles }) {
     const impVal = impField === 'importance' ? row.importance : row.reinforcedImportance;
     const impStr = colorize(formatImportance(impVal), importanceColor(impVal));
     const rein = String(row.reinforcementCount ?? 0).padStart(4);
-    const src = (row.source || '').padEnd(6);
+    const src = ((row.source || '') + (row.tier === 'cold' ? '*' : '')).padEnd(7);
     const about = truncate(aboutLabel(row), 20).padEnd(20);
     const chat = truncate(chatLabel(row, fullTitles), fullTitles ? 24 : 32).padEnd(fullTitles ? 24 : 32);
     const links = String(linkCount(row)).padStart(5);
@@ -556,7 +614,7 @@ async function cmdFind(flags, positional) {
 
     const limit = flags.limit > 0 ? flags.limit : 50;
     const fullWhere = where ? `${where} AND ${matchSql}` : `WHERE ${matchSql}`;
-    const sql = `${SELECT_BASE} ${fullWhere} ORDER BY ${order} LIMIT ?`;
+    const sql = `${selectBase(db)} ${fullWhere} ORDER BY ${order} LIMIT ?`;
     const allParams = [...params, ...matchParams, ...orderParams, limit];
     const rows = db.prepare(sql).all(...allParams);
 
@@ -608,7 +666,7 @@ async function cmdSemanticGrep(flags, query) {
 
   const top = flags.top > 0 ? flags.top : 20;
   const threshold = flags.threshold >= 0 ? flags.threshold : 0.5;
-  const port = flags.port || 3000;
+  const { port } = resolveMemoriesServerPort(flags);
   const url = `http://localhost:${port}/api/v1/memories?action=search`;
 
   const body = { characterId, query, limit: top, minScore: threshold };
@@ -691,7 +749,7 @@ async function cmdGrep(flags, positional) {
     const fullWhere = where ? `${where} AND ${contentClause}` : `WHERE ${contentClause}`;
 
     const limit = flags.limit > 0 ? flags.limit : 50;
-    const sql = `${SELECT_BASE} ${fullWhere}
+    const sql = `${selectBase(db)} ${fullWhere}
                  ORDER BY m.reinforcedImportance DESC, m.createdAt DESC
                  LIMIT ?`;
     const rows = db.prepare(sql).all(...params, likeNeedle, limit);
@@ -805,7 +863,7 @@ async function cmdShow(flags, positional) {
   const { db } = await openDb(flags);
   try {
     const id = resolveMemoryId(db, idArg);
-    const row = db.prepare(`${SELECT_BASE} WHERE m.id = ?`).get(id);
+    const row = db.prepare(`${selectBase(db)} WHERE m.id = ?`).get(id);
     if (!row) {
       throw new Error(`Memory ${id} not found`);
     }
@@ -878,6 +936,7 @@ function renderShowText(row, graph, depth) {
   console.log(`  Holder:        ${holderName}    (${shortId(row.characterId)})`);
   console.log(`  About:         ${aboutName}${row.aboutCharacterId && row.aboutCharacterId !== row.characterId ? `    (${shortId(row.aboutCharacterId)})` : ''}`);
   console.log(`  Source:        ${row.source || '(?)'}`);
+  console.log(`  Tier:          ${row.tier || 'hot'}${row.supersededById ? `    (superseded by ${shortId(row.supersededById)})` : ''}`);
   const reinf = row.reinforcedImportance != null ? Number(row.reinforcedImportance).toFixed(2) : '?';
   const baseImp = row.importance != null ? Number(row.importance).toFixed(2) : '?';
   console.log(`  Importance:    ${reinf} (reinforced from ${baseImp}, count: ${row.reinforcementCount ?? 0})`);
@@ -1065,9 +1124,23 @@ async function cmdStatus(flags) {
       `).all();
     }
 
+    // The parent's maintenance ledger (last run per phase, last demotion's
+    // effectiveness) lives in the running server; ask it, briefly. Without a
+    // server the job rows still say when maintenance last ran.
+    let ledgerPort = 3000;
+    try {
+      ledgerPort = resolveMemoriesServerPort(flags, { quiet: true }).port;
+    } catch { /* openDb already validated the instance; fall back to the default */ }
+    const ledger = await fetchMaintenanceLedger(ledgerPort);
+
     const report = [];
     for (const holder of holderRows) {
       const stats = computeHolderStats(db, holder.id);
+      stats.maintenance = {
+        recentJobs: recentMaintenanceJobs(db, holder.id),
+        ledger: ledger ? ledger.find((e) => e.characterId === holder.id) || null : null,
+        ledgerReachable: !!ledger,
+      };
       report.push({ holder, stats });
     }
 
@@ -1100,6 +1173,41 @@ async function cmdStatus(flags) {
   }
 }
 
+/** The server's maintenance ledger, or null when the server cannot be reached. */
+async function fetchMaintenanceLedger(port) {
+  try {
+    const res = await fetch(`http://localhost:${port}/api/v1/memories?action=maintenance-status`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return null;
+    const payload = await res.json();
+    return Array.isArray(payload && payload.ledger) ? payload.ledger : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The character's most recent MEMORY_MAINTENANCE job rows, newest first. */
+function recentMaintenanceJobs(db, characterId) {
+  try {
+    return db.prepare(`
+      SELECT id, status, updatedAt, lastError,
+             json_extract(payload, '$.reason') AS reason,
+             json_extract(payload, '$.phases') AS phases
+      FROM background_jobs
+      WHERE type = 'MEMORY_MAINTENANCE'
+        AND json_extract(payload, '$.characterId') = ?
+      ORDER BY updatedAt DESC
+      LIMIT 3
+    `).all(characterId).map((row) => ({
+      ...row,
+      phases: row.phases ? JSON.parse(row.phases) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function computeHolderStats(db, characterId) {
   const counts = db.prepare(`
     SELECT
@@ -1114,6 +1222,19 @@ function computeHolderStats(db, characterId) {
     FROM memories
     WHERE characterId = ?
   `).get(characterId);
+
+  // Tier rollup — guarded so pre-tier instances still report.
+  let tiers = { hot: counts.total || 0, cold: 0, consolidated: 0 };
+  try {
+    const t = db.prepare(`
+      SELECT
+        SUM(CASE WHEN COALESCE(tier, 'hot') = 'hot' THEN 1 ELSE 0 END) AS hot,
+        SUM(CASE WHEN tier = 'cold' THEN 1 ELSE 0 END) AS cold,
+        SUM(CASE WHEN source = 'CONSOLIDATED' THEN 1 ELSE 0 END) AS consolidated
+      FROM memories WHERE characterId = ?
+    `).get(characterId);
+    tiers = { hot: t.hot || 0, cold: t.cold || 0, consolidated: t.consolidated || 0 };
+  } catch { /* tier column absent: everything is hot */ }
 
   const graph = scanDanglingEdges(db, { characterId });
 
@@ -1131,6 +1252,7 @@ function computeHolderStats(db, characterId) {
       auto: counts.auto || 0,
       manual: counts.manual || 0,
     },
+    tiers,
     aboutDistribution: {
       selfReferential: counts.selfRef || 0,
       aboutOthers: counts.aboutOthers || 0,
@@ -1156,6 +1278,10 @@ function renderStatusBlock(holder, stats) {
   console.log(`  Total memories:        ${stats.counts.total}`);
   console.log(`    AUTO:                ${stats.counts.auto}`);
   console.log(`    MANUAL:              ${stats.counts.manual}`);
+  console.log(`  Tiers:`);
+  console.log(`    hot:                 ${stats.tiers.hot}`);
+  console.log(`    cold:                ${stats.tiers.cold}`);
+  console.log(`    digests (CONSOLIDATED): ${stats.tiers.consolidated}`);
   console.log(`  About-distribution:`);
   console.log(`    self-referential:    ${stats.aboutDistribution.selfReferential}`);
   console.log(`    about-others:        ${stats.aboutDistribution.aboutOthers}`);
@@ -1172,6 +1298,7 @@ function renderStatusBlock(holder, stats) {
   console.log(`    max degree:          ${stats.graph.maxDegree}`);
   const danglingSuffix = stats.graph.danglingEdges > 0 ? '   ⚠ JSON UUIDs that no longer resolve' : '';
   console.log(`    dangling edges:      ${stats.graph.danglingEdges}${danglingSuffix}`);
+  if (stats.maintenance) renderMaintenance(stats.maintenance);
   if (stats.top.length) {
     console.log(`  Top by reinforcedImportance:`);
     for (const t of stats.top) {
@@ -1181,80 +1308,202 @@ function renderStatusBlock(holder, stats) {
   }
 }
 
+function renderMaintenance(m) {
+  console.log(`  Maintenance:`);
+  if (m.ledger) {
+    // The phases are the server's; print the ones it reports a run for.
+    const runs = Object.entries(m.ledger.lastRun || {});
+    if (runs.length === 0) console.log('    no phase has run since the server started');
+    for (const [phase, run] of runs) {
+      console.log(`    ${(phase + ':').padEnd(22)}${run.at} (${run.reason})`);
+    }
+    const d = m.ledger.lastDemotion;
+    if (d) {
+      if (d.excess === 0) {
+        console.log(`    last demotion:       within the cap${d.effective ? '' : '; automatic demotion looks again in an hour'}`);
+      } else {
+        console.log(`    last demotion:       ${d.demoted} of ${d.excess} over the cap${d.effective ? '' : '   ⚠ ineffective; watermark backing off'}`);
+      }
+    }
+  } else if (!m.ledgerReachable) {
+    console.log(`    ledger:              (server not reachable; job history only)`);
+  }
+  if (m.recentJobs.length === 0) {
+    console.log(`    jobs:                none recorded`);
+  }
+  for (const job of m.recentJobs) {
+    const phases = Array.isArray(job.phases) ? job.phases.join(',') : 'all';
+    const err = job.lastError ? `  ⚠ ${truncate(job.lastError, 60)}` : '';
+    console.log(`    job ${shortId(job.id)}  ${job.status.padEnd(10)} ${job.updatedAt}  ${job.reason || '?'}  [${phases}]${err}`);
+  }
+}
+
 // ---------- validate ----------
 
 async function cmdValidate(flags) {
+  let characterId = null;
+  let local;
   const { db, openMounts } = await openDb(flags);
   try {
-    let holderIds = null;
     let holderRows;
     if (flags.character && flags.character !== 'all') {
       const c = resolveCharacter(db, flags.character, openMounts);
       holderRows = [{ id: c.id, name: c.name }];
-      holderIds = [c.id];
+      characterId = c.id;
     } else {
+      // Every holder in the memories table — including one whose character
+      // row is gone — so the local scan covers the same rows the server's
+      // unscoped repair scans and scrubs (review of PR 98).
       holderRows = db.prepare(`
-        SELECT c.id, c.name FROM characters c
-        WHERE EXISTS (SELECT 1 FROM memories m WHERE m.characterId = c.id)
-        ORDER BY c.name
+        SELECT h.characterId AS id, COALESCE(c.name, '(missing character ' || substr(h.characterId, 1, 8) || ')') AS name
+          FROM (SELECT DISTINCT characterId FROM memories) h
+          LEFT JOIN characters c ON c.id = h.characterId
+         ORDER BY c.name IS NULL, c.name
       `).all();
     }
-
-    const includePairs = Boolean(flags.list);
-    let totalDangling = 0;
-    let totalEdges = 0;
-    let totalNodes = 0;
-    const perHolder = [];
-    for (const holder of holderRows) {
-      const stats = scanDanglingEdges(db, {
-        characterId: holder.id,
-        includePairs,
-      });
-      totalDangling += stats.danglingEdges;
-      totalEdges += stats.totalEdges;
-      totalNodes += stats.nodes;
-      perHolder.push({ holder, stats });
-    }
-
-    if (flags.json) {
-      renderJson({
-        scanned: holderIds ? 'single' : 'all',
-        characterIds: holderRows.map(h => h.id),
-        totals: {
-          nodes: totalNodes,
-          edges: totalEdges,
-          danglingEdges: totalDangling,
-        },
-        holders: perHolder.map(({ holder, stats }) => ({
-          holder: { id: holder.id, name: holder.name },
-          ...stats,
-        })),
-      });
-    } else {
-      const scope = holderIds ? `holder ${holderRows[0].name}` : `${holderRows.length} holders`;
-      const drift = totalEdges > 0 ? ((totalDangling / totalEdges) * 100).toFixed(2) : '0.00';
-      console.log(`Scanned ${scope}: ${totalNodes} memories, ${totalEdges} edges, ${totalDangling} dangling (${drift}%).`);
-      if (totalDangling === 0) {
-        console.log(colorize('Graph is clean.', GREEN));
-      } else if (flags.list) {
-        console.log('');
-        for (const { holder, stats } of perHolder) {
-          if (!stats.danglingPairs || stats.danglingPairs.length === 0) continue;
-          console.log(colorize(`${holder.name}  (${shortId(holder.id)})`, BOLD));
-          for (const pair of stats.danglingPairs) {
-            console.log(`  ${shortId(pair.sourceId)}  →  ${pair.targetIds.map(shortId).join(', ')}`);
-          }
-        }
-      } else {
-        console.log(colorize('Run with --list to see offending source memory IDs and dangling targets.', YELLOW));
-      }
-    }
-
-    if (totalDangling > 0) {
-      process.exitCode = 1;
-    }
+    local = scanForValidate(db, holderRows, Boolean(flags.list));
   } finally {
     db.close();
+  }
+
+  // --repair hands the fix (or its rehearsal) to the running server, which is
+  // the only database writer; --write is the explicit opt-in to the real thing.
+  let repair = null;
+  if (flags.repair) {
+    const body = { dryRun: !flags.write };
+    if (characterId) body.characterId = characterId;
+    const payload = await postMemoriesAction(flags, 'repair', body, {
+      why: 'The repair runs inside the server (it is the only database writer, and it queues the embedding jobs).',
+      announce: flags.json ? undefined : (url) => process.stderr.write(
+        `${body.dryRun ? 'Rehearsing' : 'Running'} graph repair via ${url}\n`
+      ),
+    });
+    repair = (payload && payload.report) || null;
+  }
+
+  if (flags.json) {
+    renderJson({
+      scanned: characterId ? 'single' : 'all',
+      characterIds: local.perHolder.map(({ holder }) => holder.id),
+      totals: local.totals,
+      holders: local.perHolder.map(({ holder, stats, digests }) => ({
+        holder: { id: holder.id, name: holder.name },
+        ...stats,
+        ...digests,
+      })),
+      ...(flags.repair ? { repair } : {}),
+    });
+  } else {
+    renderValidateText(local, characterId, flags);
+    if (flags.repair) renderRepairText(repair);
+  }
+
+  // Exit 1 while dangling links remain: always after a read-only validate or
+  // a rehearsal; after a --write repair only if the server reported nothing
+  // repaired (a missing embedding alone is a warning, never a failure).
+  const t = local.totals;
+  const dangling = t.danglingEdges + t.danglingConsolidatedFrom + t.danglingSupersededBy;
+  const repaired = Boolean(flags.repair && flags.write && repair && repair.repaired);
+  if (dangling > 0 && !repaired) {
+    process.exitCode = 1;
+  }
+}
+
+/** Run every read-only integrity scan over the holders. */
+function scanForValidate(db, holderRows, includePairs) {
+  const allIds = loadMemoryIds(db);
+  const columns = memoryColumns(db);
+  const totals = {
+    nodes: 0,
+    edges: 0,
+    danglingEdges: 0,
+    danglingConsolidatedFrom: 0,
+    digestsWithDanglingMembers: 0,
+    danglingSupersededBy: 0,
+    missingEmbeddings: 0,
+  };
+  const perHolder = [];
+  for (const holder of holderRows) {
+    const stats = scanDanglingEdges(db, { characterId: holder.id, includePairs, allIds });
+    const digests = scanDigestIntegrity(db, { characterId: holder.id, includePairs, allIds, columns });
+    totals.nodes += stats.nodes;
+    totals.edges += stats.totalEdges;
+    totals.danglingEdges += stats.danglingEdges;
+    totals.danglingConsolidatedFrom += digests.consolidatedFrom.links;
+    totals.digestsWithDanglingMembers += digests.consolidatedFrom.digests;
+    totals.danglingSupersededBy += digests.supersededBy;
+    totals.missingEmbeddings += digests.missingEmbeddings;
+    perHolder.push({ holder, stats, digests });
+  }
+  return { totals, perHolder };
+}
+
+function renderValidateText(local, characterId, flags) {
+  const { totals: t, perHolder } = local;
+  const scope = characterId ? `holder ${perHolder[0].holder.name}` : `${perHolder.length} holders`;
+  const drift = t.edges > 0 ? ((t.danglingEdges / t.edges) * 100).toFixed(2) : '0.00';
+  console.log(`Scanned ${scope}: ${t.nodes} memories, ${t.edges} edges, ${t.danglingEdges} dangling (${drift}%).`);
+  console.log(`Digests: ${t.danglingConsolidatedFrom} dangling consolidatedFrom member(s) across ` +
+    `${t.digestsWithDanglingMembers} digest(s); ${t.danglingSupersededBy} dangling supersededById.`);
+  if (t.missingEmbeddings > 0) {
+    console.log(colorize(`Warning: ${t.missingEmbeddings} memories have no embedding and cannot be recalled by meaning.`, YELLOW));
+  }
+
+  const dangling = t.danglingEdges + t.danglingConsolidatedFrom + t.danglingSupersededBy;
+  if (dangling === 0) {
+    console.log(colorize('Graph is clean.', GREEN));
+  } else if (flags.list) {
+    console.log('');
+    for (const { holder, stats, digests } of perHolder) {
+      const related = stats.danglingPairs || [];
+      const members = digests.consolidatedFromPairs || [];
+      const superseded = digests.supersededByPairs || [];
+      if (related.length + members.length + superseded.length === 0) continue;
+      console.log(colorize(`${holder.name}  (${shortId(holder.id)})`, BOLD));
+      for (const pair of related) {
+        console.log(`  related     ${shortId(pair.sourceId)}  →  ${pair.targetIds.map(shortId).join(', ')}`);
+      }
+      for (const pair of members) {
+        console.log(`  digest      ${shortId(pair.digestId)}  ⊃  ${pair.memberIds.map(shortId).join(', ')}`);
+      }
+      for (const pair of superseded) {
+        console.log(`  superseded  ${shortId(pair.memberId)}  →  ${shortId(pair.digestId)}`);
+      }
+    }
+  } else {
+    console.log(colorize('Run with --list to see the offending memory IDs and dangling targets.', YELLOW));
+  }
+  if ((dangling > 0 || t.missingEmbeddings > 0) && !flags.repair) {
+    console.log(colorize('Run with --repair to rehearse the fix on the running server (add --write to apply it).', YELLOW));
+  }
+}
+
+function renderRepairText(report) {
+  if (!report) {
+    console.log(colorize('The server returned no repair report.', YELLOW));
+    return;
+  }
+  const f = report.found || {};
+  const related = f.related || { links: 0, rows: 0 };
+  const cf = f.consolidatedFrom || { links: 0, digests: 0 };
+  console.log('');
+  console.log(colorize(`Server graph repair (${report.dryRun ? 'dry run' : 'applied'}${report.characterId ? '' : ', every memory'}):`, BOLD));
+  console.log(`  found: ${related.links} dangling related link(s) on ${related.rows} row(s); ` +
+    `${cf.links} dangling consolidatedFrom member(s) on ${cf.digests} digest(s); ` +
+    `${f.supersededBy || 0} dangling supersededById; ${f.missingEmbeddings || 0} row(s) without an embedding.`);
+  if (report.dryRun) {
+    const anything = related.links + cf.links + (f.supersededBy || 0) + (f.missingEmbeddings || 0);
+    console.log(anything > 0
+      ? colorize('  Nothing was changed. Add --write to scrub the links and queue the embedding jobs.', YELLOW)
+      : colorize('  Nothing to repair.', GREEN));
+    return;
+  }
+  const r = report.repaired || {};
+  console.log(`  repaired: ${r.relatedRowsTouched || 0} row(s) relinked, ${r.digestsTouched || 0} digest(s) touched, ` +
+    `${r.membersCut || 0} member(s) cut loose, ${r.charactersAffected || 0} character(s) affected; ` +
+    `${r.embeddingJobsQueued || 0} embedding job(s) queued.`);
+  if (r.embeddingSkippedReason) {
+    console.log(colorize(`  Embedding jobs not queued: ${r.embeddingSkippedReason} (set a default embedding profile, then run again).`, YELLOW));
   }
 }
 
@@ -1287,16 +1536,56 @@ Subcommands:
   tree     <id|prefix> [--depth N] [--max-nodes N] [--json]
                                              ASCII walk of the
                                              related-memory graph.
-  status   [--character <name|id>] [--json]  Per-holder rollup + dangling-
-                                             edge check.
-  validate [--character <name|id>] [--list]  Read-only memory-graph health
-                                  [--json]   check. Exits 1 if any
-                                             dangling edges remain.
+  status   [--character <name|id>] [--json] [--port <n>]
+                                             Per-holder rollup, maintenance
+                                             ledger + dangling-edge check.
+  validate [--character <name|id>] [--list] [--json]
+                                             Read-only memory-graph health
+                                             check: dangling relatedMemoryIds,
+                                             consolidatedFrom members and
+                                             supersededById links, plus rows
+                                             with no embedding (a warning).
+                                             Exits 1 if any dangling link
+                                             remains.
+  validate --repair [--write] [--character <name|id>] [--port N]
+                                             Ask the running server to repair
+                                             the graph. Without --write it is
+                                             a dry run: it reports what would
+                                             be repaired and changes nothing.
+                                             With --write the server scrubs
+                                             the dangling links and queues
+                                             embedding jobs for unembedded
+                                             rows. The write runs inside the
+                                             server (the only database
+                                             writer, holder of the instance
+                                             lock), so the server must be up.
+  maintain --character <name|id|all> [--phases a,b,…] [--dry-run]
+           [--max N] [--threshold 0..1] [--cap N] [--port N] [--json]
+                                             Run memory maintenance by hand on
+                                             the running server. Phases, in
+                                             run order: fold-near-duplicates,
+                                             consolidate, demote, retire,
+                                             mirror (default: all; naming
+                                             consolidate brings mirror).
+                                             --dry-run prints what each phase
+                                             would do and writes nothing;
+                                             otherwise one background job per
+                                             character is queued. 'all' runs
+                                             every character (a dry run over
+                                             'all' must leave out consolidate).
+                                             --max caps clusters consolidated,
+                                             --threshold sets the cluster
+                                             cosine (neural embedding
+                                             profiles), --cap the hot-row cap
+                                             for demotion (100-100000).
+                                             To consolidate only:
+                                             maintain --phases consolidate.
 
 Shared filter flags:
   --character <name|id|all>   Holder. Default: all.
   --about <name|id|self|none> Subject (aboutCharacterId).
-  --source AUTO|MANUAL        Restrict by source.
+  --source AUTO|MANUAL|CONSOLIDATED  Restrict by source.
+  --tier hot|cold             Restrict by recall tier (default: both).
   --chat <id|title|none>      Source chat ('none' for manual memories).
   --project <id|name>         Project context.
   --since <date>              ISO date floor on createdAt.
@@ -1317,6 +1606,10 @@ Global flags (may appear before or after the subcommand):
   -d, --data-dir <path>       Override data directory.
   --instance <name>           Use a registered instance.
   --passphrase <pass>         Decrypt .dbkey if peppered.
+  -p, --port <n>              Server port for the verbs that call the running
+                              server (default: the port in the instance's
+                              lock when --instance/--data-dir is given, else
+                              3000).
   --json                      Machine-readable output.
   -h, --help                  Show this help.
 
@@ -1324,7 +1617,9 @@ Note: -i is reserved here for 'grep --ignore-case'. Use the long --instance
 form to target a registered instance.
 
 All memories verbs are read-only. They open the main encrypted database
-(quilltap.db) and never write to it.
+(quilltap.db) and never write to it. 'maintain' and 'validate --repair' leave
+the writing to the running server; 'validate --repair' changes data only with
+--write.
 
 Examples:
   quilltap memories ls
@@ -1337,10 +1632,26 @@ Examples:
   quilltap memories status --character Ariadne
   quilltap memories validate
   quilltap memories validate --list
+  quilltap memories validate --repair                 # rehearse the repair
+  quilltap memories validate --repair --write         # apply it
+  quilltap memories maintain --instance Friday --character Friday --dry-run
+  quilltap memories maintain --instance Friday --character Friday --phases consolidate --max 100
+  quilltap memories maintain --character all --phases demote,retire --dry-run
+  quilltap memories maintain --character all
 `);
 }
 
 // ---------- dispatcher ----------
+
+/** Resolve --character locally to a UUID, for verbs that call the running server. */
+async function resolveCharacterIdForServer(flags) {
+  const { db, openMounts } = await openDb(flags);
+  try {
+    return resolveCharacter(db, flags.character, openMounts).id;
+  } finally {
+    db.close();
+  }
+}
 
 async function memoriesCommand(args) {
   if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
@@ -1357,6 +1668,12 @@ async function memoriesCommand(args) {
     printMemoriesHelp();
     return;
   }
+  if (flags.repair && verb !== 'validate') {
+    throw new Error('--repair applies only to memories validate.');
+  }
+  if (flags.write && !(verb === 'validate' && flags.repair)) {
+    throw new Error('--write applies only to memories validate --repair.');
+  }
   switch (verb) {
     case 'ls': await cmdLs(flags); break;
     case 'find': await cmdFind(flags, positional); break;
@@ -1365,6 +1682,7 @@ async function memoriesCommand(args) {
     case 'tree': await cmdTree(flags, positional); break;
     case 'status': await cmdStatus(flags); break;
     case 'validate': await cmdValidate(flags); break;
+    case 'maintain': await cmdMaintain(flags, resolveCharacterIdForServer); break;
     default:
       console.error(`Unknown memories subcommand: ${verb}`);
       console.error("Run 'quilltap memories --help' for a list.");
@@ -1376,6 +1694,8 @@ module.exports = {
   memoriesCommand,
   // Exported for unit tests:
   parseFlags,
+  resolveCharacterIdForServer,
+  renderRepairText,
   buildWhereClause,
   buildOrderBy,
   traverseMemoryGraph,

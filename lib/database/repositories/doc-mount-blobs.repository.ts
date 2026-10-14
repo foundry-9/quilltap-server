@@ -23,7 +23,7 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 
 /**
  * Joined view: a blob row with the link metadata callers need to know where
@@ -92,6 +92,12 @@ export interface CreateBlobInput {
   fileId?: string;
   linkId?: string;
   blobId?: string;
+  /**
+   * Forwarded to linkBlobContent. Defaults to `true` (normalize images to
+   * WebP). Set `false` ONLY for byte-fidelity restores — `.qtap` import and
+   * archive rehydrate — where the bytes must return exactly as archived.
+   */
+  normalizeImages?: boolean;
 }
 
 function nowIso(): string {
@@ -106,16 +112,16 @@ function rowToMetadata(row: Record<string, unknown>): DocMountBlobMetadata {
 }
 
 export class DocMountBlobsRepository {
+  /**
+   * The database this repository's table lives in — declared here as the
+   * `AbstractBaseRepository` family declares it, so the background-job
+   * write partitioner's key set can be checked against every repository.
+   */
+  readonly dbTarget = 'mountIndex' as const;
   private tableInitialized = false;
 
   private db() {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.tableInitialized) {
       db.exec(`
@@ -168,24 +174,6 @@ export class DocMountBlobsRepository {
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
-    }
-  }
-
-  async findManyByFileIds(fileIds: string[]): Promise<DocMountBlobMetadata[]> {
-    if (fileIds.length === 0) return [];
-    try {
-      const placeholders = fileIds.map(() => '?').join(',');
-      const rows = this.db().prepare(
-        `SELECT id, fileId, sha256, sizeBytes, storedMimeType, createdAt, updatedAt
-         FROM "${TABLE}" WHERE fileId IN (${placeholders})`
-      ).all(...fileIds) as Array<Record<string, unknown>>;
-      return rows.map(rowToMetadata);
-    } catch (error) {
-      logger.warn('Failed to find blobs by fileIds', {
-        fileIdCount: fileIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
     }
   }
 
@@ -314,6 +302,7 @@ export class DocMountBlobsRepository {
       fileId: input.fileId,
       linkId: input.linkId,
       blobId: input.blobId,
+      normalizeImages: input.normalizeImages,
     });
 
     const found = await this.findByMountPointAndPath(link.mountPointId, link.relativePath);
@@ -477,17 +466,23 @@ export class DocMountBlobsRepository {
   }
 
   /**
-   * Update the description on the link associated with a blob row. Blobs
-   * themselves don't carry per-link metadata anymore; the description is
-   * a property of the (mountPoint, path) link. If the blob is hard-linked
-   * to multiple paths, only the link the caller passes through gets
-   * updated. The two-argument form (id only) updates the first link found
-   * — used by routes that don't track linkId yet.
+   * Update the description on one link to a blob row. Blobs themselves don't
+   * carry per-link metadata; the description is a property of the
+   * (mountPoint, path) link, and content-addressing means one blob row can
+   * carry several links — a character vault holds every avatar at both
+   * `photos/` and `images/history/`, byte-identical, on one file row.
+   *
+   * `linkId` is therefore **required**: there is no such thing as "the"
+   * link for a blob. It used to be optional, and the two-argument form
+   * resolved the target with `WHERE fileId = ? LIMIT 1`, which wrote the
+   * caption to an arbitrary one of the sharing locations (bug 157). Callers
+   * that hold a path already hold the link — `findByMountPointAndPath`
+   * returns `linkId` on the joined view.
    */
   async updateDescription(
     id: string,
     description: string,
-    linkId?: string
+    linkId: string
   ): Promise<DocMountBlobWithLink | null> {
     try {
       const db = this.db();
@@ -496,20 +491,11 @@ export class DocMountBlobsRepository {
       const blob = await this.findById(id);
       if (!blob) return null;
 
-      let targetLinkId = linkId;
-      if (!targetLinkId) {
-        const link = db.prepare(
-          `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
-        ).get(blob.fileId) as { id: string } | undefined;
-        targetLinkId = link?.id;
-      }
-      if (!targetLinkId) return null;
-
       db.prepare(
         `UPDATE doc_mount_file_links
          SET description = ?, descriptionUpdatedAt = ?, updatedAt = ?
          WHERE id = ?`
-      ).run(description, now, now, targetLinkId);
+      ).run(description, now, now, linkId);
 
       // Return the joined view so callers can pick up the new metadata.
       return db.prepare(
@@ -524,7 +510,7 @@ export class DocMountBlobsRepository {
          FROM doc_mount_file_links l
          JOIN doc_mount_blobs b ON b.fileId = l.fileId
          WHERE l.id = ?`
-      ).get(targetLinkId) as DocMountBlobWithLink | null;
+      ).get(linkId) as DocMountBlobWithLink | null;
     } catch (error) {
       logger.warn('Failed to update blob description', {
         id,
@@ -535,14 +521,15 @@ export class DocMountBlobsRepository {
   }
 
   /**
-   * Update the extracted-text / extraction-status fields on the link
-   * associated with a blob row. Same per-link semantics as
-   * updateDescription.
+   * Update the extracted-text / extraction-status fields on one link to a
+   * blob row. Same per-link semantics as updateDescription, `linkId`
+   * included: the extracted text of a shared blob belongs to a location,
+   * not to the bytes.
    */
   async updateExtractedText(
     id: string,
     input: UpdateExtractedTextInput,
-    linkId?: string
+    linkId: string
   ): Promise<DocMountBlobWithLink | null> {
     try {
       const db = this.db();
@@ -550,15 +537,6 @@ export class DocMountBlobsRepository {
 
       const blob = await this.findById(id);
       if (!blob) return null;
-
-      let targetLinkId = linkId;
-      if (!targetLinkId) {
-        const link = db.prepare(
-          `SELECT id FROM doc_mount_file_links WHERE fileId = ? LIMIT 1`
-        ).get(blob.fileId) as { id: string } | undefined;
-        targetLinkId = link?.id;
-      }
-      if (!targetLinkId) return null;
 
       db.prepare(
         `UPDATE doc_mount_file_links SET
@@ -571,7 +549,7 @@ export class DocMountBlobsRepository {
         input.extractionStatus,
         input.extractionError ?? null,
         now,
-        targetLinkId
+        linkId
       );
 
       return db.prepare(
@@ -586,7 +564,7 @@ export class DocMountBlobsRepository {
          FROM doc_mount_file_links l
          JOIN doc_mount_blobs b ON b.fileId = l.fileId
          WHERE l.id = ?`
-      ).get(targetLinkId) as DocMountBlobWithLink | null;
+      ).get(linkId) as DocMountBlobWithLink | null;
     } catch (error) {
       logger.warn('Failed to update blob extracted text', {
         id,

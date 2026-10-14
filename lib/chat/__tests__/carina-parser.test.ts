@@ -1,4 +1,4 @@
-import { parseCarinaQuery } from '../carina-parser'
+import { isCarinaInvocableName, parseCarinaQuery } from '../carina-parser'
 
 describe('parseCarinaQuery', () => {
   describe('basic syntax', () => {
@@ -412,3 +412,15 @@ describe('parseCarinaQuery', () => {
     })
   })
 })
+
+describe('isCarinaInvocableName', () => {
+  it.each(['Archivist', 'Lady Arabella', 'R2_D2', 'Ab'])('accepts %j', (name) => {
+    expect(isCarinaInvocableName(name)).toBe(true);
+    expect(parseCarinaQuery(`@${name}: hello`)?.characterName).toBe(name);
+  });
+
+  it.each(['X', 'Jean-Luc', 'Zoë', "O'Neil", ' Lead', 'Trail '])('rejects %j', (name) => {
+    expect(isCarinaInvocableName(name)).toBe(false);
+    expect(parseCarinaQuery(`@${name}: hello`)?.characterName).not.toBe(name);
+  });
+});

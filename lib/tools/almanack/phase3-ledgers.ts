@@ -20,11 +20,13 @@ import {
   getMaxConcurrentJobs,
   getMemoryExtractionLimits,
   getMemoryRecallSettings,
+  getMemoryMaintenanceSettings,
   getLastMaintenanceSweepAt,
 } from '@/lib/instance-settings';
 import { resolveStaleChatDays, retentionCutoff } from '@/lib/background-jobs/maintenance/retention-constants';
 import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
 import { getErrorMessage } from '@/lib/error-utils';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { mainCount, mainRow, mainRows, num } from './db';
 import type {
   AutonomousRoomInfo,
@@ -41,6 +43,7 @@ import type {
   StorageStats,
   TerminalInfo,
 } from './types';
+import { MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults';
 
 const moduleLogger = logger.child({ module: 'almanack:ledgers' });
 
@@ -178,6 +181,11 @@ export function defaultInstanceSettings(): InstanceSettingsInfo {
       maxPerHour: 20,
       softStartFraction: 0.7,
       softFloor: 0.7,
+    },
+    memoryMaintenance: {
+      enabled: MEMORY_SETTING_DEFAULTS.maintenance.enabled,
+      perCharacterCap: MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap,
+      capOverrides: 0,
     },
     lastMaintenanceSweepAt: null,
   };
@@ -606,16 +614,11 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
  */
 export function defaultFeatureConfig(): FeatureConfigInfo {
   return {
-    dangerousContent: {
-      mode: 'OFF',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-    },
+    concierge: conciergeFeatureConfig(null),
     contextCompression: { enabled: true, windowSize: 5, compressionTargetTokens: 800 },
     agentMode: { maxTurns: 10, defaultEnabled: false },
     storyBackgrounds: { enabled: false, hasDefaultImageProfile: false },
+    wardrobeImages: { hasDesignatedImageProfile: false },
     timestamps: { mode: 'NONE', format: 'FRIENDLY' },
     autoLock: { enabled: false, idleMinutes: 15 },
     memoryCascade: {
@@ -635,17 +638,43 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     thinkingDisplay: { defaultVisible: true, defaultCollapsed: true },
     answerConfirmation: { enabled: false },
     autonomousRoomDefaults: {},
-    autoHousekeeping: {
-      enabled: false,
-      perCharacterCap: 2000,
-      mergeSimilar: false,
-      autoMergeSimilarThreshold: 0.9,
-    },
     textReplacements: { enabled: true, rules: 0, enabledRules: 0 },
     composerSpellcheck: true,
+    impersonationVoiceMode: 'off',
     autoScrollOnResponseComplete: false,
     imageDescriptionProfileConfigured: false,
-    uncensoredImageDescriptionProfileConfigured: false,
+    uncensoredVisionProfileConfigured: false,
+  };
+}
+
+/**
+ * The Concierge's settings as the report prints them — read through
+ * `readConciergeSettings`, so a missing row or field reads as its default.
+ */
+function conciergeFeatureConfig(
+  chatSettings: Parameters<typeof readConciergeSettings>[0],
+): FeatureConfigInfo['concierge'] {
+  const cs = readConciergeSettings(chatSettings);
+  return {
+    enabled: cs.enabled,
+    newChatsStartAs: cs.newChatsStartAs,
+    autoSwitchAfterRefusals: cs.autoSwitchAfterRefusals,
+    display: { mode: cs.display.mode, showWarningBadges: cs.display.showWarningBadges },
+    desk: {
+      textProfileSet: !!cs.uncensoredTextProfileId,
+      imageProfileSet: !!cs.uncensoredImageProfileId,
+      visionProfileSet: !!cs.uncensoredVisionProfileId,
+      imagePromptProfileSet: !!cs.imagePromptProfileId,
+    },
+    preScreen: {
+      enabled: cs.preScreen.enabled,
+      threshold: cs.preScreen.threshold,
+      scanTextChat: cs.preScreen.scanTextChat,
+      scanImagePrompts: cs.preScreen.scanImagePrompts,
+      scanImageGeneration: cs.preScreen.scanImageGeneration,
+      customClassificationPrompt: !!cs.preScreen.customClassificationPrompt,
+    },
+    summaryClassification: cs.preScreen.summaryClassification,
   };
 }
 
@@ -653,7 +682,6 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
 export async function collectFeatureConfig(userId: string): Promise<FeatureConfigInfo> {
   const chatSettings = await getRepositories().chatSettings.findByUserId(userId);
 
-  const dc = chatSettings?.dangerousContentSettings;
   const cc = chatSettings?.contextCompressionSettings;
   const am = chatSettings?.agentModeSettings;
   const sb = chatSettings?.storyBackgroundsSettings;
@@ -663,7 +691,6 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
   const cw = chatSettings?.coreWhisper;
   const td = chatSettings?.thinkingDisplay;
   const ac = chatSettings?.answerConfirmationSettings;
-  const ah = chatSettings?.autoHousekeepingSettings;
 
   const [ruleRow] = await Promise.all([
     mainRow<{ total: number; enabled: number }>(
@@ -675,13 +702,7 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
   ]);
 
   return {
-    dangerousContent: {
-      mode: dc?.mode ?? 'OFF',
-      threshold: dc?.threshold ?? 0.7,
-      scanTextChat: dc?.scanTextChat ?? true,
-      scanImagePrompts: dc?.scanImagePrompts ?? true,
-      scanImageGeneration: dc?.scanImageGeneration ?? false,
-    },
+    concierge: conciergeFeatureConfig(chatSettings),
     contextCompression: {
       enabled: cc?.enabled ?? true,
       windowSize: cc?.windowSize ?? 5,
@@ -694,6 +715,9 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     storyBackgrounds: {
       enabled: sb?.enabled ?? false,
       hasDefaultImageProfile: !!sb?.defaultImageProfileId,
+    },
+    wardrobeImages: {
+      hasDesignatedImageProfile: !!chatSettings?.wardrobeImageSettings?.imageProfileId,
     },
     timestamps: {
       mode: ts?.mode ?? 'NONE',
@@ -726,22 +750,17 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     answerConfirmation: { enabled: ac?.enabled ?? false },
     autonomousRoomDefaults: (chatSettings?.autonomousRoomSettings ?? {}) as Record<string, unknown>,
-    autoHousekeeping: {
-      enabled: ah?.enabled ?? false,
-      perCharacterCap: ah?.perCharacterCap ?? 2000,
-      mergeSimilar: ah?.mergeSimilar ?? false,
-      autoMergeSimilarThreshold: ah?.autoMergeSimilarThreshold ?? 0.9,
-    },
     textReplacements: {
       enabled: chatSettings?.textReplacementsEnabled ?? true,
       rules: num(ruleRow?.total),
       enabledRules: num(ruleRow?.enabled),
     },
     composerSpellcheck: chatSettings?.composerSpellcheck ?? true,
+    impersonationVoiceMode: chatSettings?.impersonationVoiceMode ?? 'off',
     autoScrollOnResponseComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
     imageDescriptionProfileConfigured: !!chatSettings?.imageDescriptionProfileId,
-    uncensoredImageDescriptionProfileConfigured:
-      !!chatSettings?.uncensoredImageDescriptionProfileId,
+    uncensoredVisionProfileConfigured:
+      !!readConciergeSettings(chatSettings).uncensoredVisionProfileId,
   };
 }
 
@@ -754,13 +773,14 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
  * and the number the sweep acts on can never disagree.
  */
 export async function collectInstanceSettings(userId: string): Promise<InstanceSettingsInfo> {
-  const [retention, staleChatDays, maxConcurrentJobs, recall, extraction, lastSweep] =
+  const [retention, staleChatDays, maxConcurrentJobs, recall, extraction, maintenance, lastSweep] =
     await Promise.all([
       getDataRetentionSettings(),
       resolveStaleChatDays(),
       getMaxConcurrentJobs(),
       getMemoryRecallSettings(),
       getMemoryExtractionLimits(),
+      getMemoryMaintenanceSettings(),
       getLastMaintenanceSweepAt(),
     ]);
   void retention; // resolveStaleChatDays already folds it in
@@ -797,6 +817,11 @@ export async function collectInstanceSettings(userId: string): Promise<InstanceS
       maxPerHour: extraction.maxPerHour,
       softStartFraction: extraction.softStartFraction,
       softFloor: extraction.softFloor,
+    },
+    memoryMaintenance: {
+      enabled: maintenance.enabled,
+      perCharacterCap: maintenance.perCharacterCap,
+      capOverrides: Object.keys(maintenance.perCharacterCapOverrides).length,
     },
     lastMaintenanceSweepAt: lastSweep ? lastSweep.toISOString() : null,
   };

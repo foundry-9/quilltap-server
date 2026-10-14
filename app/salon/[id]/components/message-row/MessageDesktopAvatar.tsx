@@ -2,14 +2,18 @@
 
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { RouteTrailBadge } from '@/components/ui/RouteTrailBadge'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { MessageAvatarInfo } from './types'
 
 interface MessageDesktopAvatarProps {
   messageAvatar: MessageAvatarInfo
   /** Apply the dangerous-chat ring (assistant side only). */
   dangerous?: boolean
-  /** Provider/model badge below the avatar (assistant side only); omit for the user side. */
-  badge?: { provider?: string | null; modelName?: string | null } | null
+  /** Provider/model badge below the avatar (assistant side only); omit for the user side.
+   *  When `routeTrail` is a non-empty array the badge becomes the turn's call sheet —
+   *  every profile tried, first at the top — instead of the single answering row. */
+  badge?: { provider?: string | null; modelName?: string | null; routeTrail?: RouteAttempt[] | null } | null
 }
 
 /**
@@ -28,7 +32,11 @@ export function MessageDesktopAvatar({ messageAvatar, dangerous, badge }: Messag
         showTitle
         className="flex flex-col items-center w-32 gap-1"
       />
-      {badge && <ProviderModelBadge provider={badge.provider} modelName={badge.modelName} size="xs" />}
+      {badge && (
+        badge.routeTrail && badge.routeTrail.length > 0
+          ? <RouteTrailBadge routeTrail={badge.routeTrail} size="xs" />
+          : <ProviderModelBadge provider={badge.provider} modelName={badge.modelName} size="xs" />
+      )}
     </div>
   )
 }

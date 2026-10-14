@@ -1,0 +1,435 @@
+/**
+ * Memory Recap — the fetch half (the narrative itself is the cheap-LLM task in
+ * `recap-summary.ts`).
+ *
+ * Generates a narrative summary of a character's recent memories to inject
+ * at the start of a conversation. Gathers memories by importance tier
+ * (high/medium/low), sends them to the cheap LLM for summarization,
+ * and returns formatted content for prompt injection. It is one of the turn's
+ * recall pools (`assemble.ts`): it leaves out the rows the frozen archive
+ * already carries, and its relevant-conversations list rides the turn's one
+ * query embedding when there is one.
+ *
+ * Triggered on:
+ * - First message of a new chat (for every character participant)
+ * - When a character is added to an existing chat
+ */
+
+import { getRepositories } from '@/lib/repositories/factory'
+import { formatMemoryAge } from '@/lib/memory/time'
+import { summarizeMemoryRecap, type UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
+import {
+  searchVaultConversationSummaries,
+  renderRelevantConversationsBlock,
+  READ_CONVERSATION_CALL_NOTE,
+  RELEVANT_CONVERSATIONS_MIN,
+  RELEVANT_CONVERSATIONS_MAX,
+  RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+  RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  type VaultConversationMatch,
+} from '@/lib/memory/recall/conversations'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { Memory } from '@/lib/schemas/types'
+import { logger } from '@/lib/logger'
+
+/**
+ * Linear ramp from `min` (at `minTokens` of context or less) to `max` (at
+ * `maxTokens` or more), rounded. `null`/`undefined` maxContext yields `max`
+ * (assume a generous window). Generalized from the old recent-conversations
+ * 5→20 ramp so both the recent and the relevant conversation lists can scale
+ * independently on the same curve.
+ */
+export function rampLimit(
+  maxContext: number | null | undefined,
+  min: number,
+  max: number,
+  minTokens: number,
+  maxTokens: number,
+): number {
+  if (maxContext == null) return max
+  if (maxContext <= minTokens) return min
+  if (maxContext >= maxTokens) return max
+  const ratio = (maxContext - minTokens) / (maxTokens - minTokens)
+  return Math.round(min + ratio * (max - min))
+}
+
+// Recent-conversations greeting block: ramp 5→20 over 4K→32K (unchanged).
+const RECENT_CONVERSATIONS_MIN = 5
+const RECENT_CONVERSATIONS_MAX = 20
+const RECENT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
+const RECENT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
+
+// Recap conversation lists (recent + relevant): each ramps on the shared
+// relevant-conversations curve (3→10 over 4K→32K), independently. Combined
+// 6–20 entries before dedup.
+
+export function calculateRecentConversationsLimit(maxContext?: number | null): number {
+  return rampLimit(
+    maxContext,
+    RECENT_CONVERSATIONS_MIN,
+    RECENT_CONVERSATIONS_MAX,
+    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  )
+}
+
+/**
+ * The greeting's "Recent Conversations" block — what the character remembers
+ * having talked about lately, rendered once before the opening line.
+ *
+ * Each entry is capped through `truncateGist` and the block closes with
+ * `READ_CONVERSATION_CALL_NOTE`, exactly as `buildConversationRecallLists`
+ * renders the same rows on the per-turn path. Both matter here, and bug 158 is
+ * why: a chat created before that fix carried its own scenario in
+ * `contextSummary`, so an unsummarized prior chat contributed its entire raw
+ * scenario — 9 KB of it, in the reported case — to the greeting prompt, at full
+ * length, with nothing marking it as past, immediately before "open with a
+ * concise greeting". The character greeted from it. The seed is fixed at the
+ * source, and these two lines are the standing guard: an entry that is somehow
+ * the wrong text is now a truncated wrong text that announces itself as a
+ * transcript the model may go read, not a stage direction adjacent to the
+ * instruction to act.
+ */
+export async function buildRecentConversationsBlock(
+  characterId: string,
+  currentChatId: string | undefined,
+  limit: number
+): Promise<string> {
+  if (limit <= 0) return ''
+  const repos = getRepositories()
+  const eligible = await repos.chats.findRecentSummarizedByCharacter(characterId, {
+    limit,
+    excludeChatId: currentChatId,
+  })
+  if (eligible.length === 0) return ''
+  const entries = eligible
+    .map(c => {
+      const gist = (c.contextSummary ?? '').trim()
+      return gist.length > 0
+        ? `#### ${c.title} (\`${c.id}\`)\n${truncateGist(gist)}`
+        : `#### ${c.title} (\`${c.id}\`)`
+    })
+    .join('\n\n')
+  return `### Recent Conversations\n\n${entries}\n\n${READ_CONVERSATION_CALL_NOTE}`
+}
+
+/** Cap an inlined conversation gist so the recap block stays bounded. */
+function truncateGist(text: string, maxChars = 280): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= maxChars) return trimmed
+  return trimmed.slice(0, maxChars - 1).trimEnd() + '…'
+}
+
+export interface ConversationRecallListsParams {
+  characterId: string
+  /** Current chat id, excluded from both lists. */
+  currentChatId: string | undefined
+  userId: string
+  embeddingProfileId?: string | null
+  /** Free-text describing the current moment, drives the relevant list. */
+  relevanceQuery: string
+  /** The vector already embedded for `relevanceQuery` (the turn's query), reused verbatim. */
+  relevanceEmbedding?: Float32Array | null
+  /** Connection profile maxContext, scales both list sizes (3→10 over 4K→32K). */
+  maxContext?: number | null
+}
+
+/**
+ * Build the recap's two conversation lists from the character's vault summaries:
+ *
+ * - **Relevant Past Conversations** — semantic retrieval over the embedded vault
+ *   summaries against the current moment.
+ * - **Recent Conversations** — recency-ordered, with a short gist.
+ *
+ * Each entry surfaces its conversation UUID in backticks; a closing note tells
+ * the LLM the UUID is callable via the `read_conversation` tool. A conversation
+ * that appears in both lists is kept in the relevant list and dropped from the
+ * recent one (so the combined block may fall below the nominal 6–20 entries —
+ * that is acceptable).
+ */
+export async function buildConversationRecallLists(
+  params: ConversationRecallListsParams,
+): Promise<string> {
+  const { characterId, currentChatId, userId, embeddingProfileId, relevanceQuery, relevanceEmbedding, maxContext } = params
+  const recentLimit = rampLimit(
+    maxContext,
+    RELEVANT_CONVERSATIONS_MIN,
+    RELEVANT_CONVERSATIONS_MAX,
+    RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  )
+  const relevantLimit = rampLimit(
+    maxContext,
+    RELEVANT_CONVERSATIONS_MIN,
+    RELEVANT_CONVERSATIONS_MAX,
+    RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  )
+  if (recentLimit <= 0 && relevantLimit <= 0) return ''
+
+  const repos = getRepositories()
+
+  // Relevant list — semantic retrieval over the embedded vault summaries.
+  let relevant: VaultConversationMatch[] = []
+  const trimmedQuery = relevanceQuery?.trim()
+  if (relevantLimit > 0 && trimmedQuery) {
+    try {
+      relevant = await searchVaultConversationSummaries({
+        characterId,
+        query: trimmedQuery,
+        userId,
+        embeddingProfileId,
+        precomputedEmbedding: relevanceEmbedding ?? null,
+        limit: relevantLimit,
+        excludeConversationId: currentChatId,
+      })
+    } catch (error) {
+      recapLogger.warn('Failed to build relevant-conversations list', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Recent list — recency-ordered chats that carry a summary.
+  let recent: Awaited<ReturnType<typeof repos.chats.findRecentSummarizedByCharacter>> = []
+  if (recentLimit > 0) {
+    try {
+      recent = await repos.chats.findRecentSummarizedByCharacter(characterId, {
+        limit: recentLimit,
+        excludeChatId: currentChatId,
+      })
+    } catch (error) {
+      recapLogger.warn('Failed to build recent-conversations list', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Dedup: a conversation in both lists stays in relevant, dropped from recent.
+  const relevantIds = new Set(relevant.map(r => r.conversationId))
+  const recentFiltered = recent.filter(c => !relevantIds.has(c.id))
+
+  if (relevant.length === 0 && recentFiltered.length === 0) return ''
+
+  const sections: string[] = []
+  const relevantBlock = renderRelevantConversationsBlock(relevant)
+  if (relevantBlock) {
+    sections.push(relevantBlock)
+  }
+  if (recentFiltered.length > 0) {
+    const entries = recentFiltered
+      .map(c => {
+        const gist = (c.contextSummary ?? '').trim()
+        return gist.length > 0
+          ? `#### ${c.title} (\`${c.id}\`)\n${truncateGist(gist)}`
+          : `#### ${c.title} (\`${c.id}\`)`
+      })
+      .join('\n\n')
+    sections.push(`### Recent Conversations\n\n${entries}`)
+  }
+
+  return `${sections.join('\n\n')}\n\n${READ_CONVERSATION_CALL_NOTE}`
+}
+
+const recapLogger = logger.child({ module: 'MemoryRecap' })
+
+/**
+ * Result of generating a memory recap
+ */
+export interface MemoryRecapResult {
+  /** Formatted recap content for prompt injection (empty string if no memories) */
+  content: string
+  /** Number of memories that were summarized */
+  memoriesUsed: number
+  /** The rows the narrative was built from (empty when no narrative was produced). */
+  memoryIds: string[]
+  /** Token usage from the cheap LLM call */
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
+
+/**
+ * Stable partition: consolidated digests first, everything else after, each
+ * group keeping the repository's order.
+ */
+export function digestsFirst(memories: Memory[]): Memory[] {
+  const digests = memories.filter(m => m.source === 'CONSOLIDATED')
+  if (digests.length === 0 || digests.length === memories.length) return memories
+  return [...digests, ...memories.filter(m => m.source !== 'CONSOLIDATED')]
+}
+
+/** What {@link generateMemoryRecap} needs. */
+export interface MemoryRecapRequest {
+  characterId: string
+  characterName: string
+  /** Cheap LLM selection for the narrative. */
+  selection: CheapLLMSelection
+  userId: string
+  /** The chat, excluded from both conversation lists. */
+  chatId?: string
+  /** The uncensored understudy for dangerous chats. */
+  uncensoredFallback?: UncensoredFallbackOptions
+  /** Connection profile maxContext; scales each conversation list (3 at 4K → 10 at 32K). */
+  maxContext?: number | null
+  /** Free text describing the moment; drives the relevant list. Empty skips it. */
+  relevanceQuery?: string
+  /** The vector already embedded for `relevanceQuery` — reused, never re-embedded. */
+  relevanceEmbedding?: Float32Array | null
+  embeddingProfileId?: string | null
+  /** Rows another pool already delivers (the frozen archive); the narrative is built without them. */
+  excludeIds?: ReadonlySet<string>
+}
+
+/** The tier sizes the recap reads (the repository's defaults). */
+const RECAP_TIER_LIMITS = { high: 20, medium: 10, low: 5 } as const
+
+/**
+ * Generate a memory recap for a character at the start of a conversation.
+ *
+ * Fetches recent memories across importance tiers, leaves out `excludeIds`
+ * (reading that many more per tier so the tiers stay full), sends them to the
+ * cheap LLM for a narrative, and returns it with the conversation lists. For
+ * dangerous chats or a refusal the uncensored understudy is used.
+ */
+export async function generateMemoryRecap(req: MemoryRecapRequest): Promise<MemoryRecapResult> {
+  const { characterId, characterName, selection, userId, chatId, uncensoredFallback, maxContext, relevanceQuery, embeddingProfileId } = req
+  const startTime = Date.now()
+
+  recapLogger.debug('Generating memory recap', {
+    characterId,
+    characterName,
+    chatId,
+    hasUncensoredFallback: !!uncensoredFallback,
+  })
+
+  try {
+    const repos = getRepositories()
+
+    // Fetch memories across all three importance tiers, past what another
+    // pool already carries.
+    const exclude = req.excludeIds ?? new Set<string>()
+    const extra = exclude.size
+    const raw = await repos.memories.findRecentByImportanceTier(characterId, {
+      high: RECAP_TIER_LIMITS.high + extra,
+      medium: RECAP_TIER_LIMITS.medium + extra,
+      low: RECAP_TIER_LIMITS.low + extra,
+    })
+    const keep = (rows: Memory[], limit: number) => rows.filter(m => !exclude.has(m.id)).slice(0, limit)
+    const fetched = {
+      high: keep(raw.high, RECAP_TIER_LIMITS.high),
+      medium: keep(raw.medium, RECAP_TIER_LIMITS.medium),
+      low: keep(raw.low, RECAP_TIER_LIMITS.low),
+    }
+    // Hot rows only (the repo guarantees it); digests lead the high bucket so
+    // the narrative is built on consolidated knowledge before loose shards.
+    const tiered = { ...fetched, high: digestsFirst(fetched.high) }
+
+    const totalCount = tiered.high.length + tiered.medium.length + tiered.low.length
+
+    recapLogger.debug('Fetched tiered memories for recap', {
+      characterId,
+      high: tiered.high.length,
+      medium: tiered.medium.length,
+      low: tiered.low.length,
+      total: totalCount,
+    })
+
+    // Build the two conversation lists (recent + relevant) from vault summaries;
+    // independent of the tiered-memory narrative below.
+    const conversationsBlock = await buildConversationRecallLists({
+      characterId,
+      currentChatId: chatId,
+      userId,
+      embeddingProfileId,
+      relevanceQuery: relevanceQuery ?? '',
+      relevanceEmbedding: req.relevanceEmbedding,
+      maxContext,
+    })
+
+    let narrative = ''
+    let usage: MemoryRecapResult['usage'] | undefined
+
+    if (totalCount > 0) {
+      // Format memories with relative age labels for the summarization prompt
+      const now = new Date()
+      const formatTier = (memories: Memory[]) =>
+        memories.map(m => ({
+          summary: m.summary,
+          age: formatMemoryAge(m, now),
+        }))
+
+      const tieredWithAge = {
+        high: formatTier(tiered.high),
+        medium: formatTier(tiered.medium),
+        low: formatTier(tiered.low),
+      }
+
+      // Send to cheap LLM for summarization (with uncensored fallback for dangerous content)
+      const result = await summarizeMemoryRecap(
+        characterName,
+        tieredWithAge,
+        selection,
+        userId,
+        chatId,
+        uncensoredFallback,
+        characterId
+      )
+
+      if (!result.success || !result.result) {
+        recapLogger.warn('Memory recap summarization failed', {
+          characterId,
+          error: result.error,
+        })
+      } else if (result.result.length > 0) {
+        narrative = result.result
+        usage = result.usage
+      } else {
+        recapLogger.debug('Memory recap returned empty (no meaningful memories)', { characterId })
+      }
+    }
+
+    if (!narrative && !conversationsBlock) {
+      recapLogger.debug('No memories or conversation lists found for recap, skipping', { characterId })
+      return { content: '', memoriesUsed: 0, memoryIds: [] }
+    }
+
+    const intro = `## What You Remember\nAs ${characterName}, here is what you recall from your experiences and past conversations:`
+    const sections = [intro]
+    if (narrative) sections.push(narrative)
+    if (conversationsBlock) sections.push(conversationsBlock)
+    const formattedContent = sections.join('\n\n')
+
+    const elapsed = Date.now() - startTime
+
+    recapLogger.info('Memory recap generated', {
+      characterId,
+      characterName,
+      memoriesUsed: totalCount,
+      narrativeLength: narrative.length,
+      hasConversationLists: !!conversationsBlock,
+      elapsed,
+      usage,
+    })
+
+    return {
+      content: formattedContent,
+      memoriesUsed: totalCount,
+      memoryIds: narrative ? [...tiered.high, ...tiered.medium, ...tiered.low].map(m => m.id) : [],
+      usage,
+    }
+  } catch (error) {
+    const elapsed = Date.now() - startTime
+    recapLogger.error('Failed to generate memory recap', {
+      characterId,
+      characterName,
+      elapsed,
+    }, error instanceof Error ? error : undefined)
+
+    return { content: '', memoriesUsed: 0, memoryIds: [] }
+  }
+}

@@ -20,6 +20,7 @@ import type {
   InstanceSettingRow,
   SerializedVectorEntry,
   SerializedConversationChunk,
+  SerializedMemory,
   SerializedDocMountChunk,
 } from '../types';
 import type {
@@ -29,7 +30,6 @@ import type {
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
-  Memory,
   FileEntry,
   Folder,
   PromptTemplate,
@@ -41,12 +41,13 @@ import type {
   PluginConfig,
   CharacterPluginData,
   ConversationAnnotation,
-  VectorIndexMeta,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -185,7 +186,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const connectionProfiles = await readJsonArrayFile<ConnectionProfile>(rootPath, 'data/connection-profiles.json');
     const imageProfiles = await readJsonArrayFile<ImageProfile>(rootPath, 'data/image-profiles.json');
     const embeddingProfiles = await readJsonArrayFile<EmbeddingProfile>(rootPath, 'data/embedding-profiles.json');
-    const memories = await readJsonArrayFile<Memory>(rootPath, 'data/memories.json');
+    const memories = await readJsonArrayFile<SerializedMemory>(rootPath, 'data/memories.json');
     const files = await readJsonArrayFile<FileEntry>(rootPath, 'data/files.json');
     // Templates are optional for backwards compatibility with older backups
     const promptTemplates = await readJsonArrayFileOptional<PromptTemplate>(rootPath, 'data/prompt-templates.json', []);
@@ -231,6 +232,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
         replace: true,
         migratedFromClothingRecordId: null,
         archivedAt: null,
+        folder: '',
         createdAt: preset.createdAt,
         updatedAt: preset.updatedAt,
       }));
@@ -246,11 +248,15 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
 
     // Format-3 additions (optional so older backups still load).
     const chatDocuments = await readJsonArrayFileOptional<ChatDocument>(rootPath, 'data/chat-documents.json', []);
+    // Inform rows (4.10) — optional, so a pre-4.10 archive just has none.
+    const chatInforms = await readJsonArrayFileOptional<ChatInform>(rootPath, 'data/chat-informs.json', []);
     const instanceSettings = await readJsonArrayFileOptional<InstanceSettingRow>(rootPath, 'data/instance-settings.json', []);
     const embeddingStatus = await readJsonArrayFileOptional<EmbeddingStatus>(rootPath, 'data/embedding-status.json', []);
     const conversationChunks = await readJsonArrayFileOptional<SerializedConversationChunk>(rootPath, 'data/conversation-chunks.json', []);
     const tfidfVocabularies = await readJsonArrayFileOptional<TfidfVocabulary>(rootPath, 'data/tfidf-vocabularies.json', []);
-    const vectorIndexMetas = await readJsonArrayFileOptional<VectorIndexMeta>(rootPath, 'data/vector-index-metas.json', []);
+    // Legacy (pre-Phase-B archives): the retired vector mirror, read only to
+    // backfill a memory that arrived without an embedding. Its per-character
+    // metas file is ignored.
     const vectorEntries = await readJsonArrayFileOptional<SerializedVectorEntry>(rootPath, 'data/vector-entries.json', []);
     const docMountPoints = await readJsonArrayFileOptional<DocMountPoint>(rootPath, 'data/doc-mount-points.json', []);
     const docMountFolders = await readJsonArrayFileOptional<DocMountFolder>(rootPath, 'data/doc-mount-folders.json', []);
@@ -263,6 +269,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const groupDocMountLinks = await readJsonArrayFileOptional<GroupDocMountLink>(rootPath, 'data/group-doc-mount-links.json', []);
     const groupCharacterMembers = await readJsonArrayFileOptional<GroupCharacterMember>(rootPath, 'data/group-character-members.json', []);
     const textReplacementRules = await readJsonArrayFileOptional<TextReplacementRule>(rootPath, 'data/text-replacement-rules.json', []);
+    // Wear ledger (4.11) — optional, so an older archive just has none.
+    const wardrobeWear = await readJsonArrayFileOptional<WardrobeWearStatsRow>(rootPath, 'data/wardrobe-wear.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -293,11 +301,11 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       characterPluginData,
       conversationAnnotations,
       chatDocuments,
+      chatInforms,
       instanceSettings,
       embeddingStatus,
       conversationChunks,
       tfidfVocabularies,
-      vectorIndexMetas,
       vectorEntries,
       docMountPoints,
       docMountFolders,
@@ -310,6 +318,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       groupDocMountLinks,
       groupCharacterMembers,
       textReplacementRules,
+      wardrobeWear,
     };
 
     return { data, extractDir, rootFolder };

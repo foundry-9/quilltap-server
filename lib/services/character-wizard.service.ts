@@ -26,6 +26,10 @@ import {
   FIELD_SEMANTICS_PREAMBLE,
   PROMPT_SEMANTICS,
   PROPERTIES_SEMANTICS,
+  CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  GATED_COMPANION_TRUST_DISPOSITION,
+  EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
   WARDROBE_ITEMS_GENERATION_PROMPT,
@@ -196,7 +200,9 @@ Format each exchange as:
 {{user}}: [User's response]
 {{char}}: [Character's follow-up]
 
-The {{char}}: / {{user}}: labels carry the shape — write each line in that speaker's own first-person voice, exactly as they would say it. Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.`,
+The {{char}}: / {{user}}: labels carry the shape — write each line in that speaker's own first-person voice, exactly as they would say it. Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.
+
+${EXAMPLE_DIALOGUE_COVERAGE}`,
 
   firstMessage: `Write an engaging opening message from this character that starts a brand-new conversation (1-3 paragraphs).
 - Written in the character's own voice, consistent with their personality and speech patterns.
@@ -219,7 +225,14 @@ Include:
 
 Write as direct instructions to the AI, in second person ("You are...", "You always...").
 Character facts live in the identity/description/personality/manifesto fields — the prompt directs the performance rather than restating the lore.
-Keep it under 500 words but comprehensive.`,
+
+${CONVERSATIONAL_VOICE_DIRECTION}
+
+${TRUST_SAFEGUARDS_DIRECTION}
+
+${GATED_COMPANION_TRUST_DISPOSITION}
+
+Keep it under 600 words but comprehensive.`,
 };
 
 export const PROPERTIES_PROMPT = `${PROPERTIES_SEMANTICS}

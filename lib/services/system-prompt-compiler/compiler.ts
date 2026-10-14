@@ -37,6 +37,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
 import {
   buildIdentityStack,
   IDENTITY_STACK_BUILDER_VERSION,
@@ -151,11 +152,20 @@ async function buildStackFor(
 
   const userCharacter = await resolveUserCharacter(chat);
 
+  // Subprompts ticked on for this seat. Resolved here (async, from the
+  // character's vault) and baked into the cached stack; a selection change
+  // recompiles through `compileIdentityStackForParticipant`.
+  const subprompts = await resolveSelectedSubprompts(
+    participant.characterId,
+    participant.selectedSubpromptIds ?? [],
+  );
+
   const stack = buildIdentityStack({
     character,
     userCharacter,
     selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
     scenarioText: chat.scenarioText ?? null,
+    subprompts,
   });
 
   return stack.length > 0 ? stack : null;

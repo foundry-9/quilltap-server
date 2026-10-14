@@ -10,12 +10,11 @@
  *
  * The card is presentational — it calls out to `onTakeOff` and `onBreakApart`
  * callbacks. The parent decides whether to commit via the equip API (Live
- * outfit) or mutate staged React state (Outfit Builder), and whether to hide
- * the action row entirely (chat-start embedded composer).
+ * outfit) or mutate staged React state (Outfit Builder).
  */
 
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { SlotBadge } from './slot-ui'
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
 
 interface EquippedBundleCardProps {
@@ -24,8 +23,6 @@ interface EquippedBundleCardProps {
   itemsById: Map<string, WardrobeItem>
   onTakeOff: (bundle: EquippedBundle) => void
   onBreakApart: (bundle: EquippedBundle) => void
-  /** When false, hide Take off / Break apart (used in the embedded composer). */
-  showActions?: boolean
 }
 
 export function EquippedBundleCard({
@@ -33,7 +30,6 @@ export function EquippedBundleCard({
   itemsById,
   onTakeOff,
   onBreakApart,
-  showActions = true,
 }: EquippedBundleCardProps) {
   const composite = itemsById.get(bundle.compositeId)
   const title = composite?.title ?? 'Unknown bundle'
@@ -55,35 +51,28 @@ export function EquippedBundleCard({
           </div>
           <div className="flex flex-wrap gap-1 mt-1">
             {bundle.occupiedSlots.map((slot) => (
-              <span
-                key={slot}
-                className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass} uppercase`}
-              >
-                {WARDROBE_SLOT_META[slot].label}
-              </span>
+              <SlotBadge key={slot} slot={slot} />
             ))}
           </div>
         </div>
-        {showActions && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => onBreakApart(bundle)}
-              className="qt-button-ghost qt-button-sm"
-              title="Replace this bundle with its individual items"
-            >
-              Break apart
-            </button>
-            <button
-              type="button"
-              onClick={() => onTakeOff(bundle)}
-              className="qt-button-ghost qt-button-sm"
-              title="Take this bundle off"
-            >
-              Take off bundle
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => onBreakApart(bundle)}
+            className="qt-button-ghost qt-button-sm"
+            title="Replace this bundle with its individual items"
+          >
+            Break apart
+          </button>
+          <button
+            type="button"
+            onClick={() => onTakeOff(bundle)}
+            className="qt-button-ghost qt-button-sm"
+            title="Take this bundle off"
+          >
+            Take off bundle
+          </button>
+        </div>
       </div>
     </div>
   )

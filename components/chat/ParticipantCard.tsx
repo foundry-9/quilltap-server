@@ -20,6 +20,7 @@ import { Icon } from '@/components/ui/icon'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+import { SubpromptPicker } from '@/components/subprompts'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
@@ -59,6 +60,8 @@ export interface ParticipantData {
   } | null
   /** Selected named system prompt from the character's systemPrompts[] array */
   selectedSystemPromptId?: string | null
+  /** Ids of the character's subprompts in play for this chat */
+  selectedSubpromptIds?: string[]
 }
 
 export interface ConnectionProfileOption {
@@ -96,6 +99,8 @@ interface ParticipantCardProps {
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   // System prompt selection (from character's named systemPrompts[])
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  /** Replace the set of subprompts in play for this participant. */
+  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void
   /** Force-rebuild the chat-level cached system prompt (identity stack) for
    *  this participant — picks up edits to the underlying character that the
    *  compiler doesn't auto-invalidate (manifesto, personality, prompt content,
@@ -139,6 +144,7 @@ export function ParticipantCard({
   connectionProfiles,
   onConnectionProfileChange,
   onSystemPromptChange,
+  onSubpromptsChange,
   onRebuildSystemPrompt,
   onActiveChange,
   onStatusChange,
@@ -475,6 +481,21 @@ export function ParticipantCard({
                   <Icon name="refresh" className="w-3.5 h-3.5" />
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Subprompts in play — the smaller per-chat instructions kept in
+              the character's vault. Same recompile path as the prompt
+              dropdown above. */}
+          {isCharacter && !isUserParticipant && !isUserControlledCharacter && entity && onSubpromptsChange && (
+            <div className="mt-1">
+              <SubpromptPicker
+                characterId={entity.id}
+                characterName={name}
+                selectedIds={participant.selectedSubpromptIds ?? []}
+                onChange={(ids) => onSubpromptsChange(participant.id, ids)}
+                size="sm"
+              />
             </div>
           )}
 

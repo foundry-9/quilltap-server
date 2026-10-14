@@ -5,6 +5,7 @@ const mockFindAnnotationsByChatId = jest.fn()
 const mockMergeAnnotations = jest.fn()
 const mockStripAnnotations = jest.fn()
 const mockGetRepositories = jest.fn()
+const mockRenderChatConversation = jest.fn()
 const mockLogger = {
   warn: jest.fn(),
   debug: jest.fn(),
@@ -20,6 +21,16 @@ jest.mock('@/lib/scriptorium', () => ({
   mergeAnnotations: (...args: unknown[]) => mockMergeAnnotations(...args),
   stripAnnotations: (...args: unknown[]) => mockStripAnnotations(...args),
 }))
+
+jest.mock('@/lib/scriptorium/render-chat', () => ({
+  renderChatConversation: (...args: unknown[]) => mockRenderChatConversation(...args),
+}))
+
+/** A live render result with one interchange per `## Interchange` header. */
+function rendered(markdown: string) {
+  const count = (markdown.match(/^## Interchange \d+/gm) ?? []).length
+  return { markdown, interchanges: Array.from({ length: count }, (_, i) => ({ index: i })) }
+}
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: () => mockLogger,
@@ -53,9 +64,9 @@ describe('read-conversation-handler', () => {
   it('merges annotations and counts messages from the merged markdown', async () => {
     mockFindChatById.mockResolvedValue({
       id: 'chat-current',
-      participants: [{ id: 'participant-1', characterId: 'character-1' }],
-      renderedMarkdown: '# Conversation\n\n## Interchange 1\n\n### Message 1\nOriginal',
+      participants: [{ id: 'participant-1', characterId: 'character-1' }]
     })
+    mockRenderChatConversation.mockResolvedValue(rendered('# Conversation\n\n## Interchange 1\n\n### Message 1\nOriginal'))
     mockFindAnnotationsByChatId.mockResolvedValue([{ id: 'annotation-1' }])
     mockMergeAnnotations.mockReturnValue(
       '# Conversation\n\n## Interchange 1\n\n### Message 1\nMerged\n\n## Interchange 2\n\n### Message 2\nMerged again'
@@ -80,9 +91,9 @@ describe('read-conversation-handler', () => {
   it('strips annotations when exclude_annotations is true', async () => {
     mockFindChatById.mockResolvedValue({
       id: 'chat-current',
-      participants: [{ id: 'participant-1', characterId: 'character-1' }],
-      renderedMarkdown: '# Conversation\n\n## Interchange 1\n\n### Message 1\nOriginal [Note]',
+      participants: [{ id: 'participant-1', characterId: 'character-1' }]
     })
+    mockRenderChatConversation.mockResolvedValue(rendered('# Conversation\n\n## Interchange 1\n\n### Message 1\nOriginal [Note]'))
     mockStripAnnotations.mockReturnValue(
       '# Conversation\n\n## Interchange 1\n\n### Message 1\nOriginal'
     )
@@ -104,9 +115,9 @@ describe('read-conversation-handler', () => {
   it('blocks cross-conversation reads when the character is not a participant', async () => {
     mockFindChatById.mockResolvedValue({
       id: 'chat-other',
-      participants: [{ id: 'participant-2', characterId: 'character-2' }],
-      renderedMarkdown: '# Conversation',
+      participants: [{ id: 'participant-2', characterId: 'character-2' }]
     })
+    mockRenderChatConversation.mockResolvedValue(rendered('# Conversation'))
 
     const result = await executeReadConversationTool(
       { conversationId: 'chat-other' },
@@ -120,18 +131,38 @@ describe('read-conversation-handler', () => {
     expect(mockFindAnnotationsByChatId).not.toHaveBeenCalled()
   })
 
-  it('returns a not-rendered error when markdown is unavailable', async () => {
-    mockFindChatById.mockResolvedValue({
+  it('renders the transcript live rather than reading a stored copy', async () => {
+    const chat = {
       id: 'chat-current',
       participants: [{ id: 'participant-1', characterId: 'character-1' }],
-      renderedMarkdown: '',
+    }
+    mockFindChatById.mockResolvedValue(chat)
+    mockRenderChatConversation.mockResolvedValue(rendered('# Conversation\n\n## Interchange 1\n\n### Message 1\nHello'))
+    mockFindAnnotationsByChatId.mockResolvedValue([])
+
+    const result = await executeReadConversationTool({}, context)
+
+    expect(mockRenderChatConversation).toHaveBeenCalledWith(chat)
+    expect(result).toEqual({
+      success: true,
+      markdown: '# Conversation\n\n## Interchange 1\n\n### Message 1\nHello',
+      messageCount: 1,
+      interchangeCount: 1,
     })
+  })
+
+  it('returns a no-messages error when the chat has nothing to read', async () => {
+    mockFindChatById.mockResolvedValue({
+      id: 'chat-current',
+      participants: [{ id: 'participant-1', characterId: 'character-1' }]
+    })
+    mockRenderChatConversation.mockResolvedValue(rendered(''))
 
     const result = await executeReadConversationTool({}, context)
 
     expect(result).toEqual({
       success: false,
-      error: 'Conversation has not been rendered yet.',
+      error: 'Conversation has no messages to read yet.',
     })
   })
 

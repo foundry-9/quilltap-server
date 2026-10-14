@@ -13,6 +13,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
+import { processSingleton } from '@/lib/utils/process-singleton'
 
 /**
  * Result of an embedding operation.
@@ -88,10 +89,23 @@ export const EMBEDDING_MAX_CHARS = 128 * 1024
  */
 export type EmbeddingPriority = 'interactive' | 'background'
 
-let interactivePending = 0
+/** Per-call options for {@link generateEmbeddingForUser}. */
+export interface EmbeddingCallOptions {
+  priority?: EmbeddingPriority
+  /**
+   * What a lexical (BUILTIN, TF-IDF) profile embeds instead of `text`. Memory
+   * writers pass `lexicalEmbeddingTextFor(memory)` — the memory without its
+   * anchor line (builtin-tfidf-memory-tuning §2). Ignored by every other
+   * provider; absent, the BUILTIN path embeds `text`.
+   */
+  lexicalText?: string
+}
+
+/** Interactive embeddings in flight, process-wide so every bundle copy of this module agrees (bug 235). */
+const interactive = processSingleton('embedding.interactivePending', () => ({ pending: 0 }))
 
 async function waitForInteractiveQuiet(): Promise<void> {
-  while (interactivePending > 0) {
+  while (interactive.pending > 0) {
     await new Promise<void>(resolve => setTimeout(resolve, 50))
   }
 }
@@ -184,7 +198,8 @@ async function generateApiEmbedding(
  */
 async function generateBuiltinEmbedding(
   text: string,
-  profile: EmbeddingProfile
+  profile: EmbeddingProfile,
+  lexicalText?: string
 ): Promise<EmbeddingResult> {
   const repos = getRepositories()
 
@@ -221,8 +236,18 @@ async function generateBuiltinEmbedding(
       fittedAt: vocabulary.fittedAt,
     })
 
-    // Generate the embedding
-    const result = embeddingProvider.generateEmbedding(text)
+    // A memory writer hands over its lexical text — the memory without its
+    // anchor line (`lexicalEmbeddingTextFor`) — and that is what a bag of
+    // words embeds; any other text is embedded as given.
+    if (lexicalText !== undefined) {
+      logger.debug('[Embedding] BUILTIN embed: using the caller\'s lexical text', {
+        context: 'generateBuiltinEmbedding',
+        profileId: profile.id,
+        textChars: text.length,
+        lexicalChars: lexicalText.length,
+      })
+    }
+    const result = embeddingProvider.generateEmbedding(lexicalText ?? text)
 
     const embedding = applyEmbeddingProfile(result.embedding, profile)
 
@@ -250,12 +275,13 @@ async function generateBuiltinEmbedding(
 export async function generateEmbedding(
   text: string,
   profile: EmbeddingProfile,
-  userId: string
+  userId: string,
+  opts: Pick<EmbeddingCallOptions, 'lexicalText'> = {}
 ): Promise<EmbeddingResult> {
   try {
     // Built-in provider has special handling for vocabulary state
     if (profile.provider === 'BUILTIN') {
-      return generateBuiltinEmbedding(text, profile)
+      return generateBuiltinEmbedding(text, profile, opts.lexicalText)
     }
 
     // All other providers use the API-based flow
@@ -283,7 +309,7 @@ export async function generateEmbeddingForUser(
   text: string,
   userId: string,
   profileId?: string,
-  opts: { priority?: EmbeddingPriority } = {}
+  opts: EmbeddingCallOptions = {}
 ): Promise<EmbeddingResult> {
   // Lights the "Emb" chip for the whole call, including the wait for
   // interactive quiet — an embedding minted to answer a search counts as much
@@ -296,14 +322,14 @@ async function runEmbeddingForUser(
   text: string,
   userId: string,
   profileId?: string,
-  opts: { priority?: EmbeddingPriority } = {}
+  opts: EmbeddingCallOptions = {}
 ): Promise<EmbeddingResult> {
   const priority = opts.priority ?? 'interactive'
 
   if (priority === 'background') {
     await waitForInteractiveQuiet()
   } else {
-    interactivePending++
+    interactive.pending++
   }
 
   try {
@@ -326,10 +352,10 @@ async function runEmbeddingForUser(
       throw new EmbeddingError('No embedding profile configured')
     }
 
-    return await generateEmbedding(text, profile, userId)
+    return await generateEmbedding(text, profile, userId, { lexicalText: opts.lexicalText })
   } finally {
     if (priority === 'interactive') {
-      interactivePending--
+      interactive.pending--
     }
   }
 }
@@ -427,6 +453,32 @@ export function normalizeVector(v: Float32Array): Float32Array {
     v[i] = v[i] * inv
   }
   return v
+}
+
+/**
+ * The unit-length mean of a set of embeddings — one vector standing for the
+ * whole of which they are the parts.
+ *
+ * Help documents are embedded this way: a long page cannot be sent to the
+ * provider in one piece (every embedding model has an input ceiling, some as
+ * low as 512 tokens), but its section chunks always can, and the normalised
+ * centroid of their vectors ranks the page by its overall subject much as a
+ * single whole-text vector would. Returns null for an empty set; throws if the
+ * vectors disagree on dimension, which would make the average meaningless.
+ */
+export function averageEmbeddings(vectors: ReadonlyArray<Float32Array>): Float32Array | null {
+  if (vectors.length === 0) return null
+  const dims = vectors[0].length
+  const sum = new Float32Array(dims)
+  for (const v of vectors) {
+    if (v.length !== dims) {
+      throw new Error(`Cannot average embeddings of differing dimension (${dims} vs ${v.length})`)
+    }
+    for (let i = 0; i < dims; i++) {
+      sum[i] += v[i]
+    }
+  }
+  return normalizeVector(sum)
 }
 
 /**

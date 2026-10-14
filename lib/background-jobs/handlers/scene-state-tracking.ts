@@ -12,7 +12,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { updateSceneState, extractVisibleConversation, throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -21,6 +21,7 @@ import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -70,21 +71,22 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   const isDangerousChat = shouldUseUncensoredRoute(chat);
   let cheapLLMSelection = getCheapLLMProvider(connectionProfile, cheapLLMConfig, availableProfiles, false);
 
-  // For dangerous chats, use uncensored provider to avoid content refusals.
-  // Pass the chat so an Off-duty override collapses dangerSettings to mode='OFF'.
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  // Unmoderated chats use the uncensored desk to avoid content refusals (the
+  // policy's `routeDirect`). Pass the chat so a Locked chat's policy empties
+  // the desk and closes the failover.
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
   if (isDangerousChat) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,
-      dangerSettings,
+      conciergePolicy,
       availableProfiles
     );
   }
 
   // Build uncensored LLM selection for pre-classification fallback and retries
   let uncensoredLLMSelection: CheapLLMSelection | null = null;
-  const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+  const uncensoredProfileId = conciergePolicy.desk.imagePromptProfileId;
   if (uncensoredProfileId) {
     const uncensoredProfile = availableProfiles.find(p => p.id === uncensoredProfileId);
     if (uncensoredProfile) {
@@ -131,7 +133,8 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   // 7b. Pre-classify content through the Concierge gatekeeper
   // The danger classification job runs in parallel and may not have completed yet,
   // so we classify the recent messages ourselves to decide provider routing.
-  if (!isDangerousChat && uncensoredLLMSelection && dangerSettings.mode !== 'OFF') {
+  // A classifier scan: only when the chat's pre-screen is on (Moderated, opted in).
+  if (!isDangerousChat && uncensoredLLMSelection && conciergePolicy.preScreen.enabled) {
     try {
       const sampleText = recentMessages.slice(-10)
         .map(m => m.content.substring(0, 300))
@@ -142,7 +145,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
           sampleText,
           cheapLLMSelection,
           job.userId,
-          dangerSettings,
+          conciergePolicy,
           payload.chatId
         );
 
@@ -208,7 +211,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     return {
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescription: char!.physicalDescription?.mediumPrompt || char!.physicalDescription?.shortPrompt || '',
+      physicalDescription: pickPhysicalDescription(char!.physicalDescription, 'scene'),
       clothingDescription,
       scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
     };
@@ -233,11 +236,20 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     chatScenario,
   };
 
-  // Build uncensored fallback options for the built-in retry in executeCheapLLMTask
-  const uncensoredFallback = dangerSettings.mode !== 'OFF' ? {
-    dangerSettings,
+  // Build uncensored fallback options for the built-in retry in executeCheapLLMTask —
+  // a refusal retry, so only where the policy allows failover (on duty, not Locked).
+  const uncensoredFallback = conciergePolicy.failoverAllowed ? {
+    conciergePolicy,
     availableProfiles,
   } : undefined;
+  logger.debug('[SceneStateTracking] Concierge policy for scene-state update', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    conciergeSource: conciergePolicy.source,
+    preScreen: conciergePolicy.preScreen.enabled,
+    failoverAllowed: conciergePolicy.failoverAllowed,
+    hasUncensoredFallback: !!uncensoredFallback,
+  });
 
   let result = await updateSceneState(
     sceneStateInput,

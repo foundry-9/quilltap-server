@@ -321,7 +321,7 @@ export function buildLoadedMemoriesSection(
       summary: m.summary,
       importance: m.importance,
       score: m.score,
-      effectiveWeight: m.effectiveWeight,
+      salience: m.salience,
     })),
     interCharacterMemories: (loaded.interCharacter ?? []).map((m) => ({
       aboutCharacterName: m.aboutCharacterName,

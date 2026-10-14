@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exists, enrichWithDefaultImage } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -86,8 +86,6 @@ const renameSchema = z.object({
   dryRun: z.boolean().default(true),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'toggle-carina', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'rename', 'archive', 'rehydrate'] as const;
-type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 async function handleOptimizeStream(
   req: NextRequest,
@@ -148,7 +146,6 @@ export async function handlePost(
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
-  const action = getActionParam(req);
 
   // Verify ownership first
   const character = await repos.characters.findById(id);
@@ -156,11 +153,7 @@ export async function handlePost(
     return notFound('Character');
   }
 
-  if (!isValidAction(action, CHARACTER_POST_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHARACTER_POST_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<CharacterPostAction, () => Promise<NextResponse>> = {
+  return dispatchAction(req, {
     favorite: async () => {
       try {
         const updatedCharacter = await repos.characters.setFavorite(id, !character.isFavorite);
@@ -443,7 +436,5 @@ export async function handlePost(
         return serverError('Failed to process rename request');
       }
     },
-  };
-
-  return actionHandlers[action]();
+  });
 }

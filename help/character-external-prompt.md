@@ -12,6 +12,8 @@ There comes a time in every character's life when they must venture beyond the c
 
 The generator takes your character's carefully curated fields — description, personality, system prompt, and optionally a scenario, physical appearance, and attire — and hands them to an LLM of your choosing with instructions to synthesize everything into a single second-person Markdown prompt. The result is a document written in the style of "You are [Name]. You always..." that can be pasted directly into any tool that accepts a system prompt or custom instructions.
 
+The generated prompt now carries the same listening and register direction as Quilltap's other character generators — answer what is meant, size the reply to the moment, save the formal language for matters of weight — and the safeguards described under [Whose story it is](prompts.md): what you narrate is what happened, the conversation outranks the character's notes, no setting facts invented to win a point, nothing binds you unless you agreed in plain words, and disagreement without a committee. As ever, these are rendered in the character's own voice rather than as a pasted list. A *disposition of trust* is included only when the character's material establishes them as your companion, partner, family, or crew. Since the prompt travels to establishments where Quilltap cannot keep an eye on things, these safeguards matter there at least as much as at home.
+
 ## Accessing the Generator
 
 1. Navigate to the **Aurora** page (`/aurora`)

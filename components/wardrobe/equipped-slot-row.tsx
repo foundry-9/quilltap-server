@@ -12,10 +12,14 @@
  * expansion is purely for display labels.
  */
 
-import { useMemo, useState, useRef, useEffect } from 'react'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { useCallback, useMemo, useState, useRef } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { WARDROBE_SLOT_META, formatSlotLabels, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { selectGarments } from '@/lib/wardrobe/composed-outfits'
+import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
+import { SlotBadge } from './slot-ui'
 
 interface EquippedSlotRowProps {
   slot: WardrobeItemType
@@ -26,7 +30,7 @@ interface EquippedSlotRowProps {
    * whole — equipped chips resolve their labels from it, including labels for
    * composites the picker itself won't offer.
    */
-  allItems: WardrobeItem[]
+  allItems: ListedWardrobeItem[]
   onAdd: (slot: WardrobeItemType, itemId: string) => void
   onRemove: (slot: WardrobeItemType, itemId: string) => void
   onClear: (slot: WardrobeItemType) => void
@@ -44,33 +48,18 @@ export function EquippedSlotRow({
   const [search, setSearch] = useState('')
   const pickerRef = useRef<HTMLDivElement>(null)
 
-  // Close picker on outside click
-  useEffect(() => {
-    if (!pickerOpen) return
-    const onDoc = (e: MouseEvent): void => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [pickerOpen])
-
-  // Close picker on Escape — capture phase + stopPropagation so the parent
-  // dialog's Escape handler doesn't also fire and dismiss the whole modal.
-  useEffect(() => {
-    if (!pickerOpen) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        e.preventDefault()
-        setPickerOpen(false)
-        setSearch('')
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [pickerOpen])
+  // Close on an outside click or Escape — the Escape swallowed in the
+  // capture phase so the enclosing dialog stays open.
+  const closePicker = useCallback(() => {
+    setPickerOpen(false)
+    setSearch('')
+  }, [])
+  const closeOnOutsideClick = useCallback(() => setPickerOpen(false), [])
+  useClickOutside(pickerRef, closeOnOutsideClick, {
+    enabled: pickerOpen,
+    onEscape: closePicker,
+    escapeCapture: true,
+  })
 
   const itemsById = useMemo(() => new Map(allItems.map((i) => [i.id, i])), [allItems])
 
@@ -91,7 +80,7 @@ export function EquippedSlotRow({
   return (
     <div className="qt-card py-2 px-3">
       <div className="flex items-center justify-between mb-1">
-        <span className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass}`}>{WARDROBE_SLOT_META[slot].label}</span>
+        <SlotBadge slot={slot} />
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -119,7 +108,7 @@ export function EquippedSlotRow({
       ) : (
         <div className="flex flex-wrap gap-1">
           {equippedItems.map(({ id, item }) => {
-            const isComposite = item ? item.componentItemIds.length > 0 : false
+            const isComposite = item ? isCompositeItem(item) : false
             return (
               <span
                 key={id}
@@ -162,24 +151,34 @@ export function EquippedSlotRow({
             </div>
           ) : (
             <ul className="divide-y qt-border-default">
-              {candidates.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onAdd(slot, c.id)
-                      setPickerOpen(false)
-                      setSearch('')
-                    }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:qt-bg-muted"
-                  >
-                    <span className="truncate text-sm text-foreground">{c.title}</span>
-                    <span className="qt-text-xs qt-text-secondary">
-                      {c.types.join(', ')}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {candidates.map((c) => {
+                // Two same-named garments from different tiers are exactly the
+                // case this list must tell apart, so a borrowed one says where
+                // it hangs.
+                const originLabel = wardrobeOriginLabel(c.origin)
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAdd(slot, c.id)
+                        setPickerOpen(false)
+                        setSearch('')
+                      }}
+                      className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
+                    >
+                      <WardrobeItemThumbnail fileId={c.imageFileId} size={28} />
+                      <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                        {c.title}
+                      </span>
+                      <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
+                        {formatSlotLabels(c.types)}
+                        {originLabel ? ` · ${originLabel}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

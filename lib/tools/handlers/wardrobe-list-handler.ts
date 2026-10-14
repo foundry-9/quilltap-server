@@ -14,21 +14,15 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
-import { findEquippedSlots } from './wardrobe-handler-shared';
+import { isComposite as itemIsComposite } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { findEquippedSlots, loadToolPool, type WardrobeToolContext } from './wardrobe-handler-shared';
+import { formatWornRelative } from '@/lib/wardrobe/wear-display';
+import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
+import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
-/**
- * Context required for wardrobe list tool execution
- */
-export interface WardrobeListToolContext {
-  /** User ID for authentication and logging */
-  userId: string;
-  /** Chat ID for equipped outfit lookup */
-  chatId: string;
-  /** Character ID whose wardrobe to list */
-  characterId: string;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeListToolContext = WardrobeToolContext;
 
 /**
  * Error thrown during wardrobe list execution
@@ -77,11 +71,10 @@ export async function executeWardrobeListTool(
     const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // The character's own wardrobe merged under the shared archetypes (their
-    // groups' stores + the chat's project stores + Quilltap General). Character
-    // items win on id collision so a personal override masks the shared item.
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
-    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, tiers);
+    // Everything the character can wear: their own vault over their groups'
+    // stores, the chat's project stores and Quilltap General.
+    const pool = await loadToolPool(repos, context.chatId, context.characterId);
+    const allItems = pool.wearable();
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,
@@ -106,34 +99,45 @@ export async function executeWardrobeListTool(
       );
     }
 
-    // Map every item by id for composite-component title resolution. We
-    // include the unfiltered list so a filtered composite can still show its
-    // components (some of which may have been filtered out themselves).
-    const itemsById = new Map<string, WardrobeItem>();
-    for (const item of allItems) itemsById.set(item.id, item);
+
+    // One ledger read for every listed item's wear, the caller's own share
+    // kept apart from the household's (bug 184).
+    const wearSummaries = await repos.wardrobeWear.findSummariesForWearer(
+      filteredItems.map((item) => item.id),
+      context.characterId,
+    );
 
     // Build result list with equipped status and composite metadata.
     const resultItems: WardrobeListItemResult[] = filteredItems.map((item) => {
       const equipped = findEquippedSlots(item.id, equippedSlots);
-      const isComposite = (item.componentItemIds?.length ?? 0) > 0;
+      const wear = wearSummaries.get(item.id);
+      const household = wear?.household ?? neverWornSummary();
+      const yours = wear?.yours ?? neverWornSummary();
+      // Component titles resolve against the whole pool, so a filtered-out
+      // (or archived) part still names itself.
+      const isComposite = itemIsComposite(item);
       const componentTitles = isComposite
-        ? item.componentItemIds
-            .map((cid) => itemsById.get(cid)?.title)
-            .filter((t): t is string => typeof t === 'string')
+        ? pool.getMany(item.componentItemIds).map((c) => c.title)
         : undefined;
       return {
         item_id: item.id,
         title: item.title,
         description: item.description ?? null,
         image_prompt: item.imagePrompt ?? null,
+        image_file_id: item.imageFileId ?? null,
         types: item.types,
         appropriateness: item.appropriateness ?? null,
         is_own: item.characterId === context.characterId,
+        folder: item.folder || null,
         is_equipped: equipped.length > 0,
         // Preserve the original single-slot field shape; with arrays-per-slot
         // we expose the *first* slot the item appears in for back-compat,
         // and the full set on `equipped_slots`.
         equipped_slot: equipped[0] ?? null,
+        wear_count: household.wearCount,
+        last_worn_at: household.lastWornAt,
+        worn_by_you: yours.wearCount,
+        last_worn_by_you_at: yours.lastWornAt,
         ...(isComposite
           ? {
               is_composite: true,
@@ -161,6 +165,9 @@ export async function executeWardrobeListTool(
       hasAppropriatenessFilter: !!appropriateness_filter,
       includeEquipped: include_equipped !== false,
       compositeCount: finalItems.filter((i) => i.is_composite).length,
+      neverWornCount: finalItems.filter((i) => i.wear_count === 0).length,
+      neverWornByCallerCount: finalItems.filter((i) => i.worn_by_you === 0).length,
+      withPictureCount: finalItems.filter((i) => i.image_file_id).length,
     });
 
     return {
@@ -185,13 +192,47 @@ export async function executeWardrobeListTool(
   }
 }
 
+/** "once" or "12×", for the compact list note. */
+function listTimes(count: number): string {
+  return count === 1 ? 'once' : `${count}×`;
+}
+
+/**
+ * The compact wear note a listed item carries, from the caller's side with
+ * the household's total as context (bug 184):
+ *
+ *  - ` · never worn` — nobody has
+ *  - ` · never worn by you (worn 115× by others)`
+ *  - ` · worn by you 12×, last yesterday` — only the caller has worn it
+ *  - ` · worn by you 12×, last yesterday (115× in the household)`
+ *
+ * `nowMs` pins the clock (tests); it defaults to now.
+ */
+export function formatWardrobeListWearNote(
+  item: Pick<WardrobeListItemResult, 'wear_count' | 'last_worn_at' | 'worn_by_you' | 'last_worn_by_you_at'>,
+  nowMs: number = Date.now(),
+): string {
+  if (!item.wear_count) return ' · never worn';
+  if (!item.worn_by_you) return ` · never worn by you (worn ${listTimes(item.wear_count)} by others)`;
+  // A count with no readable date (a hand-edited row) drops the date part.
+  const yourLastMs = item.last_worn_by_you_at ? Date.parse(item.last_worn_by_you_at) : NaN;
+  const when = Number.isNaN(yourLastMs) ? '' : `, last ${formatWornRelative(yourLastMs, nowMs)}`;
+  const yours = `worn by you ${listTimes(item.worn_by_you)}${when}`;
+  if (item.wear_count <= item.worn_by_you) return ` · ${yours}`;
+  return ` · ${yours} (${listTimes(item.wear_count)} in the household)`;
+}
+
 /**
  * Format wardrobe list results for inclusion in conversation context
  *
  * @param output - Wardrobe list tool output to format
+ * @param nowMs - Clock for the relative wear dates; defaults to now
  * @returns Formatted string suitable for LLM context and display
  */
-export function formatWardrobeListResults(output: WardrobeListToolOutput): string {
+export function formatWardrobeListResults(
+  output: WardrobeListToolOutput,
+  nowMs: number = Date.now(),
+): string {
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
@@ -205,6 +246,7 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
   for (const item of output.items) {
     const typeTags = item.types.map((t) => `[${t}]`).join(' ');
     const equippedTag = item.is_equipped ? ` (EQUIPPED in ${item.equipped_slot})` : '';
+    const folderTag = item.folder ? ` [folder: ${item.folder}]` : '';
     const sharedTag = item.is_own ? '' : ' [shared — read-only]';
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
     const description = item.description ? ` - ${item.description}` : '';
@@ -213,7 +255,10 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
       ? ` [composite: ${(item.component_titles ?? []).join(', ') || 'unresolved components'}]`
       : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}`);
+    const wearTag = formatWardrobeListWearNote(item, nowMs);
+    const pictureTag = item.image_file_id ? ` · picture: ${formatWardrobeImageHandle(item.image_file_id)}` : '';
+
+    lines.push(`  ${typeTags} ${item.title}${folderTag}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
   }
 
   return lines.join('\n');

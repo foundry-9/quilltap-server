@@ -31,6 +31,8 @@ import {
   importMemories,
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
+import { importWardrobeWear } from './import-wardrobe-wear';
+import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
 import {
   importPromptTemplates,
@@ -38,7 +40,8 @@ import {
   importPluginConfigs,
   importInstanceSettings,
 } from './import-configuration';
-import { reconcileRelationships } from './reconcile';
+import { reconcileRelationships, remapChatInform } from './reconcile';
+import { remapImportedMessageId } from './message-id-remap';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
@@ -397,11 +400,12 @@ async function enqueueImportedMemoryEmbeddings(
   }
 
   // BUILTIN TF-IDF vocabularies are corpus-derived and the corpus just grew:
-  // schedule the debounced refit-with-reindex, the same follow-up manual
-  // memory creation performs. (No-op for API-backed providers.)
+  // schedule the debounced refit-with-reindex. Forced, because imported rows
+  // keep their original `createdAt`, so the drift count that gates a manual
+  // edit's refit cannot see them. (No-op for API-backed providers.)
   if (profile.provider === 'BUILTIN') {
     try {
-      await scheduleRefit(userId, profile.id);
+      await scheduleRefit(userId, profile.id, { force: true });
     } catch (error) {
       moduleLogger.warn('Failed to schedule vocabulary refit after import', {
         userId,
@@ -461,6 +465,8 @@ async function executeImportStrict(
     characterVaultMounts: new Map(),
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
+    messages: new Map(),
   };
 
   // Initialize counts
@@ -650,8 +656,8 @@ async function executeImportStrict(
     }
 
     // 7a. Conversation annotations attached to imported chats. Remap chatId
-    // through idMaps.chats; sourceMessageId stays as-is because the message
-    // import preserves message IDs.
+    // through idMaps.chats, and sourceMessageId through idMaps.messages for a
+    // chat whose message ids were reminted (bug 228).
     if (data.conversationAnnotations && data.conversationAnnotations.length > 0) {
       const globalRepos = getRepositories();
       let annotationsImported = 0;
@@ -662,6 +668,9 @@ async function executeImportStrict(
           await globalRepos.conversationAnnotations.create({
             ...annotationData,
             chatId: remappedChatId,
+            ...(annotation.sourceMessageId && {
+              sourceMessageId: remapImportedMessageId(idMaps, annotation.chatId, annotation.sourceMessageId),
+            }),
           });
           annotationsImported++;
         } catch (error) {
@@ -698,6 +707,97 @@ async function executeImportStrict(
         }
       }
       imported.chatDocuments = chatDocsImported;
+    }
+
+    // 7b-ii. Inform rows (`chat_informs`), consumed ones included — a consumed
+    //    row is what lets a swipe of the turn that consumed it re-apply the
+    //    same passage in this instance.
+    //
+    //    Must follow both the chat *and* its messages: the row points at a
+    //    chat participant, at the Host record message documenting the post,
+    //    and (when consumed) at the assistant message that carried it. Every
+    //    one of those is verified before a row is written — an inform aimed at
+    //    a seat that is not here would sit pending forever, and a record
+    //    pointer into empty space is a transcript lie. `remapChatInform` owns
+    //    that judgement; here we only gather the sets it checks against.
+    if (data.chatInforms && data.chatInforms.length > 0) {
+      const globalRepos = getRepositories();
+      /** Per destination chat: the seats and the message ids it actually has. */
+      const knownByChatId = new Map<
+        string,
+        { participantIds: Set<string>; messageIds: Set<string> }
+      >();
+
+      const knownFor = async (chatId: string) => {
+        const cached = knownByChatId.get(chatId);
+        if (cached) return cached;
+        const participantIds = new Set<string>();
+        const messageIds = new Set<string>();
+        try {
+          const chat = await repos.chats.findById(chatId);
+          for (const participant of chat?.participants ?? []) {
+            if (participant.id) participantIds.add(participant.id);
+          }
+          const events = await repos.chats.getMessages(chatId);
+          for (const event of events) {
+            const id = (event as { id?: string }).id;
+            if (id) messageIds.add(id);
+          }
+        } catch (error) {
+          moduleLogger.warn('Failed to read chat while importing informs', {
+            chatId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        const known = { participantIds, messageIds };
+        knownByChatId.set(chatId, known);
+        return known;
+      };
+
+      let informsImported = 0;
+      let informsDropped = 0;
+      for (const inform of data.chatInforms) {
+        const remappedChatId = idMaps.chats.get(inform.chatId) ?? inform.chatId;
+        const result = remapChatInform(inform, idMaps, await knownFor(remappedChatId));
+
+        if (!result.ok) {
+          informsDropped++;
+          warnings.push(`Dropped an imported inform: ${result.reason}`);
+          moduleLogger.warn('Dropped imported inform with an unresolvable reference', {
+            informId: inform.id,
+            chatId: remappedChatId,
+            reason: result.reason,
+          });
+          continue;
+        }
+
+        if (result.consumedByMessageIdCleared) {
+          moduleLogger.warn('Imported inform lost its consumedByMessageId', {
+            informId: inform.id,
+            chatId: remappedChatId,
+            consumedByMessageId: inform.consumedByMessageId,
+          });
+        }
+
+        try {
+          await globalRepos.chatInforms.create(result.data);
+          informsImported++;
+        } catch (error) {
+          informsDropped++;
+          warnings.push(
+            `Failed to import inform: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+
+      imported.chatInforms = informsImported;
+      moduleLogger.debug('Imported chat informs', {
+        total: data.chatInforms.length,
+        imported: informsImported,
+        dropped: informsDropped,
+      });
     }
 
     // 7c. Document stores (Scriptorium) — mount point configs plus, for
@@ -797,6 +897,30 @@ async function executeImportStrict(
       }
     }
 
+    // 7e. Wardrobe wear ledger. Last of the wardrobe-bearing phases: every
+    //    item (character-owned via importCharacters, shared and vault-borne
+    //    via the document-store phase), every character and every chat the
+    //    rows can point at has landed and its id map is final. A row whose
+    //    item did not come along is dropped; an unresolvable wearer folds into
+    //    the item's unattributed row.
+    if (data.wardrobeWear && data.wardrobeWear.length > 0) {
+      try {
+        imported.wardrobeWear = await importWardrobeWear(
+          data.wardrobeWear,
+          data.documents ?? [],
+          idMaps,
+          warnings
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to import the wardrobe wear ledger: ${msg}`);
+        moduleLogger.warn('Failed to import wardrobe wear ledger', {
+          rowCount: data.wardrobeWear.length,
+          error: msg,
+        });
+      }
+    }
+
     // 8. Memories (if includeMemories option is enabled)
     if (options.includeMemories && data.memories && data.memories.length > 0) {
       const counts = await importMemories(
@@ -857,6 +981,23 @@ async function executeImportStrict(
 
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
+
+    // Wardrobe pictures. After reconciliation: the character must already
+    // point at the vault the bundle carried, whose blobs hold the bytes and
+    // whose Wardrobe/*.md the item update writes back to.
+    if (data.characters && data.characters.length > 0) {
+      await importWardrobeItemImages(userId, data.characters, idMaps, warnings);
+    }
+
+    // Store names: an imported vault arrives as "… (2)" when its name was
+    // taken; name each live vault after its character and retire any vault
+    // the import left unlinked (bug 186).
+    try {
+      const { reconcileStoreNames } = await import('@/lib/mount-index/reconcile-store-names');
+      await reconcileStoreNames('qtap-import');
+    } catch (error) {
+      warnings.push(`Failed to tidy document-store names after import: ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     // Re-embed what we just inserted. Imported memories carry no vector, and
     // without this their semantic search stays broken until the next boot's

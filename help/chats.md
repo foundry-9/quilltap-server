@@ -85,6 +85,8 @@ One quiet rule governs those wardrobe consultations: **an archived garment is ne
 
 The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
 
+Should your character's provider fall silent while composing the opening line — accepting the commission, and then simply never delivering — the Green Room no longer waits on it indefinitely. It allows ninety seconds, which is ample for a sentence or two, and then proceeds without one: the conversation opens with a plain scripted greeting in place of the composed one, and is yours to speak in as usual. Nothing else is lost; every other preparation was complete long before. Type a line and the chat answers perfectly normally. (See *Connection Profiles* → *The Understudies* for what a silence means elsewhere in the house.)
+
 ### Taking a Character's Chair — "Play As"
 
 By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now draws its guest list strictly from the room itself — *every* character you have added to the cast is offered, and none who have not been.
@@ -105,18 +107,27 @@ Change it and the new conversation begins in that style — no visit to the side
 
 (The dropdown keeps its counsel when you have no templates installed at all, there being nothing to choose between.)
 
+### Having the Host Set the Scene
+
+The **Starting Scenario** box need not be filled by your own hand. On the same line as its label sits **Ask the Host to set the scene**: name the place and the moment, say whether the place is real or of your own world, and the Host goes off to make enquiries — through the document stores this company could see and, for a real place, the web besides — and returns with a paragraph or two of scene that leaves the cast out of it entirely. Revise it, use it, or file it among your scenarios for another evening. The whole procedure is set out in [The Scenario Builder](scenario-builder.md).
+
+The drop-down itself offers the scenes of this chat's own household; **Browse all scenarios…** at its head opens the [Scenario Browser](scenario-browser.md), which reaches every shelf in the house.
+
 ### A Word With the Concierge, Before the Doors Open
 
 Some conversations announce their character before the first syllable is spoken, and it has always been a small indignity to have to start such a chat in the ordinary way, wait for the room to be dressed, open the sidebar, and only *then* inform the Concierge of what everybody already knew — by which time the opening line had gone out through the ordinary desk and, on occasion, come back refused.
 
-The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same four postures as the chat's own sidebar, in the same two companies:
+The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same three postures as the chat's own sidebar:
 
-- **The Concierge decides** — *Monitored* (the default, and the state of every chat that has ever been created without a word on the subject) and *Flagged*.
-- **You decide** — *Vouched Safe* and *Uncensored*.
+- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his tab at `/settings?tab=concierge&section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
+- *Unmoderated* — the uncensored desk and nowhere else.
+- *Locked* — the usual providers only, and a refusal stands.
 
-Beneath the dropdown, the Concierge states plainly what the posture you have selected commits him to. Choose one other than Monitored and he posts a brief note at the top of the new conversation saying so, immediately after the system prompt and before the scene is set — the history is thereby honest about which arrangement was in force from the very first word. The opening greeting is then composed under that arrangement: a chat opened *Uncensored* goes to the frank desk on the first attempt rather than after a refusal, and a chat opened *Vouched Safe* is never rerouted at all.
+Beneath the dropdown, the Concierge states plainly what the posture you have selected commits him to. Choose one other than Moderated and he posts a brief note at the top of the new conversation saying so, immediately after the system prompt and before the scene is set — the history is thereby honest about which arrangement was in force from the very first word. The opening greeting is then composed under that arrangement: a chat opened *Unmoderated* goes to the frank desk on the first attempt rather than after a refusal, and a chat opened *Locked* is never rerouted at all.
 
-Two consequences worth knowing before you choose. A chat created *Uncensored* or *Flagged* wears its mark in every list from its first appearance, and vanishes the moment you pull the **Quick-hide** cord with *Dangerous Chats* selected — which is generally the point. And when you take a conversation elsewhere by way of **Continue Elsewhere**, the new venue inherits the old one's posture, so a spirited conversation does not quietly become a decorous one on changing rooms; the dropdown is right there should you wish otherwise.
+Two consequences worth knowing before you choose. A chat created *Unmoderated* wears its mark in every list from its first appearance, and vanishes the moment you pull the **Quick-hide** cord with *Dangerous Chats* selected — which is generally the point. And when you take a conversation elsewhere by way of **Continue Elsewhere**, the new venue inherits the old one's posture, so a spirited conversation does not quietly become a decorous one on changing rooms; the dropdown is right there should you wish otherwise.
+
+Should the Concierge be off duty altogether (see [The Concierge](the-concierge.md)), the dropdown is shown but disabled, with a note directing you to the switch.
 
 None of this is a life sentence. The **The Concierge** control in the chat's own sidebar remains exactly where it was, ready to reconsider the matter at any hour.
 
@@ -182,6 +193,12 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 **A word on mathematics.** The Salon typesets LaTeX mathematics — `$$e^{i\pi}+1=0$$` between double dollar signs, or the backslashed `\(...\)` and `\[...\]` forms — into proper printed-monograph equations. Single dollar signs remain honest currency and are never mistaken for algebra. The full particulars are catalogued in [Mathematical Notation](math-notation.md).
 
+**Summoning a name with `@`.** Begin a word with `@` and a little register of your characters drops open beside the caret — the players in the present chat listed first, the remainder of your acquaintance after. Each letter you add pares the list down (`@ar` offers *Arabella* and *Aristarchus*, and — since any word of a name will answer — *Lady Arabella* besides). **Enter**, **Tab** or a click takes the name at the top (or whichever you have arrowed to); a **space** does likewise once you have typed at least one letter, and keeps its space, so you may carry on without breaking stride. A bare `@` followed by a space is taken for honest punctuation and left alone, as is any `@` lodged inside an address such as `name@example.com`.
+
+What lands is the character's plain name, and the `@` quietly excuses itself — `see @ari` becomes `see Aristarchus`. The single exception is the **start of a line**, where `@Name:` and `@Name?` summon a [Carina](carina.md) answerer. There the `@` lingers a moment to learn your intentions: follow the name with a colon or question mark and then a space, and it stays put for the query; type anything else, and it withdraws. (A name the reference desk cannot be rung by — one bearing a hyphen, an apostrophe or an accented letter, or a single initial — drops its `@` at once, wherever it stands.) One Cmd/Ctrl+Z restores it, should it have withdrawn in error, and the restored `@` is judged afresh by whatever you type next. At the start of a line the register also offers **Brahma**, the [Brahma Console](carina.md#consulting-the-brahma-console), who keeps no character file but answers to `@Brahma:` and `@Brahma?` all the same.
+
+The very first time you summon the register it may need a moment to fetch your characters; the menu says *Consulting the register…* meanwhile, and Enter and Tab politely wait rather than sending your half-typed name. Escape dismisses the menu should you prefer not to wait.
+
 ### Viewing History
 
 Scroll up to see earlier messages in the conversation. Long chats may have:
@@ -196,6 +213,24 @@ When the AI is generating a response:
 - **Typing Indicator** — Shows the character is "thinking"
 - **Stop Button** — Cancel generation if you change your mind
 - **Progress** — Some themes show generation progress
+
+**Should you press Return whilst the room is still speaking**, the Salon will not talk over its own
+guest. Your remark is declined — politely, and out loud: *One moment — the room is still speaking.
+Your remark waits in the composer.* Nothing is lost. Your words sit exactly where you left them, and
+a second press once the reply has landed sends them on their way. The **Nudge**, **Continue** and
+**Skip** controls are answered in the same terms if you reach for them a beat too early. (An empty
+composer, by contrast, is met with a dignified silence — there is nothing to send, and you knew that
+already.)
+
+**Should a send come to grief before it reaches the record** — a connection profile with no API key
+on file, say, or a line that goes dead halfway through the reply — the Salon tells you so in a red
+notice that lingers long enough to be read, rather than letting your bubble flicker and vanish. If
+your message never made it into the transcript, it is handed straight back: the words return to the
+composer (and to your saved draft), with any attachments and staged tool results restored beside
+them, so that you may mend whatever was amiss and press Return again. If the server *did* record
+your message before the trouble began, it stays in the transcript where it belongs and the composer
+is left empty — use **Resend** on it rather than typing it twice. And should you have begun a fresh
+remark in the meantime, the Salon will not trample it.
 
 ## Message Actions
 
@@ -226,6 +261,7 @@ Each chat can have its own configuration:
 - **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar)
 - **Connection Profiles** — Which LLM to use per participant (on each participant card in the Participants drawer)
 - **System Prompt Overrides** — Custom context per participant (on each participant card in the Participants drawer)
+- **Subprompts** — Which of a character's smaller instructions are in play (beneath the system prompt on each participant card, and in the New Chat dialog — see [Character Subprompts](character-subprompts.md))
 - **Tools** — Which AI tools are available (Chat drawer → Tools…)
 - **Project** — Which project this chat belongs to (Chat drawer)
 
@@ -314,7 +350,11 @@ The same transcript twice is the same file twice, to the letter — nothing in i
 
 A scene chosen at the outset is not a sentence passed. The party that began in the conservatory may, by degrees, find itself wanting the shipyard at dawn — and there is no reason on earth to abandon a perfectly good conversation merely to change the furniture.
 
-Open the **Chat Sidebar** on the right, expand the **Chat** drawer, and find **Scenario**. The dropdown offers precisely what the new-chat dialog offered: your project's scenarios, the general ones kept in the Quilltap General shelf, any belonging to groups the present company keeps, and — when a single character holds the floor — that character's own. Choose one and its text is displayed beneath for your inspection. Choose **Custom...** instead and a writing-box appears, in which you may set whatever scene you please, in your own words. Press **Change scenario** to make it so.
+Open the **Chat Sidebar** on the right, expand the **Chat** drawer, and find **Scenario**. The dropdown offers precisely what the new-chat dialog offered: your project's scenarios, the general ones kept in the Quilltap General shelf, any belonging to groups the present company keeps, and — when a single character holds the floor — that character's own. Choose one and its text is displayed beneath for your inspection, with a smaller box below it — **Notes beneath the scene** — for anything you would like layered under it. Choose **Custom...** instead and the writing-box becomes the whole scene, in your own words. **Browse all scenarios…** opens the [Scenario Browser](scenario-browser.md), from which a scene on any shelf in the house may be plucked. Press **Change scenario** to make it so.
+
+Above the box, a line tells you where the chat's scene came from — **From: *Owner* › *Name*** — when it came from a scenario file. Should that file have been revised on its shelf since, the line says *the shelf copy has been revised* and offers **Reload from source**, which reads the file afresh and keeps your notes beneath it. Nothing else fetches the revision: pressing **Change scenario** to amend your notes keeps the scene exactly as the chat has it; should it have been removed, the line says *the shelf copy is gone*, and the chat's scene carries on untouched.
+
+Should you know *where* and *when* but not care to write the paragraph, the **Ask the Host to set the scene** button beneath the picker sends the Host off to research the place — in your stores, or on the web for a real one — and bring back a scene for the **Custom...** box. He knows the scene being replaced and where the conversation stands, and leaves the company out of it. See [The Scenario Builder](scenario-builder.md).
 
 Three things then happen, and they happen together:
 
@@ -340,12 +380,13 @@ Quilltap thereupon does the heavy lifting:
 - A fresh chat is created with the chosen project and scenario.
 - The Host posts a brief notice at the top of the new chat linking back to the previous one.
 - The Librarian's most recent summary, together with every message that followed it, is replayed into the new chat — your characters carry on, mid-thought, as though the change of address were a passing remark.
+- Anyone from the old cast who did not come along is named by the Host at the end of the carried-over history, as having remained behind — not in the room, unable to hear, unable to answer — so the travelling party does not go on addressing an empty chair. (Only their own lines are left out of the carryover; everyone else's remarks to them come along.) See [The Host's Introductions](salon-host-introductions.md).
 - The turn order, who is up to speak, and whether the proceedings are paused are all preserved, so nothing in the conversational rhythm is lost.
 - The Host posts a closing notice in the original chat, linking forward to the new venue.
 
 The original chat is not deleted; you may always return to it. But henceforth the canonical thread continues at the new address.
 
-A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
+A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends, and the Host's note that your own character stayed behind — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
 
 ### Merging a Conversation In
 
@@ -364,6 +405,30 @@ Press **Merge In**, and Quilltap attends to the formalities:
 
 Unlike a change of venue, no old messages are replayed into the running conversation — the recap stands in for the history, and the proceedings carry on uninterrupted.
 
+### Rebuilding the Running Summary
+
+As a conversation lengthens, the Librarian quietly folds its earlier passages into a running
+summary — five tidy sections standing in for turns long since compressed away. It is an excellent
+arrangement until the day you read the thing and find it confidently wrong: a character called by
+a name nobody in the room has ever used, an event misremembered, a resolution attributed to the
+wrong party. Once such an error is written down it is carried forward at every subsequent folding,
+politely and indefinitely, rather in the manner of a butler who has misheard a guest's name at the
+door and will go on announcing it that way until the end of time.
+
+The remedy is **Rebuild Summary…**, in the **Organize** drawer of the **Chat Sidebar**. Press it,
+confirm, and the Librarian's record of the conversation is struck out entirely — summary, its
+anchors, and the mark showing how far he had read.
+
+Be warned that the chat is genuinely without a summary for a short while afterwards. The Librarian
+does not sit down and re-read the whole conversation in a single sitting; he resumes his ordinary
+rhythm from the first turn, taking it in modest batches as the talk goes on, until he has caught up
+to within a few turns of the present moment. Expect the summary panel to sit empty and then refill
+over the next several exchanges. The transcript itself is never touched — not a word of what was
+actually said is at risk.
+
+An autonomous room that is mid-run declines the request, its clockwork having its own views on when
+the Librarian should be interrupted. Pause the room first, then rebuild at leisure.
+
 ## Advanced Features
 
 ### Memory Integration
@@ -377,9 +442,9 @@ Quilltap can extract and store memories from your chats:
 
   Should the briefing-butler be detained — an unresponsive provider, most commonly, which accepts one's request with every appearance of attentiveness and then simply says nothing at all — Quilltap declines to wait indefinitely on his account. After a short interval the recap is abandoned, the character enters the room without it, and the conversation proceeds as though nothing had happened. You will notice, at worst, a character a shade less freshly briefed than usual; you will not be left staring at a stalled reply.
 
-For Semantic Search to find a conversation by meaning, Quilltap first renders it into a tidy transcript and commits that to memory — an *embedding*, in the parlance — quiet clerical work performed in the background after each exchange. Should the indexing-clerk be indisposed at the decisive moment — the embedding provider abed, or the whole establishment shuttered mid-sentence — a conversation may slip through un-indexed and sit, unsearchable, in the stacks. No matter: at every startup Quilltap takes a discreet inventory and sets any half-finished conversation to rights, re-rendering and re-indexing whatever was left undone, so your library of past chats stays complete without the slightest intervention on your part.
+For Semantic Search to find a conversation by meaning, Quilltap first renders it into a tidy transcript and commits that to memory — an *embedding*, in the parlance — quiet clerical work performed in the background after each exchange. Should the indexing-clerk be indisposed at the decisive moment — the embedding provider abed, or the whole establishment shuttered mid-sentence — a conversation may slip through un-indexed and sit, unsearchable, in the stacks. No matter: at every startup Quilltap takes a discreet inventory and sets any half-finished conversation to rights, re-rendering and re-indexing whatever was left undone, so your library of past chats stays complete without the slightest intervention on your part. The index is never allowed to lapse for want of use, either: a conversation left untouched for months remains exactly as findable as yesterday's. Each chat card's small document badge reports how far the clerk has got — see [The Scriptorium](scriptorium.md#the-scriptorium-badge).
 
-See [Chat Settings](chat-settings.md) for memory configuration.
+See [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) for memory configuration.
 
 ### Mentioned Characters
 
@@ -492,6 +557,83 @@ See [Using Tools](tools-usage.md) for tool details.
 - Try different search terms
 - Check recently deleted if available
 
+## The Call Sheet Beneath the Avatar
+
+Beneath each reply's portrait you will find a modest little placard naming the provider and model
+that supplied it. Most of the time that is one line, and one line is the whole story: the model you
+appointed was asked, and the model you appointed answered.
+
+Occasionally it is a list. When that happens, the list is a *call sheet* — every model that was
+asked for that reply, in the order they were asked, from the first name at the top to the one that
+finally obliged at the bottom.
+
+- **A line struck through and marked ❌** was asked and could not oblige on its own account: it
+  timed out, refused the connection, ran out of rate limit, could not be found, produced nothing
+  at all, or had no usable key to its name. Nothing to do with what you wrote.
+- **A line struck through and marked 🚫** declined on grounds of *content*. The provider's own
+  moderation reached for the smelling salts. That is the provider's decision, not Quilltap's, and
+  asking again in the same words will fetch the same answer.
+- **The unmarked line at the bottom** is the one that actually wrote the reply. It is the same
+  placard you see on every ordinary message.
+
+**Hover any line** and it will introduce itself properly: the profile's own name — useful when you
+keep three OpenAI profiles and need to tell them apart — its provider and model, how it came to be
+asked (first on the call sheet, asked a second time, sent by the Concierge, standing in as the
+understudy, or drafted from the company by tier), and precisely what became of it. Where a refusal
+was *inferred* rather than stated outright, the hover text says so, so you know which sort of
+evidence you are looking at.
+
+A reply with no list under it had no trouble at all. Nothing is hidden by its absence; there was
+simply nothing to record.
+
+Two footnotes, for tidiness. When the Concierge reroutes a chat to an uncensored profile *before*
+anything is asked, the original profile earns no line — it was never put the question, and the
+danger badge already announces the reroute. And when the same profile is asked twice in a row (the
+usual remedy for a reply that arrives empty), the two attempts share one line, whose hover text
+will tell you it answered on the second try.
+
+## The Room Keeps Itself Current
+
+A conversation you have open is no longer a photograph taken the moment you
+opened it. It is a room with a bell-pull in it.
+
+Whenever anything is written into a chat — a reply, a whisper, an announcement
+from one of the staff, a line edited or a note swept away — the house rings
+through to every window presently looking in on that room, and each of them
+steps over to have another look. You need do nothing. The new line simply
+appears where it belongs.
+
+What this buys you, in plain terms:
+
+- **A reply cannot be lost to a dropped connection.** Previously the only road
+  a reply travelled was the live wire opened when you pressed Send; if that wire
+  was cut — you wandered off to another tab, the machine dozed, the network
+  hiccuped during a long thirty-second composition — the reply was written down
+  in the ledger quite correctly and never reached your eyes until you reloaded.
+  Now the wire carries the typing, and the ledger carries the truth.
+- **The incidentals arrive when they arrive.** Aurora's note that a portrait has
+  been repainted, the Lantern's word that a new backdrop is hung, the
+  Commonplace Book's murmured recollection, Suparṇā's announcement of the post —
+  all of these are written by staff working in the back rooms, on their own
+  schedule. They now appear the moment they are set down, rather than only if
+  they happened to catch the same wire your own turn was riding.
+- **A chat left open in a background tab stays current.** Come back to it an hour
+  later and it is up to date, not frozen at the hour you left.
+- **Two windows on one conversation agree.** Open the same chat twice — a second
+  browser window, another device on the same instance — and a line typed in one
+  appears in the other.
+
+The bell-pull is a *hint* and nothing more: it says "something has changed here",
+never what. Your window then asks the house properly, and — this is the thrifty
+part — it mentions which edition of the transcript it already holds. If nothing
+has in fact changed since, the house says so in a word and spares everyone the
+recitation. A busy turn may ring the bell four or five times over; it costs four
+or five words, not four or five transcripts.
+
+If the bell should fail — the connection to the house drops — nothing is lost.
+The moment it is restored, every open window re-reads as a matter of course, and
+reopening the chat has always been, and remains, a complete remedy.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:
@@ -509,3 +651,5 @@ Characters with help tools enabled can navigate directly to this page:
 - [Using Tools](tools-usage.md) — AI tools available during chat
 - [Characters](characters.md) — Create and manage chat participants
 - [Projects](projects.md) — Organize chats by project
+- [The Scenario Builder](scenario-builder.md) — Having the Host research and draft a starting scene
+- [The Scenario Browser](scenario-browser.md) — Plucking a scene from any shelf in the house

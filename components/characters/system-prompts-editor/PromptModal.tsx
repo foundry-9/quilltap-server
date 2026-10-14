@@ -52,7 +52,9 @@ export function PromptModal({
       isOpen={isOpen}
       onClose={onClose}
       title={editingPrompt ? 'Edit Prompt' : 'Create Prompt'}
-      maxWidth="2xl"
+      // Wide enough for the markdown editor's full toolbar — at 2xl the right
+      // half of it ran off the edge of the dialog with nothing to scroll.
+      maxWidth="4xl"
       showCloseButton={true}
       footer={footer}
     >

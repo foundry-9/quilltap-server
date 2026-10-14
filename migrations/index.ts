@@ -3,7 +3,9 @@
  *
  * Handles running data migrations at server startup.
  * Migrations MUST complete successfully before Next.js accepts any requests.
- * If migrations fail, the process exits with code 1.
+ * If migrations fail, the process exits with code 1. The exception is a
+ * migration marked `resumable`: its failure is logged and deferred to the
+ * next boot (see `deferResumable`).
  *
  * This ensures data compatibility before any API requests can access the database.
  */
@@ -63,6 +65,22 @@ function sortMigrationsByDependency(migrations: Migration[]): Migration[] {
 }
 
 /**
+ * A failed resumable migration is deferred to the next boot rather than
+ * stopping this one: no ledger row is written, so its `shouldRun` is asked
+ * again next time. Returns false for an ordinary migration, whose failure
+ * the caller treats as fatal.
+ */
+function deferResumable(migration: Migration, deferred: string[]): boolean {
+  if (!migration.resumable) return false;
+  deferred.push(migration.id);
+  logger.warn('Resumable migration deferred to the next boot; continuing startup', {
+    context: 'migrations.runMigrations',
+    migrationId: migration.id,
+  });
+  return true;
+}
+
+/**
  * MigrationRunner class
  *
  * Orchestrates the execution of all migrations at server startup.
@@ -86,6 +104,7 @@ export class MigrationRunner {
     let migrationsRun = 0;
     let migrationsSkipped = 0;
     const failed: string[] = [];
+    const deferred: string[] = [];
 
     const backend = detectDatabaseBackend();
     logger.info('Starting migration runner', {
@@ -125,6 +144,18 @@ export class MigrationRunner {
       // Check if already completed
       if (isMigrationCompleted(state, migration.id)) {
         migrationsSkipped++;
+        continue;
+      }
+
+      // A migration that depends on one deferred this boot waits with it
+      const deferredDependency = migration.dependsOn?.find(depId => deferred.includes(depId));
+      if (deferredDependency) {
+        deferred.push(migration.id);
+        logger.warn('Migration deferred to the next boot: a dependency did not complete', {
+          context: 'migrations.runMigrations',
+          migrationId: migration.id,
+          dependsOn: deferredDependency,
+        });
         continue;
       }
 
@@ -169,13 +200,17 @@ export class MigrationRunner {
             durationMs: result.durationMs,
           });
         } else {
-          failed.push(migration.id);
           logger.error('Migration failed', {
             context: 'migrations.runMigrations',
             migrationId: migration.id,
             error: result.error,
             message: result.message,
           });
+          if (deferResumable(migration, deferred)) {
+            endMigration();
+            continue;
+          }
+          failed.push(migration.id);
           // Stop on first failure - critical migrations must succeed
           endMigration();
           break;
@@ -198,6 +233,10 @@ export class MigrationRunner {
           timestamp: new Date().toISOString(),
         });
 
+        if (deferResumable(migration, deferred)) {
+          endMigration();
+          continue;
+        }
         failed.push(migration.id);
         // Stop on exception
         endMigration();
@@ -215,6 +254,7 @@ export class MigrationRunner {
       migrationsRun,
       migrationsSkipped,
       failed: failed.length > 0 ? failed : undefined,
+      deferred: deferred.length > 0 ? deferred : undefined,
       totalDurationMs,
     });
 
@@ -225,6 +265,7 @@ export class MigrationRunner {
       results,
       totalDurationMs,
       failed: failed.length > 0 ? failed : undefined,
+      deferred: deferred.length > 0 ? deferred : undefined,
     };
   }
 

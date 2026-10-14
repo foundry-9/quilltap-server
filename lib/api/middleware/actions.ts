@@ -51,6 +51,20 @@ export type ActionHandlerMap<P extends Record<string, string> = Record<string, s
 };
 
 /**
+ * Map of action names to argument-less handler thunks.
+ *
+ * This is the shape a route handler builds *inside* its own closure, after it
+ * has already loaded the entity every action needs (the chat, the profile, the
+ * character) — each thunk captures `req`, `ctx` and that entity itself, so
+ * `dispatchAction` never has to know about them. `R` is `NextResponse` for
+ * ordinary JSON routes and plain `Response` where an action streams bytes.
+ */
+export type ActionThunkMap<A extends string, R extends Response = NextResponse> = Record<
+  A,
+  () => Promise<R>
+>;
+
+/**
  * Extract the action parameter from a request URL
  *
  * @param request - The incoming request
@@ -61,10 +75,120 @@ export function getActionParam(request: NextRequest): string | null {
 }
 
 /**
+ * The one 400 body every unknown `?action=` in the API answers with.
+ *
+ * `availableActions` rides at the top level (not under `details`) because that
+ * is the shape `withActionDispatch` has always returned and clients may read.
+ */
+function unknownActionResponse(
+  request: NextRequest,
+  action: string,
+  availableActions: readonly string[]
+): NextResponse {
+  actionLogger.warn('Unknown action requested', {
+    action,
+    availableActions,
+    method: request.method,
+    path: request.nextUrl.pathname,
+  });
+
+  return NextResponse.json(
+    { error: `Unknown action: ${action}`, availableActions },
+    { status: 400 }
+  );
+}
+
+/**
+ * The 400 body for a route that takes only actions and was called without one.
+ */
+function actionRequiredResponse(
+  request: NextRequest,
+  availableActions: readonly string[]
+): NextResponse {
+  actionLogger.warn('No action param and no default handler', {
+    method: request.method,
+    path: request.nextUrl.pathname,
+    availableActions,
+  });
+
+  return NextResponse.json(
+    { error: 'Action parameter required', availableActions },
+    { status: 400 }
+  );
+}
+
+/**
+ * Dispatch a request to one of a map of action thunks by its `?action=` param.
+ *
+ * This is the single source of truth for how `?action=` is interpreted:
+ *
+ * - **No `action` parameter at all** → `fallback` (the plain CRUD verb: list,
+ *   create, update, delete the entity). Without a fallback the route takes only
+ *   actions, and the answer is a 400 `Action parameter required`.
+ * - **A known action** → its thunk.
+ * - **Anything else** — an unknown name, *or a bare `?action=`* — → a 400
+ *   `Unknown action` listing the actions that exist.
+ *
+ * That third rule is the point. An unknown action must never fall through to
+ * the fallback: on a `DELETE` route the fallback deletes the whole entity, on a
+ * `POST` route it creates one, and on a `GET` route it quietly serves a body the
+ * caller did not ask for and then reads the wrong fields off (Bug 74). A typo in
+ * a client's action string is a 400 the developer sees, not a project gone.
+ *
+ * Handlers that must load the entity first (to 404 before anything else) do so
+ * and then call this with thunks closing over it:
+ *
+ * ```ts
+ * const chat = await repos.chats.findById(chatId);
+ * if (!chat) return notFound('Chat');
+ * return dispatchAction(req, {
+ *   'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
+ *   'rebuild-summary': () => handleRebuildSummary(chatId, chat, ctx),
+ * });
+ * ```
+ *
+ * `withActionDispatch` is this same rule for handlers that take
+ * `(request, context, params)` instead of closing over them.
+ */
+export function dispatchAction<A extends string>(
+  request: NextRequest,
+  handlers: ActionThunkMap<A>,
+  fallback?: () => Promise<NextResponse>
+): Promise<NextResponse>;
+export function dispatchAction<A extends string>(
+  request: NextRequest,
+  handlers: ActionThunkMap<A, Response>,
+  fallback?: () => Promise<Response>
+): Promise<Response>;
+export function dispatchAction<A extends string>(
+  request: NextRequest,
+  handlers: ActionThunkMap<A, Response>,
+  fallback?: () => Promise<Response>
+): Promise<Response> {
+  const action = getActionParam(request);
+  const availableActions = Object.keys(handlers);
+
+  if (action === null) {
+    if (fallback) {
+      return fallback();
+    }
+    return Promise.resolve(actionRequiredResponse(request, availableActions));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(handlers, action)) {
+    return handlers[action as A]();
+  }
+
+  return Promise.resolve(unknownActionResponse(request, action, availableActions));
+}
+
+/**
  * Create a handler that dispatches to action-specific handlers
  *
- * Routes requests based on the ?action= query parameter. If no action
- * is specified, falls back to the default handler.
+ * Routes requests based on the ?action= query parameter. A request with no
+ * `action` parameter goes to the default handler; a known action goes to its
+ * handler; an unknown action (or a bare `?action=`) is a 400 and never reaches
+ * the default. See `dispatchAction` for why.
  *
  * @param actions - Map of action names to handlers
  * @param defaultHandler - Handler for requests without action param (optional)
@@ -86,51 +210,15 @@ export function withActionDispatch<P extends Record<string, string> = Record<str
   actions: ActionHandlerMap<P>,
   defaultHandler?: ActionHandler<P>
 ): ActionHandler<P> {
-  return async (request: NextRequest, context: RequestContext, params: P) => {
-    const action = getActionParam(request);
+  return (request: NextRequest, context: RequestContext, params: P) => {
+    const thunks = Object.fromEntries(
+      Object.entries(actions).map(([name, handler]) => [name, () => handler(request, context, params)])
+    ) as ActionThunkMap<string>;
 
-    if (action) {
-      const handler = actions[action];
-
-      if (handler) {
-        return handler(request, context, params);
-      }
-
-      // Unknown action
-      actionLogger.warn('Unknown action requested', {
-        action,
-        availableActions: Object.keys(actions),
-        method: request.method,
-        path: new URL(request.url).pathname,
-      });
-
-      return NextResponse.json(
-        {
-          error: `Unknown action: ${action}`,
-          availableActions: Object.keys(actions),
-        },
-        { status: 400 }
-      );
-    }
-
-    // No action param - use default handler or return error
-    if (defaultHandler) {
-      return defaultHandler(request, context, params);
-    }
-
-    // No default handler and no action - this is a method not allowed scenario
-    actionLogger.warn('No action param and no default handler', {
-      method: request.method,
-      path: new URL(request.url).pathname,
-      availableActions: Object.keys(actions),
-    });
-
-    return NextResponse.json(
-      {
-        error: 'Action parameter required',
-        availableActions: Object.keys(actions),
-      },
-      { status: 400 }
+    return dispatchAction(
+      request,
+      thunks,
+      defaultHandler ? () => defaultHandler(request, context, params) : undefined
     );
   };
 }

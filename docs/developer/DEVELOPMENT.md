@@ -200,8 +200,8 @@ and `--no-store-mounts` opts out. To inspect or hand-assemble the plan:
 npx quilltap docs docker-mounts --format args
 ```
 
-See [CLI.md](CLI.md) for the planner's rules (collapsed duplicates, nested-path
-drops, skipped non-existent paths, and the Windows refusal).
+See [CLI.md](CLI.md#the-bind-planner) for the planner's rules (collapsed duplicates,
+nested-path drops, skipped non-existent paths, and the Windows refusal).
 
 ### Running with the Desktop App (Electron)
 
@@ -321,7 +321,7 @@ Schemas drift fast and there are 30+ tables across these three databases, so the
 - **connectionProfiles / embeddingProfiles / imageProfiles / providerModels** — provider configuration
 - **promptTemplates / roleplayTemplates** — prompt / roleplay format templates
 - **background_jobs / embedding_status** — Prospero job queue
-- **vector_indices / vector_entries / tfidf_vocabularies** — semantic search and recall
+- **tfidf_vocabularies** — TF-IDF search vocabularies (memory vectors live on `memories.embedding`)
 - **plugin_configs / instance_settings / quilltap_meta / migrations_state / migrations_metadata** — instance plumbing
 - **help_docs** — built MessagePack help index
 
@@ -419,7 +419,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
     - [API Documentation](API.md)
     - [Developer Documentation](DEVELOPMENT.md)
     - [Claude instructions](../../CLAUDE.md)
-    - [About Page](../../app/about/page.tsx)
+    - [About Page](../../app/about/AboutView.tsx)
     - [Release notes for this release](../releases/) **MUST EXIST FOR PRODUCTION RELEASE** and must match the version number in package.json exactly, or the version we are going to release at any rate
 
 ## Git and Github release instructions

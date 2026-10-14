@@ -5,7 +5,7 @@
  * lose its registration, causing embeddings to be written as JSON text instead
  * of compact Float32 BLOBs. This repair runs on every startup and converts any
  * TEXT embeddings back to BLOBs across every table that stores an embedding:
- * `vector_entries`, `memories`, `help_docs`, and `conversation_chunks`.
+ * `memories`, `help_docs`, `help_doc_chunks` and `conversation_chunks`.
  *
  * This is idempotent and fast when there's nothing to fix (a single COUNT query
  * per table).
@@ -28,7 +28,6 @@ import { logger } from '@/lib/logger'
 import { embeddingToBlob, parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion'
 
 interface RepairResult {
-  vectorEntriesRepaired: number
   memoriesRepaired: number
   helpDocsRepaired: number
   helpDocChunksRepaired: number
@@ -40,7 +39,6 @@ const PAGE_SIZE = 500
 
 /** Tables that store a Float32-BLOB `embedding` column, with a progress noun. */
 const EMBEDDING_TABLES: ReadonlyArray<{ table: string; unit: string }> = [
-  { table: 'vector_entries', unit: 'vector entries' },
   { table: 'memories', unit: 'memories' },
   { table: 'help_docs', unit: 'help docs' },
   { table: 'help_doc_chunks', unit: 'help doc sections' },
@@ -157,7 +155,6 @@ export async function repairTextEmbeddings(): Promise<RepairResult> {
   const counts: Record<string, number> = {}
 
   const buildResult = (): RepairResult => ({
-    vectorEntriesRepaired: counts['vector_entries'] ?? 0,
     memoriesRepaired: counts['memories'] ?? 0,
     helpDocsRepaired: counts['help_docs'] ?? 0,
     helpDocChunksRepaired: counts['help_doc_chunks'] ?? 0,

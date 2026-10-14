@@ -63,12 +63,31 @@ export function topicsForCompletedJob(
     case 'CHARACTER_HEADSHOULDERS_BACKFILL':
       return [{ topic: 'characters', id: str(payload, 'characterId') }];
 
+    case 'WARDROBE_ITEM_IMAGE_GENERATION':
+      // The picture lands in the owner's vault and its pointer in the item's
+      // frontmatter; the character's wardrobe views watch both.
+      return [{ topic: 'characters', id: str(payload, 'characterId') }, { topic: 'mountPoints' }];
+
     case 'TITLE_UPDATE':
     case 'CONTEXT_SUMMARY':
     case 'CHAT_DANGER_CLASSIFICATION':
     case 'SCENE_STATE_TRACKING':
     case 'WARDROBE_OUTFIT_ANNOUNCEMENT':
       return [{ topic: 'chats', id: str(payload, 'chatId') }];
+
+    case 'MEMORY_EXTRACTION':
+    case 'CARINA_MEMORY_EXTRACTION':
+    case 'MEMORY_REGENERATE_CHAT':
+      // Every one of these carries `chatId` on its payload, which is what the
+      // Salon sidebar's count is scoped by.
+      return [{ topic: 'memories', id: str(payload, 'chatId') }];
+
+    case 'MEMORY_MAINTENANCE':
+      // Character-scoped: folds, digests, demotions and retirements reach
+      // across every chat that character was in, so the hint is
+      // collection-wide by necessity. The Commonplace/ mirror files land in the
+      // character's vault, which the Scriptorium watches.
+      return [{ topic: 'memories' }, { topic: 'mountPoints' }];
 
     case 'CONVERSATION_RENDER':
       // A rendered conversation lands in a document store; the Scriptorium and
@@ -111,6 +130,12 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   mountPoints: ['mountPointId', 'id'],
   autonomousRooms: [],
   jobs: [],
+  // Deliberately empty, and `memories` is deliberately absent from
+  // REPOSITORY_TOPICS: a memories hint is scoped by *chat* id, while
+  // `firstIdArg` would hand back `memories.updateForCharacter(characterId, …)`'s
+  // positional character id. Every chat-scoped subscriber would then filter that hint out —
+  // coverage that reaches nobody, which is worse than none.
+  memories: [],
 };
 
 /**

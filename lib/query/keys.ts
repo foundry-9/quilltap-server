@@ -28,7 +28,14 @@ export const queryKeys = {
     list: (filters?: Filters) => ['characters', 'list', filters ?? {}] as const,
     detail: (id: string) => ['characters', 'detail', id] as const,
     prompts: (id: string) => ['characters', id, 'prompts'] as const,
+    subprompts: (id: string) => ['characters', id, 'subprompts'] as const,
     photos: (id: string) => ['characters', id, 'photos'] as const,
+    /**
+     * Avatar rolls — the plates the avatar configuration cache holds for this
+     * character. A separate key from `photos` because they are a separate
+     * collection with a separate endpoint, not a filtered view of the album.
+     */
+    avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
   },
   chats: {
     all: ['chats'] as const,
@@ -44,6 +51,32 @@ export const queryKeys = {
     photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
+    /**
+     * Every image in one conversation, from `?action=gallery`. Also the source
+     * of the sidebar's `Gallery (N)` count — the count and the grid are one
+     * answer, which is what stops them disagreeing (bug 129).
+     */
+    gallery: (id: string) => ['chats', id, 'gallery'] as const,
+    /**
+     * Pending Inform batches for one conversation, from `?action=informs`.
+     * Drives the composer's "Informing …" chips. It rides the `chats` realtime
+     * topic (see `lib/realtime/topic-map.ts`), so posting, cancelling and
+     * consuming an inform all refresh it without a poll of its own.
+     */
+    informs: (id: string) => ['chats', id, 'informs'] as const,
+    /**
+     * The project a chat belongs to, as the wardrobe reads it to fold the
+     * project tier into a character's wardrobe. Deliberately not `detail(id)`:
+     * the realtime `chats` topic refetches `detail` on every message, and the
+     * wardrobe needs only the one field, once.
+     */
+    project: (id: string) => ['chats', id, 'project'] as const,
+    /**
+     * Where the chat's scene came from and whether that file has since been
+     * revised (`?action=scenario-source`). Rides the `chats` realtime topic,
+     * so a scenario change — which posts the Host's announcement — refreshes it.
+     */
+    scenarioSource: (id: string) => ['chats', id, 'scenario-source'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the
@@ -65,10 +98,24 @@ export const queryKeys = {
       ['scenarios', 'group', characterIdsKey, { includeArchived }] as const,
     character: (characterId: string, includeArchived = false) =>
       ['scenarios', 'character', characterId, { includeArchived }] as const,
+    /** Every scenario in the instance, by owner (`?action=everywhere`) — no bodies. */
+    everywhere: (includeArchived = false) =>
+      ['scenarios', 'everywhere', { includeArchived }] as const,
+    /** One scenario, body included, by ref (`?action=read`). */
+    ref: (mountPointId: string, path: string) =>
+      ['scenarios', 'ref', mountPointId, path] as const,
   },
   groups: {
     all: ['groups'] as const,
+    list: () => ['groups', 'list'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,
+    /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
+    byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,
+  },
+  /** The Host's Scenario Builder — only its capability probe is cached; runs are streams. */
+  scenarioBuilder: {
+    all: ['scenario-builder'] as const,
+    capabilities: ['scenario-builder', 'capabilities'] as const,
   },
   settings: {
     chat: ['settings', 'chat'] as const,
@@ -159,16 +206,24 @@ export const queryKeys = {
         : (['custom-tools', 'file', 'new'] as const),
   },
   /**
-   * The Commonplace Book's housekeeping reads (`/api/v1/memories?action=…`):
-   * fan-out job status plus the two config documents the settings cards edit.
+   * The Commonplace Book's settings-tab reads (`/api/v1/memories?action=…`):
+   * fan-out job status, the config documents the cards edit, and the
+   * maintenance ledger.
    */
   memories: {
     all: ['memories'] as const,
     regenerateStatus: ['memories', 'regenerate-status'] as const,
     backfillProgress: ['memories', 'backfill-progress'] as const,
     recallConfig: ['memories', 'recall-config'] as const,
-    housekeepingConfig: ['memories', 'housekeeping-config'] as const,
+    consolidationConfig: ['memories', 'consolidation-config'] as const,
+    extractionModeConfig: ['memories', 'extraction-mode-config'] as const,
+    maintenanceConfig: ['memories', 'maintenance-config'] as const,
+    extractionLimitsConfig: ['memories', 'extraction-limits-config'] as const,
+    /** The maintenance ledger (parent memory); the `memories` topic refreshes it after a run. */
+    maintenanceStatus: ['memories', 'maintenance-status'] as const,
     characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
+    /** The per-chat row count the Salon sidebar renders beside its delete control. */
+    chatCount: (chatId: string) => ['memories', 'chat-count', chatId] as const,
   },
   userProfile: {
     detail: ['user', 'profile'] as const,
@@ -208,6 +263,52 @@ export const queryKeys = {
     list: (filters?: Filters) => ['files', 'list', filters ?? {}] as const,
     folders: (projectId?: string) => ['files', 'folders', projectId ?? null] as const,
     content: (url: string) => ['files', 'content', url] as const,
+  },
+  wardrobe: {
+    /**
+     * Every wardrobe read held in the query cache. Invalidate after an equip
+     * commits — a put-on gesture moves the wear ledger's tallies.
+     */
+    all: ['wardrobe'] as const,
+    /** Prefix of every `list(...)` key — invalidate after an item mutation. */
+    lists: ['wardrobe', 'list'] as const,
+    /**
+     * One wardrobe tier's collection read: a container (`scope:id`, see
+     * `wardrobeTierKey`) or a character's merged group tier. `includeArchived`
+     * is part of the key — the two are different server responses.
+     */
+    list: (tierKey: string, filters: { includeArchived: boolean }) =>
+      ['wardrobe', 'list', tierKey, filters] as const,
+    /**
+     * Prefix of every `folders(...)` key — invalidate after any item write
+     * (an item's folder may be new) and after every folder mutation.
+     */
+    folderLists: ['wardrobe', 'folders'] as const,
+    /** One wardrobe container's folder tree (`?action=folders`), by `wardrobeTierKey`. */
+    folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
+    /**
+     * What every character in one chat is wearing (`?action=outfit`). Under
+     * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
+     */
+    outfit: (chatId: string) => ['wardrobe', 'outfit', chatId] as const,
+    /**
+     * One item's wear-ledger breakdown (`?action=wear-history`). Keyed by item
+     * id first (the ledger's own key, so `wearHistory(id)` prefix-invalidates
+     * every route it was read through), then the item route it was read from.
+     */
+    wearHistory: (itemId: string, itemUrl?: string) =>
+      itemUrl === undefined
+        ? (['wardrobe', 'wear-history', itemId] as const)
+        : (['wardrobe', 'wear-history', itemId, itemUrl] as const),
+    /**
+     * One item's picture history (`/api/v1/wardrobe/[itemId]/images`). Keyed
+     * by item id first so `images(id)` prefix-invalidates every container the
+     * history was read through.
+     */
+    images: (itemId: string, containerKey?: string) =>
+      containerKey === undefined
+        ? (['wardrobe', 'images', itemId] as const)
+        : (['wardrobe', 'images', itemId, containerKey] as const),
   },
   mailbox: {
     all: ['mailbox'] as const,

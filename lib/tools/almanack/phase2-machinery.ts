@@ -23,6 +23,7 @@ import { isIconName } from '@/components/ui/icons/icon-registry';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getErrorMessage } from '@/lib/error-utils';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { mainCount, mainRows, num } from './db';
 import type {
@@ -348,13 +349,13 @@ export async function collectCheapLLMInfo(userId: string): Promise<DesignatedPro
   return designated(profiles.find(p => p.isCheap));
 }
 
-/** The separate override used for expanding image prompts, if configured. */
+/** The Concierge desk's image prompt crafter, if configured. */
 export async function collectImagePromptLLMInfo(userId: string): Promise<DesignatedProfileInfo> {
   const globalRepos = getRepositories();
   const repos = getUserRepositories(userId);
   const chatSettings = await globalRepos.chatSettings.findByUserId(userId);
 
-  const profileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+  const profileId = readConciergeSettings(chatSettings).imagePromptProfileId;
   if (!profileId) return {};
 
   return designated(await repos.connections.findById(profileId));

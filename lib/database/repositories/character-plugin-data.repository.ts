@@ -53,20 +53,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
   }
 
   /**
-   * Find all character data entries for a specific plugin
-   * @param pluginName The plugin name
-   * @returns All entries for this plugin across all characters
-   */
-  async findByPluginName(pluginName: string): Promise<CharacterPluginData[]> {
-    return this.safeQuery(
-      () => this.findByFilter({ pluginName } as TypedQueryFilter<CharacterPluginData>),
-      'Error finding plugin data by plugin name',
-      { pluginName },
-      []
-    );
-  }
-
-  /**
    * Create a new plugin data entry
    * @param data The plugin data (without id, createdAt, updatedAt)
    * @param options Optional CreateOptions to specify ID and timestamps
@@ -207,30 +193,6 @@ export class CharacterPluginDataRepository extends AbstractBaseRepository<Charac
       },
       'Error deleting plugin data by character ID',
       { characterId }
-    );
-  }
-
-  /**
-   * Delete all data for a specific plugin (used when plugin is uninstalled)
-   * @param pluginName The plugin name
-   * @returns Number of entries deleted
-   */
-  async deleteByPlugin(pluginName: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const count = await this.deleteMany({ pluginName } as TypedQueryFilter<CharacterPluginData>);
-
-        if (count > 0) {
-          logger.info('Deleted all character data for plugin', {
-            pluginName,
-            deletedCount: count,
-          });
-        }
-
-        return count;
-      },
-      'Error deleting plugin data by plugin name',
-      { pluginName }
     );
   }
 

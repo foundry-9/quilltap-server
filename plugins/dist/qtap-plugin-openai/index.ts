@@ -4,16 +4,18 @@
  *
  * This plugin provides:
  * - Chat completion using GPT-4, GPT-4o, GPT-3.5 Turbo and other OpenAI models
- * - Image generation using GPT-Image models (1.5, 1, 1-mini) and legacy DALL-E 2/3
+ * - Image generation using GPT Image models (2.5 Sunburst/Flare, 2, 1.5, 1, 1-mini) and legacy DALL-E 2/3
  * - Vision capabilities (image analysis)
  * - Function calling / tool use
  * - Web search integration
  */
 
-import type { TextProviderPlugin, EmbeddingModelInfo, ImageGenerationModelInfo, ImageOrientationSupport, ProviderOptionsSchema } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo, ImageGenerationModelInfo, ImageOrientationSupport, ProviderOptionsSchema, ProviderOptionsSchemaContext } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
 import { OpenAIEmbeddingProvider } from './embedding-provider';
+import { OPENAI_IMAGE_MODELS } from './image-models';
+import { getOpenAIImageOptionsSchema } from './image-options-schema';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -194,11 +196,23 @@ export const plugin: TextProviderPlugin = {
   },
 
   /**
+   * Image-profile options, built per model from the capability table: the
+   * quality tiers, the size list and the GPT Image extras are the selected
+   * model's own, so the editor never offers a knob that model would reject.
+   */
+  getImageProviderOptionsSchema: (
+    context?: ProviderOptionsSchemaContext
+  ): ProviderOptionsSchema => getOpenAIImageOptionsSchema(context?.modelName),
+
+  /**
    * Statically-declared image generation models with per-model orientation
-   * support. OpenAI is the proof case for model-keyed orientation: gpt-image
-   * portrait is 1024x1536, DALL·E 3 portrait is 1024x1792, and DALL·E 2 is
-   * square only (its portrait/landscape are omitted so the host degrades to a
-   * prompt hint rather than sending a size the API rejects).
+   * support. Ids, names and size lists come from the capability table in
+   * `image-models.ts`; only the orientation mappings are added here.
+   *
+   * OpenAI is the proof case for model-keyed orientation: gpt-image portrait is
+   * 1024x1536, DALL·E 3 portrait is 1024x1792, and DALL·E 2 is square only (its
+   * portrait/landscape are omitted so the host degrades to a prompt hint rather
+   * than sending a size the API rejects).
    */
   getImageGenerationModels: (): ImageGenerationModelInfo[] => {
     const gptImageOrientation: ImageOrientationSupport = {
@@ -220,14 +234,21 @@ export const plugin: TextProviderPlugin = {
       landscape: {},
       square: { size: '1024x1024', nominalWidth: 1024, nominalHeight: 1024 },
     };
-    return [
-      { id: 'gpt-image-2', name: 'GPT Image 2', supportedSizes: ['1024x1024', '1024x1536', '1536x1024', 'auto'], orientationSupport: gptImageOrientation },
-      { id: 'gpt-image-1.5', name: 'GPT Image 1.5', supportedSizes: ['1024x1024', '1024x1536', '1536x1024', 'auto'], orientationSupport: gptImageOrientation },
-      { id: 'gpt-image-1', name: 'GPT Image 1', supportedSizes: ['1024x1024', '1024x1536', '1536x1024', 'auto'], orientationSupport: gptImageOrientation },
-      { id: 'gpt-image-1-mini', name: 'GPT Image 1 Mini', supportedSizes: ['1024x1024', '1024x1536', '1536x1024', 'auto'], orientationSupport: gptImageOrientation },
-      { id: 'dall-e-3', name: 'DALL·E 3', supportedSizes: ['1024x1024', '1024x1792', '1792x1024'], orientationSupport: dalle3Orientation },
-      { id: 'dall-e-2', name: 'DALL·E 2', supportedSizes: ['256x256', '512x512', '1024x1024'], orientationSupport: dalle2Orientation },
-    ];
+    // The standard gpt-image trio is the orientation mapping even for the
+    // arbitrary-resolution families: those accept far more, but a documented
+    // standard size is the safe thing to send for a semantic "make it portrait".
+    const orientationFor = (id: string): ImageOrientationSupport => {
+      if (id === 'dall-e-3') return dalle3Orientation;
+      if (id === 'dall-e-2') return dalle2Orientation;
+      return gptImageOrientation;
+    };
+
+    return OPENAI_IMAGE_MODELS.map(model => ({
+      id: model.id,
+      name: model.name,
+      supportedSizes: [...model.sizes],
+      orientationSupport: orientationFor(model.id),
+    }));
   },
 
   /**

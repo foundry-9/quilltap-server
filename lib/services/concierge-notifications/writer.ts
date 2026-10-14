@@ -162,58 +162,108 @@ export function buildDangerOpaqueContent(details?: ConciergeDangerDetails): stri
 }
 
 /**
- * Manual-transition announcements. These mirror the auto-classification
- * variant above but speak to operator-driven flips of the per-chat
- * Concierge state. They never include classifier details (because there was
- * no classification) and never honor an opaque audience — the operator is
- * announcing their own choice, in their own voice, through the Concierge.
+ * State-transition announcements. These mirror the auto-classification
+ * variant above but speak to a change of the chat's Concierge state. They
+ * never include classifier details and never honor an opaque audience — the
+ * operator is announcing their own choice, in their own voice, through the
+ * Concierge.
+ *
+ * One kind is not the operator's: `auto-unmoderated`, posted when the refusal
+ * ledger's auto-switch moves a Moderated chat to Unmoderated. It shares this
+ * writer because it goes through the same transition chokepoint
+ * (`applyConciergeFlip` with `{ by: 'concierge' }`). The classifier's own
+ * switch is announced by {@link postConciergeDangerAnnouncement}, which carries
+ * the verdict's details.
+ *
+ * Transcripts written before phase 3 carry bubbles of the retired kinds
+ * (`manual-flagged`, `manual-safe`, `manual-resumed`, `manual-vouched`,
+ * `manual-uncensored`, `auto-flagged-refusals`); they are plain messages and
+ * render as they always did.
  */
 export type ConciergeManualKind =
-  | 'manual-flagged'      // -> Flagged (the operator flipped the switch themselves)
-  | 'manual-safe'         // Flagged -> Monitored (the operator says all clear)
-  | 'manual-vouched'      // anything -> Vouched Safe (operator vouches; the Concierge stops watching)
-  | 'manual-resumed'      // Vouched/Uncensored -> Monitored (operator calls the Concierge back)
-  | 'manual-uncensored';  // anything -> Uncensored (operator opens the uncensored door themselves)
+  | 'set-moderated'     // -> Moderated (the operator; resets the ledger)
+  | 'set-unmoderated'   // -> Unmoderated (the operator opens the uncensored door themselves)
+  | 'set-locked'        // -> Locked (the operator; ordinary providers only, refusals stand)
+  | 'auto-unmoderated'; // Moderated -> Unmoderated by the Concierge, after N stated moderation refusals
 
-function buildManualContent(kind: ConciergeManualKind): string {
+/**
+ * What the Concierge says about the refusals that earned an auto-switch.
+ * `auto-unmoderated` only.
+ */
+export interface ConciergeAutoFlagDetails {
+  /** Refusals on the ledger when the switch fired. */
+  count: number;
+  /** Provider of the most recent refusal (e.g. 'GOOGLE'). */
+  lastProvider: string;
+  lastModel?: string | null;
+}
+
+const TIMES_WORDS = ['Never', 'Once', 'Twice', 'Three times', 'Four times', 'Five times', 'Six times',
+  'Seven times', 'Eight times', 'Nine times', 'Ten times'];
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
+function refusalWho(details: ConciergeAutoFlagDetails | undefined): string | null {
+  if (!details?.lastProvider) return null;
+  return details.lastModel ? `${details.lastProvider} ${details.lastModel}` : details.lastProvider;
+}
+
+export function buildAutoFlagContent(details: ConciergeAutoFlagDetails | undefined): string {
+  const count = details?.count ?? 0;
+  const who = refusalWho(details);
+  // A threshold of one is permitted: a single refusal is stated plainly, with
+  // no tally and no "most recently".
+  const declined = count === 1
+    ? `The house's regular staff have declined this conversation on grounds of propriety${who ? ` — ${who}, to be precise` : ''}.`
+    : `${count >= 2 && count < TIMES_WORDS.length ? `${TIMES_WORDS[count]} now` : 'More than once now'} the house's regular staff have declined this conversation on grounds of propriety${who ? ` — most recently ${who}` : ''}.`;
+  return `${declined} The Concierge has taken the liberty of moving the whole affair to the uncensored desk; you may set it back to Moderated from the sidebar whenever you wish.`;
+}
+
+export function buildAutoFlagOpaqueContent(details: ConciergeAutoFlagDetails | undefined): string {
+  const count = details?.count ?? 0;
+  const counted = count >= 1 && count < COUNT_WORDS.length ? COUNT_WORDS[count] : String(count);
+  const noun = count === 1 ? 'moderation refusal' : 'moderation refusals';
+  const who = refusalWho(details);
+  const last = who ? ` (last: ${who})` : '';
+  return `${counted} ${noun}${last}. The Concierge switched this chat to Unmoderated; change it in the sidebar.`;
+}
+
+function buildManualContent(kind: ConciergeManualKind, details?: ConciergeAutoFlagDetails): string {
   switch (kind) {
-    case 'manual-flagged':
-      return "By the operator's own hand, the Concierge has thrown the switch: the conversation is to be entrusted henceforth to a desk better appointed to subjects of its particular character. Pray continue at your leisure.";
-    case 'manual-safe':
-      return "By the operator's own hand, the Concierge stands down for the moment. Routine arrangements are restored; he shall, of course, return to his post should the matter again take a turn.";
-    case 'manual-vouched':
-      return "The operator has vouched for the present company, and the Concierge, satisfied, takes the afternoon off. No moderation, no rerouting, no quiet interventions; the ordinary desks remain in service, on the operator's own recognizance.";
-    case 'manual-resumed':
-      return "The Concierge returns to his post. Customary watch is resumed; the present arrangements are once again subject to his discreet attentions.";
-    case 'manual-uncensored':
+    case 'set-moderated':
+      return "By the operator's own hand, the conversation is Moderated once more. The house's usual providers are asked first; should one of them decline a matter on grounds of propriety, the Concierge will quietly take it across the street. His ledger of refusals is wiped clean.";
+    case 'set-unmoderated':
       return "By the operator's own hand, the Concierge has been sent away and the uncensored door stands open. Nothing is to be examined, nothing softened; the conversation and its errands go henceforth to the frank desk, entirely on the operator's own recognizance.";
+    case 'set-locked':
+      return "The operator has locked the present company to the house's usual desks. Should one of them decline a matter, the refusal stands: the Concierge will take nothing elsewhere, nor move the conversation of his own accord.";
+    case 'auto-unmoderated':
+      return buildAutoFlagContent(details);
   }
 }
 
-function buildManualOpaqueContent(kind: ConciergeManualKind): string {
+function buildManualOpaqueContent(kind: ConciergeManualKind, details?: ConciergeAutoFlagDetails): string {
   switch (kind) {
-    case 'manual-flagged':
-      return 'Operator advisory: this conversation has been manually marked for handling by an uncensored provider. Subsequent traffic may be routed accordingly.';
-    case 'manual-safe':
-      return 'Operator advisory: the prior dangerous-content mark has been manually cleared. Standard routing is restored.';
-    case 'manual-vouched':
-      return 'Operator advisory: moderation is disabled for this conversation. No classification, scanning, or provider rerouting will run on the operator’s behalf. Ordinary providers still apply.';
-    case 'manual-resumed':
-      return 'Operator advisory: standard moderation is restored for this conversation.';
-    case 'manual-uncensored':
-      return 'Operator advisory: this conversation has been manually routed to the uncensored providers. No classification or scanning will run; prompts go out unaltered.';
+    case 'set-moderated':
+      return 'Operator advisory: this conversation is Moderated. Ordinary providers are asked first; a content refusal is retried on an uncensored provider.';
+    case 'set-unmoderated':
+      return 'Operator advisory: this conversation has been manually set to Unmoderated. It goes to the uncensored providers only; no classification or scanning will run, and prompts go out unaltered.';
+    case 'set-locked':
+      return 'Operator advisory: this conversation is Locked to the ordinary providers. A content refusal stands; nothing is rerouted and the Concierge will not switch the chat.';
+    case 'auto-unmoderated':
+      return buildAutoFlagOpaqueContent(details);
   }
 }
 
 export interface ConciergeManualAnnouncement {
   chatId: string;
   kind: ConciergeManualKind;
+  /** `auto-unmoderated` only. */
+  details?: ConciergeAutoFlagDetails;
 }
 
 export async function postConciergeManualAnnouncement(
   params: ConciergeManualAnnouncement,
 ): Promise<MessageEvent | null> {
-  const { chatId, kind } = params;
+  const { chatId, kind, details } = params;
   try {
     const repos = getRepositories();
 
@@ -224,8 +274,8 @@ export async function postConciergeManualAnnouncement(
 
     const messageId = randomUUID();
     const now = new Date().toISOString();
-    const content = buildManualContent(kind);
-    const opaqueContent = buildManualOpaqueContent(kind);
+    const content = buildManualContent(kind, details);
+    const opaqueContent = buildManualOpaqueContent(kind, details);
 
     const message: MessageEvent = {
       type: 'message',
@@ -309,6 +359,143 @@ export async function postConciergeDangerAnnouncement(
     logger.error('[ConciergeNotification] Failed to post danger announcement', {
       context: 'concierge-notifications',
       chatId,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}
+
+/**
+ * Refusal announcements — the Concierge says so whenever a provider refused a
+ * picture (or, with nobody to ask, a text turn). Posted by
+ * `generateImageWithConciergeFailover` and the text failover service. No
+ * dedupe: a refusal is rare, and every one is actionable.
+ *
+ * - `refusal-rerouted`      — refused, and the uncensored understudy answered.
+ * - `refusal-no-understudy` — refused, failover allowed, and nobody to ask.
+ * - `refusal-not-permitted` — refused, and a reroute is barred because the
+ *   chat is Locked. (An off-duty Concierge announces nothing at all.)
+ */
+export type ConciergeRefusalKind =
+  | 'refusal-rerouted'
+  | 'refusal-no-understudy'
+  | 'refusal-not-permitted';
+
+/** What was being made when the refusal happened. */
+export type ConciergeRefusalPurpose = 'tool' | 'lantern' | 'avatar' | 'dialog' | 'wardrobe' | 'text';
+
+export interface ConciergeRefusalDetails {
+  /** Provider of the profile that refused (e.g. 'OPENAI'). */
+  refusingProvider: string;
+  /** Model of the profile that refused. */
+  refusingModel: string;
+  /** Name the user gave the answering profile — `refusal-rerouted` only. */
+  answeringProfileName?: string;
+  purpose: ConciergeRefusalPurpose;
+  /** `refusal-not-permitted` only: what barred the reroute — the chat is Locked. */
+  reason?: 'locked';
+}
+
+export interface ConciergeRefusalAnnouncement {
+  chatId: string;
+  kind: ConciergeRefusalKind;
+  details: ConciergeRefusalDetails;
+}
+
+function refusalCommission(purpose: ConciergeRefusalPurpose): { voiced: string; plain: string } {
+  switch (purpose) {
+    case 'tool':
+      return { voiced: 'the commission for a picture', plain: 'an image request' };
+    case 'lantern':
+      return { voiced: 'the commission for a new backdrop', plain: 'a story background' };
+    case 'avatar':
+      return { voiced: 'the commission for a new portrait', plain: 'a character portrait' };
+    case 'dialog':
+      return { voiced: 'the commission for a picture', plain: 'an image request' };
+    case 'wardrobe':
+      return { voiced: 'the commission for a picture of a garment', plain: 'a wardrobe picture' };
+    case 'text':
+      return { voiced: 'the request for a reply', plain: 'this turn' };
+  }
+}
+
+export function buildRefusalContent(kind: ConciergeRefusalKind, details: ConciergeRefusalDetails): string {
+  const painter = `${details.refusingProvider} ${details.refusingModel}`;
+  const { voiced } = refusalCommission(details.purpose);
+  const house = details.purpose === 'text' ? "the house's usual correspondent" : "the house's usual painter";
+  switch (kind) {
+    case 'refusal-rerouted':
+      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety; he has taken it across the street to ${details.answeringProfileName ?? 'a more obliging studio'}, who were happy to oblige.`;
+    case 'refusal-no-understudy':
+      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety, and he knows of no more obliging establishment to take it to. Should you care to name one, tick "Uncensored-compatible" on a suitable profile, or choose one in the Concierge's settings.`;
+    case 'refusal-not-permitted':
+      return `The Concierge observes that ${house} (${painter}) declined ${voiced} on grounds of propriety. This conversation is Locked to the usual desks, so the refusal stands; set it to Moderated should you wish him to take such things elsewhere.`;
+  }
+}
+
+export function buildRefusalOpaqueContent(kind: ConciergeRefusalKind, details: ConciergeRefusalDetails): string {
+  const who = `${details.refusingProvider} ${details.refusingModel}`;
+  const { plain } = refusalCommission(details.purpose);
+  switch (kind) {
+    case 'refusal-rerouted':
+      return `Provider ${who} refused ${plain} on content grounds. The Concierge rerouted it to ${details.answeringProfileName ?? 'an uncensored profile'}.`;
+    case 'refusal-no-understudy':
+      return `Provider ${who} refused ${plain} on content grounds. No uncensored profile is available to retry it; mark a profile "Uncensored-compatible" or choose one in the Concierge settings.`;
+    case 'refusal-not-permitted':
+      return `Provider ${who} refused ${plain} on content grounds. This chat is Locked, so it was not rerouted; set it to Moderated to allow an uncensored retry.`;
+  }
+}
+
+export async function postConciergeRefusalAnnouncement(
+  params: ConciergeRefusalAnnouncement,
+): Promise<MessageEvent | null> {
+  const { chatId, kind, details } = params;
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('[ConciergeNotification] Refusal announcement skipped: chat not found', {
+        context: 'concierge-notifications',
+        chatId,
+        kind,
+      });
+      return null;
+    }
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: randomUUID(),
+      role: 'ASSISTANT',
+      content: buildRefusalContent(kind, details),
+      opaqueContent: buildRefusalOpaqueContent(kind, details),
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      participantId: null,
+      systemSender: 'concierge',
+      systemKind: 'refusal',
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    logger.info('[ConciergeNotification] Refusal announced', {
+      context: 'concierge-notifications',
+      chatId,
+      messageId: message.id,
+      kind,
+      purpose: details.purpose,
+      refusingProvider: details.refusingProvider,
+      refusingModel: details.refusingModel,
+      answeringProfileName: details.answeringProfileName,
+      reason: details.reason,
+    });
+
+    return message;
+  } catch (error) {
+    logger.error('[ConciergeNotification] Failed to post refusal announcement', {
+      context: 'concierge-notifications',
+      chatId,
+      kind,
       error: getErrorMessage(error),
     }, error as Error);
     return null;

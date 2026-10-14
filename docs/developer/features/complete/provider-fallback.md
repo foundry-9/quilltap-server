@@ -9,6 +9,12 @@ deviations recorded in "As built" at the foot of this document.
 3. "Similar tier" is defined by **`modelClass` quality** (`lib/llm/model-classes.ts`), the same ranking auto-configure already uses for failover.
 4. **Primary-first, danger-safe:** no stickiness — every new call tries the primary again; and in a dangerous-routed context, auto-picked tier candidates must be `isDangerousCompatible`. Courier-transport profiles are never auto-selected.
 
+**See also:** [Message route trail](message-route-trail.md) — the per-message
+record of which profiles this engine tried, persisted on `chat_messages` and
+rendered under the avatar. It *reads* the same failure sites but does not change
+the engine: `FallbackChainResult.attempts` remains the per-walk transient that
+feeds the error text.
+
 ## The problem
 
 Anywhere the settings lock down a specific LLM — a character's default profile, a per-seat

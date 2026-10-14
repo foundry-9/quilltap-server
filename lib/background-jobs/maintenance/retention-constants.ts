@@ -8,8 +8,9 @@
  * which IS user-configurable via `instance_settings['dataRetention']` (a
  * key/value row, so no migration was needed) — resolve it through
  * `resolveStaleChatDays()` below rather than reading the constant, so the
- * image collapse, cache collapse, and cold-tier sweeps always agree on
- * "stale".
+ * image collapse and cache collapse sweeps always agree on "stale".
+ * Conversation-chunk embeddings are NOT stale-gated — they are never
+ * cold-tiered, regardless of this window.
  *
  * All windows are expressed in days and converted to a cutoff `Date` at the
  * call site (`Date.now() - days * DAY_MS`).
@@ -44,8 +45,8 @@ export const STALE_CHAT_RETENTION_DAYS = 30;
  * Resolve the effective stale-chat window in days: the user-configured
  * `dataRetention.staleChatDays` instance setting, falling back to
  * {@link STALE_CHAT_RETENTION_DAYS} when unset or unreadable. Every
- * stale-gated sweep (image collapse, cache collapse, cold-tier) computes its
- * cutoff from this one value so they always agree on "stale".
+ * stale-gated sweep (image collapse, cache collapse) computes its cutoff
+ * from this one value so they always agree on "stale".
  */
 export async function resolveStaleChatDays(): Promise<number> {
   try {

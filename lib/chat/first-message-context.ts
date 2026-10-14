@@ -6,7 +6,9 @@
  */
 
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemories } from '@/lib/memory/recall/search'
+import { stampAccessed } from '@/lib/memory/recall/deliver'
+import { salience } from '@/lib/memory/scoring'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBaseInput } from '@/lib/schemas/chat.types'
 
@@ -106,12 +108,21 @@ async function loadMemoriesForParticipant(
   limit: number
 ): Promise<ParticipantMemory[]> {
   const memoryMap = new Map<string, ParticipantMemory>()
+  // Salience of each chosen memory: the order the greeting reads them in.
+  const salienceById = new Map<string, number>()
+  const nowMs = Date.now()
 
   // 1. Get recent memories specifically about this participant (sorted by importance, then recency)
-  const recentMemories = await repos.memories.findByCharacterAboutCharacter(
+  // Hot tier only; consolidated digests lead (stable partition keeps the
+  // repository's importance/recency order within each group).
+  const allAbout = (await repos.memories.findByCharacterAboutCharacter(
     speakingCharacterId,
     participant.characterId
-  )
+  )).filter(m => m.tier !== 'cold')
+  const recentMemories = [
+    ...allAbout.filter(m => m.source === 'CONSOLIDATED'),
+    ...allAbout.filter(m => m.source !== 'CONSOLIDATED'),
+  ]
 
   // Take up to 3 from recent inter-character memories
   const recentCount = Math.min(3, recentMemories.length)
@@ -124,6 +135,7 @@ async function loadMemoriesForParticipant(
         summary: memory.summary,
         importance: memory.importance,
       })
+      salienceById.set(memory.id, salience(memory, { nowMs }).salience)
     }
   }
 
@@ -136,7 +148,7 @@ async function loadMemoriesForParticipant(
   let semanticSearchWorked = false
 
   try {
-    const semanticResults = await searchMemoriesSemantic(
+    const semanticResults = await searchMemories(
       speakingCharacterId,
       searchQuery,
       {
@@ -160,6 +172,7 @@ async function loadMemoriesForParticipant(
           summary: result.memory.summary,
           importance: result.memory.importance,
         })
+        salienceById.set(result.memory.id, salience(result.memory, { nowMs }).salience)
       }
     }
 
@@ -184,6 +197,7 @@ async function loadMemoriesForParticipant(
 
       // Add text search results (general memories that mention this character)
       for (const memory of textSearchResults) {
+        if (memory.tier === 'cold') continue
         if (!memoryMap.has(memory.id)) {
           memoryMap.set(memory.id, {
             aboutCharacterId: participant.characterId,
@@ -191,6 +205,7 @@ async function loadMemoriesForParticipant(
             summary: memory.summary,
             importance: memory.importance,
           })
+          salienceById.set(memory.id, salience(memory, { nowMs }).salience)
         }
         // Stop if we have enough
         if (memoryMap.size >= limit) break
@@ -204,12 +219,15 @@ async function loadMemoriesForParticipant(
     }
   }
 
-  // 4. Sort by importance and take top N
-  const memories = Array.from(memoryMap.values())
-    .sort((a, b) => b.importance - a.importance)
+  // 4. Sort by salience (reinforced importance × time decay) and take top N
+  const selected = Array.from(memoryMap.entries())
+    .sort((a, b) => (salienceById.get(b[0]) ?? 0) - (salienceById.get(a[0]) ?? 0))
     .slice(0, limit)
 
-  return memories
+  // The greeting is composed from exactly these — they count as accessed.
+  stampAccessed(speakingCharacterId, selected.map(([id]) => id))
+
+  return selected.map(([, memory]) => memory)
 }
 
 // ============================================================================

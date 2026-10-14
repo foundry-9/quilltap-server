@@ -241,16 +241,34 @@ export interface CharacterBreakdownInfo {
 
 /** The feature dials, as configured. */
 export interface FeatureConfigInfo {
-  dangerousContent: {
-    mode: string;
-    threshold: number;
-    scanTextChat: boolean;
-    scanImagePrompts: boolean;
-    scanImageGeneration: boolean;
+  /** The Concierge's own settings (`conciergeSettings`), with profile ids reduced to "is one set?". */
+  concierge: {
+    enabled: boolean;
+    newChatsStartAs: string;
+    /** 0 = never. */
+    autoSwitchAfterRefusals: number;
+    display: { mode: string; showWarningBadges: boolean };
+    /** Whether each uncensored-desk profile is pinned (false = auto-detect / none). */
+    desk: {
+      textProfileSet: boolean;
+      imageProfileSet: boolean;
+      visionProfileSet: boolean;
+      imagePromptProfileSet: boolean;
+    };
+    preScreen: {
+      enabled: boolean;
+      threshold: number;
+      scanTextChat: boolean;
+      scanImagePrompts: boolean;
+      scanImageGeneration: boolean;
+      customClassificationPrompt: boolean;
+    };
+    summaryClassification: boolean;
   };
   contextCompression: { enabled: boolean; windowSize: number; compressionTargetTokens: number };
   agentMode: { maxTurns: number; defaultEnabled: boolean };
   storyBackgrounds: { enabled: boolean; hasDefaultImageProfile: boolean };
+  wardrobeImages: { hasDesignatedImageProfile: boolean };
   timestamps: { mode: string; format: string };
   autoLock: { enabled: boolean; idleMinutes: number };
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };
@@ -267,17 +285,12 @@ export interface FeatureConfigInfo {
   thinkingDisplay: { defaultVisible: boolean; defaultCollapsed: boolean };
   answerConfirmation: { enabled: boolean };
   autonomousRoomDefaults: Record<string, unknown>;
-  autoHousekeeping: {
-    enabled: boolean;
-    perCharacterCap: number;
-    mergeSimilar: boolean;
-    autoMergeSimilarThreshold: number;
-  };
   textReplacements: { enabled: boolean; rules: number; enabledRules: number };
   composerSpellcheck: boolean;
+  impersonationVoiceMode: 'off' | 'ask' | 'always';
   autoScrollOnResponseComplete: boolean;
   imageDescriptionProfileConfigured: boolean;
-  uncensoredImageDescriptionProfileConfigured: boolean;
+  uncensoredVisionProfileConfigured: boolean;
 }
 
 export interface InstanceSettingsInfo {
@@ -290,6 +303,11 @@ export interface InstanceSettingsInfo {
     maxPerHour: number;
     softStartFraction: number;
     softFloor: number;
+  };
+  memoryMaintenance: {
+    enabled: boolean;
+    perCharacterCap: number;
+    capOverrides: number;
   };
   lastMaintenanceSweepAt: string | null;
 }

@@ -146,19 +146,35 @@ In addition to tag-based hiding, the quick-hide menu includes a **Content Filter
 
 The "Dangerous Chats" toggle hides every conversation that takes the uncensored route, from your sidebar, your projects, and your all-chats page. It asks about the *road the chat is on*, not about anyone's opinion of it:
 
-- A chat the Concierge has **Flagged** himself goes behind the curtain — red mark, uncensored road.
-- A chat you have marked **Uncensored** goes with it — blue mark, same road, your own hand on the door.
-- A chat you have **Vouched Safe** stays put, whatever ancient and colourful classification it may still be carrying in its pocket. You gave your word, and the toggle takes it.
-- A merely **Monitored** chat stays put as well, being the ordinary case.
+- An **Unmoderated** chat goes behind the curtain — red mark, uncensored road — whether the Concierge moved it there himself or you opened the door with your own hand.
+- A **Locked** chat stays put, whatever ancient and colourful classification it may still be carrying in its pocket. You gave your word, and the toggle takes it.
+- A merely **Moderated** chat stays put as well, being the ordinary case.
 
 Further particulars:
 
 - Toggle is available in the quick-hide menu under "Content Filters"
-- The eye icon appears in the sidebar footer only when some chat is actually on the uncensored road
 - Works independently of tag-based hiding
 - Your preference is saved across sessions
 
-See [Dangerous Content Handling](dangerous-content.md) for more information about how chats are classified.
+See [The Concierge](the-concierge.md) for more information about how a chat comes to be Unmoderated.
+
+### Salon Images
+
+There are moments — a crowded railway carriage, a colleague with a wandering eye, a relative of delicate constitution peering over one's shoulder — when a conversation may proceed quite respectably in words while its illustrations had better stay in the portfolio. The **Salon Images** toggle draws a discreet curtain over every picture in the Salon:
+
+- The **story background** behind the conversation (and its little thumbnail in the header) is withdrawn, leaving the plain wallpaper of your theme
+- **Avatars** beside each message, on the speaking-as portrait by the composer, in the participant sidebar, beside the character names in the header, and in the Salon's own dialogues (announcements, informs, the impersonation voice) give way to each party's initial or a plain disc
+- **Attached images** and images produced by tools become a modest grey tile bearing a closed eye; click the tile and the image opens in the viewer as usual, should you decide the coast is clear
+- **Images embedded in a message's text** are replaced by a small "Image hidden" label
+
+Particulars:
+
+- Images are shown by default; flip the toggle to hide them, and flip it again to bring them back
+- The curtain is drawn in the Salon only — character pages, the wardrobe, the gallery, the image viewer and the rest of the establishment go on displaying their pictures, since one opens those precisely to look
+- Nothing is deleted, regenerated or re-fetched; the Lantern goes on painting backgrounds in the ordinary way, and they reappear the moment you lift the curtain
+- Your preference is saved across sessions, like the other quick-hide choices
+
+Because this toggle is always of use, the eye icon is always present in the sidebar footer.
 
 ## Quick-Hide vs. Other Features
 

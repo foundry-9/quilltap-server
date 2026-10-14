@@ -237,6 +237,42 @@ describe('useClickOutside', () => {
     })
   })
 
+  describe('escapeCapture', () => {
+    it('handles Escape in the capture phase and keeps it from reaching outer listeners', () => {
+      const ref = createRef<HTMLDivElement>()
+      const onEscape = jest.fn()
+      Object.defineProperty(ref, 'current', { writable: true, value: element })
+      const outer = jest.fn()
+      document.addEventListener('keydown', outer)
+
+      renderHook(() => useClickOutside(ref, mockCallback, { onEscape, escapeCapture: true }))
+
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      element.dispatchEvent(event)
+
+      expect(onEscape).toHaveBeenCalledTimes(1)
+      expect(event.defaultPrevented).toBe(true)
+      expect(outer).not.toHaveBeenCalled()
+      document.removeEventListener('keydown', outer)
+    })
+
+    it('lets Escape propagate without it', () => {
+      const ref = createRef<HTMLDivElement>()
+      const onEscape = jest.fn()
+      Object.defineProperty(ref, 'current', { writable: true, value: element })
+      const outer = jest.fn()
+      document.addEventListener('keydown', outer)
+
+      renderHook(() => useClickOutside(ref, mockCallback, { onEscape }))
+
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+      expect(onEscape).toHaveBeenCalledTimes(1)
+      expect(outer).toHaveBeenCalledTimes(1)
+      document.removeEventListener('keydown', outer)
+    })
+  })
+
   describe('cleanup', () => {
     it('should remove event listeners on unmount', () => {
       const ref = createRef<HTMLDivElement>()

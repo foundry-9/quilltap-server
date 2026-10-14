@@ -19,7 +19,6 @@ import {
 
 export const BackgroundJobTypeEnum = z.enum([
   'MEMORY_EXTRACTION',
-  'INTER_CHARACTER_MEMORY',
   'CONTEXT_SUMMARY',
   'TITLE_UPDATE',
   'LLM_LOG_CLEANUP',
@@ -31,8 +30,9 @@ export const BackgroundJobTypeEnum = z.enum([
   'CHAT_DANGER_CLASSIFICATION', // Classify chat-level danger from context summary
   'SCENE_STATE_TRACKING', // Track scene state (location, character actions, appearance, clothing)
   'CHARACTER_AVATAR_GENERATION', // Generate character avatar based on equipped wardrobe items
+  'WARDROBE_ITEM_IMAGE_GENERATION', // Draw a picture of one wardrobe item, queued by a wardrobe tool
   'CONVERSATION_RENDER', // Deterministic Markdown rendering of conversation (Scriptorium)
-  'MEMORY_HOUSEKEEPING', // Prune / merge a character's memories against retention policy
+  'MEMORY_MAINTENANCE', // One character's maintenance: fold near-duplicates → consolidate → demote → retire → mirror
   'MEMORY_REGENERATE_CHAT', // Wipe one chat's auto-extracted memories and re-enqueue extraction per turn
   'MEMORY_REGENERATE_ALL', // Fan-out wrapper: enumerate chats + orphans and enqueue MEMORY_REGENERATE_CHAT jobs
   'WARDROBE_OUTFIT_ANNOUNCEMENT', // Debounced Aurora announcement of outfit changes

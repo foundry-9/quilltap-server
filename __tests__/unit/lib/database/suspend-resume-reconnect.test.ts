@@ -81,6 +81,7 @@ jest.mock('@/lib/database/backends/sqlite/instance-lock', () => ({
   releaseInstanceLock: jest.fn(),
   startLockHeartbeat: jest.fn(),
   stopLockHeartbeat: jest.fn(),
+  registerInstanceLockShutdownHandler: jest.fn(),
   InstanceLockError: class InstanceLockError extends Error {},
 }));
 

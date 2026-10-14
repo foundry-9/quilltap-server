@@ -12,8 +12,9 @@
  * with a plain textarea that surfaces its aria-label.
  */
 
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
+import { renderWithQuery } from '@/__tests__/helpers/renderWithQuery'
 import { NewChatForm } from '../NewChatForm'
 import { CONCIERGE_STATE_PRESENTATION } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type {
@@ -25,6 +26,13 @@ import type {
 } from '../types'
 
 // --- Stub heavy / irrelevant children -------------------------------------
+
+// react-markdown is ESM-only; the scenario browser (imported by the form)
+// renders previews through it. Nothing here opens the browser.
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -41,17 +49,52 @@ jest.mock('@/components/markdown-editor/MarkdownLexicalEditor', () => ({
     value,
     onChange,
     ariaLabel,
+    remountKey,
   }: {
     value: string
     onChange: (v: string) => void
     ariaLabel?: string
+    remountKey?: number
   }) => (
     <textarea
+      key={remountKey}
       aria-label={ariaLabel}
+      data-remount-key={remountKey}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
   ),
+}))
+
+// The Scenario Builder dialog is loaded lazily via next/dynamic. Mock the
+// target module with a trivial stub carrying a button that fires `onUse`, and
+// mock next/dynamic to resolve to it synchronously (the real dynamic() awaits
+// the import; the mocked module is already in the registry, so there is
+// nothing async worth waiting for in a test).
+jest.mock('@/components/scenario-builder/ScenarioBuilderDialog', () => ({
+  __esModule: true,
+  ScenarioBuilderDialog: (props: {
+    onUse: (scene: string) => void
+    onSaved?: (target: unknown) => void
+  }) => (
+    <>
+      <button type="button" onClick={() => props.onUse('A scene from the Host.')}>
+        Use built scene
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onSaved?.((globalThis as { __savedTarget?: unknown }).__savedTarget)}
+      >
+        Saved built scene
+      </button>
+    </>
+  ),
+}))
+
+jest.mock('next/dynamic', () => ({
+  __esModule: true,
+  default: () =>
+    require('@/components/scenario-builder/ScenarioBuilderDialog').ScenarioBuilderDialog,
 }))
 
 jest.mock('@/components/image-profiles/ImageProfilePicker', () => ({
@@ -81,15 +124,12 @@ jest.mock('@/hooks/usePersonaDisplayName', () => ({
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
     imageProfileId: '',
-    conciergeState: 'monitored',
+    conciergeState: 'moderated',
     roleplayTemplateId: null,
     roleplayTemplateTouched: false,
     scenario: '',
-    scenarioId: null,
-    projectScenarioPath: null,
-    generalScenarioPath: null,
-    groupScenarioPath: null,
-    groupScenarioGroupId: null,
+    scenarioSelection: { kind: 'custom' },
+    scenarioTouched: false,
     timestampConfig: null,
     avatarGenerationEnabled: false,
     outfitSelections: [],
@@ -119,7 +159,7 @@ const GENERAL_SCENARIO: GeneralScenarioOption = {
 
 function renderForm(stateOverrides: Partial<NewChatFormState> = {}, props: Record<string, unknown> = {}) {
   const setState = jest.fn()
-  render(
+  renderWithQuery(
     <NewChatForm
       profiles={[]}
       imageProfiles={[]}
@@ -147,7 +187,7 @@ describe('NewChatForm scenario layering', () => {
 
   it('shows the preset preview, append hint, and editor when a preset is selected', () => {
     renderForm(
-      { generalScenarioPath: GENERAL_SCENARIO.path },
+      { scenarioSelection: { kind: 'general', path: GENERAL_SCENARIO.path } },
       { generalScenarios: [GENERAL_SCENARIO] }
     )
     // Read-only preview of the chosen scenario body
@@ -175,8 +215,9 @@ describe('NewChatForm scenario layering', () => {
     const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
     const next = updater(makeState({ scenario: 'typed notes' }))
 
-    // The preset is set, but the free text survives (no `scenario: ''` reset).
-    expect(next.generalScenarioPath).toBe(GENERAL_SCENARIO.path)
+    // The preset is set and pinned, but the free text survives (no `scenario: ''` reset).
+    expect(next.scenarioSelection).toEqual({ kind: 'general', path: GENERAL_SCENARIO.path })
+    expect(next.scenarioTouched).toBe(true)
     expect(next.scenario).toBe('typed notes')
   })
 })
@@ -205,7 +246,7 @@ function renderPlayAs(
   stateOverrides: Partial<NewChatFormState> = {}
 ) {
   const setSelectedCharacters = jest.fn()
-  render(
+  renderWithQuery(
     <NewChatForm
       profiles={[]}
       imageProfiles={[]}
@@ -393,26 +434,26 @@ describe('NewChatForm Concierge picker', () => {
   const conciergeSelect = () =>
     screen.getByRole('combobox', { name: /The Concierge/i }) as HTMLSelectElement
 
-  it('offers the four states in the sidebar’s two optgroups', () => {
+  it('offers the three states as a flat list, no optgroups', () => {
     renderForm()
     const select = conciergeSelect()
 
-    const groups = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label)
-    expect(groups).toEqual(['The Concierge decides', 'You decide'])
+    expect(select.querySelectorAll('optgroup')).toHaveLength(0)
 
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    expect(options).toEqual(['monitored', 'flagged', 'vouched', 'uncensored'])
+    expect(options).toEqual(['moderated', 'unmoderated', 'locked'])
   })
 
-  it('starts on Monitored and marks it the default', () => {
+  it('starts on Moderated and marks it the default', () => {
     renderForm()
-    expect(conciergeSelect().value).toBe('monitored')
-    expect(screen.getByRole('option', { name: 'Monitored (default)' })).toBeInTheDocument()
-    // Only Monitored carries the suffix.
-    expect(screen.getByRole('option', { name: 'Uncensored' })).toBeInTheDocument()
+    expect(conciergeSelect().value).toBe('moderated')
+    expect(screen.getByRole('option', { name: 'Moderated (default)' })).toBeInTheDocument()
+    // Only Moderated carries the suffix.
+    expect(screen.getByRole('option', { name: 'Unmoderated' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Locked' })).toBeInTheDocument()
   })
 
-  it.each(['monitored', 'flagged', 'vouched', 'uncensored'] as const)(
+  it.each(['moderated', 'unmoderated', 'locked'] as const)(
     'shows the shared presentation helper sentence for %s',
     (state) => {
       renderForm({ conciergeState: state })
@@ -425,10 +466,242 @@ describe('NewChatForm Concierge picker', () => {
   it('records the chosen state on the form state', () => {
     const { setState } = renderForm()
 
-    fireEvent.change(conciergeSelect(), { target: { value: 'uncensored' } })
+    fireEvent.change(conciergeSelect(), { target: { value: 'unmoderated' } })
 
     expect(setState).toHaveBeenCalledTimes(1)
     const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    expect(updater(makeState()).conciergeState).toBe('uncensored')
+    expect(updater(makeState()).conciergeState).toBe('unmoderated')
+  })
+})
+
+// --- Ask the Host to set the scene (Scenario Builder entry point) ----------
+
+function connectionProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'profile-1',
+    name: 'Sonnet',
+    provider: 'anthropic',
+    modelName: 'claude-sonnet-5',
+    isDefault: true,
+    ...overrides,
+  }
+}
+
+function hostButton() {
+  return screen.getByRole('button', { name: /Ask the Host to set the scene/i })
+}
+
+describe('NewChatForm — Ask the Host to set the scene', () => {
+  it('is disabled while creating', () => {
+    renderForm({}, { creating: true, profiles: [connectionProfile()] })
+    expect(hostButton()).toBeDisabled()
+  })
+
+  it('is disabled when there are no connection profiles', () => {
+    renderForm({}, { profiles: [] })
+    expect(hostButton()).toBeDisabled()
+  })
+
+  it('is enabled with at least one profile and not creating', () => {
+    renderForm({}, { profiles: [connectionProfile()] })
+    expect(hostButton()).not.toBeDisabled()
+  })
+
+  it("fills state.scenario from the builder's scene and clears every preset pointer, and remounts the editor", () => {
+    const { setState } = renderForm(
+      {
+        scenario: 'old notes',
+        scenarioSelection: { kind: 'group', groupId: 'group-1', path: 'group/z.md' },
+      },
+      { profiles: [connectionProfile()] }
+    )
+
+    // A preset is held, so the editor is labelled for notes beneath it.
+    const editorBefore = screen.getByLabelText('Additional scenario notes')
+    const keyBefore = editorBefore.getAttribute('data-remount-key')
+
+    // Open the (mocked, dynamically-loaded) builder dialog.
+    fireEvent.click(hostButton())
+    // The stub's "Use" button fires onUse('A scene from the Host.').
+    fireEvent.click(screen.getByRole('button', { name: 'Use built scene' }))
+
+    expect(setState).toHaveBeenCalledTimes(1)
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(
+      makeState({
+        scenario: 'old notes',
+        scenarioSelection: { kind: 'group', groupId: 'group-1', path: 'group/z.md' },
+      })
+    )
+    expect(next.scenario).toBe('A scene from the Host.')
+    expect(next.scenarioSelection).toEqual({ kind: 'custom' })
+    expect(next.scenarioTouched).toBe(true)
+
+    // scenarioEditorKey is real internal state (setState above is a spy that
+    // never applies), so the remount happens regardless of the mocked setState.
+    const editorAfter = screen.getByLabelText('Additional scenario notes')
+    expect(editorAfter.getAttribute('data-remount-key')).not.toBe(keyBefore)
+  })
+})
+
+describe('NewChatForm — selecting a scene the Host just filed', () => {
+  const GROUP_OPTION = {
+    path: 'Scenarios/aerodrome.md',
+    filename: 'aerodrome.md',
+    name: 'Aerodrome',
+    isDefault: false,
+    body: 'Dawn on the downs.',
+    groupId: 'group-1',
+    groupName: 'Aeronauts Club',
+  }
+
+  async function saveWith(target: unknown, fresh: unknown) {
+    ;(globalThis as { __savedTarget?: unknown }).__savedTarget = target
+    const onScenarioTiersChanged = jest.fn().mockResolvedValue(fresh)
+    const view = renderForm({ scenario: 'old notes' }, { profiles: [connectionProfile()], onScenarioTiersChanged })
+    fireEvent.click(hostButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Saved built scene' }))
+    await waitFor(() => expect(onScenarioTiersChanged).toHaveBeenCalled())
+    // Let the handler's continuation after the awaited refetch run.
+    await new Promise((r) => setTimeout(r, 0))
+    return view
+  }
+
+  const applyAll = (setState: jest.Mock) =>
+    setState.mock.calls.reduce(
+      (acc: NewChatFormState, [u]: [(p: NewChatFormState) => NewChatFormState]) => u(acc),
+      makeState({ scenario: 'old notes' }),
+    )
+
+  it('selects a group preset the re-read tiers now offer, and clears the custom text', async () => {
+    const { setState } = await saveWith(
+      { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
+      { general: [], project: null, group: [GROUP_OPTION] },
+    )
+    const next = applyAll(setState)
+    expect(next.scenarioSelection).toEqual({ kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path })
+    expect(next.scenarioTouched).toBe(true)
+    expect(next.scenario).toBe('')
+  })
+
+  it('leaves the form alone when the saved tier is not offered here', async () => {
+    const { setState } = await saveWith(
+      { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
+      { general: [], project: null, group: null },
+    )
+    expect(setState).not.toHaveBeenCalled()
+  })
+
+  it('selects a general preset when the re-read general tier carries it', async () => {
+    const { setState } = await saveWith(
+      { kind: 'general', path: GENERAL_SCENARIO.path },
+      { general: [GENERAL_SCENARIO], project: null, group: null },
+    )
+    const next = applyAll(setState)
+    expect(next.scenarioSelection).toEqual({ kind: 'general', path: GENERAL_SCENARIO.path })
+    expect(next.scenario).toBe('')
+  })
+})
+
+// --- One selection: what is shown is what is held ---------------------------
+
+describe('NewChatForm — the scenario selection drives the display', () => {
+  const PROJECT_DEFAULT = {
+    path: 'Scenarios/atrium.md',
+    filename: 'atrium.md',
+    name: 'The Atrium',
+    isDefault: true,
+    body: 'Glass overhead.',
+  }
+  const STUDY = { id: 'sc-study', title: 'Her Study', content: 'Books to the ceiling.' }
+  const alice = makeChar('a', 'Alice', { scenarios: [STUDY], defaultScenarioId: STUDY.id })
+
+  const scenarioSelect = () =>
+    document.getElementById('new-chat-scenario-select') as HTMLSelectElement
+
+  it("shows the character's default, not the project's, when the selection names the character (regression)", () => {
+    // The old form displayed the character default while submitting the
+    // project default. With one selection the two cannot disagree: the select,
+    // the preview and the override note all read `state.scenarioSelection`.
+    renderForm(
+      { scenarioSelection: { kind: 'character', scenarioId: STUDY.id } },
+      { selectedCharacters: [llm(alice)], projectScenarios: [PROJECT_DEFAULT] },
+    )
+
+    expect(scenarioSelect().value).toBe(STUDY.id)
+    expect(screen.getByText('Books to the ceiling.')).toBeInTheDocument()
+    expect(screen.queryByText('Glass overhead.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Using the project default/)).not.toBeInTheDocument()
+  })
+
+  it('offers the character default as a switch when the project default is held', () => {
+    const { setState } = renderForm(
+      { scenarioSelection: { kind: 'project', path: PROJECT_DEFAULT.path }, scenario: 'notes' },
+      { selectedCharacters: [llm(alice)], projectScenarios: [PROJECT_DEFAULT] },
+    )
+
+    expect(scenarioSelect().value).toBe(`project:${PROJECT_DEFAULT.path}`)
+    expect(screen.getByText('Glass overhead.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: STUDY.title }))
+
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(makeState({ scenario: 'notes' }))
+    expect(next.scenarioSelection).toEqual({ kind: 'character', scenarioId: STUDY.id })
+    expect(next.scenarioTouched).toBe(true)
+  })
+
+  it('always renders the dropdown, with Browse, even when no tier has anything to offer', () => {
+    renderForm()
+    const select = scenarioSelect()
+    expect(select).toBeInTheDocument()
+    const values = Array.from(select.querySelectorAll('option')).map((o) => o.value)
+    expect(values).toEqual(['__custom__', '__browse__'])
+  })
+
+  it('treats "Browse all scenarios…" as an action, never a selection', () => {
+    const { setState } = renderForm({}, { generalScenarios: [GENERAL_SCENARIO] })
+    // The browser fetches the catalogue on open; give it an empty one.
+    ;(global.fetch as jest.Mock).mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ sources: [] }),
+    }))
+
+    fireEvent.change(scenarioSelect(), { target: { value: '__browse__' } })
+
+    expect(setState).not.toHaveBeenCalled()
+    expect(scenarioSelect().value).toBe('__custom__')
+  })
+
+  it('shows a store pick under "Elsewhere" with its body read by ref, and the notes hint', async () => {
+    ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        url.includes('action=read') ? { scenario: { body: 'A borrowed scene.' } } : {},
+    }))
+
+    renderForm({
+      scenarioSelection: {
+        kind: 'store',
+        mountPointId: 'mp-9',
+        path: 'Scenarios/borrowed.md',
+        label: 'Bob › Borrowed',
+      },
+    })
+
+    const elsewhere = scenarioSelect().querySelector('optgroup[label="Elsewhere"]')
+    expect(elsewhere).not.toBeNull()
+    expect(within(elsewhere as HTMLElement).getByRole('option', { name: 'Bob › Borrowed' })).toBeInTheDocument()
+    expect(scenarioSelect().value).toBe('store:mp-9:Scenarios/borrowed.md')
+
+    expect(await screen.findByText('A borrowed scene.')).toBeInTheDocument()
+    expect(screen.getByText(/added beneath the scenario above/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('Additional scenario notes')).toBeInTheDocument()
+
+    const readCall = (global.fetch as jest.Mock).mock.calls.find(([u]) => String(u).includes('action=read'))
+    expect(readCall[0]).toBe(
+      '/api/v1/scenarios?action=read&mountPointId=mp-9&path=Scenarios%2Fborrowed.md',
+    )
   })
 })

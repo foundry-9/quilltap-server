@@ -1,142 +1,143 @@
 /**
  * Scenario single-item route factory.
  *
- * The group and project single-scenario endpoints
- * (`/api/v1/groups/[id]/scenarios/[scenarioPath]` and
+ * The General, group and project single-scenario endpoints
+ * (`/api/v1/scenarios/[scenarioPath]`,
+ * `/api/v1/groups/[id]/scenarios/[scenarioPath]` and
  * `/api/v1/projects/[id]/scenarios/[scenarioPath]`) are identical modulo the
- * owning tier: its labels, its `Scenarios/` helpers, and (for groups) an
- * extra Knowledge-folder ensure. This factory owns the shared GET / PUT /
- * POST(?action=rename) / DELETE bodies once; each route file supplies a small
- * config and re-exports the produced handlers.
- *
- * Behaviour contract: every status code, response body, error string, log
- * message and the hand-rolled `?action=` dispatch (`rename` only, with its
- * exact unknown-action 400 text) are preserved byte-for-byte from the two
- * original route files.
+ * owning scope and its labels. This factory owns the shared GET / PUT /
+ * POST(?action=rename) / DELETE bodies once; every read and write goes through
+ * the scope's `ScenarioLocation` (`lib/scenarios/location.ts`), so the routes
+ * hold no file IO of their own.
  *
  * `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`.
  * The routes accept the bare filename (with or without `.md`) and prefix
- * `Scenarios/` server-side; `..` segments are rejected. PUT, POST and DELETE
- * all honour `?includeArchived=true` on the freshly-listed scenarios they
- * return.
+ * `Scenarios/` server-side; `..` segments are rejected before any store is
+ * looked up. PUT, POST and DELETE all honour `?includeArchived=true` on the
+ * freshly-listed scenarios they return. A read never provisions: an owner
+ * without a store yet is a 404 naming the remedy.
  *
  * @module mount-index/scenario-item-route-factory
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, created, notFound, serverError, successResponse } from '@/lib/api/responses';
 import {
-  buildScenarioFileContent,
-  isScenarioContentArchived,
+  SCENARIOS_FOLDER,
+  createScenarioSchema,
   resolveScenarioPath,
   updateScenarioSchema,
   renameScenarioSchema,
-  type ParsedScenario,
-  type ListScenariosResult,
 } from '@/lib/mount-index/scenarios-common';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import {
-  writeDatabaseDocument,
-  deleteDatabaseDocument,
-  moveDatabaseDocument,
-} from '@/lib/mount-index/database-store';
-import { sanitizeFileName } from '@/lib/mount-index/character-vault';
+  ScenarioConflictError,
+  ScenarioFilenameError,
+  ScenarioNotFoundError,
+  resolveScenarioLocation,
+  type StoreScenarioLocation,
+} from '@/lib/scenarios/location';
 
 export interface ScenarioItemRouteConfig {
-  /** Capitalised owner label — `'Group'` / `'Project'`. Feeds `notFound(...)`
-   *  bodies and, lower-cased, the error strings and log messages. */
-  ownerLabel: 'Group' | 'Project';
-  /** Log-message prefix — `'[Groups v1]'` / `'[Projects v1]'`. */
+  /** The store scope this endpoint serves. */
+  scope: 'project' | 'group' | 'general';
+  /** Capitalised owner label — `'Group'` / `'Project'` / `'General'`. Feeds
+   *  `notFound(...)` bodies and, lower-cased, the error strings and log messages. */
+  ownerLabel: 'Group' | 'Project' | 'General';
+  /** Log-message prefix — `'[Groups v1]'` / `'[Projects v1]'` / `'[General v1]'`. */
   logTag: string;
-  /** Metadata key naming the owner id in log lines — `'groupId'` / `'projectId'`. */
+  /** Metadata key naming the owner id in log lines — `'groupId'` / `'projectId'` / `'ownerId'`. */
   logIdKey: string;
-  /** The tier's scenarios folder constant (`GROUP_SCENARIOS_FOLDER` / `PROJECT_SCENARIOS_FOLDER`). */
-  scenariosFolder: string;
-  /** Repo lookup for the owning row (must expose `officialMountPointId`). */
-  findOwner: (
-    repos: RequestContext['repos'],
-    id: string,
-  ) => Promise<{ officialMountPointId?: string | null } | null>;
-  /** Cheap idempotent folder ensure(s) run once the store is known — the
-   *  group tier also ensures its Knowledge folder here. */
-  ensureFolders: (mountPointId: string) => Promise<void>;
-  listScenarios: (
-    mountPointId: string,
-    options: { includeArchived?: boolean },
-  ) => Promise<ListScenariosResult>;
-  readScenario: (mountPointId: string, relativePath: string) => Promise<ParsedScenario | null>;
-  setScenarioDefault: (mountPointId: string, relativePath: string) => Promise<void>;
+  /** Extra idempotent folder heals once the store is known for a write (the group tier's `Knowledge/`). */
+  afterEnsure?: (mountPointId: string) => Promise<void>;
 }
 
-export interface ScenarioItemHandlers {
-  GET: ReturnType<typeof createContextParamsHandler<{ id: string; scenarioPath: string }>>;
-  PUT: ReturnType<typeof createContextParamsHandler<{ id: string; scenarioPath: string }>>;
-  POST: ReturnType<typeof createContextParamsHandler<{ id: string; scenarioPath: string }>>;
-  DELETE: ReturnType<typeof createContextParamsHandler<{ id: string; scenarioPath: string }>>;
+/** `{ scenarioPath }`, plus `{ id }` for the project and group endpoints. */
+type ItemParams = Record<string, string> & { scenarioPath: string };
+
+/**
+ * Map a location error onto its response, or null when it isn't one of ours.
+ */
+export function scenarioErrorResponse(error: unknown): NextResponse | null {
+  if (error instanceof ScenarioNotFoundError) return notFound('Scenario');
+  if (error instanceof ScenarioConflictError || error instanceof ScenarioFilenameError) {
+    return badRequest(error.message);
+  }
+  if (error instanceof z.ZodError) {
+    return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
+  }
+  return null;
 }
 
 /**
- * Build the four route handlers for one tier's single-scenario endpoint.
+ * Build the four route handlers for one scope's single-scenario endpoint.
  */
-export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): ScenarioItemHandlers {
-  const {
-    ownerLabel,
-    logTag,
-    logIdKey,
-    scenariosFolder,
-    findOwner,
-    ensureFolders,
-    listScenarios,
-    readScenario,
-    setScenarioDefault,
-  } = config;
+export function createScenarioItemHandlers<P extends ItemParams>(config: ScenarioItemRouteConfig) {
+  const { scope, ownerLabel, logTag, logIdKey, afterEnsure } = config;
   const owner = ownerLabel.toLowerCase();
 
-  async function loadOwnerAndStore(
-    ownerId: string,
-    repos: RequestContext['repos'],
-  ): Promise<
-    | { ok: true; mountPointId: string }
-    | { ok: false; response: NextResponse }
-  > {
-    const row = await findOwner(repos, ownerId);
-    if (!row) return { ok: false, response: notFound(ownerLabel) };
-    if (!row.officialMountPointId) {
-      return {
-        ok: false,
-        response: notFound(`${ownerLabel} has no official document store yet — restart the server or call GET /scenarios first`),
-      };
+  /**
+   * GET is a read probe and never provisions. PUT, rename and DELETE are
+   * writes, so they heal what they write into — the store's `Scenarios/`
+   * folder (and the group's `Knowledge/`) — rather than leave a deleted
+   * folder missing until the next collection call or restart. An owner with
+   * no store at all still answers 404 with the remedy; a write to a scenario
+   * that cannot exist is no reason to mint a store.
+   */
+  async function loadLocation(
+    ownerId: string | undefined,
+    { user, repos }: RequestContext,
+    forWrite = false,
+  ): Promise<{ ok: true; location: StoreScenarioLocation } | { ok: false; response: NextResponse }> {
+    let location = await resolveScenarioLocation(scope, ownerId, repos, user.id);
+    if (location && forWrite) {
+      location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: true });
+      if (location && afterEnsure) await afterEnsure(location.mountPointId);
     }
-    // Cheap idempotent check that the Scenarios folder is in place.
-    await ensureFolders(row.officialMountPointId);
-    return { ok: true, mountPointId: row.officialMountPointId };
+    if (location) return { ok: true, location };
+
+    if (scope === 'general') {
+      return { ok: false, response: notFound('Quilltap General mount has not been provisioned yet') };
+    }
+    const row = ownerId
+      ? scope === 'project'
+        ? await repos.projects.findByIdRaw(ownerId)
+        : await repos.groups.findByIdRaw(ownerId)
+      : null;
+    if (!row) return { ok: false, response: notFound(ownerLabel) };
+    return {
+      ok: false,
+      response: notFound(`${ownerLabel} has no official document store yet — restart the server or call GET /scenarios first`),
+    };
   }
 
   // ==========================================================================
   // GET — read one scenario
   // ==========================================================================
 
-  const GET = createContextParamsHandler<{ id: string; scenarioPath: string }>(
-    async (_req: NextRequest, { repos }: RequestContext, { id, scenarioPath }) => {
+  const GET = createContextParamsHandler<P>(
+    async (_req: NextRequest, ctx: RequestContext, params) => {
+      const { scenarioPath } = params;
+      const id: string | undefined = params.id;
       try {
-        const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
+        const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
         if (!resolved.ok) return badRequest(resolved.error);
 
-        const lookup = await loadOwnerAndStore(id, repos);
+        const lookup = await loadLocation(id, ctx);
         if (!lookup.ok) return lookup.response;
 
-        const scenario = await readScenario(lookup.mountPointId, resolved.path);
+        const scenario = await lookup.location.read(resolved.path);
         if (!scenario) return notFound('Scenario');
 
         return successResponse({ scenario });
       } catch (error) {
         logger.error(
           `${logTag} Failed to read ${owner} scenario`,
-          { [logIdKey]: id, scenarioPath },
+          { [logIdKey]: id ?? null, scenarioPath },
           error instanceof Error ? error : undefined,
         );
         return serverError(`Failed to read ${owner} scenario`);
@@ -148,58 +149,41 @@ export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): Sce
   // PUT — update scenario content + frontmatter
   // ==========================================================================
 
-  const PUT = createContextParamsHandler<{ id: string; scenarioPath: string }>(
-    async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
+  const PUT = createContextParamsHandler<P>(
+    async (req: NextRequest, ctx: RequestContext, params) => {
+      const { scenarioPath } = params;
+      const id: string | undefined = params.id;
       try {
-        const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
+        const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
         if (!resolved.ok) return badRequest(resolved.error);
 
-        const lookup = await loadOwnerAndStore(id, repos);
+        const lookup = await loadLocation(id, ctx, true);
         if (!lookup.ok) return lookup.response;
+        const { location } = lookup;
 
         const includeArchived = readIncludeArchived(req);
-        const body = await req.json();
-        const validated = updateScenarioSchema.parse(body);
+        const validated = updateScenarioSchema.parse(await req.json());
 
         // 404 if the file doesn't exist (use POST on the collection to create).
-        const existing = await repos.docMountDocuments.findByMountPointAndPath(
-          lookup.mountPointId,
-          resolved.path,
-        );
-        if (!existing) return notFound('Scenario');
+        await location.update(resolved.path, validated);
 
-        const fileContent = buildScenarioFileContent({
-          name: validated.name,
-          description: validated.description,
-          isDefault: validated.isDefault,
-          archived: validated.archived ?? isScenarioContentArchived(existing.content),
-          body: validated.body,
-        });
-
-        await writeDatabaseDocument(lookup.mountPointId, resolved.path, fileContent);
-
-        if (validated.isDefault) {
-          await setScenarioDefault(lookup.mountPointId, resolved.path);
-        }
-
-        const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
+        const { scenarios, warnings } = await location.list({ includeArchived });
 
         logger.info(`${logTag} Updated ${owner} scenario`, {
-          [logIdKey]: id,
-          userId: user.id,
-          mountPointId: lookup.mountPointId,
+          [logIdKey]: id ?? null,
+          userId: ctx.user.id,
+          mountPointId: location.mountPointId,
           relativePath: resolved.path,
           isDefault: validated.isDefault === true,
         });
 
         return successResponse({ scenarios, warnings });
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
-        }
+        const mapped = scenarioErrorResponse(error);
+        if (mapped) return mapped;
         logger.error(
           `${logTag} Failed to update ${owner} scenario`,
-          { [logIdKey]: id, scenarioPath },
+          { [logIdKey]: id ?? null, scenarioPath },
           error instanceof Error ? error : undefined,
         );
         return serverError(`Failed to update ${owner} scenario`);
@@ -211,69 +195,43 @@ export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): Sce
   // POST ?action=rename — rename a scenario file
   // ==========================================================================
 
-  const POST = createContextParamsHandler<{ id: string; scenarioPath: string }>(
-    async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
+  const POST = createContextParamsHandler<P>(
+    async (req: NextRequest, ctx: RequestContext, params) => {
+      const { scenarioPath } = params;
+      const id: string | undefined = params.id;
       try {
         const includeArchived = readIncludeArchived(req);
-        const url = new URL(req.url);
-        const action = url.searchParams.get('action');
-        if (action !== 'rename') {
-          return badRequest('Unknown action — supported: rename');
-        }
+        return await dispatchAction(req, {
+          rename: async () => {
+            const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
+            if (!resolved.ok) return badRequest(resolved.error);
 
-        const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
-        if (!resolved.ok) return badRequest(resolved.error);
+            const lookup = await loadLocation(id, ctx, true);
+            if (!lookup.ok) return lookup.response;
+            const { location } = lookup;
 
-        const lookup = await loadOwnerAndStore(id, repos);
-        if (!lookup.ok) return lookup.response;
+            const validated = renameScenarioSchema.parse(await req.json());
+            const renamed = await location.rename(resolved.path, validated.newFilename);
 
-        const body = await req.json();
-        const validated = renameScenarioSchema.parse(body);
+            const { scenarios, warnings } = await location.list({ includeArchived });
 
-        const cleaned = sanitizeFileName(validated.newFilename).replace(/\.md$/i, '');
-        if (!cleaned) return badRequest('newFilename cannot be empty after sanitisation');
-        const newPath = `${scenariosFolder}/${cleaned}.md`;
+            logger.info(`${logTag} Renamed ${owner} scenario`, {
+              [logIdKey]: id ?? null,
+              userId: ctx.user.id,
+              mountPointId: location.mountPointId,
+              from: resolved.path,
+              to: renamed.path,
+            });
 
-        if (newPath === resolved.path) {
-          // No-op rename — return current state.
-          const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
-          return successResponse({ path: newPath, scenarios, warnings });
-        }
-
-        const existing = await repos.docMountDocuments.findByMountPointAndPath(
-          lookup.mountPointId,
-          resolved.path,
-        );
-        if (!existing) return notFound('Scenario');
-
-        const conflict = await repos.docMountDocuments.findByMountPointAndPath(
-          lookup.mountPointId,
-          newPath,
-        );
-        if (conflict) {
-          return badRequest(`A scenario named "${cleaned}" already exists`);
-        }
-
-        await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
-
-        const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
-
-        logger.info(`${logTag} Renamed ${owner} scenario`, {
-          [logIdKey]: id,
-          userId: user.id,
-          mountPointId: lookup.mountPointId,
-          from: resolved.path,
-          to: newPath,
+            return successResponse({ path: renamed.path, scenarios, warnings });
+          },
         });
-
-        return successResponse({ path: newPath, scenarios, warnings });
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
-        }
+        const mapped = scenarioErrorResponse(error);
+        if (mapped) return mapped;
         logger.error(
           `${logTag} Failed to rename ${owner} scenario`,
-          { [logIdKey]: id, scenarioPath },
+          { [logIdKey]: id ?? null, scenarioPath },
           error instanceof Error ? error : undefined,
         );
         return serverError(`Failed to rename ${owner} scenario`);
@@ -285,33 +243,37 @@ export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): Sce
   // DELETE — delete a scenario file
   // ==========================================================================
 
-  const DELETE = createContextParamsHandler<{ id: string; scenarioPath: string }>(
-    async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
+  const DELETE = createContextParamsHandler<P>(
+    async (req: NextRequest, ctx: RequestContext, params) => {
+      const { scenarioPath } = params;
+      const id: string | undefined = params.id;
       try {
         const includeArchived = readIncludeArchived(req);
-        const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
+        const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
         if (!resolved.ok) return badRequest(resolved.error);
 
-        const lookup = await loadOwnerAndStore(id, repos);
+        const lookup = await loadLocation(id, ctx, true);
         if (!lookup.ok) return lookup.response;
+        const { location } = lookup;
 
-        const deleted = await deleteDatabaseDocument(lookup.mountPointId, resolved.path);
-        if (!deleted) return notFound('Scenario');
+        await location.delete(resolved.path);
 
-        const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
+        const { scenarios, warnings } = await location.list({ includeArchived });
 
         logger.info(`${logTag} Deleted ${owner} scenario`, {
-          [logIdKey]: id,
-          userId: user.id,
-          mountPointId: lookup.mountPointId,
+          [logIdKey]: id ?? null,
+          userId: ctx.user.id,
+          mountPointId: location.mountPointId,
           relativePath: resolved.path,
         });
 
         return successResponse({ scenarios, warnings });
       } catch (error) {
+        const mapped = scenarioErrorResponse(error);
+        if (mapped) return mapped;
         logger.error(
           `${logTag} Failed to delete ${owner} scenario`,
-          { [logIdKey]: id, scenarioPath },
+          { [logIdKey]: id ?? null, scenarioPath },
           error instanceof Error ? error : undefined,
         );
         return serverError(`Failed to delete ${owner} scenario`);
@@ -320,4 +282,107 @@ export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): Sce
   );
 
   return { GET, PUT, POST, DELETE };
+}
+
+// ============================================================================
+// Collection endpoints — list + create
+// ============================================================================
+
+export type ScenarioCollectionRouteConfig = ScenarioItemRouteConfig;
+
+/**
+ * Build the list (GET) and create (POST) bodies for one scope's collection
+ * endpoint. Both provision the store and its `Scenarios/` folder first
+ * (`ensure: true`), so a user hitting the endpoint needn't wait for the next
+ * startup heal. General tolerates the pre-migration race on GET (an empty
+ * list with `mountPointId: null`) and refuses writes in that window.
+ *
+ * The bodies are returned bare (`(req, ctx, params)`) so a route can wrap
+ * them in action dispatch, as the General collection route does.
+ */
+export function createScenarioCollectionBodies<P extends Record<string, string>>(
+  config: ScenarioCollectionRouteConfig,
+) {
+  const { scope, ownerLabel, logTag, logIdKey, afterEnsure } = config;
+  const owner = ownerLabel.toLowerCase();
+
+  async function ensureLocation(
+    ownerId: string | undefined,
+    { user, repos }: RequestContext,
+    forWrite: boolean,
+  ): Promise<{ ok: true; location: StoreScenarioLocation } | { ok: false; response: NextResponse }> {
+    if (scope !== 'general' && ownerId) {
+      const row = scope === 'project'
+        ? await repos.projects.findByIdRaw(ownerId)
+        : await repos.groups.findByIdRaw(ownerId);
+      if (!row) return { ok: false, response: notFound(ownerLabel) };
+    }
+    const location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: true });
+    if (!location) {
+      if (scope === 'general') {
+        return {
+          ok: false,
+          response: forWrite
+            ? badRequest('Quilltap General mount has not been provisioned yet — restart the server')
+            : successResponse({ mountPointId: null, scenarios: [], warnings: [] }),
+        };
+      }
+      return { ok: false, response: serverError(`Failed to ensure ${owner} document store`) };
+    }
+    if (afterEnsure) await afterEnsure(location.mountPointId);
+    return { ok: true, location };
+  }
+
+  const list = async (req: NextRequest, ctx: RequestContext, params: P): Promise<NextResponse> => {
+    const id: string | undefined = params.id;
+    try {
+      const includeArchived = readIncludeArchived(req);
+      const lookup = await ensureLocation(id, ctx, false);
+      if (!lookup.ok) return lookup.response;
+      const { scenarios, warnings } = await lookup.location.list({ includeArchived });
+      return successResponse({ mountPointId: lookup.location.mountPointId, scenarios, warnings });
+    } catch (error) {
+      logger.error(
+        `${logTag} Failed to list ${owner} scenarios`,
+        { [logIdKey]: id ?? null },
+        error instanceof Error ? error : undefined,
+      );
+      return serverError(`Failed to list ${owner} scenarios`);
+    }
+  };
+
+  const create = async (req: NextRequest, ctx: RequestContext, params: P): Promise<NextResponse> => {
+    const id: string | undefined = params.id;
+    try {
+      const validated = createScenarioSchema.parse(await req.json());
+      const lookup = await ensureLocation(id, ctx, true);
+      if (!lookup.ok) return lookup.response;
+      const { location } = lookup;
+
+      const scenario = await location.create(validated);
+
+      logger.info(`${logTag} Created ${owner} scenario`, {
+        [logIdKey]: id ?? null,
+        userId: ctx.user.id,
+        mountPointId: location.mountPointId,
+        relativePath: scenario.path,
+        isDefault: validated.isDefault === true,
+      });
+
+      // Return the freshly listed scenarios so the client doesn't need a follow-up GET.
+      const { scenarios, warnings } = await location.list({ includeArchived: validated.archived === true });
+      return created({ mountPointId: location.mountPointId, path: scenario.path, scenarios, warnings });
+    } catch (error) {
+      const mapped = scenarioErrorResponse(error);
+      if (mapped) return mapped;
+      logger.error(
+        `${logTag} Failed to create ${owner} scenario`,
+        { [logIdKey]: id ?? null },
+        error instanceof Error ? error : undefined,
+      );
+      return serverError(`Failed to create ${owner} scenario`);
+    }
+  };
+
+  return { list, create };
 }

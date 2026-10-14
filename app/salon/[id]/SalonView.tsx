@@ -17,8 +17,15 @@ import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
-import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
+import {
+  getConciergeProvenance,
+  getConciergeReason,
+  getConciergeState,
+  shouldShowDangerStyling,
+} from '@/lib/services/dangerous-content/chat-override'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneSuffix,
@@ -39,6 +46,7 @@ import {
   qualifiesForTurnSkipping,
   isUserDrivenSeat,
   findActiveUserParticipant,
+  resolveFloorSeatId,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
@@ -46,27 +54,35 @@ import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@
 // Import extracted hooks
 import {
   useChatData,
+  useChatGallery,
   useTurnManagement,
   useMessageActions,
+  useRegeneration,
+  useConciergeRetry,
   useFileAttachments,
   useAutoScroll,
   useModalState,
   useDraftPersistence,
   useMemoryActions,
+  useSummaryActions,
   useLLMLogs,
   useParticipants,
   useImpersonation,
+  useImpersonationVoice,
   useChatControls,
   useSSEStreaming,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge-retry'
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
+import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -108,9 +124,27 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
-  const { chat, messages, loading, error, chatSettings, swipeStates, chatPhotoCount, chatMemoryCount } = chatDataHook
-  const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
+  const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
+  const { setChat, setMessages, setSwipeStates, selectSwipeVariant } = chatDataHook
+  const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
+
+  // --- Chat settings ---
+  // Every settings read in this component goes through the TanStack query, and
+  // never through a fetch of its own. The workspace renders a Salon tab once and
+  // hides it with `display: none`, so a mounted chat can outlive a dozen visits
+  // to the Settings tab; a value read at mount would be a snapshot of whenever
+  // the tab was opened. Saving a dial writes this key through `setQueryData`
+  // and invalidates it, which TanStack delivers to every mounted observer —
+  // a hidden tab included — so an open chat follows the change live (bug 134).
+  const { data: chatSettings } = useChatSettingsQuery()
+
+  // --- The chat gallery ---
+  // One read backs both the sidebar's `Gallery (N)` and the grid the modal
+  // draws. It rides the `chats` realtime topic, so a Lantern backdrop or an
+  // Aurora repaint landing from a background job updates the number with no
+  // poll; `invalidateChatGallery` is for the images this client itself put in
+  // the conversation, which the server has no hint to publish for.
+  const { total: chatGalleryTotal, invalidate: invalidateChatGallery } = useChatGallery(id)
 
   // --- Story background ---
   // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
@@ -128,10 +162,15 @@ export function SalonView({ chatId }: SalonViewProps) {
     () => { void fetchChat() }
   )
 
+  // Quick-hide "Salon Images" withholds the backdrop along with every other
+  // image in the room; the URL is still tracked so it returns on un-hide.
+  const { shouldHideByIds, hiddenTagIds, hideSalonImages } = useQuickHide()
+  const visibleStoryBackgroundUrl = hideSalonImages ? null : storyBackgroundUrl
+
   // In the workspace, surrender the story background to the single arbitrated
   // workspace backdrop — a conversation's background always wins (no-op outside
   // the workspace).
-  useReportWorkspaceBackdrop(storyBackgroundUrl || null, true)
+  useReportWorkspaceBackdrop(visibleStoryBackgroundUrl || null, true)
 
   // --- UI state that stays in page ---
   // `input` is the EXTERNAL composer value (draft restore / resend / post-send
@@ -210,6 +249,15 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
     return names
   }, [chat?.participants])
+
+  // The `@` typeahead lists this chat's cast ahead of everyone else.
+  const castCharacterIds = useMemo(
+    () =>
+      (chat?.participants ?? [])
+        .filter(p => p.status !== 'removed' && p.character?.id)
+        .map(p => p.character!.id),
+    [chat?.participants]
+  )
 
   const handleWhisper = useCallback((participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
@@ -443,6 +491,9 @@ export function SalonView({ chatId }: SalonViewProps) {
     chat,
   })
 
+  // --- Summary actions hook ---
+  const summaryActions = useSummaryActions({ chatId: id })
+
   // --- LLM logs hook ---
   const llmLogs = useLLMLogs({
     chatId: id,
@@ -468,7 +519,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     setIsPaused,
     fetchChat,
     setTurnState,
-    triggerContinueModeRef,
     setChat: (fn) => setChat(fn as any),
     startBackgroundPolling,
   })
@@ -488,6 +538,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     activeTypingParticipantId: impersonation.activeTypingParticipantId,
     impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
     fetchChat,
+    clearProvisionalMessages,
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
@@ -562,6 +613,50 @@ export function SalonView({ chatId }: SalonViewProps) {
       },
     }
   }, [speakingSeat])
+
+  // In Their Own Words: when the instance setting is not 'off' and the composer
+  // will attribute this message to a seat the human is *impersonating*, the
+  // draft opens in a review dialog first — under 'ask' it waits for the
+  // operator to send it as written or ask for a restatement; under 'always'
+  // the character's own model starts restating it at once. Owner-persona seats
+  // are deliberately out of scope.
+  const impersonationVoiceMode = chatSettings?.impersonationVoiceMode ?? 'off'
+  const rehearsalTarget = useMemo(() => {
+    const p = speakingSeat
+    if (!p?.character) return null
+    return {
+      participantId: p.id,
+      characterName: p.character.name,
+      characterTitle: p.character.title ?? null,
+      avatarSrc: {
+        defaultImage: p.character.defaultImage ?? null,
+        avatarUrl: p.character.avatarUrl ?? null,
+      },
+      profileName: p.connectionProfile?.name ?? null,
+      modelName: p.connectionProfile?.modelName ?? null,
+      systemPrompts: p.character.systemPrompts ?? [],
+      selectedSystemPromptId: p.selectedSystemPromptId ?? null,
+    }
+  }, [speakingSeat])
+  const focusComposer = useCallback(() => {
+    inputRef.current?.focus()
+  }, [])
+  const impersonationVoice = useImpersonationVoice({
+    chatId: id,
+    sendMessage: sseStreaming.sendMessage,
+    focusComposer,
+  })
+  // Armed for the current seat (the mode, or null): drives the composer's
+  // informational cue. The text-dependent half of the gate is checked at submit
+  // time.
+  const impersonationVoiceCue =
+    impersonationVoiceMode !== 'off'
+    && speakingSeat
+    && speakingSeat.type === 'CHARACTER'
+    && speakingSeat.controlledBy !== 'user'
+    && impersonation.impersonatingParticipantIds.includes(speakingSeat.id)
+      ? impersonationVoiceMode
+      : null
 
   // Bug 49: the composer's speaking-as follows the current user-driven turn.
   // When the rotation lands on a seat the human drives — their own character OR
@@ -676,16 +771,52 @@ export function SalonView({ chatId }: SalonViewProps) {
     chatSettings,
   )
 
-  // --- Unpause callback for turn management ---
-  // The pause setter without its toast: clears the local pause and the
-  // user-stopped flag, then persists.
-  const { setPauseState } = chatControls
-  const unpauseChat = useCallback(() => setPauseState(false), [setPauseState])
+  // --- Regeneration ---
+  // A re-roll of an already-spoken line. It runs on its own transport, not the
+  // turn stream, so it keeps its own state: the composer is shut for its
+  // duration, the line being replaced narrates itself, and the strip above the
+  // composer carries the stage.
+  const regenerationController = useRegeneration()
+  const handleRegenerate = useCallback((messageId: string) => {
+    void regenerationController.regenerate(messageId, fetchChat, selectSwipeVariant)
+  }, [regenerationController, fetchChat, selectSwipeVariant])
 
-  // Stable callback wrapper using ref
+  // --- The Concierge's "Try uncensored" ---
+  // One click sends the same request straight to the uncensored desk without
+  // touching the chat's state: a text line re-rolls as a swipe on the ordinary
+  // regeneration transport, a picture is redrawn beside the original, a
+  // refused backdrop is queued again. Never offered on a Locked chat.
+  //
+  // Every dependency here is stable across ordinary renders (and `chat` is
+  // reduced to two booleans), because each transcript row compares these
+  // handlers by identity: a fresh object per render would redraw them all.
+  const { retryPicture, retryBackground } = useConciergeRetry(id, fetchChat, startBackgroundPolling)
+  const regenerate = regenerationController.regenerate
+  const hasChat = !!chat
+  const chatIsLocked = getConciergeState(chat) === 'locked'
+  const conciergeRetry = useMemo<ConciergeRetryHandlers | undefined>(() => {
+    if (!hasChat || chatIsLocked) return undefined
+    return {
+      onRetryTurn: (messageId: string) => {
+        void regenerate(messageId, fetchChat, selectSwipeVariant, {
+          url: retryUncensoredTurnUrl(id, messageId),
+        })
+      },
+      onRetryPicture: (toolMessageId: string) => {
+        void retryPicture(toolMessageId)
+      },
+      onRetryBackground: () => {
+        void retryBackground()
+      },
+    }
+  }, [hasChat, chatIsLocked, id, regenerate, fetchChat, selectSwipeVariant, retryPicture, retryBackground])
+
+  // Stable callback wrapper using ref. `nudge` must be forwarded: it is what
+  // withholds the "nothing to add" skip option, and a summons that lets the
+  // character pass is the difference between one turn and none in a paused room.
   const stableTriggerContinueMode = useCallback(
-    async (participantId: string) => {
-      await triggerContinueModeRef.current(participantId)
+    async (participantId: string, nudge?: boolean) => {
+      await triggerContinueModeRef.current(participantId, nudge)
     },
     []
   )
@@ -701,8 +832,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     setTurnState,
     setTurnSelectionResult,
     stableTriggerContinueMode,
-    isPaused,
-    unpauseChat,
     impersonation.impersonatingParticipantIds,
   )
 
@@ -741,6 +870,7 @@ export function SalonView({ chatId }: SalonViewProps) {
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
       spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
+      cycleOrderParticipantIds: chat?.cycleOrderParticipantIds,
     })
 
     setTurnState(newTurnState)
@@ -772,7 +902,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
 
     setTurnSelectionResult(result)
-  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds])
+  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds, chat?.cycleOrderParticipantIds])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {
@@ -791,7 +921,6 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   // --- Quick-hide logic ---
   const chatContext = useChatContext()
-  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
   const isCurrentChat = chatContext.chatId === id
   const chatTags = chatContext.tags.map(tag => tag.id)
@@ -801,35 +930,36 @@ export function SalonView({ chatId }: SalonViewProps) {
   // --- Initialization effects ---
   useEffect(() => {
     fetchChat()
-    fetchChatSettings()
-    fetchChatPhotoCount()
     fetchChatMemoryCount()
-  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+  }, [fetchChat, fetchChatMemoryCount])
 
-  // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
-  // new Ariel close announcement appears inline.
+  // When a TerminalEmbed reports its PTY has exited, re-read the transcript so
+  // the new Ariel close announcement appears inline. The transcript read, not
+  // the whole chat: nothing but a message arrived.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId?: string }>).detail
       if (!detail?.chatId || detail.chatId !== id) return
-      void fetchChat()
+      void refreshTranscript()
     }
     window.addEventListener('quilltap:terminal-exited', handler)
     return () => window.removeEventListener('quilltap:terminal-exited', handler)
-  }, [id, fetchChat])
+  }, [id, refreshTranscript])
 
   // The terminal WebSocket pushes `chat-update` server messages when something
   // (e.g., an Ariel periodic terminal-output summary) gets posted to the chat
-  // out-of-band. Refetch so the new message shows up without a manual reload.
+  // out-of-band. Re-read the transcript so the new message shows up without a
+  // manual reload — and, if the write already published its own `chats` hint,
+  // the conditional read answers "unchanged" and costs nothing.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId?: string }>).detail
       if (!detail?.chatId || detail.chatId !== id) return
-      void fetchChat()
+      void refreshTranscript()
     }
     window.addEventListener('quilltap:chat-update', handler)
     return () => window.removeEventListener('quilltap:chat-update', handler)
-  }, [id, fetchChat])
+  }, [id, refreshTranscript])
 
   useEffect(() => {
     const fetchTemplateData = async () => {
@@ -995,6 +1125,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   useEffect(() => {
     if (chat?.title) {
       const getCharacterAvatarUrl = (character: CharacterData): string | null => {
+        if (hideSalonImages) return null
         if (character.defaultImage?.url) return character.defaultImage.url
         if (character.defaultImage?.filepath) return character.defaultImage.filepath.startsWith('/') ? character.defaultImage.filepath : `/${character.defaultImage.filepath}`
         if (character.avatarUrl) return character.avatarUrl.startsWith('/') ? character.avatarUrl : `/${character.avatarUrl}`
@@ -1042,11 +1173,11 @@ export function SalonView({ chatId }: SalonViewProps) {
               </span>
             )
           })}
-          {storyBackgroundUrl && (
+          {visibleStoryBackgroundUrl && (
             <button
               type="button"
               onClick={() => setModalImage({
-                src: storyBackgroundUrl,
+                src: visibleStoryBackgroundUrl,
                 filename: storyBackgroundFilename || 'story_background.png',
                 fileId: storyBackgroundFileId || undefined,
               })}
@@ -1054,22 +1185,31 @@ export function SalonView({ chatId }: SalonViewProps) {
               title="View story background"
             >
               <img
-                src={storyBackgroundUrl}
+                src={visibleStoryBackgroundUrl}
                 alt="Story background"
                 className="w-8 h-5 object-cover"
               />
             </button>
           )}
           {(() => {
-            // Monitored is the default and renders no badge — the pill means
+            // Moderated is the default and renders no badge — the pill means
             // "something other than the default is set." Everything the pill
             // says comes from the presentation table, so it speaks the same
-            // words as the list marks and the sidebar's helper text.
+            // words as the list marks and the sidebar's helper text; who set
+            // Unmoderated goes in the tooltip, never the colour.
             const conciergeState = getConciergeState(chat)
-            if (conciergeState === 'monitored') return null
+            if (conciergeState === 'moderated') return null
 
             const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
-            const description = describeConciergeState(conciergeState, chat.dangerCategories ?? undefined)
+            const description = describeConciergeState(
+              conciergeState,
+              {
+                setBy: getConciergeProvenance(chat),
+                reason: getConciergeReason(chat),
+                refusalCount: chat.conciergeRefusalCount,
+              },
+              chat.dangerCategories ?? undefined,
+            )
             const toneSuffix = conciergeToneSuffix(tone)
 
             return (
@@ -1100,7 +1240,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.conciergeState, chat?.conciergeSetBy, chat?.conciergeReason, chat?.conciergeRefusalCount, chat?.dangerCategories, llmCharacterKey, setLeftContent, visibleStoryBackgroundUrl, hideSalonImages, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -1307,9 +1447,17 @@ export function SalonView({ chatId }: SalonViewProps) {
   }, [chat?.isPaused, participantsWithImpersonation.isAllLLM, setAllLLMPauseModalOpen])
 
   // --- All-LLM pause handlers ---
-  const handleAllLLMContinue = useCallback(() => {
-    modals.setAllLLMPauseModalOpen(false)
-  }, [modals])
+  // "Continue" is the one place in a paused room where the human asks for the
+  // conversation back, so it must actually lift the pause before handing the
+  // floor on — closing the modal alone left the room paused and every later
+  // turn stopping dead after one reply. Resume first and await the persist: the
+  // server reads `isPaused` when the continue-mode turn arrives, and would
+  // otherwise grant a single turn and stop again.
+  const handleAllLLMContinue = useCallback(() => continueAllLLMRoom({
+    closeModal: () => modals.setAllLLMPauseModalOpen(false),
+    setPauseState: chatControls.setPauseState,
+    handleContinue: turnManagement.handleContinue,
+  }), [modals, chatControls, turnManagement])
 
   const handleAllLLMStop = useCallback(() => {
     modals.setAllLLMPauseModalOpen(false)
@@ -1367,10 +1515,11 @@ export function SalonView({ chatId }: SalonViewProps) {
   const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
 
   return (
+    <ImagesHiddenProvider hidden={hideSalonImages}>
     <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
-      style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
+      style={visibleStoryBackgroundUrl ? { '--story-background-url': `url('${visibleStoryBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
         <SalonModePanes
@@ -1410,14 +1559,15 @@ export function SalonView({ chatId }: SalonViewProps) {
           streamingContent={sseStreaming.streamingContent}
           waitingForResponse={sseStreaming.waitingForResponse}
           userParticipantId={participantsWithImpersonation.userParticipantId}
-          isPaused={isPaused}
           respondingParticipantId={respondingParticipantId}
           chatId={id}
+          regeneration={regenerationController.regeneration}
+          onRegenerate={handleRegenerate}
           messageActions={messageActions}
           turnManagement={turnManagement}
           setEditContent={setEditContent}
-          onTogglePause={chatControls.togglePause}
           onOverrideDangerFlag={chatControls.handleOverrideDangerFlag}
+          conciergeRetry={conciergeRetry}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           onReattribute={handleReattribute}
           onImageClick={(filepath, filename, fileId) => {
@@ -1438,6 +1588,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={shouldShowDangerStyling(chat)}
+          conciergeDisplay={resolveConciergeSettings(chatSettings, chat).display}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}
@@ -1464,14 +1615,38 @@ export function SalonView({ chatId }: SalonViewProps) {
             take words as this seat, Skip is offered for it too: a pass is "let
             someone else respond", and that is as meaningful mid-rotation as it
             is on-turn. The wording says whose turn it is; only the must-speak
-            guard withholds the button. */}
+            guard withholds the button.
+
+            Bug 146: the banner is about the FLOOR, not about the composer. With
+            two seats the human drives, "whose turn is it" and "whose voice will
+            the composer take" disagree routinely — the rotation moves every
+            turn, the speaking-as only follows it as a client-side default. When
+            they disagree, passing the *composer's* seat records a Host
+            turn-pass for a seat that never held the floor and leaves the real
+            turn outstanding, so the human is prompted again. `resolveFloorSeatId`
+            settles it: the rotation's seat wins when it is one the human drives,
+            and the composer's seat is kept only for the off-turn case bug 123
+            added. */}
         {(() => {
           if (sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending) return null
           if (!participantsWithImpersonation.hasActiveCharacters) return null
-          const seat = speakingSeat
+          const floorSeatId = resolveFloorSeatId(
+            turnSelectionResult?.nextSpeakerId,
+            participantsWithImpersonation.participantsAsBase,
+            impersonation.impersonatingParticipantIds,
+            speakingSeat?.id ?? null,
+          )
+          const seat = floorSeatId
+            ? participantsWithImpersonation.participantData.find(pp => pp.id === floorSeatId) ?? null
+            : null
           if (!seat || !isUserDrivenSeat({ id: seat.id, controlledBy: seat.controlledBy ?? 'llm' }, impersonation.impersonatingParticipantIds)) return null
           const name = seat.character?.name ?? 'this character'
           const isSeatsTurn = turnSelectionResult?.nextSpeakerId === seat.id
+          // The composer is pointed somewhere else — say so rather than inviting
+          // words that would land in another character's voice. Normally the Bug
+          // 49 turn-follow has already moved it; this is the reload case and the
+          // deliberate same-turn SpeakerSelector choice.
+          const composerElsewhere = isSeatsTurn && speakingSeat?.id !== seat.id
 
           // Must-speak guard: when every other active character has passed since
           // the last substantive message, the floor falls to this participant and
@@ -1500,9 +1675,11 @@ export function SalonView({ chatId }: SalonViewProps) {
               <span className="qt-text-secondary">
                 {mustSpeak
                   ? `Everyone else has passed — it falls to ${name} to say something.`
-                  : isSeatsTurn
-                    ? `${name}'s turn — type as them, or skip to let someone else respond.`
-                    : `Speaking as ${name} — type, or skip to let someone else take the floor.`}
+                  : composerElsewhere
+                    ? `${name}'s turn — switch the speaker to them to type, or skip to let someone else respond.`
+                    : isSeatsTurn
+                      ? `${name}'s turn — type as them, or skip to let someone else respond.`
+                      : `Speaking as ${name} — type, or skip to let someone else take the floor.`}
               </span>
               {!mustSpeak && (
                 <button
@@ -1521,6 +1698,8 @@ export function SalonView({ chatId }: SalonViewProps) {
         <ChatComposer
           id={id}
           speakingAs={speakingAsSeat}
+          voiceRehearsal={impersonationVoiceCue}
+          mentionPriorityCharacterIds={castCharacterIds}
           input={input}
           setInput={setInput}
           // Bug 67: in raw-source view the textarea is the visible surface and
@@ -1534,12 +1713,14 @@ export function SalonView({ chatId }: SalonViewProps) {
           pendingToolResults={pendingToolResults}
           onRemovePendingToolResult={handleRemovePendingToolResult}
           inputRef={inputRef}
-          disabled={sseStreaming.sending}
+          disabled={sseStreaming.sending || regenerationController.isRegenerating}
           sending={sseStreaming.sending}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}
-          responseStatus={sseStreaming.responseStatus}
+          // A regeneration owns the strip while it runs; nothing else can be
+          // generating at the same time, so there is no contest for it.
+          responseStatus={regenerationController.regenerationStatus ?? sseStreaming.responseStatus}
           showSource={modals.showPreview}
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
@@ -1554,21 +1735,50 @@ export function SalonView({ chatId }: SalonViewProps) {
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          onSubmit={(e) => sseStreaming.sendMessage(
-            e,
+          onSubmit={(e) => {
             // Read the live text straight from the editor handle — page `input`
             // intentionally lags while typing (that's the decoupling). Except in
             // raw-source view (bug 67), where the textarea is the edited surface
             // and the editor's bridge is suspended: its handle still holds the
             // pre-toggle document, so send what the writer can see.
-            resolveComposerSubmitText(modals.showPreview, input, inputRef.current?.getMarkdown()),
-            clearComposerInput,
-            attachedFiles,
-            pendingToolResults,
-            setPendingToolResults,
-            clearDraft,
-            chatControls.userStoppedStreamRef,
-          )}
+            const text = resolveComposerSubmitText(
+              modals.showPreview,
+              input,
+              inputRef.current?.getMarkdown(),
+            )
+            const sendArgs = {
+              setInput: clearComposerInput,
+              setPendingToolResults,
+              clearDraft,
+              persistDraft,
+            }
+            // In Their Own Words takes the submit over when it is armed; it has
+            // already called preventDefault and nothing has been cleared.
+            if (
+              impersonationVoice.intercept(e, {
+                text,
+                seat: speakingSeat,
+                seatTarget: rehearsalTarget,
+                mode: impersonationVoiceMode,
+                impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
+                attachedFiles,
+                pendingToolResults,
+                sendArgs,
+              })
+            ) {
+              return
+            }
+            void sseStreaming.sendMessage(
+              e,
+              text,
+              sendArgs.setInput,
+              attachedFiles,
+              pendingToolResults,
+              sendArgs.setPendingToolResults,
+              sendArgs.clearDraft,
+              sendArgs.persistDraft,
+            )
+          }}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {}}
           onImagePaste={async (file: File) => {
@@ -1585,6 +1795,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
           onComposeMailClick={modals.openComposeMail}
+          onInformClick={modals.openInform}
+          informParticipantNames={participantNames}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1699,7 +1911,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           setMessages={setMessages}
           setChat={(fn) => setChat(fn as any)}
           fetchChat={fetchChat}
-          fetchChatPhotoCount={fetchChatPhotoCount}
+          invalidateChatGallery={invalidateChatGallery}
           setAttachedFiles={setAttachedFiles}
           modalImage={modals.modalImage}
           setModalImage={modals.setModalImage}
@@ -1729,7 +1941,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           insertAnnouncementOpen={modals.insertAnnouncementOpen}
           closeInsertAnnouncement={modals.closeInsertAnnouncement}
+          informOpen={modals.informOpen}
+          closeInform={modals.closeInform}
           composeMailOpen={modals.composeMailOpen}
+          impersonationVoice={impersonationVoice}
           closeComposeMail={modals.closeComposeMail}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
@@ -1764,13 +1979,16 @@ export function SalonView({ chatId }: SalonViewProps) {
             <SaveImageDialog
               isOpen={!!saveImageTarget}
               onClose={() => setSaveImageTarget(null)}
-              chatId={id}
-              messageId={saveImageTarget.messageId}
+              target={{
+                kind: 'message',
+                chatId: id,
+                messageId: saveImageTarget.messageId,
+                fileId: saveImageTarget.attachmentId,
+              }}
               attachments={attachments}
-              initialAttachmentId={saveImageTarget.attachmentId}
               onSaved={(info) => {
                 showSuccessToast(`Saved to ${info.mountPoint}`)
-                void fetchChatPhotoCount()
+                invalidateChatGallery()
               }}
             />
           )
@@ -1814,12 +2032,12 @@ export function SalonView({ chatId }: SalonViewProps) {
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onSystemPromptChange={chatControls.handleSystemPromptChange}
+          onSubpromptsChange={chatControls.handleSubpromptsChange}
           onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           chatId={id}
           onRegenerateAvatar={handleRegenerateAvatar}
-          isDangerousChat={chat?.isDangerousChat === true}
           // Chat section
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
@@ -1833,7 +2051,12 @@ export function SalonView({ chatId }: SalonViewProps) {
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
           avatarGenerationEnabled={chat?.avatarGenerationEnabled}
           timelineMode={chat?.timelineMode}
-          conciergeOverride={chat?.conciergeOverride}
+          conciergeState={getConciergeState(chat)}
+          conciergeProvenance={{
+            setBy: getConciergeProvenance(chat),
+            reason: getConciergeReason(chat),
+            refusalCount: chat?.conciergeRefusalCount,
+          }}
           onToolSettingsClick={modals.openToolSettings}
           onRunToolClick={modals.openRunTool}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
@@ -1865,7 +2088,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStateClick={modals.openStateEditor}
           onContinueChatClick={modals.openContinueChat}
           onMergeConversationClick={modals.openMergeConversation}
-          chatPhotoCount={chatPhotoCount}
+          onRebuildSummaryClick={summaryActions.handleRebuildSummary}
+          galleryCount={chatGalleryTotal}
           onGalleryClick={modals.openGallery}
           isAutonomousRoom={chat?.chatType === 'autonomous'}
           onEditEnclaveClick={modals.openEditEnclave}
@@ -1906,5 +2130,6 @@ export function SalonView({ chatId }: SalonViewProps) {
 
     </div>
     </TerminalModeContext.Provider>
+    </ImagesHiddenProvider>
   )
 }

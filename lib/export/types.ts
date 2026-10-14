@@ -5,6 +5,7 @@
  * supporting selective entity exports with optional memory inclusion.
  */
 
+import type { BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import type {
   Character,
   ChatMetadata,
@@ -108,6 +109,9 @@ export interface QuilltapExportCounts {
   documentStoreProjectLinks?: number;
   conversationAnnotations?: number;
   chatDocuments?: number;
+  chatInforms?: number;
+  /** Wear-ledger rows (`wardrobe_wear_stats`) for exported wardrobe items. */
+  wardrobeWear?: number;
   files?: number;
   folders?: number;
   promptTemplates?: number;
@@ -144,13 +148,39 @@ export interface QuilltapExportManifest {
 // ============================================================================
 
 /**
+ * One wardrobe picture's `files` row, as it rides on its item's record. The
+ * bytes are NOT here: they travel with the character's vault as a blob at
+ * `Wardrobe/images/<itemId>/<originalFilename>`, and the importer re-mints the
+ * row against the imported vault's blob.
+ */
+export interface ExportedWardrobeImageFile {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  size: number;
+  width?: number | null;
+  height?: number | null;
+  source: 'UPLOADED' | 'GENERATED' | 'IMPORTED' | 'SYSTEM';
+  generationPrompt?: string | null;
+  generationModel?: string | null;
+  generationRevisedPrompt?: string | null;
+  description?: string | null;
+  createdAt: string;
+}
+
+/** A wardrobe item as exported: the item plus its pictures' file metadata. */
+export type ExportedWardrobeItem = WardrobeItem & {
+  _imageFiles?: ExportedWardrobeImageFile[];
+};
+
+/**
  * Character with resolved relationships
  */
 export interface ExportedCharacter extends Character {
   _linkedPersonaNames?: string[];
   _tagNames?: string[];
   /** Wardrobe items belonging to this character, exported alongside the character */
-  wardrobeItems?: WardrobeItem[];
+  wardrobeItems?: ExportedWardrobeItem[];
   /** Per-plugin metadata for this character, keyed by plugin name */
   pluginData?: Record<string, unknown>;
 }
@@ -158,7 +188,7 @@ export interface ExportedCharacter extends Character {
 /**
  * Chat with messages and resolved participant information
  */
-export interface ExportedChat extends ChatMetadata {
+export interface ExportedChat extends ChatMetadata, BundleCursorFields {
   messages: MessageEvent[];
   _participantInfo?: Array<{
     participantId: string;
@@ -207,6 +237,11 @@ export interface SanitizedEmbeddingProfile extends Omit<EmbeddingProfile, 'apiKe
 export interface CharactersExportData {
   characters: ExportedCharacter[];
   memories?: Memory[];
+  /**
+   * Wear-ledger rows for the exported characters' wardrobe items. Optional —
+   * bundles written before the ledger existed carry none.
+   */
+  wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];
 }
 
 /**
@@ -225,6 +260,13 @@ export interface ChatsExportData {
    * same back-compat reason as conversationAnnotations.
    */
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
+  /**
+   * Inform rows (`chat_informs`) attached to any exported chat — consumed rows
+   * included, because a consumed row is what makes a swipe of the turn that
+   * consumed it honest after a round-trip. Optional for the same back-compat
+   * reason as conversationAnnotations.
+   */
+  chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
 }
 
 /**
@@ -395,6 +437,12 @@ export interface DocumentStoresExportData {
    * compatibility with older .qtap files that predated this field.
    */
   projectLinks?: ExportedProjectDocMountLink[];
+  /**
+   * Wear-ledger rows for the shared wardrobe items riding in these stores'
+   * `Wardrobe/` folders. Optional — bundles written before the ledger
+   * existed carry none.
+   */
+  wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];
 }
 
 // ============================================================================
@@ -634,7 +682,22 @@ export interface QtapCharacterRecord {
 export interface QtapWardrobeItemRecord {
   kind: 'wardrobe_item';
   characterId: string;
-  data: import('@/lib/schemas/wardrobe.types').WardrobeItem;
+  data: ExportedWardrobeItem;
+}
+
+/**
+ * One wear-ledger row (`wardrobe_wear_stats`): one wearer's tally for one
+ * exported wardrobe item — a character-owned item (`wardrobe_item` record) or
+ * a shared item riding as a `doc_mount_document` under a `Wardrobe/` folder.
+ * Emitted after every other entity record, so an importer has seen every item
+ * (and every chat and character) the row can point at. `itemId`,
+ * `wearerCharacterId` and `lastWornChatId` are source-instance ids; the
+ * importer remaps them, folds an unresolvable wearer into the item's
+ * unattributed row, and drops a row whose item did not come along.
+ */
+export interface QtapWardrobeWearRecord {
+  kind: 'wardrobe_wear';
+  data: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow;
 }
 
 export interface QtapCharacterPluginDataRecord {
@@ -695,6 +758,21 @@ export interface QtapChatDocumentRecord {
   kind: 'chat_document';
   chatId: string;
   data: import('@/lib/schemas/chat-document.types').ChatDocument;
+}
+
+/**
+ * One Inform row streamed alongside its parent chat. Emitted after every
+ * `chat_message` (and before the annotations) so an importer can resolve
+ * `recordMessageId` / `consumedByMessageId` against message IDs it has already
+ * seen in this same stream.
+ *
+ * Consumed rows travel too: the row a past turn consumed is what lets a swipe
+ * of that turn re-apply the same inform in the destination instance.
+ */
+export interface QtapChatInformRecord {
+  kind: 'chat_inform';
+  chatId: string;
+  data: import('@/lib/schemas/chat-inform.types').ChatInform;
 }
 
 export interface QtapDocMountPointRecord {
@@ -827,9 +905,11 @@ export type QtapRecord =
   | QtapGroupRecord
   | QtapCharacterRecord
   | QtapWardrobeItemRecord
+  | QtapWardrobeWearRecord
   | QtapCharacterPluginDataRecord
   | QtapChatRecord
   | QtapChatMessageRecord
+  | QtapChatInformRecord
   | QtapConversationAnnotationRecord
   | QtapChatDocumentRecord
   | QtapMemoryRecord

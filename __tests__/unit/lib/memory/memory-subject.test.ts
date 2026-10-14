@@ -7,7 +7,7 @@
  * handing the character someone else's life in the first person.
  */
 
-import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
+import { buildMemorySubjectContext } from '@/lib/memory/recall/subject'
 import type { Memory } from '@/lib/schemas/types'
 
 const findNamesByIds = jest.fn()

@@ -24,10 +24,13 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
+import { folderOfWardrobePath, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 import {
+  CHARACTER_WARDROBE_FOLDER,
+  isWardrobeInstructionsFileName,
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
   CharacterVaultMetadataSchema,
@@ -227,6 +230,83 @@ export function parsePromptFile(
 }
 
 /**
+ * The id a `Wardrobe/*.md` file's item carries: its frontmatter `id` when that
+ * is UUID-shaped, otherwise a stable id derived from where the file lives. The
+ * single source of this rule — `parseWardrobeItemFile` and the `.qtap`
+ * wear-ledger export/import (which need an item's id without parsing the whole
+ * item) both call it, so they can never disagree about which item a file is.
+ */
+export function resolveWardrobeItemId(
+  frontmatterId: unknown,
+  mountPointId: string,
+  relativePath: string,
+): string {
+  return typeof frontmatterId === 'string' && /^[0-9a-f-]{36}$/i.test(frontmatterId)
+    ? frontmatterId
+    : stableUuidFromString(`wardrobe-item:${mountPointId}:${relativePath}`);
+}
+
+/**
+ * True for a document path that holds a wardrobe item: a `.md` file anywhere
+ * under a mount's `Wardrobe/` folder — the operator's subfolders are folders
+ * of items too — except under `Wardrobe/images/` (item pictures) and except
+ * the dressing-guidance `instructions.md` at any depth. The one predicate:
+ * `readCharacterVaultWardrobe`, the `.qtap` wear-ledger export and import and
+ * the restore id remap all agree through it about which files are items.
+ */
+export function isWardrobeItemDocumentPath(relativePath: string): boolean {
+  const prefix = `${CHARACTER_WARDROBE_FOLDER}/`.toLowerCase();
+  const pathLower = relativePath.toLowerCase();
+  if (!pathLower.startsWith(prefix)) return false;
+  const rest = pathLower.slice(prefix.length);
+  if (rest.length === 0 || !rest.endsWith('.md')) return false;
+  const segments = rest.split('/');
+  if (segments.some((segment) => segment.length === 0)) return false;
+  if (segments.length > 1 && WARDROBE_RESERVED_FOLDER_SEGMENTS.includes(segments[0])) return false;
+  return !isWardrobeInstructionsFileName(segments[segments.length - 1]);
+}
+
+/**
+ * True for a document the wardrobe owns: an item path
+ * ({@link isWardrobeItemDocumentPath}) whose frontmatter carries a valid
+ * `types` list — exactly the files `parseWardrobeItemFile` turns into items.
+ * The projection sweeps only these, so a note or a half-written file kept
+ * under `Wardrobe/` is never deleted by a wardrobe write. Quiet: no logging.
+ */
+export function isWardrobeItemDocument(doc: { relativePath: string; content?: string | null }): boolean {
+  if (!isWardrobeItemDocumentPath(doc.relativePath)) return false;
+  return parseWardrobeTypesField(parseFrontmatter(doc.content ?? '').data?.types) !== null;
+}
+
+/**
+ * True when a wardrobe file carries its own UUID `id` in frontmatter. A file
+ * without one takes a path-derived id ({@link resolveWardrobeItemId}), which
+ * changes if the file moves — so anything that moves files without
+ * re-projecting them must stamp ids first.
+ */
+export function hasStableWardrobeItemId(content: string | null | undefined): boolean {
+  const id = parseFrontmatter(content ?? '').data?.id;
+  return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id);
+}
+
+/**
+ * The item id of a `Wardrobe/*.md` document, read from its frontmatter alone
+ * (see {@link resolveWardrobeItemId}). Callers check
+ * {@link isWardrobeItemDocumentPath} first.
+ */
+export function wardrobeItemIdForDocument(doc: {
+  mountPointId: string;
+  relativePath: string;
+  content: string;
+}): string {
+  return resolveWardrobeItemId(
+    parseFrontmatter(doc.content).data?.id,
+    doc.mountPointId,
+    doc.relativePath,
+  );
+}
+
+/**
  * Parse a `Wardrobe/<title>.md` file. Frontmatter carries the structured
  * fields (id, title, types, appropriateness, default flag, archive flag,
  * componentItems, timestamps); the body is the freeform description.
@@ -292,10 +372,7 @@ export function parseWardrobeItemFile(
     return null;
   }
 
-  const id =
-    typeof parsed.data?.id === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.data.id as string)
-      ? (parsed.data.id as string)
-      : stableUuidFromString(`wardrobe-item:${doc.mountPointId}:${doc.relativePath}`);
+  const id = resolveWardrobeItemId(parsed.data?.id, doc.mountPointId, doc.relativePath);
 
   const appropriateness =
     typeof parsed.data?.appropriateness === 'string' && parsed.data.appropriateness.length > 0
@@ -325,6 +402,11 @@ export function parseWardrobeItemFile(
       ? (parsed.data.migratedFromClothingRecordId as string)
       : null;
 
+  const imageFileId =
+    typeof parsed.data?.imageFileId === 'string' && parsed.data.imageFileId.length > 0
+      ? (parsed.data.imageFileId as string)
+      : null;
+
   // Raw componentItems refs (slug or UUID strings). We deliberately store
   // these as-written into componentItemIds; `resolveAndCheckComponentItems`
   // rewrites them to canonical UUIDs in a second pass once the slug/id maps
@@ -340,6 +422,19 @@ export function parseWardrobeItemFile(
     typeof parsed.data?.updatedAt === 'string'
       ? (parsed.data.updatedAt as string)
       : doc.updatedAt;
+
+  // The folder is the file's path and nothing else. A hand-edited file that
+  // carries a `folder:` key is ignored — the path wins.
+  const folder = folderOfWardrobePath(doc.relativePath);
+  if (parsed.data && Object.prototype.hasOwnProperty.call(parsed.data, 'folder')) {
+    logger.debug('Wardrobe/*.md frontmatter carries a `folder` key; the file path wins', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+      frontmatterFolder: parsed.data.folder,
+      folder,
+    });
+  }
 
   const bodyText = (titleLineIndex >= 0
     ? lines.slice(titleLineIndex + 1).join('\n')
@@ -359,7 +454,9 @@ export function parseWardrobeItemFile(
     replace,
     componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
+    imageFileId,
     archivedAt,
+    folder,
     createdAt,
     updatedAt,
   };
@@ -400,12 +497,27 @@ export function parseWardrobeTypesField(raw: unknown): WardrobeItemType[] | null
 }
 
 /**
+ * A component reference written as a raw UUID. `buildWardrobeItemFile` writes
+ * any component outside the vault's own folder (a group, project or General
+ * item) this way, so a UUID the local maps don't know is a cross-tier part,
+ * not a typo.
+ */
+const COMPONENT_UUID_REF = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Resolve the raw `componentItems:` strings that `parseWardrobeItemFile`
  * stashed on each item into canonical UUIDs, then run a cycle check across
  * the resolved list. Items whose composites would form a cycle have their
  * `componentItemIds` cleared (read-tolerant — the item itself stays so the
- * user doesn't lose a hand-edit, but the bad reference is dropped). Unknown
- * refs (no slug or UUID match) are logged and dropped from that item's list.
+ * user doesn't lose a hand-edit, but the bad reference is dropped).
+ *
+ * A UUID that matches nothing local is KEPT as written: it names a component
+ * in another tier this reader cannot see (a group or project store), and
+ * dropping it here would let the next write of any item in the folder
+ * re-project the stripped list to disk (bug 187). `expandComposites` and the
+ * read-time hydration in `resolve-equipped.ts` resolve it against the full
+ * pool. Only a slug that matches nothing is logged and dropped — a slug is
+ * only ever written for an item in the same folder.
  *
  * Mutates `items` in place because the array is freshly built by the caller
  * and not yet exposed elsewhere.
@@ -417,7 +529,8 @@ export function resolveAndCheckComponentItems(
   characterId: string,
   mountPointId: string,
 ): void {
-  // First pass — slug/UUID → canonical UUID, dropping unknown refs.
+  // First pass — slug/UUID → canonical UUID. Unknown UUIDs survive; unknown
+  // slugs are dropped.
   for (const item of items) {
     if (item.componentItemIds.length === 0) continue;
     const resolved: string[] = [];
@@ -432,7 +545,17 @@ export function resolveAndCheckComponentItems(
         resolved.push(byId.id);
         continue;
       }
-      logger.warn('Wardrobe item references unknown component; dropping ref', {
+      if (COMPONENT_UUID_REF.test(ref)) {
+        logger.debug('Wardrobe item references a component outside this folder; keeping ref', {
+          characterId,
+          mountPointId,
+          itemId: item.id,
+          ref,
+        });
+        resolved.push(ref);
+        continue;
+      }
+      logger.warn('Wardrobe item references unknown component slug; dropping ref', {
         characterId,
         mountPointId,
         itemId: item.id,
@@ -470,7 +593,8 @@ export function resolveAndCheckComponentItems(
  * the body. Files with neither fall back to the filename-without-extension as
  * the title so malformed files are still visible rather than silently dropped.
  *
- * Project Scenarios in `lib/mount-index/project-scenarios.ts` use the same
+ * The file-backed scenario tiers (`lib/mount-index/scenarios-common.ts`, via
+ * the scenario location in `lib/scenarios/location.ts`) use the same
  * shape (frontmatter-first, heading-fallback) for symmetry between vault and
  * project scenario authoring.
  */

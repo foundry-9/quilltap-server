@@ -30,4 +30,7 @@ export type {
   EmbeddingResult,
   EmbeddingOptions,
   ProviderOptionsSchema,
+  ProviderOptionsSchemaContext,
+  ProviderOptionEnumValue,
+  ProviderOptionField,
 } from '@quilltap/plugin-types';

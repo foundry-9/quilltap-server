@@ -1,7 +1,8 @@
 /**
  * POST /api/v1/chats — the Concierge state chosen on the New Chat form.
  *
- * The four-state control moved from the Salon sidebar onto the creation form,
+ * The Concierge's three-state control (Moderated / Unmoderated / Locked) sits
+ * on the creation form as well as the Salon sidebar,
  * so the create route now accepts `conciergeState` and applies it through the
  * one transition chokepoint (`applyConciergeFlip`) *after* the system-prompt
  * message and *before* any staff announcement or greeting. The greeting itself
@@ -24,13 +25,13 @@ jest.mock('@/lib/chat/initial-greeting', () => ({
 }))
 
 // The resolver keeps its real semantics — the whole point of §5 is that a
-// Vouched Safe chat resolves to `mode: 'OFF'` and an Uncensored one to
-// `AUTO_ROUTE` — but is wrapped in a spy so the tests can see what it was asked.
+// Locked chat never fails over and an Unmoderated one routes direct — but is
+// wrapped in a spy so the tests can see what it was asked.
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => {
   const actual = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
   return {
     ...actual,
-    resolveDangerousContentSettings: jest.fn(actual.resolveDangerousContentSettings),
+    resolveConciergeSettings: jest.fn(actual.resolveConciergeSettings),
   }
 })
 
@@ -39,7 +40,7 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/manual-flip', () => ({
-  applyConciergeFlip: jest.fn().mockResolvedValue({ newState: 'uncensored', changed: true }),
+  applyConciergeFlip: jest.fn().mockResolvedValue({ newState: 'unmoderated', changed: true }),
 }))
 
 jest.mock('@/lib/chat/first-message-context', () => ({
@@ -49,7 +50,7 @@ jest.mock('@/lib/chat/first-message-context', () => ({
   }),
 }))
 
-jest.mock('@/lib/memory/memory-recap', () => ({
+jest.mock('@/lib/memory/recall/recap', () => ({
   buildRecentConversationsBlock: jest.fn().mockResolvedValue(''),
   calculateRecentConversationsLimit: jest.fn().mockReturnValue(0),
 }))
@@ -129,7 +130,7 @@ import { buildChatContext } from '@/lib/chat/initialize'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip'
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 import { postProsperoContextAnnouncement } from '@/lib/services/prospero-notifications/writer'
 import {
@@ -153,7 +154,7 @@ const mockedBuildChatContext = buildChatContext as unknown as jest.Mock
 const mockedGenerateGreeting = generateGreetingMessage as unknown as jest.Mock
 const mockedApplyConciergeFlip = applyConciergeFlip as unknown as jest.Mock
 const mockedApplyContinuation = applyChatContinuation as unknown as jest.Mock
-const mockedResolveSettings = resolveDangerousContentSettings as unknown as jest.Mock
+const mockedResolveSettings = resolveConciergeSettings as unknown as jest.Mock
 const mockedResolveProvider = resolveProviderForDangerousContent as unknown as jest.Mock
 const mockedProsperoAnnouncement = postProsperoContextAnnouncement as unknown as jest.Mock
 
@@ -211,9 +212,13 @@ function makeUncensoredProfile() {
   }
 }
 
-/** The stored Concierge pair the chat row carries; defaults to Monitored. */
+/** The stored Concierge columns the chat row carries; defaults to Moderated. */
 function makeCreatedChat(
-  pair: { conciergeOverride?: string | null; isDangerousChat?: boolean } = {},
+  concierge: {
+    conciergeMode?: 'moderated' | 'unmoderated' | 'locked' | null
+    conciergeModeSetBy?: 'operator' | 'concierge' | null
+    conciergeModeReason?: string | null
+  } = {},
 ) {
   return {
     id: NEW_CHAT_ID,
@@ -224,8 +229,10 @@ function makeCreatedChat(
       { id: 'np-a', type: 'CHARACTER', characterId: CHAR_ID, controlledBy: 'llm', isActive: true, displayOrder: 0 },
     ],
     messageCount: 0,
-    conciergeOverride: pair.conciergeOverride ?? null,
-    isDangerousChat: pair.isDangerousChat ?? false,
+    conciergeMode: concierge.conciergeMode ?? null,
+    conciergeModeSetBy: concierge.conciergeModeSetBy ?? null,
+    conciergeModeReason: concierge.conciergeModeReason ?? null,
+    isDangerousChat: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   }
@@ -267,7 +274,10 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     chatRow = makeCreatedChat()
 
     ;(mockRepos.chats as any).getEquippedOutfitForCharacter = jest.fn().mockResolvedValue(null)
-    ;(mockRepos as any).wardrobe = { findByIdsForCharacter: jest.fn().mockResolvedValue([]) }
+    ;(mockRepos as any).wardrobe = {
+      findByCharacterId: jest.fn().mockResolvedValue([]),
+      readSharedTiers: jest.fn().mockResolvedValue([]),
+    }
     ;(mockRepos as any).projects = {
       findById: jest.fn().mockResolvedValue(null),
       update: jest.fn().mockResolvedValue(null),
@@ -301,7 +311,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     mockRepos.chats.create.mockImplementation(async () => chatRow as any)
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       userId: USER_ID,
-      dangerousContentSettings: { mode: 'OFF', threshold: 0.7 },
+      conciergeSettings: { enabled: true },
     } as any)
   })
 
@@ -316,14 +326,81 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
   })
 
-  it('does not touch the Concierge when Monitored is requested', async () => {
-    const res = await POST(createMockRequest(baseBody({ conciergeState: 'monitored' })))
+  it('does not touch the Concierge when Moderated is requested', async () => {
+    const res = await POST(createMockRequest(baseBody({ conciergeState: 'moderated' })))
 
     expect(res.status).toBe(201)
     expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
   })
 
-  it.each(['flagged', 'vouched', 'uncensored'])(
+  describe('newChatsStartAs', () => {
+    const withDefault = (newChatsStartAs: 'moderated' | 'unmoderated', enabled = true) =>
+      mockRepos.chatSettings.findByUserId.mockResolvedValue({
+        userId: USER_ID,
+        conciergeSettings: { enabled, newChatsStartAs },
+      } as any)
+
+    it('applies the operator default when the request names no state', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledTimes(1)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledWith(NEW_CHAT_ID, 'unmoderated', chatRow)
+    })
+
+    it('lets an explicit Moderated request beat an Unmoderated default', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'moderated' })))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
+
+    it('lets an explicit Locked request beat an Unmoderated default', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'locked' })))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledTimes(1)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledWith(NEW_CHAT_ID, 'locked', chatRow)
+    })
+
+    it('does nothing with a Moderated default', async () => {
+      withDefault('moderated')
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
+
+    it('ignores the default while the Concierge is off duty', async () => {
+      withDefault('unmoderated', false)
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
+
+    it.each(['unmoderated', 'locked'])(
+      'ignores an explicit %s request while the Concierge is off duty (a stale form)',
+      async (state) => {
+        withDefault('moderated', false)
+
+        const res = await POST(createMockRequest(baseBody({ conciergeState: state })))
+
+        expect(res.status).toBe(201)
+        expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+      }
+    )
+  })
+
+  it.each(['unmoderated', 'locked'])(
     'applies %s through the flip chokepoint with the created chat',
     async (state) => {
       const res = await POST(createMockRequest(baseBody({ conciergeState: state })))
@@ -334,6 +411,28 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     }
   )
 
+  it('reports the applied state in the create response, not the row as first inserted', async () => {
+    const created = { ...chatRow }
+    mockRepos.chats.create.mockImplementation(async () => created as any)
+    // After the flip, the stored row carries the new state.
+    mockRepos.chats.findById.mockImplementation(async (id: string) =>
+      id === NEW_CHAT_ID
+        ? ({ ...created, conciergeMode: 'locked', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' } as any)
+        : null
+    )
+
+    const res = await POST(createMockRequest(baseBody({ conciergeState: 'locked' })))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.chat).toMatchObject({
+      id: NEW_CHAT_ID,
+      conciergeMode: 'locked',
+      conciergeModeSetBy: 'operator',
+      conciergeModeReason: 'manual',
+    })
+  })
+
   it('flips after the system-prompt message and before the staff and the greeting', async () => {
     // A general shelf makes Prospero's chat-start announcement — the first
     // staff bubble of the scenario-and-staff phase — actually fire.
@@ -342,7 +441,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     ) as { loadProsperoGeneralContext: jest.Mock }
     loadProsperoGeneralContext.mockResolvedValue({ shelfName: 'Quilltap General' })
 
-    const res = await POST(createMockRequest(baseBody({ conciergeState: 'uncensored' })))
+    const res = await POST(createMockRequest(baseBody({ conciergeState: 'unmoderated' })))
     expect(res.status).toBe(201)
 
     const addMessageOrders = mockRepos.chats.addMessage.mock.invocationCallOrder
@@ -362,7 +461,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
 
     const res = await POST(
       createMockRequest(
-        baseBody({ conciergeState: 'flagged', continuationFromChatId: SOURCE_CHAT_ID })
+        baseBody({ conciergeState: 'locked', continuationFromChatId: SOURCE_CHAT_ID })
       )
     )
 
@@ -373,13 +472,26 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     )
   })
 
-  it('rejects a state outside the four', async () => {
+  it('rejects a state outside the three', async () => {
     const res = await POST(createMockRequest(baseBody({ conciergeState: 'spicy' })))
 
     expect(res.status).toBe(400)
     expect(mockRepos.chats.create).not.toHaveBeenCalled()
     expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
   })
+
+  // The retired four-state vocabulary is refused, not silently mapped: a stale
+  // client must learn it is speaking an old dialect.
+  it.each(['monitored', 'flagged', 'vouched', 'uncensored'])(
+    'rejects the retired state %s',
+    async (state) => {
+      const res = await POST(createMockRequest(baseBody({ conciergeState: state })))
+
+      expect(res.status).toBe(400)
+      expect(mockRepos.chats.create).not.toHaveBeenCalled()
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    }
+  )
 
   // -------------------------------------------------------------------------
   // Greeting routing under the chosen state (§5)
@@ -397,8 +509,12 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       })
     })
 
-    it('sends an Uncensored chat to the frank desk first, even under a global OFF', async () => {
-      chatRow = makeCreatedChat({ conciergeOverride: 'UNCENSORED' })
+    it('sends an Unmoderated chat to the frank desk first', async () => {
+      chatRow = makeCreatedChat({
+        conciergeMode: 'unmoderated',
+        conciergeModeSetBy: 'operator',
+        conciergeModeReason: 'manual',
+      })
       mockedResolveProvider.mockResolvedValue({
         rerouted: true,
         connectionProfile: makeUncensoredProfile(),
@@ -407,13 +523,13 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       })
       mockedGenerateGreeting.mockResolvedValue({ content: 'Well then.', reasoningContent: '' })
 
-      const res = await POST(createMockRequest(baseBody({ conciergeState: 'uncensored' })))
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'unmoderated' })))
       expect(res.status).toBe(201)
 
       // The resolver was asked about the chat, not just the globe...
       expect(mockedResolveSettings).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ conciergeOverride: 'UNCENSORED' })
+        expect.objectContaining({ conciergeMode: 'unmoderated' })
       )
       // ...and the reroute happened before any greeting call at all.
       expect(firstCallOrder(mockedResolveProvider)).toBeLessThan(
@@ -425,24 +541,57 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       )
     })
 
-    it('never reroutes a Vouched Safe chat, content filter or no', async () => {
-      chatRow = makeCreatedChat({ conciergeOverride: 'OFF' })
-      mockRepos.chatSettings.findByUserId.mockResolvedValue({
-        userId: USER_ID,
-        dangerousContentSettings: { mode: 'AUTO_ROUTE', threshold: 0.7 },
-      } as any)
+    it('never tries the uncensored desk for a Locked chat, content filter or no', async () => {
+      chatRow = makeCreatedChat({
+        conciergeMode: 'locked',
+        conciergeModeSetBy: 'operator',
+        conciergeModeReason: 'manual',
+      })
       mockedGenerateGreeting
         .mockResolvedValueOnce({ content: '', reasoningContent: '', contentFilterDetected: true })
         .mockResolvedValue({ content: 'Good evening.', reasoningContent: '' })
 
-      const res = await POST(createMockRequest(baseBody({ conciergeState: 'vouched' })))
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'locked' })))
       expect(res.status).toBe(201)
 
-      expect(mockedResolveSettings).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ conciergeOverride: 'OFF' })
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledWith(NEW_CHAT_ID, 'locked', expect.anything())
+      // The refusal stands: a Locked chat never even consults the uncensored
+      // desk — neither the chat-state opener nor the content-filter fallback.
+      expect(mockedGenerateGreeting.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ provider: 'ANTHROPIC', modelName: 'claude-test' })
       )
+      // The policy was read for the Locked chat, and it neither routes direct
+      // nor fails over.
+      const lockedPolicy = mockedResolveSettings.mock.results
+        .map((r) => r.value)
+        .find((p: { state?: string }) => p?.state === 'locked')
+      expect(lockedPolicy).toMatchObject({ routeDirect: false, failoverAllowed: false })
       expect(mockedResolveProvider).not.toHaveBeenCalled()
+      for (const [params] of mockedGenerateGreeting.mock.calls) {
+        expect(params).not.toEqual(expect.objectContaining({ provider: 'OPENROUTER' }))
+      }
+    })
+
+    it('does try the uncensored desk for a Moderated chat whose greeting hits a content filter', async () => {
+      // The control for the Locked case above: the same content filter, the
+      // same on-duty Concierge, and a Moderated chat does fail over.
+      mockedResolveProvider.mockResolvedValue({
+        rerouted: true,
+        connectionProfile: makeUncensoredProfile(),
+        apiKey: 'frank-key',
+        reason: 'configured uncensored profile',
+      })
+      mockedGenerateGreeting
+        .mockResolvedValueOnce({ content: '', reasoningContent: '', contentFilterDetected: true })
+        .mockResolvedValue({ content: 'Good evening.', reasoningContent: '' })
+
+      const res = await POST(createMockRequest(baseBody()))
+      expect(res.status).toBe(201)
+
+      expect(mockedResolveProvider).toHaveBeenCalledTimes(1)
+      expect(firstCallOrder(mockedGenerateGreeting)).toBeLessThan(
+        firstCallOrder(mockedResolveProvider)
+      )
     })
   })
 })

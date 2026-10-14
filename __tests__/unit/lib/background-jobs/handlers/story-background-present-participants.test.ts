@@ -6,7 +6,7 @@
  * payload gets painted back into a room they walked out of. Both enqueue sites
  * must filter on `isParticipantPresent`.
  */
-import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { queueStoryBackgroundIfEnabled } from '@/lib/chat/auto-title'
 import { handleRegenerateBackground } from '@/app/api/v1/chats/[id]/actions/story-background'
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service'
 import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types'
@@ -31,9 +31,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({
-    settings: { mode: 'OFF', threshold: 0.7 }, source: 'default',
-  })),
+  resolveConciergeSettings: jest.fn(() => ({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' })),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: () => false,

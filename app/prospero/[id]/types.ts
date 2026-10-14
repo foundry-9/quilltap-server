@@ -4,7 +4,8 @@
  * Shared types for the project detail page components.
  */
 
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 export interface ProjectCharacter {
   id: string
@@ -53,6 +54,9 @@ export interface ProjectChat {
     filepath: string
   } | null
   conciergeState?: ConciergeState
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the chat is in its state; `null` for Moderated */
+  conciergeReason?: ConciergeModeReason | null
   dangerCategories?: string[]
 }
 

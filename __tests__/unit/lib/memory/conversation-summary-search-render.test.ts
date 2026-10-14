@@ -7,7 +7,7 @@ import { describe, it, expect } from '@jest/globals'
 import {
   renderRelevantConversationsBlock,
   READ_CONVERSATION_CALL_NOTE,
-} from '@/lib/memory/conversation-summary-search'
+} from '@/lib/memory/recall/conversations'
 
 describe('renderRelevantConversationsBlock', () => {
   it('returns empty string for no matches', () => {

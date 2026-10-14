@@ -24,7 +24,6 @@ chat-settings/
 ├── AutomationSettings.tsx          # Automation toggle switches (55 lines)
 ├── AgentModeSettings.tsx           # Agent mode (agentic tool use) configuration (97 lines)
 ├── StoryBackgroundsSettings.tsx    # AI-generated background image settings (99 lines)
-├── DangerousContentSettings.tsx    # The Concierge content management system (359 lines)
 ├── TabooSettings.tsx               # Instance-wide forbidden-phrase list (self-fetching)
 └── README.md                       # This file
 ```
@@ -91,6 +90,7 @@ Manages configuration for background task LLM usage (memory extraction, image de
 Manages vision-capable profile selection for automatic image descriptions:
 - Selects which vision-capable profile to use for describing uploaded images
 - Filters only vision-capable providers (OPENAI, ANTHROPIC, GOOGLE, GROK)
+- Points at the Concierge tab for the uncensored vision fallback (`conciergeSettings.uncensoredVisionProfileId`)
 
 **Props:**
 - `settings`: Current chat settings
@@ -180,24 +180,16 @@ Configuration for **The Lantern** (story backgrounds) AI-generated background im
 - `imageProfiles`: Available image generation profiles
 - `onUpdate`: Callback for background settings updates
 
-### DangerousContentSettings (DangerousContentSettings.tsx)
-Configuration for **The Concierge** (dangerous content tracking and rerouting system):
-- Activation mode: OFF, DETECT_ONLY, or AUTO_ROUTE
-- Content display mode: SHOW with warning, BLUR until clicked, or COLLAPSE behind placeholder
-- Image prompt expansion profile (vision provider for classifying image content)
-- Uncensored provider configuration for routing flagged content
-
-This component integrates with the memory system to track dangerous content detection patterns.
-
-**Props:**
-- `settings`: Current chat settings
-- `saving`: Loading state indicator
-- `connectionProfiles`: Available LLM profiles
-- `imageProfiles`: Available image profiles
-- `loadingProfiles`: Profile loading state
-- `onUpdate`: Callback for dangerous content settings updates
-- `imagePromptProfileId`: Current image prompt profile ID
-- `onImagePromptProfileChange`: Callback for profile changes
+### The Concierge (moved)
+The Concierge's controls no longer live in this directory or on the Chat tab. They have their own
+Settings tab, **The Concierge** (`/settings?tab=concierge`), rendered by
+`components/settings/tabs/ConciergeTabContent.tsx` from five leaf cards in
+`components/settings/concierge-settings/` (`OnDutyCard`, `UncensoredDeskCard`, `RefusalsCard`,
+`DisplayCard`, `PreScreeningCard`; section ids `on-duty`, `uncensored-desk`, `refusals`, `display`,
+`pre-screening`). Every card saves through `handleConciergeUpdate` on this module's hook, and the
+settings object is `ConciergeSettings` in `types.ts`. The uncensored vision fallback that used to sit
+in `ImageDescriptionSettings` and the image-prompt crafter that used to be
+`cheapLLMSettings.imagePromptProfileId` are both on the Concierge's uncensored desk now.
 
 ### TabooSettings (TabooSettings.tsx)
 Editor for the instance-wide **Taboo** list — phrases no character may utter, rendered into the universal (cache-stable) portion of every character's system prompt.
@@ -252,7 +244,7 @@ Centralized state management hook for all chat settings operations. Handles data
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
-  handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
+  handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
 }
 ```
@@ -288,7 +280,8 @@ Centralized state management hook for all chat settings operations. Handles data
 - `LLMLoggingSettings`: Request/response logging configuration
 - `AgentModeSettings`: Agentic tool use configuration
 - `StoryBackgroundsSettings`: AI-generated background image configuration
-- `DangerousContentSettings`: The Concierge dangerous content system configuration
+- `ConciergeSettings`: The Concierge's settings (edited on the Concierge tab)
+- `ConciergeSettingsUpdate`: A partial Concierge update (`display` / `preScreen` deep-merge)
 - `ConnectionProfile`: LLM provider connection details
 - `EmbeddingProfile`: Embedding model configuration
 - `ImageProfile`: Image generation model configuration
@@ -302,7 +295,7 @@ All constants and defaults are defined in `types.ts`:
 - `DEFAULT_AUTO_DETECT_RNG`
 - `DEFAULT_AGENT_MODE_SETTINGS`
 - `DEFAULT_STORY_BACKGROUNDS_SETTINGS`
-- `DEFAULT_DANGEROUS_CONTENT_SETTINGS`
+- `DEFAULT_CONCIERGE_SETTINGS`
 - `AVATAR_MODES`: Array of available avatar display modes with labels
 - `AVATAR_STYLES`: Array of available avatar styles with preview symbols
 - `MEMORY_CASCADE_ACTIONS`: Available memory cascade action options
@@ -403,7 +396,6 @@ function IndependentComponent() {
 |------|-------|---------|
 | useChatSettings.ts | 808 | State management hook |
 | TimestampConfigCard.tsx | 365 | Component |
-| DangerousContentSettings.tsx | 359 | Component |
 | ContextCompressionSettings.tsx | 320 | Component |
 | types.ts | 417 | Type definitions |
 | CheapLLMSettings.tsx | 211 | Component |

@@ -5,7 +5,8 @@ const mockInvalidateCompressionCache = jest.fn()
 const mockExtractMemorySearchKeywords = jest.fn()
 const mockExtractVisibleConversation = jest.fn()
 const mockStripToolArtifacts = jest.fn((s: string) => s)
-const mockSearchMemoriesSemantic = jest.fn()
+const mockSearchRecall = jest.fn()
+const mockEmbed = jest.fn()
 const mockResolveUncensoredCheapLLMSelection = jest.fn()
 
 const mockSafeEnqueue = jest.fn((_controller: unknown, _chunk: unknown) => true)
@@ -38,13 +39,19 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   stripToolArtifacts: (s: string) => mockStripToolArtifacts(s),
 }))
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: (...args: any[]) => mockSearchMemoriesSemantic(...args),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchRecall: (...args: any[]) => mockSearchRecall(...args),
+}))
+
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  generateEmbeddingForUser: (...args: any[]) => mockEmbed(...args),
 }))
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: (...args: any[]) => mockResolveUncensoredCheapLLMSelection(...args),
 }))
+
+const { resolveConciergeSettings } = jest.requireActual('@/lib/services/dangerous-content/resolver.service') as typeof import('@/lib/services/dangerous-content/resolver.service')
 
 const {
   runPreContextPreCompute,
@@ -52,7 +59,7 @@ const {
 
 const baseChat = { id: 'chat-1', isDangerousChat: false } as any
 const baseCharacter = { id: 'char-1', name: 'Alice' } as any
-const baseDangerSettings = { mode: 'OFF' } as any
+const baseConciergePolicy = resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any)
 const baseCheapLLM = { provider: 'OPENAI', modelName: 'gpt-4.1-mini' } as any
 
 function baseOptions(overrides: Partial<Parameters<typeof runPreContextPreCompute>[0]> = {}) {
@@ -69,7 +76,7 @@ function baseOptions(overrides: Partial<Parameters<typeof runPreContextPreComput
     compressionEnabled: false,
     bypassCompression: false,
     cheapLLMSelection: null,
-    dangerSettings: baseDangerSettings,
+    conciergePolicy: baseConciergePolicy,
     allProfiles: [],
     controller: { enqueue: jest.fn() } as any,
     encoder: new TextEncoder(),
@@ -82,6 +89,8 @@ describe('pre-compute.service', () => {
     jest.clearAllMocks()
     jest.useFakeTimers()
     mockExtractVisibleConversation.mockReturnValue([])
+    ;(mockSearchRecall as jest.Mock).mockResolvedValue({ candidates: [], strategy: 'vector', trace: [] })
+    ;(mockEmbed as jest.Mock).mockResolvedValue({ embedding: new Float32Array([1, 0]), provider: 'OPENAI', model: 'm', dimensions: 2 })
   })
 
   afterEach(() => {
@@ -138,7 +147,7 @@ describe('pre-compute.service', () => {
   describe('proactiveRecallTask', () => {
     it('returns undefined when no cheap LLM is selected', async () => {
       const result = await runPreContextPreCompute(baseOptions({ cheapLLMSelection: null }))
-      expect(result.preSearchedMemories).toBeUndefined()
+      expect(result.preRecall).toBeUndefined()
       expect(mockExtractMemorySearchKeywords).not.toHaveBeenCalled()
     })
 
@@ -149,7 +158,7 @@ describe('pre-compute.service', () => {
           { type: 'message', role: 'USER', content: 'hi', participantId: 'p-user' } as any,
         ],
       }))
-      expect(result.preSearchedMemories).toBeUndefined()
+      expect(result.preRecall).toBeUndefined()
       expect(mockExtractMemorySearchKeywords).not.toHaveBeenCalled()
     })
 
@@ -158,10 +167,10 @@ describe('pre-compute.service', () => {
         success: true,
         result: { keywords: ['ship', 'storm'], temporal: 'present', context: 'history' },
       })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([
+      ;(mockSearchRecall as jest.Mock).mockResolvedValue({ candidates: [
         { id: 'm1', content: 'memory 1', importance: 0.6 },
         { id: 'm2', content: 'memory 2', importance: 0.5 },
-      ])
+      ], strategy: 'vector', trace: [] })
 
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
@@ -180,11 +189,10 @@ describe('pre-compute.service', () => {
 
       // The distilled keywords drive the embedding query, and the turn-level
       // guess + present-character set + scope policy ride along in recallContext.
-      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+      expect(mockSearchRecall).toHaveBeenCalledWith(
         'char-1',
-        'ship storm',
+        expect.objectContaining({ text: 'ship storm' }),
         expect.objectContaining({
-          userId: 'user-1',
           recallContext: expect.objectContaining({
             scopePolicy: 'down-weight',
             turnContext: 'history',
@@ -193,14 +201,19 @@ describe('pre-compute.service', () => {
             expandRelated: false,
           }),
         }),
+        expect.anything(),
+        'head',
       )
-      expect(result.preSearchedMemories).toHaveLength(2)
+      expect(result.preRecall?.candidates).toHaveLength(2)
+      // The query was embedded once, here, for the whole turn.
+      expect(mockEmbed).toHaveBeenCalledTimes(1)
+      expect(result.preRecall?.query.embedding).not.toBeNull()
     })
 
     it('forwards a resolved time window even when the turn is not retrospective', async () => {
       // The deterministic day-reference resolver can hand back a window on a
       // turn the classifier still calls non-retrospective (and vice versa).
-      // The window must ride along regardless — searchMemoriesSemantic's
+      // The window must ride along regardless — the score stage's
       // two-stage filter makes it starvation-safe — while the multi-probe
       // block stays gated on the flag.
       const timeRange = { from: '2026-07-28T05:00:00.000Z', to: '2026-07-29T02:44:00.000Z' }
@@ -214,8 +227,6 @@ describe('pre-compute.service', () => {
           entities: ['Constantinople'],
         },
       })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([])
-
       await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
         existingMessages: [
@@ -224,36 +235,33 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+      expect(mockSearchRecall).toHaveBeenCalledWith(
         'char-1',
-        'Charlie is asking how the mission went.',
         expect.objectContaining({
-          occurredWithin: timeRange,
-          extraProbes: undefined,
+          text: 'Charlie is asking how the mission went.',
+          window: timeRange,
+          probes: [],
+          anchors: ['Constantinople'],
+        }),
+        expect.objectContaining({
           recallContext: expect.objectContaining({
             turnRetrospective: false,
             currentChatId: 'chat-1',
             nowMs: expect.any(Number),
           }),
         }),
+        expect.anything(),
+        'head',
       )
     })
 
-    it('hands back the vector the memory search embedded, for reuse later in the turn', async () => {
-      // The per-turn conversation-summary list rides this vector instead of
-      // embedding the same sentence a second time, so it has to survive the
-      // trip out of the proactive task.
-      const captured = new Float32Array([0.25, 0.5, 0.25])
+    it('hands back the query and its one embedding, for reuse by every pool of the turn', async () => {
+      const vector = new Float32Array([0.25, 0.5, 0.25])
+      mockEmbed.mockResolvedValue({ embedding: vector, provider: 'OPENAI', model: 'm', dimensions: 3 })
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
         success: true,
         result: { keywords: ['storm'], paraphrase: 'They are talking about the storm.' },
       })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockImplementation(
-        async (_characterId: string, query: string, options: any) => {
-          options.captureQueryEmbedding?.({ query, embedding: captured })
-          return [{ id: 'm1', content: 'memory 1' }]
-        },
-      )
 
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
@@ -263,24 +271,15 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedQueryEmbedding).toEqual({
-        query: 'They are talking about the storm.',
-        embedding: captured,
-      })
+      expect(result.preRecall?.query.text).toBe('They are talking about the storm.')
+      expect(result.preRecall?.query.embedding?.embedding).toBe(vector)
     })
 
-    it('still reports the embedded vector when the search finds no memories', async () => {
-      const captured = new Float32Array([1, 0])
+    it('still hands back the query when the search finds no memories', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
         success: true,
         result: { keywords: ['storm'], paraphrase: 'They are talking about the storm.' },
       })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockImplementation(
-        async (_characterId: string, query: string, options: any) => {
-          options.captureQueryEmbedding?.({ query, embedding: captured })
-          return []
-        },
-      )
 
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
@@ -290,17 +289,15 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedMemories).toBeUndefined()
-      expect(result.preSearchedQueryEmbedding?.embedding).toBe(captured)
+      expect(result.preRecall?.candidates).toEqual([])
+      expect(result.preRecall?.query.text).toBe('They are talking about the storm.')
     })
 
-    it('passes null for occurredWithin when no window was resolved', async () => {
+    it('carries no window when none was resolved', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
         success: true,
         result: { keywords: ['mission'], retrospective: false, timeRange: null },
       })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue([])
-
       await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
         existingMessages: [
@@ -309,20 +306,22 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+      expect(mockSearchRecall).toHaveBeenCalledWith(
         'char-1',
-        'mission',
-        expect.objectContaining({ occurredWithin: null }),
+        expect.objectContaining({ text: 'mission', window: null }),
+        expect.anything(),
+        expect.anything(),
+        'head',
       )
     })
 
-    it('routes through the uncensored cheap-LLM selection in dangerous chats', async () => {
+    it('routes through the uncensored cheap-LLM selection in Unmoderated chats', async () => {
       const uncensored = { provider: 'LOCAL', modelName: 'unc' } as any
       ;(mockResolveUncensoredCheapLLMSelection as jest.Mock).mockReturnValue(uncensored)
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: false })
 
       await runPreContextPreCompute(baseOptions({
-        chat: { ...baseChat, isDangerousChat: true } as any,
+        chat: { ...baseChat, conciergeMode: 'unmoderated' } as any,
         cheapLLMSelection: baseCheapLLM,
         existingMessages: [
           { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,
@@ -330,7 +329,7 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(mockResolveUncensoredCheapLLMSelection).toHaveBeenCalledWith(baseCheapLLM, true, baseDangerSettings, [])
+      expect(mockResolveUncensoredCheapLLMSelection).toHaveBeenCalledWith(baseCheapLLM, true, baseConciergePolicy, [])
       const callArgs = mockExtractMemorySearchKeywords.mock.calls[0] as unknown[]
       expect(callArgs[2]).toBe(uncensored)
     })
@@ -346,13 +345,13 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedMemories).toBeUndefined()
-      expect(mockSearchMemoriesSemantic).not.toHaveBeenCalled()
+      expect(result.preRecall).toBeUndefined()
+      expect(mockSearchRecall).not.toHaveBeenCalled()
     })
 
-    it('returns undefined when semantic search throws', async () => {
+    it('keeps the query, with no candidates, when the search throws', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: { keywords: ['k'] } })
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockRejectedValue(new Error('search broke'))
+      ;(mockSearchRecall as jest.Mock).mockRejectedValue(new Error('search broke'))
 
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
@@ -362,13 +361,14 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedMemories).toBeUndefined()
+      expect(result.preRecall?.candidates).toEqual([])
+      expect(result.preRecall?.query.text).toBe('k')
     })
 
-    it('caps the returned memory list at 10', async () => {
+    it('returns the whole proactive pool so archive overlap cannot starve the head', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: { keywords: ['k'] } })
-      const many = Array.from({ length: 15 }, (_, i) => ({ id: `m${i}`, content: `c${i}`, importance: 0.5 }))
-      ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue(many)
+      const many = Array.from({ length: 90 }, (_, i) => ({ id: `m${i}`, content: `c${i}`, importance: 0.5 }))
+      ;(mockSearchRecall as jest.Mock).mockResolvedValue({ candidates: many, strategy: 'vector', trace: [] })
 
       const result = await runPreContextPreCompute(baseOptions({
         cheapLLMSelection: baseCheapLLM,
@@ -378,7 +378,14 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedMemories).toHaveLength(10)
+      expect(result.preRecall?.candidates).toHaveLength(90)
+      expect(mockSearchRecall).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ limit: 90 }),
+        expect.anything(),
+        'head',
+      )
     })
   })
 

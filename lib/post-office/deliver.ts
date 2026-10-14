@@ -18,7 +18,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import type { Character } from '@/lib/schemas/character.types';
 import {
-  MAIL_FOLDER,
+  resolveMailPath,
   deliverLetter,
   readLetter,
   buildReplyPreface,
@@ -59,7 +59,8 @@ export async function composeAndDeliverLetter(
   params: ComposeAndDeliverParams,
 ): Promise<ComposeAndDeliverResult> {
   const { sender, recipient, message } = params;
-  const inReplyTo = params.inReplyTo ?? null;
+  // Store the canonical `Mail/…` path whichever form the caller named it by.
+  const inReplyTo = params.inReplyTo ? (resolveMailPath(params.inReplyTo) ?? params.inReplyTo) : null;
 
   // Ensure both vaults (idempotent). Use the returned ids — the raw rows may
   // carry a stale/null FK before provisioning.
@@ -91,16 +92,16 @@ export async function composeAndDeliverLetter(
 }
 
 /**
- * Resolve an `in_reply_to` reference: it must be a `Mail/…` path that exists in
- * the SENDER's own mailbox. Returns the parsed original, or null when the path
- * is outside `Mail/` or no such letter exists.
+ * Resolve an `in_reply_to` reference — a letter's file name (or its `Mail/…`
+ * path) — to a letter that exists in the SENDER's own mailbox. Returns the
+ * parsed original, or null when the reference escapes `Mail/` or no such
+ * letter exists.
  */
 export async function resolveReplyInSenderMailbox(
   senderVaultId: string,
   inReplyTo: string,
 ): Promise<ParsedLetter | null> {
-  const normalized = inReplyTo.replace(/^\/+/, '');
-  const prefix = `${MAIL_FOLDER}/`;
-  if (!normalized.toLowerCase().startsWith(prefix.toLowerCase())) return null;
-  return readLetter(senderVaultId, normalized);
+  const path = resolveMailPath(inReplyTo);
+  if (!path) return null;
+  return readLetter(senderVaultId, path);
 }

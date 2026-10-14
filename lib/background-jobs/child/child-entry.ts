@@ -18,7 +18,7 @@
 import { installChildLoggerTransport, logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getHandler } from '../handlers';
-import { runWithJobScope, flushPendingWrites, getChildRepositoriesProxy } from './child-repositories-proxy';
+import { runWithJobScope, flushPendingWrites, takeJobResult, getChildRepositoriesProxy } from './child-repositories-proxy';
 import {
   ParentToChildMessage,
   ChildJobResultMessage,
@@ -27,6 +27,7 @@ import {
   isParentToChildMessage,
 } from '../ipc-types';
 import { handleHostRpcResponse } from './host-rpc-client';
+import { startPluginInitialization, whenPluginsReady } from './plugin-readiness';
 import { runAttributedToJob } from '../activity-registry';
 import { activityKindForJobType } from '../activity-kinds';
 import type { BackgroundJob } from '@/lib/schemas/types';
@@ -61,11 +62,12 @@ getChildRepositoriesProxy();
 // EMBEDDING_GENERATE call into `providerRegistry.createEmbeddingProvider`,
 // and `initializePlugins` is the canonical wiring path. It's read-only
 // (scans plugins, loads modules, registers in memory) so it's safe to
-// run inside the child's readonly DB context. We do this asynchronously
-// so the child can already accept jobs while plugins finish loading;
-// any job that requires a registered provider before init completes will
-// fail and retry on the dispatcher's normal backoff.
-(async () => {
+// run inside the child's readonly DB context. It runs asynchronously so
+// the child answers IPC at once, but every job waits for it to settle
+// (`whenPluginsReady` in `runJob`): the parent forks the child on the first
+// job and sends it straight away, and a handler that reached the registry
+// first used to fail with "Provider '…' not found in registry" (bug 243).
+startPluginInitialization(async () => {
   try {
     const { initializePlugins } = await import('@/lib/startup/plugin-initialization');
     const result = await initializePlugins();
@@ -79,7 +81,7 @@ getChildRepositoriesProxy();
       error: getErrorMessage(err),
     });
   }
-})();
+});
 
 log.info('Job-runner child ready', {
   pid: process.pid,
@@ -132,6 +134,14 @@ process.on('message', (raw: unknown) => {
         });
       });
       break;
+    case 'memory-index-patch':
+      handleMemoryIndexPatch(msg.characterId, msg.entries).catch(err => {
+        log.warn('Memory index patch failed', {
+          characterId: msg.characterId,
+          error: getErrorMessage(err),
+        });
+      });
+      break;
     case 'shutdown':
       beginShutdown();
       break;
@@ -163,6 +173,7 @@ async function runJob(job: BackgroundJob): Promise<void> {
   log.info('Running job in child', { jobId: job.id, type: job.type, attempts: job.attempts });
 
   try {
+    await whenPluginsReady();
     await runWithJobScope(job.id, async () => {
       const handler = getHandler(job.type);
       // Attribute the handler to its own chip kind without adding a count —
@@ -172,7 +183,7 @@ async function runJob(job: BackgroundJob): Promise<void> {
       // and mirrors up to the parent.
       await runAttributedToJob(activityKindForJobType(job.type), () => handler(job));
       const writes = flushPendingWrites();
-      sendJobResult(job.id, true, writes);
+      sendJobResult(job.id, true, writes, undefined, undefined, takeJobResult());
     });
     state.completedSinceLastStatus++;
   } catch (err) {
@@ -189,12 +200,20 @@ async function runJob(job: BackgroundJob): Promise<void> {
   }
 }
 
-function sendJobResult(jobId: string, ok: boolean, writes: ReturnType<typeof flushPendingWrites>, errorMessage?: string, stack?: string): void {
+function sendJobResult(
+  jobId: string,
+  ok: boolean,
+  writes: ReturnType<typeof flushPendingWrites>,
+  errorMessage?: string,
+  stack?: string,
+  result?: unknown,
+): void {
   const msg: ChildJobResultMessage = {
     type: 'job-result',
     jobId,
     ok,
     writes,
+    ...(result !== undefined ? { result } : {}),
     ...(errorMessage ? { error: { message: errorMessage, stack } } : {}),
   };
   trySend(msg);
@@ -207,12 +226,23 @@ function sendJobResult(jobId: string, ok: boolean, writes: ReturnType<typeof flu
 async function handleInvalidate(target: 'vectorStore' | 'mountPoint', key: string): Promise<void> {
   // Lazy import so the parent doesn't pay the cost.
   if (target === 'vectorStore') {
-    const mod = await import('@/lib/embedding/vector-store');
-    mod.getVectorStoreManager().unloadStore(key);
+    const { memoryIndex } = await import('@/lib/memory/index-store');
+    memoryIndex.reload(key);
   } else if (target === 'mountPoint') {
     const mod = await import('@/lib/mount-index/mount-chunk-cache');
     mod.invalidateMountPoint(key);
   }
+}
+
+async function handleMemoryIndexPatch(
+  characterId: string,
+  entries: Array<{ id: string; embedding: Float32Array; tier: 'hot' | 'cold' }>,
+): Promise<void> {
+  // Cache only: the rows are already written. A character whose cache is not
+  // loaded costs nothing (the next search reads the rows).
+  const { memoryIndex } = await import('@/lib/memory/index-store');
+  await memoryIndex.indexInserted(characterId, entries);
+  log.debug('Patched memory index cache from parent admission', { characterId, entries: entries.length });
 }
 
 // ============================================================================

@@ -8,7 +8,7 @@
  * their chat-bound hooks — and portaled into this host. That keeps the PTY/editor
  * mounted inside the kept-alive Salon subtree (surviving tab switches) while
  * appearing in their own tab, possibly in the other pane. See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/workspace/TerminalDocumentViews
  */

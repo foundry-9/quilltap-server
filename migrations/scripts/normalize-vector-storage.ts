@@ -40,9 +40,12 @@ export const normalizeVectorStorageMigration: Migration = {
       return false;
     }
 
-    // Need to run if vector_entries table doesn't exist
+    // Need to run if vector_entries doesn't exist yet while vector_indices
+    // does (there is something to normalize). Both missing means
+    // retire-memory-vector-entries-v1 has dropped the mirror for good: never
+    // recreate it.
     if (!sqliteTableExists('vector_entries')) {
-      return true;
+      return sqliteTableExists('vector_indices');
     }
 
     // Need to run if vector_indices still has an entries column

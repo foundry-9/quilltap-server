@@ -152,3 +152,41 @@ describe('realtime bus', () => {
     expect(socket.sent).toHaveLength(0);
   });
 });
+
+/**
+ * The forked job child owns no sockets, so publishing there must be a no-op —
+ * and it must be a no-op *by construction*, because that is what lets shared
+ * chokepoints call `publishRealtime` without a guard of their own. The message
+ * funnel (`chats-messages.ops.ts`) is the load-bearing example: it publishes on
+ * every write, runs in both worlds, and relies on this to avoid a double
+ * announcement when the parent replays a child's buffered writes.
+ */
+describe('realtime bus — the job child', () => {
+  const JOB_CHILD_ENV = 'QUILLTAP_JOB_CHILD';
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.resetModules();
+    delete process.env[JOB_CHILD_ENV];
+  });
+
+  it('publishes nothing when running in the forked child', () => {
+    jest.resetModules();
+    process.env[JOB_CHILD_ENV] = '1';
+
+    // The flag is read once at module load, so the child's bus has to be a
+    // fresh import rather than the one at the top of this file.
+    const bus = require('@/lib/realtime/bus') as typeof import('@/lib/realtime/bus');
+
+    const socket = fakeSocket();
+    bus.attachRealtimeSocket(socket as never);
+    bus.publishRealtime('chats', 'c0ffee');
+    jest.advanceTimersByTime(250);
+
+    expect(socket.sent).toHaveLength(0);
+  });
+});

@@ -5,6 +5,7 @@
  * This is the main entry point for the message API route.
  */
 
+import { markMailAlertsDelivered, type MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
 import { acceptsApiKey, requiresApiKey } from '@/lib/plugins/provider-validation'
@@ -13,11 +14,13 @@ import {
   computeSkipEligibility,
   detectSkipSentinel,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterSkip,
   qualifiesForTurnSkipping,
   findActiveUserParticipant,
   isUserDrivenSeat,
   selectNextSpeakerAfterUserMessage,
   getPresentCharacterSeats,
+  loadRoomCharacters,
 } from '@/lib/chat/turn-manager'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
@@ -66,7 +69,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -93,7 +96,7 @@ import {
   triggerSceneStateTracking,
   triggerConversationRender,
 } from './memory-trigger.service'
-import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
+import { flushPendingWardrobeAnnouncements } from '@/lib/wardrobe/outfit-change-effects'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getCheapLLMProvider, profileParams, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -108,6 +111,7 @@ import {
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { shouldHoldUserTurnForPause } from './paused-hold'
 import {
   finalizeMessageResponse,
 } from './message-finalizer.service'
@@ -182,6 +186,18 @@ export const continueMessageSchema = z.object({
 })
 
 /**
+ * What of the operator's submission has reached the database during one send
+ * request. Flipped by `processMessage` right after each write succeeds and read
+ * by `handleStreamError`, so the error frame can tell the Salon whether the
+ * typed text has a row to fall back on or exists only in the client (bug 241).
+ * Chained turns run in continue mode and never flip it.
+ */
+interface SubmissionLedger {
+  userMessagePersisted: boolean
+  pendingToolResultsPersisted: boolean
+}
+
+/**
  * Handle sending a message and streaming the response
  */
 export async function handleSendMessage(
@@ -191,11 +207,12 @@ export async function handleSendMessage(
   options: SendMessageOptions
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder()
+  const ledger: SubmissionLedger = { userMessagePersisted: false, pendingToolResultsPersisted: false }
 
   return new ReadableStream({
     async start(controller) {
       try {
-        const result = await processMessage(repos, chatId, userId, options, controller, encoder)
+        const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
 
         await executeTurnChain({
           repos,
@@ -218,7 +235,8 @@ export async function handleSendMessage(
               autonomousContextCap: options.autonomousContextCap,
             },
             controller,
-            encoder
+            encoder,
+            ledger
           ),
           neverPauseForUser: options.neverPauseForUser === true,
           singleTurn: options.singleTurn === true,
@@ -256,7 +274,7 @@ export async function handleSendMessage(
 
         safeClose(controller)
       } catch (error) {
-        handleStreamError(error, controller, encoder)
+        handleStreamError(error, controller, encoder, { chatId, ledger })
       }
     },
   })
@@ -271,7 +289,8 @@ async function processMessage(
   userId: string,
   options: SendMessageOptions,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  ledger: SubmissionLedger
 ): Promise<ProcessMessageResult> {
   const isContinueMode = options.continueMode === true
 
@@ -285,6 +304,31 @@ async function processMessage(
   const chat = await repos.chats.findById(chatId)
   if (!chat) {
     throw new Error('Chat not found')
+  }
+
+  // ============================================================================
+  // Paused chat — hold the user's turn
+  // ============================================================================
+  // A paused conversation never moves on its own. A typed message is still
+  // recorded in full (attachments, staged tool results, auto-detected rolls,
+  // inline Carina queries) — it simply draws no reply: the floor stays where the
+  // user left it until they nudge a specific character (one turn, still paused)
+  // or press Resume. Continue-mode turns are the explicit summons themselves —
+  // Nudge, Skip, the all-LLM modal's Continue, an autonomous-room turn — so they
+  // are never held; the chain that would follow one is what `executeTurnChain`
+  // stops while `isPaused` stands.
+  const holdForPausedChat = shouldHoldUserTurnForPause({
+    isContinueMode,
+    chatIsPaused: chat.isPaused === true,
+    neverPauseForUser: options.neverPauseForUser,
+  })
+  if (holdForPausedChat) {
+    logger.info('[Orchestrator] Chat paused — recording the user message without a reply', {
+      chatId,
+      userId,
+      hasContent: !!options.content,
+      attachmentCount: options.fileIds?.length ?? 0,
+    })
   }
 
   // Resolve responding participant
@@ -310,6 +354,10 @@ async function processMessage(
   // speaker), as does any single-user-seat room (the common case is untouched).
   if (
     !isContinueMode &&
+    // A paused chat already holds every user post below — and holds it more
+    // completely (staged tool results, auto-detected rolls, danger flags). The
+    // fairness guard would persist a thinner copy of the same message first.
+    !holdForPausedChat &&
     !options.respondingParticipantId &&
     !(options.targetParticipantIds && options.targetParticipantIds.length > 0) &&
     !options.nudge &&
@@ -326,7 +374,12 @@ async function processMessage(
       controller,
       encoder,
     )
-    if (pauseResult) return pauseResult
+    if (pauseResult) {
+      // The fairness pause returns only after it has saved the user's message.
+      ledger.userMessagePersisted = true
+      logger.debug('[Orchestrator] User message persisted (fair-rotation pause)', { chatId })
+      return pauseResult
+    }
   }
 
   const participantResult = await resolveRespondingParticipant(
@@ -446,8 +499,10 @@ async function processMessage(
   // ============================================================================
 
   // Check if full context was requested (requestFullContextOnNextMessage flag)
+  // Held posts build no request, so the flag must survive to be spent by the
+  // turn the user eventually asks for.
   let bypassCompression = false
-  if (chat.requestFullContextOnNextMessage === true) {
+  if (chat.requestFullContextOnNextMessage === true && !holdForPausedChat) {
     bypassCompression = true
     // Reset the flag
     await repos.chats.update(chatId, { requestFullContextOnNextMessage: false })
@@ -514,8 +569,13 @@ async function processMessage(
     encoder,
   })
 
-  let dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
-  const dangerSettings = dangerState.dangerSettings
+  const dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
+  // Flagged by the pre-screen, or headed straight for the uncensored desk on an
+  // Unmoderated chat (which writes no per-message flags): either way the
+  // failover service reads an empty body as a refusal and clears stand-ins
+  // for the content.
+  const contentTreatedAsDangerous = (dangerFlags?.length ?? 0) > 0 || dangerState.routedDirect
+  const conciergePolicy = dangerState.conciergePolicy
 
   // Mutable streaming state — threaded through failover and finalization by reference
   const streamingState: StreamingState = {
@@ -529,6 +589,13 @@ async function processMessage(
     thoughtSignature: undefined,
     reasoningContent: undefined,
     hasStartedStreaming: false,
+    // The route trail starts empty and is written only by route-trail.ts.
+    routeFailures: [],
+    // The Concierge's *pre-call* reroute swapped the profile before anything
+    // was tried, so the original gets no row — but the profile now holding the
+    // turn was sent by the Concierge, and the trail should say so if it in turn
+    // fails and an understudy answers.
+    routeVia: dangerState.effectiveProfile.id !== connectionProfile.id ? 'concierge' : 'primary',
   }
 
   // Get roleplay template
@@ -596,7 +663,11 @@ async function processMessage(
   const messageCount = existingMessages.filter(m => m.type === 'message').length
   // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
   // re-injects at multiples of N thereafter.
-  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
+  // Both whispers below brief the character about to take the floor. On a held
+  // post nobody does, so the cadence waits for the turn the user asks for.
+  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0
+    && messageCount % reinjectInterval === 0
+    && !holdForPausedChat
 
   if (shouldInjectContext) {
     const projectContext = project ? await loadProsperoProjectContext(project.id) : null
@@ -678,6 +749,11 @@ async function processMessage(
       // (existingMessages was loaded before this save operation)
       existingMessages.push(toolMessage)
     }
+    ledger.pendingToolResultsPersisted = true
+    logger.debug('[Orchestrator] Pending tool results persisted', {
+      chatId,
+      count: options.pendingToolResults.length,
+    })
   }
 
   // ============================================================================
@@ -749,6 +825,8 @@ async function processMessage(
     }
 
     await repos.chats.addMessage(chatId, userMessage)
+    ledger.userMessagePersisted = true
+    logger.debug('[Orchestrator] User message persisted', { chatId, userMessageId })
 
     // Link file attachments
     for (const file of fileProcessing.attachedFiles) {
@@ -821,6 +899,24 @@ async function processMessage(
       // character to respond in the same cycle hears it (parallels the
       // RNG-result push above; the DB copy already covers later turns).
       onPublicAnswer: (msg) => existingMessages.push(msg),
+    })
+  }
+
+  // ============================================================================
+  // Paused chat — the user's turn is recorded; nobody answers it
+  // ============================================================================
+  // Everything above belongs to the message the user just wrote. Everything
+  // below belongs to a character's turn, and a paused room grants none. Stop
+  // here, before a single token is spent on tools, context or the model.
+  if (holdForPausedChat) {
+    return finishHeldUserTurn({
+      repos,
+      chatId,
+      isMultiCharacter,
+      userMessageId,
+      userParticipantId,
+      controller,
+      encoder,
     })
   }
 
@@ -955,7 +1051,7 @@ async function processMessage(
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
       canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
       canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
-      documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
+      documentEditingEnabled ? 'full' : 'off', // docToolsMode - the full doc_* family when stores are linked
       askCarinaEnabled, // askCarinaEnabled - enables ask_carina tool when an answerer exists
       undefined, // includeWorkspaceTools - Salon turns keep the always-on set
       undefined, // excludeMemorySearch - Brahma Console only
@@ -1065,11 +1161,12 @@ async function processMessage(
     ),
   )
 
+  const presentParticipantNames = [character.name, ...[...participantCharacters.values()].map(c => c.name)]
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+
   const {
     cachedCompressionResponse,
-    preSearchedMemories,
-    recallSignals,
-    preSearchedQueryEmbedding,
+    preRecall,
     stopKeepAlive,
   } = await runPreContextPreCompute({
     chatId,
@@ -1079,13 +1176,14 @@ async function processMessage(
     characterParticipant,
     isMultiCharacter,
     presentAboutCharacterIds,
+    presentParticipantNames,
     isContinueMode,
     content,
     existingMessages,
     compressionEnabled,
     bypassCompression,
     cheapLLMSelection,
-    dangerSettings,
+    conciergePolicy,
     allProfiles,
     controller,
     encoder,
@@ -1144,13 +1242,12 @@ async function processMessage(
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
-      preSearchedMemories,
-      recallSignals,
-      preSearchedQueryEmbedding,
-      // Memory recap: uncensored fallback for dangerous chats. Off-duty
-      // chats opt out, so the fallback is not engaged for them.
-      uncensoredFallbackOptions: (shouldUseUncensoredRoute(chat) && dangerSettings && cheapLLMSelection)
-        ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
+      preRecall,
+      // Memory recap: uncensored fallback for Unmoderated chats. The policy
+      // routes direct only when the Concierge is on duty and the chat is
+      // Unmoderated, so off-duty and exempt chats never engage it.
+      uncensoredFallbackOptions: (conciergePolicy?.routeDirect && cheapLLMSelection)
+        ? { conciergePolicy, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {
@@ -1387,6 +1484,10 @@ async function processMessage(
     characterParticipant,
     streaming: streamingState,
     preGeneratedAssistantMessageId,
+    // A preserved partial is a persisted turn, so it spends this turn's
+    // informs exactly as a completed one does.
+    informRowIds: builtContext.informRowIds,
+    mailAlertsOwed: builtContext.mailAlertsOwed,
   })
 
   const previousResponseId = findPreviousResponseId(
@@ -1418,7 +1519,8 @@ async function processMessage(
     // stand-in must be cleared for it, or the fallback would hand the content
     // straight back to the moderation that refused it.
     isDangerousRouted:
-      (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
+      contentTreatedAsDangerous || streamingState.effectiveProfile.id !== connectionProfile.id,
+    conciergePolicy,
     streaming: streamingState,
     controller,
     encoder,
@@ -1552,13 +1654,14 @@ async function processMessage(
     })
   }
 
-  const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
+  const contentWasFlaggedDangerous = contentTreatedAsDangerous
   const { uncensoredRetryAttempted, sameProviderRetryAttempted, chainAttempts } =
     await attemptEmptyResponseRecovery({
       state: streamingState,
       toolMessagesLength: toolMessages.length,
       contentWasFlaggedDangerous,
-      dangerSettings,
+      conciergePolicy,
+      conciergeState: getConciergeState(chat),
       connectionProfile,
       formattedMessages,
       modelParams,
@@ -1625,6 +1728,7 @@ async function processMessage(
           streaming: streamingState,
           controller,
           encoder,
+          mailAlertsOwed: builtContext.mailAlertsOwed,
         })
       } else {
         // Sentinel when the skip option wasn't offered: route to the existing
@@ -1666,7 +1770,7 @@ async function processMessage(
         allProfiles,
       },
       triggers: {
-        dangerSettings,
+        conciergePolicy,
         chatSettings,
         participantCharacters,
         resolvedIdentity,
@@ -1689,6 +1793,9 @@ async function processMessage(
       characterParticipant.id,
       toolWhisperContext
     )
+
+    // The model read this turn's mail and acted (tools ran); the turn is kept.
+    await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'tool-only' })
 
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
@@ -1737,7 +1844,8 @@ async function processMessage(
       })),
       finishReason: emptyFinishReason,
       moderationRefusal: isModerationFinishReason(emptyFinishReason),
-      dangerMode: dangerSettings.mode,
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,
     })
@@ -1761,6 +1869,50 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
+  }
+}
+
+/**
+ * Close out a user turn that a paused chat held.
+ *
+ * The message and its side effects are already persisted by the time this is
+ * called; all that remains is to leave the floor empty and tell the Salon why
+ * the room said nothing. The `paused` chain-complete is the same event a
+ * mid-chain pause emits, so the client reconciles its pause flag through the
+ * one path it already has (bug 123) — it just arrives at depth 0, before any
+ * character has spoken.
+ */
+async function finishHeldUserTurn(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  isMultiCharacter: boolean
+  userMessageId: string | null
+  userParticipantId: string | null
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const { repos, chatId, isMultiCharacter, userMessageId, userParticipantId, controller, encoder } = params
+
+  // Nobody is on deck: the rotation resumes from wherever the user left it, and
+  // a stale pending seat would have the Salon announce a turn that isn't coming.
+  await repos.chats.update(chatId, { lastTurnParticipantId: null })
+
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'paused',
+    nextSpeakerId: null,
+    chainDepth: 0,
+    paused: true,
+    heldUserTurn: true,
+  }))
+
+  return {
+    isMultiCharacter,
+    // No character took the floor, so the turn chain stops before it starts and
+    // neither scene tracking nor the Scriptorium render fires for this message.
+    hasContent: false,
+    messageId: userMessageId,
+    userParticipantId,
+    isPaused: true,
   }
 }
 
@@ -1806,12 +1958,7 @@ async function maybePauseForUserSeatTurn(
   if (userDrivenSeatCount < 2) return null
 
   // Talkativeness lives on the character record — build the weight map.
-  const charactersMap = new Map<string, Character>()
-  for (const p of activeChars) {
-    if (!p.characterId) continue
-    const char = await repos.characters.findById(p.characterId)
-    if (char) charactersMap.set(p.characterId, char)
-  }
+  const charactersMap = await loadRoomCharacters(repos, chat.participants)
 
   const next = selectNextSpeakerAfterUserMessage(
     chat.participants,
@@ -1821,6 +1968,7 @@ async function maybePauseForUserSeatTurn(
     chat.turnQueue,
     posterSeat.id,
     chat.impersonatingParticipantIds,
+    chat.cycleOrderParticipantIds,
   )
   const nextSeat = next.nextSpeakerId
     ? chat.participants.find(p => p.id === next.nextSpeakerId)
@@ -1929,6 +2077,8 @@ async function handleTurnSkip(params: {
   streaming: StreamingState
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
+  /** This turn's announced letters: a deliberate pass still read them. */
+  mailAlertsOwed: MailAlertsOwed | null
 }): Promise<ProcessMessageResult> {
   const {
     repos,
@@ -1940,6 +2090,7 @@ async function handleTurnSkip(params: {
     streaming,
     controller,
     encoder,
+    mailAlertsOwed,
   } = params
 
   logger.info('[TurnSkip] Character passed the turn', {
@@ -1947,6 +2098,10 @@ async function handleTurnSkip(params: {
     characterId: character.id,
     participantId: characterParticipant.id,
   })
+
+  // A pass is an answer: the character read its mail and chose to say
+  // nothing. Mark the letters so the next turn does not announce them again.
+  await markMailAlertsDelivered(mailAlertsOwed, { chatId, via: 'turn-skip' })
 
   // Post the Host announcement (errors swallowed by the writer contract).
   const hostMessage = await postHostTurnPassAnnouncement({
@@ -1968,9 +2123,18 @@ async function handleTurnSkip(params: {
         freshChat.participants,
         freshChat.spokenThisCycleParticipantIds,
       )
+      const orderUpdate = computeCycleOrderAfterSkip(
+        characterParticipant.id,
+        freshChat.cycleOrderParticipantIds,
+      )
       const updatePayload: Record<string, unknown> = { updatedAt: new Date().toISOString() }
       if (cycleUpdate !== null) {
         updatePayload.spokenThisCycleParticipantIds = cycleUpdate
+      }
+      if (orderUpdate !== null) {
+        // A pass spends the turn: the character leaves this cycle's rotation
+        // exactly as a spoken line would have taken them out of it.
+        updatePayload.cycleOrderParticipantIds = orderUpdate
       }
       await repos.chats.update(chatId, updatePayload)
     }
@@ -2016,9 +2180,15 @@ async function handleTurnSkip(params: {
 function handleStreamError(
   error: unknown,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  context: { chatId: string; ledger: SubmissionLedger }
 ): void {
-  logger.error('Streaming error', {}, error as Error)
+  const { chatId, ledger } = context
+  logger.error('Streaming error', {
+    chatId,
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  }, error as Error)
 
   let errorMessage = 'Unknown error'
   let errorType = 'unknown'
@@ -2036,6 +2206,15 @@ function handleStreamError(
   }
 
   // Use safe methods to prevent crash if stream is already closed
-  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage))
+  logger.debug('[Orchestrator] Emitting error frame', {
+    chatId,
+    errorType,
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  })
+  safeEnqueue(controller, encodeErrorEvent(encoder, 'Failed to generate response', errorType, errorMessage, {
+    userMessagePersisted: ledger.userMessagePersisted,
+    pendingToolResultsPersisted: ledger.pendingToolResultsPersisted,
+  }))
   safeClose(controller)
 }

@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, created, conflict, notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -26,25 +26,19 @@ import type { ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-t
  * GET /api/v1/image-profiles
  * List all image profiles or get available models
  */
-export const GET = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const GET = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    {
+      'list-providers': () => handleListProviders(req, context),
+      'list-models': () => handleListModels(req, context),
+      'options-schema': async () => handleOptionsSchema(req),
+    },
+    () => handleListProfiles(req, context)
+  )
+);
 
-  // Handle list-providers action
-  if (action === 'list-providers') {
-    return handleListProviders(req, context);
-  }
-
-  // Handle list-models action
-  if (action === 'list-models') {
-    return handleListModels(req, context);
-  }
-
-  // Handle options-schema action
-  if (action === 'options-schema') {
-    return handleOptionsSchema(req);
-  }
-
+async function handleListProfiles(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
   try {
     const { searchParams } = req.nextUrl;
     const sortByCharacter = searchParams.get('sortByCharacter');
@@ -117,7 +111,7 @@ export const GET = createContextHandler(async (req, context) => {
     logger.error('[Image Profiles v1] Error listing profiles', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch image profiles');
   }
-});
+}
 
 /**
  * Handle list-models action
@@ -437,20 +431,18 @@ async function handleLoraMetadata(req: NextRequest) {
  * POST /api/v1/image-profiles?action=validate-key - Validate an API key
  * POST /api/v1/image-profiles?action=lora-metadata - Look up a LoRA source on HuggingFace
  */
-export const POST = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const POST = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    {
+      'validate-key': () => handleValidateKey(req, context),
+      'lora-metadata': () => handleLoraMetadata(req),
+    },
+    () => handleCreateProfile(req, context)
+  )
+);
 
-  // Handle validate-key action
-  if (action === 'validate-key') {
-    return handleValidateKey(req, context);
-  }
-
-  // Handle lora-metadata action
-  if (action === 'lora-metadata') {
-    return handleLoraMetadata(req);
-  }
-
+async function handleCreateProfile(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
   try {
     const body = await req.json();
     const {
@@ -542,4 +534,4 @@ export const POST = createContextHandler(async (req, context) => {
     logger.error('[Image Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to create image profile');
   }
-});
+}

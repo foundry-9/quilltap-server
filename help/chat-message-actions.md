@@ -128,6 +128,46 @@ Get an alternative response:
 - The newest version is shown in place; the original is kept one swipe away in the same group
 - Token usage counts for each generation
 
+#### Try Uncensored
+
+Beside the refresh icon, on a character's line, sits a small **shield** labelled *Try uncensored*. It re-rolls the line exactly as the refresh icon does — a new swipe, narrated as it arrives — except that the Concierge hands it to the uncensored desk rather than the character's usual provider. It is the remedy for a line the provider declined politely, or softened past usefulness. The chat's own posture is not changed. The shield is absent on a **Locked** chat. See [The Concierge](the-concierge.md).
+
+#### Watching a Regeneration Happen
+
+A re-roll no longer asks you to take it on faith. From the moment you press the
+refresh icon until the new line is filed, the Salon reports itself in three
+places at once:
+
+- **The line being replaced dims**, greys, and wears a small plate reading
+  *Regenerating…* — a plain statement that what you are looking at is on its way
+  out and not to be trusted.
+- **The new line arrives in its place, word by word**, the instant the character
+  begins to speak. The plate withdraws the moment there is prose to read, so
+  there is never a blank gap between the old line and the new one. (A model that
+  declines to stream simply delivers the whole passage at once; the plate holds
+  until it does.)
+- **A notice above the composer** carries the stage of the business —
+  *Regenerating — gathering Riya's memories and context…*, then *…sending to
+  Riya…*, then *Regenerating Riya's reply…* — exactly as it does when a line is
+  spoken for the first time.
+
+While all this is going on the composer is **shut** and the message's own row of
+icons is **greyed out**. Neither is an oversight: a remark typed on top of a
+turn in flight, or a second re-roll pressed on a line already mid-replacement,
+is precisely the sort of accident that produces a transcript nobody can account
+for afterwards. Both open again the instant the new line is in the record.
+
+When the regeneration finishes, the version you just watched arrive is the
+version left on display — the swipe counter advances to it, and the line it
+replaced remains one swipe to the left.
+
+If the character's model shows its thinking (see
+[Chat Settings](chat-settings.md)), that too appears live while the re-roll runs.
+
+Should the whole business fail — a provider that refuses, or one that accepts
+the request and then falls silent — you are told so in a notice, the old line is
+restored untouched, and the composer opens again.
+
 **Use cases:**
 - Response doesn't fit the character
 - Want to see different approaches
@@ -194,6 +234,8 @@ When a message has an image pinned beneath it — whether the Lantern just lit a
 The same image saved twice into the same album is politely refused — you'll see a small note explaining when it was first kept. Save it to a different album and you'll have two records, both pointing at the same underlying bytes (Quilltap does not waste storage on duplication).
 
 This is the operator-facing twin of the characters' own `keep_image` tool; everything an LLM can preserve, you can now preserve too.
+
+The same dialog has a second door. The ribbon's bookmark can only reach an image pinned beneath a message, and a great many of a conversation's pictures — a backdrop the Lantern painted quietly, a character's standing portrait — are pinned beneath nothing at all. The **Gallery** in the sidebar's Organize drawer lays out every picture in the conversation and offers this same album picker on each of them. See [The Chat Gallery](chat-gallery.md).
 
 ### Reattribute Message (Multi-Character)
 
@@ -293,6 +335,8 @@ Find and replace text across all messages:
 - Correct repeated spelling errors
 - Update character names
 - Fix terminology across conversation
+
+When memories are included, each altered memory is re-read by the Commonplace Book on the spot, so that a memory of "Lauren" is thereafter recalled as Lauren and not as the "Laura" it once was. Should the embedding provider be indisposed at that moment, the memory in question is left precisely as it was and named in the list of errors, rather than wearing new words over an old understanding.
 
 ### Bulk Character Replace
 

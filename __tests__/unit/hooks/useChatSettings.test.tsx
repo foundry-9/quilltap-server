@@ -73,7 +73,6 @@ describe('useChatSettings — optimistic update', () => {
 
   it.each([
     ['handleImageDescriptionProfileChange', 'imageDescriptionProfileId'],
-    ['handleUncensoredImageDescriptionProfileChange', 'uncensoredImageDescriptionProfileId'],
   ] as const)('%s PUTs the profile and applies the response without a revalidating GET', async (handler, field) => {
     const { result } = renderHook(() => useChatSettings(), { wrapper })
 
@@ -92,5 +91,75 @@ describe('useChatSettings — optimistic update', () => {
     expect(JSON.parse(String((put![1] as RequestInit).body))).toEqual({ [field]: 'profile-1' })
     expect((result.current.settings as unknown as Record<string, unknown>)?.[field]).toBe('profile-1')
     expect(countSettingsGets(mockFetch)).toBe(getsBefore)
+  })
+
+  it('handleConciergeUpdate deep-merges display and preScreen, keeping every other field', async () => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+
+    const putBodies = () =>
+      mockFetch.mock.calls
+        .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+
+    await act(async () => {
+      await result.current.handleConciergeUpdate({ display: { mode: 'BLUR' } })
+    })
+    await act(async () => {
+      await result.current.handleConciergeUpdate({ preScreen: { enabled: true }, autoSwitchAfterRefusals: 5 })
+    })
+
+    const [first, second] = putBodies()
+    expect(first.conciergeSettings.display).toEqual({ mode: 'BLUR', showWarningBadges: true })
+    expect(first.conciergeSettings.preScreen.enabled).toBe(false)
+    // The second update keeps the first's display change and every preScreen default.
+    expect(second.conciergeSettings.display).toEqual({ mode: 'BLUR', showWarningBadges: true })
+    expect(second.conciergeSettings.preScreen).toMatchObject({ enabled: true, threshold: 0.7, scanTextChat: true })
+    expect(second.conciergeSettings.autoSwitchAfterRefusals).toBe(5)
+    expect(second.conciergeSettings.enabled).toBe(true)
+    expect(result.current.settings?.conciergeSettings?.preScreen.enabled).toBe(true)
+  })
+
+  it('handleWardrobeImageProfileChange PUTs the designated profile, and null for the default', async () => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+
+    const putBodies = () =>
+      mockFetch.mock.calls
+        .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange('profile-1')
+    })
+    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: false })
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange(null)
+    })
+
+    expect(putBodies()).toEqual([
+      { wardrobeImageSettings: { imageProfileId: 'profile-1', generateFromTools: false } },
+      { wardrobeImageSettings: { imageProfileId: null, generateFromTools: false } },
+    ])
+  })
+
+  it('handleWardrobeImageGenerateFromToolsChange PUTs the switch and keeps the designated profile', async () => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange('profile-1')
+    })
+    await act(async () => {
+      await result.current.handleWardrobeImageGenerateFromToolsChange(true)
+    })
+
+    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: true })
+    const lastPut = mockFetch.mock.calls
+      .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+      .pop()
+    expect(lastPut).toEqual({ wardrobeImageSettings: { imageProfileId: 'profile-1', generateFromTools: true } })
   })
 })

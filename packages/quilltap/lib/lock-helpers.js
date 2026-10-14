@@ -111,6 +111,70 @@ function getLockStatus(dataDir) {
 }
 
 // ============================================================================
+// Server port resolution
+//
+// CLI tools that talk to a RUNNING server over HTTP (memory-diff, recall-replay,
+// anchor-probe, memories consolidate) need its port. The server records the
+// port it listens on in the instance lock, so naming an instance (or a data
+// dir) is enough to find it. An explicit --port always wins.
+// ============================================================================
+
+const DEFAULT_SERVER_PORT = 3000;
+
+/**
+ * Decide which port to call.
+ *
+ * @param {{ port?: number, instance?: string, dataDir?: string }} opts
+ *   `port` is the explicit --port (undefined when not given).
+ * @returns {{ port: number, source: 'flag'|'lock'|'default', note: string|null,
+ *            hint: string }}
+ *   `note` is a one-line message to print when the lock supplied the port;
+ *   `hint` is the connection-failure advice.
+ * @throws if both instance and dataDir are given, or the instance is unknown.
+ */
+function resolveServerPort({ port, instance, dataDir } = {}) {
+  const baseHint = 'Start the server (npm run dev) or pass --port to match a non-default port.';
+  if (port !== undefined && port !== null) {
+    return { port, source: 'flag', note: null, hint: baseHint };
+  }
+  if (!instance && !dataDir) {
+    return { port: DEFAULT_SERVER_PORT, source: 'default', note: null, hint: baseHint };
+  }
+
+  // Lazy require: db-helpers is heavier and nothing else here needs it.
+  const { resolveDataDirAndPassphrase } = require('./db-helpers');
+  const resolved = resolveDataDirAndPassphrase({ instance, dataDir });
+  const label = resolved.instanceName || resolved.dataDir;
+  const status = getLockStatus(resolved.dataDir);
+  const lockPort = status.lock && Number.isInteger(status.lock.port) &&
+    status.lock.port >= 1 && status.lock.port <= 65535
+    ? status.lock.port
+    : null;
+
+  if (status.state === 'active' && lockPort !== null) {
+    return {
+      port: lockPort,
+      source: 'lock',
+      note: `Using port ${lockPort} from the ${label} instance lock`,
+      hint: baseHint,
+    };
+  }
+
+  let why;
+  if (status.state === 'active') why = 'its lock records no port (server predates port recording)';
+  else if (status.state === 'absent') why = 'it has no instance lock, so no server appears to be running';
+  else if (status.state === 'stale') why = `its lock is stale (${status.reason})`;
+  else if (status.state === 'suspect') why = `its lock looks suspect (${status.reason})`;
+  else why = 'its lock file is unreadable';
+  return {
+    port: DEFAULT_SERVER_PORT,
+    source: 'default',
+    note: null,
+    hint: `${baseHint}\nNo port found for the ${label} instance: ${why}; fell back to ${DEFAULT_SERVER_PORT}.`,
+  };
+}
+
+// ============================================================================
 // Write-lock acquire / release
 //
 // When the CLI opens the database read-write (`quilltap db --write`), it must
@@ -354,4 +418,6 @@ module.exports = {
   acquireWriteLock,
   releaseWriteLock,
   detectEnvironmentType,
+  resolveServerPort,
+  DEFAULT_SERVER_PORT,
 };

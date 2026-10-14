@@ -72,7 +72,9 @@ You may also manage document stores through the API at `/api/v1/mount-points` if
 
 A library in which *Lore* and *lore* are two different rooms is a library designed by a prankster, and the Scriptorium will have none of it. Names here are compared without regard to capitalization, and no two things at the same level may share one:
 
-- **Store names are unique.** Attempting to create or rename a store to a name another store already holds — even dressed in different capitals — is politely declined, and you will be asked to choose another. Stores Quilltap conjures on its own behalf (project file stores, character vaults, and the like) sidestep the collision by appending a discreet ` (2)`, ` (3)`, and so on; two characters who share a name thus receive distinctly named vaults.
+- **Store names are unique.** A store's name is its address — in every `qtap://` link and every request a character makes of the Scriptorium — so no two stores may ever answer to the same one, not even dressed in different capitals. Attempting to create or rename a store to a name another already holds is politely declined, and you will be asked to choose another; a restored backup or an imported bundle whose stores would collide with yours brings them in under a discreet ` (2)`, ` (3)`, and so on. Stores Quilltap conjures on its own behalf (project file stores and the like) do the same.
+- **A character's vault wears the character's name.** The vault a character presently keeps is always called `<Character Name> Character Vault`, and follows the character through any change of name; to rename the vault, rename the character, for the Scriptorium will decline to rename it on its own. Only when two characters share a name does the second take a ` (2)`.
+- **Old vaults are retired, not discarded.** A vault no character keeps any longer — one left behind by a restore, by a vault conjured afresh, or by a character who has since been deleted — keeps every page it holds but is retired under the name `<Character Name> Version <date and time> Store` (for instance `Tester Version 2026-10-09T164506Z Store`, the moment it was first made, in UTC), so the plain name is free for the vault in service. Quilltap tidies these names at every start, after a restore or import, and whenever a character is renamed or deleted. A retired vault you have renamed to something of your own is left as you named it.
 - **Folders and files within a database-backed store follow the same rule.** Sibling folders may not differ only by casing, nor may two files at the same path. Writing to `lore/notes.md` when a `Lore` folder already exists simply files the note in `Lore`, keeping the folder's original capitalization; saving over `Notes.md` as `notes.md` updates the existing document rather than minting a shadow copy.
 - **Changing only the capitalization of a name is always allowed.** Renaming `notes.md` to `Notes.md`, or `lore` to `Lore`, does exactly what you intend — no spurious "destination already exists" objections.
 - **Existing collisions are tidied automatically — and re-checked at every opening.** Should an older library arrive carrying such duplicates, or should some enterprising soul introduce them by rummaging in the database directly, the inspection that runs each time Quilltap starts will find them: the newer of the two is renamed with a ` (2)` suffix (subfolders and files moving with it), and a note of the correction is made in the logs.
@@ -169,6 +171,34 @@ A word on how the three relate: **`character_read` is the master switch.** A vol
 Crucially, **these flags govern your characters, never you.** The human at the desk — in Document Mode, the Open-Document picker, or the Brahma Console — sees and edits every document regardless of what its frontmatter says. The flags are the means by which you, the proprietor, keep certain volumes for your own consultation while leaving the rest of the library open to your characters.
 
 Only Markdown documents carry frontmatter, so only they may bear these instructions; other formats (PDFs, plain text, and the like) remain fully accessible as before. And because the flags are read afresh each time a document is re-indexed, the way to change a document's discretion is simply to edit its frontmatter — at the desk, or directly on disk in your editor of choice — and let the Scriptorium take note on its next pass.
+
+## Mirroring a Store to a Directory
+
+A database-backed store may be kept in step with an ordinary directory on disk
+by way of `quilltap sync` — edit a chapter in your own text editor, and the
+next run carries it into the store; edit it here, and the next run carries it
+back out. The full account lives in
+[Keeping a Store and a Directory in Step](cli-sync.md), but two conventions
+are worth knowing wherever document stores are discussed, because you will
+meet both the moment you look inside such a directory.
+
+**Anything beginning with a dot is invisible to the sync, in both
+directions.** A file or folder whose name starts with `.` — or that sits
+anywhere beneath one — is never read, never copied, and never deleted, on
+either side. Your `.git` directory and your editor's scratch files stay out of
+your store; a dot-named file in your store stays off your disk. The single
+exception is `.quilltap-sync.json`, a small record the verb keeps in the
+directory of what the last run left on both sides. It is what allows the sync
+to tell "this file is new here" from "this file was deleted there", it never
+enters the store, and `--no-manifest` makes the verb disregard it.
+
+**A binary's description travels beside it.** An image or PDF that carries a
+description keeps it, on disk, in a small Markdown file named after the whole
+file with `.description.md` appended — so `harbour.png` is accompanied by
+`harbour.png.description.md`. Edit that file and the caption changes in the
+store; delete it and the caption is cleared. Text documents' descriptions are
+not mirrored this way, on the reasonable grounds that a Markdown file's
+contents are already its own description.
 
 ## In-Chat Navigation
 

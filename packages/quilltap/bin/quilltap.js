@@ -11,8 +11,10 @@ const {
   printDefaultInstanceHint,
   promptPassphrase,
   loadDbKey,
+  openEncryptedDb,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
+const { decodeCompressedTextInRows } = require('../lib/text-codec');
 const { resolveModuleDir, ensureNativeModules, ensureDatabaseNativeModule } = require('../lib/native-modules');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
@@ -92,6 +94,7 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  sync <store> <path>           Mirror a database-backed store to a directory
   memories                      Search, browse, and graph memories
   instances                     Register / inspect named Quilltap instances
   logs                          Tail or print an instance log file
@@ -100,6 +103,7 @@ Subcommands:
   file-verify                   Force-download cloud-evicted data files (iCloud, etc.)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
   recall-replay <chatId>        Replay a turn's memory recall, old vs episodic ranking
+  anchor-probe <characterId>    Probe whether episodic anchor lines suppress reinforcement at admission
   completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
 Options:
@@ -484,6 +488,51 @@ function verifyPidIsNode(pid, expectedArgv0) {
   }
 }
 
+const HEARTBEAT_FRESH_MS = 5 * 60 * 1000;
+
+/**
+ * The freshness window in words, derived from the constant the check actually
+ * uses — so the sentence `--lock-clean` prints cannot drift away from the
+ * behaviour it describes.
+ */
+function describeFreshWindow() {
+  const seconds = Math.round(HEARTBEAT_FRESH_MS / 1000);
+  if (seconds % 60 !== 0) return `${seconds} seconds`;
+  const minutes = seconds / 60;
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
+/**
+ * Decide whether a lock record belongs to a live process.
+ *
+ * A hostname that differs from ours does NOT mean a different machine: macOS
+ * derives gethostname() dynamically when `scutil --get HostName` is unset, so
+ * one Mac reports e.g. "MacBook-Pro.local" and "Mac" at different times. So
+ * check PID liveness regardless of the recorded name, and fall back to
+ * heartbeat freshness for any environment rather than only for containers.
+ * See bug 126.
+ */
+function assessLock(lock, hostname) {
+  const sameHost = lock.hostname === hostname;
+  const alive = isPidAlive(lock.pid);
+  const isNode = alive ? verifyPidIsNode(lock.pid, lock.processArgv0 || '') : false;
+  const heartbeatAgeMs = lock.lastHeartbeat
+    ? Date.now() - new Date(lock.lastHeartbeat).getTime()
+    : Infinity;
+  const heartbeatFresh = heartbeatAgeMs < HEARTBEAT_FRESH_MS;
+
+  return {
+    sameHost,
+    alive,
+    isNode,
+    heartbeatAgeMs,
+    heartbeatFresh,
+    // Held by something running: a confirmed local process, or any holder
+    // still refreshing its heartbeat.
+    live: (alive && isNode) || heartbeatFresh,
+  };
+}
+
 /**
  * Handle --lock-status, --lock-clean, --lock-override commands.
  */
@@ -518,32 +567,20 @@ function handleLockCommand(dataDir, opts) {
       return;
     }
 
-    const sameHost = lock.hostname === hostname;
-    const alive = sameHost && isPidAlive(lock.pid);
-    const isNode = alive ? verifyPidIsNode(lock.pid, lock.processArgv0 || '') : false;
+    const { sameHost, alive, isNode, heartbeatAgeMs, heartbeatFresh } =
+      assessLock(lock, hostname);
 
     // Status line
     let status;
     if (alive && isNode) {
       status = '\x1b[32mACTIVE\x1b[0m (process confirmed running)';
+    } else if (heartbeatFresh) {
+      const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+      status = `\x1b[32mACTIVE\x1b[0m (${lock.environment || 'unknown'}, heartbeat ${ageStr} ago)`;
     } else if (alive && !isNode) {
       status = '\x1b[33mSUSPECT\x1b[0m (PID alive but does not look like Quilltap — possible PID reuse)';
     } else if (!sameHost) {
-      // Different hostname — could be a container on this machine
-      const isVMOrContainer = lock.environment === 'docker';
-      const heartbeatAgeMs = lock.lastHeartbeat
-        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
-        : Infinity;
-      const heartbeatFreshMs = 5 * 60 * 1000;
-
-      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
-        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
-        status = `\x1b[32mACTIVE (${lock.environment}, heartbeat ${ageStr} ago)\x1b[0m`;
-      } else if (isVMOrContainer) {
-        status = `\x1b[33mSTALE (${lock.environment}, no recent heartbeat)\x1b[0m — will be auto-claimed on next startup`;
-      } else {
-        status = '\x1b[33mSTALE (different host)\x1b[0m — will be auto-claimed on next startup';
-      }
+      status = `\x1b[33mSTALE (${lock.environment || 'unknown'} on ${lock.hostname}, no recent heartbeat)\x1b[0m — will be auto-claimed on next startup`;
     } else {
       status = '\x1b[31mSTALE (process dead)\x1b[0m — will be auto-claimed on next startup';
     }
@@ -551,10 +588,13 @@ function handleLockCommand(dataDir, opts) {
     console.log(`Instance Lock Status: ${status}`);
     console.log();
     console.log(`  PID:          ${lock.pid}`);
-    console.log(`  Hostname:     ${lock.hostname}${sameHost ? ' (this host)' : ' (different host)'}`);
+    console.log(`  Hostname:     ${lock.hostname}${sameHost ? ' (this host)' : ` (recorded name differs from ours: ${hostname})`}`);
     console.log(`  Environment:  ${lock.environment || 'unknown'}`);
     console.log(`  Process:      ${lock.processTitle || 'unknown'}`);
     console.log(`  Started:      ${lock.startedAt || 'unknown'}`);
+    if (Number.isInteger(lock.port)) {
+      console.log(`  Port:         ${lock.port}`);
+    }
 
     // Show heartbeat age if available
     if (lock.lastHeartbeat) {
@@ -599,37 +639,31 @@ function handleLockCommand(dataDir, opts) {
       return;
     }
 
-    const sameHost = lock.hostname === hostname;
-    const alive = sameHost && isPidAlive(lock.pid);
+    const { sameHost, alive, isNode, heartbeatAgeMs, heartbeatFresh } =
+      assessLock(lock, hostname);
 
-    if (alive) {
-      const isNode = verifyPidIsNode(lock.pid, lock.processArgv0 || '');
-      if (isNode) {
-        console.log(`Lock is held by a live Quilltap process (PID ${lock.pid}). Cannot clean.`);
-        console.log('Stop the running instance first, or use --lock-override to force.');
-        process.exit(1);
-      } else {
-        console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);
-        console.log('This is likely a stale lock with a reused PID. Removing.');
-      }
+    if (alive && isNode) {
+      console.log(`Lock is held by a live Quilltap process (PID ${lock.pid}). Cannot clean.`);
+      console.log('Stop the running instance first, or use --lock-override to force.');
+      process.exit(1);
+    } else if (heartbeatFresh) {
+      // Reached only when `alive` is false — the arm above has already claimed
+      // every confirmed-live case — so this must not assert that anything is
+      // running. Freshness alone is the deliberate fallback (bug 126) for
+      // environments where PID checks are unreliable; the refusal is right,
+      // and what it says is simply what was tested.
+      const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+      console.log(`Lock heartbeat is still fresh (${ageStr} ago). Cannot clean.`);
+      console.log(
+        `A lock counts as held until its heartbeat is ${describeFreshWindow()} stale, even if its process has gone. ` +
+          'Wait it out, or use --lock-override to force.'
+      );
+      process.exit(1);
+    } else if (alive && !isNode) {
+      console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);
+      console.log('This is likely a stale lock with a reused PID. Removing.');
     } else if (!sameHost) {
-      // Different hostname — check if it's a container with a recent heartbeat
-      const isVMOrContainer = lock.environment === 'docker';
-      const heartbeatAgeMs = lock.lastHeartbeat
-        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
-        : Infinity;
-      const heartbeatFreshMs = 5 * 60 * 1000;
-
-      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
-        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
-        console.log(`Lock is held by a live ${lock.environment} instance (heartbeat ${ageStr} ago). Cannot clean.`);
-        console.log('Stop the other instance first, or use --lock-override to force.');
-        process.exit(1);
-      } else if (isVMOrContainer) {
-        console.log(`Lock was held by ${lock.environment} (${lock.hostname}) with no recent heartbeat. Removing stale lock.`);
-      } else {
-        console.log(`Lock was held by a different host (${lock.hostname}). Removing stale lock.`);
-      }
+      console.log(`Lock was held by ${lock.environment || 'unknown'} on ${lock.hostname} with no recent heartbeat. Removing stale lock.`);
     } else {
       console.log(`Lock was held by PID ${lock.pid} which is no longer running. Removing stale lock.`);
     }
@@ -735,7 +769,10 @@ Subcommands (high-level shortcuts; auto-pick the right database):
   message <id>                Full content of a single chat message
   log <id>                    Full request/response of a single LLM log
   memories --character <id>   Memories held by a character
-                              (flags: --about <id|name> --source AUTO|MANUAL)
+                              (flags: --about <id|name>
+                              --source AUTO|MANUAL|CONSOLIDATED
+                              --tier hot|cold (NULL tier counts as hot)
+                              --limit N)
   characters status           Per-character vault readiness report:
                               flag value, vault present, single-file count,
                               Prompts/ and Scenarios/ folder counts, and any
@@ -954,9 +991,10 @@ async function dbCommand(args) {
   }
 
   let dbFilename;
-  if (useLlmLogs) dbFilename = 'quilltap-llm-logs.db';
-  else if (useMountPoints) dbFilename = 'quilltap-mount-index.db';
-  else dbFilename = 'quilltap.db';
+  let dbFriendlyName;
+  if (useLlmLogs) { dbFilename = 'quilltap-llm-logs.db'; dbFriendlyName = 'LLM logs database'; }
+  else if (useMountPoints) { dbFilename = 'quilltap-mount-index.db'; dbFriendlyName = 'mount index database'; }
+  else { dbFilename = 'quilltap.db'; dbFriendlyName = 'main database'; }
   const dbPath = path.join(dataDir, dbFilename);
 
   if (!fs.existsSync(dbPath)) {
@@ -986,27 +1024,16 @@ async function dbCommand(args) {
     }
   }
 
-  // Open database — prefer SQLCipher-capable build
-  let Database;
+  // Open through the one shared opener. It picks the SQLCipher-capable build,
+  // keys the connection, verifies it, and — the reason the low-level path may
+  // not roll its own — registers qt_text(). Without it raw SQL cannot read
+  // inside a compressed text column, and a --write to chat_messages fails
+  // outright because the search-index triggers call it (bug 162).
+  let db;
   try {
-    Database = require('better-sqlite3-multiple-ciphers');
-  } catch {
-    Database = require('better-sqlite3');
-  }
-  const db = new Database(dbPath, { readonly: !writable });
-
-  if (pepper) {
-    const keyHex = Buffer.from(pepper, 'base64').toString('hex');
-    db.pragma(`key = "x'${keyHex}'"`);
-  }
-
-  try {
-    // Verify database is readable
-    db.prepare('SELECT 1').get();
+    db = openEncryptedDb(dbPath, pepper, { readonly: !writable, friendlyName: dbFriendlyName });
   } catch (err) {
-    console.error(`Cannot open database: ${err.message}`);
-    console.error('The database may be encrypted with a different key, or the .dbkey file may be missing.');
-    db.close();
+    console.error(err.message);
     process.exit(1);
   }
 
@@ -1023,6 +1050,8 @@ async function dbCommand(args) {
       const stmt = db.prepare(sql);
       if (stmt.reader) {
         const rows = stmt.all();
+        // Compressed text columns arrive as Buffers; print them as text (bug 173).
+        decodeCompressedTextInRows(rows);
         if (asJson) {
           console.log(JSON.stringify(rows, null, 2));
         } else if (rows.length === 0) {
@@ -1091,6 +1120,7 @@ async function dbCommand(args) {
             const stmt = db.prepare(trimmed);
             if (stmt.reader) {
               const rows = stmt.all();
+              decodeCompressedTextInRows(rows);
               if (rows.length === 0) console.log('(no results)');
               else console.table(rows);
             } else {
@@ -1147,7 +1177,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'recall-replay', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
+  'db', 'themes', 'docs', 'sync', 'memories', 'instances', 'memory-diff', 'recall-replay', 'anchor-probe', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1186,6 +1216,12 @@ if (subName === 'db') {
 } else if (subName === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(subArgs);
+} else if (subName === 'sync') {
+  const { syncCommand } = require('../lib/sync-command');
+  syncCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else if (subName === 'memories') {
   const { memoriesCommand } = require('../lib/memories-commands');
   memoriesCommand(subArgs).catch(err => {
@@ -1210,6 +1246,12 @@ if (subName === 'db') {
 } else if (subName === 'recall-replay') {
   const { recallReplayCommand } = require('../lib/recall-replay-command');
   recallReplayCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (subName === 'anchor-probe') {
+  const { anchorProbeCommand } = require('../lib/anchor-probe-command');
+  anchorProbeCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });

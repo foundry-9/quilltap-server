@@ -17,15 +17,18 @@
  * @module components/wardrobe/outfit-quick-pick
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
 import { selectComposedOutfits } from '@/lib/wardrobe/composed-outfits'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
+import { formatSlotLabels } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
 
 export interface OutfitQuickPickProps {
   /** The character's full wearable pool (garments and composed outfits). */
-  items: WardrobeItem[]
+  items: ListedWardrobeItem[]
   /** Wear the chosen outfit. The parent applies the usual equip rules. */
   onWear: (item: WardrobeItem) => void
 }
@@ -37,32 +40,18 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
 
   const outfits = useMemo(() => selectComposedOutfits(items), [items])
 
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent): void => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
-
-  // Close on Escape — capture phase + stopPropagation so the enclosing dialog's
-  // own Escape handler doesn't dismiss the whole modal along with the menu.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      e.preventDefault()
-      setOpen(false)
-      setSearch('')
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [open])
+  // Close on an outside click or Escape — the Escape swallowed in the
+  // capture phase so the enclosing dialog stays open.
+  const closeOnOutsideClick = useCallback(() => setOpen(false), [])
+  const closeOnEscape = useCallback(() => {
+    setOpen(false)
+    setSearch('')
+  }, [])
+  useClickOutside(containerRef, closeOnOutsideClick, {
+    enabled: open,
+    onEscape: closeOnEscape,
+    escapeCapture: true,
+  })
 
   const candidates = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -108,7 +97,9 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
             <div className="px-3 py-2 qt-text-xs qt-text-secondary">No matching outfits.</div>
           ) : (
             <ul className="divide-y qt-border-default">
-              {candidates.map((outfit) => (
+              {candidates.map((outfit) => {
+                const originLabel = wardrobeOriginLabel(outfit.origin)
+                return (
                 <li key={outfit.id}>
                   <button
                     type="button"
@@ -119,16 +110,21 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
                       setOpen(false)
                       setSearch('')
                     }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:qt-bg-muted"
+                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
                   >
-                    <span className="truncate text-sm text-foreground">{outfit.title}</span>
-                    <span className="qt-text-xs qt-text-secondary whitespace-nowrap">
-                      {outfit.types.map((t) => WARDROBE_SLOT_META[t].label).join(', ')}
+                    <WardrobeItemThumbnail fileId={outfit.imageFileId} size={28} />
+                    <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                      {outfit.title}
+                    </span>
+                    <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
+                      {formatSlotLabels(outfit.types)}
                       {outfit.replace ? ' · replaces' : ''}
+                      {originLabel ? ` · ${originLabel}` : ''}
                     </span>
                   </button>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </div>

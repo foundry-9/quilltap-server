@@ -3,6 +3,7 @@
  * Detects and executes LLM tool calls during message processing
  */
 
+import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { logger } from '@/lib/logger'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { toolRegistry } from '@/lib/plugins/tool-registry'
@@ -75,41 +76,7 @@ import {
   DOC_EDIT_TOOL_NAMES,
   type DocEditToolContext,
 } from '@/lib/tools/handlers/doc-edit-handler';
-import {
-  executeWardrobeListTool,
-  formatWardrobeListResults,
-  type WardrobeListToolContext,
-} from '@/lib/tools/handlers/wardrobe-list-handler';
-import {
-  executeWardrobeReadTool,
-  formatWardrobeReadResults,
-  type WardrobeReadToolContext,
-} from '@/lib/tools/handlers/wardrobe-read-handler';
-import {
-  executeWardrobeCreateTool,
-  formatWardrobeCreateResults,
-  type WardrobeCreateToolContext,
-} from '@/lib/tools/handlers/wardrobe-create-handler';
-import {
-  executeWardrobeUpdateTool,
-  formatWardrobeUpdateResults,
-  type WardrobeUpdateToolContext,
-} from '@/lib/tools/handlers/wardrobe-update-handler';
-import {
-  executeWardrobeArchiveTool,
-  formatWardrobeArchiveResults,
-  type WardrobeArchiveToolContext,
-} from '@/lib/tools/handlers/wardrobe-archive-handler';
-import {
-  executeWardrobeWearTool,
-  formatWardrobeWearResults,
-  type WardrobeWearToolContext,
-} from '@/lib/tools/handlers/wardrobe-wear-handler';
-import {
-  executeWardrobeTakeOffTool,
-  formatWardrobeTakeOffResults,
-  type WardrobeTakeOffToolContext,
-} from '@/lib/tools/handlers/wardrobe-take-off-handler';
+import { WARDROBE_TOOL_TABLE } from '@/lib/tools/handlers/wardrobe-tool-table';
 import {
   executeReadConversationTool,
   formatReadConversationResults,
@@ -141,6 +108,7 @@ import {
   TerminalToolError,
   type TerminalToolError as TerminalToolErrorType,
 } from '@/lib/tools/handlers/terminal-handler';
+import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
 export interface ToolCallRequest {
   name: string;
@@ -161,6 +129,8 @@ export interface ToolResult {
     model?: string;
     /** For image generation, the expanded prompt with {{me}} etc. resolved */
     expandedPrompt?: string;
+    /** For image generation, the Concierge's call sheet when a provider refused on the way */
+    routeTrail?: RouteAttempt[];
   };
 }
 
@@ -171,7 +141,7 @@ export interface ToolResult {
  */
 export interface LoadedMemoriesContext {
   /** Semantic-search memories rendered under `## Relevant Memories`. */
-  semantic?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>;
+  semantic?: Array<{ summary: string; importance: number; score: number; salience: number }>;
   /** Inter-character memories rendered under `## Memories About Other Characters`. */
   interCharacter?: Array<{ aboutCharacterName: string; summary: string; importance: number }>;
   /** Memory recap text injected on chat start or character join, if any. */
@@ -242,6 +212,14 @@ export interface ToolExecutionContext {
    * unchanged.
    */
   operatorSurface?: boolean;
+  /**
+   * A pre-built accessible set — "what this chat could see" before the chat
+   * exists — for a character-less tool loop (the Scenario Builder; built by
+   * `resolveScenarioBuilderMountPool`). Copied onto the `search` and `doc_*`
+   * contexts, where it replaces pool resolution. Mutually exclusive with
+   * `operatorSurface`: the executor refuses a context that sets both.
+   */
+  mountPool?: TieredMountPool;
 }
 
 /**
@@ -289,7 +267,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'ask_carina',
   // Post Office — inter-character mail
   'send_mail',
-  'list_email',
+  'list_mail',
+  'read_mail',
+  'discard_mail',
 ]);
 
 export async function executeToolCallWithContext(
@@ -297,6 +277,22 @@ export async function executeToolCallWithContext(
   context: ToolExecutionContext
 ): Promise<ToolResult> {
   const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
+
+  // A pre-built pool narrows; the operator surface widens. A context carrying
+  // both is a caller bug — refuse rather than guess which one was meant.
+  if (context.mountPool && context.operatorSurface) {
+    logger.error('Tool context sets both mountPool and operatorSurface; refusing', {
+      context: 'tool-executor',
+      toolName: toolCall.name,
+      chatId,
+    });
+    return {
+      toolName: toolCall.name,
+      success: false,
+      result: null,
+      error: 'Tool context is misconfigured (mountPool and operatorSurface are mutually exclusive).',
+    };
+  }
 
   try {
     // Check if this is a built-in tool - these are handled later in this function
@@ -417,6 +413,7 @@ export async function executeToolCallWithContext(
           provider: result.provider,
           model: result.model,
           expandedPrompt: result.expandedPrompt,
+          routeTrail: result.routeTrail,
         },
       };
     }
@@ -718,172 +715,17 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle wardrobe_list
-    if (toolCall.name === 'wardrobe_list') {
-      const wardrobeContext: WardrobeListToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeListTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeListResults(result);
-
-      return {
-        toolName: 'wardrobe_list',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          items: result.items,
-          total_count: result.total_count,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_read
-    if (toolCall.name === 'wardrobe_read') {
-      const wardrobeContext: WardrobeReadToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeReadTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeReadResults(result);
-
-      return {
-        toolName: 'wardrobe_read',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          ...result,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_create
-    if (toolCall.name === 'wardrobe_create') {
-      const wardrobeContext: WardrobeCreateToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeCreateTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeCreateResults(result);
-
-      return {
-        toolName: 'wardrobe_create',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          item_id: result.item_id,
-          title: result.title,
-          equipped: result.equipped,
-          recipient_name: result.recipient_name,
-          current_state: result.current_state,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_update
-    if (toolCall.name === 'wardrobe_update') {
-      const wardrobeContext: WardrobeUpdateToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeUpdateTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeUpdateResults(result);
-
-      return {
-        toolName: 'wardrobe_update',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          ...result,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_archive (soft retire)
-    if (toolCall.name === 'wardrobe_archive') {
-      const wardrobeContext: WardrobeArchiveToolContext = {
+    // The seven wardrobe_* tools: one table, one context. Every tool gets the
+    // turn's announcement set, so none can be the one that drops it (bug 193).
+    const wardrobeTool = WARDROBE_TOOL_TABLE[toolCall.name];
+    if (wardrobeTool) {
+      const { success, result, error } = await wardrobeTool(toolCall.arguments, {
         userId,
         chatId,
         characterId: characterId || '',
         pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeArchiveTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeArchiveResults(result);
-
-      return {
-        toolName: 'wardrobe_archive',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          item_id: result.item_id,
-          title: result.title,
-          action: result.action,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_wear (put on / layer — array of operations)
-    if (toolCall.name === 'wardrobe_wear') {
-      const wardrobeContext: WardrobeWearToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeWearTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeWearResults(result);
-
-      return {
-        toolName: 'wardrobe_wear',
-        success: result.success,
-        result: {
-          formattedText: formattedResult,
-          operations: result.operations,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
-        },
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_take_off (remove / clear — array of operations)
-    if (toolCall.name === 'wardrobe_take_off') {
-      const wardrobeContext: WardrobeTakeOffToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeTakeOffTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeTakeOffResults(result);
-
-      return {
-        toolName: 'wardrobe_take_off',
-        success: result.success,
-        result: {
-          formattedText: formattedResult,
-          operations: result.operations,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
-        },
-        error: result.success ? undefined : result.error,
-      };
+      });
+      return { toolName: toolCall.name, success, result, error };
     }
 
     // Handle read_conversation (Scriptorium)
@@ -993,7 +835,7 @@ export async function executeToolCallWithContext(
       // Character surfaces require a character (memories/conversations are
       // per-character). The operator surface (Brahma Console) is character-less:
       // it searches operator-wide and never touches memories.
-      if (!characterId && !context.operatorSurface) {
+      if (!characterId && !context.operatorSurface && !context.mountPool) {
         return {
           toolName: 'search',
           success: false,
@@ -1008,6 +850,7 @@ export async function executeToolCallWithContext(
         embeddingProfileId,
         projectId: context.projectId,
         operatorSurface: context.operatorSurface,
+        mountPool: context.mountPool,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
@@ -1119,6 +962,7 @@ export async function executeToolCallWithContext(
         characterId,
         // Operator surface (Brahma Console): resolve against every enabled store.
         operatorOverride: context.operatorSurface,
+        mountPool: context.mountPool,
       };
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
@@ -1181,18 +1025,50 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle list_email (Post Office — list the caller's own mailbox)
-    if (toolCall.name === 'list_email') {
-      const { executeListEmailTool, formatListEmailResults } = await import('@/lib/tools/handlers/list-email-handler');
-      const out = await executeListEmailTool(toolCall.arguments, {
+    // Handle list_mail (Post Office — list the caller's own mailbox)
+    if (toolCall.name === 'list_mail') {
+      const { executeListMailTool, formatListMailResults } = await import('@/lib/tools/handlers/list-mail-handler');
+      const out = await executeListMailTool(toolCall.arguments, {
         userId,
         chatId,
         characterId,
       });
       return {
-        toolName: 'list_email',
+        toolName: 'list_mail',
         success: out.success,
-        result: { formattedText: formatListEmailResults(out), count: out.count },
+        result: { formattedText: formatListMailResults(out), count: out.count },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle read_mail (Post Office — read one letter from the caller's own mailbox)
+    if (toolCall.name === 'read_mail') {
+      const { executeReadMailTool, formatReadMailResults } = await import('@/lib/tools/handlers/read-mail-handler');
+      const out = await executeReadMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'read_mail',
+        success: out.success,
+        result: { formattedText: formatReadMailResults(out), path: out.path },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle discard_mail (Post Office — discard one letter from the caller's own mailbox)
+    if (toolCall.name === 'discard_mail') {
+      const { executeDiscardMailTool, formatDiscardMailResults } = await import('@/lib/tools/handlers/discard-mail-handler');
+      const out = await executeDiscardMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'discard_mail',
+        success: out.success,
+        result: { formattedText: formatDiscardMailResults(out), path: out.path },
         error: out.success ? undefined : out.error,
       };
     }

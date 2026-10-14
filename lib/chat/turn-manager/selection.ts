@@ -11,6 +11,8 @@ import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/ty
 import { isParticipantPresent } from '@/lib/schemas/types';
 import { isUserDrivenSeat } from './utils';
 import { computeSpokenThisCycleAfterMessage } from './state';
+import { pickWeightedRandom } from './weighted-random';
+import { parseCycleOrder, pickFromCycleOrder } from './cycle-order';
 
 /**
  * Selects the next speaker based on turn state and talkativeness weights.
@@ -22,10 +24,19 @@ import { computeSpokenThisCycleAfterMessage } from './state';
  *
  * Algorithm:
  * 1. If the manual queue is not empty, pop and return its head.
- * 2. Otherwise, weighted-random pick from { active CHARACTER participants } minus
- *    { last speaker, anyone in spokenThisCycle }.
- * 3. If no candidates remain (cycle complete), wrap: weighted-random pick from
+ * 2. Otherwise, follow `turnState.cycleOrder` — the rotation drawn for this
+ *    cycle by `resolveCycleOrder` — taking its first member who can still
+ *    speak. This is the ordinary path once a cycle is under way.
+ * 3. With no usable rotation (a fresh chat, a spent cycle, or a client whose
+ *    row has none yet), fall back to the original one-at-a-time weighted pick
+ *    from { active CHARACTER participants } minus { last speaker, anyone in
+ *    spokenThisCycle }.
+ * 4. If no candidates remain (cycle complete), wrap: weighted-random pick from
  *    { active - last speaker }. The orchestrator clears spokenThisCycle on wrap.
+ *
+ * Steps 3 and 4 are the pre-rotation algorithm, kept as the fallback: the draw
+ * in step 2 is the same successive weighted sampling, so following a drawn order
+ * and picking one at a time produce the same distribution of rotations.
  */
 export function selectNextSpeaker(
   participants: ChatParticipantBase[],
@@ -69,7 +80,28 @@ export function selectNextSpeaker(
     return buildResult(onlyCharacter, 'only_character', false, impersonatingParticipantIds);
   }
 
-  // Step 2: Weighted-random pick from eligible (not last speaker, not yet
+  // Step 2: The rotation drawn for this cycle, if there is one. `resolveCycleOrder`
+  // (`cycle-order.ts`) draws and persists it before any server path asks this
+  // question, so every reader gets the same answer and nobody re-rolls a turn
+  // that was already decided. `debug.weights` is empty here on purpose: the
+  // weighting happened once, at the draw, not at this pick.
+  const fromOrder = pickFromCycleOrder(
+    turnState.cycleOrder,
+    activeCharacterParticipants,
+    characters,
+    turnState,
+  );
+  if (fromOrder) {
+    const ordered = activeCharacterParticipants.find(p => p.id === fromOrder)!;
+    return buildResult(ordered, 'cycle_order', false, impersonatingParticipantIds, {
+      eligibleSpeakers: [...turnState.cycleOrder],
+      weights: {},
+    });
+  }
+
+  // Step 3: No stored rotation to follow (a fresh chat, a spent cycle, or a
+  // client reading a row that has none yet). Fall back to the original
+  // one-at-a-time weighted pick from eligible (not last speaker, not yet
   // spoken this cycle).
   const eligibleParticipants = activeCharacterParticipants.filter(p => {
     if (p.id === turnState.lastSpeakerId) return false;
@@ -86,7 +118,7 @@ export function selectNextSpeaker(
     });
   }
 
-  // Step 3: Cycle wrapped. Weighted-random pick from { all - last speaker }.
+  // Step 4: Cycle wrapped. Weighted-random pick from { all - last speaker }.
   // The orchestrator clears spokenThisCycle when it observes cycleComplete=true.
   const newCycleParticipants = activeCharacterParticipants.filter(
     p => p.id !== turnState.lastSpeakerId,
@@ -121,7 +153,9 @@ export function selectNextSpeaker(
  * This helper advances the persisted cycle exactly the way the message write will
  * (via {@link computeSpokenThisCycleAfterMessage}, so the projection and the
  * eventual persisted state agree), sets the poster as `lastSpeakerId`, then runs
- * the normal full-rotation {@link selectNextSpeaker} over ALL participants.
+ * the normal full-rotation {@link selectNextSpeaker} over ALL participants — with
+ * the cycle's stored rotation, so the projection follows the same order the real
+ * turn will.
  *
  * The caller uses this to detect when the floor after a human's post belongs to
  * ANOTHER seat the human drives — in which case the chat pauses for that seat
@@ -136,6 +170,7 @@ export function selectNextSpeakerAfterUserMessage(
   turnQueueJson: string | null | undefined,
   userParticipantId: string | null,
   impersonatingParticipantIds?: readonly string[] | null,
+  cycleOrderJson?: string | null,
 ): TurnSelectionResult {
   const syntheticPost = {
     type: 'message',
@@ -170,6 +205,10 @@ export function selectNextSpeakerAfterUserMessage(
     lastSpeakerId: posterParticipantId,
     queue: parseIds(turnQueueJson),
     currentTurnParticipantId: null,
+    // The projection reads the stored rotation but never draws one: it is asking
+    // a hypothetical ("who would follow this post?"), and a draw made here would
+    // be persisted by nobody and contradicted by the real selection.
+    cycleOrder: parseCycleOrder(cycleOrderJson),
   };
 
   return selectNextSpeaker(
@@ -203,34 +242,12 @@ function buildResult(
 }
 
 /**
- * Weighted-random pick: each item's chance is its weight over the total. When
- * the weights sum to nothing (every candidate at 0 talkativeness) every item is
- * equally likely instead, and `equalWeights` says so. `weights` is parallel to
- * `items` and `randomValue` is the draw, both for the caller's debug trail.
- * Shared by the per-turn speaker selection and the opening-character pick at
- * chat creation, so the two can never drift apart.
+ * Weighted-random pick — re-exported from {@link ./weighted-random} so the
+ * long-standing `@/lib/chat/turn-manager/selection` import path keeps working.
+ * Shared by the per-turn speaker selection, the whole-cycle rotation draw, and
+ * the opening-character pick at chat creation, so the three can never drift.
  */
-export function pickWeightedRandom<T>(
-  items: T[],
-  weightOf: (item: T) => number,
-): { item: T; weights: number[]; randomValue: number; equalWeights: boolean } {
-  const weights = items.map(weightOf);
-  let totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-  const equalWeights = totalWeight <= 0;
-  if (equalWeights) {
-    weights.fill(1);
-    totalWeight = items.length;
-  }
-  const randomValue = Math.random() * totalWeight;
-  let cumulative = 0;
-  for (let i = 0; i < items.length; i++) {
-    cumulative += weights[i];
-    if (randomValue < cumulative) {
-      return { item: items[i], weights, randomValue, equalWeights };
-    }
-  }
-  return { item: items[items.length - 1], weights, randomValue, equalWeights };
-}
+export { pickWeightedRandom } from './weighted-random';
 
 function pickWeighted(
   candidates: ChatParticipantBase[],

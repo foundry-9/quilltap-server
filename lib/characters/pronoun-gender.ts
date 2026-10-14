@@ -7,7 +7,7 @@
  * neopronouns, empty, or unset pronouns return `null`/`''` so we never force a
  * binary presentation onto a character who hasn't declared one.
  *
- * Used by the avatar prompt builder (`lib/wardrobe/avatar-prompt.ts`), the
+ * Used by the avatar prompt builder (`lib/image-gen/avatar-prompt.ts`), the
  * story-background prompt builder (`lib/background-jobs/handlers/story-background.ts`),
  * and the manual image-prompt expander (`lib/image-gen/prompt-expansion.ts`).
  */

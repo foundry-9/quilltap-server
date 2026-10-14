@@ -43,6 +43,19 @@ function parseFlags(args) {
 
 // ---------- migration list parsing ----------
 
+/**
+ * A migration's id is either a string literal on the object (`id: 'foo-v1'`)
+ * or a module constant (`id: MIGRATION_ID` beside `const MIGRATION_ID = 'foo-v1'`).
+ * Missing the constant form drops those migrations from "source", which then
+ * report as retired on every instance that ran them.
+ */
+function extractMigrationId(fileContent) {
+  const constMatch = fileContent.match(/^\s*const\s+MIGRATION_ID\s*(?::\s*\w+\s*)?=\s*['"]([^'"]+)['"]/m);
+  if (constMatch && /^\s*id:\s*MIGRATION_ID\b/m.test(fileContent)) return constMatch[1];
+  const literalMatch = fileContent.match(/^\s*id:\s*['"]([^'"]+)['"]/m);
+  return literalMatch ? literalMatch[1] : null;
+}
+
 // Reads the registered migration list from migrations/scripts/index.ts and resolves each
 // entry's real `id:` value by reading the imported source file. Heuristic camelCase→kebab
 // conversion is unreliable (some migrations omit `-v1`, others use `-v2`), so we always
@@ -95,11 +108,11 @@ function extractMigrationsFromSource() {
     const filePath = path.join(scriptsDir, info.filePath + '.ts');
     if (!fs.existsSync(filePath)) continue;
     const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const idMatch = fileContent.match(/^\s*id:\s*['"]([^'"]+)['"]/m);
-    if (!idMatch) continue;
+    const id = extractMigrationId(fileContent);
+    if (!id) continue;
     migrations.push({
-      id: idMatch[1],
-      description: info.comment || idMatch[1],
+      id,
+      description: info.comment || id,
     });
   }
 
@@ -321,4 +334,5 @@ async function migrationsCommand(args) {
 
 module.exports = {
   migrationsCommand,
+  extractMigrationId,
 };

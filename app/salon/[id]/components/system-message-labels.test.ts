@@ -101,6 +101,13 @@ describe('getAnnouncementImportance', () => {
     expect(getAnnouncementImportance(ann('ariel', 'session-opened'))).toBe('medium')
   })
 
+  it('rates the Lantern\'s refused backdrop high, including legacy rows by their wording', () => {
+    expect(getAnnouncementImportance(ann('lantern', 'background-refused'))).toBe('high')
+    expect(
+      getAnnouncementImportance(ann('lantern', undefined, "The Lantern's usual painter (GOOGLE imagen) would not take the scene — called it improper and downed brushes.")),
+    ).toBe('high')
+  })
+
   it('rates Prospero context and Commonplace recalls low', () => {
     expect(getAnnouncementImportance(ann('prospero', 'project-context'))).toBe('low')
     expect(getAnnouncementImportance(ann('prospero', 'general-context'))).toBe('low')

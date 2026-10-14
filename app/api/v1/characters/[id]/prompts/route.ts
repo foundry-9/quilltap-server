@@ -13,7 +13,7 @@ import { notFound, serverError, created, successResponse } from '@/lib/api/respo
 const createPromptSchema = z.object({
   name: z.string().min(1).max(100),
   content: z.string().min(1),
-  isDefault: z.boolean().optional().prefault(false),
+  isDefault: z.boolean().prefault(false),
 });
 
 // GET /api/v1/characters/[id]/prompts

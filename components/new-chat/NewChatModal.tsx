@@ -107,16 +107,20 @@ export function NewChatModal({
     project,
     projectScenarios,
     generalScenarios,
+    groupScenarios,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
+    refetchScenarioTiers,
     selectedCharacters,
     setSelectedCharacters,
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState,
   } = useNewChat({
     initialCharacterId: isOpen && !isContinuation ? characterId : undefined,
     projectId: isOpen ? projectId : undefined,
@@ -228,7 +232,14 @@ export function NewChatModal({
                 profiles={profiles}
                 selectedCharacters={selectedCharacters}
                 onSelectedCharactersChange={setSelectedCharacters}
-                onCharactersChanged={() => setState((prev) => ({ ...prev, scenarioId: null }))}
+                onCharactersChanged={() =>
+                  setState((prev) =>
+                    // A character's own scenario leaves with the cast that offered it.
+                    prev.scenarioSelection.kind === 'character'
+                      ? { ...prev, scenarioSelection: { kind: 'custom' } }
+                      : prev,
+                  )
+                }
                 disabled={creating}
               />
             )}
@@ -244,6 +255,7 @@ export function NewChatModal({
               project={project}
               projectScenarios={projectScenarios}
               generalScenarios={generalScenarios}
+              groupScenarios={groupScenarios}
               roleplayTemplates={roleplayTemplates}
               defaultRoleplayTemplateId={defaultRoleplayTemplateId}
               availableProjects={isContinuation ? undefined : availableProjects}
@@ -254,6 +266,9 @@ export function NewChatModal({
               continuationFromChatId={continuationFromChatId ?? null}
               previousOutfitSummary={previousOutfitSummary}
               autonomousSettingsHint={autonomousHint}
+              onScenarioTiersChanged={refetchScenarioTiers}
+              conciergeOnDuty={conciergeOnDuty}
+              conciergeDefaultState={conciergeDefaultState}
             />
           </div>
         )}

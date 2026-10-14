@@ -109,6 +109,8 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
+A word on the longer messages: Quilltap keeps any message of 512 bytes or more folded up in compressed form, the way a sensible traveller rolls shirts rather than packing them flat. When a query *returns* such a column — `SELECT content FROM chat_messages`, say — the command unrolls it for you, so the text prints as text. When you need to work on the text *inside* the query (a `WHERE … LIKE`, a `substr`, a `json_extract`), wrap the column in `qt_text()` first: `SELECT id FROM chat_messages WHERE qt_text(content) LIKE '%pie%'`.
+
 ### Tidying Up the Premises
 
 From time to time — particularly after a great churn of message deletion, log pruning, or document-store reshuffling — the databases will accumulate unused pages and grow stale query-planner statistics. A spot of housekeeping reclaims the disk space and restores the planner's wits:
@@ -124,6 +126,8 @@ npx quilltap db optimize mount-points
 ```
 
 The command refuses to proceed while a Quilltap instance still has the database in its grasp — VACUUM rewrites the entire file, an operation which brooks no concurrent writers. Stop the running instance first (or, in the case of a stale lock left behind by a previous crash, consult `quilltap db --lock-status` and `--lock-clean`).
+
+You will seldom need to, mind you: Quilltap now performs exactly this housekeeping on its own, once a day, as it starts up (see *Daily Tidying on Startup* below). The command remains for the occasion when you would rather not wait until tomorrow.
 
 ### Taking a Snapshot Without Stopping the Server
 
@@ -182,7 +186,11 @@ Two situations are worth recognizing:
 
 **The other instance is genuinely running.** Stop it, and the newcomer will start normally. This is nearly always the answer.
 
-**The other instance is long gone but left its lock behind.** A process killed outright — a container stopped abruptly, a laptop closed mid-thought — has no opportunity to tidy up after itself. Quilltap can usually tell: if the lock names a process on this same machine and that process is no longer running, the lock is claimed automatically and you will never know it happened. A lock left by a *Docker container*, however, names a process inside a machine that no longer exists, and no amount of squinting from outside will confirm its demise. For that case:
+**The other instance is long gone but left its lock behind.** A process killed outright — a container stopped abruptly, a laptop closed mid-thought — has no opportunity to tidy up after itself. Quilltap can usually tell: if the lock names a process still drawing breath on this machine, it is respected; if that process is demonstrably gone, the lock is claimed automatically and you will never know it happened.
+
+The awkward case is a lock whose holder cannot be inspected at all — a Docker container names a process inside a machine that no longer exists, and no amount of squinting from outside will confirm its demise. Here Quilltap consults the **heartbeat** rather than the name: the holder stamps the lock file every minute it lives, so a stamp from moments ago means a going concern and a stamp from an hour ago means an estate to be settled. A lock that has gone quiet for five minutes is claimed; one still ticking is left strictly alone.
+
+That deference to the heartbeat also covers a subtler embarrassment. A machine's own name is not the fixed thing one assumes: macOS, absent an explicitly configured hostname, derives one afresh from whatever the network last told it, so the very same Mac may announce itself `MacBook-Pro.local` in the morning and `Mac` after it rejoins the café's Wi-Fi. Quilltap no longer takes a changed name as evidence of a changed machine — a lock is identified by the process that wrote it, not by what the network was calling the house at the time. Should a startup nonetheless be refused while you are quite certain nothing else is running, the notice will say how long remains before the lock goes stale of its own accord; waiting is the tidier course, and the commands below are the impatient one:
 
 ```bash
 # See who holds the lock, and how long since they last drew breath
@@ -193,6 +201,16 @@ npx quilltap db --lock-clean
 ```
 
 `--lock-status` reports the holder's last heartbeat, which is the useful tell: a live instance updates it continuously, while a stale one's grows steadily older. Should you find yourself reaching for `--lock-override`, pause — it seizes the lock regardless of who holds it, and if that party is in fact alive, you have arranged precisely the collision the lock was built to prevent.
+
+One courtesy of the house deserves mention, lest it be mistaken for obstinacy. A lock is considered held until its heartbeat has gone **five minutes** stale — and that is true whether or not the process that set it still draws breath. Stop an instance and reach immediately for `--lock-clean`, and you will be told, quite correctly, that the heartbeat is still fresh and the lock therefore stays where it is:
+
+```
+Lock heartbeat is still fresh (82s ago). Cannot clean.
+A lock counts as held until its heartbeat is 5 minutes stale, even if its process
+has gone. Wait it out, or use --lock-override to force.
+```
+
+This is deliberate rather than pedantic. On certain systems — containers chief among them — the question *is that process still running?* cannot be answered reliably, and a heartbeat that is merely recent is the only honest evidence available. The house would rather keep a dead instance's lock five minutes too long than clean a living one's out from under it. Wait out the window and `--lock-clean` will oblige without further comment; the next startup would have reclaimed it regardless, so in the ordinary course you need do nothing at all.
 
 ### The Version Floor
 
@@ -225,6 +243,14 @@ Quilltap creates a physical copy of all three database files once per day. The c
 - 1 backup per year is kept indefinitely
 
 Old backups are automatically cleaned up according to this schedule.
+
+### Daily Tidying on Startup
+
+The first time Quilltap starts on any given day, before it does anything else with your data — before even the migrations that bring it up to date with a new version — it gives all three databases the very treatment `quilltap db optimize` would: `VACUUM` to reclaim the space left by deletions, `ANALYZE` and `PRAGMA optimize` to restore the query planner's wits. Each database is backed up first (the daily physical backup described above, taken a little earlier than it otherwise would be), so the tidying always has a fresh copy standing behind it.
+
+Later starts the same day skip the business entirely; the calendar, not the clock, decides, so a launch at a quarter to midnight and another at a quarter past both qualify. Quilltap keeps its note of the matter in `data/db-optimize-state.json`. Delete that file and the next start will tidy again; a database whose tidying failed is simply tried again on the next start, and startup continues regardless.
+
+On a large instance this adds some seconds to the day's first launch — `VACUUM` rewrites each file whole — and the loading screen will say so while it works. If your data directory lives in a cloud-synced folder, note that the rewritten files will be synced afresh each day, much as the daily backups already are.
 
 ### Durable Writes
 

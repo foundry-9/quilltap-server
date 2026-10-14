@@ -1,9 +1,9 @@
 import { handleChatDangerClassification } from '@/lib/background-jobs/handlers/chat-danger-classification';
 import { getRepositories } from '@/lib/repositories/factory';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import { createSystemEvent } from '@/lib/services/system-events.service';
+import { maybeSwitchAfterClassification } from '@/lib/services/dangerous-content/classifier-switch';
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: () => ({
@@ -22,9 +22,6 @@ jest.mock('@/lib/services/dangerous-content/gatekeeper.service', () => ({
   classifyContent: jest.fn(),
 }));
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
-}));
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -34,9 +31,12 @@ jest.mock('@/lib/services/system-events.service', () => ({
   createSystemEvent: jest.fn(),
 }));
 
+jest.mock('@/lib/services/dangerous-content/classifier-switch', () => ({
+  maybeSwitchAfterClassification: jest.fn().mockResolvedValue({ switched: true }),
+}));
+
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
 const mockClassifyContent = classifyContent as jest.MockedFunction<typeof classifyContent>;
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 const mockGetCheapLLMProvider = getCheapLLMProvider as jest.MockedFunction<typeof getCheapLLMProvider>;
 const mockCreateSystemEvent = createSystemEvent as jest.MockedFunction<typeof createSystemEvent>;
 
@@ -44,7 +44,7 @@ type MockRepositories = {
   chats: {
     findById: jest.Mock;
     getMessages: jest.Mock;
-    update: jest.Mock;
+    setDangerClassification: jest.Mock;
   };
   chatSettings: {
     findByUserId: jest.Mock;
@@ -92,6 +92,24 @@ const baseChatMetadata = {
   dangerClassifiedAtMessageCount: null,
 };
 
+/** Global Concierge settings: on duty, summary classifier opted in. */
+function conciergeSettings(overrides: { enabled?: boolean; summaryClassification?: boolean } = {}) {
+  return {
+    enabled: overrides.enabled ?? true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: overrides.summaryClassification ?? true,
+    },
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 
@@ -99,7 +117,7 @@ beforeEach(() => {
     chats: {
       findById: jest.fn().mockResolvedValue({ ...baseChatMetadata }),
       getMessages: jest.fn().mockResolvedValue([]),
-      update: jest.fn().mockResolvedValue(undefined),
+      setDangerClassification: jest.fn().mockResolvedValue(undefined),
     },
     chatSettings: {
       findByUserId: jest.fn().mockResolvedValue({
@@ -107,15 +125,7 @@ beforeEach(() => {
           strategy: 'PROVIDER_CHEAPEST',
           fallbackToLocal: true,
         },
-        dangerousContentSettings: {
-          mode: 'DETECT_ONLY',
-          threshold: 0.7,
-          scanTextChat: true,
-          scanImagePrompts: true,
-          scanImageGeneration: false,
-          displayMode: 'SHOW',
-          showWarningBadges: true,
-        },
+        conciergeSettings: conciergeSettings(),
       }),
     },
     connections: {
@@ -133,19 +143,6 @@ beforeEach(() => {
   };
 
   mockGetRepositories.mockReturnValue(repositories as any);
-
-  mockResolveDangerousContentSettings.mockReturnValue({
-    settings: {
-      mode: 'DETECT_ONLY',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    },
-    source: 'global',
-  });
 
   mockGetCheapLLMProvider.mockReturnValue({
     provider: 'OPENAI',
@@ -170,15 +167,54 @@ describe('handleChatDangerClassification', () => {
 
     await handleChatDangerClassification(buildJob());
 
-    expect(repositories.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalledWith('chat-1', expect.objectContaining({
       isDangerousChat: true,
       dangerScore: 0.85,
       dangerCategories: ['nsfw'],
       dangerClassifiedAtMessageCount: 10,
-    }));
+    }), expect.objectContaining({ score: 0.85 }));
     expect(mockCreateSystemEvent).toHaveBeenCalledWith('chat-1', expect.objectContaining({
       systemEventType: 'DANGER_CLASSIFICATION',
     }));
+  });
+
+  it('carries the dangerous verdict on the telemetry write and, in the parent, asks the classifier switch', async () => {
+    mockClassifyContent.mockResolvedValue({
+      isDangerous: true,
+      score: 0.85,
+      categories: [{ category: 'nsfw', score: 0.85, label: 'Sexual content' }],
+      source: 'moderation',
+      providerName: 'OPENAI',
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    const verdict = expect.objectContaining({ score: 0.85, threshold: 0.7, source: 'moderation', providerName: 'OPENAI' });
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalledWith('chat-1', expect.anything(), verdict);
+    expect(maybeSwitchAfterClassification).toHaveBeenCalledWith('chat-1', verdict);
+  });
+
+  it('leaves the switch to the parent when running in the job child', async () => {
+    mockClassifyContent.mockResolvedValue({
+      isDangerous: true,
+      score: 0.85,
+      categories: [{ category: 'nsfw', score: 0.85 }],
+    });
+    process.env.QUILLTAP_JOB_CHILD = '1';
+    try {
+      await handleChatDangerClassification(buildJob());
+    } finally {
+      delete process.env.QUILLTAP_JOB_CHILD;
+    }
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
+    expect(maybeSwitchAfterClassification).not.toHaveBeenCalled();
+  });
+
+  it('never asks the switch for a safe verdict', async () => {
+    mockClassifyContent.mockResolvedValue({ isDangerous: false, score: 0.1, categories: [] });
+    await handleChatDangerClassification(buildJob());
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalledWith('chat-1', expect.anything(), null);
+    expect(maybeSwitchAfterClassification).not.toHaveBeenCalled();
   });
 
   it('classifies chat as safe and updates fields', async () => {
@@ -191,12 +227,12 @@ describe('handleChatDangerClassification', () => {
 
     await handleChatDangerClassification(buildJob());
 
-    expect(repositories.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalledWith('chat-1', expect.objectContaining({
       isDangerousChat: false,
       dangerScore: 0.1,
       dangerCategories: [],
       dangerClassifiedAtMessageCount: 10,
-    }));
+    }), null);
   });
 
   it('skips if chat not found', async () => {
@@ -205,7 +241,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
   it.each(['help', 'brahma'])('never classifies or announces on %s chats (moderation-exempt backstop)', async (chatType) => {
@@ -217,7 +253,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
     expect(mockCreateSystemEvent).not.toHaveBeenCalled();
   });
 
@@ -231,7 +267,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
   it('skips if chat already classified as safe and no new messages (sticky)', async () => {
@@ -247,7 +283,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
   it('re-classifies safe chat when new messages have been added', async () => {
@@ -270,7 +306,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).toHaveBeenCalled();
-    expect(repositories.chats.update).toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
   });
 
   it('uses concatenated messages when no context summary', async () => {
@@ -309,7 +345,7 @@ describe('handleChatDangerClassification', () => {
       expect.anything(),
       expect.anything()
     );
-    expect(repositories.chats.update).toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
   });
 
   it('excludes SYSTEM, TOOL, and Staff (systemSender) content from the no-summary fallback', async () => {
@@ -356,7 +392,7 @@ describe('handleChatDangerClassification', () => {
     expect(classificationInput).not.toContain('new participant joined');
 
     // And the chat is not flagged on the strength of the benign conversation.
-    expect(repositories.chats.update).toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
   });
 
   it('skips if no context summary AND no messages', async () => {
@@ -370,27 +406,52 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
-  it('skips if dangerous content mode is OFF', async () => {
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
-      },
-      source: 'default',
+  it('skips if summary classification is off', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ summaryClassification: false }),
     });
 
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it('skips if the Concierge is off duty', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ enabled: false }),
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it('skips when there are no stored Concierge settings (summary classification defaults off)', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({});
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+  });
+
+  it('hands the classifier the policy resolved for this chat', async () => {
+    mockClassifyContent.mockResolvedValue({ isDangerous: false, score: 0.1, categories: [] });
+    repositories.chats.findById.mockResolvedValue({ ...baseChatMetadata, contextSummary: 'A summary' });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).toHaveBeenCalledWith(
+      'A summary',
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ summaryClassification: true, state: 'moderated' }),
+      'chat-1',
+    );
   });
 
   it('falls back to available profile when connection profile not found', async () => {
@@ -407,7 +468,7 @@ describe('handleChatDangerClassification', () => {
 
     // Should still classify using the fallback profile from findByUserId
     expect(mockClassifyContent).toHaveBeenCalled();
-    expect(repositories.chats.update).toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
   });
 
   it('skips if connection profile not found and no available profiles', async () => {
@@ -417,7 +478,7 @@ describe('handleChatDangerClassification', () => {
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
-    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
   it('does not create system event if no usage data', async () => {
@@ -429,7 +490,7 @@ describe('handleChatDangerClassification', () => {
 
     await handleChatDangerClassification(buildJob());
 
-    expect(repositories.chats.update).toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).toHaveBeenCalled();
     expect(mockCreateSystemEvent).not.toHaveBeenCalled();
   });
 });

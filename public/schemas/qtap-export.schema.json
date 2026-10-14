@@ -25,7 +25,8 @@
               "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
               "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
-              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
+              "wardrobeWear": { "type": "array", "items": { "$ref": "#/$defs/WardrobeWear" } }
             },
             "additionalProperties": false,
             "description": "From 4.8 a characters export carries each character's vault as well: its mount point, folders, documents and blobs appear here exactly as they would in a document-stores export. That is what makes avatars, photographs and correspondence survive a cross-instance import. Project links never appear — a character vault has none."
@@ -45,7 +46,8 @@
               "chats": { "type": "array", "items": { "$ref": "#/$defs/ExportedChat" } },
               "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
-              "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } }
+              "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
+              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } }
             },
             "additionalProperties": false
           }
@@ -177,7 +179,8 @@
               "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
               "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
-              "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } }
+              "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } },
+              "wardrobeWear": { "type": "array", "items": { "$ref": "#/$defs/WardrobeWear" } }
             },
             "additionalProperties": false
           }
@@ -374,6 +377,8 @@
         "documentStoreProjectLinks": { "type": "integer", "minimum": 0 },
         "conversationAnnotations": { "type": "integer", "minimum": 0 },
         "chatDocuments": { "type": "integer", "minimum": 0 },
+        "chatInforms": { "type": "integer", "minimum": 0 },
+        "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
         "promptTemplates": { "type": "integer", "minimum": 0 },
@@ -536,6 +541,20 @@
           "type": ["string", "null"],
           "description": "The resolved scenario content persisted on this chat at creation time"
         },
+        "scenarioSource": {
+          "type": ["object", "null"],
+          "description": "Where the preset under scenarioText was read from: the scenario file's store (mountPointId, remapped with the document stores on import; dropped to null when that store did not come across), its path, and the SHA-256 of its body at pick time. Null for a custom scene and for chats from before sources were recorded.",
+          "required": ["mountPointId", "path", "bodySha256"],
+          "properties": {
+            "mountPointId": { "type": "string", "format": "uuid" },
+            "path": { "type": "string", "maxLength": 500, "description": "Scenarios/<file>.md inside that store" },
+            "bodySha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "scenarioNotes": {
+          "type": ["string", "null"],
+          "description": "The free-text notes layered beneath the preset in scenarioText (so a reload from source keeps them)"
+        },
         "coreWhisperEnabled": {
           "type": ["boolean", "null"],
           "description": "Per-chat override of the global coreWhisper.enabled setting (Aurora's Core whisper). Null = inherit. Resolution: chat > character > global."
@@ -544,6 +563,18 @@
           "type": ["integer", "null"],
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
+        },
+        "otherExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "The other-fold extraction pass's cursor: the message id it has read this chat up to. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
+        },
+        "episodeExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "The episode-fold extraction pass's cursor: the message id it has read this chat up to. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
+        },
+        "turnExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "The per-turn extraction's cursor: the last assistant message a committed turn extraction covered, so a turn reopened by a skip, nudge or continue (or an autonomous room's next speaker) is read only past it. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
         },
         "timelineMode": {
           "type": ["string", "null"],
@@ -656,7 +687,20 @@
         },
         "conciergeOverride": {
           "enum": ["OFF", "UNCENSORED", null],
-          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = Vouched Safe (the operator vouches for the chat — no moderation, ordinary providers); 'UNCENSORED' = the operator asserts the chat spicy (uncensored routing with no classification or scanning)."
+          "deprecated": true,
+          "description": "DEPRECATED (4.10): no longer written; superseded by conciergeMode. Kept so a bundle from before the three Concierge states can be imported: when a chat carries no conciergeMode, the importer derives it from this and isDangerousChat — 'UNCENSORED' → unmoderated (operator), 'OFF' → locked (operator), NULL with isDangerousChat true → unmoderated (concierge, classifier), otherwise moderated."
+        },
+        "conciergeMode": {
+          "enum": ["moderated", "unmoderated", "locked", null],
+          "description": "The chat's Concierge state (4.10). NULL reads as 'moderated'. 'moderated' = ordinary providers first, uncensored on refusal, the Concierge may switch the chat; 'unmoderated' = the uncensored desk only; 'locked' = ordinary providers only, a refusal stands."
+        },
+        "conciergeModeSetBy": {
+          "enum": ["operator", "concierge", null],
+          "description": "Who put the chat in its conciergeMode. NULL when Moderated."
+        },
+        "conciergeModeReason": {
+          "enum": ["manual", "refusals", "classifier", "migration", null],
+          "description": "Why the chat is in its conciergeMode. NULL when Moderated."
         },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],
@@ -769,6 +813,15 @@
       "properties": {
         "participantId": { "$ref": "#/$defs/UUID" },
         "type": { "const": "CHARACTER" },
+        "selectedSystemPromptId": {
+          "type": ["string", "null"],
+          "description": "Id of the character's named system prompt this seat speaks from. Null/omitted means the character's default prompt."
+        },
+        "selectedSubpromptIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "description": "Ids (vault file names sans .md) of the character's Subprompts/*.md in play for this seat. Omitted or empty means none."
+        },
         "status": {
           "enum": ["active", "silent", "absent", "removed"],
           "description": "Participation status: active (normal), silent (inner thoughts only), absent (away), removed (left chat)"
@@ -919,6 +972,26 @@
             "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
             "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
           }
+        },
+        "routeTrail": {
+          "type": ["array", "null"],
+          "description": "The route trail: every profile tried, in the order tried, with why each one stepped aside. On an assistant turn it lists connection profiles; on an image-bearing row (the TOOL row of a generate_image call, a Lantern or Aurora announcement) it lists image profiles (profileKind 'image') when a picture was refused on the way. NULL on every message whose call had no failure — a one-entry trail says nothing the provider/modelName fields do not, and on an assistant turn those stay authoritative for who answered (the trail's last entry always agrees with them). `profileId` is a historical reference and is NOT remapped on import: it may name a profile that does not exist in the importing instance, which is fine because the trail is display-only and nothing dereferences it.",
+          "items": {
+            "type": "object",
+            "required": ["profileId", "profileName", "provider", "modelName", "via", "outcome"],
+            "properties": {
+              "profileId": { "type": "string", "description": "Connection or image profile that was asked. Historical — never remapped on import, and never dereferenced by the UI." },
+              "profileName": { "type": "string", "description": "The profile's name at the time of the turn. Users name their own profiles, so this is what tells three OpenAI profiles apart." },
+              "provider": { "type": "string", "description": "Provider the profile spoke to (e.g. 'openai', 'anthropic')." },
+              "modelName": { "type": "string", "description": "Model that was asked." },
+              "via": { "type": "string", "enum": ["primary", "retry", "concierge", "understudy", "tier-pick"], "description": "How this profile came to be asked: 'primary' = the configured profile (or the one the Concierge's pre-call reroute installed); 'retry' = the same profile asked again after an empty body; 'concierge' = the uncensored profile the Concierge sent the turn to; 'understudy' = the profile's own named fallbackProfileId; 'tier-pick' = a stand-in the fallback engine drafted from the company." },
+              "outcome": { "type": "string", "enum": ["answered", "failed", "refused"], "description": "'answered' = this profile wrote the message; 'failed' = it fell over on its own (timeout, auth, rate limit, 5xx, an empty body with no stated reason); 'refused' = it declined on content grounds." },
+              "trigger": { "type": "string", "enum": ["auth", "rate-limit", "network", "model-missing", "provider-error", "empty-response", "moderation-refusal"], "description": "The fallback engine's failure class. Absent on the entry that answered." },
+              "evidence": { "type": "string", "enum": ["typed-error", "provider-code", "finish-reason", "message-pattern", "inferred"], "description": "How a refusal was established, strongest first: 'typed-error' = the provider plugin threw a moderation rejection (code MODERATION_REJECTED); 'provider-code' = the provider's own moderation error code; 'finish-reason' = the provider reported a moderation stop; 'message-pattern' = refusal wording in the provider's error text; 'inferred' = an empty body on a turn the Concierge had flagged. Absent unless outcome is 'refused'." },
+              "profileKind": { "type": "string", "enum": ["connection", "image"], "description": "What kind of profile was asked. Absent means 'connection' (every trail written before image calls had trails); 'image' = an image generation profile, whose modelName is the image model." },
+              "detail": { "type": "string", "maxLength": 200, "description": "Short human-readable reason — the error message truncated, or the finish reason. Never the full error body." }
+            }
+          }
         }
       }
     },
@@ -937,7 +1010,29 @@
         "projectId": { "$ref": "#/$defs/UUID" },
         "importance": { "type": "number" },
         "keywords": { "type": "array", "items": { "type": "string" } },
-        "source": { "type": "string" },
+        "source": { "type": "string", "description": "AUTO | MANUAL | CONSOLIDATED (a digest written by the consolidator)." },
+        "tier": {
+          "type": "string",
+          "enum": ["hot", "cold"],
+          "description": "Recall tier. Absent reads as 'hot'. Cold rows are consolidated members (or cap-pressure demotions): hidden from ordinary recall, still visible to the gate, search tool and UI."
+        },
+        "supersededById": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Memory id of the CONSOLIDATED digest that replaced this cold row. Null/absent when not superseded. Remapped with the memory ids on import."
+        },
+        "supersededAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "When this row went cold under its digest; set and cleared with supersededById. Cold retention ages superseded rows by it. Null/absent when not superseded (older bundles: retention falls back to updatedAt)."
+        },
+        "consolidatedFrom": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "On a CONSOLIDATED digest: memory ids of the cold members it folds. Absent reads as []. Remapped with the memory ids on import."
+        },
+        "consolidatedAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "Last time the consolidator considered this row. Null/absent when never considered."
+        },
         "occurredAt": {
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
           "description": "ISO wall-clock time of the EVENT the memory records (episodic spine) — distinct from createdAt, the write clock. Durable data; always exported."
@@ -991,6 +1086,26 @@
         "mountPoint": { "type": ["string", "null"] },
         "displayTitle": { "type": ["string", "null"] },
         "isActive": { "type": "boolean" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ChatInform": {
+      "type": "object",
+      "description": "One Inform row: an out-of-character passage the operator handed to a single LLM-controlled seat, delivered verbatim as its own system block on that seat's next generation. One row per (batch x target) \u2014 the body is duplicated per target on purpose, so consumption is a single-row write. Consumed rows are exported too: the row a past turn consumed is what lets a swipe of that turn re-apply the same inform.",
+      "required": ["id", "chatId", "batchId", "participantId", "contentMarkdown", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "batchId": { "$ref": "#/$defs/UUID", "description": "Shared by every row one post produced \u2014 the unit the operator cancels." },
+        "participantId": { "$ref": "#/$defs/UUID", "description": "A chat PARTICIPANT id, never a character id." },
+        "contentMarkdown": { "type": "string", "description": "Exactly what the operator typed. Delivered verbatim; never framed." },
+        "recordMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The Host transcript message documenting the post. Nullable so a record-write failure cannot orphan the batch." },
+        "permanent": { "type": "boolean", "default": false, "description": "A standing inform: delivered on every generation this seat makes in this chat until withdrawn, never consumed. Absent means false (a one-shot inform)." },
+        "consumedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }], "description": "When the row was consumed; on a standing row, its first delivery only." },
+        "consumedByMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The assistant message whose generation delivered this row (the first such, for a standing row)." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }
@@ -1239,6 +1354,24 @@
       }
     },
 
+    "WardrobeWear": {
+      "type": "object",
+      "description": "One wear-ledger row (wardrobe_wear_stats): one wearer's tally for one exported wardrobe item \u2014 a character-owned item or a shared item riding as a Wardrobe/*.md document. In an NDJSON stream each row is a `wardrobe_wear` record emitted after every other entity record. All ids are source-instance ids: the importer remaps itemId and wearerCharacterId, folds a wearer it cannot resolve into the item's unattributed row (wearerCharacterId null), clears lastWornChatId when the chat did not come along, and drops a row whose item did not import.",
+      "required": ["id", "itemId", "wearerCharacterId", "wearCount", "firstWornAt", "lastWornAt", "lastWornChatId", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "itemId": { "type": "string", "minLength": 1, "description": "The wardrobe item's id (its Wardrobe/*.md frontmatter id). Not a row id: items are vault files." },
+        "wearerCharacterId": { "type": ["string", "null"], "description": "The character who wore it. Null is the unattributed row \u2014 the wearer was deleted, or an earlier import could not resolve them. At most one row per (itemId, wearerCharacterId)." },
+        "wearCount": { "type": "integer", "minimum": 0, "description": "Equip transitions: each time the item went from not worn to worn on this wearer in a chat." },
+        "firstWornAt": { "$ref": "#/$defs/Timestamp" },
+        "lastWornAt": { "$ref": "#/$defs/Timestamp" },
+        "lastWornChatId": { "type": ["string", "null"], "description": "The chat of the last wear. May name a chat since deleted." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
     "WardrobeItem": {
       "type": "object",
       "description": "A wardrobe item (clothing, accessory, etc.) belonging to a character.",
@@ -1293,12 +1426,47 @@
           ],
           "description": "Provenance tracking for items migrated from legacy clothingRecords"
         },
+        "imageFileId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ],
+          "description": "The item's current picture: the id of one of its own image files (see _imageFiles). Null or absent means no picture. The importer re-mints the file rows and points this at the item's own copy, or nulls it when the picture did not come along."
+        },
+        "_imageFiles": {
+          "type": "array",
+          "description": "Character-owned items only: metadata of the item's pictures (the item's image file history). The bytes are not here — they ride in the character's vault as blobs at Wardrobe/images/<itemId>/<originalFilename>.",
+          "items": {
+            "type": "object",
+            "required": ["id", "originalFilename", "mimeType", "size", "source", "createdAt"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "$ref": "#/$defs/UUID" },
+              "originalFilename": { "type": "string" },
+              "mimeType": { "type": "string" },
+              "size": { "type": "number" },
+              "width": { "type": ["number", "null"] },
+              "height": { "type": ["number", "null"] },
+              "source": { "type": "string", "enum": ["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"] },
+              "generationPrompt": { "type": ["string", "null"] },
+              "generationModel": { "type": ["string", "null"] },
+              "generationRevisedPrompt": { "type": ["string", "null"] },
+              "description": { "type": ["string", "null"] },
+              "createdAt": { "$ref": "#/$defs/Timestamp" }
+            }
+          }
+        },
         "archivedAt": {
           "oneOf": [
             { "$ref": "#/$defs/Timestamp" },
             { "type": "null" }
           ],
           "description": "When the item was archived; null or absent means active. An archived garment is hidden from every wardrobe list and picker unless the surface asks for archived entries, and is never offered to the outfit-selection LLM. It does not undress a character already wearing it."
+        },
+        "folder": {
+          "type": "string",
+          "maxLength": 900,
+          "description": "The operator's folder for the item under its wardrobe's Wardrobe/ folder (e.g. \"Formal/Evening\"); empty or absent means the top level. Derived from the item file's path, never stored in its frontmatter. Filing only: it has no bearing on what a character can wear. Importers file the item at the same path, normalising one that is not a clean wardrobe folder (at most 8 segments, none named \"images\") or falling back to the top level."
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
@@ -1573,6 +1741,10 @@
         },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "description": { "type": ["string", "null"] },
+        "generationKey": {
+          "type": ["string", "null"],
+          "description": "Avatar configuration cache key — the hash of everything deterministic about the generation that produced this image (prompt, provider, image profile, model, built params). Travels as-is. It folds in the exporting instance's image-profile id, so on a receiving instance the key is simply inert until that same profile id derives it again: nothing on the target will ever compute a matching key by accident, and a round trip back to the origin still hits. Only avatar rows carry one."
+        },
         "dataBase64": {
           "type": "string",
           "contentEncoding": "base64",

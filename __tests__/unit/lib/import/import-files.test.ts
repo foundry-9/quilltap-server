@@ -60,7 +60,8 @@ function emptyIdMaps(): IdMappingState {
     groups: new Map(),
     mountPoints: new Map(),
     docMountFileLinks: new Map(),
-  }
+    messages: new Map(),
+  } as unknown as IdMappingState
 }
 
 const OPTIONS: ImportOptions = {
@@ -248,6 +249,47 @@ describe('importFiles', () => {
 
     const created = filesCreate.mock.calls[0][0] as Record<string, unknown>
     expect(created.linkedTo).toEqual(['chat-1', 'msg-1'])
+  })
+
+  it('follows a message reminted with its duplicated chat (bug 228)', async () => {
+    const idMaps = emptyIdMaps()
+    idMaps.chats.set('chat-old', 'chat-copy')
+    idMaps.messages.set('chat-old', new Map([['msg-old', 'msg-copy']]))
+
+    await importFiles(
+      'user-1',
+      [makeFile({ linkedTo: ['chat-old', 'msg-old'] })] as never,
+      [],
+      OPTIONS,
+      repos as never,
+      idMaps,
+      warnings
+    )
+
+    const created = filesCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(created.linkedTo).toEqual(['chat-copy', 'msg-copy'])
+  })
+
+  it('drops a message id whose reminted chat is not named beside it, or that never landed', async () => {
+    const idMaps = emptyIdMaps()
+    idMaps.chats.set('chat-a', 'chat-a-copy')
+    idMaps.chats.set('chat-b', 'chat-b-copy')
+    // msg-x landed in chat B only; chat A's insert of it failed.
+    idMaps.messages.set('chat-a', new Map())
+    idMaps.messages.set('chat-b', new Map([['msg-x', 'msg-x-in-b']]))
+
+    await importFiles(
+      'user-1',
+      [makeFile({ linkedTo: ['chat-a', 'msg-x'] })] as never,
+      [],
+      OPTIONS,
+      repos as never,
+      idMaps,
+      warnings
+    )
+
+    const created = filesCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(created.linkedTo).toEqual(['chat-a-copy'])
   })
 
   it('creates folders parents-first and reuses one that already exists', async () => {

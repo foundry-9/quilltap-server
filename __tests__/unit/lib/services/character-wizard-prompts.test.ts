@@ -7,6 +7,13 @@
  */
 
 import { FIELD_PROMPTS, PROPERTIES_PROMPT } from '@/lib/services/character-wizard.service'
+import {
+  CONVERSATIONAL_VOICE_DIRECTION,
+  EXAMPLE_DIALOGUE_COVERAGE,
+  TRUST_SAFEGUARDS_DIRECTION,
+  COMPANION_TRUST_DISPOSITION,
+  COMPANION_TRUST_DISPOSITION_GATE,
+} from '@/lib/services/character-field-semantics'
 
 describe('character-wizard FIELD_PROMPTS', () => {
   it('defines a prompt for the identity field', () => {
@@ -68,6 +75,39 @@ describe('character-wizard FIELD_PROMPTS', () => {
     const p = FIELD_PROMPTS.systemPrompt
     expect(p).toContain('SYSTEM PROMPTS')
     expect(p.toLowerCase()).toContain('second person')
+  })
+
+  it('systemPrompt prompt directs listening and conversational register', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    expect(p).toContain(CONVERSATIONAL_VOICE_DIRECTION)
+    expect(p).toMatch(/listen like a person/i)
+    expect(p).toMatch(/seasoning/i)
+  })
+
+  it('systemPrompt prompt carries the trust safeguards', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    expect(p).toContain(TRUST_SAFEGUARDS_DIRECTION)
+    expect(p).toMatch(/not a committee/i)
+  })
+
+  it('systemPrompt prompt gates the companion trust disposition', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    const gate = p.indexOf(COMPANION_TRUST_DISPOSITION_GATE)
+    const disposition = p.indexOf(COMPANION_TRUST_DISPOSITION)
+    expect(gate).toBeGreaterThan(-1)
+    expect(disposition).toBeGreaterThan(gate)
+  })
+
+  it('systemPrompt prompt allows 600 words', () => {
+    expect(FIELD_PROMPTS.systemPrompt).toMatch(/under 600 words/)
+  })
+
+  it('exampleDialogues prompt asks for a joke caught, a casual line, and a serious moment', () => {
+    const p = FIELD_PROMPTS.exampleDialogues
+    expect(p).toContain(EXAMPLE_DIALOGUE_COVERAGE)
+    expect(p).toMatch(/catching a joke/i)
+    expect(p).toMatch(/casual, offhand line briefly/i)
+    expect(p).toMatch(/getting serious/i)
   })
 })
 

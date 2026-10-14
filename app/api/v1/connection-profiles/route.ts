@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
@@ -50,9 +50,6 @@ const testMessageSchema = z.object({
     })
     .optional(),
 });
-
-  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort', 'auto-configure'] as const;
-  type ConnectionProfilePostAction = typeof CONNECTION_PROFILE_POST_ACTIONS[number];
 
 /**
  * GET /api/v1/connection-profiles
@@ -650,20 +647,16 @@ async function handleAutoConfigure(req: NextRequest, context: RequestContext) {
 /**
  * POST /api/v1/connection-profiles - Action dispatch or create
  */
-export const POST = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  if (!action || !isValidAction(action, CONNECTION_PROFILE_POST_ACTIONS)) {
-    return handleCreate(req, context);
-  }
-
-  const actionHandlers: Record<ConnectionProfilePostAction, () => Promise<NextResponse>> = {
-    'test-connection': () => handleTestConnection(req, context),
-    'test-message': () => handleTestMessage(req, context),
-    reorder: () => handleReorder(req, context),
-    'reset-sort': () => handleResetSort(req, context),
-    'auto-configure': () => handleAutoConfigure(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+export const POST = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    {
+      'test-connection': () => handleTestConnection(req, context),
+      'test-message': () => handleTestMessage(req, context),
+      reorder: () => handleReorder(req, context),
+      'reset-sort': () => handleResetSort(req, context),
+      'auto-configure': () => handleAutoConfigure(req, context),
+    },
+    () => handleCreate(req, context)
+  )
+);

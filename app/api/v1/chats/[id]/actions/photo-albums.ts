@@ -22,23 +22,9 @@ import { notFound, serverError } from '@/lib/api/responses';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { RequestContext } from '@/lib/api/middleware';
+import type { PhotoAlbumOption } from '@/lib/photos/photo-album-options';
 
-export type PhotoAlbumKind = 'character' | 'project' | 'document-store' | 'general';
-
-export interface PhotoAlbumOption {
-  mountPointId: string;
-  /** Display label. Character albums use the character name; others use the mount-point name. */
-  name: string;
-  kind: PhotoAlbumKind;
-  /** Present for `kind: 'character'`. */
-  characterId?: string;
-  /** Present for `kind: 'character'` — the chat participant whose vault this is. */
-  participantId?: string;
-  /** Present for `kind: 'character'` — true when the participant is user-controlled. */
-  isUserCharacter?: boolean;
-  /** Exactly one option in the response is marked default. */
-  isDefault?: boolean;
-}
+export type { PhotoAlbumKind, PhotoAlbumOption } from '@/lib/photos/photo-album-options';
 
 export async function handleGetPhotoAlbums(
   chatId: string,

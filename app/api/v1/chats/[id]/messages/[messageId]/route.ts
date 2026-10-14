@@ -10,6 +10,10 @@
  *   - Cancel a Courier placeholder turn: delete the message and unpause
  * POST /api/v1/chats/[id]/messages/[messageId]?action=save-image
  *   - Save an attached image to a chosen photo album
+ * POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored
+ *   - Regenerate an assistant message on the Concierge's uncensored desk, as a
+ *     new swipe (add &stream=1 for the regeneration's SSE narration). 409
+ *     `locked` / `no-understudy` when it cannot be done.
  */
 
 import { NextRequest } from 'next/server';
@@ -17,16 +21,26 @@ import { z } from 'zod';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, successResponse, serverError } from '@/lib/api/responses';
+import { badRequest, conflict, created, notFound, successResponse, serverError } from '@/lib/api/responses';
+import { regenerateMessageAsSwipe, streamSwipeRegeneration } from '@/lib/services/chat-message';
+import {
+  composeRetryRouteTrail,
+  resolveTextRetryUnderstudy,
+} from '@/lib/services/dangerous-content/retry-uncensored';
+import type { MessageEvent } from '@/lib/schemas/types';
 import {
   triggerTurnMemoryExtraction,
   triggerChatDangerClassification,
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from '@/lib/services/chat-message/memory-trigger.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album';
-import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
+import {
+  saveImageToAlbum,
+  SaveImageToAlbumError,
+  SaveImageRequestSchema,
+} from '@/lib/photos/save-image-to-album';
+import { resolveSaveAttribution } from '@/lib/photos/save-attribution';
+import { savedImageResponse, saveImageErrorResponse } from '@/lib/photos/save-image-response';
 
 /**
  * Handle overriding danger flags on a message
@@ -173,16 +187,14 @@ async function handleResolveExternalTurn(
     }
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings?.cheapLLMSettings,
-      dangerSettings,
-      isDangerousChat: chat.isDangerousChat === true,
     };
 
-    // Fire-and-forget post-response triggers. Memory extraction is gated to
-    // the user's turn inside the helper, so multi-character courier chains
-    // remain consistent with the streaming finalizer's behavior.
+    // Fire-and-forget post-response triggers. Every Courier reply enqueues
+    // extraction for the turn it closes; the queue dedupes a turn's repeat
+    // enqueues on (chat, opener, anchor), so a multi-character Courier chain
+    // still extracts each turn once.
     if (connectionProfile) {
       void triggerTurnMemoryExtraction(repos, {
         chatId: id,
@@ -274,13 +286,6 @@ async function handleCancelExternalTurn(
   }
 }
 
-const saveImageSchema = z.object({
-  fileId: z.string().uuid('fileId must be a UUID'),
-  mountPointId: z.string().uuid('mountPointId must be a UUID'),
-  caption: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-});
-
 /**
  * Save an image attachment from a chat message into a chosen photo album.
  * Mirrors the LLM `keep_image` tool but lets the human operator pick any
@@ -294,7 +299,7 @@ async function handleSaveImage(
 ) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = saveImageSchema.safeParse(body);
+    const parsed = SaveImageRequestSchema.safeParse(body);
     if (!parsed.success) {
       return badRequest(parsed.error.issues.map((i) => i.message).join('; '));
     }
@@ -316,47 +321,10 @@ async function handleSaveImage(
       return badRequest('Image is not attached to this message');
     }
 
-    // Decide attribution. If the chosen mount point is a participant's
-    // character vault, attribute the save to that character (matching the
-    // LLM keep_image flow). Otherwise attribute it to the human operator —
-    // preferring the actively-impersonated user character's name when one
-    // exists.
-    let attribution: { name: string; id: string | null; role: 'character' | 'user' } | null = null;
-    for (const participant of chat.participants) {
-      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-      const vault = await getCharacterVaultStore(participant.characterId);
-      if (!vault || vault.mountPointId !== mountPointId) continue;
-      const character = await repos.characters.findById(participant.characterId);
-      attribution = {
-        name: character?.name ?? vault.mountPointName,
-        id: participant.characterId,
-        role: 'character',
-      };
-      break;
-    }
-
-    if (!attribution) {
-      let userPersonaName: string | null = null;
-      let userPersonaId: string | null = null;
-      const activeTypingId = chat.activeTypingParticipantId ?? null;
-      const activeParticipant = activeTypingId
-        ? chat.participants.find((p) => p.id === activeTypingId && p.controlledBy === 'user')
-        : undefined;
-      const fallbackParticipant = chat.participants.find((p) => p.controlledBy === 'user');
-      const userParticipant = activeParticipant ?? fallbackParticipant;
-      if (userParticipant?.characterId) {
-        const character = await repos.characters.findById(userParticipant.characterId);
-        if (character?.name) {
-          userPersonaName = character.name;
-          userPersonaId = character.id;
-        }
-      }
-      attribution = {
-        name: userPersonaName ?? user.name ?? 'Quilltap',
-        id: userPersonaId ?? user.id ?? null,
-        role: 'user',
-      };
-    }
+    // Who the save is attributed to — the one rule, shared with the
+    // gallery's chat-scoped twin so both doors write the same byline into the
+    // kept-image sidecar.
+    const attribution = await resolveSaveAttribution(chat, mountPointId, user, repos);
 
     const saved = await saveImageToAlbum({
       mountPointId,
@@ -376,15 +344,7 @@ async function handleSaveImage(
       linkId: saved.linkId,
     });
 
-    return successResponse({
-      saved: true,
-      mountPoint: saved.mountPointName,
-      relativePath: saved.relativePath,
-      linkId: saved.linkId,
-      keptAt: saved.keptAt,
-      fileId: saved.fileId,
-      sha256: saved.sha256,
-    });
+    return savedImageResponse(saved);
   } catch (error) {
     if (error instanceof SaveImageToAlbumError) {
       logger.info('[SaveImage] rejected', {
@@ -393,7 +353,7 @@ async function handleSaveImage(
         code: error.code,
         message: error.message,
       });
-      return badRequest(error.message);
+      return saveImageErrorResponse(error);
     }
     logger.error('[SaveImage] failed', {
       chatId: id,
@@ -404,11 +364,97 @@ async function handleSaveImage(
   }
 }
 
+/**
+ * "Try uncensored" on a text turn.
+ *
+ * A regenerate of the target assistant message — the same swipe the refresh
+ * icon makes, with the same inform semantics (re-applied, never consumed) —
+ * except that the Concierge's uncensored understudy takes it instead of the
+ * responder's own profile. The chat's Concierge state is not touched.
+ */
+async function handleRetryUncensored(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id, messageId }: { id: string; messageId: string }
+) {
+  const chat = await repos.chats.findById(id);
+  if (!chat) {
+    return notFound('Chat');
+  }
+
+  const allMessages = (await repos.chats.getMessages(id)).filter(
+    (m): m is MessageEvent => m.type === 'message'
+  );
+  const targetMessage = allMessages.find((m) => m.id === messageId);
+  if (!targetMessage) {
+    return notFound('Message');
+  }
+  if (targetMessage.role !== 'ASSISTANT') {
+    return badRequest('Only assistant messages can be retried');
+  }
+  if (targetMessage.systemSender) {
+    return badRequest('Staff and system messages cannot be regenerated');
+  }
+
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const gate = await resolveTextRetryUnderstudy({
+    repos,
+    userId: user.id,
+    chat,
+    chatSettings,
+    targetMessage,
+  });
+  if (!gate.ok) {
+    logger.info('[DangerousContent] Uncensored retry refused', {
+      chatId: id,
+      messageId,
+      reason: gate.reason,
+    });
+    return conflict(gate.reason);
+  }
+
+  const { understudy } = gate;
+  const options = {
+    repos,
+    userId: user.id,
+    chat,
+    targetMessage,
+    allMessages,
+    activeUserParticipantId: chat.activeTypingParticipantId ?? null,
+    profileOverride: understudy,
+    routeTrail: composeRetryRouteTrail(targetMessage.routeTrail, understudy.profile, 'connection'),
+  };
+
+  logger.info('[DangerousContent] Retrying a turn on the uncensored desk', {
+    chatId: id,
+    messageId,
+    understudyProfileId: understudy.profile.id,
+    understudyName: understudy.profile.name,
+  });
+
+  if (req.nextUrl?.searchParams.get('stream') === '1') {
+    return streamSwipeRegeneration(options, '[DangerousContent] Uncensored retry:');
+  }
+
+  try {
+    const newSwipe = await regenerateMessageAsSwipe(options);
+    return created({ message: newSwipe });
+  } catch (error) {
+    logger.error('[DangerousContent] Uncensored retry failed', {
+      chatId: id,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : undefined);
+    return serverError(error instanceof Error ? error.message : 'Failed to retry uncensored');
+  }
+}
+
 export const POST = createContextParamsHandler<{ id: string; messageId: string }>(
   withActionDispatch({
     'override-danger-flag': handleOverrideDangerFlag,
     'resolve-external-turn': handleResolveExternalTurn,
     'cancel-external-turn': handleCancelExternalTurn,
     'save-image': handleSaveImage,
+    'retry-uncensored': handleRetryUncensored,
   })
 );

@@ -220,7 +220,7 @@ function formatDateTime(iso: string): string {
 export function renderConversationMarkdown(
   messages: ChatEvent[],
   participants: ChatParticipantBase[],
-  characterNames: Map<string, string>,
+  characterNames: ReadonlyMap<string, string>,
   metadata?: ConversationMetadata,
 ): RenderedConversation {
 

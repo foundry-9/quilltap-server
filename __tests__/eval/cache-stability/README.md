@@ -3,7 +3,7 @@
 Asserts that the cacheable prefix of an LLM request stays byte-stable across
 turns. Drift in any tier (system block 1 / system block 2 / tools / frozen
 history) means provider caches will miss; the report at
-`docs/developer/features/llm_api_costs_breakdown.md` documents why this matters.
+`docs/developer/features/complete/llm_api_costs_breakdown.md` documents why this matters.
 
 ## What we measure
 

@@ -28,7 +28,7 @@ import {
   applyProjectStoreWriteOverlay,
   writeProjectStoreManagedFields,
 } from '@/lib/projects/project-store/write-overlay';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 
 /**
  * Projects Repository
@@ -48,7 +48,7 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
     applyOverlayOne: applyProjectStoreOverlayOne,
     applyWriteOverlay: applyProjectStoreWriteOverlay,
     writeManagedFields: writeProjectStoreManagedFields,
-    ensureOfficialStore: ensureProjectOfficialStore,
+    ensureOfficialStore: (id, name) => ensureOwnerOfficialStore('project', id, name),
   };
 
   /** Seed the roster defaults a fresh project needs before its row is written. */
@@ -57,7 +57,7 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
   ): Omit<Project, 'id' | 'createdAt' | 'updatedAt'> {
     return {
       ...data,
-      allowAnyCharacter: data.allowAnyCharacter ?? false,
+      allowAnyCharacter: data.allowAnyCharacter ?? true,
       characterRoster: data.characterRoster ?? [],
     };
   }
@@ -175,10 +175,13 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
   }
 
   /**
-   * Check if a character can participate in a project
+   * The roster policy: may this character use their tools on the project's
+   * files and shared wardrobe? (`allowAnyCharacter`, or on the roster.) It does
+   * not govern who may chat in the project. Call sites go through
+   * `projectRosterAdmits` in `lib/projects/roster-access.ts`.
    * @param projectId The project ID
    * @param characterId The character ID
-   * @returns Promise<boolean> True if character can participate
+   * @returns Promise<boolean> True if the roster admits the character
    */
   async canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
     return this.safeQuery(

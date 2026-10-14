@@ -38,6 +38,12 @@ function formatDateTime(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
 }
 
+const IMPERSONATION_VOICE_MODE_LABELS: Record<string, string> = {
+  off: 'Never',
+  ask: 'Ask each time',
+  always: 'Always restate',
+};
+
 function yesNo(value: boolean): string {
   return value ? 'Yes' : 'No';
 }
@@ -530,6 +536,11 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
       `floor ${data.instanceSettings.memoryExtractionLimits.softFloor})`,
   );
   push(
+    `- **Memory maintenance**: ${yesNo(data.instanceSettings.memoryMaintenance.enabled)} ` +
+      `(per-character cap ${data.instanceSettings.memoryMaintenance.perCharacterCap}, ` +
+      `${data.instanceSettings.memoryMaintenance.capOverrides} override(s))`,
+  );
+  push(
     `- **Last maintenance sweep**: ${formatDateTime(data.instanceSettings.lastMaintenanceSweepAt)}`,
     '',
   );
@@ -662,12 +673,28 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
 function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('### Feature Configuration', '');
   const fc = data.featureConfig;
-  push('#### The Concierge (Dangerous Content)', '');
-  push(`- **Mode**: ${fc.dangerousContent.mode}`);
-  push(`- **Threshold**: ${fc.dangerousContent.threshold}`);
-  push(`- **Scan Text Chat**: ${yesNo(fc.dangerousContent.scanTextChat)}`);
-  push(`- **Scan Image Prompts**: ${yesNo(fc.dangerousContent.scanImagePrompts)}`);
-  push(`- **Scan Image Generation**: ${yesNo(fc.dangerousContent.scanImageGeneration)}`, '');
+  const cg = fc.concierge;
+  const pinned = (set: boolean) => (set ? 'pinned' : 'auto-detect');
+  push('#### The Concierge', '');
+  push(`- **On Duty**: ${yesNo(cg.enabled)}`);
+  push(`- **New Chats Start As**: ${cg.newChatsStartAs}`);
+  push(
+    `- **Auto-Switch After Refusals**: ${cg.autoSwitchAfterRefusals === 0 ? 'never' : cg.autoSwitchAfterRefusals}`,
+  );
+  push(`- **Display**: ${cg.display.mode} (warning badges: ${yesNo(cg.display.showWarningBadges)})`);
+  push(
+    `- **Uncensored Desk**: text ${pinned(cg.desk.textProfileSet)}, ` +
+      `image ${pinned(cg.desk.imageProfileSet)}, ` +
+      `vision ${cg.desk.visionProfileSet ? 'pinned' : 'none'}, ` +
+      `image-prompt crafter ${cg.desk.imagePromptProfileSet ? 'pinned' : 'none'}`,
+  );
+  push(`- **Pre-Screen**: ${yesNo(cg.preScreen.enabled)}`);
+  push(`- **Pre-Screen Threshold**: ${cg.preScreen.threshold}`);
+  push(`- **Scan Text Chat**: ${yesNo(cg.preScreen.scanTextChat)}`);
+  push(`- **Scan Image Prompts**: ${yesNo(cg.preScreen.scanImagePrompts)}`);
+  push(`- **Scan Image Generation**: ${yesNo(cg.preScreen.scanImageGeneration)}`);
+  push(`- **Custom Classification Prompt**: ${yesNo(cg.preScreen.customClassificationPrompt)}`);
+  push(`- **Summary Classification**: ${yesNo(cg.summaryClassification)}`, '');
 
   push('#### Context Compression', '');
   push(`- **Enabled**: ${yesNo(fc.contextCompression.enabled)}`);
@@ -681,6 +708,9 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('#### The Lantern (Story Backgrounds)', '');
   push(`- **Enabled**: ${yesNo(fc.storyBackgrounds.enabled)}`);
   push(`- **Has Default Image Profile**: ${yesNo(fc.storyBackgrounds.hasDefaultImageProfile)}`, '');
+
+  push('#### Wardrobe Images', '');
+  push(`- **Has Designated Image Profile**: ${yesNo(fc.wardrobeImages.hasDesignatedImageProfile)}`, '');
 
   push('#### Aurora (Core Whisper)', '');
   push(`- **Enabled**: ${yesNo(fc.coreWhisper.enabled)}`);
@@ -707,19 +737,16 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push(`- **Enabled**: ${yesNo(fc.autoLock.enabled)}`);
   push(`- **Idle Minutes**: ${fc.autoLock.idleMinutes}`, '');
 
-  push('#### Memory Cascade & Housekeeping', '');
+  push('#### Memory Cascade', '');
   push(`- **On Message Delete**: ${fc.memoryCascade.onMessageDelete}`);
-  push(`- **On Swipe/Regenerate**: ${fc.memoryCascade.onSwipeRegenerate}`);
-  push(`- **Auto Housekeeping**: ${yesNo(fc.autoHousekeeping.enabled)}`);
-  push(`- **Per-Character Cap**: ${fc.autoHousekeeping.perCharacterCap}`);
-  push(`- **Merge Similar**: ${yesNo(fc.autoHousekeeping.mergeSimilar)}`);
-  push(`- **Merge Threshold**: ${fc.autoHousekeeping.autoMergeSimilarThreshold}`, '');
+  push(`- **On Swipe/Regenerate**: ${fc.memoryCascade.onSwipeRegenerate}`, '');
 
   push('#### Salon Behaviour', '');
   push(`- **Answer Confirmation**: ${yesNo(fc.answerConfirmation.enabled)}`);
   push(`- **Thinking Visible by Default**: ${yesNo(fc.thinkingDisplay.defaultVisible)}`);
   push(`- **Thinking Collapsed by Default**: ${yesNo(fc.thinkingDisplay.defaultCollapsed)}`);
   push(`- **Composer Spellcheck**: ${yesNo(fc.composerSpellcheck)}`);
+  push(`- **Impersonated Lines in Character Voice**: ${IMPERSONATION_VOICE_MODE_LABELS[fc.impersonationVoiceMode] ?? fc.impersonationVoiceMode}`);
   push(`- **Auto-Scroll on Response Complete**: ${yesNo(fc.autoScrollOnResponseComplete)}`);
   push(
     `- **Text Replacements**: ${yesNo(fc.textReplacements.enabled)} ` +
@@ -730,7 +757,7 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('#### Image Description', '');
   push(`- **Primary profile configured**: ${yesNo(fc.imageDescriptionProfileConfigured)}`);
   push(
-    `- **Uncensored fallback configured**: ${yesNo(fc.uncensoredImageDescriptionProfileConfigured)}`,
+    `- **Uncensored fallback configured**: ${yesNo(fc.uncensoredVisionProfileConfigured)}`,
     '',
   );
 }

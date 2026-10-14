@@ -1,3 +1,4 @@
+import type { ScenarioSelection } from '@/components/scenario/types'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 /**
@@ -112,6 +113,8 @@ export interface SelectedCharacter {
   character: Character
   connectionProfileId: string
   selectedSystemPromptId?: string | null
+  /** Ids of the character's subprompts to put in play for this chat. */
+  selectedSubpromptIds?: string[]
   controlledBy: 'llm' | 'user'
 }
 
@@ -146,7 +149,7 @@ export interface NewChatFormState {
   /**
    * The Concierge state the chat is created with — the sidebar's four-state
    * control, moved earlier in time so the choice is in force for the opening
-   * greeting. `'monitored'` is the default and is omitted from the create
+   * greeting. `'moderated'` is the default and is omitted from the create
    * request; anything else is applied server-side through `applyConciergeFlip`
    * right after the system-prompt message.
    */
@@ -163,16 +166,19 @@ export interface NewChatFormState {
    * this is false, so an explicit choice is never quietly overwritten.
    */
   roleplayTemplateTouched: boolean
+  /** Free-text notes — layered beneath the preset, or the whole scene under Custom. */
   scenario: string
-  scenarioId: string | null
-  /** Relative path of a selected project scenario; mutually exclusive with `scenarioId` and free-text `scenario`. */
-  projectScenarioPath: string | null
-  /** Relative path of a selected general scenario; mutually exclusive with the other scenario fields. */
-  generalScenarioPath: string | null
-  /** Relative path of a selected group scenario; mutually exclusive with the other scenario fields. */
-  groupScenarioPath: string | null
-  /** Group ID of the selected group scenario; paired with `groupScenarioPath`. */
-  groupScenarioGroupId: string | null
+  /**
+   * The one preset pointer — what the dropdown shows and exactly what is
+   * submitted (`scenarioSelectionToPayload`), so display and submit cannot
+   * disagree. Seeded character default > project default > general default.
+   */
+  scenarioSelection: ScenarioSelection
+  /**
+   * Set once the user picks a scenario by hand. Reference-data reloads (a new
+   * cast, a different project) re-seed the default only while this is false.
+   */
+  scenarioTouched: boolean
   timestampConfig: TimestampConfig | null
   avatarGenerationEnabled: boolean
   outfitSelections: OutfitSelection[]

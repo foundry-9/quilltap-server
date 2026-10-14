@@ -57,8 +57,6 @@ export const CheapLLMSettingsSchema = z.object({
   fallbackToLocal: z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
-  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
-  imagePromptProfileId: UUIDSchema.nullable().optional(),
   /**
    * Whether a cheap-LLM route with no connection profile behind it — a
    * pure-local Ollama pick, or a provider-cheapest synthesis — may have a
@@ -130,30 +128,63 @@ export const MemoryCascadePreferencesSchema = z.object({
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
 
 // ============================================================================
-// AUTO-HOUSEKEEPING SETTINGS (Commonplace Book)
+// MEMORY MAINTENANCE SETTINGS (Commonplace Book — instance_settings.memoryMaintenance)
 // ============================================================================
 
-/**
- * Per-character cap override. When a characterId appears in the map, its cap
- * replaces the global `perCharacterCap` for that character only.
- */
-export const AutoHousekeepingCapOverrideSchema = z.record(z.string(), z.number().int().positive());
-export type AutoHousekeepingCapOverride = z.infer<typeof AutoHousekeepingCapOverrideSchema>;
+/** Smallest and largest per-character cap the maintenance settings accept. */
+export const MEMORY_MAINTENANCE_CAP_MIN = 100;
+export const MEMORY_MAINTENANCE_CAP_MAX = 100_000;
 
-export const AutoHousekeepingSettingsSchema = z.object({
-  /** When true, housekeeping runs automatically (post-write watermark + scheduled sweep). Default off. */
+/** One per-character cap: an integer in [{@link MEMORY_MAINTENANCE_CAP_MIN}, {@link MEMORY_MAINTENANCE_CAP_MAX}]. */
+export const MemoryMaintenanceCapSchema = z
+  .number()
+  .int()
+  .min(MEMORY_MAINTENANCE_CAP_MIN)
+  .max(MEMORY_MAINTENANCE_CAP_MAX);
+
+/**
+ * Per-character cap overrides keyed by characterId. When a character appears
+ * here, its cap replaces the global `perCharacterCap` for that character only.
+ */
+export const MemoryMaintenanceCapOverridesSchema = z.record(z.string(), MemoryMaintenanceCapSchema);
+export type MemoryMaintenanceCapOverrides = z.infer<typeof MemoryMaintenanceCapOverridesSchema>;
+
+/** Per-phase switches for the memory maintenance job. */
+export const MemoryMaintenancePhaseTogglesSchema = z.object({
+  /** Fold near-duplicate AUTO rows into one survivor (LLM-free). */
+  foldNearDuplicates: z.boolean().default(true),
+  /** Send the lowest-protection demotable rows cold when over the cap. */
+  demote: z.boolean().default(true),
+  /** Delete superseded cold rows past `coldRetentionDays`. */
+  retire: z.boolean().default(true),
+});
+export type MemoryMaintenancePhaseToggles = z.infer<typeof MemoryMaintenancePhaseTogglesSchema>;
+
+/**
+ * Memory maintenance (formerly per-user `chat_settings.autoHousekeepingSettings`,
+ * moved by `move-memory-maintenance-settings-v1`). Stored under
+ * `instance_settings.memoryMaintenance`; read through `resolveMemorySettings`
+ * (`lib/memory/settings.ts`), whose `capFor` is the one cap resolver.
+ * Every default lives here, once.
+ */
+export const MemoryMaintenanceSettingsSchema = z.object({
+  /** When true, maintenance runs automatically (post-write watermark + scheduled sweep). Default off. */
   enabled: z.boolean().default(false),
-  /** Global per-character memory cap. Housekeeping engages when count >= 80% of this. */
-  perCharacterCap: z.number().int().positive().default(2000),
+  /** Global per-character cap on demotable memories. Maintenance engages at 90% of it. */
+  perCharacterCap: MemoryMaintenanceCapSchema.default(2000),
   /** Per-character cap overrides keyed by characterId. */
-  perCharacterCapOverrides: AutoHousekeepingCapOverrideSchema.default({}),
-  /** Similarity threshold for the optional merge-similar pass during housekeeping. */
-  autoMergeSimilarThreshold: z.number().min(0).max(1).default(0.90),
-  /** When true, housekeeping also merges semantically similar memories (on top of retention-policy deletions). */
-  mergeSimilar: z.boolean().default(false),
+  perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.default({}),
+  /**
+   * Which of the maintenance job's own phases run when nobody asked for them
+   * by hand: every phase of a scheduled or watermark request (named or not).
+   * A phase a manual request asks for runs regardless. Consolidation has its own
+   * switch (`memoryConsolidation.enabled`); the Commonplace mirror always
+   * follows consolidation; retirement also needs `coldRetentionDays`.
+   */
+  phases: MemoryMaintenancePhaseTogglesSchema.prefault({}),
 });
 
-export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
+export type MemoryMaintenanceSettings = z.infer<typeof MemoryMaintenanceSettingsSchema>;
 
 // ============================================================================
 // MEMORY RECALL SETTINGS (Commonplace Book — recall/read path)
@@ -162,7 +193,7 @@ export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSc
 /**
  * Recall-time relevance controls for the Commonplace Book. These shape which
  * stored memories surface in a chat by reading the targeting tags the extractor
- * already writes into each memory's `keywords` (see lib/memory/recall-tags.ts).
+ * already writes into each memory's `keywords` (see lib/memory/recall/tags.ts).
  *
  * Stored instance-wide in `instance_settings['memoryRecall']` (single-user
  * model — same class as `memoryExtractionLimits`), NOT on the column-per-field
@@ -205,6 +236,72 @@ export const MemoryRecallSettingsSchema = z.object({
 export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
 
 // ============================================================================
+// MEMORY CONSOLIDATION (Commonplace Book — digests and tiers)
+// ============================================================================
+
+/**
+ * Controls for the consolidation job, which folds clusters of hot memories
+ * into digest rows and sends the members cold (see
+ * docs/developer/features/complete/memory-consolidation-and-tiers.md, §4).
+ *
+ * Stored instance-wide in `instance_settings['memoryConsolidation']` (same
+ * class as `memoryRecall`), so adding it needs no migration. Accessors:
+ * `getMemoryConsolidationSettings` / `setMemoryConsolidationSettings` in
+ * `lib/instance-settings`.
+ */
+export const MemoryConsolidationSettingsSchema = z.object({
+  /** Master switch for the scheduled sweep and the watermark trigger. Manual runs ignore it. */
+  enabled: z.boolean().default(false),
+  /** Connection profile for the consolidation call. Null → the cheap LLM. */
+  connectionProfileId: z.string().nullable().default(null),
+  /** Cosine similarity at which two memories join a cluster (neural embedding profiles). */
+  clusterThreshold: z.number().min(0).max(1).default(0.72),
+  /**
+   * The same, when the default embedding profile is the Built-in (TF-IDF) one,
+   * whose cosines run far lower (builtin-tfidf-memory-tuning §5).
+   */
+  tfidfClusterThreshold: z.number().min(0).max(1).default(0.30),
+  /** Smallest cluster worth a digest (drops to 2 when any member is older than `matureAfterDays`). */
+  minClusterSize: z.number().int().min(2).default(3),
+  /** Largest cluster handed to one consolidation call. */
+  maxClusterSize: z.number().int().min(2).default(30),
+  /** Rows younger than this many days are left alone. */
+  matureAfterDays: z.number().min(0).default(7),
+  /** Upper bound on consolidation calls per run; the backlog drains over runs. */
+  maxClustersPerRun: z.number().int().positive().default(40),
+  /** Enqueue a run for a character once this many hot rows have never been considered. */
+  watermark: z.number().int().positive().default(150),
+  /** Delete superseded cold AUTO rows older than this many days. Null → never delete. */
+  coldRetentionDays: z.number().int().positive().nullable().default(null),
+});
+
+export type MemoryConsolidationSettings = z.infer<typeof MemoryConsolidationSettingsSchema>;
+
+// ============================================================================
+// MEMORY EXTRACTION MODE (Commonplace Book — grain of the OTHER pass)
+// ============================================================================
+
+/**
+ * Where the extractor's OTHER pass (observations of other characters) runs:
+ *  - 'turn': every turn, as before.
+ *  - 'fold': only at context-summary folds (and the idle-chat catch-up sweep).
+ *  - 'hybrid' (default): at folds, plus per turn for candidates at or above
+ *    `perTurnOtherFloor` (commitments, agreements, new standing facts).
+ *
+ * Stored instance-wide in `instance_settings['memoryExtractionMode']`. Accessors:
+ * `getMemoryExtractionModeSettings` / `setMemoryExtractionModeSettings`.
+ */
+export const MemoryExtractionModeSettingsSchema = z.object({
+  otherPass: z.enum(['turn', 'fold', 'hybrid']).default('hybrid'),
+  /** Per-turn OTHER candidates below this importance are dropped in 'hybrid'. */
+  perTurnOtherFloor: z.number().min(0).max(1).default(0.75),
+  /** Fold-grain OTHER pass: candidates kept per (observer, subject). */
+  foldCandidatesPerSubject: z.number().int().positive().default(3),
+});
+
+export type MemoryExtractionModeSettings = z.infer<typeof MemoryExtractionModeSettingsSchema>;
+
+// ============================================================================
 // MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
 // ============================================================================
 
@@ -219,7 +316,7 @@ export const MemoryExtractionLimitsSchema = z.object({
   /** When true, the rate limiter is active. Off by default. */
   enabled: z.boolean().default(false),
   /** Maximum memories a single character may accrue per hour before the limiter engages. */
-  maxPerHour: z.number().int().positive().default(20),
+  maxPerHour: z.number().int().positive().max(10_000).default(20),
   /** Fraction of maxPerHour at which the graduated floor begins to apply (0–1). */
   softStartFraction: z.number().min(0).max(1).default(0.7),
   /** Importance floor applied to new candidates while in the graduated band. */
@@ -236,7 +333,8 @@ export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema
  * How long a chat must sit with no *played* message (participant character or
  * the human user — feature whispers don't count) before the daily maintenance
  * sweep treats it as stale. Governs every stale-gated sweep: generated-image
- * collapse, regenerable-cache collapse, and conversation-chunk cold-tiering.
+ * collapse and regenerable-cache collapse. Conversation-chunk embeddings are
+ * NOT stale-gated — they are never cold-tiered.
  *
  * Stored instance-wide in `instance_settings['dataRetention']` (single-user
  * model — same class as `memoryRecall`), NOT on the column-per-field
@@ -247,7 +345,7 @@ export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema
 export const DataRetentionSettingsSchema = z.object({
   /**
    * A chat is "stale" after this many days with no played message. Governs
-   * the maintenance sweep (image collapse + cache collapse + cold-tier).
+   * the maintenance sweep (image collapse + cache collapse).
    */
   staleChatDays: z.number().int().min(1).max(3650).default(30),
 });
@@ -319,6 +417,24 @@ export const TabooSettingsSchema = z.object({
 export type TabooSettings = z.infer<typeof TabooSettingsSchema>;
 
 // ============================================================================
+// IMPERSONATED-LINE VOICE (In Their Own Words)
+// ============================================================================
+
+/**
+ * What happens to a line typed while impersonating a character (the Salon's
+ * Impersonate button — the `chat.impersonatingParticipantIds` overlay):
+ *
+ * - `off`    — it posts as typed; no dialog.
+ * - `ask`    — the review dialog opens with the draft and no model call; the
+ *              operator chooses to send it as written or have it restated.
+ * - `always` — the review dialog opens and the restatement starts at once.
+ *
+ * Never applies to a `controlledBy: 'user'` seat.
+ */
+export const ImpersonationVoiceModeEnum = z.enum(['off', 'ask', 'always']);
+export type ImpersonationVoiceMode = z.infer<typeof ImpersonationVoiceModeEnum>;
+
+// ============================================================================
 // AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
 // ============================================================================
 
@@ -382,39 +498,84 @@ export const LLMLoggingSettingsSchema = z.object({
 export type LLMLoggingSettings = z.infer<typeof LLMLoggingSettingsSchema>;
 
 // ============================================================================
-// DANGEROUS CONTENT SETTINGS
+// CONCIERGE SETTINGS
 // ============================================================================
-
-export const DangerousContentModeEnum = z.enum(['OFF', 'DETECT_ONLY', 'AUTO_ROUTE']);
-export type DangerousContentMode = z.infer<typeof DangerousContentModeEnum>;
 
 export const DangerousContentDisplayModeEnum = z.enum(['SHOW', 'BLUR', 'COLLAPSE']);
 export type DangerousContentDisplayMode = z.infer<typeof DangerousContentDisplayModeEnum>;
 
-export const DangerousContentSettingsSchema = z.object({
-  /** Operating mode: OFF disables all scanning, DETECT_ONLY flags but doesn't reroute, AUTO_ROUTE flags and reroutes to uncensored provider */
-  mode: DangerousContentModeEnum.default('OFF'),
+/** What a new chat's Concierge state is when the request names none. */
+export const ConciergeNewChatStateEnum = z.enum(['moderated', 'unmoderated']);
+export type ConciergeNewChatState = z.infer<typeof ConciergeNewChatStateEnum>;
+
+export const ConciergeDisplaySettingsSchema = z.object({
+  /** How flagged or Unmoderated content is shown in the Salon */
+  mode: DangerousContentDisplayModeEnum.default('SHOW'),
+  /** Whether to show warning badges on flagged messages */
+  showWarningBadges: z.boolean().default(true),
+});
+
+export type ConciergeDisplaySettings = z.infer<typeof ConciergeDisplaySettingsSchema>;
+
+export const ConciergePreScreenSettingsSchema = z.object({
+  /** Run the classifier on messages and image prompts before sending. */
+  enabled: z.boolean().default(false),
   /** Classification threshold (0-1): content scoring above this is flagged as dangerous */
   threshold: z.number().min(0).max(1).default(0.7),
-  /** Whether to scan user text messages for dangerous content */
+  /** Whether to scan user text messages */
   scanTextChat: z.boolean().default(true),
-  /** Whether to scan user image prompts for dangerous content */
+  /** Whether to scan user image prompts */
   scanImagePrompts: z.boolean().default(true),
   /** Whether to scan expanded prompts before image generation */
   scanImageGeneration: z.boolean().default(false),
-  /** Connection profile ID for uncensored text LLM (must have isDangerousCompatible=true) */
-  uncensoredTextProfileId: UUIDSchema.nullable().optional(),
-  /** Image profile ID for uncensored image generation (must have isDangerousCompatible=true) */
-  uncensoredImageProfileId: UUIDSchema.nullable().optional(),
-  /** How flagged messages are displayed in the UI */
-  displayMode: DangerousContentDisplayModeEnum.default('SHOW'),
-  /** Whether to show warning badges on flagged messages */
-  showWarningBadges: z.boolean().default(true),
-  /** Custom classification prompt to append to the default classification system prompt */
+  /** Custom classification prompt appended to the default classification system prompt */
   customClassificationPrompt: z.string().nullable().optional(),
+  /** Read each chat's summary in the background and switch it when it reads as dangerous (the 10-minute sweep). */
+  summaryClassification: z.boolean().default(false),
 });
 
-export type DangerousContentSettings = z.infer<typeof DangerousContentSettingsSchema>;
+export type ConciergePreScreenSettings = z.infer<typeof ConciergePreScreenSettingsSchema>;
+
+/**
+ * The Concierge's settings (Concierge overhaul phase 4), replacing the retired
+ * `dangerousContentSettings` and absorbing the uncensored vision fallback and
+ * the image-prompt crafter. Read the *effective* policy through
+ * `resolveConciergeSettings` (`lib/services/dangerous-content/resolver.service.ts`),
+ * never these raw fields.
+ */
+export const ConciergeSettingsSchema = z.object({
+  /** Master switch. Off: no failover, no announcements, no auto-switch, no pre-screen. */
+  enabled: z.boolean().default(true),
+
+  /** The uncensored desk. Null = auto-detect (first isDangerousCompatible profile). */
+  uncensoredTextProfileId: UUIDSchema.nullable().optional(),
+  uncensoredImageProfileId: UUIDSchema.nullable().optional(),
+  /** Candid vision fallback when the image-description profile refuses. Was ChatSettings.uncensoredImageDescriptionProfileId. */
+  uncensoredVisionProfileId: UUIDSchema.nullable().optional(),
+  /** Any connection profile; crafts image prompts for the uncensored desk. Was cheapLLMSettings.imagePromptProfileId. */
+  imagePromptProfileId: UUIDSchema.nullable().optional(),
+
+  /** After this many stated refusals on a Moderated chat the Concierge switches it. 0 = never. */
+  autoSwitchAfterRefusals: z.number().int().min(0).max(10).default(2),
+  /** The state a new chat starts in when the request names none. */
+  newChatsStartAs: ConciergeNewChatStateEnum.default('moderated'),
+
+  display: ConciergeDisplaySettingsSchema.default({
+    mode: 'SHOW',
+    showWarningBadges: true,
+  }),
+
+  preScreen: ConciergePreScreenSettingsSchema.default({
+    enabled: false,
+    threshold: 0.7,
+    scanTextChat: true,
+    scanImagePrompts: true,
+    scanImageGeneration: false,
+    summaryClassification: false,
+  }),
+});
+
+export type ConciergeSettings = z.infer<typeof ConciergeSettingsSchema>;
 
 // ============================================================================
 // AUTO-LOCK SETTINGS
@@ -540,6 +701,30 @@ export const StoryBackgroundsSettingsSchema = z.object({
 export type StoryBackgroundsSettings = z.infer<typeof StoryBackgroundsSettingsSchema>;
 
 // ============================================================================
+// WARDROBE IMAGE SETTINGS
+// ============================================================================
+
+/**
+ * Which image profile draws wardrobe items' pictures (Settings → Images →
+ * Wardrobe Images). Deliberately separate from the Lantern's backdrop desk:
+ * a profile chosen for landscapes may balk at a garment. Resolved by
+ * `resolveWardrobeImageProfile` (`lib/image-gen/profile-resolution.ts`).
+ */
+export const WardrobeImageSettingsSchema = z.object({
+  /** The designated profile; null = the user's default image profile. */
+  imageProfileId: UUIDSchema.nullable().default(null),
+  /**
+   * Let the wardrobe tools (`wardrobe_create` / `wardrobe_update`) queue a
+   * picture of the item they touched. Off by default: every picture is a paid
+   * provider call the operator did not click for. Read through
+   * `wardrobeToolImagesEnabled` (`lib/wardrobe/tool-image-generation.ts`).
+   */
+  generateFromTools: z.boolean().default(false),
+});
+
+export type WardrobeImageSettings = z.infer<typeof WardrobeImageSettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -558,12 +743,6 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
-  /**
-   * Profile ID to use as a candid fallback when `imageDescriptionProfileId`
-   * refuses or returns an unusable response. Typically an uncensored
-   * vision-capable model that can describe images the primary refuses to.
-   */
-  uncensoredImageDescriptionProfileId: UUIDSchema.nullable().optional(),
   /** Default roleplay template ID for all new chats */
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
   /** Theme preference settings */
@@ -586,21 +765,6 @@ export const ChatSettingsSchema = z.object({
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
-  }),
-  /** Commonplace Book auto-housekeeping settings (off by default; user opts in from the Commonplace Book tab) */
-  autoHousekeepingSettings: AutoHousekeepingSettingsSchema.default({
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  }),
-  /** Per-hour extraction rate limit for the Commonplace Book (off by default) */
-  memoryExtractionLimits: MemoryExtractionLimitsSchema.default({
-    enabled: false,
-    maxPerHour: 20,
-    softStartFraction: 0.7,
-    softFloor: 0.7,
   }),
   /** 4.6 Private Character Rooms — user-level defaults for autonomous rooms */
   autonomousRoomSettings: AutonomousRoomSettingsSchema.default({
@@ -642,6 +806,8 @@ export const ChatSettingsSchema = z.object({
   composerEmoji: z.boolean().default(true),
   /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
   composerUnicode: z.boolean().default(true),
+  /** What happens to a line typed while impersonating a character — see `ImpersonationVoiceModeEnum` (default: 'off'). Replaced the 4.10-dev boolean `impersonationVoiceRewrite`. */
+  impersonationVoiceMode: ImpersonationVoiceModeEnum.default('off'),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
   /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */
@@ -679,15 +845,22 @@ export const ChatSettingsSchema = z.object({
     enabled: false,
     defaultImageProfileId: null,
   }),
-  /** Dangerous content detection and routing settings */
-  dangerousContentSettings: DangerousContentSettingsSchema.default({
-    mode: 'OFF',
-    threshold: 0.7,
-    scanTextChat: true,
-    scanImagePrompts: true,
-    scanImageGeneration: false,
-    displayMode: 'SHOW',
-    showWarningBadges: true,
+  /** The designated image profile for wardrobe item pictures */
+  wardrobeImageSettings: WardrobeImageSettingsSchema.optional(),
+  /** The Concierge: failover to the uncensored desk, display of flagged content, the optional pre-screen */
+  conciergeSettings: ConciergeSettingsSchema.default({
+    enabled: true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: false,
+    },
   }),
   /** Auto-lock settings for automatic idle timeout locking */
   autoLockSettings: AutoLockSettingsSchema.default({

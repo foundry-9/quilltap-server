@@ -53,8 +53,8 @@ import { readNdjsonLines } from '@/lib/import/ndjson-reader';
 import { executeImport } from '@/lib/import/quilltap-import/execute';
 import { reindexLinks } from '@/lib/mount-index/reindex';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate';
-import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+import { retireMemories } from '@/lib/memory/retire';
+import { memoryIndex } from '@/lib/memory/index-store';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
 import {
@@ -743,7 +743,6 @@ async function flipCharacterParticipants(
 async function pruneArchivedCharacterState(userId: string, characterId: string): Promise<boolean> {
   const steps = [
     await deleteOwnMemories(userId, characterId),
-    await deleteVectorStore(characterId),
     await pruneVault(characterId),
   ];
   const complete = steps.every(Boolean);
@@ -759,29 +758,19 @@ async function deleteOwnMemories(userId: string, characterId: string): Promise<b
   try {
     const memories = await repos.memories.findByCharacterId(characterId);
     if (memories.length > 0) {
-      // Through the gate, never repos.memories.delete*: it scrubs the deleted
-      // ids out of surviving neighbours' relatedMemoryIds first.
-      await deleteMemoriesWithUnlinkBatch(memories.map((memory) => memory.id));
+      // Through the deletion chokepoint, never a bare row delete: it scrubs
+      // the retired ids out of every surviving row's links and evicts their
+      // vectors (bug 200).
+      await retireMemories(memories.map((memory) => memory.id), { reason: 'character-archive' });
       for (const memory of memories) {
         await globalRepos.embeddingStatus.deleteByEntity('MEMORY', memory.id);
       }
     }
+    // The vectors lived on those rows; drop whatever the cache still holds.
+    memoryIndex.reload(characterId);
     return true;
   } catch (error) {
     logger.warn('Failed to delete memories for archived character', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
-async function deleteVectorStore(characterId: string): Promise<boolean> {
-  try {
-    await getVectorStoreManager().deleteStore(characterId);
-    return true;
-  } catch (error) {
-    logger.warn('Failed to delete vector store for archived character', {
       characterId,
       error: error instanceof Error ? error.message : String(error),
     });

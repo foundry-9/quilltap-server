@@ -49,6 +49,8 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
@@ -146,6 +148,8 @@ export async function assembleExportFromStream(
 
   const conversationAnnotations: ConversationAnnotation[] = [];
   const chatDocuments: ChatDocument[] = [];
+  const chatInforms: ChatInform[] = [];
+  const wardrobeWear: WardrobeWearStatsRow[] = [];
 
   const folderRecords: ExportedFolder[] = [];
   const filesById = new Map<string, ExportedFileWithBytes>();
@@ -245,7 +249,7 @@ export async function assembleExportFromStream(
           break;
         }
         if (!parent.wardrobeItems) parent.wardrobeItems = [];
-        parent.wardrobeItems.push(wi.data as WardrobeItem);
+        parent.wardrobeItems.push(wi.data);
         break;
       }
 
@@ -305,6 +309,20 @@ export async function assembleExportFromStream(
 
       case 'chat_document':
         chatDocuments.push((record as { data: ChatDocument }).data);
+        break;
+
+      // Inform rows, consumed ones included. They arrive after the messages
+      // they point at, so `recordMessageId` / `consumedByMessageId` resolve
+      // against ids already in hand; the executor validates them before it
+      // inserts anything.
+      case 'chat_inform':
+        chatInforms.push((record as { data: ChatInform }).data);
+        break;
+
+      // Wear-ledger rows. Source-instance ids throughout; the executor remaps
+      // them once every item, character and chat has landed.
+      case 'wardrobe_wear':
+        wardrobeWear.push((record as { data: WardrobeWearStatsRow }).data);
         break;
 
       case 'doc_mount_point':
@@ -501,6 +519,8 @@ export async function assembleExportFromStream(
     projectLinks,
     conversationAnnotations,
     chatDocuments,
+    chatInforms,
+    wardrobeWear,
     fileFolders: folderRecords,
     files: fileOrder.map((id) => filesById.get(id)!),
     promptTemplates,
@@ -539,6 +559,8 @@ interface CollectedArrays {
   projectLinks: ExportedProjectDocMountLink[];
   conversationAnnotations: ConversationAnnotation[];
   chatDocuments: ChatDocument[];
+  chatInforms: ChatInform[];
+  wardrobeWear: WardrobeWearStatsRow[];
   /**
    * General file-library folders. Named `fileFolders` rather than `folders`
    * because `folders` is already taken by the document-store folder rows.
@@ -565,6 +587,7 @@ function buildExportDataForType(
         ...(c.documents.length > 0 && { documents: c.documents }),
         ...(c.blobs.length > 0 && { blobs: c.blobs }),
         ...(c.projectLinks.length > 0 && { projectLinks: c.projectLinks }),
+        ...(c.wardrobeWear.length > 0 && { wardrobeWear: c.wardrobeWear }),
       };
     case 'chats':
       return {
@@ -572,6 +595,7 @@ function buildExportDataForType(
         ...(c.memories.length > 0 && { memories: c.memories }),
         ...(c.conversationAnnotations.length > 0 && { conversationAnnotations: c.conversationAnnotations }),
         ...(c.chatDocuments.length > 0 && { chatDocuments: c.chatDocuments }),
+        ...(c.chatInforms.length > 0 && { chatInforms: c.chatInforms }),
       };
     case 'roleplay-templates':
       return { roleplayTemplates: c.roleplayTemplates };
@@ -594,6 +618,7 @@ function buildExportDataForType(
         documents: c.documents,
         blobs: c.blobs,
         projectLinks: c.projectLinks,
+        ...(c.wardrobeWear.length > 0 && { wardrobeWear: c.wardrobeWear }),
       };
     case 'files':
       // `folders` is the same field name the document-store branch uses; the

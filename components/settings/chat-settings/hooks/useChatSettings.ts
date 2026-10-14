@@ -12,6 +12,7 @@ import {
   ImageProfile,
   AvatarDisplayMode,
   AvatarDisplayStyle,
+  ImpersonationVoiceMode,
   CheapLLMSettings,
   MemoryCascadePreferences,
   TokenDisplaySettings,
@@ -26,8 +27,10 @@ import {
   AgentModeSettings,
   DEFAULT_AGENT_MODE_SETTINGS,
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
-  DangerousContentSettings,
-  DEFAULT_DANGEROUS_CONTENT_SETTINGS,
+  DEFAULT_WARDROBE_IMAGE_SETTINGS,
+  ConciergeSettings,
+  ConciergeSettingsUpdate,
+  DEFAULT_CONCIERGE_SETTINGS,
   AutonomousRoomSettings,
   ThinkingDisplaySettings,
   DEFAULT_THINKING_DISPLAY_SETTINGS,
@@ -52,7 +55,6 @@ interface UseChatSettingsReturn {
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
-  handleUncensoredImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
@@ -63,13 +65,16 @@ interface UseChatSettingsReturn {
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleComposerUnicodeChange: (value: boolean) => Promise<void>
+  handleImpersonationVoiceModeChange: (value: ImpersonationVoiceMode) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
-  handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
+  handleWardrobeImageProfileChange: (profileId: string | null) => Promise<void>
+  handleWardrobeImageGenerateFromToolsChange: (enabled: boolean) => Promise<void>
+  handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
   handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
@@ -260,20 +265,6 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
-   * Update uncensored image description fallback profile
-   */
-  const handleUncensoredImageDescriptionProfileChange = useCallback(
-    async (profileId: string | null) => {
-      await patchChatSettings(
-        { uncensoredImageDescriptionProfileId: profileId },
-        'Failed to update settings',
-        'Failed to update uncensored image description profile'
-      )
-    },
-    [patchChatSettings]
-  )
-
-  /**
    * Update memory cascade preferences
    */
   const handleMemoryCascadeUpdate = useCallback(
@@ -434,6 +425,23 @@ export function useChatSettings(): UseChatSettingsReturn {
         { composerUnicode: value },
         'Failed to update composer unicode setting',
         'Failed to update composer unicode setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
+   * Update the impersonated-line voice mode — off / ask / always (the
+   * Impersonate overlay only — a `controlledBy: 'user'` seat is never rehearsed)
+   */
+  const handleImpersonationVoiceModeChange = useCallback(
+    async (value: ImpersonationVoiceMode) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { impersonationVoiceMode: value },
+        'Failed to update impersonated-line voice setting',
+        'Failed to update impersonated-line voice setting'
       )
     },
     [settings, patchChatSettings]
@@ -640,20 +648,69 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
-   * Update dangerous content settings
+   * Update the image profile that draws wardrobe item pictures (null = the default image profile)
    * Uses settingsRef to prevent race conditions with concurrent updates
    */
-  const handleDangerousContentUpdate = useCallback(
-    async (updates: Partial<DangerousContentSettings>) => {
+  const handleWardrobeImageProfileChange = useCallback(
+    async (profileId: string | null) => {
       // Use ref for latest state to prevent race conditions
       const latestSettings = settingsRef.current
       if (!latestSettings) return
 
-      const currentSettings = latestSettings.dangerousContentSettings || DEFAULT_DANGEROUS_CONTENT_SETTINGS
+      const currentSettings = latestSettings.wardrobeImageSettings || DEFAULT_WARDROBE_IMAGE_SETTINGS
       await patchChatSettings(
-        { dangerousContentSettings: { ...currentSettings, ...updates } },
-        'Failed to update dangerous content settings',
-        'Failed to update dangerous content settings'
+        { wardrobeImageSettings: { ...currentSettings, imageProfileId: profileId } },
+        'Failed to update wardrobe image settings',
+        'Failed to update wardrobe image profile'
+      )
+    },
+    [patchChatSettings]
+  )
+
+  /**
+   * Let (or stop) the wardrobe tools queueing pictures of the items they touch
+   * Uses settingsRef to prevent race conditions with concurrent updates
+   */
+  const handleWardrobeImageGenerateFromToolsChange = useCallback(
+    async (enabled: boolean) => {
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
+
+      const currentSettings = latestSettings.wardrobeImageSettings || DEFAULT_WARDROBE_IMAGE_SETTINGS
+      await patchChatSettings(
+        { wardrobeImageSettings: { ...currentSettings, generateFromTools: enabled } },
+        'Failed to update wardrobe image settings',
+        'Failed to update wardrobe tool pictures'
+      )
+    },
+    [patchChatSettings]
+  )
+
+  /**
+   * Update the Concierge's settings. Top-level fields replace; `display` and
+   * `preScreen` deep-merge, so a card can send just the field it changed.
+   * Uses settingsRef to prevent race conditions with concurrent updates
+   */
+  const handleConciergeUpdate = useCallback(
+    async (updates: ConciergeSettingsUpdate) => {
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
+
+      const current = latestSettings.conciergeSettings || DEFAULT_CONCIERGE_SETTINGS
+      const { display, preScreen, ...topLevel } = updates
+      const next: ConciergeSettings = {
+        ...DEFAULT_CONCIERGE_SETTINGS,
+        ...current,
+        ...topLevel,
+        display: { ...DEFAULT_CONCIERGE_SETTINGS.display, ...current.display, ...(display ?? {}) },
+        preScreen: { ...DEFAULT_CONCIERGE_SETTINGS.preScreen, ...current.preScreen, ...(preScreen ?? {}) },
+      }
+      await patchChatSettings(
+        { conciergeSettings: next },
+        "Failed to update the Concierge's settings",
+        'Failed to update Concierge settings'
       )
     },
     [patchChatSettings]
@@ -690,7 +747,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAvatarStyleChange,
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
-    handleUncensoredImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
@@ -701,13 +757,16 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
-    handleDangerousContentUpdate,
+    handleWardrobeImageProfileChange,
+    handleWardrobeImageGenerateFromToolsChange,
+    handleConciergeUpdate,
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,

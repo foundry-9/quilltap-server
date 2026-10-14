@@ -16,7 +16,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override'
 import {
   enqueueChatDangerClassification,
@@ -24,17 +24,19 @@ import {
   enqueueConversationRender,
   enqueueMemoryExtraction,
 } from '@/lib/background-jobs/queue-service'
-import { findTurnOpenerMessageId } from './turn-transcript'
+import { findAutonomousTurnAnchorMessageId, findTurnOpenerMessageId } from './turn-transcript'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('MemoryTriggerService')
 
+/**
+ * What the post-turn triggers need from the user's settings. Each job that
+ * runs resolves the chat's Concierge state for itself (the extraction context
+ * does it once per unit of work), so nothing Concierge-shaped rides here.
+ */
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
-  dangerSettings?: DangerousContentSettings
-  isDangerousChat?: boolean
 }
 
 /**
@@ -74,19 +76,8 @@ export async function triggerTurnMemoryExtraction(
 
     const turnOpenerMessageId = findTurnOpenerMessageId(messageEvents)
 
-    let extractionAnchorMessageId: string | null = null
-    if (turnOpenerMessageId === null) {
-      for (let i = messageEvents.length - 1; i >= 0; i--) {
-        const m = messageEvents[i]
-        if (m.type !== 'message') continue
-        if (m.role !== 'ASSISTANT') continue
-        if (m.systemSender) continue
-        if (m.isSilentMessage) continue
-        if (!m.participantId) continue
-        extractionAnchorMessageId = m.id
-        break
-      }
-    }
+    const extractionAnchorMessageId =
+      turnOpenerMessageId === null ? findAutonomousTurnAnchorMessageId(messageEvents) : null
 
     await enqueueMemoryExtraction(options.userId, {
       chatId: options.chatId,
@@ -143,7 +134,7 @@ export async function triggerContextSummaryCheck(
  * - Bails if dangerous content mode is OFF
  * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
  * - Once classified as safe, stays safe (sticky) unless new messages are added
- * - Skips if no context summary available yet
+ * - Skips if neither a context summary nor a scenario is available yet
  */
 export async function triggerChatDangerClassification(
   repos: ReturnType<typeof getRepositories>,
@@ -170,12 +161,18 @@ export async function triggerChatDangerClassification(
       return
     }
 
-    // Resolve danger settings — bail if mode is OFF. Passing `chat` collapses
-    // to OFF for a moderation-exempt chat type (Help Chat, Brahma Console),
-    // so those surfaces are never enqueued either.
+    // Resolve the Concierge policy — bail unless the summary classifier is
+    // on duty for this chat (Concierge enabled, chat Moderated, operator opted
+    // in). Passing `chat` rules out a moderation-exempt chat type (Help Chat,
+    // Brahma Console), so those surfaces are never enqueued either.
     const chatSettings = await repos.chatSettings.findByUserId(options.userId)
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
-    if (dangerSettings.mode === 'OFF') {
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat)
+    if (!conciergePolicy.summaryClassification) {
+      logger.debug('[DangerClassification] Summary classifier not on duty; skipping enqueue', {
+        chatId: options.chatId,
+        conciergeSource: conciergePolicy.source,
+        conciergeState: conciergePolicy.state,
+      })
       return
     }
 
@@ -192,8 +189,13 @@ export async function triggerChatDangerClassification(
       return
     }
 
-    // No context summary → nothing to classify yet
-    if (!chat.contextSummary) {
+    // Nothing to classify yet. The handler takes a summary, then the chosen
+    // scenario, then raw messages; this gate asks the first two, because a chat
+    // with neither has nothing the classifier can act on early. The scenario
+    // arm keeps the pre-fold behaviour the seed used to give us for free —
+    // before bug 158 a new chat's `contextSummary` *was* its scenario, so this
+    // gate passed from the first turn.
+    if (!chat.contextSummary && !chat.scenarioText) {
       return
     }
 

@@ -103,7 +103,7 @@ describe('runBrahmaQuery', () => {
     await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
     const args = jest.mocked(buildTools).mock.calls[0]
     expect(args[8]).toBe(true) // agentModeEnabled
-    expect(args[13]).toBe(true) // documentEditingEnabled
+    expect(args[13]).toBe('full') // docToolsMode
     expect(args[14]).toBe(false) // askCarinaEnabled — recursion guard
     expect(args[15]).toBe(false) // includeWorkspaceTools
     expect(args[16]).toBe(true) // excludeMemorySearch

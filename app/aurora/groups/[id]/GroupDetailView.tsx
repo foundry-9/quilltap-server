@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { GroupMembersCard } from '../components/GroupMembersCard'
 import { GroupLinkedStoresCard } from '../components/GroupLinkedStoresCard'
+import { GroupScenariosCard } from '../components/GroupScenariosCard'
 import { useGroupMembers } from '../hooks/useGroupMembers'
 import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
 import { Icon } from '@/components/ui/icon'
@@ -35,6 +36,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   const [formData, setFormData] = useState({ name: '', description: '', instructions: '', color: '', icon: '' })
   const [membersExpanded, setMembersExpanded] = useState(false)
   const [storesExpanded, setStoresExpanded] = useState(false)
+  const [scenariosExpanded, setScenariosExpanded] = useState(false)
   const [showStateModal, setShowStateModal] = useState(false)
 
   const { members, allCharacters, fetchMembers, fetchAllCharacters, addMember, removeMember } = useGroupMembers(groupId)
@@ -266,6 +268,12 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
           onToggle={() => setStoresExpanded(!storesExpanded)}
           onLink={linkStore}
           onUnlink={unlinkStore}
+        />
+
+        <GroupScenariosCard
+          groupId={groupId}
+          expanded={scenariosExpanded}
+          onToggle={() => setScenariosExpanded(!scenariosExpanded)}
         />
       </div>
 

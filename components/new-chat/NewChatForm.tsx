@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
@@ -10,7 +10,8 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { CONCIERGE_STATES, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { ConciergeOffDutyHint } from '@/components/chat/ConciergeOffDutyHint'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneTextClass,
@@ -29,9 +30,23 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
-import type { ProjectListEntry } from './hooks/useNewChat'
-import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
+import type { ProjectListEntry, RefetchedScenarioTiers } from './hooks/useNewChat'
+import { ScenarioSelect } from '@/components/scenario/ScenarioSelect'
+import { ScenarioBrowserDialog, useScenarioRefBody } from '@/components/scenario/ScenarioBrowserDialog'
 import type { ScenarioSelection } from '@/components/scenario/types'
+import { SubpromptPicker } from '@/components/subprompts'
+import dynamic from 'next/dynamic'
+import type {
+  SavedScenarioTarget,
+} from '@/components/scenario-builder/ScenarioBuilderDialog'
+import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+
+// Loaded on demand: the builder (and the Markdown renderer behind its thinking
+// block) stays out of this surface's bundle until the Host is asked.
+const ScenarioBuilderDialog = dynamic(
+  () => import('@/components/scenario-builder/ScenarioBuilderDialog').then((m) => m.ScenarioBuilderDialog),
+  { ssr: false },
+)
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -105,6 +120,19 @@ interface NewChatFormProps {
     destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
     defaultFreshnessHours?: number
   }
+  /**
+   * Re-read the scenario tiers after the Scenario Builder files a new one
+   * (`useNewChat().refetchScenarioTiers`). Without it a saved scene still
+   * works as custom text; it just can't be selected as a preset.
+   */
+  onScenarioTiersChanged?: () => Promise<RefetchedScenarioTiers>
+  /**
+   * False when the Concierge is off duty globally: the Concierge select is
+   * disabled and points at Settings → The Concierge. Defaults to true.
+   */
+  conciergeOnDuty?: boolean
+  /** The state a chat gets when none is named (`newChatsStartAs`); labelled "(default)". */
+  conciergeDefaultState?: ConciergeState
 }
 
 export function NewChatForm({
@@ -132,6 +160,9 @@ export function NewChatForm({
   continuationFromChatId,
   previousOutfitSummary,
   autonomousSettingsHint,
+  onScenarioTiersChanged,
+  conciergeOnDuty = true,
+  conciergeDefaultState = 'moderated',
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -160,6 +191,10 @@ export function NewChatForm({
     [singleLlm],
   )
 
+  const scenarioSelection = state.scenarioSelection
+  const selectedCharacterScenarioId =
+    scenarioSelection.kind === 'character' ? scenarioSelection.scenarioId : null
+
   /**
    * What the dropdown offers. Archived scenarios are hidden unless "Show
    * archived" is ticked — with one exception: whatever is currently selected
@@ -169,89 +204,150 @@ export function NewChatForm({
   const singleCharacterScenarios = useMemo(() => {
     if (!singleLlm) return null
     const visible = allCharacterScenarios.filter(
-      (s) => showArchivedScenarios || s.archived !== true || s.id === state.scenarioId,
+      (s) => showArchivedScenarios || s.archived !== true || s.id === selectedCharacterScenarioId,
     )
     return visible.length > 0 ? visible : null
-  }, [singleLlm, allCharacterScenarios, showArchivedScenarios, state.scenarioId])
+  }, [singleLlm, allCharacterScenarios, showArchivedScenarios, selectedCharacterScenarioId])
 
-  const showScenarioDropdown = hasAnyScenarioOptions({
-    projectScenarios,
-    generalScenarios,
-    groupScenarios,
-    characterScenarios: singleCharacterScenarios,
-  })
-
-  const selectedProjectScenario = state.projectScenarioPath
-    ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
-    : undefined
-  const selectedGeneralScenario = state.generalScenarioPath
-    ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
-    : undefined
-  const selectedGroupScenario = state.groupScenarioPath
-    ? groupScenarios.find(
-        (s) =>
-          s.path === state.groupScenarioPath &&
-          s.groupId === state.groupScenarioGroupId
-      )
-    : undefined
-  // Looked up against the unfiltered list: a scenario the chat already points
+  // The body behind the one selection, previewed under the dropdown. Looked up
+  // against the unfiltered character list: a scenario the form already points
   // at keeps previewing even after it's archived.
-  const selectedCharacterScenario = state.scenarioId
-    ? allCharacterScenarios.find((s) => s.id === state.scenarioId)
-    : undefined
-  const selectedPreset = selectedProjectScenario
-    ? { kind: 'project' as const, content: selectedProjectScenario.body }
-    : selectedGeneralScenario
-      ? { kind: 'general' as const, content: selectedGeneralScenario.body }
-      : selectedGroupScenario
-        ? { kind: 'group' as const, content: selectedGroupScenario.body }
-        : selectedCharacterScenario
-          ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-          : null
+  const selectedPresetBody = useMemo((): string | null => {
+    switch (scenarioSelection.kind) {
+      case 'project':
+        return projectScenarios.find((s) => s.path === scenarioSelection.path)?.body ?? null
+      case 'general':
+        return generalScenarios.find((s) => s.path === scenarioSelection.path)?.body ?? null
+      case 'group':
+        return (
+          groupScenarios.find(
+            (s) => s.path === scenarioSelection.path && s.groupId === scenarioSelection.groupId,
+          )?.body ?? null
+        )
+      case 'character':
+        return allCharacterScenarios.find((s) => s.id === scenarioSelection.scenarioId)?.content ?? null
+      default:
+        return null
+    }
+  }, [scenarioSelection, projectScenarios, generalScenarios, groupScenarios, allCharacterScenarios])
+
+  // A pick from elsewhere carries no body in the option lists; read it by ref.
+  const { data: storePreview } = useScenarioRefBody(
+    scenarioSelection.kind === 'store' ? scenarioSelection : null,
+  )
+
+  const selectedPreset =
+    scenarioSelection.kind === 'custom'
+      ? null
+      : {
+          kind: scenarioSelection.kind,
+          content:
+            scenarioSelection.kind === 'store' ? storePreview?.scenario.body ?? '' : selectedPresetBody ?? '',
+        }
 
   // The character's own default — used to render the override-visibility note
-  // when the form is currently using the project default but the character
-  // also has one.
+  // when the form is using the project default but the character also has one.
   const characterDefaultScenario = useMemo(() => {
     if (!singleLlm) return undefined
     const id = singleLlm.character.defaultScenarioId
     if (!id) return undefined
     return singleCharacterScenarios?.find((s) => s.id === id)
   }, [singleLlm, singleCharacterScenarios])
-  const showOverrideNote =
-    Boolean(selectedProjectScenario) &&
-    Boolean(characterDefaultScenario)
-
-  const scenarioSelection: ScenarioSelection = selectedProjectScenario
-    ? { kind: 'project', path: selectedProjectScenario.path }
-    : selectedGeneralScenario
-      ? { kind: 'general', path: selectedGeneralScenario.path }
-      : selectedGroupScenario
-        ? { kind: 'group', groupId: selectedGroupScenario.groupId, path: selectedGroupScenario.path }
-        : selectedCharacterScenario
-          ? { kind: 'character', scenarioId: selectedCharacterScenario.id }
-          : { kind: 'custom' }
+  const showOverrideNote = scenarioSelection.kind === 'project' && Boolean(characterDefaultScenario)
 
   const handleScenarioSelectionChange = (selection: ScenarioSelection) => {
+    setState((prev) => ({ ...prev, scenarioSelection: selection, scenarioTouched: true }))
+  }
+
+  // --- The scenario browser ------------------------------------------------
+  const [browserOpen, setBrowserOpen] = useState(false)
+  const scenarioHierarchy = useMemo(
+    () => ({
+      projectId: selectedProjectId ?? project?.id ?? null,
+      groupIds: [...new Set(groupScenarios.map((s) => s.groupId))],
+      characterId: singleLlm?.character.id ?? null,
+    }),
+    [selectedProjectId, project, groupScenarios, singleLlm],
+  )
+
+  // --- The Host's Scenario Builder -----------------------------------------
+  const [builderOpen, setBuilderOpen] = useState(false)
+  // MarkdownLexicalEditor reads `value` only at mount; a programmatic fill must
+  // bump its remountKey or the editor keeps showing the old text.
+  const [scenarioEditorKey, setScenarioEditorKey] = useState(0)
+
+  const builderCast = useMemo(
+    () => selectedCharacters.map((sc) => ({ id: sc.character.id, name: sc.character.name })),
+    [selectedCharacters],
+  )
+  const builderProjectId = selectedProjectId ?? project?.id ?? null
+  const builderProjectName =
+    (builderProjectId && availableProjects?.find((p) => p.id === builderProjectId)?.name) ||
+    (project && project.id === builderProjectId ? project.name : null)
+
+  const handleUseBuiltScene = (scene: string) => {
     setState((prev) => ({
       ...prev,
-      scenarioId: selection.kind === 'character' ? selection.scenarioId : null,
-      projectScenarioPath: selection.kind === 'project' ? selection.path : null,
-      generalScenarioPath: selection.kind === 'general' ? selection.path : null,
-      groupScenarioPath: selection.kind === 'group' ? selection.path : null,
-      groupScenarioGroupId: selection.kind === 'group' ? selection.groupId : null,
+      scenario: scene,
+      scenarioSelection: { kind: 'custom' },
+      scenarioTouched: true,
     }))
+    setScenarioEditorKey((k) => k + 1)
+  }
+
+  // After a save: select the new preset when this form's picker now offers it
+  // (checked against the freshly re-read tiers — a tier this surface doesn't
+  // show, or a group no LLM cast member belongs to, is not offered; a
+  // character's own list only when exactly one LLM character is cast), and
+  // clear the custom text it replaces. Otherwise the text stays as custom.
+  const handleBuiltSceneSaved = async (target: SavedScenarioTarget) => {
+    const fresh = await onScenarioTiersChanged?.()
+    let selection: ScenarioSelection | null = null
+    if (target.kind === 'general') {
+      if (fresh?.general?.some((s) => s.path === target.path)) {
+        selection = { kind: 'general', path: target.path }
+      }
+    } else if (target.kind === 'project' && target.projectId === builderProjectId) {
+      if (fresh?.project?.some((s) => s.path === target.path)) {
+        selection = { kind: 'project', path: target.path }
+      }
+    } else if (target.kind === 'group') {
+      if (fresh?.group?.some((s) => s.groupId === target.groupId && s.path === target.path)) {
+        selection = { kind: 'group', groupId: target.groupId, path: target.path }
+      }
+    } else if (target.kind === 'character' && singleLlm?.character.id === target.characterId) {
+      // The character's scenario list rides on the character record, which this
+      // form does not refetch; add the new entry locally so it can be selected.
+      setSelectedCharacters((prev) =>
+        prev.map((sc) =>
+          sc.character.id === target.characterId
+            ? {
+                ...sc,
+                character: {
+                  ...sc.character,
+                  scenarios: [
+                    ...(sc.character.scenarios ?? []),
+                    { id: target.scenarioId, title: target.title, content: target.content },
+                  ],
+                },
+              }
+            : sc,
+        ),
+      )
+      selection = { kind: 'character', scenarioId: target.scenarioId }
+    }
+    if (!selection) return
+    handleScenarioSelectionChange(selection)
+    setState((prev) => ({ ...prev, scenario: '' }))
+    setScenarioEditorKey((k) => k + 1)
   }
 
   const switchToCharacterDefault = () => {
     if (!characterDefaultScenario) return
     setState((prev) => ({
       ...prev,
-      scenarioId: characterDefaultScenario.id,
-      projectScenarioPath: null,
-      generalScenarioPath: null,
-      groupScenarioPath: null,
-      groupScenarioGroupId: null,
+      scenarioSelection: { kind: 'character', scenarioId: characterDefaultScenario.id },
+      scenarioTouched: true,
       scenario: '',
     }))
   }
@@ -270,6 +366,15 @@ export function NewChatForm({
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === singleLlm.character.id ? { ...sc, selectedSystemPromptId: promptId } : sc
+      )
+    )
+  }
+
+  const handleSingleSubpromptsChange = (ids: string[]) => {
+    if (!singleLlm) return
+    setSelectedCharacters((prev) =>
+      prev.map((sc) =>
+        sc.character.id === singleLlm.character.id ? { ...sc, selectedSubpromptIds: ids } : sc
       )
     )
   }
@@ -498,6 +603,19 @@ export function NewChatForm({
           </div>
         )}
 
+        {showSingleCharacterControls && singleLlm && (
+          <div>
+            <label className="mb-2 block text-sm qt-text-primary">Subprompts</label>
+            <SubpromptPicker
+              characterId={singleLlm.character.id}
+              characterName={singleLlm.character.name}
+              selectedIds={singleLlm.selectedSubpromptIds ?? []}
+              onChange={handleSingleSubpromptsChange}
+              disabled={creating}
+            />
+          </div>
+        )}
+
         {!isAutonomous && playAsOptions.length > 0 && (
           <div>
             <label htmlFor="new-chat-partner" className="mb-2 block text-sm qt-text-primary">
@@ -584,36 +702,59 @@ export function NewChatForm({
             id="new-chat-concierge"
             value={state.conciergeState}
             onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
-            disabled={creating}
+            disabled={creating || !conciergeOnDuty}
             className="qt-select"
           >
-            <optgroup label="The Concierge decides">
-              <option value="monitored">Monitored (default)</option>
-              <option value="flagged">Flagged</option>
-            </optgroup>
-            <optgroup label="You decide">
-              <option value="vouched">Vouched Safe</option>
-              <option value="uncensored">Uncensored</option>
-            </optgroup>
+            {CONCIERGE_STATES.map((value) => (
+              <option key={value} value={value}>
+                {CONCIERGE_STATE_PRESENTATION[value].label}{value === conciergeDefaultState ? ' (default)' : ''}
+              </option>
+            ))}
           </select>
-          <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
+          {conciergeOnDuty ? (
+            <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
+          ) : (
+            <ConciergeOffDutyHint className="block qt-text-xs qt-text-muted mt-1" />
+          )}
         </div>
 
         <div>
-          <label htmlFor="new-chat-scenario" className="mb-2 block text-sm qt-text-primary">
-            Starting Scenario (Optional)
-          </label>
-          {showScenarioDropdown && (
-            <ScenarioSelect
-              id="new-chat-scenario-select"
-              selection={scenarioSelection}
-              onChange={handleScenarioSelectionChange}
-              projectScenarios={projectScenarios}
-              generalScenarios={generalScenarios}
-              groupScenarios={groupScenarios}
-              characterScenarios={singleCharacterScenarios}
-              characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
-              disabled={creating}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="new-chat-scenario-select" className="block text-sm qt-text-primary">
+              Starting Scenario (Optional)
+            </label>
+            <button
+              type="button"
+              onClick={() => setBuilderOpen(true)}
+              disabled={creating || profiles.length === 0}
+              className="qt-button-secondary qt-button-sm inline-flex items-center gap-1.5"
+            >
+              <img
+                src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
+                alt=""
+                className="h-4 w-4 rounded-full"
+              />
+              Ask the Host to set the scene
+            </button>
+          </div>
+          <ScenarioSelect
+            id="new-chat-scenario-select"
+            selection={scenarioSelection}
+            onChange={handleScenarioSelectionChange}
+            onBrowse={() => setBrowserOpen(true)}
+            projectScenarios={projectScenarios}
+            generalScenarios={generalScenarios}
+            groupScenarios={groupScenarios}
+            characterScenarios={singleCharacterScenarios}
+            characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
+            disabled={creating}
+          />
+          {browserOpen && (
+            <ScenarioBrowserDialog
+              isOpen={browserOpen}
+              onClose={() => setBrowserOpen(false)}
+              hierarchy={scenarioHierarchy}
+              onPick={handleScenarioSelectionChange}
             />
           )}
           {onShowArchivedScenariosChange && (
@@ -642,7 +783,7 @@ export function NewChatForm({
               — click to switch.
             </p>
           )}
-          {selectedPreset && (
+          {selectedPreset && selectedPreset.content && (
             <div className="rounded-lg border qt-border-default qt-bg-muted/40 px-3 py-2 text-sm qt-text-secondary whitespace-pre-wrap">
               {selectedPreset.content}
             </div>
@@ -656,10 +797,22 @@ export function NewChatForm({
             value={state.scenario}
             onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
             disabled={creating}
+            remountKey={scenarioEditorKey}
             namespace="NewChatForm.scenario"
             ariaLabel={selectedPreset ? 'Additional scenario notes' : 'Starting scenario'}
             minHeight="6rem"
           />
+          {builderOpen && (
+            <ScenarioBuilderDialog
+              isOpen={builderOpen}
+              onClose={() => setBuilderOpen(false)}
+              cast={builderCast}
+              projectId={builderProjectId}
+              projectName={builderProjectName}
+              onUse={handleUseBuiltScene}
+              onSaved={handleBuiltSceneSaved}
+            />
+          )}
         </div>
 
         {outfitCharacters.length > 0 && (

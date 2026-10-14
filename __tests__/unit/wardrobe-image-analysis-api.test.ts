@@ -67,6 +67,7 @@ describe('POST /api/v1/wardrobe/analyze-image', () => {
         { name: 'velvet blazer', type: 'top', description: 'A deep green velvet blazer with brass buttons' },
         { name: 'lace gloves', type: 'accessory', description: 'Short black gloves with lace trim' },
       ],
+      proposedOutfit: { title: 'Evening Velvet', description: 'Dark and plush', appropriateness: 'evening' },
       provider: 'OPENAI',
       model: 'gpt-4o',
     })
@@ -93,6 +94,7 @@ describe('POST /api/v1/wardrobe/analyze-image', () => {
         { name: 'velvet blazer', type: 'top', description: 'A deep green velvet blazer with brass buttons' },
         { name: 'lace gloves', type: 'accessory', description: 'Short black gloves with lace trim' },
       ],
+      proposedOutfit: { title: 'Evening Velvet', description: 'Dark and plush', appropriateness: 'evening' },
       provider: 'OPENAI',
       model: 'gpt-4o',
     })

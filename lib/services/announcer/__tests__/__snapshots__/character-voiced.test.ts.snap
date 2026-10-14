@@ -1,0 +1,43 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`generateCharacterVoicedAnnouncement composes a public announcement exactly as before the shared-core refactor 1`] = `
+[
+  {
+    "content": "SYSTEM",
+    "role": "system",
+  },
+  {
+    "content": "You want to say something to the people in the chat. The following people are present:
+- Bertie (active)
+- Jeeves (silent)
+
+Below is your own rough draft — the meaning and substance of what you want to convey. Rewrite it in your own voice, the way you would actually say it given your personality, manner of speech, and current circumstances. Keep the meaning, the addressees, and any specific facts; refine the voice and phrasing. Narration, action, and stage directions are welcome where they fit your voice. Do not respond to the draft — it is yours.
+
+Draft:
+
+The wardrobe has been refreshed.",
+    "role": "user",
+  },
+]
+`;
+
+exports[`generateCharacterVoicedAnnouncement composes a whispered announcement exactly as before the shared-core refactor 1`] = `
+[
+  {
+    "content": "SYSTEM",
+    "role": "system",
+  },
+  {
+    "content": "RECALL<REMEMBERED>
+
+You want to say something privately to Bertie and Jeeves — others are present in the chat, but this remark is for those named alone and no one else will hear it. Pitch it as a private aside, not a declaration to the room.
+
+Below is your own rough draft — the meaning and substance of what you want to convey. Rewrite it in your own voice, the way you would actually say it given your personality, manner of speech, and current circumstances. Keep the meaning, the addressees, and any specific facts; refine the voice and phrasing. Narration, action, and stage directions are welcome where they fit your voice. Do not respond to the draft — it is yours.
+
+Draft:
+
+The wardrobe has been refreshed.",
+    "role": "user",
+  },
+]
+`;

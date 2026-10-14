@@ -5,7 +5,8 @@
  */
 
 import type { FileEntry } from '@/lib/schemas/types'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 /** Lightweight chat data for homepage display */
 export interface RecentChat {
@@ -14,9 +15,13 @@ export interface RecentChat {
   createdAt: string
   updatedAt: string
   lastMessageAt: string | null
-  /** The derived Concierge four-state — never the raw danger label */
+  /** The derived Concierge state — never a stored column */
   conciergeState?: ConciergeState
-  /** The classifier's categories, shown on the mark's tooltip when Flagged */
+  /** Who put the chat in its state; `null` for Moderated */
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the chat is in its state; `null` for Moderated */
+  conciergeReason?: ConciergeModeReason | null
+  /** The classifier's categories, shown on the mark's tooltip */
   dangerCategories?: string[]
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null

@@ -46,6 +46,38 @@ import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helper
 const logger = createServiceLogger('MountIndex:StoreFile');
 
 /**
+ * `unique-suffix` paths picked but not yet linked, as `<mountPointId>:<path>`.
+ * `resolveUniqueRelativePath` only checks; without this, two concurrent writes
+ * aiming at the same free path (two pictures of one item in the same second)
+ * would both pick it, and the second `linkBlobContent` would re-point the
+ * first's link. Parent-process only, like every caller of this module.
+ */
+const reservedBlobPaths = new Set<string>();
+
+function reservationKey(mountPointId: string, relativePath: string): string {
+  return `${mountPointId}:${relativePath}`;
+}
+
+/**
+ * Pick a free path and claim it before any further await. The final
+ * check-and-add is synchronous, so no other write can slip between them.
+ */
+async function reserveUniqueBlobPath(mountPointId: string, desired: string): Promise<string> {
+  const isReserved = (candidate: string) => reservedBlobPaths.has(reservationKey(mountPointId, candidate));
+  for (;;) {
+    const candidate = await resolveUniqueRelativePath(mountPointId, desired, isReserved);
+    if (!isReserved(candidate)) {
+      reservedBlobPaths.add(reservationKey(mountPointId, candidate));
+      return candidate;
+    }
+    logger.debug('storeMountFile: unique path claimed while resolving; trying again', {
+      mountPointId,
+      candidate,
+    });
+  }
+}
+
+/**
  * Collision policy when the destination path is already occupied.
  *  - `error-if-exists`: throw `DEST_EXISTS` unless `force` (then overwrite).
  *  - `overwrite`: upsert in place; rely on `expectedMtime` for conflict detection.
@@ -258,8 +290,10 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
 
   let finalPath = normaliseBlobRelativePath(rel, transcoded.storedMimeType);
 
+  let reservedPath: string | null = null;
   if (strategy === 'unique-suffix') {
-    finalPath = await resolveUniqueRelativePath(mp.id, finalPath);
+    finalPath = await reserveUniqueBlobPath(mp.id, finalPath);
+    reservedPath = reservationKey(mp.id, finalPath);
   } else if (strategy === 'error-if-exists' && (await destExists(mp, finalPath))) {
     if (!input.force) {
       throw new FileOpError(`Destination already exists: ${finalPath}. Use force to overwrite.`, 'DEST_EXISTS');
@@ -267,30 +301,38 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
     await deleteAtDest(mp, finalPath);
   }
 
-  const folderDir = path.posix.dirname(finalPath);
-  const folderId = folderDir !== '.' && folderDir !== '' ? await ensureFolderPath(mp.id, folderDir) : null;
+  // The link is what makes a reserved path visible to the next resolver; the
+  // reservation is released once it exists (or the write failed).
   const mirrorFileType = detectBlobFileType(finalPath);
+  let linked: Awaited<ReturnType<typeof repos.docMountFileLinks.linkBlobContent>>;
+  try {
+    const folderDir = path.posix.dirname(finalPath);
+    const folderId = folderDir !== '.' && folderDir !== '' ? await ensureFolderPath(mp.id, folderDir) : null;
 
-  // 'overwrite' (and force) re-point an existing link at new content — drop its
-  // stale chunks first so a re-extraction starts clean.
-  const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, finalPath);
-  if (existingLink) {
-    await repos.docMountChunks.deleteByLinkId(existingLink.id);
+    // 'overwrite' (and force) re-point an existing link at new content — drop its
+    // stale chunks first so a re-extraction starts clean.
+    const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(mp.id, finalPath);
+    if (existingLink) {
+      await repos.docMountChunks.deleteByLinkId(existingLink.id);
+    }
+
+    linked = await repos.docMountFileLinks.linkBlobContent({
+      mountPointId: mp.id,
+      relativePath: finalPath,
+      fileName: path.posix.basename(finalPath),
+      folderId,
+      fileType: mirrorFileType,
+      originalFileName: input.originalFileName ?? path.posix.basename(finalPath),
+      originalMimeType,
+      storedMimeType: transcoded.storedMimeType,
+      sha256: transcoded.sha256,
+      description: input.description ?? '',
+      data: transcoded.data,
+    });
+  } finally {
+    if (reservedPath) reservedBlobPaths.delete(reservedPath);
   }
-
-  const { link, file, blobId } = await repos.docMountFileLinks.linkBlobContent({
-    mountPointId: mp.id,
-    relativePath: finalPath,
-    fileName: path.posix.basename(finalPath),
-    folderId,
-    fileType: mirrorFileType,
-    originalFileName: input.originalFileName ?? path.posix.basename(finalPath),
-    originalMimeType,
-    storedMimeType: transcoded.storedMimeType,
-    sha256: transcoded.sha256,
-    description: input.description ?? '',
-    data: transcoded.data,
-  });
+  const { link, file, blobId } = linked;
 
   // PDF/DOCX: extract plain text from the ORIGINAL bytes (transcode only
   // touches bitmaps, so for these types transcoded.data === input.data).

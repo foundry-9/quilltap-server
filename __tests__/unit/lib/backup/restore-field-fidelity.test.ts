@@ -23,6 +23,7 @@ import { parseBackupZip } from '@/lib/backup/restore/archive';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { rawQuery } from '@/lib/database/manager';
+import { ChatMetadataBaseSchema } from '@/lib/schemas/chat.types';
 
 jest.mock('@/lib/backup/restore/archive', () => ({
   parseBackupZip: jest.fn(),
@@ -40,6 +41,11 @@ jest.mock('@/lib/repositories/user-scoped', () => ({
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+}))
+
+// The restore drops the memory-index cache once the rows are in.
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
 }))
 
 jest.mock('@/lib/file-storage/manager', () => ({
@@ -84,7 +90,7 @@ const EMPTY_COLLECTIONS = [
   'groups', 'llmLogs', 'pluginConfigs', 'folders', 'wardrobeItems',
   'characterPluginData', 'conversationAnnotations', 'chatDocuments',
   'instanceSettings', 'embeddingStatus', 'conversationChunks', 'tfidfVocabularies',
-  'vectorIndexMetas', 'textReplacementRules', 'docMountPoints', 'docMountFiles',
+  'textReplacementRules', 'docMountPoints', 'docMountFiles',
   'docMountDocuments', 'docMountChunks', 'docMountFileLinks', 'docMountFolders',
   'docMountBlobs', 'projectDocMountLinks', 'groupDocMountLinks',
   'groupCharacterMembers', 'vectorEntries',
@@ -104,6 +110,17 @@ const NEW_CHAT_FIELDS = {
   turnSkippingEnabled: true,
 }
 
+/**
+ * The fold passes' cursors: carried on the archived chat under their pre-4.10
+ * column names, restored into `memory_extraction_cursors` (memory refactor
+ * Phase D), never onto the chat row.
+ */
+const BUNDLED_CURSOR_FIELDS = {
+  otherExtractionWatermarkMessageId: 'msg-1',
+  episodeExtractionWatermarkMessageId: 'msg-1',
+  turnExtractionWatermarkMessageId: 'msg-1',
+}
+
 const NEW_MESSAGE_FIELDS = {
   confirmed: true,
   confirmationChecked: true,
@@ -118,6 +135,10 @@ const NEW_MEMORY_FIELDS = {
   narrativeTime: 'the second evening',
   entities: ['Lorian', 'the conservatory'],
   kind: 'episodic',
+  tier: 'cold',
+  supersededById: 'mem-digest',
+  consolidatedFrom: ['mem-a', 'mem-b'],
+  consolidatedAt: '2026-10-01T00:00:00.000Z',
 }
 
 const NEW_CHAT_SETTINGS_FIELDS = {
@@ -147,7 +168,11 @@ const NEW_EQUIPPED_OUTFIT = {
  * some restored row happens to carry the new value.
  */
 
-/** `chats.conciergeOverride` grew a fourth state in 4.9; the column did not change. */
+/**
+ * `chats.conciergeOverride` grew a fourth state in 4.9, was superseded by
+ * `conciergeMode` in 4.10, and its column was dropped in 4.10 too. Old
+ * archives still carry it.
+ */
 const WIDENED_CONCIERGE_OVERRIDE = 'UNCENSORED'
 
 /** `chat_settings.cheapLLMSettings` (a JSON column) grew `allowCheapFallback` in 4.10. */
@@ -200,6 +225,8 @@ function buildRepoMocks() {
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
   )
   const chatSettingsCreate = jest.fn().mockResolvedValue({})
+  const setCursor = jest.fn().mockResolvedValue(undefined)
+  const tfidfCreate = jest.fn().mockResolvedValue({})
   const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
   )
@@ -211,7 +238,6 @@ function buildRepoMocks() {
     get(_t, prop: string) {
       if (prop === 'chats')
         return repoStub({ create: chatsCreate, addMessage, getLastPlayedMessageAt, update: chatsUpdate })
-      if (prop === 'memories') return repoStub({ create: memoriesCreate })
       if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
       if (prop === 'imageProfiles') return repoStub({ create: imageProfilesCreate })
       return repoStub()
@@ -221,6 +247,14 @@ function buildRepoMocks() {
   const globalRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
       if (prop === 'chatSettings') return repoStub({ create: chatSettingsCreate })
+      if (prop === 'memoryExtractionCursors') return repoStub({ setCursor })
+      if (prop === 'tfidfVocabularies') return repoStub({ create: tfidfCreate })
+      // Memories restore through the global repository, owner checked by a raw
+      // character read (bug 185: the user-scoped read goes through the vault
+      // overlay, which throws for a vault not yet restored).
+      if (prop === 'memories') return repoStub({ create: memoriesCreate })
+      if (prop === 'characters')
+        return repoStub({ findByIdRaw: jest.fn(async (id: string) => ({ id, userId: 'user-1' })) })
       return repoStub()
     },
   })
@@ -235,6 +269,8 @@ function buildRepoMocks() {
     chatsUpdate,
     memoriesCreate,
     chatSettingsCreate,
+    setCursor,
+    tfidfCreate,
     connectionsCreate,
     imageProfilesCreate,
   }
@@ -375,7 +411,7 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
     expect(chatsCreate.mock.calls[0][0]).toMatchObject({ equippedOutfit: NEW_EQUIPPED_OUTFIT })
   })
 
-  it("carries the widened conciergeOverride domain ('UNCENSORED') through restore", async () => {
+  it("derives conciergeMode from a legacy conciergeOverride ('UNCENSORED') before the schema strips it", async () => {
     const { chatsCreate } = buildRepoMocks()
     primeArchive(
       makeBackupData({
@@ -397,12 +433,81 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
 
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
-    // The fourth state is a *value*, not a column: a restore that narrowed it
-    // back to 'OFF' or dropped it would silently re-arm the classifier on a
-    // chat whose operator had already ruled on it.
-    expect(chatsCreate.mock.calls[0][0]).toMatchObject({
-      conciergeOverride: WIDENED_CONCIERGE_OVERRIDE,
+    // The operator's ruling is a *value* the dropped column carried: the
+    // restore must turn it into conciergeMode before the row reaches the
+    // repository, whose schema no longer knows conciergeOverride.
+    const payload = chatsCreate.mock.calls[0][0]
+    expect(payload).toMatchObject({
+      conciergeMode: 'unmoderated',
+      conciergeModeSetBy: 'operator',
+      conciergeModeReason: 'migration',
     })
+    const stored = ChatMetadataBaseSchema
+      .pick({ conciergeMode: true, conciergeModeSetBy: true, conciergeModeReason: true })
+      .parse(payload) as Record<string, unknown>
+    expect(stored.conciergeMode).toBe('unmoderated')
+    // The schema no longer declares the legacy field, so it would be stripped.
+    expect('conciergeOverride' in ChatMetadataBaseSchema.shape).toBe(false)
+  })
+
+  it('translates pre-4.10 Concierge settings into conciergeSettings through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [
+          {
+            id: 'settings-1',
+            userId: 'old-user',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            dangerousContentSettings: {
+              mode: 'AUTO_ROUTE',
+              threshold: 0.6,
+              uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
+              displayMode: 'BLUR',
+            },
+            uncensoredImageDescriptionProfileId: '33333333-3333-4333-8333-333333333333',
+            cheapLLMSettings: { ...NEW_CHEAP_LLM_SETTINGS, imagePromptProfileId: '44444444-4444-4444-8444-444444444444' },
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject({
+      conciergeSettings: {
+        enabled: true,
+        uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
+        uncensoredVisionProfileId: '33333333-3333-4333-8333-333333333333',
+        imagePromptProfileId: '44444444-4444-4444-8444-444444444444',
+        display: { mode: 'BLUR' },
+        preScreen: { enabled: true, threshold: 0.6, summaryClassification: true },
+      },
+    })
+  })
+
+  it('leaves a 4.10 archive\'s conciergeSettings exactly as stored', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    const conciergeSettings = { enabled: false, autoSwitchAfterRefusals: 0 }
+    primeArchive(
+      makeBackupData({
+        chatSettings: [
+          {
+            id: 'settings-1',
+            userId: 'old-user',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            conciergeSettings,
+            dangerousContentSettings: { mode: 'AUTO_ROUTE' },
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0].conciergeSettings).toEqual(conciergeSettings)
   })
 
   it('carries the cheap-LLM fallback opt-in inside cheapLLMSettings through restore', async () => {
@@ -485,7 +590,7 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
   })
 
   it('carries every new chats and chat_messages column through restore', async () => {
-    const { chatsCreate, addMessage } = buildRepoMocks()
+    const { chatsCreate, addMessage, setCursor } = buildRepoMocks()
     primeArchive(
       makeBackupData({
         chats: [
@@ -498,6 +603,7 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
             participants: [],
             tags: [],
             ...NEW_CHAT_FIELDS,
+            ...BUNDLED_CURSOR_FIELDS,
             messages: [
               { id: 'msg-1', type: 'message', role: 'assistant', content: 'hello', ...NEW_MESSAGE_FIELDS },
             ],
@@ -512,6 +618,13 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     expect(chatsCreate.mock.calls[0][0]).toMatchObject(NEW_CHAT_FIELDS)
     // The chat id must survive so messages/memories keep pointing at it.
     expect(chatsCreate.mock.calls[0][1]).toEqual({ id: 'chat-1' })
+    // The bundled cursors leave the chat row and land in their own table.
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('otherExtractionWatermarkMessageId')
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('episodeExtractionWatermarkMessageId')
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('turnExtractionWatermarkMessageId')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'other-fold', 'msg-1')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'episode-fold', 'msg-1')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'turn', 'msg-1')
 
     expect(addMessage).toHaveBeenCalledTimes(1)
     expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_MESSAGE_FIELDS)
@@ -629,5 +742,261 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     // relatedMemoryIds above dangle and the memory graph is lost on restore.
     expect(memoriesCreate.mock.calls[0][1]).toEqual({ id: 'mem-1' })
     expect(memoriesCreate.mock.calls[1][1]).toEqual({ id: 'mem-2' })
+  })
+
+  it('restores a CONSOLIDATED digest and its cold members under their own ids, links intact', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    const base = {
+      characterId: 'char-1',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+    }
+    primeArchive(
+      makeBackupData({
+        memories: [
+          { ...base, id: 'mem-digest', content: 'Digest.', source: 'CONSOLIDATED', tier: 'hot', consolidatedFrom: ['mem-a'] },
+          { ...base, id: 'mem-a', content: 'Member.', source: 'AUTO', tier: 'cold', supersededById: 'mem-digest' },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(2)
+    expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ source: 'CONSOLIDATED', consolidatedFrom: ['mem-a'] })
+    expect(memoriesCreate.mock.calls[1][0]).toMatchObject({ tier: 'cold', supersededById: 'mem-digest' })
+    expect(memoriesCreate.mock.calls[1][1]).toEqual({ id: 'mem-a' })
+  })
+
+  it('restores a pre-tier backup memory without inventing tier fields (repository defaults to hot)', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-old',
+            characterId: 'char-1',
+            content: 'Old.',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    const data = memoriesCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(data.tier).toBeUndefined()
+    expect(data.supersededById).toBeUndefined()
+  })
+
+  it('decodes an index-keyed embedding from a pre-fix backup (bug 181)', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    // Backups written before the fix serialised a Float32Array embedding with
+    // JSON.stringify, which yields an index-keyed object. MemorySchema refuses
+    // that shape, so without the decode every embedded memory was skipped.
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-1',
+            characterId: 'char-1',
+            content: 'Embedded.',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+            embedding: { '0': 0.25, '1': -0.5 },
+          },
+        ],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(1)
+    expect(memoriesCreate.mock.calls[0][0].embedding).toEqual([0.25, -0.5])
+    expect(summary.memories).toBe(1)
+  })
+
+  it('adopts the legacy vector-entries vector for a memory that arrived without one, and keeps its own otherwise', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    const { memoryIndex } = jest.requireMock('@/lib/memory/index-store') as { memoryIndex: { reloadAll: jest.Mock } }
+    memoryIndex.reloadAll.mockClear()
+    const row = (id: string, embedding: number[] | null) => ({
+      id,
+      characterId: 'char-1',
+      content: id,
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+      embedding,
+    })
+    const legacy = (id: string, embedding: number[]) => ({
+      id,
+      characterId: 'char-1',
+      embedding,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    })
+    // A pre-Phase-B archive: the mirror rides beside the rows.
+    primeArchive(
+      makeBackupData({
+        memories: [row('mem-bare', null), row('mem-own', [0.5, 0.5]), row('mem-no-mirror', null)],
+        vectorEntries: [legacy('mem-bare', [0.1, 0.9]), legacy('mem-own', [0.9, 0.1]), legacy('mem-orphan', [1, 0])],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    const byId = new Map(memoriesCreate.mock.calls.map((c) => [(c[1] as { id: string }).id, c[0] as Record<string, unknown>]))
+    expect(byId.get('mem-bare')!.embedding).toEqual([0.1, 0.9])
+    expect(byId.get('mem-own')!.embedding).toEqual([0.5, 0.5])
+    expect(byId.get('mem-no-mirror')!.embedding ?? null).toBeNull()
+    // The orphan mirror entry creates nothing.
+    expect(memoriesCreate).toHaveBeenCalledTimes(3)
+    expect(summary.memories).toBe(3)
+    expect(summary.legacyVectorsAdopted).toBe(1)
+    // The cache is dropped once the rows are in, so the next search reads them.
+    expect(memoryIndex.reloadAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts restored memories from the rows written, not the archive', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    memoriesCreate
+      .mockRejectedValueOnce(new Error('invalid_union'))
+      .mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
+        Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
+      )
+    const row = (id: string) => ({
+      id,
+      characterId: 'char-1',
+      content: id,
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+    })
+    primeArchive(makeBackupData({ memories: [row('mem-1'), row('mem-2')] }))
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(2)
+    expect(summary.memories).toBe(1)
+    expect(summary.warnings.some((w: string) => w.startsWith('Failed to restore memory'))).toBe(true)
+  })
+})
+
+describe('restore field fidelity — 4.10 data-model additions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  /** Columns added to chats in 4.10, as a 4.10 archive carries them. */
+  const NEW_410_CHAT_FIELDS = {
+    conciergeMode: 'locked',
+    conciergeModeSetBy: 'operator',
+    conciergeModeReason: 'manual',
+    scenarioSource: { mountPointId: 'store-1', path: 'Scenarios/tea.md', bodySha256: 'a'.repeat(64) },
+    scenarioNotes: 'It is raining.',
+    cycleOrderParticipantIds: JSON.stringify(['seat-b', 'seat-a']),
+  }
+
+  const NEW_410_MESSAGE_FIELDS = {
+    routeTrail: [
+      { profileId: 'profile-1', profileName: 'Primary', provider: 'ANTHROPIC', modelName: 'm', via: 'primary', outcome: 'failed', trigger: 'timeout' },
+      { profileId: 'profile-2', profileName: 'Understudy', provider: 'OPENAI', modelName: 'n', via: 'fallback', outcome: 'answered' },
+    ],
+  }
+
+  const NEW_410_CHAT_SETTINGS_FIELDS = {
+    impersonationVoiceMode: 'ask',
+    wardrobeImageSettings: { imageProfileId: 'img-1', toolImagesEnabled: true },
+  }
+
+  it('carries every new 4.10 chats and chat_messages column through restore', async () => {
+    const { chatsCreate, addMessage } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Conversation',
+            participants: [],
+            tags: [],
+            ...NEW_410_CHAT_FIELDS,
+            messages: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello', ...NEW_410_MESSAGE_FIELDS }],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // A 4.10 archive's Concierge state is restored as stored, not re-derived.
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject(NEW_410_CHAT_FIELDS)
+    expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_410_MESSAGE_FIELDS)
+  })
+
+  it("carries a memory's supersededAt (cold-retention clock) through restore", async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-1',
+            characterId: 'char-1',
+            content: 'Superseded.',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+            tier: 'cold',
+            supersededById: 'mem-digest',
+            supersededAt: '2026-10-02T00:00:00.000Z',
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ supersededAt: '2026-10-02T00:00:00.000Z' })
+  })
+
+  it('carries every new 4.10 chat_settings column through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [{ id: 'settings-1', userId: 'old-user', ...NEW_410_CHAT_SETTINGS_FIELDS }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject(NEW_410_CHAT_SETTINGS_FIELDS)
+  })
+
+  it("carries a TF-IDF vocabulary's textShapeVersion through restore", async () => {
+    const { tfidfCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        tfidfVocabularies: [{ id: 'voc-1', userId: 'old-user', profileId: 'emb-1', textShapeVersion: 2 }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(tfidfCreate.mock.calls[0][0]).toMatchObject({ textShapeVersion: 2, userId: 'user-1' })
   })
 })

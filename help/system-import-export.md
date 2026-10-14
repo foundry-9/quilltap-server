@@ -160,6 +160,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 - Creates a copy even if item exists
 - Imported character becomes "Alice 2" if "Alice" exists
+- A chat copied this way arrives titled "… (imported)", sitting beside its original with every last line of the transcript intact — swipes, summaries and Informs following along to the copy rather than wandering back to the original
 - Useful for having multiple versions
 
 ## Understanding Import Results
@@ -230,6 +231,8 @@ When you import data, Quilltap automatically preserves and updates relationships
 - Associated chat
 - Associated project
 - Tags assigned to the memory
+
+A chats-only export brings its memories but not its cast. That is perfectly in order: on import, each memory finds its way home to the character of the same identity already living in your Quilltap. Only a memory whose character is nowhere to be found — or has been archived, and so is not receiving visitors — is set aside, with a note in the import summary.
 
 **Profile relationships:**
 

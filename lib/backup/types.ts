@@ -5,6 +5,7 @@
  * supporting full user data exports and imports with version management.
  */
 
+import type { BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import type {
   Character,
   ChatMetadata,
@@ -27,14 +28,14 @@ import type {
   CharacterPluginData,
   ConversationAnnotation,
   ConversationChunk,
-  VectorIndexMeta,
-  VectorEntryRow,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -59,9 +60,11 @@ export interface InstanceSettingRow {
 }
 
 /**
- * A vector entry whose Float32 embedding has been encoded as a plain number
- * array so it can survive JSON serialisation. The repository accepts number[]
- * on the way back in and rehydrates it as Float32Array.
+ * A row of the retired `vector_entries` mirror, as archives written before
+ * Phase B of the memory refactor carry it in `data/vector-entries.json`. New
+ * backups write no such file: a memory's vector rides on its own row. A
+ * restore reads this only to give a memory that arrived without an embedding
+ * the one its archive kept beside it.
  */
 export interface SerializedVectorEntry {
   id: string;
@@ -69,6 +72,13 @@ export interface SerializedVectorEntry {
   embedding: number[];
   createdAt: string;
 }
+
+/**
+ * A memory whose embedding has been encoded as a plain number array so it
+ * survives JSON serialisation (bug 181: a raw Float32Array becomes an
+ * index-keyed object MemorySchema refuses). Other fields match Memory.
+ */
+export type SerializedMemory = Omit<Memory, 'embedding'> & { embedding: number[] | null };
 
 /**
  * A conversation chunk whose embedding has been encoded as a plain number
@@ -202,6 +212,8 @@ export interface BackupManifest {
     userInstalledThemes?: number;
     /** Number of ChatDocument entities (Document Mode pane state) */
     chatDocuments?: number;
+    /** Number of ChatInform rows (out-of-character passages handed to seats) */
+    chatInforms?: number;
     /** Number of instance_settings key/value rows */
     instanceSettings?: number;
     /** Number of EmbeddingStatus entities */
@@ -210,10 +222,6 @@ export interface BackupManifest {
     conversationChunks?: number;
     /** Number of TfidfVocabulary entities */
     tfidfVocabularies?: number;
-    /** Number of VectorIndexMeta entities (one per character with embeddings) */
-    vectorIndexMetas?: number;
-    /** Number of vector entries (per-memory Float32 embeddings) */
-    vectorEntries?: number;
     /** Number of DocMountPoint entities (document stores) */
     docMountPoints?: number;
     /** Number of DocMountFolder entities */
@@ -236,6 +244,8 @@ export interface BackupManifest {
     groupCharacterMembers?: number;
     /** Number of TextReplacementRule entities (global find→replace rules) */
     textReplacementRules?: number;
+    /** Number of wardrobe wear-ledger rows (`wardrobe_wear_stats`) */
+    wardrobeWear?: number;
   };
 }
 
@@ -272,8 +282,8 @@ export interface BackupData {
   /** Array of EmbeddingProfile entities */
   embeddingProfiles: EmbeddingProfile[];
 
-  /** Array of Memory entities */
-  memories: Memory[];
+  /** Array of Memory entities, embeddings encoded as number[] */
+  memories: SerializedMemory[];
 
   /** Array of FileEntry entities (metadata only, not actual file contents) */
   files: FileEntry[];
@@ -322,6 +332,12 @@ export interface BackupData {
 
   /** Array of ChatDocument entities (Document Mode pane state per chat) */
   chatDocuments?: ChatDocument[];
+  /**
+   * Array of ChatInform rows per chat — consumed rows included, because a
+   * consumed row is what makes a swipe of the turn that consumed it honest
+   * after a restore.
+   */
+  chatInforms?: ChatInform[];
 
   /**
    * Array of instance_settings key/value pairs. Includes references to
@@ -348,12 +364,10 @@ export interface BackupData {
   /** TF-IDF vocabularies for BUILTIN embedding profiles. */
   tfidfVocabularies?: TfidfVocabulary[];
 
-  /** Per-character vector-index metadata (one row per indexed character). */
-  vectorIndexMetas?: VectorIndexMeta[];
-
   /**
-   * Per-memory vector embeddings (Float32Array serialised to number[]).
-   * Skipping this would force every restored memory to be re-embedded.
+   * Legacy only: the retired `vector_entries` mirror from an archive written
+   * before Phase B. Read on restore to backfill a memory row that arrived with
+   * no embedding; never written.
    */
   vectorEntries?: SerializedVectorEntry[];
 
@@ -398,6 +412,13 @@ export interface BackupData {
    * is already backed up.
    */
   textReplacementRules?: TextReplacementRule[];
+
+  /**
+   * The wardrobe wear ledger (`wardrobe_wear_stats`): one row per item ×
+   * wearer. Global (no userId — single-user per instance), keyed by item id
+   * with no FK, since items are vault files rather than rows.
+   */
+  wardrobeWear?: WardrobeWearStatsRow[];
 }
 
 // ============================================================================
@@ -410,7 +431,7 @@ export interface BackupData {
  * This combines the ChatMetadata with an array of all MessageEvent objects
  * that belong to the chat. Used primarily during backup/restore operations.
  */
-export interface ChatWithMessages extends ChatMetadata {
+export interface ChatWithMessages extends ChatMetadata, BundleCursorFields {
   /** Array of message events for this chat in chronological order */
   messages: MessageEvent[];
 }
@@ -532,6 +553,8 @@ export interface RestoreSummary {
 
   /** Number of ChatDocument entities restored */
   chatDocuments?: number;
+  /** Number of ChatInform rows restored */
+  chatInforms?: number;
 
   /** Number of instance_settings rows restored */
   instanceSettings?: number;
@@ -545,11 +568,11 @@ export interface RestoreSummary {
   /** Number of TfidfVocabulary entities restored */
   tfidfVocabularies?: number;
 
-  /** Number of VectorIndexMeta entities restored */
-  vectorIndexMetas?: number;
-
-  /** Number of vector entries restored */
-  vectorEntries?: number;
+  /**
+   * Memories that arrived without an embedding and took the one an older
+   * archive kept in its `vector-entries.json`.
+   */
+  legacyVectorsAdopted?: number;
 
   /** Number of DocMountPoint entities restored */
   docMountPoints?: number;
@@ -584,6 +607,9 @@ export interface RestoreSummary {
   /** Number of TextReplacementRule entities restored */
   textReplacementRules?: number;
 
+  /** Number of wardrobe wear-ledger rows restored */
+  wardrobeWear?: number;
+
   /**
    * Outcome of the post-restore embedding reconcile. A restore can land a
    * corpus whose vectors were produced by a different embedding standard than
@@ -595,8 +621,6 @@ export interface RestoreSummary {
   embeddingReconcile?: {
     targetDimensions: number | null;
     skippedReason: string | null;
-    vectorEntriesDeleted: number;
-    vectorIndexMetaFixed: number;
     reindexEnqueued: boolean;
   };
 

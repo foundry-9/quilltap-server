@@ -1,5 +1,6 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryList } from '@/components/memory/memory-list'
+import { createQueryWrapper } from '../../../helpers/renderWithQuery'
 
 // Mock IntersectionObserver for infinite scroll
 const mockObserve = jest.fn()
@@ -49,7 +50,7 @@ describe('MemoryList', () => {
     let rendered: ReturnType<typeof render>
 
     await act(async () => {
-      rendered = render(<MemoryList {...props} />)
+      rendered = render(<MemoryList {...props} />, { wrapper: createQueryWrapper().wrapper })
       await flushPromises()
     })
 
@@ -138,7 +139,7 @@ describe('MemoryList', () => {
     expect(searchInput).toHaveValue('alpha')
   })
 
-  it('opens housekeeping dialog when cleanup is clicked', async () => {
+  it('opens the maintenance dialog for this character', async () => {
     mockFetch.mockResolvedValue(createMockResponse({
       memories: [
         {
@@ -164,12 +165,15 @@ describe('MemoryList', () => {
       expect(screen.getByText(/Memories \(1\)/i)).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /cleanup/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^maintenance$/i }))
 
     await act(async () => {
       await flushPromises()
     })
 
-    expect(screen.getByText(/memory cleanup/i)).toBeInTheDocument()
+    expect(screen.getByText(/memory maintenance/i)).toBeInTheDocument()
+    // Fixed to this character: no picker, and the four pickable phases are offered.
+    expect(screen.queryByLabelText(/^character$/i)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(4)
   })
 })

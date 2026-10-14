@@ -29,6 +29,7 @@ import {
   needsFallbackProcessing,
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
+  type ImageDescriptionOptions,
 } from '@/lib/chat/file-attachment-fallback'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
@@ -100,7 +101,8 @@ export async function adaptMessagesForProfile<T extends AttachmentBearingMessage
   profile: ConnectionProfile,
   repos: unknown,
   userId: string,
-  logContext: Record<string, unknown> = {}
+  logContext: Record<string, unknown> = {},
+  options: ImageDescriptionOptions = {}
 ): Promise<T[]> {
   const needsWork = messages.some(m =>
     (m.attachments ?? []).some(
@@ -152,6 +154,7 @@ export async function adaptMessagesForProfile<T extends AttachmentBearingMessage
           profile,
           repos as never,
           userId,
+          options,
         )
         prefix += formatFallbackAsMessagePrefix(result)
         // Mirror `loadAndProcessFiles`: the bytes ride along only when the

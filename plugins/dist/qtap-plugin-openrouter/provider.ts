@@ -685,9 +685,24 @@ export class OpenRouterProvider implements TextProvider {
         },
       }));
 
+    // The real reason, under the snake_case key the host's finish-reason
+    // reader looks for (`extractFinishReason`). An incomplete response names
+    // why (`content_filter` for a moderation stop); a refusal item says so.
+    const incompleteReason = (response as any).incompleteDetails?.reason ?? (response as any).incomplete_details?.reason;
+    const refused = (response.output ?? []).some((item: any) =>
+      item?.type === 'refusal'
+      || (item?.type === 'message' && Array.isArray(item.content) && item.content.some((part: any) => part?.type === 'refusal')));
+    const streamedFinishReason = toolCalls?.length
+      ? 'tool_calls'
+      : refused
+        ? 'refusal'
+        : response.status === 'completed'
+          ? 'stop'
+          : (response.status === 'incomplete' && incompleteReason) ? incompleteReason : response.status;
     const rawResponse = {
       choices: [{
-        finishReason: response.status === 'completed' ? 'stop' : response.status,
+        finish_reason: streamedFinishReason,
+        finishReason: streamedFinishReason,
         delta: {
           toolCalls: toolCalls?.length ? toolCalls : undefined,
         },
@@ -836,6 +851,9 @@ export class OpenRouterProvider implements TextProvider {
       let cacheUsage: { cacheReadInputTokens: number; cachedTokens: number } | undefined;
       let toolCalls: any[] = [];
       let fetchReasoning = '';
+      // The provider's own finish reason from the stream, so a moderation stop
+      // (`content_filter`) reaches the host instead of a hardcoded 'stop'.
+      let streamFinishReason: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -853,6 +871,9 @@ export class OpenRouterProvider implements TextProvider {
           try {
             const chunk = JSON.parse(data);
             const choice = chunk.choices?.[0];
+            if (typeof choice?.finish_reason === 'string' && choice.finish_reason) {
+              streamFinishReason = choice.finish_reason;
+            }
 
             if (choice?.delta?.content) {
               yield {
@@ -907,9 +928,13 @@ export class OpenRouterProvider implements TextProvider {
       }
 
       // Build raw response with tool calls
+      const finalFinishReason = toolCalls.length > 0 ? 'tool_calls' : (streamFinishReason ?? 'stop');
       const rawResponse = {
         choices: [{
-          finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+          // snake_case is what the host's finish-reason reader looks for; the
+          // camelCase key is kept for anything that already reads it.
+          finish_reason: finalFinishReason,
+          finishReason: finalFinishReason,
           delta: {
             toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           },
