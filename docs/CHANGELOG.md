@@ -4,6 +4,11 @@
 
 ### 4.10-dev
 
+#### Release checklist 7: `qt-*` theme classes
+
+- Reviewed the 158 components changed since 4.9.2. The new `className` values are layout, sizing, or the theme-variable `text-foreground`; none hard-code palette colors.
+- The memory card's "Superseded by a digest" button uses `qt-link` instead of `text-primary hover:underline`, so themes control its color.
+
 #### Release checklist 6: debug logging prune
 
 - Reviewed the 514 debug logs and 19 `console.*` calls added since 4.9.2. Removed three leftover traces: the client `console.debug` on wardrobe item duplicate, the per-file `[Sync] Reading disk file` line, and the `Projecting chat transcript` entry line (the `Projected` summary stays).

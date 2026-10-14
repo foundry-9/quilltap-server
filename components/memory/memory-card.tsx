@@ -102,7 +102,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
               <button
                 type="button"
                 onClick={() => onViewDigest(memory.supersededById!)}
-                className="text-primary hover:underline"
+                className="qt-link"
               >
                 Superseded by a digest
               </button>
