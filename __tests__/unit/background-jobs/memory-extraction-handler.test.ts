@@ -151,6 +151,7 @@ describe('handleMemoryExtraction (per-turn)', () => {
     expect(mockRunTurn).toHaveBeenCalledWith(ctx, {
       turnOpenerMessageId: 'user-msg-1',
       extractionAnchorMessageId: 'assistant-msg-1',
+      extractAfterMessageId: null,
     });
     expect(mockRunFoldCatchup).not.toHaveBeenCalled();
   });
@@ -160,6 +161,7 @@ describe('handleMemoryExtraction (per-turn)', () => {
     expect(mockRunTurn).toHaveBeenCalledWith(ctx, {
       turnOpenerMessageId: 'user-msg-1',
       extractionAnchorMessageId: null,
+      extractAfterMessageId: null,
     });
   });
 

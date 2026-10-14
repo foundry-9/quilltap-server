@@ -37,8 +37,17 @@ import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
 /** Task type recorded on the LLM log and the activity registry. */
 export const CONSOLIDATION_TASK_TYPE = 'memory-consolidation'
 
-/** Output-token ceiling for one cluster's answer (a 30-member cluster fits comfortably). */
-const CONSOLIDATION_MAX_TOKENS = 4000
+/**
+ * Output-token floor for one cluster's answer (a 30-member cluster fits
+ * comfortably). The call takes the profile's own budget when it is larger: a
+ * reasoning model counts its thinking against the same ceiling, and at a flat
+ * 4,000 it could spend every token thinking and answer nothing (bug 246).
+ */
+export const CONSOLIDATION_MIN_MAX_TOKENS = 4000
+
+/** The reason an empty answer is skipped under, so it is not read as bad JSON. */
+export const CONSOLIDATION_EMPTY_ANSWER_REASON =
+  'empty answer: the model returned no text (a reasoning model may have spent the whole output budget thinking)'
 
 /** Longest member text shown to the model, in characters. */
 const MEMBER_CONTENT_CHAR_CAP = 1200
@@ -324,6 +333,9 @@ export function parseConsolidationResponse(
   content: string,
   inputHandles: readonly string[],
 ): ConsolidationValidation {
+  if (!content.trim()) {
+    return { ok: false, reason: CONSOLIDATION_EMPTY_ANSWER_REASON }
+  }
   let raw: unknown
   try {
     raw = parseLLMJsonObject<unknown>(content)
@@ -348,9 +360,12 @@ export async function consolidateMemoryCluster(
   options: {
     characterId?: string
     uncensoredFallback?: UncensoredFallbackOptions
+    /** The routed profile's output budget (`resolveMaxTokens`); never below the floor. */
+    profileMaxTokens?: number
   } = {},
 ): Promise<CheapLLMTaskResult<ConsolidationValidation>> {
   const handles = input.members.map((m) => m.handle)
+  const maxTokens = Math.max(CONSOLIDATION_MIN_MAX_TOKENS, options.profileMaxTokens ?? 0)
   const messages: LLMMessage[] = [
     { role: 'system', content: CONSOLIDATION_SYSTEM_PROMPT },
     { role: 'user', content: buildConsolidationUserMessage(input) },
@@ -363,6 +378,7 @@ export async function consolidateMemoryCluster(
     hasExistingDigest: !!input.existingDigest,
     provider: selection.provider,
     model: selection.modelName,
+    maxTokens,
   })
   return executeCheapLLMTask(
     selection,
@@ -373,7 +389,7 @@ export async function consolidateMemoryCluster(
     undefined,
     undefined,
     options.uncensoredFallback,
-    CONSOLIDATION_MAX_TOKENS,
+    maxTokens,
     options.characterId,
   )
 }

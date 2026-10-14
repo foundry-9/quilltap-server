@@ -150,8 +150,8 @@ describe('listExtractionTurns', () => {
 
   it('anchors each closing line in an autonomous room', () => {
     expect(listExtractionTurns([msg('a1', 'ASSISTANT'), msg('a2', 'ASSISTANT')], 'autonomous')).toEqual([
-      { turnOpenerMessageId: null, extractionAnchorMessageId: 'a1' },
-      { turnOpenerMessageId: null, extractionAnchorMessageId: 'a2' },
+      { turnOpenerMessageId: null, extractionAnchorMessageId: 'a1', extractAfterMessageId: null },
+      { turnOpenerMessageId: null, extractionAnchorMessageId: 'a2', extractAfterMessageId: 'a1' },
     ])
   })
 })

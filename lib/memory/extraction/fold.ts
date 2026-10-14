@@ -19,7 +19,7 @@
  */
 
 import type { MessageEvent } from '@/lib/schemas/types'
-import type { ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
+import type { FoldCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
 import { logger } from '@/lib/logger'
 import type { ExtractionContext } from './context'
 import { emptyPassResult, mergePassResult, runPass, type ExtractionPass, type PassResult } from './run'
@@ -58,7 +58,7 @@ export interface FoldResult extends PassResult {
   cursorAdvancedTo: string | null
 }
 
-function foldResult(pass: ExtractionCursorPass, skippedReason?: string): FoldResult {
+function foldResult(pass: FoldCursorPass, skippedReason?: string): FoldResult {
   return {
     ...emptyPassResult(pass),
     slices: 0,
@@ -68,11 +68,11 @@ function foldResult(pass: ExtractionCursorPass, skippedReason?: string): FoldRes
   }
 }
 
-function passFor(name: ExtractionCursorPass): ExtractionPass {
+function passFor(name: FoldCursorPass): ExtractionPass {
   return name === 'other-fold' ? otherFoldPass() : episodeFoldPass()
 }
 
-async function advance(ctx: ExtractionContext, pass: ExtractionCursorPass, messageId: string | null, result: FoldResult): Promise<void> {
+async function advance(ctx: ExtractionContext, pass: FoldCursorPass, messageId: string | null, result: FoldResult): Promise<void> {
   if (!messageId) return
   try {
     await ctx.cursors.advance(pass, messageId)
@@ -89,7 +89,7 @@ async function advance(ctx: ExtractionContext, pass: ExtractionCursorPass, messa
 /** Run one fold-grain pass over a window. See module docs. */
 export async function runFoldPass(
   ctx: ExtractionContext,
-  passName: ExtractionCursorPass,
+  passName: FoldCursorPass,
   input: RunFoldInput,
 ): Promise<FoldResult> {
   const chatId = ctx.chat.id

@@ -20,7 +20,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { isHelpLikeChatType } from '@/lib/schemas/chat.types'
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types'
-import type { ExtractionCursorMap, ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
+import type { ExtractionCursorMap, FoldCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
 import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
 import { loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript'
@@ -131,7 +131,7 @@ export interface FoldCatchupSelection {
  * and one cursor read between the two passes.
  */
 export async function findFoldCatchupCandidates(
-  pass: ExtractionCursorPass,
+  pass: FoldCursorPass,
   options: {
     now?: number
     limit?: number
@@ -204,7 +204,7 @@ export async function findFoldCatchupCandidates(
   return { candidates, deferred }
 }
 
-function skipped(pass: ExtractionCursorPass, skippedReason: string): FoldResult {
+function skipped(pass: FoldCursorPass, skippedReason: string): FoldResult {
   return { ...emptyPassResult(pass), slices: 0, slicesDeferred: 0, cursorAdvancedTo: null, skippedReason }
 }
 
@@ -214,7 +214,7 @@ function skipped(pass: ExtractionCursorPass, skippedReason: string): FoldResult 
  */
 export async function runFoldCatchup(
   ctx: ExtractionContext,
-  pass: ExtractionCursorPass,
+  pass: FoldCursorPass,
   options: { ignoreIdle?: boolean; now?: number; maxSlices?: number } = {},
 ): Promise<FoldResult> {
   const chat = ctx.chat

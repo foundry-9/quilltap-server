@@ -2,18 +2,39 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed 2026-10-14 |
 | **Found** | 2026-10-13, V4test dogfood of the memory refactor (a Skip after a closed multi-character turn) |
-| **Fixed** | — |
+| **Fixed** | 2026-10-14 |
 | **Severity** | Medium — the earlier speakers' lines are read a second time, so the memories they produced a minute ago are reinforced by their own source (counts and `reinforcedImportance` inflate), and a paraphrase that misses the reinforce threshold lands as a near-duplicate row; every re-read also spends a cheap-LLM call per cast member |
-| **Who it bites** | any Salon turn reopened after it closed: Skip, nudge, a continue, a late chained speaker. Suspected (unconfirmed) for autonomous rooms, where no USER opener exists — see below |
+| **Who it bites** | any Salon turn reopened after it closed: Skip, nudge, a continue, a late chained speaker. and autonomous rooms, where no USER opener exists, so each speaker's job read the room from its first line (confirmed in the transcript builder) |
 | **Provenance** | Original to v4. The per-turn trigger has addressed a turn by its USER opener and re-extracted the whole interchange on each close since the per-turn redesign; Phase D of the memory refactor moved it onto `runTurnExtraction` unchanged. Bugs 209 and 231 fixed duplicates *inside* one job and across *concurrent* jobs; this is two *sequential* jobs over one turn |
 | **Defect site** | `lib/services/chat-message/memory-trigger.service.ts` — `triggerTurnMemoryExtraction` enqueues `{ turnOpenerMessageId }` with no record of which slices were already read; `lib/background-jobs/queue-service.ts` `enqueueMemoryExtraction` dedupes only against PENDING/PROCESSING jobs; `lib/services/chat-message/turn-transcript.ts` `buildTurnTranscript` collects every assistant message after the opener |
-| **Fix site** | — |
+| **Fix site** | `lib/services/chat-message/turn-transcript.ts` (`extractAfterMessageId`, `priorSlices`, `withPriorAsMaterial`, autonomous bounds in `listExtractionTurns`); `lib/memory/extraction/turn.ts` (`liveTurnBound`, `advanceTurnCursor`); `lib/memory/extraction/window.ts` (`PRIOR_TURN_CONTEXT_HEADING`); `lib/memory/extraction/passes/other-turn.ts`; a `turn` row in `memory_extraction_cursors` (`lib/schemas/memory-extraction-cursor.types.ts`), carried in bundles as `turnExtractionWatermarkMessageId` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-14).** The turn grain has a cursor: a `turn` row in
+`memory_extraction_cursors` holding the last assistant message a committed turn extraction
+covered. It only moves forward. A live turn job reads it as the transcript's lower bound;
+`buildTurnTranscript` applies a bound only when it is one of the turn's own lines, so a cursor
+left in an older turn (or moved ahead by a concurrent job) never hides a turn's lines. Lines at or
+before the bound, the opener's slice with them, become `priorSlices`: rendered under
+"EARLIER IN THIS TURN (already noted — context only…)", capped at 8 messages, never extraction
+material. SELF runs only for speakers with new lines. OTHER still runs for everyone who spoke: a
+speaker from the earlier part reads only the new lines and is skipped when nobody else said
+anything new; a speaker new to the turn reads the whole turn (`withPriorAsMaterial`), since none of
+it was observed through them before. A regenerate and the queue-memories batch read each turn whole
+(they do not consult the cursor, and advance it only forward). **Autonomous rooms (confirmed in the
+transcript builder):** `listExtractionTurns` now bounds each speaker by the previous anchor, so a
+rebuild reads each line once instead of the room's whole history per speaker, and a live speaker's
+job is bounded by the cursor. Tests: `context-and-carina.test.ts` ("a reopened turn is read past its
+turn cursor"), `turn-transcript.test.ts` ("reading a turn past lines already extracted"), the
+regenerate test's autonomous bounds, and the bundle round-trips in `uuid-remapper.test.ts`,
+`restore-field-fidelity.test.ts` and `duplicate-chat-message-ids.test.ts`. Verified on V4test
+2026-10-14: a Skip after a closed turn ran SELF for the two new speakers only, and the cursor moved
+to the new last line.
 
 ## Symptom
 
@@ -56,7 +77,7 @@ room before the fix is designed.
 The extraction tests address one turn once. The dogfood walks before this one never reopened a
 closed turn; the turn-transcript tests have no case with a null opener and an anchor.
 
-## Fix (proposed, not built)
+## Fix (as proposed; built — see the FIXED paragraph above)
 
 Give the turn grain a cursor, as the fold passes have: record per chat the last assistant message a
 turn job has extracted, and build the next job's transcript from the slices after it (earlier

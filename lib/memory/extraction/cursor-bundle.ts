@@ -6,7 +6,10 @@
  * used before Phase D — `otherExtractionWatermarkMessageId` and
  * `episodeExtractionWatermarkMessageId`. Keeping the names keeps every old
  * bundle readable and lets the existing message-id remapping (import's
- * `remintChatMessageIds`, restore's uuid remapper) carry them unchanged.
+ * `remintChatMessageIds`, restore's uuid remapper) carry them unchanged. The
+ * turn grain's cursor (bug 245) travels under `turnExtractionWatermarkMessageId`;
+ * a bundle written before it simply lacks the field, and the chat's next
+ * reopened turn reads from its opener as it always did.
  *
  *  - Writers call {@link withBundleCursorFields} on each chat they emit.
  *  - Readers call {@link takeBundleCursors} on the chat they are about to
@@ -26,11 +29,12 @@ const log = logger.child({ module: 'memory:extraction:cursor-bundle' })
 export const BUNDLE_CURSOR_FIELDS = {
   'other-fold': 'otherExtractionWatermarkMessageId',
   'episode-fold': 'episodeExtractionWatermarkMessageId',
+  turn: 'turnExtractionWatermarkMessageId',
 } as const satisfies Record<ExtractionCursorPass, string>
 
 export type BundleCursorField = (typeof BUNDLE_CURSOR_FIELDS)[ExtractionCursorPass]
 
-/** The two bundle fields, as they appear on an exported or backed-up chat. */
+/** The bundle fields, as they appear on an exported or backed-up chat. */
 export type BundleCursorFields = Partial<Record<BundleCursorField, string | null>>
 
 const ENTRIES = Object.entries(BUNDLE_CURSOR_FIELDS) as Array<[ExtractionCursorPass, BundleCursorField]>

@@ -170,6 +170,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const result = await runTurnExtraction(ctx, {
     turnOpenerMessageId: payload.turnOpenerMessageId,
     extractionAnchorMessageId: payload.extractionAnchorMessageId ?? null,
+    extractAfterMessageId: payload.extractAfterMessageId ?? null,
   });
   if (!result.hadContributions) {
     logger.info('[MemoryExtraction] Turn has no character contributions; skipping', {

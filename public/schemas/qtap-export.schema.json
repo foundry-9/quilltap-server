@@ -572,6 +572,10 @@
           "type": ["string", "null"],
           "description": "The episode-fold extraction pass's cursor: the message id it has read this chat up to. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
         },
+        "turnExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "The per-turn extraction's cursor: the last assistant message a committed turn extraction covered, so a turn reopened by a skip, nudge or continue (or an autonomous room's next speaker) is read only past it. Absent/null = never. Stored in memory_extraction_cursors, carried on the chat under this name. A message-id reference, remapped with the messages."
+        },
         "timelineMode": {
           "type": ["string", "null"],
           "enum": ["realtime", "narrative", null],

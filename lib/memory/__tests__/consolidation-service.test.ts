@@ -245,6 +245,22 @@ describe('the consolidate phase', () => {
     expect(mirrorCommonplaceForSubjects).not.toHaveBeenCalled()
   })
 
+  it("bug 246: each cluster call carries the routed profile's output budget", async () => {
+    repos.connections.findByUserId.mockResolvedValue([{ id: 'p-cheap', maxTokens: 9000 }])
+    ;(selectCheapLLMFromProfiles as jest.Mock).mockReturnValue({
+      selection: { provider: 'DEEPSEEK', modelName: 'deepseek-v4-flash', isLocal: false, connectionProfileId: 'p-cheap' },
+      defaultProfile: {},
+      allProfiles: [],
+    })
+    await runConsolidation(HOLDER, { dryRun: true, now: NOW })
+    expect((consolidateMemoryCluster as jest.Mock).mock.calls[0][3].profileMaxTokens).toBe(9000)
+  })
+
+  it('bug 246: a selection naming no known profile leaves the budget to the task floor', async () => {
+    await runConsolidation(HOLDER, { dryRun: true, now: NOW })
+    expect((consolidateMemoryCluster as jest.Mock).mock.calls[0][3].profileMaxTokens).toBeUndefined()
+  })
+
   it('real run: inserts the digest with its vector, sends members cold, marks the rest considered, mirrors', async () => {
     const report = await runConsolidation(HOLDER, { now: NOW })
 

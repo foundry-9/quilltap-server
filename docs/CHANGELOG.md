@@ -4,6 +4,11 @@
 
 ### 4.10-dev
 
+#### Bugs 245 and 246: reopened turns re-extracted; consolidation token budget
+
+- Bug 245: per-turn extraction keeps a `turn` cursor in `memory_extraction_cursors` (the last assistant message a committed turn job covered; only moves forward). A live turn job reads past it: earlier lines of the turn, the opener with them, go to `priorSlices` and render as context under "EARLIER IN THIS TURN", capped at 8 messages. SELF runs only for speakers with new lines; OTHER runs for every speaker, earlier speakers on the new lines only, new speakers on the whole turn (`withPriorAsMaterial`). A bound outside the turn is ignored. Regenerate and queue-memories read turns whole and bound each autonomous speaker by the previous anchor (`listExtractionTurns`), which also stops a rebuild re-reading the room's history per speaker. Bundles carry the cursor as `turnExtractionWatermarkMessageId` (export schema, restore remap, import remint). No migration.
+- Bug 246: consolidation's cluster call takes the routed profile's output budget (`resolveMaxTokens`) with 4,000 as a floor instead of a fixed 4,000; an empty answer is logged as empty, not as unparseable JSON.
+
 #### Memory refactor V4test dogfood; bugs 245 and 246 filed
 
 - Ran the phase B–G acceptance walks on V4test and recorded the results in `docs/developer/features/complete/memory-system-refactor.md`.

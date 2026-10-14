@@ -10,6 +10,9 @@ import { describe, expect, it } from '@jest/globals'
 import {
   buildTurnTranscript,
   findTurnOpenerMessageId,
+  listExtractionTurns,
+  PRIOR_CONTEXT_MAX_MESSAGES,
+  withPriorAsMaterial,
 } from '@/lib/services/chat-message/turn-transcript'
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 
@@ -340,5 +343,80 @@ describe('buildTurnTranscript — user-controlled characters', () => {
     })
 
     expect(transcript.characterSlices.some(s => s.isUserControlled)).toBe(false)
+  })
+})
+
+describe('reading a turn past lines already extracted (bug 245)', () => {
+  const userChar = makeCharacter('char-user', 'Tess')
+  const seats: ChatParticipantBase[] = [
+    { id: 'participant-user', type: 'CHARACTER', characterId: 'char-user', controlledBy: 'user', isActive: true, status: 'active', hasHistoryAccess: true, displayOrder: 0 } as unknown as ChatParticipantBase,
+    ...participants,
+  ]
+  const chars = new Map<string, Character>([['char-user', userChar], ['char-a', charA], ['char-b', charB]])
+
+  it('splits at a bound inside the turn: the opener and earlier lines become context', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'Hold the notary for Friday?', { participantId: 'participant-user' }),
+      assistantMsg('a-1', 'participant-a', 'Holding Friday.'),
+      assistantMsg('b-1', 'participant-b', 'Drafts by 11:30.'),
+    ]
+    const t = buildTurnTranscript(messages, seats, chars, { turnOpenerMessageId: 'u-1', extractAfterMessageId: 'a-1' })
+    expect(t.characterSlices.map(s => s.characterId)).toEqual(['char-b'])
+    expect(t.priorSlices?.map(s => s.characterId)).toEqual(['char-user', 'char-a'])
+    expect(t.latestAssistantMessageId).toBe('b-1')
+  })
+
+  it('ignores a bound that is not one of the turn\'s own lines', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'Hello'),
+      assistantMsg('a-1', 'participant-a', 'Hi.'),
+      assistantMsg('b-1', 'participant-b', 'Hey.'),
+    ]
+    const t = buildTurnTranscript(messages, participants, characterMap, { turnOpenerMessageId: 'u-1', extractAfterMessageId: 'elsewhere' })
+    expect(t.characterSlices.map(s => s.characterId)).toEqual(['char-a', 'char-b'])
+    expect(t.priorSlices).toBeUndefined()
+  })
+
+  it('bounds an autonomous speaker to the lines after the previous anchor, keeping a capped tail as context', () => {
+    const messages: MessageEvent[] = []
+    for (let i = 0; i < 12; i++) {
+      messages.push(assistantMsg(`m-${i}`, i % 2 === 0 ? 'participant-a' : 'participant-b', `line ${i}`))
+    }
+    const t = buildTurnTranscript(messages, participants, characterMap, {
+      turnOpenerMessageId: null,
+      extractionAnchorMessageId: 'm-11',
+      extractAfterMessageId: 'm-10',
+    })
+    expect(t.characterSlices).toHaveLength(1)
+    expect(t.characterSlices[0].contributingMessageIds).toEqual(['m-11'])
+    const priorIds = (t.priorSlices ?? []).flatMap(s => s.contributingMessageIds)
+    expect(priorIds).toHaveLength(PRIOR_CONTEXT_MAX_MESSAGES)
+    expect(priorIds).toContain('m-10')
+    expect(priorIds).not.toContain('m-0')
+  })
+
+  it('lists each autonomous speaker bounded by the previous anchor', () => {
+    const messages: MessageEvent[] = [
+      assistantMsg('a-1', 'participant-a', 'one'),
+      assistantMsg('b-1', 'participant-b', 'two'),
+      assistantMsg('a-2', 'participant-a', 'three'),
+    ]
+    expect(listExtractionTurns(messages, 'autonomous').map(t => t.extractAfterMessageId)).toEqual([null, 'a-1', 'b-1'])
+  })
+
+  it('folds prior lines back into their slices for an observer new to the turn', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'Go on.'),
+      assistantMsg('a-1', 'participant-a', 'First.'),
+      assistantMsg('b-1', 'participant-b', 'Second.'),
+      assistantMsg('a-2', 'participant-a', 'Third.'),
+    ]
+    const t = buildTurnTranscript(messages, participants, characterMap, { turnOpenerMessageId: 'u-1', extractAfterMessageId: 'b-1' })
+    const whole = withPriorAsMaterial(t)
+    expect(whole.priorSlices).toBeUndefined()
+    const avery = whole.characterSlices.find(s => s.characterId === 'char-a')!
+    expect(avery.contributingMessageIds).toEqual(['a-1', 'a-2'])
+    expect(avery.text).toBe('First.\n\nThird.')
+    expect(withPriorAsMaterial(buildTurnTranscript(messages, participants, characterMap, { turnOpenerMessageId: 'u-1' })).priorSlices).toBeUndefined()
   })
 })

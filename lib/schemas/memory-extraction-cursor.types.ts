@@ -6,7 +6,11 @@
  * A pass advances its cursor only past messages its window actually covered,
  * so nothing is ever marked read unread (bugs 206, 207).
  *
- * The per-turn passes need no cursor: a turn is addressed by its opener.
+ * The `turn` row is the turn grain's: the last assistant message a committed
+ * per-turn extraction covered. A turn is addressed by its opener, but a Skip,
+ * nudge or continue closes the same turn again, and an autonomous room's turns
+ * have no opener at all; the next job reads only what lies past this cursor,
+ * so no line is extracted twice (bug 245).
  *
  * @module schemas/memory-extraction-cursor.types
  */
@@ -15,8 +19,11 @@ import { z } from 'zod'
 import { UUIDSchema, TimestampSchema } from './common.types'
 
 /** The passes that keep a cursor. */
-export const ExtractionCursorPassEnum = z.enum(['other-fold', 'episode-fold'])
+export const ExtractionCursorPassEnum = z.enum(['other-fold', 'episode-fold', 'turn'])
 export type ExtractionCursorPass = z.infer<typeof ExtractionCursorPassEnum>
+
+/** The fold-grain passes: the cursors that read a chat in stretches. */
+export type FoldCursorPass = Exclude<ExtractionCursorPass, 'turn'>
 
 export const EXTRACTION_CURSOR_PASSES: readonly ExtractionCursorPass[] = ExtractionCursorPassEnum.options
 

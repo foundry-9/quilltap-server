@@ -1310,11 +1310,15 @@ restored afterwards.
 
 Found in the walk:
 
-- **Bug 245** (open): a turn reopened by Skip, nudge or continue is extracted again from its
-  first line, so the earlier speakers' fresh memories are reinforced by their own source.
-  Suspected, not confirmed, for autonomous rooms.
-- **Bug 246** (open): consolidation's fixed 4,000-token budget let `deepseek-v4-flash` spend it
-  all reasoning; the empty answer was skipped as unparseable.
+- **Bug 245** (fixed 2026-10-14): a turn reopened by Skip, nudge or continue was extracted again
+  from its first line, so the earlier speakers' fresh memories were reinforced by their own
+  source; an autonomous room's speakers each re-read the room. The turn grain now has a cursor
+  (a `turn` row in `memory_extraction_cursors`): lines at or before it ride along as context,
+  never material, and a rebuild bounds each autonomous speaker by the previous anchor. This
+  retires §3.7's assumption that "the per-turn passes need no cursor".
+- **Bug 246** (fixed 2026-10-14): consolidation's fixed 4,000-token budget let `deepseek-v4-flash`
+  spend it all reasoning; the empty answer was skipped as unparseable. The cluster call now takes
+  the routed profile's budget, 4,000 as a floor.
 - `quilltap memories status` printed "0 of 0 over the cap ⚠ ineffective" for a demotion with no
   excess, the same wording the ledger card had; fixed to "within the cap".
 - `quilltap memories maintain --character all --dry-run` with no `--phases` fails with the server's

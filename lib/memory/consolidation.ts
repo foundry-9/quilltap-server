@@ -56,6 +56,7 @@ import {
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
 import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection'
+import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
@@ -320,6 +321,18 @@ async function resolveModelRoute(
   const resolved = selectCheapLLMFromProfiles(availableProfiles, buildCheapLLMConfig(chatSettings))
   if (!resolved) return null
   return { base: resolved.selection, availableProfiles, chatSettings }
+}
+
+/**
+ * The output budget of the profile a cluster's call was routed to, as
+ * extraction reads it (`resolveMaxTokens`). Undefined when the selection names
+ * no known profile; the call then keeps the consolidation floor (bug 246).
+ */
+function profileMaxTokensFor(route: ModelRoute, selection: CheapLLMSelection): number | undefined {
+  const profile = selection.connectionProfileId
+    ? route.availableProfiles.find((p) => p.id === selection.connectionProfileId)
+    : undefined
+  return profile ? resolveMaxTokens(profile) : undefined
 }
 
 /** Route one cluster's call under the Concierge posture of its members' chats. */
@@ -741,6 +754,7 @@ export async function consolidate(
     const result = await consolidateMemoryCluster(callInput, routed.selection, userId, {
       characterId,
       uncensoredFallback: routed.uncensoredFallback,
+      profileMaxTokens: profileMaxTokensFor(route, routed.selection),
     })
 
     if (!result.success || !result.result) {

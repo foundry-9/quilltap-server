@@ -17,9 +17,10 @@
  *   exactly as `?action=rebuild-summary` does, so the ordinary cadence
  *   refolds rather than trusting a summary with a partial anchor set.
  * - `chat.otherExtractionWatermarkMessageId` /
- *   `chat.episodeExtractionWatermarkMessageId` (the bundle's carriage of the
- *   fold passes' cursors) — nulled when unresolvable, which simply lets the
- *   next fold-grain pass catch up.
+ *   `chat.episodeExtractionWatermarkMessageId` /
+ *   `chat.turnExtractionWatermarkMessageId` (the bundle's carriage of the
+ *   extraction cursors) — nulled when unresolvable, which simply lets the
+ *   next pass catch up (a reopened turn then reads from its opener).
  * - `chat.courierCheckpoints[*].lastResolvedMessageId` — a checkpoint whose
  *   message is gone (or that cannot be read) is dropped, so the next Courier
  *   turn sends full context.

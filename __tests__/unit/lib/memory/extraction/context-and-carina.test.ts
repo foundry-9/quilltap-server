@@ -139,6 +139,11 @@ function makeRepos(chat: Record<string, unknown>, messages: unknown[], project: 
     characters: { findById: jest.fn(async (id: string) => CHARACTERS[id] ?? null) },
     projects: { findById: jest.fn(async () => project) },
     memories: { findByCharacterAndSourceMessageIds: jest.fn(async () => []) },
+    memoryExtractionCursors: {
+      findCursor: jest.fn(async () => null),
+      setCursor: jest.fn(async () => undefined),
+      clearCursor: jest.fn(async () => true),
+    },
   }
 }
 
@@ -291,5 +296,84 @@ describe('the episode pass receives the uncensored fallback (bug 213)', () => {
   it('passes isDangerousChat: false on a Moderated chat, whatever the classifier telemetry says', async () => {
     const fallback = await episodeFallback({ ...THREE_SEAT_CHAT, conciergeMode: 'moderated', isDangerousChat: true })
     expect(fallback!.isDangerousChat).toBe(false)
+  })
+})
+
+describe('a reopened turn is read past its turn cursor (bug 245)', () => {
+  // Amy answered and the turn closed (extracted, cursor at m-amy); a Skip then
+  // let Ben answer, closing the same turn again.
+  const REOPENED = [
+    message('m-user', 'USER', 'Shall we open the vault?', '2026-10-12T10:00:00.000Z'),
+    message('m-amy', 'ASSISTANT', 'I have the key.', '2026-10-12T10:00:01.000Z', 'p-amy'),
+    message('m-ben', 'ASSISTANT', 'I will keep watch.', '2026-10-12T10:05:00.000Z', 'p-ben'),
+  ]
+  const NEXT_TURN = [
+    message('m-user-2', 'USER', 'And now?', '2026-10-12T10:10:00.000Z'),
+    message('m-cleo-2', 'ASSISTANT', 'Now we go.', '2026-10-12T10:10:01.000Z', 'p-cleo'),
+  ]
+  const callsOf = (taskType: string) =>
+    jest.mocked(executeCheapLLMTask).mock.calls.filter(c => c[4] === taskType)
+  const promptOf = (call: unknown[]) => (call[1] as Array<{ content: string }>).map(m => m.content).join('\n')
+
+  it('extracts SELF only for the new speaker; the earlier speaker observes only the new line', async () => {
+    prime(THREE_SEAT_CHAT, REOPENED)
+    repos.memoryExtractionCursors.findCursor.mockResolvedValue('m-amy')
+    answerWith([{ content: 'Keeps watch.', summary: 'Keeps watch', importance: 0.6 }])
+
+    const ctx = await buildExtractionContext('chat-1', 'u1', { connectionProfileId: 'prof-1' })
+    await runTurnExtraction(ctx, { turnOpenerMessageId: 'm-user' })
+
+    const self = callsOf('memory-extraction-self')
+    expect(self).toHaveLength(1)
+    expect(self[0][9]).toBe('char-ben')
+    expect(promptOf(self[0])).toContain('EARLIER IN THIS TURN')
+
+    // Amy observes Ben's new line (context: her own); Ben, new to the turn, observes all of it.
+    const other = callsOf('memory-extraction-other')
+    expect(other.map(c => c[9]).sort()).toEqual(['char-amy', 'char-ben'])
+    const amyView = promptOf(other.find(c => c[9] === 'char-amy')!)
+    const benView = promptOf(other.find(c => c[9] === 'char-ben')!)
+    expect(amyView).toContain('EARLIER IN THIS TURN')
+    expect(benView).not.toContain('EARLIER IN THIS TURN')
+    expect(benView).toContain('I have the key.')
+
+    expect(repos.memoryExtractionCursors.setCursor).toHaveBeenCalledWith('chat-1', 'turn', 'm-ben')
+  })
+
+  it('a turn already read to its end extracts nothing', async () => {
+    prime(THREE_SEAT_CHAT, REOPENED)
+    repos.memoryExtractionCursors.findCursor.mockResolvedValue('m-ben')
+    const ctx = await buildExtractionContext('chat-1', 'u1', { connectionProfileId: 'prof-1' })
+    const result = await runTurnExtraction(ctx, { turnOpenerMessageId: 'm-user' })
+    expect(result.hadContributions).toBe(false)
+    expect(executeCheapLLMTask).not.toHaveBeenCalled()
+    expect(repos.memoryExtractionCursors.setCursor).not.toHaveBeenCalled()
+  })
+
+  it('a cursor in an earlier turn does not bound the next one', async () => {
+    prime(THREE_SEAT_CHAT, TURN_MESSAGES)
+    repos.memoryExtractionCursors.findCursor.mockResolvedValue('some-earlier-line')
+    const ctx = await buildExtractionContext('chat-1', 'u1', { connectionProfileId: 'prof-1' })
+    await runTurnExtraction(ctx, { turnOpenerMessageId: 'm-user' })
+    expect(callsOf('memory-extraction-self')).toHaveLength(3)
+    expect(promptOf(callsOf('memory-extraction-self')[0])).not.toContain('EARLIER IN THIS TURN')
+    expect(repos.memoryExtractionCursors.setCursor).toHaveBeenCalledWith('chat-1', 'turn', 'm-cleo')
+  })
+
+  it('a backfill reads the whole turn and never moves the cursor backwards', async () => {
+    prime(THREE_SEAT_CHAT, [...REOPENED, ...NEXT_TURN])
+    repos.memoryExtractionCursors.findCursor.mockResolvedValue('m-cleo-2')
+    const ctx = await buildExtractionContext('chat-1', 'u1', { connectionProfileId: 'prof-1', backfill: true })
+    await runTurnExtraction(ctx, { turnOpenerMessageId: 'm-user' })
+    expect(callsOf('memory-extraction-self')).toHaveLength(2)
+    expect(repos.memoryExtractionCursors.setCursor).not.toHaveBeenCalled()
+  })
+
+  it('a dry run neither reads nor moves the real cursor', async () => {
+    prime(THREE_SEAT_CHAT, REOPENED)
+    const ctx = await buildExtractionContext('chat-1', 'u1', { connectionProfileId: 'prof-1', dryRun: true })
+    await runTurnExtraction(ctx, { turnOpenerMessageId: 'm-user' })
+    expect(repos.memoryExtractionCursors.findCursor).not.toHaveBeenCalled()
+    expect(repos.memoryExtractionCursors.setCursor).not.toHaveBeenCalled()
   })
 })

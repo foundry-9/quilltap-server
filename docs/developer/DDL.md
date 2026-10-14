@@ -719,7 +719,7 @@ active.)
 CREATE TABLE "memory_extraction_cursors" (
   "id" TEXT PRIMARY KEY,          -- "<chatId>:<pass>"
   "chatId" TEXT NOT NULL,
-  "pass" TEXT NOT NULL,           -- 'other-fold' | 'episode-fold'
+  "pass" TEXT NOT NULL,           -- 'other-fold' | 'episode-fold' | 'turn'
   "messageId" TEXT NOT NULL,      -- the last message the pass has read
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
@@ -741,6 +741,14 @@ chat's rows. Exports and backups carry them on the chat object under the two
 legacy field names; import and restore remap the message ids and write them
 back (`lib/memory/extraction/cursor-bundle.ts`). No `userId` column: replace-mode
 restore truncates the table.
+
+The `turn` row (4.10, bug 245; no migration — `pass` is free text) is the
+per-turn grain's: the last assistant message a committed turn extraction
+covered. It only moves forward. A live turn job reads past it, so a turn
+reopened by a skip, nudge or continue — or an autonomous room's next speaker —
+is not extracted again from its first line; a regenerate clears it with the
+rest and does not read it. It travels in bundles as
+`turnExtractionWatermarkMessageId`.
 
 ### chat_informs
 

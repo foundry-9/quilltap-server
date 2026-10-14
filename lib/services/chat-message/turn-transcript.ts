@@ -50,6 +50,14 @@ export interface TurnTranscript {
   userCharacterPronouns?: Pronouns | null
   /** ASSISTANT participants that spoke during the turn, ordered by first contribution. */
   characterSlices: TurnCharacterSlice[]
+  /**
+   * Lines of this turn an earlier committed extraction already covered (the
+   * part at or before `extractAfterMessageId`), grouped the same way. Context
+   * only: rendered under their own heading, never extraction material, and
+   * capped at {@link PRIOR_CONTEXT_MAX_MESSAGES} messages. Absent when the
+   * whole turn is new (bug 245).
+   */
+  priorSlices?: TurnCharacterSlice[]
   /** The most recent ASSISTANT message ID in the turn — used as sourceMessageId on derived memories. */
   latestAssistantMessageId: string | null
   /**
@@ -105,7 +113,16 @@ function isAutonomousTurnAnchor(m: MessageEvent): boolean {
 export interface ExtractionTurnLocator {
   turnOpenerMessageId: string | null
   extractionAnchorMessageId?: string | null
+  /**
+   * Lines at or before this message are context, not material (bug 245). Set
+   * by {@link listExtractionTurns} for an autonomous room (the previous
+   * speaker's anchor); a live job takes it from the chat's `turn` cursor.
+   */
+  extractAfterMessageId?: string | null
 }
+
+/** The most already-extracted messages a transcript keeps as context (bug 245). */
+export const PRIOR_CONTEXT_MAX_MESSAGES = 8
 
 /**
  * Every turn of a chat, as extraction addresses them — the one scan the
@@ -125,7 +142,14 @@ export function listExtractionTurns(
   chatType: string | null | undefined,
 ): ExtractionTurnLocator[] {
   if (chatType === 'autonomous') {
-    return messages.filter(isAutonomousTurnAnchor).map(m => ({ turnOpenerMessageId: null, extractionAnchorMessageId: m.id }))
+    // Each speaker's turn is read past the previous anchor; without the bound
+    // every job would re-read the room from its first line (bug 245).
+    const anchors = messages.filter(isAutonomousTurnAnchor)
+    return anchors.map((m, i) => ({
+      turnOpenerMessageId: null,
+      extractionAnchorMessageId: m.id,
+      extractAfterMessageId: i > 0 ? anchors[i - 1].id : null,
+    }))
   }
   const isOpener = (m: MessageEvent) => m.type === 'message' && m.role === 'USER' && !m.systemSender
   const firstOpener = messages.findIndex(isOpener)
@@ -171,9 +195,74 @@ interface BuildTurnTranscriptOptions {
    * rather than re-extracting the whole tail every time.
    */
   extractionAnchorMessageId?: string | null
+  /**
+   * The last message an earlier extraction of this stretch covered. When it is
+   * one of the turn's own assistant lines, everything up to and including it
+   * (the opener's slice too) becomes `priorSlices` — context, not material.
+   * A bound outside the turn (an older turn's line, or a later one from a
+   * concurrent job) is ignored, so it can never hide a turn's own lines (bug 245).
+   */
+  extractAfterMessageId?: string | null
   userCharacterId?: string
   userCharacterName?: string
   userCharacterPronouns?: Pronouns | null
+}
+
+interface TurnLine {
+  message: MessageEvent
+  character: Character
+}
+
+/** Group lines into per-speaker slices, ordered by first contribution. */
+function groupIntoSlices(lines: readonly TurnLine[]): TurnCharacterSlice[] {
+  const slices = new Map<string, TurnCharacterSlice>()
+  for (const { message: m, character } of lines) {
+    const existing = slices.get(character.id)
+    if (existing) {
+      existing.text = existing.text.length
+        ? `${existing.text}\n\n${m.content}`
+        : m.content
+      existing.contributingMessageIds.push(m.id)
+      existing.lastMessageCreatedAt = m.createdAt ?? existing.lastMessageCreatedAt
+    } else {
+      slices.set(character.id, {
+        characterId: character.id,
+        characterName: character.name,
+        characterPronouns: character.pronouns ?? null,
+        text: m.content,
+        contributingMessageIds: [m.id],
+        lastMessageCreatedAt: m.createdAt ?? null,
+      })
+    }
+  }
+  return [...slices.values()]
+}
+
+/**
+ * The turn as one stretch of material: its already-extracted lines folded back
+ * into the slices they belong to (prior lines first). For an observer who
+ * joined the turn after an earlier extraction, everything said in it is new
+ * (bug 245). A transcript with no prior lines is returned as it is.
+ */
+export function withPriorAsMaterial(transcript: TurnTranscript): TurnTranscript {
+  if (!transcript.priorSlices?.length) return transcript
+  const merged = new Map<string, TurnCharacterSlice>()
+  for (const slice of [...transcript.priorSlices, ...transcript.characterSlices]) {
+    const key = `${slice.isUserControlled ? 'user' : 'ai'}:${slice.characterId}`
+    const existing = merged.get(key)
+    if (existing) {
+      merged.set(key, {
+        ...existing,
+        text: `${existing.text}\n\n${slice.text}`,
+        contributingMessageIds: [...existing.contributingMessageIds, ...slice.contributingMessageIds],
+        lastMessageCreatedAt: slice.lastMessageCreatedAt ?? existing.lastMessageCreatedAt,
+      })
+    } else {
+      merged.set(key, { ...slice, contributingMessageIds: [...slice.contributingMessageIds] })
+    }
+  }
+  const { priorSlices: _prior, ...rest } = transcript
+  return { ...rest, characterSlices: [...merged.values()] }
 }
 
 /**
@@ -196,8 +285,7 @@ export function buildTurnTranscript(
   participantCharacters: Map<string, Character>,
   options: BuildTurnTranscriptOptions,
 ): TurnTranscript {
-  const slices = new Map<string, TurnCharacterSlice>()
-  const sliceOrder: string[] = []
+  const lines: TurnLine[] = []
   let userMessage: string | null = null
   let userSlice: TurnCharacterSlice | null = null
   let latestAssistantMessageId: string | null = null
@@ -256,25 +344,7 @@ export function buildTurnTranscript(
     const character = participantCharacters.get(participant.characterId)
     if (!character) continue
 
-    const existing = slices.get(participant.characterId)
-    if (existing) {
-      existing.text = existing.text.length
-        ? `${existing.text}\n\n${m.content}`
-        : m.content
-      existing.contributingMessageIds.push(m.id)
-      existing.lastMessageCreatedAt = m.createdAt ?? existing.lastMessageCreatedAt
-    } else {
-      slices.set(participant.characterId, {
-        characterId: character.id,
-        characterName: character.name,
-        characterPronouns: character.pronouns ?? null,
-        text: m.content,
-        contributingMessageIds: [m.id],
-        lastMessageCreatedAt: m.createdAt ?? null,
-      })
-      sliceOrder.push(participant.characterId)
-    }
-
+    lines.push({ message: m, character })
     latestAssistantMessageId = m.id
     turnTimestamp = m.createdAt ?? turnTimestamp
 
@@ -283,15 +353,26 @@ export function buildTurnTranscript(
     }
   }
 
+  // Split at the bound when it is one of this turn's own lines (bug 245).
+  const boundIndex = options.extractAfterMessageId
+    ? lines.findIndex(l => l.message.id === options.extractAfterMessageId)
+    : -1
+  const material = boundIndex >= 0 ? lines.slice(boundIndex + 1) : lines
+  const prior = boundIndex >= 0 ? lines.slice(0, boundIndex + 1).slice(-PRIOR_CONTEXT_MAX_MESSAGES) : []
+  const materialSlices = groupIntoSlices(material)
+  const priorSlices = groupIntoSlices(prior)
+  // The opener was read with the turn's first extraction; once the bound is
+  // inside the turn it is context too.
+  if (userSlice) (boundIndex >= 0 ? priorSlices : materialSlices).unshift(userSlice)
+
   return {
     turnOpenerMessageId: options.turnOpenerMessageId,
     userMessage,
     userCharacterId: options.userCharacterId,
     userCharacterName: options.userCharacterName,
     userCharacterPronouns: options.userCharacterPronouns,
-    characterSlices: userSlice
-      ? [userSlice, ...sliceOrder.map(id => slices.get(id)!)]
-      : sliceOrder.map(id => slices.get(id)!),
+    characterSlices: materialSlices,
+    ...(priorSlices.length > 0 ? { priorSlices } : {}),
     latestAssistantMessageId,
     turnTimestamp,
   }

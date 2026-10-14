@@ -124,6 +124,13 @@ export const ORDERED_TURN_TRANSCRIPT_HEADING =
   "TURN TRANSCRIPT (in the order spoken — the USER's lines came first; nothing the USER says here answers anything a character says below it):"
 
 /**
+ * The heading over a turn's already-extracted lines (bug 245): they explain
+ * what the new lines answer, but every memory they hold has been formed.
+ */
+export const PRIOR_TURN_CONTEXT_HEADING =
+  'EARLIER IN THIS TURN (already noted — context only; form no memory from these lines, only from the TURN TRANSCRIPT below):'
+
+/**
  * Render the participant roster + joined transcript for inclusion in
  * extraction prompts. Single shared formatter so the user-pass, self-pass
  * and inter-character-pass all see byte-identical input prefixes.
@@ -136,8 +143,19 @@ export function renderTurnContext(transcript: TurnTranscript): string {
   // never duplicated as a standalone opener. AI slices keep their existing
   // labeling, so a turn with no user-controlled slice renders byte-identically
   // to before.
-  const aiSlices = transcript.characterSlices.filter(s => !s.isUserControlled)
-  const userSlices = transcript.characterSlices.filter(s => s.isUserControlled)
+  // The roster names everyone who spoke in the turn, already-covered lines
+  // included: an earlier speaker still observes what was said after them.
+  const priorSlices = transcript.priorSlices ?? []
+  const allSlices = [...priorSlices, ...transcript.characterSlices]
+  const seenSpeakers = new Set<string>()
+  const rosterSlices = allSlices.filter(s => {
+    const key = `${s.isUserControlled ? 'user' : 'ai'}:${s.characterId}`
+    if (seenSpeakers.has(key)) return false
+    seenSpeakers.add(key)
+    return true
+  })
+  const aiSlices = rosterSlices.filter(s => !s.isUserControlled)
+  const userSlices = rosterSlices.filter(s => s.isUserControlled)
   const hasUserSlice = userSlices.length > 0
 
   const roster: string[] = ['PARTICIPANTS IN THIS TURN:']
@@ -172,11 +190,12 @@ export function renderTurnContext(transcript: TurnTranscript): string {
       : 'The user'
     transcriptSections.push(`${userLabel} says:\n"${transcript.userMessage}"`)
   }
-  for (const slice of transcript.characterSlices) {
+  const renderSlice = (slice: TurnTranscript['characterSlices'][number]) => {
     const role = slice.isUserControlled ? 'the user-controlled character' : 'the character'
     const characterLabel = `${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (${role})`
-    transcriptSections.push(`${characterLabel} says:\n"${slice.text}"`)
+    return `${characterLabel} says:\n"${slice.text}"`
   }
+  for (const slice of transcript.characterSlices) transcriptSections.push(renderSlice(slice))
 
   // By construction the human's line opens the turn and the next human line
   // is not in it, so nothing the human says here answers a character below.
@@ -186,9 +205,19 @@ export function renderTurnContext(transcript: TurnTranscript): string {
     ? ORDERED_TURN_TRANSCRIPT_HEADING
     : 'TURN TRANSCRIPT:'
 
+  // Lines an earlier extraction already covered (bug 245): context for what
+  // follows, never material. Absent, the output is byte-identical to before.
+  const earlier = priorSlices.length > 0
+    ? `${PRIOR_TURN_CONTEXT_HEADING}
+
+${priorSlices.map(renderSlice).join('\n\n')}
+
+`
+    : ''
+
   return `${roster.join('\n')}
 
-${heading}
+${earlier}${heading}
 
 ${transcriptSections.join('\n\n')}`
 }

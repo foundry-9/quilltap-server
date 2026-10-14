@@ -73,6 +73,12 @@ export interface MemoryExtractionPayload {
    * is unique per turn already.
    */
   extractionAnchorMessageId?: string | null;
+  /**
+   * Lines at or before this message are context, not material (bug 245).
+   * Set by a regenerate for an autonomous room (the previous speaker's
+   * anchor); a live job leaves it unset and reads the chat's `turn` cursor.
+   */
+  extractAfterMessageId?: string | null;
   connectionProfileId: string;
   /**
    * The grain (memory refactor §3.7): `'turn'` (the default) runs the turn
@@ -1278,6 +1284,8 @@ export type MemoryExtractionBatchEntry =
   | {
       turnOpenerMessageId: string | null;
       extractionAnchorMessageId?: string | null;
+      /** Read past this message (an autonomous room's previous anchor; bug 245). */
+      extractAfterMessageId?: string | null;
     };
 
 export async function enqueueMemoryExtractionBatch(
@@ -1299,6 +1307,8 @@ export async function enqueueMemoryExtractionBatch(
       typeof entry === 'object' && entry !== null ? entry.turnOpenerMessageId : entry;
     const extractionAnchorMessageId =
       typeof entry === 'object' && entry !== null ? entry.extractionAnchorMessageId ?? null : null;
+    const extractAfterMessageId =
+      typeof entry === 'object' && entry !== null ? entry.extractAfterMessageId ?? null : null;
     return {
       userId,
       type: 'MEMORY_EXTRACTION' as const,
@@ -1307,6 +1317,7 @@ export async function enqueueMemoryExtractionBatch(
         chatId,
         turnOpenerMessageId,
         extractionAnchorMessageId,
+        ...(extractAfterMessageId ? { extractAfterMessageId } : {}),
         connectionProfileId,
         // Every batch rebuilds history (queue-memories, SillyTavern import).
         backfill: true,

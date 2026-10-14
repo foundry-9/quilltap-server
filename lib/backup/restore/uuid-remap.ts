@@ -306,10 +306,11 @@ export function remapBackupData(
           'storyBackgroundImageId',
           'imageProfileId',
           // Message-id reference: messages are remapped below, so the
-          // "other-subject" and episode extraction watermarks must follow
-          // their messages.
+          // "other-subject", episode and turn extraction watermarks must
+          // follow their messages.
           'otherExtractionWatermarkMessageId',
           'episodeExtractionWatermarkMessageId',
+          'turnExtractionWatermarkMessageId',
         ]),
         ['tags', 'impersonatingParticipantIds']
       ),

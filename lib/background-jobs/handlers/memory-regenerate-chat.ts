@@ -76,6 +76,8 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
         chatId: payload.chatId,
         turnOpenerMessageId: turn.turnOpenerMessageId,
         extractionAnchorMessageId: turn.extractionAnchorMessageId ?? null,
+        // An autonomous room's speaker reads past the previous one (bug 245).
+        ...(turn.extractAfterMessageId ? { extractAfterMessageId: turn.extractAfterMessageId } : {}),
         connectionProfileId: payload.connectionProfileId,
         backfill: true,
       },

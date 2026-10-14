@@ -118,6 +118,7 @@ const NEW_CHAT_FIELDS = {
 const BUNDLED_CURSOR_FIELDS = {
   otherExtractionWatermarkMessageId: 'msg-1',
   episodeExtractionWatermarkMessageId: 'msg-1',
+  turnExtractionWatermarkMessageId: 'msg-1',
 }
 
 const NEW_MESSAGE_FIELDS = {
@@ -617,8 +618,10 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     // The bundled cursors leave the chat row and land in their own table.
     expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('otherExtractionWatermarkMessageId')
     expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('episodeExtractionWatermarkMessageId')
+    expect(chatsCreate.mock.calls[0][0]).not.toHaveProperty('turnExtractionWatermarkMessageId')
     expect(setCursor).toHaveBeenCalledWith('chat-1', 'other-fold', 'msg-1')
     expect(setCursor).toHaveBeenCalledWith('chat-1', 'episode-fold', 'msg-1')
+    expect(setCursor).toHaveBeenCalledWith('chat-1', 'turn', 'msg-1')
 
     expect(addMessage).toHaveBeenCalledTimes(1)
     expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_MESSAGE_FIELDS)

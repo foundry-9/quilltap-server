@@ -24,6 +24,12 @@ import { turnWindow } from './window'
 export interface TurnLocator {
   turnOpenerMessageId: string | null
   extractionAnchorMessageId?: string | null
+  /**
+   * Lines at or before this message are context, not material (bug 245).
+   * When absent, a live job takes the chat's `turn` cursor; a dry run and a
+   * backfill read the whole turn.
+   */
+  extractAfterMessageId?: string | null
 }
 
 export interface TurnExtractionResult extends PassResult {
@@ -44,6 +50,7 @@ export async function turnTranscriptFor(ctx: ExtractionContext, locator: TurnLoc
   return buildTurnTranscript(await ctx.messages(), ctx.chat.participants, castCharacters(ctx), {
     turnOpenerMessageId: locator.turnOpenerMessageId,
     extractionAnchorMessageId: locator.extractionAnchorMessageId ?? null,
+    extractAfterMessageId: locator.extractAfterMessageId ?? null,
     userCharacterId: user?.characterId,
     userCharacterName: user?.name,
     userCharacterPronouns: user?.pronouns ?? null,
@@ -84,9 +91,55 @@ export async function runTurnPasses(
   return result
 }
 
-/** One closed turn, located in the chat. */
+/**
+ * Where a live turn job starts reading: the chat's `turn` cursor. A dry run and
+ * a backfill (regenerate) read each turn whole and never consult it — a
+ * regenerate's turns run in parallel, and a later turn's cursor must not hide
+ * an earlier one's lines. The bound is ignored anyway unless it falls inside
+ * the turn (`buildTurnTranscript`), so a stale or foreign cursor is harmless.
+ */
+async function liveTurnBound(ctx: ExtractionContext): Promise<string | null> {
+  if (ctx.dryRun || ctx.backfill) return null
+  return (await ctx.cursors.read('turn')).afterMessageId
+}
+
+/**
+ * Move the `turn` cursor to the turn's latest line, never backwards: a
+ * regenerate's turns, and an autonomous room's speakers, can commit out of
+ * order. A dry run moves nothing.
+ */
+async function advanceTurnCursor(ctx: ExtractionContext, messageId: string | null): Promise<void> {
+  if (ctx.dryRun || !messageId) return
+  const current = (await ctx.cursors.read('turn')).afterMessageId
+  if (current === messageId) return
+  if (current) {
+    const messages = await ctx.messages()
+    const at = (id: string) => messages.findIndex(m => m.id === id)
+    if (at(current) > at(messageId)) return
+  }
+  await ctx.cursors.advance('turn', messageId)
+}
+
+/**
+ * One closed turn, located in the chat. Lines an earlier extraction covered
+ * (bug 245) ride along as context; the cursor moves past this turn's lines
+ * once its passes have run.
+ */
 export async function runTurnExtraction(ctx: ExtractionContext, locator: TurnLocator): Promise<TurnExtractionResult> {
-  return runTurnPasses(ctx, await turnTranscriptFor(ctx, locator))
+  const extractAfterMessageId = locator.extractAfterMessageId ?? (await liveTurnBound(ctx))
+  const transcript = await turnTranscriptFor(ctx, { ...locator, extractAfterMessageId })
+  if (extractAfterMessageId && transcript.priorSlices?.length) {
+    logger.debug('[Memory] Turn read past lines already extracted', {
+      chatId: ctx.chat.id,
+      turnOpenerMessageId: transcript.turnOpenerMessageId,
+      extractAfterMessageId,
+      priorSpeakers: transcript.priorSlices.length,
+      newSpeakers: transcript.characterSlices.length,
+    })
+  }
+  const result = await runTurnPasses(ctx, transcript)
+  await advanceTurnCursor(ctx, transcript.latestAssistantMessageId)
+  return result
 }
 
 /**

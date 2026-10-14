@@ -7,6 +7,8 @@ import {
   consolidateMemoryCluster,
   parseConsolidationResponse,
   validateConsolidationOutput,
+  CONSOLIDATION_EMPTY_ANSWER_REASON,
+  CONSOLIDATION_MIN_MAX_TOKENS,
   CONSOLIDATION_SYSTEM_PROMPT,
   type ConsolidationCallInput,
 } from '../consolidation-tasks'
@@ -127,6 +129,13 @@ describe('parseConsolidationResponse', () => {
     const result = parseConsolidationResponse('I would rather not.', ['m1'])
     expect(result.ok).toBe(false)
   })
+
+  it('names an empty answer as empty, not as bad JSON (bug 246)', () => {
+    for (const content of ['', '  \n ']) {
+      const result = parseConsolidationResponse(content, ['m1'])
+      expect(result).toEqual({ ok: false, reason: CONSOLIDATION_EMPTY_ANSWER_REASON })
+    }
+  })
 })
 
 describe('buildConsolidationUserMessage', () => {
@@ -190,5 +199,38 @@ describe('consolidateMemoryCluster', () => {
     expect(messages[0]).toEqual({ role: 'system', content: CONSOLIDATION_SYSTEM_PROMPT })
     expect(mockExecute.mock.calls[0][4]).toBe('memory-consolidation')
     expect(result.result?.ok).toBe(true)
+  })
+
+  describe('output budget (bug 246)', () => {
+    const input: ConsolidationCallInput = {
+      holderName: 'Friday',
+      subjectName: 'Laura',
+      bucket: 'other',
+      clusterKind: 'semantic',
+      canonBlock: null,
+      existingDigest: null,
+      members: [
+        { handle: 'm1', when: null, importance: 0.5, reinforcementCount: 1, content: 'a' },
+        { handle: 'm2', when: null, importance: 0.5, reinforcementCount: 1, content: 'b' },
+      ],
+    }
+    const selection = { provider: 'DEEPSEEK', modelName: 'deepseek-v4-flash', isLocal: false } as any
+    const sentMaxTokens = () => mockExecute.mock.calls[mockExecute.mock.calls.length - 1][8]
+
+    beforeEach(() => {
+      mockExecute.mockResolvedValue({ success: true, result: { ok: false, reason: 'unused' } } as any)
+    })
+
+    it('takes the profile budget when it is larger than the floor', async () => {
+      await consolidateMemoryCluster(input, selection, 'user-1', { profileMaxTokens: 8000 })
+      expect(sentMaxTokens()).toBe(8000)
+    })
+
+    it('never goes below the floor', async () => {
+      await consolidateMemoryCluster(input, selection, 'user-1', { profileMaxTokens: 1024 })
+      expect(sentMaxTokens()).toBe(CONSOLIDATION_MIN_MAX_TOKENS)
+      await consolidateMemoryCluster(input, selection, 'user-1')
+      expect(sentMaxTokens()).toBe(CONSOLIDATION_MIN_MAX_TOKENS)
+    })
   })
 })

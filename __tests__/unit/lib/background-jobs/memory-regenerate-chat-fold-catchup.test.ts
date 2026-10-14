@@ -109,9 +109,10 @@ describe('memory regenerate — turn jobs', () => {
     })
     await handleMemoryRegenerateChat(job as never)
     const turns = payloads().filter(p => !p.pass)
-    expect(turns.map(t => [t.turnOpenerMessageId, t.extractionAnchorMessageId])).toEqual([
-      [null, 'a1'],
-      [null, 'a2'],
+    expect(turns.map(t => [t.turnOpenerMessageId, t.extractionAnchorMessageId, t.extractAfterMessageId ?? null])).toEqual([
+      [null, 'a1', null],
+      // Bug 245: each speaker is read past the previous anchor, not from the room's first line.
+      [null, 'a2', 'a1'],
     ])
   })
 })

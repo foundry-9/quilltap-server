@@ -24,7 +24,7 @@ import type { ExtractionContext } from './context'
 import type { AdmittedCandidate, PassResult } from './run'
 import { runTurnExtraction, type TurnExtractionResult } from './turn'
 import { runFoldCatchup } from './catchup'
-import type { ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
+import type { FoldCursorPass } from '@/lib/schemas/memory-extraction-cursor.types'
 
 /** One candidate as the dry run reports it (the NDJSON `candidate` event). */
 export interface ExtractedCandidate {
@@ -82,7 +82,7 @@ export interface DryRunHooks {
   onStart?(turnCount: number): void
   onTurn?(index: number, total: number, result: TurnExtractionResult): void
   onTurnError?(index: number, total: number, sourceMessageId: string | null, error: string): void
-  onFold?(pass: ExtractionCursorPass, result: PassResult & { skippedReason?: string; slices: number }): void
+  onFold?(pass: FoldCursorPass, result: PassResult & { skippedReason?: string; slices: number }): void
   /** Polled between units; true stops the run (the client went away). */
   isCancelled?(): boolean
 }

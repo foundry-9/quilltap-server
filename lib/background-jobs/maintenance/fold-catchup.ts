@@ -22,7 +22,7 @@ import { logger } from '@/lib/logger';
 import { enqueueMemoryExtraction, memoryExtractionPassOf, type MemoryExtractionPayload } from '../queue-service';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { ChatMetadata } from '@/lib/schemas/types';
-import type { ExtractionCursorMap, ExtractionCursorPass } from '@/lib/schemas/memory-extraction-cursor.types';
+import type { ExtractionCursorMap, FoldCursorPass } from '@/lib/schemas/memory-extraction-cursor.types';
 import { findFoldCatchupCandidates, FOLD_CATCHUP_MAX_CHATS } from '@/lib/memory/extraction';
 
 const moduleLogger = logger.child({ module: 'maintenance.fold-catchup' });
@@ -35,7 +35,7 @@ export interface FoldCatchupSweepSummary {
 }
 
 /** Chats (by user) with a catch-up of `pass` queued or running. */
-async function chatsWithCatchupInFlight(pass: ExtractionCursorPass, userIds: Iterable<string>): Promise<Set<string>> {
+async function chatsWithCatchupInFlight(pass: FoldCursorPass, userIds: Iterable<string>): Promise<Set<string>> {
   const repos = getRepositories();
   const chatIds = new Set<string>();
   for (const userId of userIds) {
@@ -53,7 +53,7 @@ async function chatsWithCatchupInFlight(pass: ExtractionCursorPass, userIds: Ite
 }
 
 export async function enqueueFoldCatchups(
-  pass: ExtractionCursorPass,
+  pass: FoldCursorPass,
   options: {
     now?: number;
     limit?: number;
