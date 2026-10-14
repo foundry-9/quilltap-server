@@ -10,7 +10,7 @@
  * Every tier is a location (`resolveWardrobeLocation`), so the handler bodies
  * are written once: list / create (each with `?action=instructions`), the
  * folder actions (`GET ?action=folders`; `POST ?action=create-folder`,
- * `rename-folder`, `delete-folder`, `move-items`), and get (with
+ * `rename-folder`, `delete-folder`, `move-items`, `copy-items`), and get (with
  * `?action=wear-history`) / update / delete. Each route file is a config.
  * Rules that hold everywhere:
  *
@@ -46,6 +46,7 @@ import { CharacterArchivedError } from '@/lib/database/repositories/characters.r
 import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
+  copyWardrobeItemsSchema,
   createWardrobeFolderSchema,
   createWardrobeSchema,
   deleteWardrobeFolderSchema,
@@ -57,10 +58,10 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import {
   componentLookupFor,
   createItem,
-  moveItemsToFolder,
   updateItem,
   WardrobeItemNotInLocationError,
 } from '@/lib/wardrobe/item-mutations';
+import { fileItemsToFolder, FolderFilingRequestError } from '@/lib/wardrobe/folder-filing';
 import {
   createWardrobeFolder,
   deleteWardrobeFolder,
@@ -125,6 +126,7 @@ function writeErrorResponse(error: unknown): NextResponse {
   if (error instanceof WardrobeComponentCycleError) return badRequest(error.message);
   if (error instanceof WardrobeFolderPathError) return badRequest(error.message);
   if (error instanceof WardrobeItemNotInLocationError) return badRequest(error.message);
+  if (error instanceof FolderFilingRequestError) return badRequest(error.message);
   if (error instanceof WardrobeFolderNotFoundError) return notFound('Wardrobe folder');
   if (error instanceof WardrobeFolderConflictError) return conflict(error.message);
   if (error instanceof CharacterArchivedError) {
@@ -301,26 +303,47 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     }
   }
 
-  async function handleMoveItems(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = moveWardrobeItemsSchema.parse(await req.json());
+  /**
+   * `move-items` / `copy-items`: file items into one folder of this tier, an
+   * outfit's same-wardrobe components brought along as `components` says.
+   */
+  async function handleFileItems(
+    action: 'move' | 'copy',
+    body: { itemIds: string[]; folder: string; components?: 'move' | 'copy' | 'none' },
+    ctx: RequestContext,
+    params: P,
+  ) {
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
-    let moved: WardrobeItem[];
+    let result: Awaited<ReturnType<typeof fileItemsToFolder>>;
     try {
-      moved = await moveItemsToFolder(location, body.itemIds, body.folder);
+      result = await fileItemsToFolder(ctx.repos, ctx.user.id, location, { action, ...body });
     } catch (error) {
       return writeErrorResponse(error);
     }
-    logger.info(`${logTag} Moved wardrobe items to folder`, {
+    logger.info(`${logTag} ${action === 'move' ? 'Moved' : 'Copied'} wardrobe items to folder`, {
       [logIdKey]: location.id,
       userId: ctx.user.id,
       mountPointId: location.mountPointId,
       folder: body.folder,
-      count: moved.length,
+      count: result.items.length,
+      components: body.components ?? 'none',
+      componentsCarried: result.componentsCarried,
       context: 'wardrobe',
     });
-    return successResponse({ items: await serializeWardrobeItems(moved, location.origin, ctx.repos) });
+    return successResponse({
+      items: await serializeWardrobeItems(result.items, location.origin, ctx.repos),
+      componentsCarried: result.componentsCarried,
+    });
+  }
+
+  async function handleMoveItems(req: NextRequest, ctx: RequestContext, params: P) {
+    return handleFileItems('move', moveWardrobeItemsSchema.parse(await req.json()), ctx, params);
+  }
+
+  async function handleCopyItems(req: NextRequest, ctx: RequestContext, params: P) {
+    return handleFileItems('copy', copyWardrobeItemsSchema.parse(await req.json()), ctx, params);
   }
 
   /** The character tier's `?scope=group`: the group tier, each item tagged with its group. */
@@ -382,6 +405,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
       'rename-folder': handleRenameFolder,
       'delete-folder': handleDeleteFolder,
       'move-items': handleMoveItems,
+      'copy-items': handleCopyItems,
     }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());

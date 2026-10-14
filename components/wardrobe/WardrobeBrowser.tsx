@@ -64,6 +64,7 @@ import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeImageViewer } from './wardrobe-image-viewer'
 import { WardrobeTransferDialog } from './WardrobeTransferDialog'
 import { WardrobeFolderPickerDialog } from './WardrobeFolderPickerDialog'
+import type { ComponentMode } from './WardrobeComponentModeFieldset'
 
 type SlotFilter = 'all' | WardrobeItemType
 const SLOT_FILTERS: SlotFilter[] = ['all', ...WARDROBE_SLOT_TYPES]
@@ -321,26 +322,34 @@ export function WardrobeBrowser({
     return picker.items.every((i) => isSameFolder(i.folder ?? '', first)) ? first : null
   }, [picker])
 
-  const moveToFolder = async (folder: string): Promise<void> => {
+  const pickerOutfits = useMemo(() => (picker ? picker.items.filter(isComposite) : []), [picker])
+
+  const fileToFolder = async (folder: string, components?: ComponentMode): Promise<void> => {
     if (!picker || !pickerHome) return
+    const copying = picker.mode === 'copy'
     setMoving(true)
     try {
-      const moved = await folderOps.moveItems(
-        pickerHome,
-        picker.items.map((i) => i.id),
-        folder,
-      )
-      const where = folder ? `"${folderCrumb(moved[0]?.folder || folder)}"` : 'the top of the wardrobe'
+      const ids = picker.items.map((i) => i.id)
+      const filed = copying
+        ? await folderOps.copyItems(pickerHome, ids, folder, components === 'move' ? undefined : components)
+        : await folderOps.moveItems(pickerHome, ids, folder, components)
+      const where = folder ? `"${folderCrumb(filed[0]?.folder || folder)}"` : 'the top of the wardrobe'
       showSuccessToast(
-        picker.items.length === 1
-          ? `"${picker.items[0].title}" now hangs in ${where}`
-          : `${plural(moved.length, 'item')} now hang in ${where}`,
+        copying
+          ? picker.items.length === 1
+            ? `A copy of "${picker.items[0].title}" now hangs in ${where}`
+            : `Copies of ${plural(filed.length, 'item')} now hang in ${where}`
+          : picker.items.length === 1
+            ? `"${picker.items[0].title}" now hangs in ${where}`
+            : `${plural(filed.length, 'item')} now hang in ${where}`,
       )
       actions.closeFolderPicker()
       clearSelection()
       setSelectMode(false)
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The items would not be moved')
+      showErrorToast(
+        error instanceof Error ? error.message : copying ? 'The items would not be copied' : 'The items would not be moved',
+      )
     } finally {
       setMoving(false)
     }
@@ -362,9 +371,17 @@ export function WardrobeBrowser({
           type="button"
           className="qt-button-secondary qt-button-sm"
           disabled={selectedItems.length === 0}
-          onClick={() => actions.openFolderPicker(selectedItems)}
+          onClick={() => actions.openFolderPicker(selectedItems, 'move')}
         >
           Move to folder…
+        </button>
+        <button
+          type="button"
+          className="qt-button-secondary qt-button-sm"
+          disabled={selectedItems.length === 0}
+          onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
+        >
+          Copy to folder…
         </button>
         <button
           type="button"
@@ -639,7 +656,8 @@ export function WardrobeBrowser({
                   onDuplicate={actions.duplicate}
                   onMove={actions.move}
                   onCopy={actions.copy}
-                  onMoveToFolder={(i) => actions.openFolderPicker([i])}
+                  onMoveToFolder={(i) => actions.openFolderPicker([i], 'move')}
+                  onCopyToFolder={(i) => actions.openFolderPicker([i], 'copy')}
                   selection={
                     selectMode
                       ? { selected: selectedIds.has(item.id), onToggle: toggleSelected }
@@ -683,12 +701,14 @@ export function WardrobeBrowser({
       {picker && pickerHome && (
         <WardrobeFolderPickerDialog
           isOpen
+          mode={picker.mode}
           container={pickerHome}
           subject={picker.items.length === 1 ? `"${picker.items[0].title}"` : plural(picker.items.length, 'item')}
+          outfits={pickerOutfits}
           currentFolder={pickerCurrentFolder}
-          moving={moving}
+          working={moving}
           onClose={actions.closeFolderPicker}
-          onMove={moveToFolder}
+          onSubmit={fileToFolder}
         />
       )}
     </section>

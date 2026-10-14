@@ -7,6 +7,8 @@
  *  - tier rows appear only in a character's container;
  *  - select mode puts checkboxes only on manageable rows;
  *  - the Move-to-folder picker disables the folder the item is already in;
+ *  - Copy to folder… may land beside the original, and an outfit filed into a
+ *    folder asks what its components do (sent as `components`);
  *  - a click inside that picker does not close the dialog around the browser
  *    (bug 229: the picker must count as one of the actions' overlays).
  */
@@ -125,8 +127,11 @@ function Harness({
     ...base,
     folderPicker,
     overlayOpen: folderPicker !== null,
-    openFolderPicker: (items: NonNullable<WardrobeItemActions['folderPicker']>['items']) => {
-      if (items.length > 0) setFolderPicker({ items })
+    openFolderPicker: (
+      items: NonNullable<WardrobeItemActions['folderPicker']>['items'],
+      mode: 'move' | 'copy' = 'move',
+    ) => {
+      if (items.length > 0) setFolderPicker({ items, mode })
     },
     closeFolderPicker: () => setFolderPicker(null),
   } as WardrobeItemActions
@@ -297,5 +302,49 @@ describe('WardrobeBrowser — folders', () => {
     expect(onDialogClose).not.toHaveBeenCalled()
     expect(screen.getByRole('listbox', { name: 'Folders' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Move' })).not.toBeDisabled()
+  })
+
+  it('Copy to folder… may land in the folder the item already sits in', async () => {
+    renderBrowser(characterContainer, makeData([COAT, GLOVES], ownOnly))
+    await waitFor(() => expect(folderRows()).toHaveLength(2))
+    fireEvent.click(within(folderRows()[0]).getByText('Formal'))
+    await screen.findByTitle('Opera Gloves')
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy to folder…' }))
+
+    const list = await screen.findByRole('listbox', { name: 'Folders' })
+    const formal = within(list).getByRole('option', { name: /Formal/ })
+    expect(formal).not.toBeDisabled()
+    fireEvent.click(formal)
+    expect(screen.getByRole('button', { name: 'Copy' })).not.toBeDisabled()
+    // A plain garment brings no components question.
+    expect(screen.queryByRole('radio')).toBeNull()
+  })
+
+  it('moving an outfit to a folder asks about its components and sends the choice', async () => {
+    const OUTFIT = item('outfit', 'Evening Ensemble', '', { componentItemIds: ['coat'] })
+    renderBrowser(characterContainer, makeData([COAT, OUTFIT], ownOnly))
+    await waitFor(() => expect(folderRows()).toHaveLength(2))
+    fireEvent.click(screen.getByRole('tab', { name: /Outfits/ }))
+    await screen.findByTitle('Evening Ensemble')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to folder…' }))
+
+    const list = await screen.findByRole('listbox', { name: 'Folders' })
+    expect(screen.getByText('This outfit bundles 1 component')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Move the components along with it' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Copy the components (originals stay behind)' }))
+
+    fireEvent.click(within(list).getByRole('option', { name: /Formal/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    await waitFor(() => {
+      const calls = (global.fetch as jest.Mock).mock.calls
+      const move = calls.find(([url]) => String(url).includes('action=move-items'))
+      expect(move).toBeDefined()
+      expect(JSON.parse(move![1].body)).toEqual({ itemIds: ['outfit'], folder: 'Formal', components: 'copy' })
+    })
   })
 })

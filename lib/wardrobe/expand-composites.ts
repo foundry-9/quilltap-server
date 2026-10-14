@@ -150,3 +150,34 @@ export function detectComponentCycles(
   }
   return cycles;
 }
+
+/**
+ * The transitive closure of the composites' components that live among
+ * `containerItems` (one wardrobe). Components from other tiers (a General
+ * archetype bundled into a character outfit) are excluded — they are already
+ * shared and stay where they are. The composites themselves are never in the
+ * result. Cycles are tolerated via the visited set (the write layer refuses
+ * to store them, but old data gets no infinite loop here).
+ *
+ * The one walk behind "bring the components along" — the cross-wardrobe
+ * transfer and the folder move/copy both gather through it.
+ */
+export function collectContainerComponents<T extends CompositeNode & { id: string }>(
+  composites: readonly T[],
+  containerItems: readonly T[],
+): T[] {
+  const byId = new Map(containerItems.map((i) => [i.id, i]));
+  const visited = new Set<string>(composites.map((c) => c.id));
+  const result: T[] = [];
+  const queue = composites.flatMap((c) => [...(c.componentItemIds ?? [])]);
+  while (queue.length > 0) {
+    const id = queue.shift() as string;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const item = byId.get(id);
+    if (!item) continue;
+    result.push(item);
+    queue.push(...(item.componentItemIds ?? []));
+  }
+  return result;
+}

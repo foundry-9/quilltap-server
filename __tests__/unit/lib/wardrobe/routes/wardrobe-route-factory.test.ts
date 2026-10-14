@@ -88,6 +88,7 @@ jest.mock('@/lib/wardrobe/item-images', () => {
     ForeignWardrobeImageError,
     assertItemImageChoice: jest.fn(async () => undefined),
     cleanupItemImages: jest.fn(async () => undefined),
+    carryItemImages: jest.fn(async () => ({ fileIdMap: new Map(), pendingMove: { repoints: [] } })),
   };
 });
 
@@ -1262,6 +1263,45 @@ describe('folder actions', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toContain('from-general');
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('move-items with components: move files the outfit and its same-wardrobe pieces together', async () => {
+    mockReadItems.mockResolvedValue([
+      wardrobeItem({ id: 'outfit', componentItemIds: ['a', 'from-general'] }),
+      wardrobeItem({ id: 'a' }),
+    ] as never);
+
+    const res = await post('move-items', { itemIds: ['outfit'], folder: 'Formal', components: 'move' });
+
+    expect(res.status).toBe(200);
+    expect(mockUpdateMany.mock.calls[0][1]).toEqual([
+      { id: 'outfit', patch: { folder: 'Formal' } },
+      { id: 'a', patch: { folder: 'Formal' } },
+    ]);
+    const body = await res.json();
+    expect(body.items.map((i: { id: string }) => i.id)).toEqual(['outfit']);
+    expect(body.componentsCarried).toBe(1);
+  });
+
+  it('copy-items files a copy with a fresh id and a (copy) title', async () => {
+    mockReadItems.mockResolvedValue([wardrobeItem({ id: 'a', title: 'Cloak' })] as never);
+    mockCreate.mockImplementation(async (_mount, i) => i as never);
+
+    const res = await post('copy-items', { itemIds: ['a'], folder: 'Formal' });
+
+    expect(res.status).toBe(200);
+    const created = mockCreate.mock.calls[0][1] as { id: string; title: string; folder: string };
+    expect(created.id).not.toBe('a');
+    expect(created.title).toBe('Cloak (copy)');
+    expect(created.folder).toBe('Formal');
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('copy-items refuses components: move at the schema (the middleware answers 400)', async () => {
+    await expect(
+      post('copy-items', { itemIds: ['a'], folder: 'Formal', components: 'move' }),
+    ).rejects.toThrow(/components/);
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('item PUT carries a normalised folder', async () => {

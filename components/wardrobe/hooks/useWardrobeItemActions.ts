@@ -3,7 +3,7 @@
 /**
  * Row actions for a wardrobe list — star, archive, draw a picture, delete,
  * duplicate (into the same folder) — plus the open/closed state of the overlays they summon (the
- * item editor, the move/copy dialog, the full-screen picture).
+ * item editor, the move/copy dialog, the move/copy-to-folder picker, the full-screen picture).
  *
  * Every item is addressed through `containerForListedItem` when the browsed
  * wardrobe is a character's merged view (so a borrowed group or project item
@@ -55,6 +55,8 @@ export interface TransferRequest {
  */
 export interface FolderPickerRequest {
   items: ListedWardrobeItem[]
+  /** File the items themselves, or copies of them. */
+  mode: 'move' | 'copy'
 }
 
 export interface ImageViewRequest {
@@ -264,8 +266,8 @@ export function useWardrobeItemActions({
   const copy = useCallback((item: ListedWardrobeItem) => setTransfer({ item, mode: 'copy' }), [])
   const closeTransfer = useCallback(() => setTransfer(null), [])
   const closeImage = useCallback(() => setImageView(null), [])
-  const openFolderPicker = useCallback((items: ListedWardrobeItem[]) => {
-    if (items.length > 0) setFolderPicker({ items })
+  const openFolderPicker = useCallback((items: ListedWardrobeItem[], mode: 'move' | 'copy' = 'move') => {
+    if (items.length > 0) setFolderPicker({ items, mode })
   }, [])
   const closeFolderPicker = useCallback(() => setFolderPicker(null), [])
 

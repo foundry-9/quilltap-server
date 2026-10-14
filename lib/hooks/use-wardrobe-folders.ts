@@ -30,6 +30,9 @@ import {
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 
+/** What travels with an outfit filed into a folder (mirrors the server's `components`). */
+export type WardrobeFolderComponentMode = 'move' | 'copy' | 'none'
+
 const EMPTY: WardrobeFolder[] = []
 
 export interface UseWardrobeFoldersResult {
@@ -65,7 +68,7 @@ export function useWardrobeFolders(container: WardrobeContainer | null): UseWard
 
 interface FolderRequest {
   container: WardrobeContainer
-  action: 'create-folder' | 'rename-folder' | 'delete-folder' | 'move-items'
+  action: 'create-folder' | 'rename-folder' | 'delete-folder' | 'move-items' | 'copy-items'
   body: unknown
 }
 
@@ -128,13 +131,39 @@ export function useWardrobeFolderMutations() {
     [mutateAsync],
   )
 
-  const moveItems = useCallback(
-    async (container: WardrobeContainer, itemIds: string[], folder: string): Promise<WardrobeItem[]> => {
-      const data = await mutateAsync({ container, action: 'move-items', body: { itemIds, folder } })
+  /**
+   * Move (or copy) items into a folder. `components` says what an outfit's
+   * same-wardrobe components do: travel along, get copied, or stay put.
+   */
+  const fileItems = useCallback(
+    async (
+      mode: 'move' | 'copy',
+      container: WardrobeContainer,
+      itemIds: string[],
+      folder: string,
+      components?: WardrobeFolderComponentMode,
+    ): Promise<WardrobeItem[]> => {
+      const data = await mutateAsync({
+        container,
+        action: mode === 'move' ? 'move-items' : 'copy-items',
+        body: { itemIds, folder, ...(components ? { components } : {}) },
+      })
       return (data?.items as WardrobeItem[] | undefined) ?? []
     },
     [mutateAsync],
   )
 
-  return { createFolder, renameFolder, deleteFolder, moveItems, pending: mutation.isPending }
+  const moveItems = useCallback(
+    (container: WardrobeContainer, itemIds: string[], folder: string, components?: WardrobeFolderComponentMode) =>
+      fileItems('move', container, itemIds, folder, components),
+    [fileItems],
+  )
+
+  const copyItems = useCallback(
+    (container: WardrobeContainer, itemIds: string[], folder: string, components?: 'copy' | 'none') =>
+      fileItems('copy', container, itemIds, folder, components),
+    [fileItems],
+  )
+
+  return { createFolder, renameFolder, deleteFolder, moveItems, copyItems, pending: mutation.isPending }
 }

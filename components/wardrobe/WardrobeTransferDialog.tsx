@@ -12,10 +12,13 @@ import {
   type WardrobeContainer,
   type WardrobeContainerScope,
 } from '@/lib/wardrobe/wardrobe-container'
+import {
+  WardrobeComponentModeFieldset,
+  defaultComponentMode,
+  type ComponentMode,
+} from './WardrobeComponentModeFieldset'
 
 type TransferMode = 'move' | 'copy'
-/** What travels with a composite outfit: its components, or nothing. */
-type ComponentMode = 'move' | 'copy' | 'none'
 
 interface DestinationOption {
   id: string
@@ -73,9 +76,7 @@ export function WardrobeTransferDialog({
   // defaults to moving them along; a copy defaults to copying them, since an
   // outfit that arrives without its pieces is rarely what anyone meant.
   const isComposite = isCompositeItem(item)
-  const [componentMode, setComponentMode] = useState<ComponentMode>(
-    mode === 'move' ? 'move' : 'copy',
-  )
+  const [componentMode, setComponentMode] = useState<ComponentMode>(defaultComponentMode(mode))
 
   useEffect(() => {
     if (!isOpen) return
@@ -83,7 +84,7 @@ export function WardrobeTransferDialog({
     setLoadingDestinations(true)
     setDestinations(null)
     setSelectedDestination('')
-    setComponentMode(mode === 'move' ? 'move' : 'copy')
+    setComponentMode(defaultComponentMode(mode))
 
     void fetch('/api/v1/wardrobe/transfers')
       .then(async (res) => {
@@ -269,42 +270,17 @@ export function WardrobeTransferDialog({
         )}
 
         {isComposite && (
-          <fieldset>
-            <legend className="text-sm qt-text-secondary mb-1">
-              This outfit bundles {item.componentItemIds.length}{' '}
-              {item.componentItemIds.length === 1 ? 'component' : 'components'}
-            </legend>
-            <div className="space-y-1">
-              {(mode === 'move'
-                ? ([
-                    { value: 'move', label: 'Move the components along with it' },
-                    { value: 'copy', label: 'Copy the components (originals stay behind)' },
-                    { value: 'none', label: 'Leave the components behind' },
-                  ] as const)
-                : ([
-                    { value: 'copy', label: 'Copy the components along with it' },
-                    { value: 'none', label: 'Copy the outfit alone' },
-                  ] as const)
-              ).map(({ value, label }) => (
-                <label key={value} className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="radio"
-                    name="wardrobe-transfer-components"
-                    className="qt-radio"
-                    checked={componentMode === value}
-                    onChange={() => setComponentMode(value)}
-                    disabled={working}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
-            <p className="qt-text-xs qt-text-secondary mt-1">
-              All or nothing — the choice covers every component, nested pieces included. Only
-              components living in the same wardrobe travel; pieces from a shared tier stay put.
-              The transferred outfit is rewired to point at whichever components arrive with it.
-            </p>
-          </fieldset>
+          <WardrobeComponentModeFieldset
+            mode={mode}
+            value={componentMode}
+            onChange={setComponentMode}
+            legend={`This outfit bundles ${item.componentItemIds.length} ${
+              item.componentItemIds.length === 1 ? 'component' : 'components'
+            }`}
+            destination="wardrobe"
+            name="wardrobe-transfer-components"
+            disabled={working}
+          />
         )}
 
         <p className="qt-text-xs qt-text-secondary">

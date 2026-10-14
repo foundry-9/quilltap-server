@@ -1,18 +1,23 @@
 'use client'
 
 /**
- * "Move to folder…" — pick where in one wardrobe to file one or more items.
+ * "Move to folder…" / "Copy to folder…" — pick where in one wardrobe to file
+ * one or more items, or copies of them.
  *
  * The wardrobe's folder tree (`?action=folders`) as an indented list with the
- * top level first; the folder the items already share is shown but can't be
- * chosen. **New folder…** opens an input under the highlighted folder and
- * creates the folder there, then highlights it. **Move** files the items with
- * one `move-items` call. Filing changes nothing about what anyone can wear.
+ * top level first; for a move, the folder the items already share is shown
+ * but can't be chosen (a copy may land beside its original). **New folder…**
+ * opens an input under the highlighted folder and creates the folder there,
+ * then highlights it. When any of the items is an outfit, the same
+ * all-or-nothing components choice the cross-wardrobe transfer offers comes
+ * along (`WardrobeComponentModeFieldset`). **Move** / **Copy** hands the
+ * folder and that choice to `onSubmit` (one `move-items` / `copy-items`
+ * call). Filing changes nothing about what anyone can wear.
  *
  * @module components/wardrobe/WardrobeFolderPickerDialog
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import { useWardrobeFolderMutations, useWardrobeFolders } from '@/lib/hooks/use-wardrobe-folders'
@@ -24,38 +29,60 @@ import {
 } from '@/lib/wardrobe/folders'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import { showErrorToast } from '@/lib/toast'
+import {
+  WardrobeComponentModeFieldset,
+  defaultComponentMode,
+  type ComponentMode,
+} from './WardrobeComponentModeFieldset'
 
 interface WardrobeFolderPickerDialogProps {
   isOpen: boolean
+  /** Move the items, or file copies of them. */
+  mode: 'move' | 'copy'
   /** The wardrobe the items live in — the only one whose folders are offered. */
   container: WardrobeContainer
   /** What is being moved, for the title: one item's title, or a count. */
   subject: string
   /**
+   * The outfits among the items (composites). When there are any, the
+   * components choice is offered; otherwise nothing is asked.
+   */
+  outfits?: ReadonlyArray<{ componentItemIds: readonly string[] }>
+  /**
    * The folder every item being moved already sits in (disabled in the
    * list), or null when they come from different folders.
    */
   currentFolder: string | null
-  /** Busy while the move is in flight. */
-  moving?: boolean
+  /** Busy while the move or copy is in flight. */
+  working?: boolean
   onClose: () => void
-  onMove: (folder: string) => void | Promise<void>
+  /** `components` is set only when outfits were among the items. */
+  onSubmit: (folder: string, components?: ComponentMode) => void | Promise<void>
 }
 
 export function WardrobeFolderPickerDialog({
   isOpen,
+  mode,
   container,
   subject,
+  outfits = [],
   currentFolder,
-  moving = false,
+  working = false,
   onClose,
-  onMove,
+  onSubmit,
 }: WardrobeFolderPickerDialogProps) {
   const { folders, loading } = useWardrobeFolders(isOpen ? container : null)
   const { createFolder, pending } = useWardrobeFolderMutations()
   const [highlighted, setHighlighted] = useState<string | null>(null)
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [componentMode, setComponentMode] = useState<ComponentMode>(defaultComponentMode(mode))
+
+  useEffect(() => {
+    if (!isOpen) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open
+    setComponentMode(defaultComponentMode(mode))
+  }, [isOpen, mode])
 
   const rows = useMemo(
     () => [{ path: '', label: 'Wardrobe (top level)', depth: 0 }].concat(
@@ -64,9 +91,18 @@ export function WardrobeFolderPickerDialog({
     [folders],
   )
 
-  const isCurrent = (path: string): boolean => currentFolder !== null && isSameFolder(path, currentFolder)
+  // A copy may land in the folder it came from; a move there would do nothing.
+  const isCurrent = (path: string): boolean =>
+    mode === 'move' && currentFolder !== null && isSameFolder(path, currentFolder)
   const target = highlighted
-  const canMove = target !== null && !isCurrent(target) && !moving
+  const canSubmit = target !== null && !isCurrent(target) && !working
+  const hasOutfits = outfits.length > 0
+  const componentCount = outfits.reduce((n, o) => n + o.componentItemIds.length, 0)
+  const componentsLegend =
+    outfits.length === 1
+      ? `This outfit bundles ${componentCount} ${componentCount === 1 ? 'component' : 'components'}`
+      : `${outfits.length} of these are outfits, bundling ${componentCount} ${componentCount === 1 ? 'component' : 'components'} between them`
+  const verb = mode === 'move' ? 'Move' : 'Copy'
 
   const submitNewFolder = async (): Promise<void> => {
     const name = newFolderName.trim()
@@ -117,10 +153,10 @@ export function WardrobeFolderPickerDialog({
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Move ${subject} to a folder`}
+      title={`${verb} ${subject} to a folder`}
       maxWidth="md"
-      closeOnClickOutside={!moving}
-      closeOnEscape={!moving}
+      closeOnClickOutside={!working}
+      closeOnEscape={!working}
       footer={(
         <div className="flex items-center justify-between gap-2">
           <button
@@ -132,23 +168,25 @@ export function WardrobeFolderPickerDialog({
             New folder…
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="qt-button-secondary qt-button-sm" disabled={moving}>
+            <button type="button" onClick={onClose} className="qt-button-secondary qt-button-sm" disabled={working}>
               Cancel
             </button>
             <button
               type="button"
               className="qt-button-primary qt-button-sm"
-              disabled={!canMove}
-              onClick={() => target !== null && void onMove(target)}
+              disabled={!canSubmit}
+              onClick={() => target !== null && void onSubmit(target, hasOutfits ? componentMode : undefined)}
             >
-              {moving ? 'Moving…' : 'Move'}
+              {working ? (mode === 'move' ? 'Moving…' : 'Copying…') : verb}
             </button>
           </div>
         </div>
       )}
     >
       <p className="qt-text-xs qt-text-secondary mb-2">
-        Folders are for your browsing; what anyone can wear stays exactly as it was.
+        {mode === 'move'
+          ? 'Folders are for your browsing; what anyone can wear stays exactly as it was.'
+          : 'Each copy is a new item with its own ID and a "(copy)" title, filed in the folder you choose.'}
       </p>
       {loading ? (
         <div className="text-sm qt-text-secondary px-2 py-3">Loading folders…</div>
@@ -184,6 +222,19 @@ export function WardrobeFolderPickerDialog({
           })}
           {newFolderOpen && highlighted === null && newFolderInput}
         </ul>
+      )}
+      {hasOutfits && (
+        <div className="mt-3">
+          <WardrobeComponentModeFieldset
+            mode={mode}
+            value={componentMode}
+            onChange={setComponentMode}
+            legend={componentsLegend}
+            destination="folder"
+            name="wardrobe-folder-components"
+            disabled={working}
+          />
+        </div>
       )}
     </BaseModal>
   )

@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Wardrobe: copy to folder, and components when filing outfits
+
+- New **Copy to folder…** in a wardrobe item's menu and in the select bar. It files a copy with a new id and a `(copy)` title, and copies the item's pictures. A copy may go in the folder the original is in.
+- Moving or copying an outfit to a folder now asks what to do with its components, as moving or copying to another wardrobe already did: move them along, copy them (the outfit is rewired to the copies), or leave them. A copy offers copy or leave. Only components in the same wardrobe are affected, nested ones included.
+- API: `?action=move-items` takes an optional `components`; new `?action=copy-items`. Both answer `componentsCarried`. The logic is `fileItemsToFolder` in `lib/wardrobe/folder-filing.ts`.
+- The component walk shared by transfers and folder filing is now `collectContainerComponents` in `lib/wardrobe/expand-composites.ts`. The component radio group is one component, `WardrobeComponentModeFieldset`, used by both dialogs.
+
 #### Release checklist 13: documentation freshness
 
 - README: the Concierge section describes the three states (Moderated, Unmoderated, Locked), refusal failover, the opt-in pre-screen and Try uncensored instead of the retired four states and global mode. Memory describes the active/archived tiers and the single Maintenance pass instead of the Memory Gate and cleanup. Added message search's FTS index, Browse all scenarios / Reload from source, the Scenario Builder, subprompts, progressions, Inform, and wardrobe folders, pictures and the wear ledger.

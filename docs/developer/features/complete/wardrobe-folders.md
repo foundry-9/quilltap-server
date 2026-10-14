@@ -117,7 +117,8 @@ Collection route additions, dispatched with `withCollectionActionDispatch`:
 | `POST` | `?action=create-folder` | `{ path }` | `{ folder }` |
 | `POST` | `?action=rename-folder` | `{ path, name }` | `{ folder }` |
 | `POST` | `?action=delete-folder` | `{ path }` | `{ movedItems: n, movedFolders: n }` |
-| `POST` | `?action=move-items` | `{ itemIds: string[], folder: string }` | `{ items: WardrobeItem[] }` |
+| `POST` | `?action=move-items` | `{ itemIds: string[], folder: string, components?: 'move' \| 'copy' \| 'none' }` | `{ items: WardrobeItem[], componentsCarried }` |
+| `POST` | `?action=copy-items` | `{ itemIds: string[], folder: string, components?: 'copy' \| 'none' }` | `{ items: WardrobeItem[], componentsCarried }` (added after the spec shipped; see API.md) |
 
 `createWardrobeSchema` / `updateWardrobeSchema` accept `folder`. The character collection's `?scope=group` listing and the merged pool carry `folder` on every item because the type does. Unknown actions remain a 400 by the dispatcher's rule.
 

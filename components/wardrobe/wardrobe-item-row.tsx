@@ -13,7 +13,7 @@
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
  *  - `⋮` kebab menu with secondary actions: Edit, Generate image, toggle the
- *    default-outfit flag, Duplicate, Archive, Move to folder…, Move to another
+ *    default-outfit flag, Duplicate, Archive, Move to folder…, Copy to folder…, Move to another
  *    wardrobe…, Copy to another wardrobe…, and Delete. Which of these appear
  *    is governed by the `canManage` predicate: items living in the container
  *    being browsed get the full set, items merged in from another shared
@@ -76,6 +76,8 @@ interface WardrobeItemRowProps {
   onCopy: (item: WardrobeItem) => void
   /** File the item in another folder of its own wardrobe (manageable rows only). */
   onMoveToFolder?: (item: WardrobeItem) => void
+  /** Copy to another folder of the same wardrobe (offered beside Move to folder…). */
+  onCopyToFolder?: (item: WardrobeItem) => void
   /**
    * Select mode: a checkbox on a manageable row (never on a borrowed one),
    * and the wear buttons and `⋮` disabled while it is on.
@@ -124,6 +126,7 @@ export function WardrobeItemRow({
   onMove,
   onCopy,
   onMoveToFolder,
+  onCopyToFolder,
   selection,
   folderCrumb,
   onDelete,
@@ -449,6 +452,21 @@ export function WardrobeItemRow({
                           className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                         >
                           Move to folder…
+                        </button>
+                      </li>
+                    )}
+                    {manageable && onCopyToFolder && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setKebabOpen(false)
+                            onCopyToFolder(item)
+                          }}
+                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                        >
+                          Copy to folder…
                         </button>
                       </li>
                     )}

@@ -205,10 +205,31 @@ export const deleteWardrobeFolderSchema = z.object({
   path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
 });
 
-/** `POST …/wardrobe?action=move-items` body: file every item into `folder` (`''` = root). */
+/**
+ * What travels with an outfit filed into a folder (`move-items` / `copy-items`):
+ * its same-wardrobe components moved, copied, or left where they are.
+ */
+export const WardrobeFolderComponentModeSchema = z.enum(['move', 'copy', 'none']);
+
+/**
+ * `POST …/wardrobe?action=move-items` body: file every item into `folder`
+ * (`''` = root). `components` (default `none`) brings composites' components along.
+ */
 export const moveWardrobeItemsSchema = z.object({
   itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
   folder: WardrobeFolderInputSchema,
+  components: WardrobeFolderComponentModeSchema.optional(),
+});
+
+/**
+ * `POST …/wardrobe?action=copy-items` body: copy every item into `folder`.
+ * `components` is `copy` or `none` (default) — a copy cannot move the pieces
+ * its original still wears.
+ */
+export const copyWardrobeItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
+  folder: WardrobeFolderInputSchema,
+  components: z.enum(['copy', 'none']).optional(),
 });
 
 // ============================================================================

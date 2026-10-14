@@ -35,6 +35,7 @@ import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { normalizeWardrobeFolderPathOrRoot } from '@/lib/wardrobe/folders'
+import { collectContainerComponents } from '@/lib/wardrobe/expand-composites'
 import { createItem } from '@/lib/wardrobe/item-mutations'
 import {
   WardrobeScopeSchema,
@@ -106,33 +107,6 @@ const transferRequestSchema = z
   .refine((body) => !(body.action === 'copy' && body.components === 'move'), {
     message: 'Copying an outfit cannot move its components — the original outfit still needs them',
   })
-
-/**
- * The transitive closure of a composite's components that live in the same
- * source container. Components from other tiers (e.g. a General archetype
- * bundled into a character outfit) are excluded — they are already shared and
- * stay where they are. Cycles are tolerated via the visited set (the write
- * layer refuses to store them, but old data gets no infinite loop here).
- */
-function collectContainerComponents(
-  outfit: WardrobeItem,
-  containerItems: readonly WardrobeItem[],
-): WardrobeItem[] {
-  const byId = new Map(containerItems.map((i) => [i.id, i]))
-  const visited = new Set<string>([outfit.id])
-  const result: WardrobeItem[] = []
-  const queue = [...outfit.componentItemIds]
-  while (queue.length > 0) {
-    const id = queue.shift() as string
-    if (visited.has(id)) continue
-    visited.add(id)
-    const item = byId.get(id)
-    if (!item) continue
-    result.push(item)
-    queue.push(...item.componentItemIds)
-  }
-  return result
-}
 
 /**
  * Look `itemId` up in a location. The hit carries the folder's whole item list
@@ -279,7 +253,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     const travellingComponents =
       componentMode === 'none'
         ? []
-        : collectContainerComponents(source.item, source.containerItems)
+        : collectContainerComponents([source.item], source.containerItems)
 
     // Plan every write up front so id remapping is consistent across the
     // whole set. Moves keep ids; copies mint fresh ones — and every
