@@ -1283,6 +1283,44 @@ Three report labels read wrong on these figures and were fixed afterwards: "Clus
 singleton clusters (now the qualifying clusters), "Protected" was the exempt MANUAL rows and digests,
 and the ledger's back-off note blamed a demotion that had no excess to move.
 
+### V4test dogfood — done 2026-10-13
+
+The phase acceptance walks recorded above as "not run in this environment" were run on V4test
+(Built-in TF-IDF embeddings, DeepSeek cheap LLM; database backed up to
+`data/backups/pre-dogfood-2026-10-13/` first). Every consolidation setting changed for the test was
+restored afterwards.
+
+| Phase | Acceptance | Result |
+|---|---|---|
+| B | Delete a memory in the browser; the gate sees the live neighbour, not the dead vector | Pass. Deleted `637cb80b` (one of an identical pair) from Lorian's Memories tab; a semantic search of the live index for its exact text returned only the twin `38b5d56a`, and two re-extractions never named the deleted id |
+| B | Restart; cold rows stay cold in recall (bug 205) | Pass. After a restart none of Lorian's 10 cold rows appeared among the 35 ids of a full recall replay |
+| C | `memory-diff` on three chats | Run (no pre-refactor baseline exists to compare). Admission chained within the dry run (`dry-run:` targets) and reinforced live rows; with TF-IDF, paraphrases mostly land as `insert-linked`, as the thresholds intend |
+| C | Live admission in the parent | Pass. A live turn's jobs reinforced (with footnotes, re-embedding where the text changed), absorbed, linked and inserted, each logged as `Memory admitted` |
+| D | A room turn mints no more candidates than before | 3 candidates for a two-speaker turn, one more dropped by the hybrid floor. No baseline; nothing runaway |
+| D | `memory-diff --dry-run` on an autonomous chat | Not run: V4test has no autonomous room |
+| D | Regenerate a long chat; fold-grain observations cover its history | Pass. `regenerate-all` (14 chats, 88 extraction jobs, none failed) moved every chat's other-fold cursor to its last message; "Roses, Rain…" (51 messages) has fold-grain memories from messages 9–47 and self memories from 8–49 |
+| E | A continue turn's request body carries recall (bug 199) | Pass. A Skip let Riya answer with no new user message; her logged request's trailing message holds "You remember the following entries… Memory Anchors" |
+| E | `debugMemoryLogs` shows the stage trace | Pass, on live turns and in `recall-replay` (query → gather → hydrate → score → select → assemble → deliver) |
+| E | Inter-character never repeats an archive row | Pass. `skippedAsDelivered` 7 and 12 on two turns, nothing re-rendered |
+| F | Dry run lists phases and counts | Pass, in the CLI and the dialog; the all-character table matches the CLI row for row |
+| F | Real over-cap run demotes exactly `demotable − cap` | Pass on Friday (913 = 3,413 − 2,500, above). V4test's largest holder has 36 counted rows, below the 100 minimum cap |
+| F | `quilltap memories status` shows the ledger | Pass, including after a restart (seeded from the job rows) |
+| F | A job failing after planning writes no `Commonplace/*.md` | Pass. With `QUILLTAP_TEST_MAINTENANCE_FAIL_AFTER_PLAN=1` the job went DEAD ("failed after planning (test flag)"); digests stayed at 4, the vault files kept their 09:05 stamps and the ledger recorded nothing. Run again without the flag: one digest written and `Commonplace/Riya.md` refreshed after commit |
+| G | Card, dialog and CLI against a live server | Pass. Exempt counts, "Clusters worth folding", the muted within-cap ledger note (refreshed by the realtime topic, no reload), the all-character dry-run guard, `validate`, `validate --repair` dry and `--write` on a clean graph, and a one-field `consolidation-config` write leaving the other fields alone (bug 244) |
+
+Found in the walk:
+
+- **Bug 245** (open): a turn reopened by Skip, nudge or continue is extracted again from its
+  first line, so the earlier speakers' fresh memories are reinforced by their own source.
+  Suspected, not confirmed, for autonomous rooms.
+- **Bug 246** (open): consolidation's fixed 4,000-token budget let `deepseek-v4-flash` spend it
+  all reasoning; the empty answer was skipped as unparseable.
+- `quilltap memories status` printed "0 of 0 over the cap ⚠ ineffective" for a demotion with no
+  excess, the same wording the ledger card had; fixed to "within the cap".
+- `quilltap memories maintain --character all --dry-run` with no `--phases` fails with the server's
+  "a dry run that includes consolidation names one character", as the help says; the dialog
+  disables Dry run in the same case and says why. Left as is.
+
 ## 8. Risks
 
 - **Scale of change.** Six of the seven phases touch the per-turn path. Mitigation: phase order

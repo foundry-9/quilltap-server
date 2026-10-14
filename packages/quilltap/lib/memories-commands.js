@@ -1319,7 +1319,11 @@ function renderMaintenance(m) {
     }
     const d = m.ledger.lastDemotion;
     if (d) {
-      console.log(`    last demotion:       ${d.demoted} of ${d.excess} over the cap${d.effective ? '' : '   ⚠ ineffective; watermark backing off'}`);
+      if (d.excess === 0) {
+        console.log(`    last demotion:       within the cap${d.effective ? '' : '; automatic demotion looks again in an hour'}`);
+      } else {
+        console.log(`    last demotion:       ${d.demoted} of ${d.excess} over the cap${d.effective ? '' : '   ⚠ ineffective; watermark backing off'}`);
+      }
     }
   } else if (!m.ledgerReachable) {
     console.log(`    ledger:              (server not reachable; job history only)`);

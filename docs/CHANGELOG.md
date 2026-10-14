@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Memory refactor V4test dogfood; bugs 245 and 246 filed
+
+- Ran the phase B–G acceptance walks on V4test and recorded the results in `docs/developer/features/complete/memory-system-refactor.md`.
+- Filed bug 245 (open): a turn reopened by Skip, nudge or continue is extracted again from its first line, reinforcing earlier speakers' new memories from their own source. Suspected for autonomous rooms.
+- Filed bug 246 (open): consolidation's fixed 4,000-token output budget lets a reasoning model use it all thinking; the empty answer is skipped as unparseable.
+- CLI: `quilltap memories status` reports a demotion with no excess as "within the cap; automatic demotion looks again in an hour" instead of "0 of 0 over the cap ⚠ ineffective".
+
 #### Memory refactor closed: Friday backfill recorded; three report labels fixed
 
 - The Friday backfill (E2) ran on 2026-10-13 and its figures are recorded in the spec, which moved to `docs/developer/features/complete/memory-system-refactor.md`. ROADMAP item checked.
