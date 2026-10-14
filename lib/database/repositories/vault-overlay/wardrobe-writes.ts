@@ -644,11 +644,6 @@ export async function deleteInMount(mount: WardrobeMount, id: string): Promise<b
   });
 }
 
-/** Create an item directly in a project or group store's `Wardrobe/` folder. */
-export function createMountWardrobeItem(mountPointId: string, item: WardrobeItem): Promise<WardrobeItem> {
-  return createInMount(mountWardrobeLocation(mountPointId), item);
-}
-
 /**
  * Patch an item addressed by mount alone. The restore pass uses this for every
  * tier: it addresses the folder by mount, and a vault's frontmatter carries no
@@ -660,10 +655,5 @@ export function updateMountWardrobeItem(
   patch: Partial<WardrobeItem>,
 ): Promise<WardrobeItem | null> {
   return updateInMount(mountWardrobeLocation(mountPointId), id, patch);
-}
-
-/** Delete an item directly from a project or group store's `Wardrobe/` folder. */
-export function deleteMountWardrobeItem(mountPointId: string, id: string): Promise<boolean> {
-  return deleteInMount(mountWardrobeLocation(mountPointId), id);
 }
 

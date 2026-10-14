@@ -23,8 +23,6 @@
  * fallback applies.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
 /** How long a read of the instance timezone is trusted before re-reading. */
 const INSTANCE_TIMEZONE_TTL_MS = 5 * 60 * 1000
 
@@ -205,5 +203,3 @@ export function zonedDayBoundsIso(
   const next = zonedTimeToUtcMs(year, month, day + 1, 0, timeZone)
   return { from: new Date(from).toISOString(), to: new Date(next - 1).toISOString() }
 }
-
-export { DAY_MS as MEMORY_CALENDAR_DAY_MS }

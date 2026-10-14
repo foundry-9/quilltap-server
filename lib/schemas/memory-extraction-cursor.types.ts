@@ -25,8 +25,6 @@ export type ExtractionCursorPass = z.infer<typeof ExtractionCursorPassEnum>
 /** The fold-grain passes: the cursors that read a chat in stretches. */
 export type FoldCursorPass = Exclude<ExtractionCursorPass, 'turn'>
 
-export const EXTRACTION_CURSOR_PASSES: readonly ExtractionCursorPass[] = ExtractionCursorPassEnum.options
-
 export const MemoryExtractionCursorSchema = z.object({
   /** `<chatId>:<pass>` — one row per chat and pass. */
   id: z.string().min(1),

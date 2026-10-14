@@ -7,7 +7,6 @@
 import { describe, it, expect } from '@jest/globals'
 import {
   classifyRefusal,
-  isModerationRefusal,
   MODERATION_REJECTION_CODE,
 } from '@/lib/services/dangerous-content/refusal'
 
@@ -101,10 +100,5 @@ describe('classifyRefusal — evidence precedence', () => {
   it('never lets a detail run past 200 characters', () => {
     const verdict = classifyRefusal({ error: new Error(`content policy ${'x'.repeat(500)}`) })
     expect(verdict.detail!.length).toBeLessThanOrEqual(200)
-  })
-
-  it('isModerationRefusal is the same question at a catch site', () => {
-    expect(isModerationRefusal(new Error('rejected by content moderation'))).toBe(true)
-    expect(isModerationRefusal(new Error('socket hang up'))).toBe(false)
   })
 })

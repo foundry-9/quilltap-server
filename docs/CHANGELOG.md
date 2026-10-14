@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Release checklist 5: dead code sweep
+
+- Removed the memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`, which had no importers, and a stale `jest.mock('@/lib/memory')` that mocked functions that no longer exist.
+- Removed unused exports: `withMemoryTimeZone` (superseded by `buildExtractionContext` resolving the zone once), `isModerationRefusal`, `createMountWardrobeItem`, `deleteMountWardrobeItem`, `emptyBase`, `EXTRACTION_CURSOR_PASSES`, `MEMORY_CALENDAR_DAY_MS`, and the unused types `SyncDirection`, `SyncPreference` and `ProgressionIssue`.
+- `knip.json`: dropped the redundant `plugins/**` ignore and the unused `ps` binary ignore.
+- Recorded the sweep and its keep list in `docs/developer/DEAD-CODE-REPORT.md`.
+
 #### Release checklist 4: API endpoint standard
 
 - Audited every route changed since 4.9.2. All routes outside `/api/v1/` are the three allowed exceptions; the six new routes (avatar rolls, subprompts, Scenario Builder, wardrobe item images) follow the action-dispatch pattern. No handler reads `?action=` by hand.

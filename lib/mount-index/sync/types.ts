@@ -20,18 +20,14 @@ type FileType = DocMountFile['fileType'];
 // Options
 // ============================================================================
 
-/** Which side(s) the run is allowed to change. */
-export type SyncDirection = 'both' | 'to-disk' | 'to-store';
-
-/** How a content difference is resolved. */
-export type SyncPreference = 'newer' | 'store' | 'disk';
-
 export const SyncOptionsSchema = z.object({
   /** Absolute, server-local directory. Created when absent. */
   targetPath: z.string().min(1),
   /** Plan and report; change nothing on either side, and write no manifest. */
   dryRun: z.boolean().default(false),
+  /** Which side(s) the run is allowed to change. */
   direction: z.enum(['both', 'to-disk', 'to-store']).default('both'),
+  /** How a content difference is resolved. */
   prefer: z.enum(['newer', 'store', 'disk']).default('newer'),
   /** False suppresses every `delete` / `rmdir`, on both sides. */
   propagateDeletes: z.boolean().default(true),

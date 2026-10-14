@@ -213,8 +213,3 @@ export function classifyRefusal(input: RefusalInput): RefusalVerdict {
 
   return verdict
 }
-
-/** Shorthand for the common question at a catch site. */
-export function isModerationRefusal(error: unknown): boolean {
-  return classifyRefusal({ error }).refused
-}

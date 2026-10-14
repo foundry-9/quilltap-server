@@ -1,7 +1,7 @@
 /**
  * The extractor's CLOCK is rendered on the instance's memory calendar even on
  * a cold timezone cache (review of PR 90, finding 5). The zone is resolved
- * once — `withMemoryTimeZone` reads the instance setting — and carried on the
+ * once — `refreshMemoryTimeZone` reads the instance setting — and carried on the
  * clock (`clockAt(ctx, iso)`); every prompt builder renders the CLOCK in the
  * zone on the clock it is handed, so the prompt and the `when` resolver
  * cannot disagree.
@@ -25,7 +25,8 @@ jest.mock('@/lib/repositories/factory', () => ({
 import { buildSelfTurnMessages } from '../prompts/self'
 import { buildOtherTurnMessages, buildOtherFoldMessages, type OtherSubjectInput } from '../prompts/other'
 import { buildEpisodeFoldMessages } from '../prompts/episode'
-import { withMemoryTimeZone, type ExtractionClock } from '../prompts/shared'
+import type { ExtractionClock } from '../prompts/shared'
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import { clockAt } from '../context'
 import { getRepositories } from '@/lib/repositories/factory'
 import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/time/calendar'
@@ -72,26 +73,9 @@ afterAll(() => {
   resetMemoryTimeZoneCacheForTests()
 })
 
-describe('withMemoryTimeZone on a cold timezone cache', () => {
-  const clock: ExtractionClock = { nowIso: NOW_ISO, timelineMode: 'realtime' }
-
+describe('refreshMemoryTimeZone on a cold timezone cache', () => {
   it('resolves the instance zone, not the env fallback', async () => {
-    const resolved = await withMemoryTimeZone(clock)
-    expect(resolved.timeZone).toBe('Asia/Tokyo')
-    expect(resolved.nowIso).toBe(NOW_ISO)
-    expect(resolved.timelineMode).toBe('realtime')
-  })
-
-  it('keeps a clock that already carries its zone, without a settings read', async () => {
-    const findAll = jest.fn().mockResolvedValue([{ timezone: 'Asia/Tokyo' }])
-    jest.mocked(getRepositories).mockReturnValue({ chatSettings: { findAll } } as never)
-    const resolved = await withMemoryTimeZone({ ...clock, timeZone: 'Pacific/Kiritimati' })
-    expect(resolved.timeZone).toBe('Pacific/Kiritimati')
-    expect(findAll).not.toHaveBeenCalled()
-  })
-
-  it('passes an absent clock through untouched', async () => {
-    await expect(withMemoryTimeZone(undefined)).resolves.toBeUndefined()
+    await expect(refreshMemoryTimeZone()).resolves.toBe('Asia/Tokyo')
   })
 })
 
@@ -106,7 +90,7 @@ describe('extraction CLOCK renders in the zone on the clock it is handed', () =>
   let clock: ExtractionClock
   beforeEach(async () => {
     // As the extraction context does: resolve once, carry it on the clock.
-    clock = await withMemoryTimeZone({ nowIso: NOW_ISO, timelineMode: 'realtime' })
+    clock = { nowIso: NOW_ISO, timelineMode: 'realtime', timeZone: await refreshMemoryTimeZone() }
   })
 
   it('SELF pass renders the clock in the instance zone', () => {

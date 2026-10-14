@@ -15,7 +15,6 @@
   ],
   "ignore": [
     "packages/**",
-    "plugins/**",
     "migrations/lib/**",
     "lib/background-jobs/child/child-entry.ts",
     "__tests__/helpers/lexicalPluginHarness.tsx",
@@ -32,7 +31,6 @@
     "tar"
   ],
   "ignoreBinaries": [
-    "ps",
     "tasklist",
     "du"
   ]

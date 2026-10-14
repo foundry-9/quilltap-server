@@ -8,8 +8,6 @@
  */
 
 import { getMemoryTimeZone, zonedDateStamp, zonedParts } from '@/lib/memory/time/calendar'
-import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
-import { logger } from '@/lib/logger'
 
 /**
  * Non-canonical orienting context fed into the extraction footer. Project
@@ -66,25 +64,12 @@ export interface ExtractionClock {
    * resolves it once and hands the same value to the `when` resolver, so the
    * date the model is shown and the date its phrases resolve against cannot
    * disagree. Absent, the extraction entry point resolves it before building
-   * the prompt ({@link withMemoryTimeZone}).
+   * the prompt (`buildExtractionContext` reads `refreshMemoryTimeZone` once).
    */
   timeZone?: string
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-/**
- * The clock with its memory-calendar zone resolved. Every extraction entry
- * point calls this before building a prompt: the zone is read from the
- * instance settings (`refreshMemoryTimeZone`), so a cold cache in the job
- * child never renders the clock in the env/system fallback zone.
- */
-export async function withMemoryTimeZone<C extends ExtractionClock | undefined>(clock: C): Promise<C> {
-  if (!clock || clock.timeZone) return clock
-  const timeZone = await refreshMemoryTimeZone()
-  logger.debug('[Memory] Extraction clock zone resolved', { timeZone, nowIso: clock.nowIso })
-  return { ...clock, timeZone } as C
-}
 
 /** `2026-07-14 (Tuesday), <nowIso>` — the clock's local date on the memory calendar. */
 export function renderClockStamp(clock: ExtractionClock): string {

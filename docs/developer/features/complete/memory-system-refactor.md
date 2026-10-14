@@ -495,7 +495,7 @@ export async function runPass(pass, ctx, cursor): Promise<PassResult>;  // extra
 - Prompts: `memory-tasks.ts` (1,600 lines) splits into `extraction/prompts/{self,other,episode}.ts`
   and `extraction/parse.ts`. Bodies unchanged. The search-keyword distiller
   (`extractMemorySearchKeywords`) moves to `recall/query.ts`; `cheap-llm-tasks/memory-tasks.ts`
-  is left with nothing and deleted. `lib/memory/index.ts` keeps exporting the public names.
+  is left with nothing and deleted. `lib/memory/index.ts` keeps exporting the public names (it had no importers, and the 4.10 dead-code sweep removed it with `recall/index.ts`; callers import the submodules directly).
 
 ### 3.8 `recall/` — a pipeline with a trace
 

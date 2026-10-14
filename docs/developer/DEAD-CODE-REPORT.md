@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-09-04
+**Last Updated**: 2026-10-13
 **Tool Used**: knip
-**Codebase**: Quilltap v4.9.0-dev.121
+**Codebase**: Quilltap v4.10.0-dev.176
 
 ---
 
@@ -12,12 +12,63 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 2 remaining as of 2026-09-04, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
-| Unused Dependencies | None flagged as of 2026-09-04 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Files | 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-10-13 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
-| Duplicate Exports | 65 (named + default pattern, low priority) |
+| Duplicate Exports | 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-10-13 — v4.10 release sweep (knip), scoped since the 4.9 sweep
+
+Scope: the 171 commits since `d4138b96b` (the 2026-09-04 sweep), dominated by the memory-system refactor (Phases A–G), the Concierge overhaul, character progressions, the Scenario Builder, wardrobe folders and the document-store sync. knip 6.41.0 flagged **4 unused files**, **1307 unused exports**, **918 unused exported types**, 4 unused enum members and 68 duplicate exports; no unused or unlisted dependencies and no unlisted binaries.
+
+Method as on 2026-09-04. (1) Every knip-flagged symbol was scored by identifier references outside its defining file, split test / non-test, plus a comment-stripped in-file count. (2) To cover knip's two blind spots (exports under `app/`, and exports kept "used" only by their own tests), every `export` declaration in the 2,444 non-test `.ts`/`.tsx` files outside `packages/` and `plugins/` was scored the same way. Both lists were then narrowed to names that did not exist at `d4138b96b`, so the review covered new surface rather than relitigating standing keeps: **364 new exports with no non-test reference outside their file** and **108 referenced only by tests**. Everything with no use at all was read by hand; so was every test-only export not used in-file. After the barrels were deleted the scan was re-run, because it counts a barrel re-export as a use: it surfaced 19 more names, all used inside their own module (kept, below).
+
+Verified with `npx tsc` (exit 0), `npm run lint` (clean) and the full `npm run test:unit` suite — **1,102 suites / 16,076 tests / 74 snapshots**, 1 suite and 2 tests skipped (pre-existing). Re-running knip: unused files 4 → 2, exports 1307 → 1302, types 918 → 915.
+
+### Removed — files
+
+| File | Why |
+|------|-----|
+| `lib/memory/index.ts` | Barrel with no importers anywhere — every caller imports the submodules directly. Its only mention was a stale `jest.mock('@/lib/memory', …)` in `__tests__/unit/services/chat-danger-trigger.test.ts`, mocking two functions (`processMessageForMemoryAsync`, `processInterCharacterMemoryAsync`) that no longer exist; the mock is removed with it. |
+| `lib/memory/recall/index.ts` | Barrel whose only importer was `lib/memory/index.ts`. |
+
+### Removed — functions / consts / types
+
+| File | Removed | Why |
+|------|---------|-----|
+| `lib/memory/extraction/prompts/shared.ts` | `withMemoryTimeZone` | Superseded in Phase D: `buildExtractionContext` (`lib/memory/extraction/context.ts`) resolves the zone once with `refreshMemoryTimeZone` and carries it on every window clock (`clockAt`). The helper's doc comment claimed every extraction entry point called it; none did. `clock-zone.test.ts` now builds its clock from `refreshMemoryTimeZone` directly, which is what the context does. |
+| `lib/services/dangerous-content/refusal.ts` | `isModerationRefusal` | Shorthand for `classifyRefusal({ error }).refused`, born unused in the Concierge phase 1 commit; every catch site calls `classifyRefusal`. Its one test case went with it. |
+| `lib/database/repositories/vault-overlay/wardrobe-writes.ts` | `createMountWardrobeItem`, `deleteMountWardrobeItem` | Mount-addressed wrappers with no callers; their sibling `updateMountWardrobeItem` (used by restore) stays, and writes go through `lib/wardrobe/item-mutations.ts`. |
+| `lib/mount-index/sync/manifest.ts` | `emptyBase` | No callers; `baseFromManifest(null)` already returns the empty base. |
+| `lib/schemas/memory-extraction-cursor.types.ts` | `EXTRACTION_CURSOR_PASSES` | No callers; `ExtractionCursorPassEnum.options` is the list. |
+| `lib/memory/time/calendar.ts` | `MEMORY_CALENDAR_DAY_MS` (re-export alias) and its now-unused `DAY_MS` | No callers. |
+| `lib/mount-index/sync/types.ts` | `SyncDirection`, `SyncPreference` | Hand-written copies of the `direction` / `prefer` enums in `SyncOptionsSchema`, with no users — a drift risk. Their doc comments moved onto the schema fields. |
+| `lib/progressions/engine.ts` | `ProgressionIssue` | Unused interface; `parseProgressions` reports through its `onIssue(id, issue)` callback. |
+
+Docs touched: the Phase D note in `docs/developer/features/complete/memory-system-refactor.md` said `lib/memory/index.ts` keeps exporting the public names; it now records the removal.
+
+### `knip.json`
+
+Applied knip's configuration hints: dropped `plugins/**` from `ignore` (already outside `project`) and `ps` from `ignoreBinaries` (no longer referenced). The remaining hint (`.css` imports not followed) is expected.
+
+### Kept — with reason
+
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from prior rounds; the in-progress SVAR file-manager surface.
+- **`isMemoryMaintenanceSchedulerRunning`** (`lib/memory/maintenance/scheduler.ts`) — no caller, but it is the introspection member of the scheduler `start` / `stop` / `is*Running` family that every other scheduler carries (`isCleanupSchedulerRunning`, `isDangerScanSchedulerRunning`, …). Lifecycle-pair rule.
+- **New `z.infer` / `z.input` aliases with no users** — `MemoryCandidateInput`, `SaveImageRequest`, `OnComplete`, `ProgressionQuantity`, `ScenarioBuildRequest`, `ChatInformInput`, `MemoryMaintenanceCapOverrides`, `MemoryMaintenancePhaseToggles`, `SearchScriptoriumScenarioToolInput` (tool-input convention), and `ProjectedTranscript` (a `ReturnType` alias). Standing schema rule.
+- **New test hooks** — `resetPluginReadinessForTests`, `resetAdmissionStateForTests`, `resetRateLedgerForTests`, `resetMemoryTimeZoneCacheForTests`; their suites use them.
+- **~100 new exports referenced only by tests but used in-file** — e.g. the recall budget constants in `lib/memory/recall/assemble.ts` and `archive.ts`, the maintenance ledger throttles, `runStartupTick`, the `daily-db-optimize.ts` helpers, the `store-names.ts` naming rules, the progressions engine helpers, `wardrobeWearToolInputSchema` / `wardrobeTakeOffToolInputSchema`, `buildAutoFlagContent` / `buildAutoFlagOpaqueContent`. Exported so their behavior can be pinned directly; live through their module's entry point.
+- **Names freed by the barrel removal** — `passesFilters`, `survivingLines`, `recallQueryText`, `humanKeywords`, `RecallPlan`, `ConsolidationBucketRef`, `RetireOptions` and the recall option/result types (`GatherOptions`, `ScoreOptions`, `SelectOptions`, `RecallSearchOptions`, `MemoryRecapResult`, …). All used inside their own module; the "exported helper used only inside its own module" category.
+- **Registry convenience accessors** (`lib/plugins/{moderation,search}-provider-registry.ts`, `tool-registry.ts`, `system-prompt-registry.ts`, `provider-registry.ts` stats/errors getters), **`migrations/lib/**`**, and the rest of the long-standing surface — unchanged standing keeps from prior rounds.
+- **4 `ErrorCode` enum members and 68 duplicate exports** — unchanged in character.
+
+### Follow-ups this round surfaced (not dead code)
+
+- The 2026-09-04 follow-ups (orphaned `quilltap_meta` table, unwired bundle signature verification, `invalidateFrozenArchive` with no production caller) are still open.
 
 ---
 

@@ -114,11 +114,6 @@ export async function writeManifest(targetPath: string, manifest: SyncManifest):
   logger.debug('[Sync] Manifest written', { targetPath, entries: Object.keys(manifest.entries).length });
 }
 
-/** An empty base, used under `--no-manifest` and on a first run. */
-export function emptyBase(): Map<string, ManifestEntry> {
-  return new Map();
-}
-
 /** The manifest's entries, keyed by lower-cased path like the two walks. */
 export function baseFromManifest(manifest: SyncManifest | null): Map<string, ManifestEntry> {
   const base = new Map<string, ManifestEntry>();

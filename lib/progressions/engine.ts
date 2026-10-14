@@ -119,12 +119,6 @@ export interface ShouldReportResult {
   reason: ReportReason;
 }
 
-/** What `parseProgressions` reports about an entry it had to drop. */
-export interface ProgressionIssue {
-  id: string;
-  issue: string;
-}
-
 /**
  * Read the reserved `progressions` key off a character's metadata.
  *

@@ -10,11 +10,6 @@ jest.mock('@/lib/logging/create-logger', () => ({
   }),
 }));
 
-jest.mock('@/lib/memory', () => ({
-  processMessageForMemoryAsync: jest.fn(),
-  processInterCharacterMemoryAsync: jest.fn(),
-}));
-
 jest.mock('@/lib/chat/context-summary', () => ({
   checkAndGenerateSummaryIfNeeded: jest.fn(),
 }));
