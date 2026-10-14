@@ -38,8 +38,9 @@ resolveEpisodicAnchors({ when: 'constructor 5', … })  → RangeError: Invalid 
 so the only `Object.prototype` key that can reach the lookup is `constructor` (measured: it is the one
 all-lowercase own property of `Object.prototype`). `MONTH_NAMES['constructor']` is the `Object`
 function, so the branch takes it as a month: `zonedTimeToUtcMs(year, Object, day, 0, tz)` passes it to
-`Date.UTC`, which coerces it to `NaN`; `candidate` is `NaN`, the yearless roll-back comparison is
-false, and `iso(NaN)` — `new Date(NaN).toISOString()` — throws.
+`Date.UTC`, which coerces it to `NaN`, so the first-pass guess is `NaN` and `offsetMs` → `zonedParts`
+hands `new Date(NaN)` to `Intl.DateTimeFormat#formatToParts`, which throws
+(`clock.ts:167` → `calendar.ts:152` → `:134` → `:120`, measured at `8489d08b9`).
 
 `resolveEpisodicAnchors` → `resolveWhenPhrase` → `resolveEventTime` has no catch, and
 `extraction/run.ts:308` calls `resolveEpisodicAnchors` before the `try` that protects one candidate's
