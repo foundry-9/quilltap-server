@@ -55,7 +55,6 @@ export async function ensureTargetDirectory(targetPath: string): Promise<void> {
 /** Read one file's bytes from the target, refusing a path that escapes it. */
 export async function readDiskFile(targetPath: string, relativePath: string): Promise<Buffer> {
   const absolute = resolveInTarget(targetPath, relativePath);
-  logger.debug('[Sync] Reading disk file', { relativePath });
   return fs.readFile(absolute);
 }
 

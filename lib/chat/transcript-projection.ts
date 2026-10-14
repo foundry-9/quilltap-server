@@ -68,8 +68,6 @@ export async function projectChatTranscript(
   repos: RepositoryContainer,
   userId: string,
 ) {
-  logger.debug('[Transcript] Projecting chat transcript', { chatId });
-
   // Get roleplay template for rendering patterns
   let renderingPatterns: RenderingPattern[] | undefined;
   let dialogueDetection: DialogueDetection | null | undefined;

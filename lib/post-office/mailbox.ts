@@ -321,7 +321,7 @@ export async function markMailAlertsDelivered(
       });
     }
   }
-  logger.debug('markMailAlertsDelivered', {
+  logger.debug('Mail alerts marked delivered', {
     chatId: context.chatId,
     vaultId: owed.vaultId,
     via: context.via,
@@ -338,7 +338,7 @@ export async function markMailAlertsDelivered(
  */
 export async function discardLetter(vaultId: string, path: string): Promise<boolean> {
   const deleted = await deleteDatabaseDocumentIfExists(vaultId, path);
-  logger.debug('discardLetter', { vaultId, path, deleted });
+  logger.debug('Letter discarded', { vaultId, path, deleted });
   return deleted;
 }
 

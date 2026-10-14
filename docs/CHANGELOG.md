@@ -4,6 +4,11 @@
 
 ### 4.10-dev
 
+#### Release checklist 6: debug logging prune
+
+- Reviewed the 514 debug logs and 19 `console.*` calls added since 4.9.2. Removed three leftover traces: the client `console.debug` on wardrobe item duplicate, the per-file `[Sync] Reading disk file` line, and the `Projecting chat transcript` entry line (the `Projected` summary stays).
+- Mailbox debug logs read "Mail alerts marked delivered" and "Letter discarded" instead of bare function names.
+
 #### Release checklist 5: dead code sweep
 
 - Removed the memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`, which had no importers, and a stale `jest.mock('@/lib/memory')` that mocked functions that no longer exist.

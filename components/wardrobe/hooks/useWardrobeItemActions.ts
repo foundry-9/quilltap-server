@@ -207,13 +207,6 @@ export function useWardrobeItemActions({
         item.title,
         listItems.map((i) => i.title),
       )
-      console.debug('[useWardrobeItemActions] Duplicating wardrobe item', {
-        sourceId: item.id,
-        targetScope: home.scope,
-        targetId: home.id,
-        newTitle: title,
-        componentItemIds: item.componentItemIds,
-      })
       const body = draftToPayload({ ...draftFromItem(item), title })
       if (await send({ url: wardrobeCollectionUrl(home), method: 'POST', body }, 'Failed to duplicate item')) {
         showSuccessToast(`Duplicated "${item.title}"`)
