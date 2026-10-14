@@ -128,8 +128,8 @@ describe('conversation-render handler', () => {
     })
     mockFindEmbeddingProfiles.mockResolvedValue([{ id: 'profile-1', isDefault: true }])
     mockFindChunkByInterchangeIndex
-      .mockResolvedValueOnce({ id: 'chunk-0', embedding: null })
-      .mockResolvedValueOnce({ id: 'chunk-1', embedding: [0.2] })
+      .mockResolvedValueOnce({ id: 'chunk-0', content: 'Chunk 0', embedding: null })
+      .mockResolvedValueOnce({ id: 'chunk-1', content: 'Chunk 1', embedding: [0.2] })
 
     await handleConversationRender(job as any)
 
@@ -171,8 +171,8 @@ describe('conversation-render handler', () => {
     })
     mockFindEmbeddingProfiles.mockResolvedValue([{ id: 'profile-1', isDefault: true }])
     mockFindChunkByInterchangeIndex
-      .mockResolvedValueOnce({ id: 'chunk-0', embedding: [0.1] })
-      .mockResolvedValueOnce({ id: 'chunk-1', embedding: [0.2] })
+      .mockResolvedValueOnce({ id: 'chunk-0', content: 'Chunk 0', embedding: [0.1] })
+      .mockResolvedValueOnce({ id: 'chunk-1', content: 'Chunk 1', embedding: [0.2] })
 
     await handleConversationRender({
       ...job,
@@ -183,5 +183,78 @@ describe('conversation-render handler', () => {
     } as any)
 
     expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(2)
+  })
+
+  // Bug 248: in the job child the upsert is buffered, so a read after it still
+  // sees the committed row. The decision must come from the row as it was.
+  describe('decides re-embedding from the chunk as it was before the write (bug 248)', () => {
+    const chat = {
+      id: 'chat-1',
+      title: 'Bug 248',
+      createdAt: '2026-04-01T00:00:00.000Z',
+      updatedAt: '2026-04-02T00:00:00.000Z',
+      messageCount: 2,
+      participants: [],
+    }
+
+    beforeEach(() => {
+      mockFindChatById.mockResolvedValue(chat)
+      mockGetMessages.mockResolvedValue([{ id: 'message-1' }, { id: 'message-2' }])
+      mockFindEmbeddingProfiles.mockResolvedValue([{ id: 'profile-1', isDefault: true }])
+      mockRenderConversationMarkdown.mockReturnValue({
+        markdown: '# Conversation',
+        interchanges: [
+          { index: 0, content: 'Chunk 0', participantNames: [], messageIds: ['message-1'] },
+          { index: 1, content: 'Chunk 1, now longer', participantNames: [], messageIds: ['message-2'] },
+        ],
+      })
+    })
+
+    it('queues a chunk whose content changed even though the read still shows its old vector', async () => {
+      // A buffered write leaves the committed row in place: the old content
+      // with its old vector, which the upsert is about to clear.
+      mockFindChunkByInterchangeIndex.mockImplementation(async (_chatId: unknown, index: unknown) =>
+        index === 0
+          ? { id: 'chunk-0', content: 'Chunk 0', embedding: [0.1] }
+          : { id: 'chunk-1', content: 'Chunk 1', embedding: [0.2] }
+      )
+      mockUpsertChunk.mockImplementation(async (input: any) => ({ ...input, id: 'synthetic-id' }))
+
+      await handleConversationRender(job as any)
+
+      expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(1)
+      // The existing row's id, never the child's synthetic one.
+      expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith('user-1', {
+        entityType: 'CONVERSATION_CHUNK',
+        entityId: 'chunk-1',
+        chatId: 'chat-1',
+        profileId: 'profile-1',
+      })
+    })
+
+    it('queues a brand-new chunk under the id the upsert handed back', async () => {
+      // The child cannot read its own buffered create, so the new chunk is absent.
+      mockFindChunkByInterchangeIndex.mockImplementation(async (_chatId: unknown, index: unknown) =>
+        index === 0 ? { id: 'chunk-0', content: 'Chunk 0', embedding: [0.1] } : null
+      )
+      mockUpsertChunk.mockImplementation(async (input: any) => ({ ...input, id: `new-${input.interchangeIndex}` }))
+
+      await handleConversationRender(job as any)
+
+      expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(1)
+      expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith('user-1', expect.objectContaining({
+        entityId: 'new-1',
+      }))
+    })
+
+    it('reads each chunk before upserting it', async () => {
+      const order: string[] = []
+      mockFindChunkByInterchangeIndex.mockImplementation(async () => { order.push('read'); return null })
+      mockUpsertChunk.mockImplementation(async (input: any) => { order.push('write'); return { ...input, id: 'x' } })
+
+      await handleConversationRender(job as any)
+
+      expect(order).toEqual(['read', 'write', 'read', 'write'])
+    })
   })
 })

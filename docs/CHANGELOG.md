@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### Fix: conversation chunks left without embeddings after a render (bug 248)
+
+- The conversation render job decided which chunks to embed by re-reading them after its upsert. Jobs run in the forked child, where writes are buffered until the job ends, so the read saw the old row: a chunk whose content changed kept its old vector until the buffered write cleared it, and a new chunk did not exist yet. Neither was queued. New chunks were embedded one render late, and the last render of a chat (or a bulk re-render, such as an upgrade) left its chunks unembedded until the next boot.
+- The handler now reads each chunk before writing it and queues the chunk if it is new, has no vector, or changed (or on a full re-embed).
+- `ConversationChunksRepository.upsert` now keeps a caller-supplied id on insert, so the id the child proxy hands back for a new chunk is the row's real id.
+
 #### Wardrobe: copy to folder, and components when filing outfits
 
 - New **Copy to folder…** in a wardrobe item's menu and in the select bar. It files a copy with a new id and a `(copy)` title, and copies the item's pictures. A copy may go in the folder the original is in.

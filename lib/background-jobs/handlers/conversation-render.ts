@@ -43,21 +43,50 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
     return;
   }
 
-  // 3. Upsert interchange chunks
-  const now = new Date().toISOString();
+  // 3. Upsert interchange chunks, deciding which need an embedding from what
+  //    each chunk was BEFORE the write. This handler runs in the job child,
+  //    where writes are buffered until the job ends: a read after the upsert
+  //    still sees the committed row — the old vector the upsert is about to
+  //    clear, and no row at all for a new chunk — so a changed or new chunk
+  //    was never queued and waited for the chat's next render or a reboot
+  //    (bug 248). The id comes from the existing row, or for a new chunk from
+  //    the upsert's result, which the repository keeps as the row's id.
+  const toEmbed: string[] = [];
   for (const interchange of result.interchanges) {
-    await repos.conversationChunks.upsert({
+    const existing = await repos.conversationChunks.findByInterchangeIndex(
+      payload.chatId,
+      interchange.index
+    );
+    const upserted = await repos.conversationChunks.upsert({
       chatId: payload.chatId,
       interchangeIndex: interchange.index,
       content: interchange.content,
       participantNames: interchange.participantNames,
       messageIds: interchange.messageIds,
     });
+
+    const needsEmbedding =
+      payload.fullReembed ||
+      !existing ||
+      !existing.embedding ||
+      existing.content !== interchange.content;
+    const chunkId = existing?.id ?? upserted?.id;
+    if (needsEmbedding && chunkId) {
+      toEmbed.push(chunkId);
+    }
   }
 
-  // 4. Enqueue embedding for interchanges (if embedding profile configured)
-  // When fullReembed is true, embed ALL chunks; otherwise only the newest
-  if (result.interchanges.length > 0) {
+  logger.debug('[ConversationRender] Chunks upserted', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    interchangeCount: result.interchanges.length,
+    needingEmbedding: toEmbed.length,
+    fullReembed: !!payload.fullReembed,
+  });
+
+  // 4. Enqueue embedding for the chunks that need one (if an embedding
+  //    profile is configured). When fullReembed is true, that is all of them.
+  if (toEmbed.length > 0) {
     try {
       // Default profile only — every vector in the instance must come from
       // the same profile. With no default marked, chunks wait for the
@@ -66,26 +95,20 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
       const defaultProfile = embeddingProfiles.find(p => p.isDefault);
 
       if (defaultProfile) {
-        // Embed all chunks that don't already have embeddings,
-        // or all chunks if fullReembed is requested
-        let embeddedCount = 0;
-        for (const interchange of result.interchanges) {
-          const chunk = await repos.conversationChunks.findByInterchangeIndex(
-            payload.chatId,
-            interchange.index
-          );
-
-          if (chunk && (payload.fullReembed || !chunk.embedding)) {
-            await enqueueEmbeddingGenerate(job.userId, {
-              entityType: 'CONVERSATION_CHUNK',
-              entityId: chunk.id,
-              chatId: payload.chatId,
-              profileId: defaultProfile.id,
-            });
-            embeddedCount++;
-          }
+        for (const chunkId of toEmbed) {
+          await enqueueEmbeddingGenerate(job.userId, {
+            entityType: 'CONVERSATION_CHUNK',
+            entityId: chunkId,
+            chatId: payload.chatId,
+            profileId: defaultProfile.id,
+          });
         }
       } else {
+        logger.debug('[ConversationRender] No default embedding profile; chunks left for the startup reconcile', {
+          jobId: job.id,
+          chatId: payload.chatId,
+          pending: toEmbed.length,
+        });
       }
     } catch (error) {
       // Don't fail the render job if embedding enqueue fails

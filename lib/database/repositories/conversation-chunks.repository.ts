@@ -17,6 +17,7 @@ import {
 import { AbstractBaseRepository } from './base.repository';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
+import { logger } from '@/lib/logger';
 
 /**
  * Conversation Chunks Repository
@@ -198,7 +199,21 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           return updated;
         }
 
-        return this._create(input as Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>);
+        // Honour a caller-supplied id on insert. The job child's repository
+        // proxy hands an upsert's caller a synthetic row carrying an id it
+        // assigned (`syntheticWriteResult`) and ships that same input here;
+        // without this the parent minted a different id, so the id the render
+        // handler queued an embedding for named no row (bug 248).
+        const { id: suppliedId, ...data } = input as ConversationChunkInput & { id?: unknown };
+        logger.debug('Creating conversation chunk', {
+          chatId: input.chatId,
+          interchangeIndex: input.interchangeIndex,
+          suppliedId: typeof suppliedId === 'string',
+        });
+        return this._create(
+          data as Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>,
+          typeof suppliedId === 'string' ? { id: suppliedId } : undefined
+        );
       },
       'Error upserting conversation chunk',
       { chatId: input.chatId, interchangeIndex: input.interchangeIndex }
