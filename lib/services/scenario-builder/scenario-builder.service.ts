@@ -12,7 +12,7 @@
  * `resolveScenarioBuilderMountPool` (cast vaults, their groups' stores, the
  * project's stores, Quilltap General), never `operatorSurface`.
  *
- * Design of record: docs/developer/features/scenario-builder.md
+ * Design of record: docs/developer/features/complete/scenario-builder.md
  *
  * @module services/scenario-builder/scenario-builder.service
  */

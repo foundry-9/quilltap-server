@@ -353,7 +353,7 @@ trip end to end.
 
 ## Image trails (Concierge overhaul, phase 1)
 
-Added by [concierge-overhaul-phase-1-refusal-failover.md](../concierge-overhaul-phase-1-refusal-failover.md).
+Added by [concierge-overhaul-phase-1-refusal-failover.md](concierge-overhaul-phase-1-refusal-failover.md).
 
 - **`profileKind`.** `RouteAttemptSchema` gained `profileKind: 'connection' | 'image'`,
   optional; absent means `'connection'`, so every trail written before this reads

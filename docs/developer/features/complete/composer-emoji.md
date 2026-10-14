@@ -2,7 +2,7 @@
 
 **Status:** ✅ **COMPLETE — shipped 2026-08-13.** Every gate item met; see [Completion gate](#completion-gate) for what was verified how, and for the two defects the live walk caught that this spec did not anticipate.
 **Scope:** quilltap-server (renderer + one settings boolean + its migration). No shell changes. No API route.
-**Phase:** 2.0e of the composer series. Layer 1 ([spellcheck](../composer-spellcheck.md)) and Layer 1.5 ([text replacement](../composer-text-replacement.md)) have shipped in code — note that both of those specs still carry `Status: Proposal / Not Implemented` in their own headers and neither has been moved to `complete/`; trust the code, not their status lines.
+**Phase:** 2.0e of the composer series. Layer 1 ([spellcheck](composer-spellcheck.md)) and Layer 1.5 ([text replacement](composer-text-replacement.md)) have shipped in code — note that both of those specs still carry `Status: Proposal / Not Implemented` in their own headers and neither has been moved to `complete/`; trust the code, not their status lines.
 This lands the typeahead shell that [Layer 2](../composer-typeahead.md) (`@`/`#`/`/`) needs, and proves it on the cheapest possible consumer.
 
 > **Portability mandate.** This feature must be implementable in **quilltap-v5** (Rust core + Angular 21 SPA, ProseMirror editor) without redesign. v4 uses **Lexical**; v5 uses **ProseMirror**. Nothing below may depend on React, Lexical, SWR/TanStack, or any server round-trip. See [Portability contract](#portability-contract) — read it before writing a line of code.

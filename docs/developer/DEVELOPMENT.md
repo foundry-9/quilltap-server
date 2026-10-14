@@ -419,7 +419,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
     - [API Documentation](API.md)
     - [Developer Documentation](DEVELOPMENT.md)
     - [Claude instructions](../../CLAUDE.md)
-    - [About Page](../../app/about/page.tsx)
+    - [About Page](../../app/about/AboutView.tsx)
     - [Release notes for this release](../releases/) **MUST EXIST FOR PRODUCTION RELEASE** and must match the version number in package.json exactly, or the version we are going to release at any rate
 
 ## Git and Github release instructions

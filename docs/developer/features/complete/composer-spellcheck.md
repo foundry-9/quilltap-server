@@ -1,6 +1,6 @@
 # Composer Spellcheck — Layer 1 Spec
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented in v4 (server side; the dictionary bridge lives in quilltap-shell). Deferred: a language picker and Layer 3 ghost text.
 **Scope:** quilltap-server (renderer) + quilltap-shell (Electron main + preload)
 **Phase:** 1 of a planned 2 (Layer 2 — `@`/`#`/`/` typeahead — is deferred)
 

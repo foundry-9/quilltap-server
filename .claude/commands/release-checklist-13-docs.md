@@ -9,7 +9,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 - [API Documentation](../../docs/developer/API.md)
 - [Developer Documentation](../../docs/developer/DEVELOPMENT.md)
 - [Claude instructions](../../CLAUDE.md)
-- [About Page](../../app/about/page.tsx)
+- [About Page](../../app/about/AboutView.tsx)
 - [Release notes for this release](../../docs/releases/) — **MUST EXIST for a production release** and must match the `version` in `package.json` exactly (or the version being released).
 
 ## Steps
@@ -26,7 +26,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    - **API.md** — matches the actual `/api/v1/` routes (ties to checklist item 4).
    - **DEVELOPMENT.md** — dev workflow still accurate.
    - **CLAUDE.md** — any new conventions/chokepoints/glossary entries introduced this cycle.
-   - **about/page.tsx** — version, credits, feature blurbs.
+   - **about/AboutView.tsx** (content; `page.tsx` is a wrapper) — version, credits, feature blurbs.
    - **docs/releases/{version}.md** — exists and matches `package.json` version exactly. If missing for a production release, follow the release-notes format in [tag-for-release](tag-for-release.md) / the pattern in `docs/releases/`.
 3. Also confirm the broader doc set from [update-documentation](update-documentation.md) is current — user-visible changes need `help/*.md` updates (with `url` frontmatter + matching `help_navigate(...)`), and the docs listed there stay in sync. Consider running `/update-documentation` if a lot changed.
 4. Fix anything stale.

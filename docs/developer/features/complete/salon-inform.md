@@ -1,8 +1,6 @@
 # Feature: Inform — out-of-character information a character receives before their next turn
 
-**Status:** implemented in 4.10-dev; **live verification outstanding** (the ten-step
-walkthrough in [Verification](#verification-live-on-the-v4test-instance--never-friday) has not
-been run against a real instance). Move this file to `features/complete/` once it has.
+**Status:** implemented in 4.10-dev; live verification complete (2026-10-14).
 
 Two things landed differently from the text below, both noted at their sections: the
 `chat_informs` DDL carries an `updatedAt` column (the repository base class writes one on every
@@ -109,7 +107,7 @@ CREATE INDEX "idx_chat_informs_consumedBy" ON "chat_informs" ("consumedByMessage
 - `participantId` is a **chat participant id**, never a character id — the same rule as `targetParticipantIds`.
 - `recordMessageId` links every row of a batch to its Host record message. Nullable so a record-write failure cannot orphan the batch (the announcer convention: errors never propagate).
 - `consumedByMessageId` is the assistant message whose generation delivered the row. It is what makes regenerate re-apply.
-- No `userId` column ([single-user](../../../CLAUDE.md)).
+- No `userId` column ([single-user](../../../../CLAUDE.md)).
 - `updatedAt` was **not** in the original draft of this block and is required: `AbstractBaseRepository._create` always writes one, and the SQLite adapter derives its INSERT column list from the schema, so a table without the column rejects every insert.
 - Consumed rows are kept. They are tiny, they make swipes honest, and the chat's cascade removes them. No sweep.
 
@@ -129,9 +127,9 @@ CREATE INDEX "idx_chat_informs_consumedBy" ON "chat_informs" ("consumedByMessage
 | `deletePendingForParticipant(chatId, participantId)` | write | Seat removed from the chat |
 | `deleteByChatId(chatId)` | write | Mirror of `chatDocuments.deleteByChatId` wherever the chats repository calls it |
 
-Add the repo to the method-override audit in [BACKGROUND_JOBS_CHILD.md](../BACKGROUND_JOBS_CHILD.md#method-name-overrides) only if a name falls outside the prefix rules; with the names above none should.
+Add the repo to the method-override audit in [BACKGROUND_JOBS_CHILD.md](../../BACKGROUND_JOBS_CHILD.md#method-name-overrides) only if a name falls outside the prefix rules; with the names above none should.
 
-**Migration:** `migrations/scripts/add-chat-informs-table.ts`, id `add-chat-informs-table-v1`, `introducedInVersion: '4.10.0'`, modelled on `add-text-replacement-rules-table.ts` (`CREATE TABLE IF NOT EXISTS`, `shouldRun` = table absent). No loop, so no `reportProgress`. Add the pretty label to `PRETTY_LABELS` in `lib/startup/prettify.ts` — something like *"Laying out a tray for the notes you slip the cast"* — and the export to `migrations/scripts/index.ts`. Add the section to [DDL.md](../DDL.md) after `chat_documents`.
+**Migration:** `migrations/scripts/add-chat-informs-table.ts`, id `add-chat-informs-table-v1`, `introducedInVersion: '4.10.0'`, modelled on `add-text-replacement-rules-table.ts` (`CREATE TABLE IF NOT EXISTS`, `shouldRun` = table absent). No loop, so no `reportProgress`. Add the pretty label to `PRETTY_LABELS` in `lib/startup/prettify.ts` — something like *"Laying out a tray for the notes you slip the cast"* — and the export to `migrations/scripts/index.ts`. Add the section to [DDL.md](../../DDL.md) after `chat_documents`.
 
 ## API
 
@@ -213,7 +211,7 @@ Content is the rows' `contentMarkdown` in delivery order, joined with `\n\n---\n
 
 Why this position and not "right after block 1" literally: blocks 1 and 2 are the static prefix. The Anthropic plugin puts its `cache_control` breakpoint on the **first** system block only (`plugins/dist/qtap-plugin-anthropic/provider.ts:442`, `:628`), OpenAI-style prefix caching is unaffected by anything after an unchanged prefix, and local providers fold the leading system run into one message (`collapseLeadingSystemMessages`) so an extra block costs them nothing. Placing the inform between 2 and 3 keeps the cached region contiguous; to the model, "after the system prompt" is exactly what it sees. Neither `IDENTITY_STACK_BUILDER_VERSION` nor `PROMPT_CACHE_STRUCTURE_VERSION` is bumped: the block is conditional, not structural.
 
-Add a row to the wire-order table in [PROMPT_ARCHITECTURE.md §2](../PROMPT_ARCHITECTURE.md), a bullet in §14 ("the inform block is the one sanctioned turn-variable system block, and it is empty-is-absent"), and a line in the CLAUDE.md chokepoint list.
+Add a row to the wire-order table in [PROMPT_ARCHITECTURE.md §2](../../PROMPT_ARCHITECTURE.md), a bullet in §14 ("the inform block is the one sanctioned turn-variable system block, and it is empty-is-absent"), and a line in the CLAUDE.md chokepoint list.
 
 ### Which generations
 

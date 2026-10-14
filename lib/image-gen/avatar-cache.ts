@@ -16,7 +16,7 @@
  * This module is the only place a key is derived or looked up. Never compute
  * one at a call site: a second derivation is a second format, and the two drift.
  *
- * Design of record: `docs/developer/features/avatar-configuration-cache.md`.
+ * Design of record: `docs/developer/features/complete/avatar-configuration-cache.md`.
  *
  * @module image-gen/avatar-cache
  */

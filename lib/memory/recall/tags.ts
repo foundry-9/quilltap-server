@@ -266,7 +266,7 @@ export function boostGateStrength(gate: BoostGate, cosine: number, bestCosine: n
 /**
  * The ranking knobs the recall multiplier retuning chose (R1, R2, R4), in force
  * whenever a {@link RecallContext} carries no explicit `tuning`. Chosen on the
- * Friday probe set (docs/developer/features/recall-probe-set-runbook.md, the
+ * Friday probe set (docs/developer/features/complete/recall-probe-set-runbook.md, the
  * `cap14` candidate): boosts gated on relevance (full at the gate, faded to
  * nothing 0.10 below it), the product of boosts capped at 1.4, and entity
  * anchors chosen by rarity among the names of people not in the room. The

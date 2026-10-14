@@ -1,6 +1,6 @@
 # Smart Typography — Layer 1.6 Spec
 
-**Status:** Implemented in v4 (2026-08-13). Every file in the [file-touch summary](#file-touch-summary) is written and the automated suites pass; the [completion gate](#completion-gate) still wants both manual matrices walked on a running instance before this moves to `complete/`. Implementation notes and corrections to this document are collected in [As built](#as-built).
+**Status:** Implemented in v4 (2026-08-13). Every file in the [file-touch summary](#file-touch-summary) is written and the automated suites pass; both manual matrices in the [completion gate](#completion-gate) have been walked on a running instance (2026-10-14). Implementation notes and corrections to this document are collected in [As built](#as-built).
 
 **Original status:** Proposal / Not Implemented
 **Scope:** quilltap-server (message renderer + composer plugin + one settings bag). No shell changes. No API route. One prerequisite bug fix.
@@ -61,7 +61,7 @@ Four designs were considered. Recording the rejected three matters, because each
 
 ## Prerequisite: fix the roleplay dialogue-pattern fallback first
 
-✅ **DONE — [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md) landed 2026-08-13 as its own commit.** Both defaults now carry the real curly code points as `“`/`”` escapes, single quotes deliberately excluded, with fallback-path regression coverage on the server suite *and* a `bug 62` block in `components/chat/__tests__/MessageContent.test.tsx` for the streaming path. **This spec is unblocked**; the rest of this section is kept as the record of what was wrong and why it gated Part A.
+✅ **DONE — [Bug 62](../../bugs/fixed/bug-62-dialogue-fallback-quotes.md) landed 2026-08-13 as its own commit.** Both defaults now carry the real curly code points as `“`/`”` escapes, single quotes deliberately excluded, with fallback-path regression coverage on the server suite *and* a `bug 62` block in `components/chat/__tests__/MessageContent.test.tsx` for the streaming path. **This spec is unblocked**; the rest of this section is kept as the record of what was wrong and why it gated Part A.
 
 ⚠ It was **required, not advisory, and had to land as its own commit before Part A.** With quotes moving to render time this became *strictly* load-bearing rather than merely prudent — see [ordering](#ordering-the-load-bearing-constraint).
 
@@ -83,8 +83,8 @@ These are the **live fallback** for every chat not on a template supplying its o
 2. Correct both defaults to match straight *and* curly: pattern class containing `"`, U+201C, U+201D; `openingChars: ['"', '“']`, `closingChars: ['"', '”']`.
 3. **Decide the single-quote question explicitly.** Recommendation: double-quote only, matching the seeded template. `'` is far more often an apostrophe than a quotation mark, and a single-quote dialogue pattern would false-positive across most English prose.
 4. Add regression coverage in [`__tests__/unit/lib/services/markdown-renderer.service.test.ts`](../../../__tests__/unit/lib/services/markdown-renderer.service.test.ts) — which already has curly-quote cases at `:409-421` — asserting the **fallback** path, not just the template path. That is the gap that let this survive.
-5. **The bug is filed — it is [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md)**, now fixed, with the full root-cause write-up, the hexdumps, the single-quote product decision (resolved: double-quote only), and the v5 coordination note. Read it rather than re-deriving any of this.
-6. **Cross-repo — still owed.** v5 ported this verbatim *and knew it* — `quilltap-v5: apps/web/src/app/chat/render/roleplay-rendering.ts:68-69` carries the comment "v4's stored pattern is straight-quote-only — copied byte-for-byte". v4 has now converged; the mirror on the v5 side has **not** landed, and the fix moves v5's captured markdown parity corpus. That is ordinary drift, worked in the v5 repo. Details in Bug 62's [v5 section](../bugs/fixed/bug-62-dialogue-fallback-quotes.md#v5).
+5. **The bug is filed — it is [Bug 62](../../bugs/fixed/bug-62-dialogue-fallback-quotes.md)**, now fixed, with the full root-cause write-up, the hexdumps, the single-quote product decision (resolved: double-quote only), and the v5 coordination note. Read it rather than re-deriving any of this.
+6. **Cross-repo — still owed.** v5 ported this verbatim *and knew it* — `quilltap-v5: apps/web/src/app/chat/render/roleplay-rendering.ts:68-69` carries the comment "v4's stored pattern is straight-quote-only — copied byte-for-byte". v4 has now converged; the mirror on the v5 side has **not** landed, and the fix moves v5's captured markdown parity corpus. That is ordinary drift, worked in the v5 repo. Details in Bug 62's [v5 section](../../bugs/fixed/bug-62-dialogue-fallback-quotes.md#v5).
 
 ### Related, worth checking while you are in there
 
@@ -347,7 +347,7 @@ Worked through, with a rule `Aris → Aristarchus the Wise` and the user typing 
 
 Correct in both features — which is the point of fixing the order rather than leaving it to registration accident. Assert this table step by step in the plugin tests; it is the test that fails if someone reorders.
 
-[Layer 2.0e emoji](complete/composer-emoji.md) triggers on `:`, which is not a Part B trigger — no interaction. Registration order among the three: emoji → smart typography → text replacement. In v5, all three are plugin-array positions in `buildPlugins()` (`apps/web/src/app/editor/rich-editor.ts:224-280`, whose doc comment already says the order is load-bearing — add this pair to it).
+[Layer 2.0e emoji](composer-emoji.md) triggers on `:`, which is not a Part B trigger — no interaction. Registration order among the three: emoji → smart typography → text replacement. In v5, all three are plugin-array positions in `buildPlugins()` (`apps/web/src/app/editor/rich-editor.ts:224-280`, whose doc comment already says the order is load-bearing — add this pair to it).
 
 ---
 
@@ -384,7 +384,7 @@ Plumb through, copying `answerConfirmationSettings` line for line:
 
 **No per-field JSON code to write** — TEXT↔object marshalling is driven by Zod field metadata, not by the repository. `lib/database/schema-translator.ts:70-71` maps `ZodObject` → `'object'`; the marshalling itself is in `lib/database/backends/sqlite/backend.ts:704` and `json-columns.ts:42,61,85`. (`base.repository.ts` contains none of it — look in the backend if it misbehaves.)
 
-Migration `migrations/scripts/add-smart-typography-settings-field.ts`: `ALTER TABLE "chat_settings" ADD COLUMN "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}'`. **No migration in this repo is date-prefixed** — all 179 use `add-<thing>-field.ts` / `add-<thing>-v1.ts`. Add a `PRETTY_LABELS` entry in [lib/startup/prettify.ts](../../../lib/startup/prettify.ts) in the steampunk-Wodehouse voice — *"Teaching the quotation marks to curtsey."* No loop, so no `reportProgress`. Register in `migrations/scripts/index.ts`. Update [docs/developer/DDL.md](../DDL.md).
+Migration `migrations/scripts/add-smart-typography-settings-field.ts`: `ALTER TABLE "chat_settings" ADD COLUMN "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}'`. **No migration in this repo is date-prefixed** — all 179 use `add-<thing>-field.ts` / `add-<thing>-v1.ts`. Add a `PRETTY_LABELS` entry in [lib/startup/prettify.ts](../../../lib/startup/prettify.ts) in the steampunk-Wodehouse voice — *"Teaching the quotation marks to curtsey."* No loop, so no `reportProgress`. Register in `migrations/scripts/index.ts`. Update [docs/developer/DDL.md](../../DDL.md).
 
 ## Settings card
 
@@ -463,7 +463,7 @@ One `[smart-typography]` debug line per Part B substitution. Nothing on non-trig
 # Open questions
 
 - **Should `displayQuotes` default on?** ✅ **Resolved: off**, as specified, and shipped that way. Still cheap to revisit (one schema line, the repository seed, and the migration's column default) — but the migration has now shipped, so flipping it means a follow-up migration for existing rows, not just a default change.
-- **Single-quoted dialogue in the fixed fallback pattern.** ✅ Resolved in [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md): double-quote only.
+- **Single-quoted dialogue in the fixed fallback pattern.** ✅ Resolved in [Bug 62](../../bugs/fixed/bug-62-dialogue-fallback-quotes.md): double-quote only.
 - **The seven other bare-`ReactMarkdown` pipelines.** ✅ **Accepted in writing.** They are left straight-quoted; the changelog names the message renderer explicitly as the scope. They are not conversation, they have no roleplay layer, and none of them is read side by side with a chat message.
 - **`remark-smartypants` option surface.** ✅ **Verified against the installed version.** `remark-smartypants` 3.0.3 re-exports `retext-smartypants` 6's `Options` type, whose keys are exactly `quotes`, `ellipses`, `dashes`, `backticks` (plus `openingQuotes`/`closingQuotes`, unused). All four names in `SMARTYPANTS_OPTIONS` are real, and `__tests__/unit/lib/markdown/typography.test.ts` pins the key set so a rename fails a test rather than silently re-enabling dashes.
 
@@ -475,7 +475,7 @@ Where the implementation departs from, or resolves, what this document assumed.
 
 1. **`no-restricted-imports` "is not used anywhere in the repo today."** It is — `eslint.config.mjs` already scopes it to `lib/char-insert/**` for the Layer 2.0e/2.0u character-insertion engine, which is the same Tier-A contract for the same reason. The `lib/smart-typography/**` override is a copy of that block. It was verified to fire by adding a `react` import to `engine.ts` and watching `npm run lint` fail.
 2. **"No `TextReplacementPlugin` test exists in the repo at all."** One does, added with bug 63, along with `__tests__/helpers/lexicalPluginHarness.tsx` — a real-Lexical harness with `seedParagraph` / `seedCodeBlock` / `seedInlineCode` / `pressKey` helpers. The new plugin suite is built on it, so no separate Layer 1.5 suite was needed.
-3. **"Extract and share `isInCodeContext()`, fixing the latent code-context defect (file that bug too)."** Already done and already filed — `components/chat/lexical/utils/code-context.ts`, [bug 63](../bugs/fixed/bug-63-text-replacement-in-code.md). `SmartTypographyPlugin` just imports it.
+3. **"Extract and share `isInCodeContext()`, fixing the latent code-context defect (file that bug too)."** Already done and already filed — `components/chat/lexical/utils/code-context.ts`, [bug 63](../../bugs/fixed/bug-63-text-replacement-in-code.md). `SmartTypographyPlugin` just imports it.
 
 **The reserved-character guard reads patterns, not delimiters.** The renderer never receives a template's `TemplateDelimiter[]` — it receives compiled `RenderingPattern`s. So `isQuoteSensitiveRoleplayConfig` (`lib/markdown/typography.ts`) uses the same discriminator `escapeMarkdownInBrackets` already uses: a pattern carrying the generated `(?<rpBody>…)` group came from a declared wrap delimiter, and if such a pattern mentions `"` or `'`, curling is suppressed. The legacy built-in dialogue pattern has no `rpBody` group, so the shipped defaults are unaffected — which is the behaviour that matters, since flagging them would disable the feature for every default chat.
 
@@ -505,12 +505,12 @@ Where the implementation departs from, or resolves, what this document assumed.
 
 # File-touch summary
 
-**Prerequisite — [Bug 62](../bugs/fixed/bug-62-dialogue-fallback-quotes.md): ✅ landed 2026-08-13 as its own commit.**
+**Prerequisite — [Bug 62](../../bugs/fixed/bug-62-dialogue-fallback-quotes.md): ✅ landed 2026-08-13 as its own commit.**
 - [lib/chat/roleplay-rendering.ts](../../../lib/chat/roleplay-rendering.ts) — ✅ both defaults respelled with `“`/`”` escapes
 - `__tests__/unit/lib/services/markdown-renderer.service.test.ts` — ✅ `shared defaults (fallback path, no options passed)` block
 - `components/chat/__tests__/MessageContent.test.tsx` — ✅ the client render assertion, added to the existing suite (a server-only test proves nothing about the streaming path)
 - `docs/developer/bugs/fixed/bug-62-dialogue-fallback-quotes.md` — ✅ moved, dated, `FIXED in v4` paragraph added
-- [docs/developer/bugs.md](../bugs.md) — ✅ row and header Status paragraph updated
+- [docs/developer/bugs.md](../../bugs.md) — ✅ row and header Status paragraph updated
 
 **Part A:**
 - `lib/markdown/typography.ts` — new; `SMARTYPANTS_OPTIONS` plus the reserved-character guard, shared by both pipelines (the `REMARK_MATH_OPTIONS` precedent)
@@ -541,7 +541,7 @@ Where the implementation departs from, or resolves, what this document assumed.
 
 **Cross-cutting:**
 - `eslint.config.mjs` — the `lib/smart-typography/**` import restriction
-- [help/chat-settings.md](../../../help/chat-settings.md) — a Smart Typography section beside Composer (`:42-58`) and Text Replacement (`:96-116`). ⚠ **Do not change that file's frontmatter** — `:2` declares `url: /settings?tab=chat` with the matching `help_navigate` at `:599`, and CLAUDE.md requires them to agree. A section-scoped deep link means a *separate* help file (`help/answer-confirmation.md` is the precedent), not a frontmatter edit.
+- [help/chat-settings.md](../../../../help/chat-settings.md) — a Smart Typography section beside Composer (`:42-58`) and Text Replacement (`:96-116`). ⚠ **Do not change that file's frontmatter** — `:2` declares `url: /settings?tab=chat` with the matching `help_navigate` at `:599`, and CLAUDE.md requires them to agree. A section-scoped deep link means a *separate* help file (`help/answer-confirmation.md` is the precedent), not a frontmatter edit.
 - `docs/CHANGELOG.md` — top entry
 - [composer-text-replacement.md](composer-text-replacement.md) — record the shared `isInCodeContext()` helper and the plugin-ordering contract
 - `packages/theme-storybook/src/css/qt-components.css` **only if** a `qt-*` class changed (**publish gates the commit**). If none proves necessary, say so in the commit message so the omission reads as deliberate.
@@ -550,7 +550,7 @@ Where the implementation departs from, or resolves, what this document assumed.
 
 ## Changelog entry
 
-Top of [docs/CHANGELOG.md](../../CHANGELOG.md), terse plain American English:
+Top of [docs/CHANGELOG.md](../../../CHANGELOG.md), terse plain American English:
 
 ```
 - Smart typography, in two parts. Quotes: the conversation now displays curly quotes while storing and sending exactly what you typed, so nothing about your text or the model's input changes; off by default, toggle on the Chat settings tab. Dashes: typing `--` gives an en dash, `---` an em dash, and `...` an ellipsis, in the Salon composer and Document Mode; on by default, and one Backspace or Cmd/Ctrl+Z reverts any substitution. Dashes are deliberately not applied at render time, so `--verbose` in prose stays intact.

@@ -1,6 +1,6 @@
 # The Concierge — Four-State Per-Chat Control
 
-> **Superseded by [concierge-overhaul-phase-3-three-states.md](../concierge-overhaul-phase-3-three-states.md) (4.10).** The four states described here are now three — Moderated / Unmoderated / Locked, stored in `conciergeMode` with provenance in `conciergeModeSetBy` / `conciergeModeReason`. `conciergeOverride` is no longer written. This document is kept as the historical record of the four-state design.
+> **Superseded by [concierge-overhaul-phase-3-three-states.md](concierge-overhaul-phase-3-three-states.md) (4.10).** The four states described here are now three — Moderated / Unmoderated / Locked, stored in `conciergeMode` with provenance in `conciergeModeSetBy` / `conciergeModeReason`. `conciergeOverride` is no longer written. This document is kept as the historical record of the four-state design.
 
 **Status:** Implemented (4.9-dev, 2026-08-30)
 **Scope:** quilltap-server (sidebar UI + API + danger-content services); no shell impact

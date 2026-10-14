@@ -1,6 +1,6 @@
 # Built-in TF-IDF profile: tuning the memory system for a lexical embedder
 
-**Status:** Implemented (4.10-dev, 2026-10-13). Thresholds in §3 were calibrated offline; §7 lists the live checks still owed on `V4test`.
+**Status:** Implemented (4.10-dev, 2026-10-13). Thresholds in §3 were calibrated offline; The §7 live checks on `V4test` are complete (2026-10-14).
 **Scope:** quilltap-server core only. No change to the `qtap-plugin-builtin-embeddings` plugin. One new column (`tfidf_vocabularies.textShapeVersion`, migration `add-tfidf-text-shape-version-v1`) and one new consolidation setting (`tfidfClusterThreshold`).
 **Provider:** `BUILTIN`, model `tfidf-bm25-v1`, plugin `plugins/dist/qtap-plugin-builtin-embeddings/` (TF-IDF with BM25 term weighting, Porter stemming, unigrams + bigrams, dense L2-normalised vectors one dimension per vocabulary term).
 **Source:** the 2026-10-13 dogfood session on `V4test` (bugs 235–241, commit 93c5af6ad).

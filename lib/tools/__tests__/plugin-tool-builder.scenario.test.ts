@@ -5,7 +5,7 @@
  *    both `memories` and `conversations` from its `sources` enum
  *  - `pluginToolAllowlist` filters which plugin (tool-registry) tools are built
  *
- * See docs/developer/features/scenario-builder.md §5.3.
+ * See docs/developer/features/complete/scenario-builder.md §5.3.
  */
 
 import { buildToolsForProvider } from '@/lib/tools/plugin-tool-builder'

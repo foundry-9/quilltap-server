@@ -1,9 +1,9 @@
 # Prompt Trust and Anti-Committee Safeguards
 
-**Status:** Implemented (2026-10-01) in 4.10-dev, all four phases — see §15 "As built". The §10.3 live eval has not yet been run against a real cheap model; the spec moves to `complete/` once it has.
+**Status:** Implemented (2026-10-01) in 4.10-dev, all four phases — see §15 "As built". Live verification, including the §10.3 eval, complete (2026-10-14).
 **Scope:** quilltap-server. The 21 shipped sample prompts in the `default-system-prompts` plugin; the four LLM features that write character persona text (AI Wizard, Summon From Lore, Character Optimizer, External Prompt generator) and the shared `character-field-semantics.ts` they draw from; the Commonplace Book turn extractor's SELF and OTHER prompts plus the turn-transcript renderer that feeds them; one new trailing per-turn context note on chained multi-character turns. No schema change, no migration, no new table, no `.qtap` export change.
 **Non-scope:** users' own prompt copies (never touched); the roleplay *templates* (formatting entity, separate from the sample prompts); the Scenario Builder (writes a scene, not a character); the server-side cure for the turn race itself (documented as a follow-up in §9).
-**Related:** [prompt-person-consistency.md](complete/prompt-person-consistency.md) (generator chokepoint pattern this spec extends), [memory-extraction-enrichment.md](complete/memory-extraction-enrichment.md) (the extractor prompts this spec amends), [character-progressions.md](complete/character-progressions.md) (the trailing-section pattern §9 copies), [context-summary-speaker-names.md](complete/context-summary-speaker-names.md) (bug 161: a cheap LLM told to name something it had no name for invented one — the same failure class as manufactured consent).
+**Related:** [prompt-person-consistency.md](prompt-person-consistency.md) (generator chokepoint pattern this spec extends), [memory-extraction-enrichment.md](memory-extraction-enrichment.md) (the extractor prompts this spec amends), [character-progressions.md](character-progressions.md) (the trailing-section pattern §9 copies), [context-summary-speaker-names.md](context-summary-speaker-names.md) (bug 161: a cheap LLM told to name something it had no name for invented one — the same failure class as manufactured consent).
 
 ## 1. The problem
 

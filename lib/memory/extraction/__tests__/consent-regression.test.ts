@@ -1,7 +1,7 @@
 /**
  * Regression for mechanism 6 of the anti-committee spec (manufactured
  * consent in memory extraction). See
- * docs/developer/features/prompt-trust-and-anti-committee.md §10.2.
+ * docs/developer/features/complete/prompt-trust-and-anti-committee.md §10.2.
  *
  * What this can prove deterministically: the real transcript builder puts the
  * proposal last and the renderer tells the extractor the user's line came

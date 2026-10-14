@@ -1,5 +1,5 @@
 /**
- * Scenario Builder mount pool threading (docs/developer/features/scenario-builder.md
+ * Scenario Builder mount pool threading (docs/developer/features/complete/scenario-builder.md
  * §5.2): a pre-built `TieredMountPool` stands in for a chat's normal
  * project/character resolution when the tool loop runs before any chat row
  * exists. `PathResolutionContext.mountPool`, when set, IS the accessible set —

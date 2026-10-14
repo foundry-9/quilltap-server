@@ -1,6 +1,6 @@
 # Avatar Configuration Cache
 
-**Status:** implemented (4.10-dev), not yet exercised against a live instance · **Introduced:** 4.10.0
+**Status:** implemented (4.10-dev); verified live (2026-10-14) · **Introduced:** 4.10.0
 
 One avatar per character *per configuration*, generated once and reused, instead
 of a fresh provider call every time a character puts the same coat back on.

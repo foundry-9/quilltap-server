@@ -8,7 +8,7 @@
  * process inside this route and streams tool events, reasoning, and a terminal
  * `done` (carrying the scene) or `error`. Closing the request aborts the loop.
  *
- * Design of record: docs/developer/features/scenario-builder.md
+ * Design of record: docs/developer/features/complete/scenario-builder.md
  */
 
 import { NextRequest, NextResponse } from 'next/server'

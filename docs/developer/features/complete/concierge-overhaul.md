@@ -2,7 +2,7 @@
 
 **Status:** Implemented (4.10-dev, 2026-09-25) — phases 1–5 implemented
 **Scope:** quilltap-server. Text turns, every cheap-LLM task, every image call site, the per-chat Concierge control, the global Concierge settings, a new Settings tab. Touches `@quilltap/plugin-types` and every provider plugin (publish gates called out per phase). No shell impact.
-**Supersedes, when complete:** [concierge-four-state.md](complete/concierge-four-state.md), [concierge-list-marks.md](complete/concierge-list-marks.md), [concierge-default-at-creation.md](complete/concierge-default-at-creation.md), and the routing half of [dangerous.md](complete/dangerous.md). The display half of `dangerous.md` (badges, blur, collapse) survives unchanged.
+**Supersedes, when complete:** [concierge-four-state.md](concierge-four-state.md), [concierge-list-marks.md](concierge-list-marks.md), [concierge-default-at-creation.md](concierge-default-at-creation.md), and the routing half of [dangerous.md](dangerous.md). The display half of `dangerous.md` (badges, blur, collapse) survives unchanged.
 
 ## Why
 

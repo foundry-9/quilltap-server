@@ -1,7 +1,7 @@
 # Memory consent eval (opt-in)
 
 Live-model check for manufactured consent in memory extraction — mechanism 6
-of [prompt-trust-and-anti-committee.md](../../../docs/developer/features/prompt-trust-and-anti-committee.md)
+of [prompt-trust-and-anti-committee.md](../../../docs/developer/features/complete/prompt-trust-and-anti-committee.md)
 (§10.3). The deterministic half lives in
 `lib/memory/extraction/__tests__/consent-regression.test.ts`; the
 shared fixtures are in `__tests__/unit/lib/fixtures/proposal-no-reply.ts`.

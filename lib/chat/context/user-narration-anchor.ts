@@ -23,7 +23,7 @@
  * When the note does not apply this returns `''` and the caller pushes nothing,
  * the same contract `lib/progressions/prompt-section.ts` keeps.
  *
- * Design of record: docs/developer/features/prompt-trust-and-anti-committee.md §9.
+ * Design of record: docs/developer/features/complete/prompt-trust-and-anti-committee.md §9.
  */
 
 import { logger } from '@/lib/logger'

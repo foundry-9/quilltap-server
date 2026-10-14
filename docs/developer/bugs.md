@@ -826,7 +826,7 @@ now share a `$isInCodeContext` guard. Bug 62 (filed and fixed
 spelled their "straight and curly" quote sets with the straight quote
 duplicated, so curly-quoted dialogue had never been highlighted in any chat that
 falls through to the defaults. Found while spec'ing
-[composer-smart-typography](features/composer-smart-typography.md), which curls
+[composer-smart-typography](features/complete/composer-smart-typography.md), which curls
 quotes upstream of the roleplay layer and was therefore blocked on it; that
 spec is now **unblocked**. Both defaults now carry the real curly code points
 as `“` / `”` escapes, with fallback-path regression coverage on the

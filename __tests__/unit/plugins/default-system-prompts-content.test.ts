@@ -3,7 +3,7 @@
  * plugin — the first test that reads the `.md` files themselves.
  *
  * Locks in the anti-committee safeguards
- * (docs/developer/features/prompt-trust-and-anti-committee.md §6): every
+ * (docs/developer/features/complete/prompt-trust-and-anti-committee.md §6): every
  * prompt carries the universal "whose story it is" rules and the committee
  * failure mode; every prompt but the relationship-neutral MODERN_GENERAL
  * carries the trust disposition; and no existing "disagree and hold" line

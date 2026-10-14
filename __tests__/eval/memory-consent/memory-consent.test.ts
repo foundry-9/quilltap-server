@@ -1,6 +1,6 @@
 /**
  * Opt-in live eval for manufactured consent in memory extraction
- * (docs/developer/features/prompt-trust-and-anti-committee.md §10.3).
+ * (docs/developer/features/complete/prompt-trust-and-anti-committee.md §10.3).
  *
  * Skipped unless MEMORY_CONSENT_EVAL_MODEL is set, so it never runs in CI.
  * It sends the real SELF and OTHER extraction prompts, built by the real

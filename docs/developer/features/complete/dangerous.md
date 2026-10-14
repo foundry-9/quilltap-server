@@ -2,10 +2,10 @@
 
 > **Superseded in part (4.10, Concierge overhaul).** The *routing* half of this spec — the
 > `OFF` / `DETECT_ONLY` / `AUTO_ROUTE` mode, the classifier as the backbone, `dangerousContentSettings`
-> — was retired by [concierge-overhaul.md](../concierge-overhaul.md): refusals now drive failover,
+> — was retired by [concierge-overhaul.md](concierge-overhaul.md): refusals now drive failover,
 > the classifier is an opt-in pre-screen, and the settings live in `conciergeSettings` on the
 > Concierge's own tab (`/settings?tab=concierge`; see
-> [phase 4](../concierge-overhaul-phase-4-concierge-tab.md)). The *display* half (badges, blur,
+> [phase 4](concierge-overhaul-phase-4-concierge-tab.md)). The *display* half (badges, blur,
 > collapse) survives unchanged. Kept as a historical record.
 
 ## Overview

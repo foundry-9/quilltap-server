@@ -3,7 +3,7 @@
 **Status:** Implemented (4.10-dev, 2026-09-25) — see [As built](#as-built) for where the shipped code departs from the plan.
 **Scope:** quilltap-server. Three new columns on `chats` and one data migration; the `ConciergeState` union, its predicates and presentation table; the PUT and POST wire contract; the sidebar and New Chat controls; the header pill, list marks and quick-hide; export schema and DDL. No settings change, no plugin or package change.
 **Prerequisites:** [Phase 1](concierge-overhaul-phase-1-refusal-failover.md) and [Phase 2](concierge-overhaul-phase-2-refusal-ledger.md) landed. This spec assumes `applyConciergeFlip(chatId, requested, chat, { by, reason })` exists and that refusals are counted. It can be read on its own; every file it touches is cited.
-**Supersedes:** [concierge-four-state.md](complete/concierge-four-state.md) §1, §3, §5, §6 and [concierge-list-marks.md](complete/concierge-list-marks.md) §"Design".
+**Supersedes:** [concierge-four-state.md](concierge-four-state.md) §1, §3, §5, §6 and [concierge-list-marks.md](concierge-list-marks.md) §"Design".
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 3 of 5).
 
 ## Summary

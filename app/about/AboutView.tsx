@@ -143,11 +143,11 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, clothing records, personalities, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
+            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, personalities, subprompts and progressions, a four-tier wardrobe with folders, pictures and a wear ledger, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, and embedded tool messages</span>
+            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, the Scenario Builder, and indexed message search</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -155,7 +155,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Commonplace Book &ndash; Memory</strong> &ndash; long-term memory with semantic recall, memory gate, proactive recall, and deduplication</span>
+            <span><strong>The Commonplace Book &ndash; Memory</strong> &ndash; long-term memory with semantic recall and proactive recall, active and archived shelves, consolidation into digests, and one per-character maintenance pass</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -163,7 +163,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, quick-hide integration, and a three-state per-chat control (Moderated, Unmoderated, Locked) settable at creation as well as mid-conversation, with the Concierge switching a chat himself after repeated refusals</span>
+            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; refusal failover to the uncensored desk, an opt-in pre-screen, quick-hide integration, a Try Uncensored shield on every reply, and a three-state per-chat control (Moderated, Unmoderated, Locked) settable at creation as well as mid-conversation, with the Concierge switching a chat himself after repeated refusals</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

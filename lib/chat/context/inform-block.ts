@@ -40,7 +40,7 @@
  * swipe: they are in force for every prompt from now on, and a swipe is one.
  *
  * Nothing else reads `chat_informs` on the prompt path. Design of record:
- * `docs/developer/features/salon-inform.md`.
+ * `docs/developer/features/complete/salon-inform.md`.
  *
  * @module lib/chat/context/inform-block
  */

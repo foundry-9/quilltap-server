@@ -6,7 +6,7 @@ API reference for Quilltap v4.3 and later.
 >
 > - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert/sync actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
-> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `merge`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `inform`, `mailbox`, `memories`, `merge`, `outfit`, `participants`, `photo-albums`, `rebuild-summary`, `regenerate-avatar`, `render-conversation`, `retry-image-uncensored`, `rng`, `run-tool`, `save-image`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
 > - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
 > - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
 > - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`, `carina`, `suparna`. See `lib/schemas/chat.types.ts`.
@@ -31,7 +31,7 @@ API reference for Quilltap v4.3 and later.
 > - **Connection-profile fallback chains** — `fallbackProfileId` (the understudy) and `allowTierFallback` on connection profiles. Chains are capped at three attempts and never recurse. See [Connection Profiles](#connection-profiles).
 > - **Image-profile LoRA adapters and model options** — the reserved `loras` parameter key (validated by `ImageLoraSpecSchema`), the per-model `loraSupport` block on the models response, and `POST /api/v1/image-profiles?action=lora-metadata` for reading a LoRA source's public HuggingFace card.
 > - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`. *Superseded in 4.10 by the three states; see below.*
-> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `photo-albums`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`. This supersedes the v4.3 list above.
+> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `impersonation-voice-preview`, `inform`, `photo-albums`, `rebuild-summary`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `retry-image-uncensored`, `rng`, `run-tool`, `save-image`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`. This supersedes the v4.3 list above.
 > - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
 > - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
 
@@ -533,6 +533,8 @@ Update chat settings.
   "conciergeSettings": { "enabled": true, "display": { "mode": "BLUR", "showWarningBadges": true }, "...": "the whole object, as in GET" }
 }
 ```
+
+Further accepted fields (each optional, same shapes as in the `GET` response): `tokenDisplaySettings`, `customTools`, `agentModeSettings`, `storyBackgroundsSettings`, `contextCompressionSettings`, `autoLockSettings`, `compositionModeDefault`, `composerSpellcheck`, `composerEmoji`, `composerUnicode`, `impersonationVoiceMode` (`'off'` / `'ask'` / `'always'`), `textReplacementsEnabled`, `autonomousRoomSettings`, `thinkingDisplay`, `autoScrollOnResponseComplete`, `answerConfirmationSettings`, `smartTypographySettings`.
 
 `conciergeSettings` is validated with `ConciergeSettingsSchema` (a malformed object is a `400`). The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
 
@@ -1561,6 +1563,14 @@ Remove a tag from a character.
 }
 ```
 
+#### `GET /api/v1/characters/[id]?action=depiction-guidelines`
+
+Read the character's depiction guidelines (the Ariel Clause), the `depiction-guidelines.md` file at the root of the character's own vault. Single-tier and raw, no fallback. Returns `{ content }`; `content` is `''` when the file is absent or the character has no vault.
+
+#### `PUT /api/v1/characters/[id]?action=depiction-guidelines`
+
+Write the file. **Request Body**: `{ "content": "..." }`. Returns `{ success: true }`. Blank content deletes the file; a character with no document vault is a `400`.
+
 ---
 
 #### Character Plugin Data
@@ -2002,7 +2012,7 @@ All four tiers' item endpoints (General, character, project, group) are one impl
 
 ##### Wardrobe folders (every tier's collection route)
 
-The same five actions on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
+The same actions (five folder actions plus `instructions`) on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
 
 | Verb | Action | Body | Result |
 |---|---|---|---|
@@ -2011,6 +2021,8 @@ The same five actions on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`,
 | `POST` | `?action=rename-folder` | `{ path, name }` | `{ folder }`; `name` is one segment; items follow (the path is the truth); a sibling holding the name in any casing is a **409**; a missing folder is a **404** |
 | `POST` | `?action=delete-folder` | `{ path }` | `{ movedItems, movedFolders }`; items (archived included) and subfolders move up to the parent, merging case-insensitively; only folder rows are deleted; a folder holding non-item files (anything that is not a parseable item `.md`), or a subfolder of its own name, is a **409** before anything moves |
 | `POST` | `?action=move-items` | `{ itemIds, folder }` | `{ items }` (serialised with `origin` and `wear`); one projection for the batch; an id not filed in this tier (a borrowed item) is a **400** naming it |
+| `GET` | `?action=instructions` | — | `{ instructions: string \| null }` — the tier's dressing-instructions file (`null` when absent or the tier has no store yet); a read probe that never provisions (General is the one tier that provisions on read) |
+| `POST` | `?action=instructions` | `{ instructions: string \| null }` | `{ instructions }` — written trimmed; `null` or blank clears the file and answers `{ instructions: null }`. Clearing on an unprovisioned General is a no-op; a write against an archived character is a **409** |
 
 Folder writes against an archived character's vault are a **409**, like every other write.
 
@@ -2039,6 +2051,7 @@ One route for an item's pictures in every tier; the item's container rides in th
 | `GET` | — | — | `{ current: fileId \| null, images: [{ fileId, url, thumbnailUrl, source, createdAt, prompt?, model? }] }`, newest first |
 | `POST` | `generate` | `{ imageProfileId? }` | `201 { image, current, prompt, subject: 'worn'\|'catalogue', profile: { id, name }, rerouted, trail }` |
 | `POST` | `upload` | multipart `file` (JPEG/PNG/WebP/GIF, ≤ 10 MB) and optional `kind: 'uploaded'\|'imported'` | `201 { image, current }` |
+| `POST` | `link-image` | `{ fileId }` | `201 { image, current }` — copies an existing image file's bytes (e.g. another item's picture or a gallery image) into this item as its own picture, de-duplicated by sha256, and makes it current; deleting it never touches the source. A file that is not an image or has no readable blob is a **400** `That picture cannot be linked` |
 | `POST` | `set-current` | `{ fileId }` | `{ current }` |
 | `POST` | `delete-image` | `{ fileId }` | `{ current }` — the next-newest becomes current |
 | `GET` | `save-targets` | — | `{ albums: PhotoAlbumOption[] }` — every enabled store, archived characters' vaults excluded, Quilltap General flagged `isDefault` |
@@ -2187,7 +2200,7 @@ Remove a photo from the gallery. `[linkId]` is the `doc_mount_file_links.id` ret
 
 ### Character Avatar Rolls
 
-The avatar configuration cache, per character: one stored portrait per configuration of outfit, provider, image profile and model. Membership is `files.generationKey IS NOT NULL` plus the character's id in `files.tags` — never a path, since rolls live at `character-avatars/…` (pre-vault), `images/history/…` (since), or `photos/…` (once kept). Backed by `lib/photos/avatar-rolls-service.ts`; design of record: [avatar-configuration-cache.md](features/avatar-configuration-cache.md).
+The avatar configuration cache, per character: one stored portrait per configuration of outfit, provider, image profile and model. Membership is `files.generationKey IS NOT NULL` plus the character's id in `files.tags` — never a path, since rolls live at `character-avatars/…` (pre-vault), `images/history/…` (since), or `photos/…` (once kept). Backed by `lib/photos/avatar-rolls-service.ts`; design of record: [avatar-configuration-cache.md](features/complete/avatar-configuration-cache.md).
 
 #### `GET /api/v1/characters/[id]/avatar-rolls`
 
@@ -2476,6 +2489,14 @@ Remove a participant from the chat.
   "participantId": "participant-uuid"
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=rebuild-system-prompt`
+
+Force-rebuild one participant's cached identity stack (the system-prompt prefix), to pick up character edits the compiler does not auto-invalidate. Backs the Participants sidebar's "Rebuild system prompt" button.
+
+**Request Body**: `{ "participantId": "participant-uuid" }`
+
+**Response**: `200 OK` — `{ ok: true, chat }` (the refreshed chat). `400` without `participantId`, or for a participant that is not an LLM-controlled `CHARACTER`; `404` for an unknown chat or participant; `500` if compilation fails.
 
 #### `POST /api/v1/chats/[id]?action=merge-conversation`
 
@@ -2860,6 +2881,12 @@ wearable pool (their own groups; the project and General tiers read once for the
 rule every prompt path uses (`resolveEquippedOutfitForCharacter`): composites are expanded, and each
 leaf is listed under every slot its own `types` cover — not only the slot it was equipped to.
 
+#### `GET /api/v1/chats/[id]?action=accessible-stores`
+
+The document stores the Open-Document picker offers for this chat. Default mode returns only what the chat can reach: each present character participant's vault, the official and linked stores of the groups those characters belong to (`isGroupStore: true`), stores linked to the chat's project, and Quilltap General. `?all=true` ("look everywhere") returns every enabled store, character vaults labelled by owner. The project's official store is always held back and returned separately as `projectLibrary`.
+
+**Response**: `200 OK` — `{ stores: [{ mountPointId, name, label, kind: 'character'|'document-store', mountType, storeType, characterId?, isGroupStore? }], projectLibrary: { mountPointId, name, mountType } | null }`. `404` for an unknown chat.
+
 #### `GET /api/v1/chats/[id]?action=group-stores`
 
 List the document stores belonging to the groups that this chat's **user-persona** characters
@@ -2912,6 +2939,18 @@ Add a tool result as a TOOL message to the chat.
   "images": []
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=update-tool-settings`
+
+Replace the chat's disabled-tool lists.
+
+**Request Body**: `{ "disabledTools": ["tool_name"], "disabledToolGroups": ["group"] }` — both default to `[]`.
+
+**Response**: `200 OK` — `{ disabledTools, disabledToolGroups }`. Also sets `forceToolsOnNextMessage` so the next message announces the change to the model.
+
+#### `POST /api/v1/chats/[id]?action=render-conversation`
+
+Queue an on-demand Scriptorium render of the conversation with a full re-embed of its chunks. No body. **Response**: `200 OK` — `{ message, jobId, isNew }`; `500` if the job cannot be queued.
 
 #### `POST /api/v1/chats/[id]?action=run-tool`
 
@@ -3400,7 +3439,7 @@ Load the chat's messages.
 
 ### Scenario Builder
 
-The Host researches a place and time and drafts a cast-agnostic starting scene. A run is ephemeral: no chat, no messages, no participant — the only durable trace is the LLM log rows typed `SCENARIO_BUILDER`. It runs in the parent process inside the route (never a background job). See `lib/services/scenario-builder/` and [features/scenario-builder.md](features/scenario-builder.md).
+The Host researches a place and time and drafts a cast-agnostic starting scene. A run is ephemeral: no chat, no messages, no participant — the only durable trace is the LLM log rows typed `SCENARIO_BUILDER`. It runs in the parent process inside the route (never a background job). See `lib/services/scenario-builder/` and [features/complete/scenario-builder.md](features/complete/scenario-builder.md).
 
 #### `POST /api/v1/scenario-builder?action=build`
 
@@ -3584,6 +3623,23 @@ Deletes only the batch's *pending* rows — or, for a standing batch, every row 
 **Response**: `200 OK` — `{ "success": true, "removed": 2, "recordDeleted": true }`. `404` when the batch is unknown; `400` when it belongs to another conversation.
 
 ---
+
+### Chat Documents (Document Mode)
+
+The chat-scoped Document Mode actions. All are `POST /api/v1/chats/[id]?action=<action>` with a JSON body, and all resolve paths with the operator override. The standalone, chat-less equivalents are under [Documents](#documents-standalone-document-mode). `scope` is `'project' | 'document_store' | 'general'` (default `'project'`; `project` with no `filePath` on a chat with no project falls back to `general`). `mountPoint` names the store for `document_store`. Open documents persist as `chat_documents` rows; `chatDocumentId` is a row id. A `document` object is `{ id, filePath, scope, mountPoint, displayTitle }`. An unknown chat is a `400 Chat not found`. Mutating actions post a Librarian announcement and return it as `librarianMessage` (or `null`).
+
+| Action | Body | Response |
+|---|---|---|
+| `active-document` | — | `{ document \| null }` — the earliest-opened open document (legacy single-pane) |
+| `open-documents` | — | `{ documents }` — every open document, oldest first; content is fetched per document with `read-document` |
+| `recent-documents` | — | `{ documents }` — this chat's documents first, then recent ones from other chats, deduped by file identity and capped; each adds `chatId`, `isActive`, `fromCurrentChat`, `updatedAt` |
+| `open-document` | `{ filePath?, title?, scope?, mountPoint?, targetFolder?, mode?: 'split'\|'focus' }` | `{ document, content, mtime, librarianMessage }` — no `filePath` creates a blank document in `targetFolder`; a missing named file is a **404**; sets the chat's `documentMode` (default `split`) |
+| `close-document` | `{ chatDocumentId? }` | `{ success }` — omitted id closes the earliest-opened; `documentMode` returns to `normal` when the last one closes |
+| `read-document` | `{ filePath, scope, mountPoint? }` | `{ content, mtime }`; unresolvable path **400**, missing file **404** |
+| `resolve-document` | `{ filePath, scope, mountPoint? }` | `{ exists, kind }` — an existence probe that never returns bytes, used to gate clickable `qtap://` links; any resolution failure answers `{ exists: false, kind: 'other' }`. The `self` mount resolves only when the chat has exactly one character participant |
+| `write-document` | `{ filePath, scope, mountPoint?, content, mtime?, diffContent? }` | `{ success, mtime, librarianMessage }` — a stale `mtime` is a **409**; `diffContent` makes the Librarian announce the save |
+| `rename-document` | `{ newTitle, chatDocumentId? }` | `{ document, librarianMessage }` — `newTitle` is the new basename in the same directory (old extension inherited when omitted, separators rejected); other chats' recent-document rows follow the rename |
+| `delete-document` | `{ chatDocumentId? }` | `{ success, librarianMessage }` — deletes the underlying file, closes the document and recomputes `documentMode` |
 
 ### Chat Photo Albums
 
@@ -5280,6 +5336,26 @@ the CLI does not re-validate.
 or written by the sync — the store's own post-write hooks re-index, because
 the sync writes through the same chokepoints as every other writer.
 
+#### `POST /api/v1/mount-points/[id]?action=reindex`
+
+Re-run text extraction for the store's files (PDF and DOCX; text-native files only when they have no chunks yet) and re-chunk them. Without `force`, only links that need it are processed (never extracted, pending, failed or skipped); with `force`, every extractable link in scope is. Engine: `reindexLinks` (`lib/mount-index/reindex.ts`).
+
+**Request Body** (optional; an empty body means the whole store):
+
+```json
+{ "path": "chapters", "force": false }
+```
+
+`path` scopes the work to a file or folder (and everything under it).
+
+**Response**: `200 OK` — `{ mountPointId, mountName, processed, succeeded, failed, skipped, errors }`. A malformed JSON body is a `400`; an unknown store a `404`.
+
+#### `POST /api/v1/mount-points/[id]?action=embed`
+
+Queue `EMBEDDING_GENERATE` jobs for the store's chunks, using the default embedding profile only. Without `force`, only chunks with no embedding are queued; with `force`, every chunk in scope. Same optional `{ path?, force? }` body as `reindex`. Engine: `enqueueEmbeddingJobsScoped`.
+
+**Response**: `200 OK` — `{ mountPointId, mountName, jobs: [{ id, kind: 'embed', status: 'queued' }], queued, skipped }`. No default embedding profile is a `500`.
+
 #### `GET /api/v1/mount-points/[id]/files`
 
 List indexed files plus the folder structure for a mount point.
@@ -6835,17 +6911,7 @@ Add a character to the group.
 
 Remove a character from the group.
 
-#### `GET /api/v1/groups/[id]?action=stores`
-
-List the document stores linked to the group.
-
-#### `POST /api/v1/groups/[id]?action=linkStore`
-
-Link a document store to the group.
-
-#### `DELETE /api/v1/groups/[id]?action=unlinkStore`
-
-Unlink a document store from the group.
+A group's linked document stores are managed through `/api/v1/groups/[id]/mount-points` (below), not through `?action=` verbs.
 
 #### `GET /api/v1/groups/[id]/mount-points`
 

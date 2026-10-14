@@ -1,6 +1,6 @@
 /**
  * Regression fixture for mechanism 6 of the anti-committee spec
- * (docs/developer/features/prompt-trust-and-anti-committee.md §10.2):
+ * (docs/developer/features/complete/prompt-trust-and-anti-committee.md §10.2):
  * manufactured consent in memory extraction.
  *
  * A user-controlled persona opens the turn with an out-of-character stage

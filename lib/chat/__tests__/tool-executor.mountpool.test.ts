@@ -1,5 +1,5 @@
 /**
- * Scenario Builder mount pool (docs/developer/features/scenario-builder.md
+ * Scenario Builder mount pool (docs/developer/features/complete/scenario-builder.md
  * §5.2): `mountPool` and `operatorSurface` are mutually exclusive on
  * `ToolExecutionContext` — the executor refuses a context that sets both,
  * before doing any real tool-call work.

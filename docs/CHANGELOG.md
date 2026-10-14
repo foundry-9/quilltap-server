@@ -4,6 +4,15 @@
 
 ### 4.10-dev
 
+#### Release checklist 13: documentation freshness
+
+- README: the Concierge section describes the three states (Moderated, Unmoderated, Locked), refusal failover, the opt-in pre-screen and Try uncensored instead of the retired four states and global mode. Memory describes the active/archived tiers and the single Maintenance pass instead of the Memory Gate and cleanup. Added message search's FTS index, Browse all scenarios / Reload from source, the Scenario Builder, subprompts, progressions, Inform, and wardrobe folders, pictures and the wear ledger.
+- About page (`AboutView.tsx`): the Commonplace Book, Aurora, Salon and Concierge blurbs updated for 4.10. The Commonplace Book blurb no longer mentions the memory gate or deduplication.
+- API.md: documented the wardrobe `link-image` and `?action=instructions` actions, character `depiction-guidelines`, mount-point `reindex` / `embed`, chat `rebuild-system-prompt` / `accessible-stores` / `update-tool-settings` / `render-conversation` and the chat-scoped document actions, and the remaining `PUT /settings/chat` fields. Removed the group `stores` / `linkStore` / `unlinkStore` actions, which do not exist.
+- CLAUDE.md: fixed the Carina design link (`features/complete/carina.md`) and added glossary rows for Ariel, Suparṇā and Brahma. DEVELOPMENT.md and the checklist-13 command point at `app/about/AboutView.tsx`, which holds the About page content.
+- Feature specs: moved the finished ones to `features/complete/` (the Concierge overhaul and its five phases, Scenario Builder, composer spellcheck, composer text replacement, recall multiplier retuning, the recall probe-set runbook, the LLM API cost breakdown, and, after live verification, Salon Inform, prompt trust and anti-committee, the avatar configuration cache, Built-in TF-IDF memory tuning and composer smart typography) and updated their links. Fixed the stale status lines on the spellcheck and text-replacement specs, ticked the Scenario Builder task list and the ROADMAP's Concierge overhaul item. Deleted the native-port specs (that work continues as v5), the unbuilt local-file MCP server spec (`MCP.md`, superseded by the Scriptorium and doc tools) and the Fastify/SPA split plan (`distant_future_separate_api.md`).
+- 4.10.0 release notes: Repairs covers bugs through 246 and adds bugs 245 and 246, the OpenAI-compatible cache-hit fix and the new-account restore seat remap. Removed a duplicated parenthetical in Upgrading.
+
 #### Release checklist 12: CLI docs, completions and tooling
 
 - Checked every CLI flag and verb added since 4.9.2 (`sync`, `anchor-probe`, `memories maintain`, `validate --repair`, the `recall-replay` tuning flags, `--tier`, `--cap`) against the README, the subcommand `--help` text and the bash/zsh/fish completions. All were present.
@@ -125,7 +134,7 @@ Structural Phase F of `docs/developer/features/complete/memory-system-refactor.m
 
 #### Built-in TF-IDF profile: memory tuning; fix bug 243
 
-Spec: `docs/developer/features/builtin-tfidf-memory-tuning.md`. One migration (`add-tfidf-text-shape-version-v1`: `tfidf_vocabularies.textShapeVersion INTEGER DEFAULT 0`). No plugin change.
+Spec: `docs/developer/features/complete/builtin-tfidf-memory-tuning.md`. One migration (`add-tfidf-text-shape-version-v1`: `tfidf_vocabularies.textShapeVersion INTEGER DEFAULT 0`). No plugin change.
 
 - BUILTIN embeds leave out a memory's anchor line. Memory writers pass `lexicalText: lexicalEmbeddingTextFor(memory)` (`summary\n\ncontent`, `lib/memory/index-store/embedding-text.ts`) to `generateEmbeddingForUser`; `generateBuiltinEmbedding` embeds it instead of the text, every other provider ignores it, and non-memory text (help sections, queries) is embedded as given. The refit fits on the same text. Under TF-IDF the anchor's dates and place names dominated short memories: identical text with different anchors scored ~0.4–0.5, unrelated facts sharing a place ~0.4. `embeddingTextFor` is unchanged and still the only builder (its base is `lexicalEmbeddingTextFor`); neural profiles embed exactly what they did.
 - Admission thresholds per provider: `ADMISSION_THRESHOLDS_TFIDF` (near-duplicate 0.80, reinforce 0.40, related 0.20) beside the neural `ADMISSION_THRESHOLDS`, picked by `admissionThresholdsForProvider`. `AdmitPreparedRequest.embeddingProvider` carries the candidate's provider to the parent; missing reads as neural. The anchor probe uses the same picker and flags a lexical profile (`lexicalProfile`, `note`; the CLI prints the note), where its two sides are the same text. One predicate for the cosine scale, `isLexicalEmbeddingProvider` (`lib/embedding/cosine-scale.ts`), used by the recall floor, the R1 boost gate, admission and consolidation. `AdmissionThresholds` is now an interface; `MemorySettings` gains `admissionTfidf`.
@@ -803,7 +812,7 @@ Implements `docs/developer/features/memory-consolidation-and-tiers.md` (workstre
 
 #### Runbook: recall probe set
 
-- New `docs/developer/features/recall-probe-set-runbook.md`: step-by-step spec for validating the
+- New `docs/developer/features/complete/recall-probe-set-runbook.md`: step-by-step spec for validating the
   recall multiplier retuning on a local machine. Covers choosing 8–12 probe turns with gold
   memories approved before any replay, the baseline `recall-replay` runs, building R7, a fixed
   sweep of candidate tunings with acceptance criteria, and moving the winner into code. Has a
@@ -833,7 +842,7 @@ Implements `docs/developer/features/memory-consolidation-and-tiers.md` (workstre
 
 #### Spec: recall multiplier retuning
 
-- New `docs/developer/features/recall-multiplier-retuning.md` (proposed, no code). Two Friday
+- New `docs/developer/features/complete/recall-multiplier-retuning.md` (proposed, no code). Two Friday
   recall replays show stacked boosts (up to ×2.43, mostly the fresh-event boost) putting
   cosine-0.31–0.40 memories ahead of the turn's best matches (0.51–0.64). Proposes gating boosts on
   relevance, capping the stacked boost, lowering the fresh boost, choosing entity anchors by
@@ -1307,7 +1316,7 @@ Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
 
 #### Spec: prompt trust and anti-committee safeguards
 
-- Added `docs/developer/features/prompt-trust-and-anti-committee.md`, the approved design for
+- Added `docs/developer/features/complete/prompt-trust-and-anti-committee.md`, the approved design for
   stopping long multi-character roleplay from drifting into "the committee": characters governing
   the user's persona with votes, sign-offs, and standing conditions, contradicting narrated events
   from their notes, treating silence as consent, and remembering temporary measures as permanent.
@@ -1776,7 +1785,7 @@ plugins. No behavior changes are intended and no code changed.
 
 #### Docs: Concierge overhaul specs
 
-- Added `docs/developer/features/concierge-overhaul.md` and five self-contained phase specs
+- Added `docs/developer/features/complete/concierge-overhaul.md` and five self-contained phase specs
   (refusal-driven failover at every call site, a per-chat refusal ledger with auto-switch, three
   chat states Moderated / Unmoderated / Locked, the Concierge's own Settings tab with the global
   mode retired, and Salon polish including "Try uncensored"). Proposal only; no code change.
@@ -2025,7 +2034,7 @@ plugins. No behavior changes are intended and no code changed.
 
 #### Docs: plan for the Scenario Builder
 
-- Added `docs/developer/features/scenario-builder.md`, the handoff spec for a Host-run scenario
+- Added `docs/developer/features/complete/scenario-builder.md`, the handoff spec for a Host-run scenario
   builder beside the custom scenario text on the New Chat form and the in-chat Change scenario
   control: four inputs (real or in-world, location, time, details), a connection-profile
   dropdown, an ephemeral tool loop generalised from the Brahma Console's one-shot service, web
@@ -2400,7 +2409,7 @@ New table `chat_informs`, migration `add-chat-informs-table-v1`. Help: `help/inf
 
 #### Docs: plan for Inform, out-of-character information delivered before a character's next turn
 
-Added `docs/developer/features/salon-inform.md`, a plan for a Salon composer button that lets the
+Added `docs/developer/features/complete/salon-inform.md`, a plan for a Salon composer button that lets the
 operator write a short second-person passage and target one, several, or every LLM-controlled
 character with it. Each target receives the passage verbatim as a system block right after their
 system prompt on their next generation, then it is consumed; a Host transcript message records

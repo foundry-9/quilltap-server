@@ -7,7 +7,7 @@
 | **Fixed** | 2026-10-12 (comment only; no behaviour change) |
 | **Severity** | **None**. The audit's "Medium" read the comment as the contract |
 | **Who it bites** | nobody |
-| **Provenance** | Original to v4. The entity-anchor union came in with the recall relevance fix; R5 of [recall-multiplier-retuning.md](../../features/recall-multiplier-retuning.md) (2026-10-08) later made related expansion the only path exempt from the floor |
+| **Provenance** | Original to v4. The entity-anchor union came in with the recall relevance fix; R5 of [recall-multiplier-retuning.md](../../features/complete/recall-multiplier-retuning.md) (2026-10-08) later made related expansion the only path exempt from the floor |
 | **Defect site** | the comments on `entityAnchors` and above the hybrid step in `searchMemoriesSemantic` (`lib/memory/memory-service.ts`, were lines 817-818 and 1018) |
 | **Fix site** | same comments |
 | **v5 status** | Unaffected |

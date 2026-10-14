@@ -7,7 +7,7 @@
 | **Fixed** | 2026-08-13 |
 | **Severity** | Medium (cosmetic, but pervasive and long-standing: curly-quoted dialogue has *never* been highlighted in any chat falling back to the defaults, and most model output is curly-quoted) |
 | **Who it bites** | anyone in a chat with no roleplay template, or one whose template supplies no `renderingPatterns` / a null `dialogueDetection`, whose text contains curly quotes — which is most LLM output, anything pasted from Word/Pages/Scrivener, and anything typed on macOS with system smart quotes on |
-| **Provenance** | Faithful — v5 copied the defect byte-for-byte and says so in a comment. Surfaced 2026-08-13 while spec'ing [composer-smart-typography](../../features/composer-smart-typography.md), which cannot ship until this is fixed |
+| **Provenance** | Faithful — v5 copied the defect byte-for-byte and says so in a comment. Surfaced 2026-08-13 while spec'ing [composer-smart-typography](../../features/complete/composer-smart-typography.md), which cannot ship until this is fixed |
 | **Defect site** | `lib/chat/roleplay-rendering.ts:32-33` (`DEFAULT_RENDERING_PATTERNS`, the dialogue entry) and `:43-49` (`DEFAULT_DIALOGUE_DETECTION`) |
 | **Fix site** | `lib/chat/roleplay-rendering.ts` (both defaults) + fallback-path regression coverage in `__tests__/unit/lib/services/markdown-renderer.service.test.ts` plus a bug-62 block in the existing `components/chat/__tests__/MessageContent.test.tsx` |
 | **v5 status** | Owed (Faithful) — v5 reproduces it deliberately; the fix moves v5's captured parity corpus. See [v5](#v5) |
@@ -198,7 +198,7 @@ it later is a behaviour change, and adding it silently is worse.
 
 ## Why this is on the critical path
 
-[composer-smart-typography](../../features/composer-smart-typography.md) applies
+[composer-smart-typography](../../features/complete/composer-smart-typography.md) applies
 curly quotes as a **remark plugin**, and the roleplay layer runs *after* parsing —
 on the HTML string on the server, on React children on the client. So the
 typographer curls the text before the dialogue matcher ever sees it.

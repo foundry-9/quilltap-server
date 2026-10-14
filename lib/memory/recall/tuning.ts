@@ -12,7 +12,7 @@
  * path (R7), so each constant can be tried against the probe set without a code
  * change; its saved-signals input ({@link RecallReplaySignalsSchema}) lives here
  * too, so the route can validate both without loading the replay engine. Design of record:
- * docs/developer/features/recall-multiplier-retuning.md.
+ * docs/developer/features/complete/recall-multiplier-retuning.md.
  *
  * Pure + I/O-free, like `recall/tags.ts`, so it is safe in the job child.
  */

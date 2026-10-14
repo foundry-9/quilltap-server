@@ -3,9 +3,9 @@
 **Status:** Implemented (2026-10-08) — R1, R2, R3, R4 and R7 in code; R5 pinned by test; R6 built but off. See [Implementation notes](#implementation-notes)
 **Owner:** Charlie
 **Drafted:** 2026-10-08
-**Follows:** [memory-recall-and-housekeeping-fixes.md](./complete/memory-recall-and-housekeeping-fixes.md)
+**Follows:** [memory-recall-and-housekeeping-fixes.md](memory-recall-and-housekeeping-fixes.md)
 ("Not in scope: retuning `RECALL_MULTIPLIERS` — do it with the replay harness after F4–F7")
-**Related:** [memory-consolidation-and-tiers.md](./complete/memory-consolidation-and-tiers.md)
+**Related:** [memory-consolidation-and-tiers.md](memory-consolidation-and-tiers.md)
 **Validation runbook:** [recall-probe-set-runbook.md](./recall-probe-set-runbook.md)
 (the probe set, baseline, R7 and sweep, step by step, with a progress tracker)
 

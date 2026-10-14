@@ -25,7 +25,7 @@
  * counts; `enqueueRefitIfDue` is the one serialised check-then-enqueue, used
  * by the debounced `scheduleRefit` and by `checkBuiltinRefit` (the default
  * profile, from boot and the scheduled maintenance pass).
- * Design of record: docs/developer/features/builtin-tfidf-memory-tuning.md §6.
+ * Design of record: docs/developer/features/complete/builtin-tfidf-memory-tuning.md §6.
  *
  * @module embedding/builtin-refit-policy
  */

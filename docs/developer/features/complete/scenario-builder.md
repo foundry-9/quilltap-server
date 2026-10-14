@@ -257,29 +257,29 @@ No new entity. Saves invalidate `queryKeys.scenarios.all`; if `REALTIME_TOPICS` 
 ## 9. Engineering tasks (phased; delegate the mechanical ones)
 
 ### Phase 0 — scoping plumbing (delegable, pure)
-- [ ] `resolveScenarioBuilderMountPool` + tests.
-- [ ] `mountPool` on the three context types; search handler, path resolver, grep/list-files guards; mutual exclusion with `operatorSurface`.
-- [ ] Builder `search` variant (documents/knowledge); snapshot test updated.
+- [x] `resolveScenarioBuilderMountPool` + tests.
+- [x] `mountPool` on the three context types; search handler, path resolver, grep/list-files guards; mutual exclusion with `operatorSurface`.
+- [x] Builder `search` variant (documents/knowledge); snapshot test updated.
 
 ### Phase 1 — engine (not delegable: touches Brahma)
-- [ ] `runOneShotToolLoop` extracted; `runBrahmaQuery` re-pointed; existing Brahma tests green.
-- [ ] `buildTools` `docToolsMode` + `pluginToolAllowlist`; every existing caller mapped to the old behaviour.
-- [ ] `streamMessage` `logType`; `SCENARIO_BUILDER` log type; export-schema check.
-- [ ] `runScenarioBuilder`, system prompt, user message builder + tests.
+- [x] `runOneShotToolLoop` extracted; `runBrahmaQuery` re-pointed; existing Brahma tests green.
+- [x] `buildTools` `docToolsMode` + `pluginToolAllowlist`; every existing caller mapped to the old behaviour.
+- [x] `streamMessage` `logType`; `SCENARIO_BUILDER` log type; export-schema check.
+- [x] `runScenarioBuilder`, system prompt, user message builder + tests.
 
 ### Phase 2 — route (delegable)
-- [ ] `POST ?action=build` SSE with abort; `GET ?action=capabilities`; route tests; API.md.
+- [x] `POST ?action=build` SSE with abort; `GET ?action=capabilities`; route tests; API.md.
 
 ### Phase 3 — dialog (delegable once §6 is read in full)
-- [ ] Shared SSE parser extracted from the Brahma hook; Brahma hook re-pointed and its tests green.
-- [ ] `ScenarioBuilderDialog`, `SaveScenarioDialog`, `useScenarioBuilderRun`; `qt-*` only.
+- [x] Shared SSE parser extracted from the Brahma hook; Brahma hook re-pointed and its tests green.
+- [x] `ScenarioBuilderDialog`, `SaveScenarioDialog`, `useScenarioBuilderRun`; `qt-*` only.
 
 ### Phase 4 — wiring (not delegable)
-- [ ] New Chat button, `scenarioEditorKey` remount, `refetchScenarioTiers`, preset selection after save.
-- [ ] In-chat button, `castCharacterIds` prop from `ChatSidebar`, custom-text fill.
+- [x] New Chat button, `scenarioEditorKey` remount, `refetchScenarioTiers`, preset selection after save.
+- [x] In-chat button, `castCharacterIds` prop from `ChatSidebar`, custom-text fill.
 
 ### Phase 5 — docs + CHANGELOG
-- [ ] Everything in §7. `npm run lint` (spelling sweep and `qt-*` gate), `npx tsc`, `npm run test:unit`.
+- [x] Everything in §7. `npm run lint` (spelling sweep and `qt-*` gate), `npx tsc`, `npm run test:unit`.
 
 ## 10. Verification (live, on the V4test instance — never Friday)
 
@@ -297,9 +297,9 @@ No new entity. Saves invalidate `queryKeys.scenarios.all`; if `REALTIME_TOPICS` 
 ## 10a. Verification record (V4test, 2026-09-23)
 
 All ten §10 steps were run on V4test with the default profile (OpenAI `gpt-5`). Two defects
-surfaced and were fixed in the same change: [bug 165](../bugs/fixed/bug-165-scenario-create-transient-id.md)
+surfaced and were fixed in the same change: [bug 165](../../bugs/fixed/bug-165-scenario-create-transient-id.md)
 (a character scenario's create response carried a transient id, so the picker could not select
-it) and [bug 166](../bugs/fixed/bug-166-modal-no-group-scenarios.md) (the workspace New Chat
+it) and [bug 166](../../bugs/fixed/bug-166-modal-no-group-scenarios.md) (the workspace New Chat
 dialog never offered group scenarios). Fixing 166 also led to the save handler checking the
 re-read tiers before selecting anything.
 

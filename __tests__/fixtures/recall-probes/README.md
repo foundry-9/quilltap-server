@@ -1,7 +1,7 @@
 # Recall probe fixture
 
 `probe-set.json` is a synthetic stand-in for the Friday probe set
-([recall-probe-set-runbook.md](../../../docs/developer/features/recall-probe-set-runbook.md)):
+([recall-probe-set-runbook.md](../../../docs/developer/features/complete/recall-probe-set-runbook.md)):
 nine turns named after its slots (A, B, C, F1, F2, M, O2, O3, O4), one
 character's corpus of 158 memories with 64-dimension vectors whose cosines to
 each turn's query are set by construction, and an embedding table for every

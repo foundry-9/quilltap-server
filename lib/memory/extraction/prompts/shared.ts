@@ -136,7 +136,7 @@ state candidates.`
  * spec: a character states a condition, the turn ends on it, and the
  * extractor records "{{user}} agreed" for every observer. Assent must be
  * spoken by the agreeing party; proposals stay proposals; limits stay in.
- * See docs/developer/features/prompt-trust-and-anti-committee.md §8.
+ * See docs/developer/features/complete/prompt-trust-and-anti-committee.md §8.
  */
 export const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIONS — read these strictly
 - Record an agreement ONLY when the agreeing party's own words of

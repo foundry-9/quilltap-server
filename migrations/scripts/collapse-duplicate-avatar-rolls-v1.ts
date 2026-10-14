@@ -2,7 +2,7 @@
  * Migration: Collapse Duplicate Avatar Rolls
  *
  * Brings existing avatars into the configuration cache
- * (`docs/developer/features/avatar-configuration-cache.md`): one image per
+ * (`docs/developer/features/complete/avatar-configuration-cache.md`): one image per
  * character per configuration, instead of a fresh provider call — and a fresh
  * stored image — every time a character put the same coat back on.
  *

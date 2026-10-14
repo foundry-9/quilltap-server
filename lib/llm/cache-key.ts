@@ -17,7 +17,7 @@
  *
  * `PROMPT_CACHE_STRUCTURE_VERSION` invalidates caches on intentional
  * structural changes (tool-schema, system-prompt structure, persona-block
- * format). Bump policy: see docs/developer/features/llm_api_costs_breakdown.md.
+ * format). Bump policy: see docs/developer/features/complete/llm_api_costs_breakdown.md.
  *
  * @module llm/cache-key
  */
