@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.10-dev
+### 4.10.0
 
 #### Docs: README rewritten for the undecided reader
 
