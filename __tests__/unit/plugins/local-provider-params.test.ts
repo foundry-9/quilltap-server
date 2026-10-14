@@ -292,6 +292,65 @@ describe('OpenAICompatibleProvider', () => {
     expect(final).not.toHaveProperty('toolCalls')
     expect(final).not.toHaveProperty('rawResponse')
   })
+
+  // Prompt-cache hits are folded into prompt_tokens on the wire; Quilltap's
+  // convention is that promptTokens/totalTokens exclude them so cached input
+  // never counts against token budgets.
+  describe('usage normalization', () => {
+    const cachedUsage = {
+      prompt_tokens: 1000,
+      completion_tokens: 50,
+      total_tokens: 1050,
+      prompt_tokens_details: { cached_tokens: 800 },
+    }
+
+    it('excludes cache hits from a non-streaming response and reports them in cacheUsage', async () => {
+      const provider = new OpenAICompatibleProvider('http://localhost:8080/v1')
+      getCreateMock().mockResolvedValue({ ...okCompletion, usage: cachedUsage })
+
+      const response = await provider.sendMessage(baseParams, '')
+      expect(response.usage).toEqual({ promptTokens: 200, completionTokens: 50, totalTokens: 250 })
+      expect(response.cacheUsage).toEqual({ cacheReadInputTokens: 800, cachedTokens: 800 })
+    })
+
+    it('excludes cache hits from the final stream chunk and keeps the raw block', async () => {
+      const provider = new OpenAICompatibleProvider('http://localhost:8080/v1')
+      getCreateMock().mockResolvedValue({
+        async *[Symbol.asyncIterator]() {
+          yield { choices: [{ delta: { content: 'hi' } }] }
+          yield { choices: [], usage: cachedUsage }
+        },
+      })
+
+      let final: Record<string, any> | undefined
+      for await (const chunk of provider.streamMessage(baseParams, '')) {
+        if (chunk.done) final = chunk as unknown as Record<string, any>
+      }
+      expect(final?.usage).toEqual({ promptTokens: 200, completionTokens: 50, totalTokens: 250 })
+      expect(final?.cacheUsage).toEqual({ cacheReadInputTokens: 800, cachedTokens: 800 })
+      expect(final?.rawProviderUsage).toEqual(cachedUsage)
+    })
+
+    it('leaves usage untouched, with no cacheUsage, when the endpoint reports no cache hits', async () => {
+      const provider = new OpenAICompatibleProvider('http://localhost:8080/v1')
+      getCreateMock().mockResolvedValue(okCompletion)
+
+      const response = await provider.sendMessage(baseParams, '')
+      expect(response.usage).toEqual({ promptTokens: 1, completionTokens: 1, totalTokens: 2 })
+      expect(response).not.toHaveProperty('cacheUsage')
+    })
+
+    it('never reports negative tokens when cached_tokens exceeds prompt_tokens', async () => {
+      const provider = new OpenAICompatibleProvider('http://localhost:8080/v1')
+      getCreateMock().mockResolvedValue({
+        ...okCompletion,
+        usage: { prompt_tokens: 10, completion_tokens: 0, total_tokens: 10, prompt_tokens_details: { cached_tokens: 20 } },
+      })
+
+      const response = await provider.sendMessage(baseParams, '')
+      expect(response.usage).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0 })
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

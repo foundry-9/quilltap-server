@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### Release checklist 8: plugin self-containment
+
+- Audited all 15 distributed plugins. None import app internals; all use only `@quilltap/plugin-types`, `@quilltap/plugin-utils`, third-party SDKs and Node built-ins, and every bundle inlines `plugin-utils`.
+- `@quilltap/plugin-utils` 2.7.1: `OpenAICompatibleProvider` now excludes prompt-cache hits (`prompt_tokens_details.cached_tokens`) from `promptTokens` / `totalTokens` and reports them in `cacheUsage`. The OpenAI-compatible plugin inherited the old behavior, so cache hits counted against autonomous-room token budgets.
+- Plugins now depend on `@quilltap/plugin-utils` ^2.7.1. Rebuilt bundles: openai-compatible 1.0.49 (picks up the fix), DeepSeek 1.0.28 and NanoGPT 1.2.10 (bundle changed only; both override the affected methods and already excluded cache hits).
+
 #### Release checklist 7: `qt-*` theme classes
 
 - Reviewed the 158 components changed since 4.9.2. The new `className` values are layout, sizing, or the theme-variable `text-foreground`; none hard-code palette colors.
