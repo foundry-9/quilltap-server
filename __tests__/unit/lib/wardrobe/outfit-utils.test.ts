@@ -6,6 +6,7 @@ import { resolveWearable } from '@/lib/wardrobe/wear-ops'
 import { buildWearablePool } from '@/lib/wardrobe/pool'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { HAIR_STYLING_PRECEDENCE_NOTE } from '@/lib/wardrobe/slot-guidance'
 import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
@@ -130,7 +131,7 @@ describe('wardrobe outfit utilities', () => {
         '- **bottom:** jeans',
         '- **footwear:** boots',
         '- **accessories:** signet ring',
-        '- **hair:** braided crown, silver pins',
+        `- **hair:** braided crown, silver pins (${HAIR_STYLING_PRECEDENCE_NOTE})`,
         '',
       ].join('\n'))
     })
@@ -162,7 +163,7 @@ describe('wardrobe outfit utilities', () => {
         '- naked',
         '- **footwear:** barefoot',
         '- **accessories:** no accessories',
-        '- **hair:** braided',
+        `- **hair:** braided (${HAIR_STYLING_PRECEDENCE_NOTE})`,
         '',
       ].join('\n'))
     })

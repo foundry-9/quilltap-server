@@ -32,10 +32,11 @@ Every wardrobe item belongs to one of five slots, which together compose a compl
 
 The Hair slot is the newest arrival and the one most liable to be misconstrued, so let us be perfectly plain about it. It holds a **coiffure**, not a head of hair. Your character's *natural* hair --- its colour, its length, whether it curls or lies flat --- has always lived in their physical description, and there it remains. What goes in the Hair slot is the deliberate *arrangement* of that hair: the plaited crown, the marcel waves, the severe bun that brooks no argument, and --- for the theatrically inclined --- the occasional wig.
 
-Three consequences follow, and they are worth committing to memory:
+Four consequences follow, and they are worth committing to memory:
 
 - **An empty Hair slot is not a bald character.** It simply means the hair is *au naturel*, unbothered by pins or tongs. Quilltap will say nothing whatever about it: not in Aurora's announcements, not in the scene's stage directions, not in a portrait or a Lantern backdrop. The other slots announce their vacancies (*topless*, *barefoot*), because a missing shoe is news; a missing hairdo is not.
 - **Hats remain Accessories.** A hat is worn *over* a coiffure, not instead of one, and the two may perfectly well coexist.
+- **A styled coiffure outranks the natural hair.** Should the physical description insist on hair *perfectly straight* while the Hair slot holds *voluminous curls*, the curls carry the day. Wherever Quilltap sets the outfit down --- a portrait prompt, a Lantern backdrop, the catalogue beneath a kept photograph --- the hairdo is marked as the current styling, taking precedence over the natural texture and style, so that neither portraitist nor character is left to guess which head of hair is actually in the room.
 - **Undressing does not undo the hair.** A character who sheds every stitch keeps their braids. Nudity is a matter for the clothing slots; the coiffure is nobody's business but the character's.
 
 A character may have many items in each slot, and equip multiple of them at once — a t-shirt under a sweater, a dress shirt beneath a waistcoat. The system trusts the LLM (and your own scene-setting) to decide what shows. List them inner-to-outer when it matters; layering is half the fun.
