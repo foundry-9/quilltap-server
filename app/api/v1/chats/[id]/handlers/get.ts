@@ -28,7 +28,7 @@ import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
@@ -202,7 +202,7 @@ async function handleGallery(
       total: gallery.total,
       counts: gallery.counts,
     });
-    return NextResponse.json(gallery);
+    return successResponse(gallery);
   } catch (error) {
     logger.error('[Chats v1] Failed to list chat gallery', { chatId }, error instanceof Error ? error : undefined);
     return serverError('Failed to list chat gallery');
@@ -232,7 +232,7 @@ async function handleCost(
     const breakdown = detailed
       ? await getDetailedChatCostBreakdown(chatId, user.id)
       : await getChatCostBreakdown(chatId, user.id);
-    return NextResponse.json(breakdown);
+    return successResponse(breakdown);
   } catch (error) {
     logger.error('[Chats v1] Failed to get cost breakdown', { chatId }, error instanceof Error ? error : undefined);
     return serverError('Failed to get cost breakdown');

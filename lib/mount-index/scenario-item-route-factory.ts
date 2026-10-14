@@ -324,7 +324,7 @@ export function createScenarioCollectionBodies<P extends Record<string, string>>
           ok: false,
           response: forWrite
             ? badRequest('Quilltap General mount has not been provisioned yet — restart the server')
-            : NextResponse.json({ mountPointId: null, scenarios: [], warnings: [] }),
+            : successResponse({ mountPointId: null, scenarios: [], warnings: [] }),
         };
       }
       return { ok: false, response: serverError(`Failed to ensure ${owner} document store`) };
@@ -340,7 +340,7 @@ export function createScenarioCollectionBodies<P extends Record<string, string>>
       const lookup = await ensureLocation(id, ctx, false);
       if (!lookup.ok) return lookup.response;
       const { scenarios, warnings } = await lookup.location.list({ includeArchived });
-      return NextResponse.json({ mountPointId: lookup.location.mountPointId, scenarios, warnings });
+      return successResponse({ mountPointId: lookup.location.mountPointId, scenarios, warnings });
     } catch (error) {
       logger.error(
         `${logTag} Failed to list ${owner} scenarios`,

@@ -34,7 +34,7 @@ export async function handleGetStoryBackground(
 
     // Check if the chat has a story background image
     if (!chat.storyBackgroundImageId) {
-      return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
+      return successResponse({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
     }
 
     // Get the file info to build the URL
@@ -44,14 +44,14 @@ export async function handleGetStoryBackground(
         chatId,
         storyBackgroundImageId: chat.storyBackgroundImageId,
       });
-      return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
+      return successResponse({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
     }
 
     const backgroundUrl = getFilePath(file);
     const linkSummary = file.sha256
       ? await getPhotoLinkSummaryBySha256(file.sha256, repos)
       : null;
-    return NextResponse.json({
+    return successResponse({
       backgroundUrl,
       fileId: file.id,
       filename: file.originalFilename,

@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, created, notFound } from '@/lib/api/responses';
+import { badRequest, created, notFound, successResponse } from '@/lib/api/responses';
 import { postInformRecord } from '@/lib/services/announcer/writer';
 import { resolveAnnouncementAudience } from '@/lib/services/announcer/audience';
 import { publishRealtime } from '@/lib/realtime/bus';
@@ -185,7 +185,7 @@ export async function handleGetInforms(
     dropped: all.length - batches.length,
   });
 
-  return NextResponse.json({ batches });
+  return successResponse({ batches });
 }
 
 /**
@@ -251,5 +251,5 @@ export async function handleCancelInform(
     recordDeleted,
   });
 
-  return NextResponse.json({ success: true, removed, recordDeleted });
+  return successResponse({ success: true, removed, recordDeleted });
 }

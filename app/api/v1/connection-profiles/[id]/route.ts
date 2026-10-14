@@ -91,7 +91,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
         },
         async () => {
           const enrichedProfile = await enrichProfile(profile, repos);
-          return NextResponse.json({ profile: enrichedProfile });
+          return successResponse({ profile: enrichedProfile });
         }
       );
     } catch (error) {

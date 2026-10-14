@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### Release checklist 4: API endpoint standard
+
+- Audited every route changed since 4.9.2. All routes outside `/api/v1/` are the three allowed exceptions; the six new routes (avatar rolls, subprompts, Scenario Builder, wardrobe item images) follow the action-dispatch pattern. No handler reads `?action=` by hand.
+- The 24 raw `NextResponse.json` calls added since 4.9.2 now use `successResponse`, in the chat actions (`impersonation-voice-preview`, `inform`, `rebuild-summary`, `story-background`), the chat GET handlers, connection profiles, memories, plugins and the scenario item route factory. Responses are unchanged.
+- Fixed the `successResponse` mock in `memories-manual-create.test.ts`, which ignored the status argument.
+
 #### Bugs 245 and 246: reopened turns re-extracted; consolidation token budget
 
 - Bug 245: per-turn extraction keeps a `turn` cursor in `memory_extraction_cursors` (the last assistant message a committed turn job covered; only moves forward). A live turn job reads past it: earlier lines of the turn, the opener with them, go to `priorSlices` and render as context under "EARLIER IN THIS TURN", capped at 8 messages. SELF runs only for speakers with new lines; OTHER runs for every speaker, earlier speakers on the new lines only, new speakers on the whole turn (`withPriorAsMaterial`). A bound outside the turn is ignored. Regenerate and queue-memories read turns whole and bound each autonomous speaker by the previous anchor (`listExtractionTurns`), which also stops a rebuild re-reading the room's history per speaker. Bundles carry the cursor as `turnExtractionWatermarkMessageId` (export schema, restore remap, import remint). No migration.

@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound } from '@/lib/api/responses';
+import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { generateInSceneVoicedLine } from '@/lib/services/announcer/in-scene-voiced';
 import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
@@ -167,7 +167,7 @@ export async function handleImpersonationVoicePreview(
     proposedLength: result.proposedMarkdown.length,
   });
 
-  return NextResponse.json({
+  return successResponse({
     success: true,
     proposedMarkdown: result.proposedMarkdown,
     profileName: profile.name,

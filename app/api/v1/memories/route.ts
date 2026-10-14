@@ -634,7 +634,7 @@ async function handleCreateMemory(
 
   // 201 only when a row was created; a reinforcement or near-duplicate
   // absorption returns 200 with the existing row, and `action` says which.
-  return NextResponse.json({ memory, action: outcome.action.kind }, { status: inserted ? 201 : 200 });
+  return successResponse({ memory, action: outcome.action.kind }, inserted ? 201 : 200);
 }
 
 async function handleSearch(
@@ -788,7 +788,7 @@ async function handleMaintain(
           )
         );
       }
-      return NextResponse.json(
+      return successResponse(
         characterId
           ? { success: true, dryRun: true, report: reports[0] }
           : { success: true, dryRun: true, reports }
@@ -809,7 +809,7 @@ async function handleMaintain(
       ? [await enqueueMemoryMaintenance(user.id, { ...payload, characterId })]
       : await enqueueMemoryMaintenanceForUser(user.id, payload);
     logger.info('[Memories API] Maintenance enqueued', { userId: user.id, characterId: characterId ?? 'all', phases: phases ?? 'all', jobs: jobIds.length });
-    return NextResponse.json({ success: true, dryRun: false, jobId: jobIds[0] ?? null, jobIds });
+    return successResponse({ success: true, dryRun: false, jobId: jobIds[0] ?? null, jobIds });
   } catch (error) {
     logger.error('[Memories API] Failed to enqueue maintenance', { characterId }, error instanceof Error ? error : undefined);
     return serverError('Failed to enqueue maintenance');
@@ -829,7 +829,7 @@ async function handleMaintenanceStatus(
   }
   const ledger = await getMaintenanceLedgerStatus(characterId ?? undefined);
   logger.debug('[Memories API] Maintenance status read', { characterId: characterId ?? 'all', entries: ledger.length });
-  return NextResponse.json({ success: true, ledger });
+  return successResponse({ success: true, ledger });
 }
 
 async function handleRepair(
@@ -850,7 +850,7 @@ async function handleRepair(
   }
   try {
     const report = await repairMemoryGraph({ userId: user.id, characterId, dryRun });
-    return NextResponse.json({ success: true, report });
+    return successResponse({ success: true, report });
   } catch (error) {
     logger.error('[Memories API] Memory graph repair failed', { characterId }, error instanceof Error ? error : undefined);
     return serverError('Memory graph repair failed');
@@ -866,7 +866,7 @@ async function handleReadMaintenanceConfig(
   _ctx: { user: { id: string }; repos: any }
 ) {
   const settings = await getMemoryMaintenanceSettings();
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 async function handleWriteMaintenanceConfig(
@@ -895,7 +895,7 @@ async function handleWriteMaintenanceConfig(
     phases: settings.phases,
   });
 
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 async function handleReadExtractionLimitsConfig(
@@ -973,7 +973,7 @@ async function handleWriteRecallConfig(
 
 async function handleReadConsolidationConfig() {
   const settings = await getMemoryConsolidationSettings();
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 async function handleWriteConsolidationConfig(req: NextRequest) {
@@ -992,12 +992,12 @@ async function handleWriteConsolidationConfig(req: NextRequest) {
     enabled: settings.enabled,
     fields: Object.keys(patch),
   });
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 async function handleReadExtractionModeConfig() {
   const settings = await getMemoryExtractionModeSettings();
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 async function handleWriteExtractionModeConfig(req: NextRequest) {
@@ -1015,7 +1015,7 @@ async function handleWriteExtractionModeConfig(req: NextRequest) {
     otherPass: settings.otherPass,
     fields: Object.keys(patch),
   });
-  return NextResponse.json({ success: true, settings });
+  return successResponse({ success: true, settings });
 }
 
 

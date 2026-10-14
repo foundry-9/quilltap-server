@@ -39,7 +39,7 @@ jest.mock('@/lib/api/responses', () => ({
   serverError: (msg: string) => ({ status: 500, body: { error: msg } }),
   errorResponse: (msg: string, status = 500) => ({ status, body: { error: msg } }),
   validationError: (err: unknown) => ({ status: 400, body: { error: 'Validation error', err } }),
-  successResponse: (data: any) => ({ status: 200, body: data }),
+  successResponse: (data: any, status: number = 200) => ({ status, body: data }),
 }))
 
 const mockAdmit = jest.fn()

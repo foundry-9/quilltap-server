@@ -17,7 +17,7 @@
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, conflict, serverError } from '@/lib/api/responses';
+import { badRequest, conflict, serverError, successResponse } from '@/lib/api/responses';
 import { enqueueContextSummary } from '@/lib/background-jobs/queue-service';
 import { publishRealtime } from '@/lib/realtime/bus';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -82,7 +82,7 @@ export async function handleRebuildSummary(
       connectionProfileId: connectionProfile.id,
     });
 
-    return NextResponse.json({ success: true, jobId });
+    return successResponse({ success: true, jobId });
   } catch (error) {
     logger.error(
       '[Chats v1] Failed to rebuild context summary',

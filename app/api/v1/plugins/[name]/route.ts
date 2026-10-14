@@ -12,7 +12,7 @@ import { createContextParamsHandler } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 
 
@@ -228,7 +228,7 @@ export const GET = createContextParamsHandler<{ name: string }>(
           }
 
           const plugin = pluginRegistry.get(name);
-          return NextResponse.json({
+          return successResponse({
             name: plugin?.manifest.name,
             title: plugin?.manifest.title,
             version: plugin?.manifest.version,
