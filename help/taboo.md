@@ -57,5 +57,5 @@ Characters with help tools enabled can navigate directly to this setting:
 ## Related Settings
 
 - [Chat Settings](chat-settings.md) — The rest of the chat-wide defaults
-- [Text Replacement](chat-settings.md) — Corrections applied to *your* typing, not your characters' speech
+- [Text Replacement](chat-settings-composer.md#text-replacement) — Corrections applied to *your* typing, not your characters' speech
 - [Roleplay Templates](roleplay-templates.md) — Per-chat instructions on style and formatting

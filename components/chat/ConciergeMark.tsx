@@ -5,12 +5,12 @@
  * every list in the house: the homepage's Recent Chats, the Salon list, a
  * character's Conversations, a Prospero project's chats.
  *
- * It reads the derived four-state, never the raw danger label, so the three
- * states other than Monitored each get their own tone: red for the Concierge's
- * own verdict, grey for a chat you vouched safe, blue for a door you opened
- * yourself. Monitored is the default and wears nothing — the mark means
- * "something other than the default is in force," exactly as the Salon
- * header's pill does.
+ * It reads the derived state, never a stored column, so the two states other
+ * than Moderated each get their own tone: red for the uncensored desk, grey
+ * for a chat locked to the ordinary desks. Who set Unmoderated — you or the
+ * Concierge — is in the bubble, never the colour. Moderated is the default and
+ * wears nothing — the mark means "something other than the default is in
+ * force," exactly as the Salon header's pill does.
  *
  * The words come from the presentation table, so the mark, the pill and the
  * sidebar all say the same thing. The bubble is Quilltap's own Tooltip rather
@@ -25,7 +25,8 @@ import {
   describeConciergeState,
   type ConciergeStateDescription,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 /**
  * The tooltip's contents — title, the full sentence, the classifier's
@@ -50,21 +51,29 @@ export function ConciergeTooltipBody({ title, detail, categories, hint }: Concie
 }
 
 export interface ConciergeMarkProps {
-  /** The derived four-state. Monitored renders nothing at all. */
+  /** The derived state. Moderated renders nothing at all. */
   conciergeState: ConciergeState
-  /** The classifier's categories; surfaced on the bubble for Flagged only. */
+  /** Who set the state; picks the bubble's sentence for Unmoderated. */
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the state was set; the Concierge's sentence names it. */
+  conciergeReason?: ConciergeModeReason | null
+  /** The classifier's categories; surfaced on the bubble when the classifier moved the chat. */
   dangerCategories?: string[]
   /** Extra classes for the mark itself (sizing, flex behaviour). */
   className?: string
 }
 
-export function ConciergeMark({ conciergeState, dangerCategories, className = '' }: ConciergeMarkProps) {
-  if (conciergeState === 'monitored') {
+export function ConciergeMark({ conciergeState, conciergeSetBy, conciergeReason, dangerCategories, className = '' }: ConciergeMarkProps) {
+  if (conciergeState === 'moderated') {
     return null
   }
 
   const { label, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
-  const description = describeConciergeState(conciergeState, dangerCategories)
+  const description = describeConciergeState(
+    conciergeState,
+    { setBy: conciergeSetBy, reason: conciergeReason },
+    dangerCategories,
+  )
   // Danger is the base rule, so its suffix is empty — don't emit the base
   // class twice for it.
   const toneSuffix = conciergeToneSuffix(tone)

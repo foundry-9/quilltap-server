@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { formatDate } from '@/lib/format-time'
+import { importanceBand } from '@/lib/memory/scoring/importance'
 
 interface Tag {
   id: string
@@ -19,7 +20,13 @@ interface Memory {
   tags: string[]
   tagDetails?: Tag[]
   importance: number
-  source: 'AUTO' | 'MANUAL'
+  source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  /** 'cold' rows are archived: out of everyday recall, still on the shelf. */
+  tier?: 'hot' | 'cold'
+  /** The digest that replaced this row, when it has been folded. */
+  supersededById?: string | null
+  /** The notes a digest was folded from (digest rows only). */
+  consolidatedFrom?: string[]
   /** Source message ID for auto-created memories (memory provenance) */
   sourceMessageId?: string | null
   /** Chat ID where the source message resides */
@@ -34,26 +41,28 @@ interface MemoryCardProps {
   onDelete?: (memoryId: string) => void
   /** Called when user clicks "Source" link to navigate to the source message */
   onNavigateToSource?: (chatId: string, messageId: string) => void
+  /** Called when the user follows a "superseded by digest" link */
+  onViewDigest?: (digestId: string) => void
   isDeleting?: boolean
 }
 
-export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDeleting = false }: MemoryCardProps) {
+export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onViewDigest, isDeleting = false }: MemoryCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const importanceColor = memory.importance >= 0.7
+  const band = importanceBand(memory.importance)
+  const importanceColor = band === 'high'
     ? 'qt-text-destructive'
-    : memory.importance >= 0.4
+    : band === 'medium'
       ? 'qt-text-warning'
       : 'qt-text-secondary'
 
-  const importanceLabel = memory.importance >= 0.7
-    ? 'High'
-    : memory.importance >= 0.4
-      ? 'Medium'
-      : 'Low'
+  const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
+
+  const archived = memory.tier === 'cold'
+  const digestSize = memory.source === 'CONSOLIDATED' ? memory.consolidatedFrom?.length ?? 0 : 0
 
   return (
-    <div className="qt-card">
+    <div className={`qt-card ${archived ? 'opacity-75' : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
@@ -65,15 +74,44 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
           <span className={`qt-text-label-xs ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
             {importanceLabel}
           </span>
+          {archived && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full qt-bg-muted qt-text-secondary"
+              title="Archived: out of everyday recall, still on the shelf"
+            >
+              Archived
+            </span>
+          )}
           <span className={`text-xs px-2 py-0.5 rounded-full ${
             memory.source === 'AUTO'
               ? 'qt-bg-info/10 qt-text-info'
-              : 'qt-bg-success/10 qt-text-success'
+              : memory.source === 'CONSOLIDATED'
+                ? 'qt-bg-warning/10 qt-text-warning'
+                : 'qt-bg-success/10 qt-text-success'
           }`}>
-            {memory.source === 'AUTO' ? 'Auto' : 'Manual'}
+            {memory.source === 'AUTO' ? 'Auto' : memory.source === 'CONSOLIDATED' ? 'Digest' : 'Manual'}
           </span>
         </div>
       </div>
+
+      {(digestSize > 0 || (archived && memory.supersededById)) && (
+        <p className="qt-text-xs qt-text-muted mb-2">
+          {digestSize > 0 && `Digested from ${digestSize} note${digestSize === 1 ? '' : 's'}. `}
+          {archived && memory.supersededById && (
+            onViewDigest ? (
+              <button
+                type="button"
+                onClick={() => onViewDigest(memory.supersededById!)}
+                className="qt-link"
+              >
+                Superseded by a digest
+              </button>
+            ) : (
+              'Superseded by a digest.'
+            )
+          )}
+        </p>
+      )}
 
       {/* Content Preview / Full Content */}
       <div className="mb-3">

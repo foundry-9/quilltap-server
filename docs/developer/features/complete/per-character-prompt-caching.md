@@ -86,7 +86,7 @@ The first three steps are sequential; the per-provider work after that is parall
     9. **Ollama / Curl** — add brief no-op comment. No version bump.
 6. **Anthropic / Google read-back instrumentation.** Verify the existing `cacheUsage` logging on responses still flows correctly for all providers. No code change expected, but spot-check by running `npm run dev` and tailing `logs/combined.log` while sending a message.
 7. **Documentation.**
-    - Update `docs/developer/features/llm_api_costs_breakdown.md` — that file is referenced by the version constant in `cache-key.ts` and presumably explains caching cost trade-offs.
+    - Update `docs/developer/features/complete/llm_api_costs_breakdown.md` — that file is referenced by the version constant in `cache-key.ts` and presumably explains caching cost trade-offs.
     - Update `docs/CHANGELOG.md` (terse, developer voice — *not* Quilltap user voice; per CLAUDE.md the changelog is the exception).
     - Add a user-facing help page in `help/` describing the behaviour change (in the steampunk-Wodehouse voice). Include the `url` frontmatter and the matching `help_navigate` call. Likely lands under the providers / settings help section.
     - Update `.claude/commands/update-documentation.md` if a new help file is added.
@@ -99,7 +99,7 @@ The first three steps are sequential; the per-provider work after that is parall
 
 ## Settled design decisions
 
-- **Multi-character group chats keep N parallel caches.** Each character in a group chat gets its own cache namespace. The cache-hit discount (~120× on DeepSeek V4-Pro, ~10× on Anthropic, etc.) easily justifies running parallel caches per character — this is precisely the use case the feature is designed for. Note this in `docs/developer/features/llm_api_costs_breakdown.md`.
+- **Multi-character group chats keep N parallel caches.** Each character in a group chat gets its own cache namespace. The cache-hit discount (~120× on DeepSeek V4-Pro, ~10× on Anthropic, etc.) easily justifies running parallel caches per character — this is precisely the use case the feature is designed for. Note this in `docs/developer/features/complete/llm_api_costs_breakdown.md`.
 
 - **Decision rule for non-conversational call sites:** key per-character **only when the character's persona block (manifesto / description / personality) is genuinely in the prompt prefix and the same prompt structure recurs across calls.** Otherwise, leave the cache key undefined.
 
@@ -137,7 +137,7 @@ plugins/dist/qtap-plugin-openrouter/index.js       # passthrough
 plugins/dist/qtap-plugin-openai-compatible/        # passthrough
 plugins/dist/qtap-plugin-z-ai/                     # passthrough if supported
 plugins/dist/qtap-plugin-google/provider.ts        # TODO marker
-docs/developer/features/llm_api_costs_breakdown.md # cost note
+docs/developer/features/complete/llm_api_costs_breakdown.md # cost note
 docs/CHANGELOG.md                                  # terse changelog entry
 help/<new-page>.md                                 # user-facing help (Quilltap voice)
 ```

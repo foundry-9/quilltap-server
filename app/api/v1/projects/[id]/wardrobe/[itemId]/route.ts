@@ -1,26 +1,19 @@
 /**
- * Project Wardrobe — item detail endpoint.
+ * Project Wardrobe — item endpoint.
  *
- * GET    /api/v1/projects/[id]/wardrobe/[itemId] — fetch one project wardrobe item.
- * PUT    /api/v1/projects/[id]/wardrobe/[itemId] — update one project wardrobe item.
- * DELETE /api/v1/projects/[id]/wardrobe/[itemId] — delete one project wardrobe item.
+ * GET    /api/v1/projects/[id]/wardrobe/[itemId]                     — one item
+ * GET    /api/v1/projects/[id]/wardrobe/[itemId]?action=wear-history — who wore it, how often, where last
+ * PUT    /api/v1/projects/[id]/wardrobe/[itemId]                     — update it
+ * DELETE /api/v1/projects/[id]/wardrobe/[itemId]                     — delete it
  *
- * The handler bodies live in the shared factory
- * (`lib/mount-index/mount-wardrobe-route-factory.ts`); this file only
- * supplies the project tier's config.
- *
- * @module app/api/v1/projects/[id]/wardrobe/[itemId]
+ * Handler bodies: `lib/wardrobe/routes/wardrobe-route-factory.ts`.
  */
 
-import { createMountWardrobeItemHandlers } from '@/lib/mount-index/mount-wardrobe-route-factory';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
-import { readProjectWardrobe } from '@/lib/mount-index/project-wardrobe';
+import { createWardrobeItemHandlers } from '@/lib/wardrobe/routes/wardrobe-route-factory';
 
-export const { GET, PUT, DELETE } = createMountWardrobeItemHandlers({
-  ownerLabel: 'Project',
+export const { GET, PUT, DELETE } = createWardrobeItemHandlers<{ id: string; itemId: string }>({
+  scope: 'project',
+  paramsToId: ({ id }) => id,
   logTag: '[Projects v1]',
   logIdKey: 'projectId',
-  findOwner: (repos, id) => repos.projects.findById(id),
-  ensureOfficialStore: ensureProjectOfficialStore,
-  readWardrobe: readProjectWardrobe,
 });

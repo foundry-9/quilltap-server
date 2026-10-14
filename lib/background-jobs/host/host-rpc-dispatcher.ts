@@ -14,12 +14,21 @@
  *     (→ `writeProjectFileToMountStore`)
  *   - `writeCharacterAvatarToVault` — project-less character-vault avatar writes
  *   - `writeLanternBackgroundToMountStore` — project-less Lantern background writes
+ *   - `writeWardrobeItemImage` — wardrobe item pictures queued by the wardrobe tools
  *
  * `startScheduledAutonomousRun` is here for a different reason: ORDERING. The
  * scheduled run-start must commit `currentRunId`/`runState` on the RW connection
  * *before* the first turn job is enqueued, or the turn reads a stale run id and
  * self-aborts. Running it on the host makes the write+enqueue atomic-in-order,
  * exactly like the always-race-free manual start.
+ *
+ * `admitMemory` is here for READ-YOUR-WRITES: memory admission searches the
+ * character's rows, decides, and writes the new row, reinforcement or link at
+ * once, so the next candidate of the same job sees it (bug 209). The child
+ * extracts and embeds; the parent does the rest (`admitPrepared`).
+ * `foldNearDuplicates` is the same rule for maintenance's near-duplicate fold:
+ * it writes under admission's per-character lock, so a fold and an admission
+ * never interleave on one row.
  *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
@@ -88,6 +97,15 @@ async function runMethod(
       const params = args[0] as Parameters<typeof writeLanternBackgroundToMountStore>[0];
       return writeLanternBackgroundToMountStore(params);
     }
+    case 'writeWardrobeItemImage': {
+      const { writeWardrobeItemImage } = await import(
+        '@/lib/file-storage/wardrobe-image-bridge'
+      );
+      const params = args[0] as Parameters<typeof writeWardrobeItemImage>[0];
+      // Structured clone delivers a Buffer as a plain Uint8Array; the bridge
+      // hashes and stores it, so hand it a real Buffer.
+      return writeWardrobeItemImage({ ...params, content: Buffer.from(params.content) });
+    }
     case 'writeConversationSummaryToVaults': {
       const { writeConversationSummaryToVaults } = await import(
         '@/lib/file-storage/conversation-summary-vault-bridge'
@@ -110,6 +128,19 @@ async function runMethod(
       // Parent re-entry: QUILLTAP_JOB_CHILD is unset here, so the bridge runs
       // `beginAutonomousRun` directly on the RW connection (no re-dispatch loop).
       return startScheduledAutonomousRun(params);
+    }
+    case 'admitMemory': {
+      const { admitPrepared } = await import('@/lib/memory/admission/admit');
+      const request = args[0] as Parameters<typeof admitPrepared>[0];
+      return admitPrepared(request);
+    }
+    case 'foldNearDuplicates': {
+      const { applyNearDuplicateFolds } = await import('@/lib/memory/maintenance/fold-near-duplicates');
+      return applyNearDuplicateFolds(args[0] as Parameters<typeof applyNearDuplicateFolds>[0]);
+    }
+    case 'countRecentAdmissions': {
+      const { countRecentAdmissionsLocal } = await import('@/lib/memory/admission/rate-ledger');
+      return countRecentAdmissionsLocal(args[0] as string, args[1] as number);
     }
     default: {
       const exhaustive: never = method;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 const mockSearchMemoriesSemantic = jest.fn()
+const mockMarkMemoriesAccessed = jest.fn()
 const mockGenerateEmbeddingForUser = jest.fn()
 const mockSearchConversationChunks = jest.fn()
 const mockSearchDocumentChunks = jest.fn()
@@ -15,8 +16,11 @@ const mockLogger = {
   error: jest.fn(),
 }
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: (...args: unknown[]) => mockSearchMemoriesSemantic(...args),
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchMemories: (...args: unknown[]) => mockSearchMemoriesSemantic(...args),
+}))
+jest.mock('@/lib/memory/recall/deliver', () => ({
+  stampAccessed: (...args: unknown[]) => mockMarkMemoriesAccessed(...args),
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -62,6 +66,7 @@ describe('search-scriptorium-handler', () => {
       characters: {
         findById: mockFindCharacterById,
       },
+      projects: { canCharacterParticipate: jest.fn().mockResolvedValue(true) },
       projectDocMountLinks: {
         findByProjectId: mockFindProjectMountLinks,
       },
@@ -81,11 +86,37 @@ describe('search-scriptorium-handler', () => {
     mockSearchDocumentChunks.mockResolvedValue([])
   })
 
+  it('marks only the memories it returns to the model as accessed', async () => {
+    const mem = (id: string, score: number) => ({
+      score,
+      salience: 0.5,
+      memory: {
+        id,
+        content: `content ${id}`,
+        summary: `summary ${id}`,
+        importance: 0.5,
+        createdAt: '2026-04-01T00:00:00.000Z',
+        source: 'AUTO',
+      },
+    })
+    mockSearchMemoriesSemantic.mockResolvedValue([mem('kept-1', 0.9), mem('kept-2', 0.8), mem('cut-1', 0.1)])
+    mockSearchConversationChunks.mockResolvedValue([])
+
+    const result = await executeSearchScriptoriumTool(
+      { query: 'blueprints', limit: 2, sources: ['memories'] },
+      context
+    )
+
+    expect(result.success).toBe(true)
+    expect(mockMarkMemoriesAccessed).toHaveBeenCalledTimes(1)
+    expect(mockMarkMemoriesAccessed).toHaveBeenCalledWith('character-1', ['kept-1', 'kept-2'])
+  })
+
   it('merges, sorts, and truncates results across memories and conversations', async () => {
     mockSearchMemoriesSemantic.mockResolvedValue([
       {
         score: 0.72,
-        effectiveWeight: 0.88,
+        salience: 0.88,
         memory: {
           id: 'memory-1',
           content: 'Remember the blueprints in the west archive.',
@@ -141,7 +172,7 @@ describe('search-scriptorium-handler', () => {
         embeddingProfileId: 'embed-1',
         limit: 5,
         minImportance: 0.4,
-        applyLiteralPhraseBoost: true,
+        literalPhrase: true,
       })
     )
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(

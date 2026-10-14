@@ -41,6 +41,11 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
+// The restore drops the memory-index cache once the rows are in.
+jest.mock('@/lib/memory/index-store', () => ({
+  memoryIndex: { reloadAll: jest.fn() },
+}))
+
 jest.mock('@/lib/file-storage/manager', () => ({
   fileStorageManager: { listUserFiles: jest.fn(), uploadFile: jest.fn() },
 }))
@@ -95,7 +100,7 @@ const EMPTY_COLLECTIONS = [
   'groups', 'llmLogs', 'pluginConfigs', 'folders', 'wardrobeItems',
   'characterPluginData', 'conversationAnnotations', 'chatDocuments',
   'instanceSettings', 'embeddingStatus', 'conversationChunks', 'tfidfVocabularies',
-  'vectorIndexMetas', 'textReplacementRules', 'docMountPoints', 'docMountFiles',
+  'textReplacementRules', 'docMountPoints', 'docMountFiles',
   'docMountDocuments', 'docMountChunks', 'docMountFileLinks', 'docMountFolders',
   'docMountBlobs', 'projectDocMountLinks', 'groupDocMountLinks',
   'groupCharacterMembers', 'vectorEntries',
@@ -126,9 +131,6 @@ function repoStub() {
 const CLEAN_RECONCILE = {
   targetDimensions: 1536,
   skippedReason: null,
-  vectorEntriesDeleted: 0,
-  vectorIndexMetaFixed: 0,
-  staleChunkEmbeddingsCleared: 0,
   mismatched: { memories: 0, conversationChunks: 0, helpDocs: 0, mountChunks: 0 },
   reindexEnqueued: false,
 }
@@ -163,8 +165,6 @@ describe('restore — post-restore embedding repair', () => {
     expect(summary.embeddingReconcile).toEqual({
       targetDimensions: 1536,
       skippedReason: null,
-      vectorEntriesDeleted: 0,
-      vectorIndexMetaFixed: 0,
       reindexEnqueued: false,
     })
     // A clean pass is silent — no warning noise for the ordinary case.

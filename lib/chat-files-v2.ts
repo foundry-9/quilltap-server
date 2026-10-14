@@ -14,6 +14,7 @@ import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from './files/tag-inheritance';
 import { resizeImageForProvider, canResizeImage, calculateBase64Size, getProviderMaxBase64Size } from './files/image-processing';
+import { shrinkImageForLlmTransport } from './files/llm-image-budget';
 import { autoDescribeChatImageAttachment } from './photos/auto-describe-attachment';
 import { nativeTextAttachmentMime } from './mount-index/path-utils';
 
@@ -479,8 +480,31 @@ async function readFileAsBase64(
   let buffer = await fileStorageManager.downloadFile(entry);
   let outputMimeType = mimeType;
   let wasResized = false;
-  // Check if this is an image that might need resizing
-  if (provider && mimeType.startsWith('image/') && canResizeImage(mimeType)) {
+  // Trim the image to what a model needs to read it before anything else
+  // looks at its size. These bytes are for one request and are discarded
+  // after it; the stored file keeps its full resolution and quality 90.
+  // `provider` is already the caller's `autoResize` switch — `loadChatFilesForLLM`
+  // passes it only when resizing is wanted — so an `autoResize: false` caller
+  // still gets the stored bytes verbatim.
+  if (provider && mimeType.startsWith('image/')) {
+    const shrunk = await shrinkImageForLlmTransport({
+      buffer,
+      mimeType,
+      provider,
+      filename: entry.originalFilename,
+    });
+    if (shrunk.wasShrunk) {
+      buffer = shrunk.buffer;
+      outputMimeType = shrunk.mimeType;
+      wasResized = true;
+    }
+  }
+
+  // Provider ceiling, as a backstop: the transport budget above is the lower
+  // limit in every case we know of, so this fires only for a format it had to
+  // pass through (and for `autoResize: false` callers, who get the old
+  // behaviour untouched).
+  if (provider && outputMimeType.startsWith('image/') && canResizeImage(outputMimeType)) {
     const maxBase64Size = getProviderMaxBase64Size(provider);
     const base64Size = calculateBase64Size(buffer);
 
@@ -497,7 +521,7 @@ async function readFileAsBase64(
       const resizeResult = await resizeImageForProvider({
         provider,
         buffer,
-        mimeType,
+        mimeType: outputMimeType,
         filename: entry.originalFilename,
       });
 
@@ -563,15 +587,14 @@ async function loadMountFileAsAttachment(
       const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
       if (document) {
         const buffer = Buffer.from(document.content, 'utf-8');
-        const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
+        // `filepath` only, never `url`: see the note on the blob branch below.
         return {
           id: mountLink.id,
-          filepath: url,
+          filepath: `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`,
           filename: mountLink.originalFileName ?? mountLink.fileName,
           mimeType: textMime,
           size: buffer.length,
           data: buffer.toString('base64'),
-          url,
         };
       }
     }
@@ -595,6 +618,24 @@ async function loadMountFileAsAttachment(
   let buffer = bytes;
   let outputMimeType = blob.storedMimeType;
 
+  // The transport budget first — a character's avatar lives in their vault, so
+  // this is the path every generated portrait takes to a model, and it is the
+  // path bug 151 put 4.52 MB of base64 on the wire through. The blob keeps its
+  // stored resolution; only this request's copy is trimmed.
+  if (autoResize && provider && outputMimeType.startsWith('image/')) {
+    const shrunk = await shrinkImageForLlmTransport({
+      buffer,
+      mimeType: outputMimeType,
+      provider,
+      filename: mountLink.originalFileName ?? mountLink.fileName,
+    });
+    if (shrunk.wasShrunk) {
+      buffer = shrunk.buffer;
+      outputMimeType = shrunk.mimeType;
+    }
+  }
+
+  // Provider ceiling, as a backstop (see the matching note in readFileAsBase64).
   if (autoResize && provider && outputMimeType.startsWith('image/') && canResizeImage(outputMimeType)) {
     const maxBase64Size = getProviderMaxBase64Size(provider);
     const base64Size = calculateBase64Size(buffer);
@@ -619,16 +660,17 @@ async function loadMountFileAsAttachment(
     }
   }
 
-  const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
-
+  // The server path goes in `filepath` and never in `url`. `FileAttachment.url`
+  // means "a URL the provider can fetch", and a plugin that honours it sends
+  // it in place of the bytes — so a server-relative path there reached Z.AI
+  // and NanoGPT as an unfetchable image and the turn died with a 400 (bug 174).
   return {
     id: mountLink.id,
-    filepath: url,
+    filepath: `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`,
     filename: mountLink.originalFileName ?? mountLink.fileName,
     mimeType: outputMimeType,
     size: buffer.length,
     data: buffer.toString('base64'),
-    url,
   };
 }
 

@@ -6,7 +6,7 @@ url: /settings
 
 > **[Open this page in Quilltap](/settings)**
 
-The Settings page is the central bureau of operations for your Quilltap estate --- a single, well-appointed room where every lever, dial, and velvet rope can be found without having to remember which wing of the house conceals which control. Everything is organized into seven plainly-labeled tabs, each a model of efficiency that would make even the most fastidious butler weep with approval.
+The Settings page is the central bureau of operations for your Quilltap estate --- a single, well-appointed room where every lever, dial, and velvet rope can be found without having to remember which wing of the house conceals which control. Everything is organized into eight plainly-labeled tabs, each a model of efficiency that would make even the most fastidious butler weep with approval.
 
 ## Accessing Settings
 
@@ -14,9 +14,9 @@ The Settings page is the central bureau of operations for your Quilltap estate -
 2. You will arrive at the Settings page with the **AI Providers** tab selected by default
 3. Click any tab to view and manage its settings
 
-You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly. To jump straight to a particular section within a tab, add `&section=` as well --- for example, `/settings?tab=chat&section=dangerous-content` will open the Chat tab and scroll directly to the Dangerous Content section with its accordion already open.
+You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly. To jump straight to a particular section within a tab, add `&section=` as well --- for example, `/settings?tab=concierge&section=uncensored-desk` will open the Concierge's tab and scroll directly to the Uncensored Desk card with its accordion already open.
 
-## The Seven Tabs
+## The Eight Tabs
 
 ### AI Providers
 
@@ -32,7 +32,7 @@ The beating mechanical heart of the operation. Here you configure everything tha
 
 ### Chat
 
-The conversational drawing-room. Every setting that governs how the AI behaves during a chat --- from the counting of tokens to the handling of content that might cause a maiden aunt to reach for the smelling salts.
+The conversational drawing-room. Every setting that governs how the AI behaves during a chat --- from the counting of tokens to the compression of a long evening's talk.
 
 - **Token Display** --- Show or hide token usage and cost estimates in chat
 - **Context Compression** --- Configure how older messages are compressed to fit the context window
@@ -40,9 +40,20 @@ The conversational drawing-room. Every setting that governs how the AI behaves d
 - **Image Description** --- How the AI describes images shared in chat
 - **Automation** --- Configure automatic detection features (dice rolls, etc.)
 - **Agent Mode** --- Enable iterative tool-use behaviors where the AI can verify and self-correct
-- **Dangerous Content** --- Configure content detection, routing to compatible providers, and display behavior
 
-> See [Chat Settings](chat-settings.md) and [Dangerous Content Handling](dangerous-content.md) for full details
+> See [Chat Settings](chat-settings.md) for full details
+
+### The Concierge
+
+The front desk, where the handling of content that might cause a maiden aunt to reach for the smelling salts is decided --- who is asked when the usual providers decline, and how the result is shown.
+
+- **On Duty** --- One switch: whether the Concierge reroutes, announces, switches and pre-screens at all
+- **The Uncensored Desk** --- The uncensored text, image and vision profiles, and the image-prompt crafter
+- **When a Provider Refuses** --- How many refusals before a chat is switched to Unmoderated, and what posture new chats start in
+- **Display** --- Show, blur or collapse flagged content, and warning badges
+- **Pre-screening** (advanced) --- The optional classifier and the background reading of chat summaries
+
+> See [The Concierge](the-concierge.md) for full details
 
 ### Appearance
 
@@ -59,10 +70,9 @@ Where aesthetics meet functionality, and both are treated with the respect they 
 The library wing --- quiet, orderly, and possessed of an uncanny ability to recall precisely the passage you need.
 
 - **Embedding Profiles** --- Configure text embedding services for semantic memory search
-- **Memory Housekeeping** --- Automatically prune stale, low-importance memories as each character approaches its cap (off by default)
-- **Memory Deduplication** --- Find and merge duplicate memories across characters
+- **Maintenance** --- Fold repeated memories, consolidate related ones into digests, and archive the least-protected as each character passes its cap, with a dry run and a ledger (off by default)
 
-> See [Embedding Provider Profiles](embedding-profiles.md) and [System Tools](system-tools.md) for full details
+> See [Embedding Provider Profiles](embedding-profiles.md), [Memory Maintenance](memory-maintenance.md) and [System Tools](system-tools.md) for full details
 
 ### Images
 
@@ -104,7 +114,7 @@ The engine room, the filing cabinet, and the emergency exits. Everything that ke
 1. **AI Providers tab** --- Run the Setup Wizard, or manually add API Keys and create Connection Profiles
 2. **Chat tab** --- Configure default chat behaviors and preferences
 3. **Images tab** (optional) --- Set up image generation if desired
-4. **Commonplace Book tab** (optional) --- Configure embedding profiles for semantic memory and enable automatic housekeeping
+4. **Commonplace Book tab** (optional) --- Configure embedding profiles for semantic memory and enable automatic memory maintenance
 
 ### Installing new capabilities
 
@@ -125,6 +135,14 @@ All changes are saved automatically. You need not hunt for a "Save" button --- m
 - **On next chat:** Connection profile changes, plugin enablement
 - **On next operation:** Image generation profile, embedding profile changes
 
+"Immediately" is meant without asterisk, and includes conversations *already in
+progress in another tab*. Adjust a Chat preference here --- auto-scroll, the
+display of a model's thinking, token counts, the inspector button, story
+backgrounds --- and switch back to a chat you left open an hour ago: it will
+have adopted your new arrangement while its back was turned, without losing a
+word of a reply still arriving. There is no need to close the conversation and
+open it again, and never was meant to be.
+
 ## Navigating from the Old Foundry Routes
 
 If you have bookmarks or links to the old `/foundry` subsystem pages, they will automatically redirect to the appropriate Settings tab. No link left behind, as they say.
@@ -134,7 +152,8 @@ If you have bookmarks or links to the old `/foundry` subsystem pages, they will 
 Characters with help tools enabled can read your current settings aloud during a conversation, rather like a well-informed secretary who has memorized the contents of every filing cabinet. The `help_settings` tool accepts a `category` parameter with the following values:
 
 - **`overview`** — A high-level summary of all configured profiles, counts, and key preferences
-- **`chat`** — Token display, context compression, memory cascade, timestamps, agent mode, and content settings
+- **`chat`** — Token display, context compression, memory cascade, timestamps, and agent mode
+- **`concierge`** — The Concierge's duty switch, uncensored desk, refusal rule, display and pre-screening settings
 - **`connections`** — Your configured LLM providers and models (API keys are never disclosed)
 - **`embeddings`** — Embedding and memory search profiles
 - **`images`** — Image generation profiles and story background settings

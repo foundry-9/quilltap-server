@@ -184,3 +184,44 @@ export function shouldFireCoreWhisper(
 
   return { fire: false, reason: null };
 }
+
+/**
+ * The instant this character last spoke here, in epoch milliseconds — the
+ * `createdAt` of their most recent visible ASSISTANT turn in `events`, or
+ * `null` if they have never spoken in this chat.
+ *
+ * Lives here because it is the same walk the Core whisper's cadence already
+ * does: the precedent this module sets is that a per-character cadence is
+ * DERIVED from history rather than stored, and character progressions
+ * (`lib/progressions/`) lean on exactly that. One helper, one definition of
+ * "their last turn", so the two cadences can never disagree about when a
+ * character last opened their mouth.
+ *
+ * `isVisibleConversationalTurn` does the filtering, so a Staff whisper, a
+ * silent message, an empty tool-call-only turn, and a whisper targeted away
+ * from this character all fail to count — none of them is this character
+ * speaking.
+ */
+export function findLastOwnTurnMs(
+  events: ChatEvent[],
+  respondingParticipantId: string,
+): number | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type !== 'message') continue;
+    const m = ev as MessageEvent;
+    if (m.role !== 'ASSISTANT') continue;
+    if (m.participantId !== respondingParticipantId) continue;
+    if (!isVisibleConversationalTurn(m, respondingParticipantId)) continue;
+
+    // Typed as an ISO string, but a row that reached here unparsed can still
+    // carry a Date; both are read rather than trusting the declared type.
+    const createdAt: unknown = m.createdAt;
+    const ms = createdAt instanceof Date ? createdAt.getTime() : Date.parse(String(createdAt));
+    // A row whose timestamp will not parse tells us nothing about when they
+    // spoke; keep walking rather than reporting a NaN the cadence would read
+    // as "never".
+    if (Number.isFinite(ms)) return ms;
+  }
+  return null;
+}

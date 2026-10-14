@@ -2024,7 +2024,8 @@ describe('quilltap-import-service', () => {
         expect.objectContaining({
           projectId: newProjectId,
         }),
-        undefined
+        // memories are created under a pre-minted id so consolidation links can be remapped
+        { id: expect.any(String) }
       );
     });
 
@@ -2067,7 +2068,8 @@ describe('quilltap-import-service', () => {
         expect.objectContaining({
           tags: [newTagId],
         }),
-        undefined
+        // memories are created under a pre-minted id so consolidation links can be remapped
+        { id: expect.any(String) }
       );
     });
   });

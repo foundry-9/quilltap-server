@@ -1,4 +1,8 @@
-import { describe, expect, it, jest } from '@jest/globals'
+/**
+ * resolveEquippedOutfitForCharacter — a pure walk over the character's
+ * wearable pool. The pool already holds every tier (character, group, project,
+ * General, archived included), so resolution does no I/O of its own.
+ */
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -11,11 +15,18 @@ jest.mock('@/lib/logger', () => ({
 
 const { resolveEquippedOutfitForCharacter } =
   require('@/lib/wardrobe/resolve-equipped') as typeof import('@/lib/wardrobe/resolve-equipped')
+const { buildWearablePool } = require('@/lib/wardrobe/pool') as typeof import('@/lib/wardrobe/pool')
 
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemWithOrigin, WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 const CHAR_ID = 'c1c1c1c1-0000-0000-0000-000000000001'
+
+const OWN: WardrobeOrigin = { scope: 'character', id: CHAR_ID, name: '' }
+const GROUP: WardrobeOrigin = { scope: 'group', id: 'g1', name: 'The Guild' }
+const PROJECT: WardrobeOrigin = { scope: 'project', id: 'p1', name: 'The Manor' }
+const GENERAL: WardrobeOrigin = { scope: 'general', id: null, name: 'Quilltap General' }
 
 function makeItem(
   id: string,
@@ -37,250 +48,196 @@ function makeItem(
   }
 }
 
-function makeRepos(items: WardrobeItem[]) {
-  return {
-    wardrobe: {
-      findByCharacterId: jest.fn(async () => items),
-      findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
-        items.filter((i) => ids.includes(i.id)),
-      ),
+const tag = (items: WardrobeItem[], origin: WardrobeOrigin, characterId: string | null = null): WardrobeItemWithOrigin[] =>
+  items.map((i) => ({ ...i, characterId, origin }))
+
+/** A pool where every item is the character's own. */
+function ownPool(items: WardrobeItem[]) {
+  return buildWearablePool(
+    CHAR_ID,
+    { groupMountPointIds: [], projectMountPointIds: [] },
+    { own: tag(items, OWN, CHAR_ID), group: [], project: [], general: [] },
+  )
+}
+
+/** A pool with explicit tiers. */
+function tieredPool(layers: { own?: WardrobeItem[]; group?: WardrobeItem[]; project?: WardrobeItem[]; general?: WardrobeItem[] }) {
+  return buildWearablePool(
+    CHAR_ID,
+    { groupMountPointIds: ['g-mp'], projectMountPointIds: ['p-mp'] },
+    {
+      own: tag(layers.own ?? [], OWN, CHAR_ID),
+      group: tag(layers.group ?? [], GROUP),
+      project: tag(layers.project ?? [], PROJECT),
+      general: tag(layers.general ?? [], GENERAL),
     },
-  } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
+  )
 }
 
 const emptySlots = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
 
 describe('resolveEquippedOutfitForCharacter', () => {
-  it('returns empty results when nothing is equipped', async () => {
-    const repos = makeRepos([])
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, emptySlots())
+  it('returns empty results when nothing is equipped', () => {
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([]), emptySlots())
     expect(resolved.outfitValues).toEqual({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
     expect(resolved.leafItemsBySlot.top).toEqual([])
-    expect(resolved.leafItemsBySlot.bottom).toEqual([])
+    expect(resolved.itemsById.size).toBe(0)
   })
 
-  it('routes a single-slot atomic item to its declared slot', async () => {
+  it('routes a single-slot atomic item to its declared slot', () => {
     const shirt = makeItem('shirt-id', 'Linen shirt', ['top'])
-    const slots: EquippedSlots = { ...emptySlots(), top: ['shirt-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([shirt]), CHAR_ID, slots)
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([shirt]), { ...emptySlots(), top: ['shirt-id'] })
     expect(resolved.outfitValues.top).toEqual(['Linen shirt'])
     expect(resolved.outfitValues.bottom).toEqual([])
   })
 
-  it('spreads an atomic multi-slot item into all slots its types declare, even when only equipped to one', async () => {
-    // A dress that covers both top and bottom, but the equipped state only
-    // lists it under slots.top. The renderer must still know the wearer
-    // isn't bottomless.
+  it('spreads an atomic multi-slot item into all slots its types declare, even when only equipped to one', () => {
     const dress = makeItem('dress-id', 'Sundress', ['top', 'bottom'])
-    const slots: EquippedSlots = { ...emptySlots(), top: ['dress-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([dress]), CHAR_ID, slots)
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([dress]), { ...emptySlots(), top: ['dress-id'] })
     expect(resolved.outfitValues.top).toEqual(['Sundress'])
     expect(resolved.outfitValues.bottom).toEqual(['Sundress'])
     expect(resolved.outfitValues.footwear).toEqual([])
   })
 
-  it('does not double-count a multi-slot item already populated in multiple input slots', async () => {
+  it('does not double-count a multi-slot item already populated in multiple input slots', () => {
     const dress = makeItem('dress-id', 'Sundress', ['top', 'bottom'])
-    const slots: EquippedSlots = { ...emptySlots(), top: ['dress-id'], bottom: ['dress-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([dress]), CHAR_ID, slots)
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([dress]), {
+      ...emptySlots(),
+      top: ['dress-id'],
+      bottom: ['dress-id'],
+    })
     expect(resolved.outfitValues.top).toEqual(['Sundress'])
     expect(resolved.outfitValues.bottom).toEqual(['Sundress'])
     expect(resolved.leafItemsBySlot.top).toHaveLength(1)
     expect(resolved.leafItemsBySlot.bottom).toHaveLength(1)
   })
 
-  it('routes composite components to each component\'s own slot, not the composite\'s equipped slot', async () => {
-    // A "casual outfit" composite equipped only to slots.top, but its
-    // components should distribute across top/bottom/footwear by their own types.
+  it("routes composite components to each component's own slot, not the composite's equipped slot", () => {
     const blouse = makeItem('blouse-id', 'White blouse', ['top'])
     const slacks = makeItem('slacks-id', 'Gray slacks', ['bottom'])
     const loafers = makeItem('loafers-id', 'Brown loafers', ['footwear'])
-    const outfit = makeItem('outfit-id', 'Casual office outfit', ['top'], [
-      'blouse-id',
-      'slacks-id',
-      'loafers-id',
-    ])
-    const slots: EquippedSlots = { ...emptySlots(), top: ['outfit-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(
-      makeRepos([blouse, slacks, loafers, outfit]),
-      CHAR_ID,
-      slots,
-    )
+    const outfit = makeItem('outfit-id', 'Casual office outfit', ['top'], ['blouse-id', 'slacks-id', 'loafers-id'])
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([blouse, slacks, loafers, outfit]), {
+      ...emptySlots(),
+      top: ['outfit-id'],
+    })
     expect(resolved.outfitValues.top).toEqual(['White blouse'])
     expect(resolved.outfitValues.bottom).toEqual(['Gray slacks'])
     expect(resolved.outfitValues.footwear).toEqual(['Brown loafers'])
     expect(resolved.outfitValues.accessories).toEqual([])
+    // Composite and leaves are both reported as touched.
+    expect(Array.from(resolved.itemsById.keys()).sort()).toEqual(
+      ['blouse-id', 'loafers-id', 'outfit-id', 'slacks-id'],
+    )
   })
 
-  it('layers a separately-equipped item on top of distributed coverage', async () => {
-    // Dress in slots.top covers top+bottom. A separate apron is also worn
-    // (also covers top). The rendered top should list dress then apron.
+  it('layers a separately-equipped item on top of distributed coverage', () => {
     const dress = makeItem('dress-id', 'Sundress', ['top', 'bottom'])
     const apron = makeItem('apron-id', 'Linen apron', ['top'])
-    const slots: EquippedSlots = { ...emptySlots(), top: ['dress-id', 'apron-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(
-      makeRepos([dress, apron]),
-      CHAR_ID,
-      slots,
-    )
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([dress, apron]), {
+      ...emptySlots(),
+      top: ['dress-id', 'apron-id'],
+    })
     expect(resolved.outfitValues.top).toEqual(['Sundress', 'Linen apron'])
     expect(resolved.outfitValues.bottom).toEqual(['Sundress'])
   })
 
-  it('falls back to findByIdsForCharacter for items missing from the character wardrobe', async () => {
-    const archetype = makeItem('arch-id', 'Borrowed jacket', ['top'])
-    const repos = {
-      wardrobe: {
-        findByCharacterId: jest.fn(async () => []),
-        findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
-          ids.includes('arch-id') ? [archetype] : [],
-        ),
-      },
-    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
-    const slots: EquippedSlots = { ...emptySlots(), top: ['arch-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
-    expect(resolved.outfitValues.top).toEqual(['Borrowed jacket'])
-  })
-
-  it('forwards projectMountPointIds to the findByIdsForCharacter fallback (tri-tier)', async () => {
-    // A garment that lives in a project store — absent from the character's own
-    // wardrobe, resolved only when the project tier is supplied.
-    const projectItem = makeItem('proj-item', 'Project livery coat', ['top'])
-    const findByIdsForCharacter = jest.fn(
-      async (_characterId: string, ids: string[], opts?: { projectMountPointIds?: string[] }) =>
-        ids.includes('proj-item') && opts?.projectMountPointIds?.includes('proj-mount')
-          ? [projectItem]
-          : [],
-    )
-    const repos = {
-      wardrobe: {
-        findByCharacterId: jest.fn(async () => []),
-        findByIdsForCharacter,
-      },
-    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
-    const slots: EquippedSlots = { ...emptySlots(), top: ['proj-item'] }
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots, {
-      projectMountPointIds: ['proj-mount'],
+  it('resolves items the character does not own from the shared tiers', () => {
+    const jacket = makeItem('arch-id', 'Borrowed jacket', ['top'])
+    const coat = makeItem('proj-item', 'Project livery coat', ['top'])
+    const sash = makeItem('group-item', 'Guild sash', ['accessories'])
+    const pool = tieredPool({ general: [jacket], project: [coat], group: [sash] })
+    const resolved = resolveEquippedOutfitForCharacter(pool, {
+      ...emptySlots(),
+      top: ['arch-id', 'proj-item'],
+      accessories: ['group-item'],
     })
-    expect(resolved.outfitValues.top).toEqual(['Project livery coat'])
-    expect(findByIdsForCharacter).toHaveBeenCalledWith(
-      CHAR_ID,
-      ['proj-item'],
-      { projectMountPointIds: ['proj-mount'] },
-    )
+    expect(resolved.outfitValues.top).toEqual(['Borrowed jacket', 'Project livery coat'])
+    expect(resolved.outfitValues.accessories).toEqual(['Guild sash'])
   })
 
-  it('hydrates a shared composite whose components are neither equipped nor owned', async () => {
-    // The canonical project-wardrobe default: a "House Livery" bundling three
-    // General items. Nothing but the composite is equipped, and the character
-    // owns none of it — so the components have to be fetched on their own, or
-    // the whole outfit resolves to nothing.
+  it('expands a shared composite whose components are neither equipped nor owned', () => {
     const coat = makeItem('coat-id', 'Livery coat', ['top'])
     const waistcoat = makeItem('waistcoat-id', 'Livery waistcoat', ['top'])
     const boots = makeItem('boots-id', 'Livery boots', ['footwear'])
-    const livery = makeItem('livery-id', 'House livery', ['top'], [
-      'coat-id',
-      'waistcoat-id',
-      'boots-id',
-    ])
-    const shared = [coat, waistcoat, boots, livery]
+    const livery = makeItem('livery-id', 'House livery', ['top'], ['coat-id', 'waistcoat-id', 'boots-id'])
+    const pool = tieredPool({ general: [coat, waistcoat, boots], project: [livery] })
 
-    const findByIdsForCharacter = jest.fn(async (_characterId: string, ids: string[]) =>
-      shared.filter((i) => ids.includes(i.id)),
-    )
-    const repos = {
-      wardrobe: {
-        findByCharacterId: jest.fn(async () => []),
-        findByIdsForCharacter,
-      },
-    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
-
-    const slots: EquippedSlots = { ...emptySlots(), top: ['livery-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
+    const resolved = resolveEquippedOutfitForCharacter(pool, { ...emptySlots(), top: ['livery-id'] })
 
     expect(resolved.outfitValues.top).toEqual(['Livery coat', 'Livery waistcoat'])
     expect(resolved.outfitValues.footwear).toEqual(['Livery boots'])
-    // One query for the equipped id, one for its component level — not one per component.
-    expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
   })
 
-  it('hydrates nested composite components level by level', async () => {
+  it("expands a character composite whose parts live in a group store", () => {
+    const sash = makeItem('sash-id', 'Guild sash', ['accessories'])
+    const shirt = makeItem('shirt-id', 'Dress shirt', ['top'])
+    const regalia = makeItem('regalia-id', 'Guild regalia', ['top', 'accessories'], ['shirt-id', 'sash-id'])
+    const pool = tieredPool({ own: [shirt, regalia], group: [sash] })
+
+    const resolved = resolveEquippedOutfitForCharacter(pool, { ...emptySlots(), top: ['regalia-id'] })
+
+    expect(resolved.outfitValues.top).toEqual(['Dress shirt'])
+    expect(resolved.outfitValues.accessories).toEqual(['Guild sash'])
+  })
+
+  it('expands nested composites to leaves', () => {
     const cufflinks = makeItem('cufflinks-id', 'Cufflinks', ['accessories'])
     const jewelry = makeItem('jewelry-id', 'Formal jewelry', ['accessories'], ['cufflinks-id'])
     const shirt = makeItem('shirt-id', 'Dress shirt', ['top'])
     const formal = makeItem('formal-id', 'Formal set', ['top'], ['shirt-id', 'jewelry-id'])
-    const shared = [cufflinks, jewelry, shirt, formal]
+    const pool = tieredPool({ general: [cufflinks, jewelry, shirt, formal] })
 
-    const repos = {
-      wardrobe: {
-        findByCharacterId: jest.fn(async () => []),
-        findByIdsForCharacter: jest.fn(async (_characterId: string, ids: string[]) =>
-          shared.filter((i) => ids.includes(i.id)),
-        ),
-      },
-    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
-
-    const slots: EquippedSlots = { ...emptySlots(), top: ['formal-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
+    const resolved = resolveEquippedOutfitForCharacter(pool, { ...emptySlots(), top: ['formal-id'] })
 
     expect(resolved.outfitValues.top).toEqual(['Dress shirt'])
     expect(resolved.outfitValues.accessories).toEqual(['Cufflinks'])
   })
 
-  it('stops hydrating when a component cannot be found anywhere', async () => {
+  it('resolves nothing for a composite whose components exist nowhere, and an unknown id is skipped', () => {
     const orphanParent = makeItem('parent-id', 'Mystery bundle', ['top'], ['ghost-id'])
-    const findByIdsForCharacter = jest.fn(async (_characterId: string, ids: string[]) =>
-      ids.includes('parent-id') ? [orphanParent] : [],
-    )
-    const repos = {
-      wardrobe: {
-        findByCharacterId: jest.fn(async () => []),
-        findByIdsForCharacter,
-      },
-    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
-
-    const slots: EquippedSlots = { ...emptySlots(), top: ['parent-id'] }
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
-
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([orphanParent]), {
+      ...emptySlots(),
+      top: ['parent-id', 'never-heard-of-it'],
+    })
     expect(resolved.outfitValues.top).toEqual([])
-    // Equipped id, then one attempt at the missing component — no retry loop.
-    expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
+  })
+
+  it('survives a component cycle without looping', () => {
+    const a = makeItem('a', 'A', ['top'], ['b'])
+    const b = makeItem('b', 'B', ['top'], ['a', 'leaf'])
+    const leaf = makeItem('leaf', 'Leaf', ['top'])
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([a, b, leaf]), { ...emptySlots(), top: ['a'] })
+    expect(resolved.outfitValues.top).toEqual(['Leaf'])
   })
 
   // Bug 78: `equippedOutfit` is unconstrained JSON, so a chat row written
-  // before a slot existed simply has no key for it. The loop must read the
-  // absent key as an empty slot, not hand `undefined` to `expandComposites`.
-  it('resolves a legacy slot bag written before the hair slot existed', async () => {
+  // before a slot existed simply has no key for it.
+  it('resolves a legacy slot bag written before the hair slot existed', () => {
     const shirt = makeItem('shirt-id', 'Linen shirt', ['top'])
-    const legacySlots = {
-      top: ['shirt-id'],
-      bottom: [],
-      footwear: [],
-      accessories: [],
-    } as unknown as EquippedSlots
+    const legacySlots = { top: ['shirt-id'], bottom: [], footwear: [], accessories: [] } as unknown as EquippedSlots
 
-    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([shirt]), CHAR_ID, legacySlots)
+    const resolved = resolveEquippedOutfitForCharacter(ownPool([shirt]), legacySlots)
 
     expect(resolved.outfitValues.top).toEqual(['Linen shirt'])
     expect(resolved.outfitValues.hair).toEqual([])
     expect(resolved.leafItemsBySlot.hair).toEqual([])
   })
 
-  // Archiving hides a garment from the pickers and bars it from the LLM's
-  // candidate list. It does NOT undress anyone: a character wearing an item
-  // that is archived mid-chat keeps wearing it until someone takes it off, so
-  // this read asks for archived items on purpose.
-  it('still resolves a garment archived while it was being worn', async () => {
+  // Archiving hides a garment from the pickers; it does NOT undress anyone.
+  // The pool's byId keeps archived items so a worn one still resolves.
+  it('still resolves a garment archived while it was being worn', () => {
     const coat = { ...makeItem('coat-id', 'Travelling coat', ['top']), archivedAt: NOW }
-    const repos = makeRepos([coat])
+    const sharedHat = { ...makeItem('hat-id', 'Old hat', ['accessories']), archivedAt: NOW }
+    const pool = tieredPool({ own: [coat], general: [sharedHat] })
 
-    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, {
+    const resolved = resolveEquippedOutfitForCharacter(pool, {
       ...emptySlots(),
       top: ['coat-id'],
+      accessories: ['hat-id'],
     })
 
     expect(resolved.outfitValues.top).toEqual(['Travelling coat'])
-    // The read must opt into archived items, or the title resolves to nothing.
-    expect(repos.wardrobe.findByCharacterId).toHaveBeenCalledWith(CHAR_ID, true)
+    expect(resolved.outfitValues.accessories).toEqual(['Old hat'])
   })
 })

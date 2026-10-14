@@ -1,10 +1,16 @@
 'use strict';
 
+const { resolveServerPort } = require('./lock-helpers');
+
 /**
  * `quilltap recall-replay <chatId>` — replay a turn's memory recall against
  * the running server and print the candidate table, old path (episodic
  * signals inert) vs. new path (retrospective flip + time window + entity
  * anchors + multi-probe) side by side.
+ *
+ * Then the text fallback's table and the stage trace (query, gather, hydrate,
+ * score, select, assemble): what the archive removed, what the budget cut, what
+ * the inter-character section took.
  *
  * Thin wrapper over POST /api/v1/chats/<chatId>?action=recall-replay.
  * Read-only; nothing is persisted server-side.
@@ -28,25 +34,62 @@ Replays the per-turn memory recall for a chat turn against the running
 Quilltap server and prints the full candidate table twice — the pre-overhaul
 ranking and the episodic (retrospective/time-window/entity) ranking — so the
 recall constants can be tuned against real "the character forgot" turns.
+After them: what the text fallback would have returned, and the stage trace
+(query → gather → hydrate → score → select → assemble). The anti-repetition
+ring is the one in force at that turn, read from the chat's recall records.
 
 Options:
+  -d, --data-dir <path>      Instance root; used to find the server's port
+  -i, --instance <name>      Registered instance whose server to call (see 'quilltap instances')
+      --passphrase <pass>    Accepted and ignored (this tool never opens the database)
       --turn <number>        1-based interchange to replay at (default: last)
       --char <characterId>   Character whose memories are searched
                              (default: first LLM-controlled participant)
-      --limit <number>       Candidate rows per path (default: 25, max: 100)
-      --port <number>        Server port for API calls (default: 3000)
+      --limit <number>       Candidate rows per path (default: the larger of 25
+                             and the new path's head size + 10; max: 100)
+      --memory-budget <tokens>
+                             Memory token budget (positive integer). The new
+                             path's selected rows then follow the budget-sized
+                             dynamic head (the head scales with the model's
+                             memory budget); the old path keeps the historical
+                             fixed 5-entry head.
+      --tuning '<json>'      Retuning constants for the NEW path only, e.g.
+                             '{"boostGateAbs":0.45,"boostGateMargin":0.15,
+                             "boostGateRamp":0.1,"boostCap":1.6}'. Keys:
+                             boostGateAbs, boostGateMargin, boostGateRamp,
+                             boostCap, freshBypassesGate, windowBypassesGate,
+                             multipliers
+                             {RECALL_MULTIPLIERS key:
+                             value}, specificAnchors, anchorMinHits,
+                             anchorOrder, backgroundReserve.
+                             Unknown keys are rejected.
+      --tuning-file <path>   Read the --tuning JSON from a file
+      --signals-from <path>  Reuse the signals saved in a previous --json
+                             replay of the same chat and turn, instead of a
+                             fresh (non-deterministic) distillation
+      --as-of                Search only memories created before the turn's
+                             opening message (the corpus as it stood then)
+      --port <number>        Server port for API calls. Default: the port recorded in the
+                             --instance/--data-dir server's lock file, else 3000
       --json                 Print the raw JSON result instead of tables
   -h, --help                 Show this help
 
 Examples:
   quilltap recall-replay <chatId>
   quilltap recall-replay <chatId> --turn 42
+  quilltap recall-replay <chatId> --turn 42 --memory-budget 4000
   quilltap recall-replay <chatId> --turn 42 --json > replay.json
+  quilltap recall-replay <chatId> --turn 42 --signals-from replay.json --as-of \
+    --tuning-file tuning-r1.json
 `);
 }
 
 function parseFlags(args) {
-  const flags = { turn: undefined, char: undefined, limit: undefined, port: 3000, json: false, help: false };
+  const flags = {
+    turn: undefined, char: undefined, limit: undefined, memoryBudget: undefined,
+    tuning: undefined, tuningFile: undefined, signalsFrom: undefined, asOf: false,
+    port: undefined, dataDir: '', instance: '', json: false, help: false,
+  };
   const positional = [];
   let i = 0;
   while (i < args.length) {
@@ -73,6 +116,40 @@ function parseFlags(args) {
         flags.limit = n;
         break;
       }
+      case '--memory-budget': {
+        const n = Number(args[++i]);
+        if (!Number.isInteger(n) || n < 1) {
+          console.error('Error: --memory-budget must be a positive integer');
+          process.exit(1);
+        }
+        flags.memoryBudget = n;
+        break;
+      }
+      case '--tuning':
+        flags.tuning = args[++i];
+        break;
+      case '--tuning-file':
+        flags.tuningFile = args[++i];
+        break;
+      case '--signals-from':
+        flags.signalsFrom = args[++i];
+        break;
+      case '--as-of':
+        flags.asOf = true;
+        break;
+      case '-d':
+      case '--data-dir':
+        flags.dataDir = args[++i];
+        break;
+      case '-i':
+      case '--instance':
+        flags.instance = args[++i];
+        break;
+      case '--passphrase':
+        // Accepted so universal flags never error; these tools talk to the
+        // running server and never open the database themselves.
+        i++;
+        break;
       case '--port': {
         const p = parseInt(args[++i], 10);
         if (isNaN(p) || p < 1 || p > 65535) {
@@ -106,8 +183,9 @@ function fmt(n, digits = 3) {
   return n.toFixed(digits);
 }
 
-function printPath(label, rows) {
-  console.log(`\n${BOLD}${label}${RESET} (${rows.length} candidates)`);
+function printPath(label, rows, headSize) {
+  const head = typeof headSize === 'number' ? `, head ${headSize}` : '';
+  console.log(`\n${BOLD}${label}${RESET} (${rows.length} candidates${head})`);
   if (rows.length === 0) {
     console.log(`  ${DIM}(none)${RESET}`);
     return;
@@ -127,6 +205,73 @@ function printPath(label, rows) {
   }
 }
 
+/** The stage trace: one line per stage entry (query → gather → … → assemble). */
+function printTrace(trace) {
+  if (!Array.isArray(trace) || trace.length === 0) return;
+  console.log(`\n${BOLD}STAGE TRACE${RESET}`);
+  for (const entry of trace) {
+    const label = entry.label ? `${DIM}(${entry.label})${RESET} ` : '';
+    const detail = Object.entries(entry.detail || {})
+      .map(([k, v]) => `${k}=${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
+      .join(' ');
+    console.log(`  ${CYAN}${String(entry.stage).padEnd(9)}${RESET}${label}${detail}`);
+  }
+}
+
+function readJson(text, what) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error(`${RED}Could not parse ${what} as JSON: ${err.message}${RESET}`);
+    process.exit(1);
+  }
+}
+
+function readJsonFile(path, what) {
+  const fs = require('fs');
+  let text;
+  try {
+    text = fs.readFileSync(path, 'utf8');
+  } catch (err) {
+    console.error(`${RED}Could not read ${what} ${path}: ${err.message}${RESET}`);
+    process.exit(1);
+  }
+  return readJson(text, `${what} ${path}`);
+}
+
+/** The tuning object from --tuning or --tuning-file (never both). */
+function loadTuning(flags) {
+  if (flags.tuning !== undefined && flags.tuningFile !== undefined) {
+    console.error('Error: pass --tuning or --tuning-file, not both');
+    process.exit(1);
+  }
+  if (flags.tuning !== undefined) return readJson(flags.tuning, '--tuning');
+  if (flags.tuningFile !== undefined) return readJsonFile(flags.tuningFile, '--tuning-file');
+  return undefined;
+}
+
+/**
+ * The signals saved in a previous --json replay. Refuses a file from another
+ * chat or turn — reusing its signals would replay a different question.
+ */
+function loadSignals(path, chatId, turn) {
+  const saved = readJsonFile(path, '--signals-from');
+  const result = saved.data ?? saved;
+  if (!result.signals) {
+    console.error(`${RED}${path} has no saved signals (its distillation failed); replay without --signals-from${RESET}`);
+    process.exit(1);
+  }
+  if (result.chatId && result.chatId !== chatId) {
+    console.error(`${RED}${path} is a replay of chat ${result.chatId}, not ${chatId}${RESET}`);
+    process.exit(1);
+  }
+  if (turn !== undefined && result.turnIndex !== undefined && result.turnIndex !== turn) {
+    console.error(`${RED}${path} is a replay of turn ${result.turnIndex}, not ${turn}${RESET}`);
+    process.exit(1);
+  }
+  return result.signals;
+}
+
 async function recallReplayCommand(args) {
   const { flags, positional } = parseFlags(args);
 
@@ -140,11 +285,26 @@ async function recallReplayCommand(args) {
   }
   const chatId = positional[0];
 
-  const url = `http://localhost:${flags.port}/api/v1/chats/${encodeURIComponent(chatId)}?action=recall-replay`;
+  let target;
+  try {
+    target = resolveServerPort({ port: flags.port, instance: flags.instance, dataDir: flags.dataDir });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const port = target.port;
+  if (target.note) process.stderr.write(`${DIM}${target.note}${RESET}\n`);
+
+  const url = `http://localhost:${port}/api/v1/chats/${encodeURIComponent(chatId)}?action=recall-replay`;
   const body = {};
   if (flags.turn !== undefined) body.turnIndex = flags.turn;
   if (flags.char) body.characterId = flags.char;
   if (flags.limit !== undefined) body.limit = flags.limit;
+  if (flags.memoryBudget !== undefined) body.memoryBudget = flags.memoryBudget;
+  const tuning = loadTuning(flags);
+  if (tuning !== undefined) body.tuning = tuning;
+  if (flags.signalsFrom !== undefined) body.signals = loadSignals(flags.signalsFrom, chatId, flags.turn);
+  if (flags.asOf) body.asOf = true;
 
   process.stderr.write(`${BOLD}Replaying recall${RESET} for chat ${DIM}${chatId}${RESET} via ${DIM}${url}${RESET}\n`);
 
@@ -156,8 +316,8 @@ async function recallReplayCommand(args) {
       body: JSON.stringify(body),
     });
   } catch (err) {
-    console.error(`${RED}Could not reach Quilltap server at http://localhost:${flags.port}: ${err.message}${RESET}`);
-    console.error('Start the server (npm run dev) or pass --port to match a non-default port.');
+    console.error(`${RED}Could not reach Quilltap server at http://localhost:${port}: ${err.message}${RESET}`);
+    console.error(target.hint);
     process.exit(1);
   }
 
@@ -170,6 +330,11 @@ async function recallReplayCommand(args) {
   }
   if (!res.ok || payload?.success === false) {
     console.error(`${RED}Replay failed (status ${res.status}): ${payload?.error || payload?.message || 'unknown error'}${RESET}`);
+    if (Array.isArray(payload?.details)) {
+      for (const issue of payload.details) {
+        console.error(`  ${(issue.path || []).join('.') || '(body)'}: ${issue.message}`);
+      }
+    }
     process.exit(1);
   }
 
@@ -193,9 +358,26 @@ async function recallReplayCommand(args) {
     console.log(`${BOLD}Signals${RESET}   ${YELLOW}distillation failed — new path ran inert${RESET}`);
   }
 
-  printPath('OLD PATH (episodic signals inert)', result.oldPath || []);
-  printPath('NEW PATH (retrospective/window/entities live)', result.newPath || []);
+  const pinned = result.signalsPinned ? `${CYAN}pinned${RESET}` : `${DIM}fresh distillation${RESET}`;
+  const asOf = result.asOf
+    ? `${CYAN}as of ${result.asOf}${RESET} ${DIM}(${result.excludedAfterAsOf} later memories left out)${RESET}`
+    : `${DIM}whole corpus${RESET}`;
+  console.log(`${BOLD}Harness${RESET}   signals ${pinned} · ${asOf}`);
+  console.log(`${BOLD}Tuning${RESET}    ${result.tuning === 'defaults' || !result.tuning ? `${DIM}defaults${RESET}` : `${YELLOW}${result.tuning}${RESET}`} ${DIM}(new path only)${RESET}`);
+  if (result.ringSource) {
+    const source = result.ringSource === 'debug-log'
+      ? `${DIM}as of the turn, from its recall records${RESET}`
+      : `${YELLOW}the chat's current ring (no recall records that early)${RESET}`;
+    console.log(`${BOLD}Ring${RESET}      ${(result.ring || []).length} recently whispered · ${source}`);
+  }
+
+  printPath('OLD PATH (episodic signals inert)', result.oldPath || [], result.oldHeadSize);
+  printPath('NEW PATH (retrospective/window/entities live)', result.newPath || [], result.newHeadSize);
+  if (Array.isArray(result.fallbackPath)) {
+    printPath('TEXT FALLBACK (what the new path returns with no usable vector)', result.fallbackPath, result.newHeadSize);
+  }
+  printTrace(result.trace);
   console.log('');
 }
 
-module.exports = { recallReplayCommand };
+module.exports = { recallReplayCommand, parseFlags };

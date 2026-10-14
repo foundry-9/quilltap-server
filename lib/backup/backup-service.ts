@@ -7,6 +7,7 @@
  * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
+import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -31,7 +32,6 @@ import type {
   BackupData,
   ChatWithMessages,
   InstanceSettingRow,
-  SerializedVectorEntry,
   SerializedConversationChunk,
   SerializedDocMountChunk,
 } from './types';
@@ -154,7 +154,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     pluginConfigs,
     chatSettingsResult,
     folders,
-    wardrobeItems,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -180,15 +179,19 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.chatSettings.findByUserId(userId),
     // Get folders
     globalRepos.folders.findByUserId(userId),
-    // Get wardrobe items (composites are wardrobe items now; outfit presets retired)
-    globalRepos.wardrobe.findAll(),
   ]);
+  // Wardrobe items live in document stores (`Wardrobe/*.md`), which the backup
+  // carries as documents; the legacy `wardrobeItems` array stays empty so old
+  // restorers still read the format.
+  const wardrobeItems: never[] = [];
 
   // Exclude backup files from the file list - we don't want to back up old backups
   const filteredFiles = files.filter(
     (file) => file.category !== 'BACKUP' && file.folderPath !== '/backups'
   );
   // Collect messages for each chat
+  // The fold passes' cursors for every chat, in one read.
+  const bundleCursors = await loadBundleCursors();
   const chats: ChatWithMessages[] = await Promise.all(
     chatMetadatas.map(async (chat) => {
       const messages = await repos.chats.getMessages(chat.id);
@@ -196,8 +199,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
       const messageEvents = messages.filter(
         (event): event is ChatEvent & { type: 'message' } => event.type === 'message'
       );
+      // The fold passes' cursors ride on the chat under their legacy field names.
       return {
-        ...chat,
+        ...(await withBundleCursorFields(chat, bundleCursors)),
         messages: messageEvents,
       } as ChatWithMessages;
     })
@@ -207,7 +211,13 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const memoriesArrays = await Promise.all(
     characters.map((char) => repos.memories.findByCharacterId(char.id))
   );
-  const memories = memoriesArrays.flat();
+  // A repository-read memory carries its embedding as a Float32Array, which
+  // JSON.stringify writes as an index-keyed object that MemorySchema refuses
+  // on restore (bug 181). Encode it as number[] like the chunk embeddings.
+  const memories = memoriesArrays.flat().map((memory) => ({
+    ...memory,
+    embedding: encodeEmbedding(memory.embedding ?? null),
+  }));
 
   // Collect character plugin data for all characters
   const characterPluginDataArrays = await Promise.all(
@@ -227,6 +237,14 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   );
   const chatDocuments = chatDocumentsArrays.flat();
 
+  // Collect Inform rows for every user chat, consumed ones included — a
+  // consumed row is what lets a swipe of the turn that consumed it re-apply
+  // the same passage once the instance is restored.
+  const chatInformsArrays = await Promise.all(
+    chatMetadatas.map((chat) => globalRepos.chatInforms.findByChatId(chat.id))
+  );
+  const chatInforms = chatInformsArrays.flat();
+
   // Collect conversation chunks for every user chat, encoding embeddings as
   // number arrays so they survive JSON. Chunks include the embedding so the
   // restored instance does not have to re-embed an entire chat history.
@@ -245,24 +263,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     updatedAt: chunk.updatedAt,
   }));
 
-  // Per-character vector indices + their entries. Without these the restored
-  // instance would have to re-embed every memory; with them, search keeps
-  // working immediately. Entries' Float32 embeddings ride as number[].
-  const characterIdsWithVectors = await globalRepos.vectorIndices.getAllCharacterIds();
-  const vectorIndexMetas = (
-    await Promise.all(
-      characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findMetaByCharacterId(cid))
-    )
-  ).filter((meta): meta is NonNullable<typeof meta> => meta !== null);
-  const vectorEntriesArrays = await Promise.all(
-    characterIdsWithVectors.map((cid) => globalRepos.vectorIndices.findEntriesByCharacterId(cid))
-  );
-  const vectorEntries: SerializedVectorEntry[] = vectorEntriesArrays.flat().map((entry) => ({
-    id: entry.id,
-    characterId: entry.characterId,
-    embedding: Array.from(entry.embedding as Float32Array),
-    createdAt: entry.createdAt,
-  }));
+  // No vector index to dump: a memory's vector rides on its own row
+  // (`memories.embedding`, written above as number[]), and the in-process
+  // index is rebuilt from the rows on first use.
 
   // TF-IDF vocabularies for BUILTIN embedding profiles. Cheap to dump and
   // means BUILTIN search keeps working after restore without a refit.
@@ -277,6 +280,12 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // up, so the rules must come along too or a restore re-enables the feature
   // with zero rules.
   const textReplacementRules = await globalRepos.textReplacementRules.list();
+
+  // The wardrobe wear ledger. Global (single-user per instance, no userId),
+  // so the whole table is the user's. Keyed by item id with no FK — items are
+  // vault files, which travel with the document-store tables below.
+  const wardrobeWear = await globalRepos.wardrobeWear.findAll();
+  moduleLogger.debug('Collected wardrobe wear ledger for backup', { rowCount: wardrobeWear.length });
 
   // Scriptorium / document store tables live in a separate mount-index
   // database. We dump them with raw SELECTs because most repositories don't
@@ -366,12 +375,11 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     characterPluginData,
     conversationAnnotations,
     chatDocuments,
+    chatInforms,
     instanceSettings,
     embeddingStatus,
     conversationChunks,
     tfidfVocabularies,
-    vectorIndexMetas,
-    vectorEntries,
     docMountPoints,
     docMountFolders,
     docMountFiles,
@@ -383,6 +391,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     groupDocMountLinks,
     groupCharacterMembers,
     textReplacementRules,
+    wardrobeWear,
   };
 }
 
@@ -468,12 +477,11 @@ function createManifest(
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: countUserInstalledThemes(),
       chatDocuments: data.chatDocuments?.length || 0,
+      chatInforms: data.chatInforms?.length || 0,
       instanceSettings: data.instanceSettings?.length || 0,
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,
       tfidfVocabularies: data.tfidfVocabularies?.length || 0,
-      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
-      vectorEntries: data.vectorEntries?.length || 0,
       docMountPoints: data.docMountPoints?.length || 0,
       docMountFolders: data.docMountFolders?.length || 0,
       docMountFiles: data.docMountFiles?.length || 0,
@@ -485,6 +493,7 @@ function createManifest(
       groupDocMountLinks: data.groupDocMountLinks?.length || 0,
       groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
+      wardrobeWear: data.wardrobeWear?.length || 0,
     },
   };
 }
@@ -563,8 +572,6 @@ function compactBackupData(
     memories: data.memories.map((memory) => ({ ...memory, embedding: null })),
     // Wholly derived collections — regenerable from the content above.
     conversationChunks: [],
-    vectorEntries: [],
-    vectorIndexMetas: [],
     tfidfVocabularies: [],
     embeddingStatus: [],
     docMountChunks: [],
@@ -618,7 +625,6 @@ export async function createBackup(
       userId,
       memories: data.memories.length,
       droppedConversationChunks: collected.conversationChunks?.length ?? 0,
-      droppedVectorEntries: collected.vectorEntries?.length ?? 0,
       droppedDocMountChunks: collected.docMountChunks?.length ?? 0,
     });
   }
@@ -664,6 +670,10 @@ export async function createBackup(
     // Format-3 additions (older restorers will simply skip these missing files).
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-documents.json'), data.chatDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'instance-settings.json'), data.instanceSettings || []);
+
+    // Inform rows (4.10). Optional on the way back in, like every file above,
+    // so an older restorer simply does not see it.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-informs.json'), data.chatInforms || []);
     // Derived embedding collections. A compact backup omits the files
     // outright rather than writing empty arrays — the restore reader treats
     // all of these as optional (`readJsonArrayFileOptional`), so an absent
@@ -673,8 +683,6 @@ export async function createBackup(
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-status.json'), data.embeddingStatus || []);
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-chunks.json'), data.conversationChunks || []);
       await writeJsonArrayFile(path.join(stagingDir, 'data', 'tfidf-vocabularies.json'), data.tfidfVocabularies || []);
-      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-index-metas.json'), data.vectorIndexMetas || []);
-      await writeJsonArrayFile(path.join(stagingDir, 'data', 'vector-entries.json'), data.vectorEntries || []);
     }
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-points.json'), data.docMountPoints || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-folders.json'), data.docMountFolders || []);
@@ -689,6 +697,9 @@ export async function createBackup(
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-doc-mount-links.json'), data.groupDocMountLinks || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-character-members.json'), data.groupCharacterMembers || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'text-replacement-rules.json'), data.textReplacementRules || []);
+    // Wear ledger (4.11). Optional on the way back in, so an older restorer
+    // simply does not see it.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-wear.json'), data.wardrobeWear || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

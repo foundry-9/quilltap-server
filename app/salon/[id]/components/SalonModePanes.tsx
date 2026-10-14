@@ -13,7 +13,7 @@
  * (possibly other-pane) tabs. Opening a document spawns its child tab; closing
  * the document closes the tab; closing the tab closes the document. The Terminal
  * pane follows the same single-pane pattern. See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * The legacy branch is single-document: it shows the focused document only,
  * matching the previous behavior so the old route is unaffected.

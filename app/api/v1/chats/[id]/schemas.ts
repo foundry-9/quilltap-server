@@ -4,8 +4,10 @@
  * Validation schemas for chat route requests
  */
 
+import { ScenarioRefSchema } from '@/lib/schemas/chat.types';
 import { z } from 'zod';
 import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
+import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 
 export const updateChatSchema = z.object({
   title: z.string().optional(),
@@ -42,6 +44,14 @@ export const updateChatSchema = z.object({
  */
 export const setScenarioSchema = z.object({
   scenario: z.string().nullish(),
+  /** A scenario anywhere (the browser's pick, or "Reload from source"). Most specific, so first. */
+  scenarioRef: ScenarioRefSchema.nullish(),
+  /**
+   * Re-read the source file even when it is the chat's own source and its
+   * text has changed since it was picked ("Reload from source"). Without it,
+   * re-saving the chat's own source keeps the scene the chat already has.
+   */
+  reload: z.boolean().optional(),
   scenarioId: z.uuid().nullish(),
   projectScenarioPath: z.string().max(500).nullish(),
   groupScenarioPath: z.string().max(500).nullish(),
@@ -54,6 +64,8 @@ export const updateParticipantSchema = z.object({
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
   selectedSystemPromptId: z.uuid().nullish(),
+  /** Replace the set of subprompts in play for this seat (ids = vault file names sans `.md`). */
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).max(100).optional(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),  // Keep for backward compat
   status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field
@@ -115,14 +127,15 @@ export const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
   /**
-   * Four-state per-chat Concierge mode set from the sidebar:
-   *   - 'monitored'  : moderation runs as usual, classifier may auto-flip → 'flagged'
-   *   - 'flagged'    : the Concierge's verdict — dangerous (uncensored routing, etc.)
-   *   - 'vouched'    : the operator vouches the chat safe (no moderation, ordinary providers)
-   *   - 'uncensored' : the operator asserts the chat spicy (uncensored routing, no moderation)
-   * The handler maps this onto chats.conciergeOverride + chats.isDangerousChat.
+   * Per-chat Concierge state set from the sidebar:
+   *   - 'moderated'   : ordinary providers first, uncensored on refusal; the
+   *                     Concierge may move the chat to 'unmoderated' himself
+   *   - 'unmoderated' : the uncensored desk only, candid prompts
+   *   - 'locked'      : ordinary providers only; a refusal stands
+   * Applied through `applyConciergeFlip`. The retired four-state values
+   * ('monitored', 'flagged', 'vouched', 'uncensored') are rejected with 400.
    */
-  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
+  conciergeState: ConciergeModeSchema.optional(),
 });
 
 export const addTagSchema = z.object({
@@ -223,6 +236,44 @@ export const insertAnnouncementPreviewSchema = z.object({
    * remark is private). Same shape as the post action's field.
    */
   targetParticipantIds: z.array(z.uuid()).nullable().optional(),
+});
+
+/**
+ * Impersonated-line voice rewrite (the IN-SCENE rehearsal). `participantId` is
+ * the seat the operator is impersonating; the server re-derives the
+ * impersonation from the chat row and never trusts the client's claim. Both
+ * ids are operator overrides from the dialog's pickers — omitted, the seat's
+ * own selections are used.
+ */
+export const impersonationVoicePreviewSchema = z.object({
+  participantId: z.uuid(),
+  seedMarkdown: z.string().min(1),
+  connectionProfileId: z.uuid().optional(),
+  systemPromptId: z.uuid().optional(),
+});
+
+/**
+ * `POST ?action=inform` — an out-of-character passage handed to one or more
+ * LLM-controlled seats, delivered verbatim as its own system block on each
+ * target's next generation.
+ */
+export const informSchema = z.object({
+  contentMarkdown: z.string().min(1),
+  /** Chat PARTICIPANT ids. null = every eligible seat at post time. */
+  targetParticipantIds: z.array(z.uuid()).min(1).nullable(),
+  /**
+   * A standing inform: delivered on every generation the targets make in this
+   * chat until withdrawn, rather than once. Scoped to this chat alone.
+   */
+  permanent: z.boolean().optional().default(false),
+});
+
+/**
+ * `POST ?action=cancel-inform` — drop a batch's still-pending targets, or
+ * withdraw a standing inform outright.
+ */
+export const cancelInformSchema = z.object({
+  batchId: z.uuid(),
 });
 
 /**

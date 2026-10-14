@@ -433,21 +433,29 @@ Ranked by expected impact on the 32k-memory case:
 
 ## 9. File inventory
 
-| Area | File | Key exports |
+Rewritten 2026-10-13 for the layout the [memory system refactor](./memory-system-refactor.md) left behind (Phases A–G). §1–§8 and §10 describe the system as it stood in April 2026 and are kept as history; where they name a file below's predecessor (`memory-gate.ts`, `memory-service.ts`, `housekeeping.ts`, `memory-weighting.ts`, `memory-injector.ts`), read the refactor spec's §3 and §6 for what replaced it.
+
+| Area | File(s) | Key exports |
 | --- | --- | --- |
-| Types | `lib/schemas/memory.types.ts` | `MemorySchema`, `Memory` |
-| Gate | `lib/memory/memory-gate.ts` | `runMemoryGate`, `reinforceMemory`, `linkRelatedMemories`, `calculateReinforcedImportance` |
-| Service | `lib/memory/memory-service.ts` | `createMemoryWithGate`, `createMemoryWithEmbedding`, `searchMemoriesSemantic`, `generateMissingEmbeddings` |
-| Processor | `lib/memory/memory-processor.ts` | `processMessageForMemory`, `processInterCharacterMemory` |
-| Housekeeping | `lib/memory/housekeeping.ts` | `runHousekeeping`, `getHousekeepingPreview`, `needsHousekeeping`, `isProtectedMemory` |
-| Weighting | `lib/memory/memory-weighting.ts` | `calculateEffectiveWeight`, `calculateProtectionScore`, `rankMemoriesByWeight`, `formatRelativeAge` |
-| Injection | `lib/chat/context/memory-injector.ts` | `formatMemoriesForContext`, `formatInterCharacterMemoriesForContext` |
-| Triggers | `lib/services/chat-message/memory-trigger.service.ts` | `triggerMemoryExtraction`, `triggerInterCharacterMemory` |
-| Job handlers | `lib/background-jobs/handlers/memory-extraction.ts`, `memory-housekeeping.ts`, `embedding-refit.ts`, `embedding-reindex.ts` | `handleMemoryExtraction`, `handleMemoryHousekeeping` |
-| Scheduler | `lib/background-jobs/scheduled-housekeeping.ts` | `scheduleHousekeeping`, `runScheduledHousekeeping` |
-| Repository | `lib/database/repositories/memories.repository.ts` | `findByCharacterId`, `findByCharacterIdInBatches`, `findByIds`, `searchByContent`, `bulkDelete`, `countCreatedSince` |
-| Vector store | `lib/embedding/vector-store.ts` | `getCharacterVectorStore`, `getVectorStoreManager` |
-| Schema DDL | `migrations/scripts/sqlite-initial-schema.ts`, `migrations/scripts/add-memory-gate-fields.ts` | — |
+| Types | `lib/schemas/memory.types.ts`, `lib/memory/candidate.ts` | `MemorySchema`, `Memory`, `MemoryCandidateSchema` (the one candidate shape every producer emits) |
+| Settings | `lib/memory/settings.ts`, `settings-defaults.ts`; `lib/schemas/settings.types.ts`; `lib/schemas/patch-schema.ts` | `resolveMemorySettings` (one read, `capFor`), `MEMORY_SETTING_DEFAULTS`, `ADMISSION_THRESHOLDS(_TFIDF)`, `patchSchemaOf` (partial writes) |
+| Time | `lib/memory/time/` | `MemoryClock`, `memoryClockFor`, `resolveEventTime`, `resolveReferenceWindow`, `formatMemoryAge` |
+| Scoring | `lib/memory/scoring/` | `relevance`, `salience`, `protection`, `calculateReinforcedImportance`, the recall blend, the importance filters |
+| Index | `lib/memory/index-store/` | `memoryIndex` (`upsert`, `indexInserted`, `setTier`, `remove`, `reload`), `embeddingTextFor`, `generateMissingEmbeddings`, `enqueueMissingEmbeddings`, `rebuildVectorIndex` |
+| Admission | `lib/memory/admission/` | `admitCandidate` (host-RPC `admitMemory` from the child), `decideAdmission` (pure), `foldInto` / `applyFold`, `linkBothWays`, `updateMemory` (hand edits) |
+| Extraction | `lib/memory/extraction/` | `buildExtractionContext`, the four passes (`selfTurnPass`, `otherTurnPass`, `otherFoldPass`, `episodeFoldPass`), `runFoldPass`, cursors (`memory_extraction_cursors`), `runExtractionDryRun`, the rate limiter |
+| Recall | `lib/memory/recall/` | `buildRecallQuery` → `gather` → `hydrate` → `score` → `select` → `assembleRecall` → render → `deliverRecall` (the one writer of `lastAccessedAt`); `searchMemories` (tool and API), `generateMemoryRecap`, the replay trace |
+| Maintenance | `lib/memory/maintenance/` | `runMaintenance` (fold → consolidate → demote → retire → mirror), `loadCorpus`, the parent-side ledger (`shouldEnqueue`, `getMaintenanceLedgerStatus`), `maybeEnqueueMaintenance`, the scheduler |
+| Consolidation | `lib/memory/consolidation.ts`, `consolidation-clustering.ts`, `consolidation-plan.ts`, `cheap-llm-tasks/consolidation-tasks.ts` | `consolidate` (planner and model route), `ConsolidationReport` |
+| Deletion and repair | `lib/memory/retire.ts`, `lib/memory/repair.ts` | `retireMemories`, `retireChatMemories`, `scrubDanglingMemoryLinks`, `repairMemoryGraph` |
+| Commonplace mirror | `lib/memory/commonplace-mirror.ts`, `commonplace-file.ts`, `lib/file-storage/commonplace-digest-vault-bridge.ts` | `mirrorCommonplaceForSubjects` (parent, after commit) |
+| Triggers | `lib/services/chat-message/memory-trigger.service.ts` | `triggerMemoryExtraction` |
+| Job handlers | `lib/background-jobs/handlers/memory-extraction.ts`, `memory-maintenance.ts`, `carina-memory-extraction.ts`, `memory-regenerate-chat.ts`, `memory-regenerate-all.ts`, `embedding-*.ts` | `MEMORY_EXTRACTION`, `MEMORY_MAINTENANCE`, … |
+| Repository | `lib/database/repositories/memories.repository.ts` | `findByCharacterIdPaginated`, `countCapBreakdown`, `incrementReinforcement`, the link deltas, `findDanglingLinks`, `bulkDeleteUnsafe` (only `retire.ts`) |
+| Vector cache | `lib/embedding/vector-store.ts` | the in-process cache only `index-store/` may import |
+| API | `app/api/v1/memories/route.ts`, `[id]/route.ts` | `?action=maintain`, `maintenance-status`, `repair`, the `*-config` actions, search, backfill |
+| UI | `components/tools/memory-maintenance-card.tsx`, `components/memory/maintenance-dialog.tsx`, `maintenance-report.tsx` | the Maintenance card, run dialog and report |
+| CLI | `packages/quilltap/lib/memories-commands.js`, `memories-maintain-command.js`, `recall-replay-command.js`, `memory-diff-command.js`, `anchor-probe-command.js` | `quilltap memories maintain / status / validate --repair`, `recall-replay`, `memory-diff`, `anchor-probe` |
 
 ---
 

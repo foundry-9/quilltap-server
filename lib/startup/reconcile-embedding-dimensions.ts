@@ -5,16 +5,12 @@
  * default embedding profile produces. This pass runs on every boot and makes
  * the stored corpus conform to it, across every embedding-bearing store:
  *
- *   - memories               (main DB — re-embedded via reindex)
- *   - vector_entries         (main DB — non-conforming rows DELETED here;
- *                             they are derived data, already invisible to
- *                             vector search, and the memory re-embed
- *                             recreates them)
- *   - vector_indices         (main DB — meta `dimensions` snapped to target)
- *   - conversation_chunks    (main DB — live chats re-embedded; STALE chats'
- *                             non-conforming embeddings NULLed to the
- *                             cold-tier state the stale sweep produces, so
- *                             the Salon reopen path re-embeds on demand)
+ *   - memories               (main DB — re-embedded via reindex; the row is
+ *                             the memory index, so a non-conforming vector
+ *                             is skipped by search until it is replaced)
+ *   - conversation_chunks    (main DB — re-embedded via reindex; stale chats
+ *                             are treated like any other chat, since chunk
+ *                             embeddings are never cold-tiered)
  *   - help_docs              (main DB — re-embedded via reindex)
  *   - doc_mount_chunks       (mount index DB — enabled mounts re-embedded)
  *
@@ -55,12 +51,6 @@ export interface EmbeddingDimensionReconcileResult {
   targetDimensions: number | null
   /** Why the pass was skipped, if it was. */
   skippedReason: 'no-profile' | 'builtin-profile' | 'no-fixed-dim' | 'db-unavailable' | null
-  /** Non-conforming vector_entries rows deleted. */
-  vectorEntriesDeleted: number
-  /** vector_indices meta rows whose dimensions were snapped to target. */
-  vectorIndexMetaFixed: number
-  /** Stale-chat conversation chunks whose non-conforming embeddings were NULLed. */
-  staleChunkEmbeddingsCleared: number
   /** Recoverable non-conforming rows found, per table. */
   mismatched: {
     memories: number
@@ -73,9 +63,6 @@ export interface EmbeddingDimensionReconcileResult {
 }
 
 const EMPTY_RESULT: Omit<EmbeddingDimensionReconcileResult, 'targetDimensions' | 'skippedReason'> = {
-  vectorEntriesDeleted: 0,
-  vectorIndexMetaFixed: 0,
-  staleChunkEmbeddingsCleared: 0,
   mismatched: { memories: 0, conversationChunks: 0, helpDocs: 0, mountChunks: 0 },
   reindexEnqueued: false,
 }
@@ -105,9 +92,11 @@ function countNonconforming(
   opts: { includeNull?: boolean } = {},
 ): number {
   // For memories and help docs a NULL embedding is also non-conforming —
-  // nothing else re-embeds it. Conversation chunks are NOT counted when NULL
-  // (that is the deliberate cold-tier state, healed on reopen), and mount
-  // chunks' NULLs belong to the mount scan pipeline.
+  // nothing else re-embeds it. Conversation chunks are NOT counted when NULL:
+  // that is simply "not embedded yet" (a fresh chunk, or one the embedder
+  // hasn't gotten to), and the conversation-render reconcile
+  // (`lib/startup/reconcile-conversation-rendering.ts`) already owns healing
+  // that gap. Mount chunks' NULLs belong to the mount scan pipeline.
   const where = opts.includeNull ? `(embedding IS NULL OR ${NONCONFORMING})` : NONCONFORMING
   const row = db
     .prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE ${where} AND ${NOT_FAILED(table)}`)
@@ -177,40 +166,6 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
     mismatched: { ...EMPTY_RESULT.mismatched },
   }
 
-  // ---- vector_entries: delete non-conforming rows outright. They are pure
-  // derived data (the memory row keeps the source text), every search path
-  // already skips them by length, and the memory re-embed recreates them.
-  if (tableExists(db, 'vector_entries')) {
-    const del = db
-      .prepare(`DELETE FROM "vector_entries" WHERE ${NONCONFORMING}`)
-      .run(targetDim)
-    result.vectorEntriesDeleted = del.changes
-  }
-
-  // ---- vector_indices: snap meta dimensions to the standard so freshly
-  // re-embedded vectors are accepted and search validates against the truth.
-  if (tableExists(db, 'vector_indices')) {
-    const fix = db
-      .prepare(`UPDATE "vector_indices" SET dimensions = ? WHERE dimensions != ?`)
-      .run(targetDim, targetDim)
-    result.vectorIndexMetaFixed = fix.changes
-  }
-
-  if (result.vectorEntriesDeleted > 0 || result.vectorIndexMetaFixed > 0) {
-    // Drop cached in-memory stores so the next search loads the cleaned rows.
-    const { getVectorStoreManager } = await import('@/lib/embedding/vector-store')
-    getVectorStoreManager().unloadAll()
-  }
-
-  // ---- conversation_chunks on STALE chats: converge to the cold-tier state
-  // (NULL embedding) instead of paying to re-embed chats nobody is reading.
-  // The Salon reopen path re-embeds on demand; the render reconcile and the
-  // reindex handler both already exclude stale chats, so a NULLed stale chunk
-  // re-triggers nothing.
-  if (tableExists(db, 'conversation_chunks') && tableExists(db, 'chats')) {
-    result.staleChunkEmbeddingsCleared = await clearStaleChatNonconformingChunks(db, targetDim)
-  }
-
   // ---- Count what still needs re-embedding (recoverable rows only).
   if (tableExists(db, 'memories')) {
     // characterId guard mirrors the reindex fan-out (it enumerates characters
@@ -227,10 +182,12 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
     result.mismatched.memories = row.n
   }
   if (tableExists(db, 'conversation_chunks') && tableExists(db, 'chats')) {
-    // Restricted to chunks whose chat still exists AND is not stale: the
-    // reindex handler only walks live chats, so counting anything else would
-    // re-enqueue a sweep on every boot that can never make progress.
-    result.mismatched.conversationChunks = await countNonconformingLiveChunks(db, targetDim, profile.id)
+    // Restricted to chunks whose chat still exists: the reindex handler only
+    // walks chats it can enumerate, so counting orphaned chunks would
+    // re-enqueue a sweep on every boot that can never make progress. Stale
+    // chats are counted like any other — their chunk embeddings are never
+    // cold-tiered.
+    result.mismatched.conversationChunks = await countNonconformingChunks(db, targetDim, profile.id)
   }
   if (tableExists(db, 'help_docs')) {
     result.mismatched.helpDocs = countNonconforming(
@@ -249,19 +206,10 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
     result.reindexEnqueued = await enqueueMismatchedReindex(profile.userId, profile.id)
   }
 
-  const touchedAnything =
-    totalMismatched > 0 ||
-    result.vectorEntriesDeleted > 0 ||
-    result.vectorIndexMetaFixed > 0 ||
-    result.staleChunkEmbeddingsCleared > 0
-
-  if (touchedAnything) {
+  if (totalMismatched > 0) {
     logger.info('Embedding dimension reconcile found non-conforming vectors', {
       profileId: profile.id,
       targetDimensions: targetDim,
-      vectorEntriesDeleted: result.vectorEntriesDeleted,
-      vectorIndexMetaFixed: result.vectorIndexMetaFixed,
-      staleChunkEmbeddingsCleared: result.staleChunkEmbeddingsCleared,
       ...result.mismatched,
       reindexEnqueued: result.reindexEnqueued,
     })
@@ -278,11 +226,10 @@ async function runReconcile(): Promise<EmbeddingDimensionReconcileResult> {
 /**
  * Count non-conforming conversation chunks that the reindex handler can
  * actually reach: the chat must still exist (orphaned chunks would otherwise
- * re-trigger a futile reindex on every boot). Stale chats' non-conforming
- * chunks were already NULLed by {@link clearStaleChatNonconformingChunks},
- * so they no longer match here.
+ * re-trigger a futile reindex on every boot). Stale chats are counted like
+ * any other chat — chunk embeddings are never cold-tiered.
  */
-async function countNonconformingLiveChunks(
+async function countNonconformingChunks(
   db: DatabaseType,
   targetDim: number,
   profileId: string,
@@ -296,54 +243,6 @@ async function countNonconformingLiveChunks(
     )
     .get(targetDim, 'CONVERSATION_CHUNK', profileId) as { n: number }
   return row.n
-}
-
-/**
- * NULL non-conforming chunk embeddings on stale chats. Staleness is decided
- * by the same shared gate the maintenance sweeps use (`isStale`), evaluated
- * per candidate chat — only chats that actually hold a non-conforming chunk
- * are examined, so this is a no-op scan on a conforming corpus.
- */
-async function clearStaleChatNonconformingChunks(
-  db: DatabaseType,
-  targetDim: number,
-): Promise<number> {
-  const candidateChatIds = (
-    db
-      .prepare(
-        `SELECT DISTINCT "chatId" AS chatId FROM "conversation_chunks"
-         WHERE "chatId" IS NOT NULL AND ${NONCONFORMING}`,
-      )
-      .all(targetDim) as Array<{ chatId: string }>
-  ).map((r) => r.chatId)
-
-  if (candidateChatIds.length === 0) return 0
-
-  const chatStmt = db.prepare(`SELECT "id" AS id, "updatedAt" AS updatedAt FROM "chats" WHERE "id" = ?`)
-  const candidateChats = candidateChatIds
-    .map((id) => chatStmt.get(id) as { id: string; updatedAt: string | null } | undefined)
-    .filter((c): c is { id: string; updatedAt: string | null } => Boolean(c))
-
-  const { getRepositories } = await import('@/lib/repositories/factory')
-  const { isStale } = await import('@/lib/background-jobs/maintenance/collapse-stale-chat-assets')
-  const { resolveStaleChatDays, retentionCutoff } = await import(
-    '@/lib/background-jobs/maintenance/retention-constants'
-  )
-
-  const repos = getRepositories()
-  const cutoffMs = retentionCutoff(await resolveStaleChatDays()).getTime()
-
-  const clearStmt = db.prepare(
-    `UPDATE "conversation_chunks" SET embedding = NULL WHERE "chatId" = ? AND ${NONCONFORMING}`,
-  )
-
-  let cleared = 0
-  for (const chat of candidateChats) {
-    if (await isStale({ id: chat.id, updatedAt: chat.updatedAt ?? '' }, cutoffMs, repos)) {
-      cleared += clearStmt.run(chat.id, targetDim).changes
-    }
-  }
-  return cleared
 }
 
 /**

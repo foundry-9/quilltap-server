@@ -22,6 +22,8 @@ describe('classifyWriteTarget', () => {
     expect(classifyWriteTarget('docMountBlobs.create')).toBe('mountIndex');
     expect(classifyWriteTarget('docMountPoints.refreshStats')).toBe('mountIndex');
     expect(classifyWriteTarget('projectDocMountLinks.create')).toBe('mountIndex');
+    expect(classifyWriteTarget('groupDocMountLinks.link')).toBe('mountIndex');
+    expect(classifyWriteTarget('groupCharacterMembers.addMember')).toBe('mountIndex');
   });
 
   it('routes llmLogs to the llm-logs database', () => {

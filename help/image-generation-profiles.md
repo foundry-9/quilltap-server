@@ -150,7 +150,7 @@ First, obtain an API key from one of the image generation providers Quilltap act
 
    **Model Selection:**
    - **Model** — Select which image model to use
-     - OpenAI: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
+     - OpenAI: gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
      - Google: Imagen models and image-capable Gemini models
      - Grok: grok-imagine-image, grok-imagine-image-pro, grok-2-image
      - OpenRouter: every image-output model they route
@@ -249,10 +249,30 @@ These are the establishments Quilltap can actually commission a picture from —
 
 ### OpenAI (DALL-E / GPT Image)
 
-- **Models:** GPT Image family (gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini) and legacy DALL-E 3 / DALL-E 2
+- **Models:** the GPT Image family — gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini — and the legacy DALL-E 3 / DALL-E 2
 - **Strengths:** Good all-around quality, text in images
-- **Sizes:** 1024x1024, 1024x1536, 1536x1024 (GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
-- **Quality:** Standard, HD
+- **Sizes:** any canvas up to 3840x2160 (GPT Image 2 and 2.5); 1024x1024, 1024x1536, 1536x1024 (earlier GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
+- **Quality:** Low, Medium, High — with Extra High and Max besides, on the 2.5 pair (Standard and HD on the DALL-E models)
+
+#### The Two Lamps of GPT Image 2.5
+
+The newest pair arrive with names rather than numbers, and the distinction is worth a moment:
+
+- **Flare** is the swift one — quicker and appreciably cheaper than GPT Image 2, at fully comparable quality. Commission it for the high-volume work: a room full of minor characters, a dozen quick variations on a scene, anything where you would rather have six attempts than one masterpiece.
+- **Sunburst** is the premium one — slower and dearer, and better at the fiddly, exacting business of detailed editing and polished, production-ready pictures. Reserve it for the portrait that will actually hang on the wall.
+
+Both will paint you any canvas whose edges divide evenly by sixteen, at any proportion between 1:3 and 3:1, up to 3840x2160 — though the establishment admits that anything beyond 2560x1440 is still somewhat experimental, and may be declined on a busy afternoon. The profile form offers a sensible selection of shapes; the models themselves accept a great many more.
+
+#### The GPT Image Output Tray
+
+Every GPT Image model — not merely the 2.5 pair — offers four further dials, which appear in the profile form only when such a model is selected:
+
+- **Background** — *Transparent* returns the subject neatly cut out, with no background at all, which is the very thing for an avatar or a token. *Opaque* insists on a filled background; *Auto* leaves the matter to the model's judgement. A transparent background requires a format that can carry it, so if you have asked for JPEG, Quilltap quietly substitutes PNG rather than hand you a picture with the transparency flattened out of it.
+- **Output Format** — PNG (lossless, carries transparency), WebP (smaller, also carries transparency), or JPEG (smallest, no transparency whatever).
+- **Output Compression** — a number from 0 to 100, consulted only for WebP and JPEG. Higher keeps more detail. PNG ignores it entirely, and Quilltap declines to send it in that case.
+- **Moderation** — OpenAI's own filter, set to *Auto* or the less restrictive *Low*. Be advised that *Low* is not *Off*: OpenAI's usage policies apply regardless of what you select here, and this dial is not a way around them.
+
+Should you set a dial the chosen model has never heard of — an Extra High quality on gpt-image-2, say, or a transparent background on DALL-E 3, or a 1536x864 canvas on gpt-image-1.5 — Quilltap drops it before sending rather than letting the whole commission be refused over one impertinent parameter, and notes what it dropped in the logs. Sizes are the one exception: an impossible canvas falls back to a plain 1024x1024 square, since a picture must have *some* dimensions.
 
 ### Google (Imagen / Gemini)
 
@@ -338,6 +358,10 @@ These are the establishments Quilltap can actually commission a picture from —
 
 ## Troubleshooting Image Generation
 
+### The provider declined the picture
+
+Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on duty, he tries once more on an uncensored image profile — the one named on his desk (`/settings?tab=concierge&section=uncensored-desk`), or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it on the Concierge's desk merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat that is not **Locked**. On a Locked chat, or with nobody to ask, the Concierge's note says so instead. See [The Concierge](the-concierge.md).
+
 ### API key validation failed
 
 **Solution:**
@@ -401,7 +425,7 @@ The most expensive failure a LoRA can suffer is the one that wears the costume o
 
 **The magic word was never said.** Most adapters answer to a trigger, and their page names it — sometimes as a single phrase, sometimes as a short list of words, in which case a phrase containing all of them will do. **Query** will often produce it for you, where the author troubled to declare it. Write it into the row's **Trigger Phrase** and Quilltap weaves it into every prompt this profile paints. Leave it blank and the adapter may attend the sitting without ever once picking up the pen.
 
-**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [Dangerous Content Handling](dangerous-content.md).
+**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [The Concierge](the-concierge.md).
 
 ### Generation is very slow
 
@@ -433,9 +457,13 @@ The notice above the composer and the toast both carry the reason verbatim, so t
 
 **Solutions:** Check error message and troubleshoot accordingly
 
+## Wardrobe Images
+
+The **Wardrobe Images** card on the same tab names the profile that draws pictures of wardrobe items and outfits; left at its default, your default image profile does the work. See [Wardrobe Images](wardrobe-images.md), or navigate there with `help_navigate(url: "/settings?tab=images&section=wardrobe-images")`.
+
 ## In-Chat Settings Access
 
-Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
+Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration and the designated wardrobe artist --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
 
 ## In-Chat Navigation
 
@@ -446,7 +474,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
-- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly
+- [The Concierge](the-concierge.md) — His tab (`/settings?tab=concierge`) holds the uncensored image profile and the image-prompt crafter; governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

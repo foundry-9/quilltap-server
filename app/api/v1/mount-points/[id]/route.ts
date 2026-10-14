@@ -7,6 +7,7 @@
  *
  * Actions:
  * POST /api/v1/mount-points/[id]?action=scan - Trigger scan and embedding
+ * POST /api/v1/mount-points/[id]?action=sync - Mirror a database store to a server-local directory
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,6 +33,8 @@ import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
+import { syncMountPoint, SyncRefusedError } from '@/lib/mount-index/sync';
+import { ManifestMismatchError } from '@/lib/mount-index/sync/manifest';
 
 // ============================================================================
 // Schemas
@@ -98,14 +101,28 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
       const body = await req.json();
       const validatedData = updateMountPointSchema.parse(body);
 
+      if (validatedData.name !== undefined && validatedData.name !== existing.name) {
+        // A live character vault is named after its character; renaming the
+        // vault alone would be undone by the next store-name reconcile.
+        const owner = (await repos.characters.findAllRaw()).find(
+          (c) => c.characterDocumentMountPointId === id
+        );
+        if (owner) {
+          logger.warn('[Mount Points v1] Rejected rename of a live character vault', {
+            mountPointId: id,
+            characterId: owner.id,
+            userId: user.id,
+          });
+          return conflict(
+            `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+          );
+        }
+      }
+
       // Renames stay inside the case-insensitive name namespace: no store may
       // take a name a peer already holds, even in a different casing.
       if (validatedData.name !== undefined) {
-        const desiredLower = validatedData.name.trim().toLowerCase();
-        const allStores = await repos.docMountPoints.findAll();
-        const clash = allStores.find(
-          mp => mp.id !== id && mp.name.trim().toLowerCase() === desiredLower
-        );
+        const clash = await repos.docMountPoints.findNameHolder(validatedData.name, id);
         if (clash) {
           logger.warn('[Mount Points v1] Rejected duplicate mount point rename', {
             mountPointId: id,
@@ -423,6 +440,92 @@ async function handleDeconvert(
     return serverError(
       `Failed to deconvert mount point: ${error instanceof Error ? error.message : String(error)}`
     );
+  }
+}
+
+// ============================================================================
+// Sync (database store ↔ a directory on disk) Action
+// ============================================================================
+
+/**
+ * The single source of truth for the sync's inputs. The CLI is a thin client
+ * and does not re-validate — whatever it sends is judged here, as with every
+ * other action on this route.
+ */
+const syncSchema = z.object({
+  targetPath: z.string().min(1),
+  dryRun: z.boolean().optional().default(false),
+  direction: z.enum(['both', 'to-disk', 'to-store']).optional().default('both'),
+  prefer: z.enum(['newer', 'store', 'disk']).optional().default('newer'),
+  propagateDeletes: z.boolean().optional().default(true),
+  useManifest: z.boolean().optional().default(true),
+});
+
+async function handleSync(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const parsed = syncSchema.safeParse(body);
+    if (!parsed.success) {
+      return badRequest(
+        `Invalid sync request: ${parsed.error.issues.map(i => `${i.path.join('.')} ${i.message}`).join('; ')}`
+      );
+    }
+
+    const mountPoint = await repos.docMountPoints.findById(id);
+    if (!mountPoint) {
+      return notFound('Mount point');
+    }
+
+    logger.info('[Mount Points v1] Sync requested', {
+      mountPointId: id,
+      name: mountPoint.name,
+      targetPath: parsed.data.targetPath,
+      dryRun: parsed.data.dryRun,
+      direction: parsed.data.direction,
+      prefer: parsed.data.prefer,
+      userId: user.id,
+    });
+
+    const report = await syncMountPoint(mountPoint, parsed.data);
+
+    logger.info('[Mount Points v1] Sync complete', {
+      mountPointId: id,
+      targetPath: report.targetPath,
+      dryRun: report.dryRun,
+      ...report.summary,
+      elapsedMs: report.elapsedMs,
+    });
+
+    return successResponse(report);
+  } catch (error) {
+    if (error instanceof SyncRefusedError) {
+      // The store is the wrong kind, archived, or busy — all of which the
+      // operator can act on, none of which is a server fault.
+      return error.code === 'SYNC_IN_PROGRESS' || error.code === 'CONVERSION_IN_PROGRESS' ||
+             error.code === 'SCAN_IN_PROGRESS'
+        ? conflict(error.message)
+        : badRequest(error.message);
+    }
+    if (error instanceof ManifestMismatchError) {
+      return conflict(error.message);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return badRequest(
+        `${message}. The path is resolved on the server: under Docker it must sit inside a bind mount ` +
+        `(see 'quilltap docs docker-mounts').`
+      );
+    }
+    logger.error(
+      '[Mount Points v1] Error syncing mount point',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError(`Failed to sync mount point: ${message}`);
   }
 }
 
@@ -770,6 +873,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       scan: handleScan,
       convert: handleConvert,
       deconvert: handleDeconvert,
+      sync: handleSync,
       'move-file': handleMoveFile,
       'copy-file': handleCopyFile,
       'link-file': handleLinkFile,

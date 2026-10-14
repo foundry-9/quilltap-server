@@ -36,6 +36,12 @@ export const REALTIME_TOPICS = [
   'characters',
   /** Document stores and their indexing/embedding status. */
   'mountPoints',
+  /**
+   * The Commonplace Book's rows. Scoped by *chat* id rather than by memory id
+   * — the count beside a Salon's Delete Memories button is what watches this,
+   * and a memory's own id would mean nothing to it.
+   */
+  'memories',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

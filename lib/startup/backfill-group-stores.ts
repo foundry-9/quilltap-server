@@ -6,7 +6,7 @@
  * `backfillProjectStores()`.
  *
  * For each group:
- *   1. Ensure `officialMountPointId` points at a real store (`ensureGroupOfficialStore`).
+ *   1. Ensure `officialMountPointId` points at a real store (`ensureOwnerOfficialStore`).
  *   2. If the store has no `properties.json`, populate all four overlay files
  *      (`description.md` / `instructions.md` / `state.json` / `properties.json`)
  *      from the raw row via `writeGroupStoreManagedFields`.
@@ -36,7 +36,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   writeGroupStoreManagedFields,
   readGroupStoreProperties,
@@ -79,7 +79,7 @@ export async function backfillGroupStores(): Promise<GroupStoreBackfillResult> {
       { current: index, total: groups.length, unit: 'groups' },
     ]);
     try {
-      const ensured = await ensureGroupOfficialStore(group.id, group.name);
+      const ensured = await ensureOwnerOfficialStore('group', group.id, group.name);
       if (!ensured) {
         result.errors++;
         logger.warn('Group store backfill: could not ensure store', {
@@ -100,7 +100,7 @@ export async function backfillGroupStores(): Promise<GroupStoreBackfillResult> {
       if (existingProps) {
         result.alreadyPopulated++;
       } else {
-        // Populate from the raw row. ensureGroupOfficialStore may have just
+        // Populate from the raw row. ensureOwnerOfficialStore may have just
         // set officialMountPointId on the row, so point the writer at it.
         await writeGroupStoreManagedFields(mountPointId, {
           ...group,

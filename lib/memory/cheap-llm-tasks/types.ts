@@ -2,33 +2,32 @@
  * Shared types for cheap LLM task modules.
  */
 
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import type { TargetingTags } from '../candidate'
 
 /**
- * Candidate memory extracted from a conversation. Extractor prompts set the
- * significance bar internally and only return memories that meet it; there is
- * no "significant: false" path any more.
+ * A memory as an extractor's parser yields it: the model's part of a
+ * `MemoryCandidate` (`lib/memory/candidate.ts`), before the producer adds who
+ * holds it, whom it is about and where it came from (`candidateFromDraft`).
+ * Extractor prompts set the significance bar internally and only return
+ * memories that meet it; there is no "significant: false" path any more.
  */
-export interface MemoryCandidate {
+export interface MemoryDraft {
   /** Full memory content */
   content?: string
   /** Brief 1-sentence summary */
   summary?: string
-  /** Keywords for text-based search */
+  /** Free keywords for text-based search (targeting tags are not here) */
   keywords?: string[]
-  /** Importance score from 0.0 to 1.0 */
-  importance?: number
+  /** Importance from 0.0 to 1.0 — clamped by the parser, 0.5 when absent (the only default) */
+  importance: number
   /**
-   * Targeting axes emitted by the extractor model. Transient only — the parser
-   * validates them against closed vocabularies, defaults invalid/missing
-   * values, and materializes them into `keywords` (bare word for temporal and
-   * context, `scope: <value>` for scope). They are never persisted as
-   * top-level memory fields.
+   * The targeting axes the model emitted, normalised against the closed
+   * vocabularies (`normaliseTargeting`). The row stores them in `keywords`;
+   * the draft and the candidate carry them apart.
    */
-  temporal?: string
-  scope?: string
-  context?: string
+  targeting: TargetingTags
   // ── Episodic spine (validated by the parser; resolved by the processor) ────
   /** 'semantic' (default) or 'episodic' — an EVENT pick emits 'episodic'. */
   kind?: 'semantic' | 'episodic'
@@ -41,6 +40,8 @@ export interface MemoryCandidate {
   when?: string
   /** Proper nouns of the episode: places, people, named things. */
   entities?: string[]
+  /** An explicit in-story time stamp (the episode prompt asks for one on fictional timelines). */
+  narrativeTime?: string
 }
 
 /**
@@ -92,10 +93,10 @@ export interface CheapLLMTaskResult<T> {
 
 /**
  * Options for uncensored provider fallback when empty responses are detected
- * Only used when the Concierge is in AUTO_ROUTE mode with an uncensored text profile configured
+ * Only used when the Concierge policy allows failover and an uncensored text profile is configured
  */
 export interface UncensoredFallbackOptions {
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   availableProfiles: ConnectionProfile[]
   isDangerousChat?: boolean
 }
@@ -258,4 +259,23 @@ export interface CharacterAppearanceInput {
     /** Plain-text image cue; preferred over `title` in image prompts. */
     imagePrompt?: string | null
   }>
+}
+
+/**
+ * How the Concierge's appearance pass treats an explicit appearance bound for a
+ * moderated image provider. `redress` swaps explicit states for neutral
+ * clothing — for callers with no concealment guidance downstream. `conceal`
+ * keeps the character's state honest and flags an undressed one, for the
+ * story-background crafter, whose concealed guidance drapes them instead.
+ */
+export type AppearanceSanitizeMode = 'redress' | 'conceal'
+
+/**
+ * One character's appearance after the Concierge's sanitization pass
+ */
+export interface SanitizedAppearance {
+  characterId: string
+  appearanceText: string
+  /** `conceal` mode only: the character is undressed in this scene */
+  undressed?: boolean
 }

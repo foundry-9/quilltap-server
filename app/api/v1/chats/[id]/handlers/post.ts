@@ -5,12 +5,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
-import { notFound, badRequest } from '@/lib/api/responses';
+import { dispatchAction } from '@/lib/api/middleware/actions';
+import { notFound } from '@/lib/api/responses';
 import {
   handleAddTag,
   handleRemoveTag,
   handleRegenerateTitle,
+  handleRebuildSummary,
   handleImpersonate,
   handleSetActiveSpeaker,
   handleAddParticipantAction,
@@ -30,6 +31,7 @@ import {
   handleRunTool,
   handleToggleAgentMode,
   handleRegenerateBackground,
+  handleRetryImageUncensored,
   handleReclassifyDanger,
   handleEquipSlot,
   handleToggleAvatarGeneration,
@@ -46,59 +48,16 @@ import {
   handleRenameDocument,
   handleDeleteDocument,
   handleInsertAnnouncement,
+  handleInform,
+  handleCancelInform,
   handleAnnouncementPreview,
+  handleImpersonationVoicePreview,
   handleSendMail,
   handleMergeConversation,
   handleSetScenario,
+  handleSaveGalleryImage,
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
-
-const CHAT_POST_ACTIONS = [
-  'regenerate-title',
-  'add-tag',
-  'remove-tag',
-  'impersonate',
-  'set-active-speaker',
-  'turn',
-  'add-participant',
-  'update-participant',
-  'remove-participant',
-  'rebuild-system-prompt',
-  'bulk-reattribute',
-  'set-avatar',
-  'remove-avatar',
-  'add-tool-result',
-  'queue-memories',
-  'extract-memories-dry-run',
-  'recall-replay',
-  'update-tool-settings',
-  'rng',
-  'run-tool',
-  'toggle-agent-mode',
-  'regenerate-background',
-  'reclassify-danger',
-  'equip',
-  'toggle-avatar-generation',
-  'regenerate-avatar',
-  'render-conversation',
-  'active-document',
-  'open-documents',
-  'recent-documents',
-  'open-document',
-  'close-document',
-  'read-document',
-  'resolve-document',
-  'write-document',
-  'rename-document',
-  'delete-document',
-  'announcement',
-  'announcement-preview',
-  'send-mail',
-  'merge-conversation',
-  'scenario',
-] as const;
-
-type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
 /**
  * POST handler with action dispatch
@@ -108,8 +67,7 @@ export async function handlePost(
   ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
-  const action = getActionParam(req);
+  const { repos } = ctx;
 
   // Verify ownership first
   const chat = await repos.chats.findById(chatId);
@@ -117,12 +75,9 @@ export async function handlePost(
     return notFound('Chat');
   }
 
-  if (!isValidAction(action, CHAT_POST_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_POST_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
+  return dispatchAction(req, {
     'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
+    'rebuild-summary': () => handleRebuildSummary(chatId, chat, ctx),
     'add-tag': () => handleAddTag(req, chatId, ctx),
     'remove-tag': () => handleRemoveTag(req, chatId, ctx),
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),
@@ -144,6 +99,7 @@ export async function handlePost(
     'run-tool': () => handleRunTool(req, chatId, ctx),
     'toggle-agent-mode': () => handleToggleAgentMode(req, chatId, ctx),
     'regenerate-background': () => handleRegenerateBackground(chatId, chat, ctx),
+    'retry-image-uncensored': () => handleRetryImageUncensored(req, chatId, chat, ctx),
     'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
     equip: () => handleEquipSlot(req, chatId, ctx),
     'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
@@ -160,11 +116,13 @@ export async function handlePost(
     'rename-document': () => handleRenameDocument(req, chatId, ctx),
     'delete-document': () => handleDeleteDocument(req, chatId, ctx),
     announcement: () => handleInsertAnnouncement(req, chatId, ctx),
+    inform: () => handleInform(req, chatId, ctx),
+    'cancel-inform': () => handleCancelInform(req, chatId, ctx),
     'announcement-preview': () => handleAnnouncementPreview(req, chatId, ctx),
+    'impersonation-voice-preview': () => handleImpersonationVoicePreview(req, chatId, chat, ctx),
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
-  };
-
-  return actionHandlers[action]();
+    'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
+  });
 }

@@ -11,16 +11,6 @@ import { logger } from '@/lib/logger';
 import { MAX_THUMBNAIL_SIZE } from '@/lib/files/thumbnail-utils';
 import type { FileCategory } from '@/lib/schemas/file.types';
 
-export const FILE_POST_ACTIONS = [
-  'upload',
-  'generate-thumbnails',
-  'cleanup-stale',
-  'cleanup-orphans',
-  'sync',
-] as const;
-
-export type FilePostAction = typeof FILE_POST_ACTIONS[number];
-
 export const MAX_BATCH_SIZE = 100;
 export const THUMBNAIL_CONCURRENCY = 3;
 

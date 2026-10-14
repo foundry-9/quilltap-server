@@ -1,7 +1,15 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+
+/** The Concierge on duty with a Moderated chat: a refusal may fail over. */
+const failoverPolicy = (uncensoredTextProfileId: string) =>
+  resolveConciergeSettings({ conciergeSettings: { enabled: true, uncensoredTextProfileId } } as any)
+/** The Concierge off duty: no failover at all. */
+const offDutyPolicy = (uncensoredTextProfileId?: string) =>
+  resolveConciergeSettings({ conciergeSettings: { enabled: false, uncensoredTextProfileId } } as any)
 
 const mockStreamMessage = jest.fn()
-const mockResolveProviderForDangerousContent = jest.fn()
+const mockResolveUncensoredTextUnderstudy = jest.fn()
 const mockEncodeStatusEvent = jest.fn((_encoder: TextEncoder, payload: unknown) => payload)
 const mockSafeEnqueue = jest.fn((controller: { enqueue: (chunk: unknown) => void }, chunk: unknown) => {
   controller.enqueue(chunk)
@@ -32,8 +40,32 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   },
 }))
 
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  resolveProviderForDangerousContent: (...args: any[]) => mockResolveProviderForDangerousContent(...args),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredTextUnderstudy: (...args: any[]) => mockResolveUncensoredTextUnderstudy(...args),
+}))
+
+const mockPostConciergeRefusalAnnouncement = jest.fn(async (_params: unknown) => null)
+const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+const mockReadCurrentConciergeOnDuty = jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot)
+jest.mock('@/lib/services/dangerous-content/current-state', () => ({
+  readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+  readCurrentConciergeOnDuty: (userId: unknown, snapshot: boolean) => mockReadCurrentConciergeOnDuty(userId, snapshot),
+}))
+
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: (params: unknown) => mockPostConciergeRefusalAnnouncement(params),
+}))
+
+const mockRecordModerationRefusal = jest.fn(async (_rec: unknown) => ({ count: 1, switched: false }))
+jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
+  recordModerationRefusal: (rec: unknown) => mockRecordModerationRefusal(rec),
+}))
+
+const mockIsModerationFinishReason = jest.fn((_r?: string | null) => false)
+
+jest.mock('@/lib/llm/moderation-finish-reason', () => ({
+  describeModerationRefusal: jest.fn(() => null),
+  isModerationFinishReason: (r?: string | null) => mockIsModerationFinishReason(r),
 }))
 
 // The reroute re-runs the attachment decision against the profile it actually
@@ -52,6 +84,9 @@ const {
   attemptEmptyResponseRecovery,
   getEmptyResponseReason,
 } = require('@/lib/services/chat-message/provider-failover.service') as typeof import('@/lib/services/chat-message/provider-failover.service')
+
+const { buildRouteTrail } =
+  require('@/lib/services/chat-message/route-trail') as typeof import('@/lib/services/chat-message/route-trail')
 
 const makeStream = (chunks: Array<Record<string, unknown>>) => (async function* () {
   for (const chunk of chunks) {
@@ -90,13 +125,15 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
-      dangerSettings: { mode: 'OFF', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: offDutyPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -134,12 +171,10 @@ describe('provider-failover.service', () => {
         { done: true, usage: { totalTokens: 9 }, rawResponse: { retry: 'uncensored' } },
       ]))
 
-    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-      rerouted: true,
-      connectionProfile: uncensoredProfile,
-      apiKey: 'sk-uncensored',
-      reason: 'rerouted to uncensored profile',
-    })
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
 
     const state = {
       fullResponse: '',
@@ -151,13 +186,15 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
-      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: failoverPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -189,13 +226,15 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: true,
-      dangerSettings: { mode: 'DETECT_ONLY', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: offDutyPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -254,6 +293,8 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     })
 
     const repos = {
@@ -279,11 +320,9 @@ describe('provider-failover.service', () => {
           { done: true },
         ]))
 
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: true,
-        connectionProfile: textOnlyUncensored,
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: textOnlyUncensored,
         apiKey: 'sk-unc',
-        reason: 'configured uncensored profile',
       })
 
       const state = freshState()
@@ -292,7 +331,7 @@ describe('provider-failover.service', () => {
         state,
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-text' } as any,
+        conciergePolicy: failoverPolicy('unc-text'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -323,18 +362,13 @@ describe('provider-failover.service', () => {
 
     it('tells the router what the turn is carrying', async () => {
       mockStreamMessage.mockReturnValue(makeStream([{ done: true }]))
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: false,
-        connectionProfile: visionPrimary,
-        apiKey: 'sk-vision',
-        reason: 'no uncensored provider available',
-      })
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue(null)
 
       await attemptEmptyResponseRecovery({
         state: freshState(),
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-text' } as any,
+        conciergePolicy: failoverPolicy('unc-text'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -348,8 +382,8 @@ describe('provider-failover.service', () => {
         repos,
       })
 
-      expect(mockResolveProviderForDangerousContent).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), 'user-1', ['image/png'],
+      expect(mockResolveUncensoredTextUnderstudy).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', turnAttachmentMimeTypes: ['image/png'] }),
       )
     })
 
@@ -368,18 +402,16 @@ describe('provider-failover.service', () => {
         .mockReturnValueOnce(makeStream([{ done: true }]))
         .mockReturnValueOnce(makeStream([{ content: 'Lovely.' }, { done: true }]))
 
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: true,
-        connectionProfile: visionUncensored,
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: visionUncensored,
         apiKey: 'sk-unc',
-        reason: 'configured uncensored profile',
       })
 
       await attemptEmptyResponseRecovery({
         state: freshState(),
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-vision' } as any,
+        conciergePolicy: failoverPolicy('unc-vision'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -411,5 +443,268 @@ describe('provider-failover.service', () => {
       sameProviderRetryAttempted: false,
       contentWasFlaggedDangerous: true,
     })).toContain('Concierge flagged this content as dangerous')
+  })
+})
+
+/**
+ * The route trail left on the message by the empty-response recovery: who was
+ * asked, in what order, and on what evidence a refusal was called.
+ */
+describe('provider-failover.service — the route trail', () => {
+  const encoder = new TextEncoder()
+  const controller = { enqueue: jest.fn() } as any
+  const baseProfile = {
+    id: 'safe-1',
+    name: 'Safe Profile',
+    provider: 'OPENAI',
+    modelName: 'gpt-4.1',
+    isDangerousCompatible: false,
+  } as any
+  const uncensoredProfile = {
+    id: 'unc-1',
+    name: 'Uncensored Profile',
+    provider: 'LOCAL',
+    modelName: 'llama-uncensored',
+    isDangerousCompatible: true,
+  } as any
+
+  const freshState = (overrides: Record<string, unknown> = {}) => ({
+    fullResponse: '',
+    effectiveProfile: baseProfile,
+    effectiveApiKey: 'sk-safe',
+    usage: null,
+    cacheUsage: null,
+    attachmentResults: null,
+    rawResponse: null,
+    thoughtSignature: undefined,
+    hasStartedStreaming: false,
+    routeFailures: [],
+    routeVia: 'primary' as const,
+    ...overrides,
+  })
+
+  const recover = (state: any, over: Record<string, unknown> = {}) => attemptEmptyResponseRecovery({
+    state,
+    toolMessagesLength: 0,
+    contentWasFlaggedDangerous: false,
+    conciergePolicy: offDutyPolicy('unc-1'),
+    connectionProfile: baseProfile,
+    formattedMessages: [{ role: 'user', content: 'Hello' }],
+    modelParams: {},
+    actualTools: [],
+    useNativeWebSearch: false,
+    userId: 'user-1',
+    chatId: 'chat-1',
+    character: { id: 'char-1', name: 'Alice' } as any,
+    controller,
+    encoder,
+    preGeneratedAssistantMessageId: 'msg-1',
+    ...over,
+  } as any)
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockIsModerationFinishReason.mockReturnValue(false)
+  })
+
+  it('writes nothing when the turn produced an answer of its own', async () => {
+    const state = freshState({ fullResponse: 'All is well.' })
+
+    await recover(state)
+
+    expect(buildRouteTrail(state)).toBeNull()
+  })
+
+  it('records the empty primary, then the same-profile retry that answered', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Recovered reply' },
+      { done: true, rawResponse: { retry: 1 } },
+    ]))
+    const state = freshState()
+
+    await recover(state)
+
+    expect(state.routeVia).toBe('retry')
+    expect(buildRouteTrail(state)).toEqual([
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'primary', outcome: 'failed', trigger: 'empty-response',
+      }),
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'retry', outcome: 'answered',
+      }),
+    ])
+  })
+
+  it('calls an empty body on a flagged turn a refusal, inferred, and credits the Concierge\'s stand-in', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Uncensored reply' },
+      { done: true, rawResponse: { retry: 'uncensored' } },
+    ]))
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
+    const state = freshState()
+
+    await recover(state, {
+      contentWasFlaggedDangerous: true,
+      conciergePolicy: failoverPolicy('unc-1'),
+    })
+
+    expect(state.routeVia).toBe('concierge')
+    expect(buildRouteTrail(state)).toEqual([
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'primary', outcome: 'refused',
+        trigger: 'moderation-refusal', evidence: 'inferred',
+      }),
+      expect.objectContaining({
+        profileId: 'unc-1', profileName: 'Uncensored Profile', via: 'concierge', outcome: 'answered',
+      }),
+    ])
+  })
+
+  it('names the uncensored profile even when it too comes back empty', async () => {
+    // Same-profile retry, then the uncensored reroute — both silent.
+    mockStreamMessage
+      .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'same' } }]))
+      .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'uncensored' } }]))
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
+    const state = freshState()
+
+    await recover(state, {
+      conciergePolicy: failoverPolicy('unc-1'),
+    })
+
+    // The existing code never swaps `effectiveProfile` for an uncensored
+    // profile that answers nothing, so this row is the ONLY record of it.
+    expect(state.effectiveProfile.id).toBe('safe-1')
+    expect(state.routeFailures.map((a: any) => [a.profileName, a.via, a.outcome])).toEqual([
+      ['Safe Profile', 'primary', 'failed'],
+      ['Safe Profile', 'retry', 'failed'],
+      ['Uncensored Profile', 'concierge', 'failed'],
+    ])
+  })
+
+  it('takes a provider\'s stated moderation stop as a refusal on the evidence of the finish reason', async () => {
+    mockIsModerationFinishReason.mockReturnValue(true)
+    const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+    await recover(state, { conciergePolicy: offDutyPolicy() })
+
+    expect(state.routeFailures[0]).toMatchObject({
+      outcome: 'refused',
+      trigger: 'moderation-refusal',
+      evidence: 'finish-reason',
+      detail: 'finish_reason: content_filter',
+    })
+  })
+
+  it('carries `via: concierge` on the opening row when the pre-call reroute had already swapped the profile', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Recovered reply' },
+      { done: true },
+    ]))
+    const state = freshState({ effectiveProfile: uncensoredProfile, routeVia: 'concierge' as const })
+
+    await recover(state)
+
+    expect(state.routeFailures[0]).toMatchObject({ profileId: 'unc-1', via: 'concierge' })
+  })
+
+  describe('a Locked chat', () => {
+    it('never asks the uncensored understudy, and says the refusal stands', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, {
+        conciergePolicy: failoverPolicy('unc-1'),
+        conciergeState: 'locked',
+      })
+
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).toHaveBeenCalledWith(expect.objectContaining({
+        chatId: 'chat-1',
+        kind: 'refusal-not-permitted',
+        details: expect.objectContaining({ purpose: 'text', reason: 'locked' }),
+      }))
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads the state at refusal time: a chat locked mid-turn is not rerouted', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      mockReadCurrentConciergeState.mockResolvedValueOnce('locked')
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, {
+        conciergePolicy: failoverPolicy('unc-1'),
+        conciergeState: 'moderated',
+      })
+
+      expect(mockReadCurrentConciergeState).toHaveBeenCalledWith('chat-1', 'moderated')
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'refusal-not-permitted',
+        details: expect.objectContaining({ reason: 'locked' }),
+      }))
+    })
+
+    it('posts nothing for a plain empty body on a Locked chat', async () => {
+      mockStreamMessage.mockReturnValueOnce(makeStream([{ done: true, rawResponse: null }]))
+      const state = freshState()
+
+      await recover(state, {
+        conciergePolicy: failoverPolicy('unc-1'),
+        conciergeState: 'locked',
+      })
+
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the refusal ledger', () => {
+    it('records a stated opening refusal once', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, { conciergePolicy: offDutyPolicy() })
+
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+      expect(mockRecordModerationRefusal).toHaveBeenCalledWith(expect.objectContaining({
+        chatId: 'chat-1', kind: 'text', purpose: 'chat',
+        refusedProfileId: 'safe-1', provider: 'OPENAI', evidence: 'finish-reason', rerouted: false,
+      }))
+    })
+
+    it('records a refusal the same-provider retry states after a plain empty opening', async () => {
+      mockIsModerationFinishReason.mockImplementation((r) => r === 'content_filter')
+      mockStreamMessage.mockReturnValueOnce(makeStream([
+        { done: true, rawResponse: { choices: [{ finish_reason: 'content_filter' }] } },
+      ]))
+      const state = freshState()
+
+      await recover(state, { conciergePolicy: offDutyPolicy() })
+
+      expect(state.routeFailures.map((a: any) => [a.via, a.outcome])).toEqual([
+        ['primary', 'failed'],
+        ['retry', 'refused'],
+      ])
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+      expect(mockRecordModerationRefusal).toHaveBeenCalledWith(expect.objectContaining({
+        refusedProfileId: 'safe-1', evidence: 'finish-reason',
+      }))
+    })
+
+    it('records nothing for a plain empty body that no one called a refusal', async () => {
+      mockStreamMessage.mockReturnValueOnce(makeStream([{ done: true, rawResponse: null }]))
+      const state = freshState()
+
+      await recover(state, { conciergePolicy: offDutyPolicy() })
+
+      expect(mockRecordModerationRefusal).not.toHaveBeenCalled()
+    })
   })
 })

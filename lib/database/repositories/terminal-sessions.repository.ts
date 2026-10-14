@@ -109,21 +109,6 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
   }
 
   /**
-   * Find all active (non-exited) sessions for a chat
-   */
-  async findActiveByChatId(chatId: string): Promise<TerminalSession[]> {
-    return this.safeQuery(
-      async () => {
-        const sessions = await this.findByChatId(chatId);
-        return sessions.filter((session) => session.exitedAt == null);
-      },
-      'Error finding active sessions by chat ID',
-      { chatId },
-      []
-    );
-  }
-
-  /**
    * Reap closed terminal sessions older than the cutoff, along with their
    * transcript files.
    *

@@ -6,7 +6,10 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { getAvatarSrc } from '@/components/ui/Avatar'
+import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
+import { RouteTrailBadge } from '@/components/ui/RouteTrailBadge'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 interface ToolMessageProps {
   readonly message: {
@@ -21,6 +24,8 @@ interface ToolMessageProps {
     }>
     /** Whisper targets — present on user-initiated runs flagged Private. */
     targetParticipantIds?: string[] | null
+    /** The Concierge's call sheet: set on a generate_image run whose picture was refused on the way. */
+    routeTrail?: RouteAttempt[] | null
   }
   readonly character?: {
     id: string
@@ -50,6 +55,13 @@ interface ToolMessageProps {
    *  `qt-chat-tool-embedded`. Used by MessageRow for character-initiated tool
    *  calls so they read as separate paragraphs under the character's prose. */
   readonly embedded?: boolean
+  /**
+   * The Concierge's "Try uncensored": redraw this `generate_image` picture on
+   * the uncensored desk. Absent on a Locked chat (and for every other tool),
+   * which hides the button. Offered on refused, failed and delivered pictures
+   * alike — a sanitized picture is a refusal no detector can see.
+   */
+  readonly onTryUncensored?: (toolMessageId: string) => void
 }
 
 interface ToolResult {
@@ -208,10 +220,11 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
-export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false, onTryUncensored }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
+  const imagesHidden = useImagesHidden()
 
   const toolData: ToolResult = useMemo(() => {
     try {
@@ -371,7 +384,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   const responsePreview = getPreviewText(formatResultContent(toolData))
 
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
-  const headerAvatarSrc = headerAvatar ? getAvatarSrc(headerAvatar) : null
+  const headerAvatarSrc = headerAvatar && !imagesHidden ? getAvatarSrc(headerAvatar) : null
   const isUserInitiated = toolData.initiatedBy === 'user'
   const actorName = isUserInitiated
     ? (toolData.operatorName || 'You')
@@ -472,6 +485,27 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             </span>
           </div>
 
+          {/* The Concierge's call sheet — the image profiles tried when a
+              provider refused the picture on content grounds. */}
+          {message.routeTrail && message.routeTrail.length > 0 && (
+            <div className="mt-1 flex items-center gap-2 qt-text-label-xs" aria-label="Image profiles tried">
+              <span>Tried:</span>
+              <RouteTrailBadge routeTrail={message.routeTrail} size="xs" />
+            </div>
+          )}
+
+          {onTryUncensored && toolData.toolName === 'generate_image' && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => onTryUncensored(message.id)}
+                className="qt-button qt-button-secondary qt-button-sm"
+              >
+                Try uncensored
+              </button>
+            </div>
+          )}
+
           {/* Tool Request collapsible - shows arguments/prompt sent to the tool */}
           {(toolData.arguments || toolData.prompt) && (
             <div className="mt-2">
@@ -564,12 +598,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                 type="button"
                               >
                                 <div className="relative w-20 h-20 qt-bg-muted">
-                                  <img
-                                    src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                                    alt={attachment.filename}
-                                    className="w-full h-full object-cover"
-                                    onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                                  />
+                                  {imagesHidden ? (
+                                    <HiddenImageTile label={attachment.filename} />
+                                  ) : (
+                                    <img
+                                      src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
+                                      alt={attachment.filename}
+                                      className="w-full h-full object-cover"
+                                      onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
+                                    />
+                                  )}
                                 </div>
                                 <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
                                   <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
@@ -648,12 +686,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                         type="button"
                       >
                         <div className="relative w-20 h-20 qt-bg-muted">
-                          <img
-                            src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                            alt={attachment.filename}
-                            className="w-full h-full object-cover"
-                            onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                          />
+                          {imagesHidden ? (
+                            <HiddenImageTile label={attachment.filename} />
+                          ) : (
+                            <img
+                              src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
+                              alt={attachment.filename}
+                              className="w-full h-full object-cover"
+                              onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
+                            />
+                          )}
                         </div>
                         <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
                           <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />

@@ -41,7 +41,9 @@ import {
   wardrobeWearToolDefinition,
   wardrobeTakeOffToolDefinition,
   sendMailToolDefinition,
-  listEmailToolDefinition,
+  listMailToolDefinition,
+  readMailToolDefinition,
+  discardMailToolDefinition,
 } from '@/lib/tools';
 import {
   searchScriptoriumToolDefinition,
@@ -70,7 +72,9 @@ import {
 const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
   ask_carina: askCarinaToolDefinition,
   send_mail: sendMailToolDefinition,
-  list_email: listEmailToolDefinition,
+  list_mail: listMailToolDefinition,
+  read_mail: readMailToolDefinition,
+  discard_mail: discardMailToolDefinition,
   generate_image: imageGenerationToolDefinition,
   search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
@@ -126,9 +130,23 @@ const BUILT_IN_TOOLS = [
     category: 'utility',
   },
   {
-    id: 'list_email',
-    name: 'List Email',
+    id: 'list_mail',
+    name: 'List Mail',
     description: 'List the letters in your own mailbox, with the exact way to read, answer, or discard each',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'read_mail',
+    name: 'Read Mail',
+    description: 'Read a letter from your own mailbox by its file name',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'discard_mail',
+    name: 'Discard Mail',
+    description: 'Throw away a letter from your own mailbox by its file name',
     source: 'built-in' as const,
     category: 'utility',
   },

@@ -264,13 +264,9 @@ export function buildScenarioFile(s: CharacterScenario): string {
   return `${fmBlock}# ${s.title}\n\n${s.content}`;
 }
 
-export function sanitizeFileName(name: string): string {
-  const cleaned = name
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned.slice(0, 100) || 'untitled';
-}
+// The sanitiser lives in a client-safe module so the wardrobe's folder rules
+// (`lib/wardrobe/folders.ts`) can share it; re-exported here for its callers.
+export { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
 
 function escapeYaml(value: string): string {
   if (/[:#"'\n]/.test(value)) {
@@ -357,6 +353,9 @@ export function buildWardrobeItemFile(
   }
   if (item.migratedFromClothingRecordId) {
     data.migratedFromClothingRecordId = item.migratedFromClothingRecordId;
+  }
+  if (item.imageFileId) {
+    data.imageFileId = item.imageFileId;
   }
   data.createdAt = item.createdAt;
   data.updatedAt = item.updatedAt;

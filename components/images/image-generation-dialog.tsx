@@ -13,7 +13,7 @@ import { useState, useEffect, FormEvent } from 'react';
 interface GenerationOption {
   n?: number;
   size?: string;
-  quality?: 'standard' | 'hd';
+  quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd' | '';
   style?: 'vivid' | 'natural';
   aspectRatio?: string;
 }
@@ -24,6 +24,12 @@ interface ImageGenerationDialogProps {
   onSuccess?: () => void;
   contextType?: 'CHARACTER' | 'CHAT' | 'THEME';
   contextId?: string;
+  /**
+   * Draw in this shape instead of offering size and aspect-ratio pickers. The
+   * server resolves it onto whatever the provider supports; avatars pass
+   * `portrait`.
+   */
+  orientation?: 'portrait' | 'landscape' | 'square';
 }
 
 interface ConnectionProfile {
@@ -40,7 +46,37 @@ type PreviewImage = {
   revisedPrompt?: string;
 };
 
-const OPENAI_SIZES = ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'];
+// Sizes across the OpenAI families. The dialog knows the profile's provider but not
+// its model, so this is the union; the provider drops a size the selected model does
+// not accept (falling back to 1024x1024) rather than sending it into a 400.
+const OPENAI_SIZES = [
+  'auto',
+  '256x256',
+  '512x512',
+  '1024x1024',
+  '1536x1024',
+  '1024x1536',
+  '1792x1024',
+  '1024x1792',
+  '2560x1440',
+  '1440x2560',
+  '3840x2160',
+  '2160x3840',
+];
+
+// Quality tiers across the OpenAI families, likewise a union. '' means "send nothing
+// and let the image profile's own setting stand".
+const OPENAI_QUALITIES: Array<{ value: string; label: string }> = [
+  { value: '', label: '(model default)' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'low', label: 'Low (GPT Image)' },
+  { value: 'medium', label: 'Medium (GPT Image)' },
+  { value: 'high', label: 'High (GPT Image)' },
+  { value: 'xhigh', label: 'Extra High (GPT Image 2.5)' },
+  { value: 'max', label: 'Max (GPT Image 2.5)' },
+  { value: 'standard', label: 'Standard (DALL-E)' },
+  { value: 'hd', label: 'HD (DALL-E 3)' },
+];
 const DEFAULT_SIZES = ['1024x1024', '512x512'];
 
 export function ImageGenerationDialog({
@@ -48,7 +84,8 @@ export function ImageGenerationDialog({
   onClose,
   onSuccess,
   contextType,
-  contextId
+  contextId,
+  orientation,
 }: ImageGenerationDialogProps) {
   const [prompt, setPrompt] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -62,7 +99,7 @@ export function ImageGenerationDialog({
   const [options, setOptions] = useState<GenerationOption>({
     n: 1,
     size: '1024x1024',
-    quality: 'standard',
+    quality: '',
     style: 'vivid',
   });
 
@@ -128,7 +165,9 @@ export function ImageGenerationDialog({
       if (options.n && options.n > 1) {
         requestBody.options.n = options.n;
       }
-      if (options.size) {
+      if (orientation) {
+        requestBody.options.orientation = orientation;
+      } else if (options.size) {
         requestBody.options.size = options.size;
       }
       if (isOpenAI && options.quality) {
@@ -137,11 +176,11 @@ export function ImageGenerationDialog({
       if (isOpenAI && options.style) {
         requestBody.options.style = options.style;
       }
-      if (isGemini && options.aspectRatio) {
+      if (!orientation && isGemini && options.aspectRatio) {
         requestBody.options.aspectRatio = options.aspectRatio;
       }
 
-      const response = await fetch('/api/v1/images/generate', {
+      const response = await fetch('/api/v1/images?action=generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,7 +223,7 @@ export function ImageGenerationDialog({
     setOptions({
       n: 1,
       size: '1024x1024',
-      quality: 'standard',
+      quality: '',
       style: 'vivid',
     });
     onClose();
@@ -276,23 +315,38 @@ export function ImageGenerationDialog({
                     </select>
                   </div>
 
-                  {/* Image Size */}
-                  <div>
-                    <label className="block qt-text-xs qt-text-primary mb-1">
-                      Size
-                    </label>
-                    <select
-                      value={options.size || '1024x1024'}
-                      onChange={(e) => setOptions({ ...options, size: e.target.value })}
-                      className="qt-select"
-                    >
-                      {(isOpenAI ? OPENAI_SIZES : DEFAULT_SIZES).map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Image Size — a fixed shape replaces the picker */}
+                  {orientation ? (
+                    <div>
+                      <span className="block qt-text-xs qt-text-primary mb-1">
+                        Shape
+                      </span>
+                      <p className="qt-text-small">
+                        {orientation === 'portrait'
+                          ? 'Portrait — taller than wide, as befits a likeness'
+                          : orientation === 'landscape'
+                            ? 'Landscape — wider than tall'
+                            : 'Square'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block qt-text-xs qt-text-primary mb-1">
+                        Size
+                      </label>
+                      <select
+                        value={options.size || '1024x1024'}
+                        onChange={(e) => setOptions({ ...options, size: e.target.value })}
+                        className="qt-select"
+                      >
+                        {(isOpenAI ? OPENAI_SIZES : DEFAULT_SIZES).map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* OpenAI Specific Options */}
@@ -303,12 +357,15 @@ export function ImageGenerationDialog({
                         Quality
                       </label>
                       <select
-                        value={options.quality || 'standard'}
-                        onChange={(e) => setOptions({ ...options, quality: e.target.value as any })}
+                        value={options.quality ?? ''}
+                        onChange={(e) => setOptions({ ...options, quality: e.target.value as GenerationOption['quality'] })}
                         className="qt-select"
                       >
-                        <option value="standard">Standard</option>
-                        <option value="hd">HD</option>
+                        {OPENAI_QUALITIES.map((q) => (
+                          <option key={q.value} value={q.value}>
+                            {q.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -329,7 +386,7 @@ export function ImageGenerationDialog({
                 )}
 
                 {/* Gemini Specific Options */}
-                {isGemini && (
+                {isGemini && !orientation && (
                   <div>
                     <label className="block qt-text-xs qt-text-primary mb-1">
                       Aspect Ratio

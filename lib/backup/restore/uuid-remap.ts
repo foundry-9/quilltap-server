@@ -9,11 +9,18 @@
  */
 
 import { UuidRemapper } from '../uuid-remapper';
+import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import {
+  withConciergeSettingsFromLegacy,
+  type SettingsWithLegacyConcierge,
+} from '@/lib/services/dangerous-content/legacy-concierge-settings';
 import type {
   BackupData,
   ChatWithMessages,
   SerializedVectorEntry,
   SerializedConversationChunk,
+  SerializedMemory,
   SerializedDocMountChunk,
 } from '../types';
 import type {
@@ -23,7 +30,6 @@ import type {
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
-  Memory,
   FileEntry,
   Folder,
   ChatParticipantBase,
@@ -36,12 +42,18 @@ import type {
   PluginConfig,
   CharacterPluginData,
   ConversationAnnotation,
-  VectorIndexMeta,
   TfidfVocabulary,
   EmbeddingStatus,
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import {
+  isWardrobeItemDocumentPath,
+  wardrobeItemIdForDocument,
+} from '@/lib/database/repositories/vault-overlay/parsers';
+import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -65,6 +77,127 @@ const MOUNT_POINT_SETTING_KEYS = new Set([
 ]);
 
 /**
+ * Old → new wardrobe item id for new-account mode.
+ *
+ * A wardrobe item is not a row: it is a `Wardrobe/*.md` document whose id
+ * lives in its frontmatter, and this remap never rewrites document content.
+ * So an item id is **not** a remapper key — sending it through
+ * `remapper.remap` would mint a fresh id that names no item, orphaning every
+ * wear-ledger row that points at it. Instead:
+ *
+ * - a frontmatter id travels verbatim, so it maps to itself;
+ * - an item with no frontmatter id has an id derived from its mount point and
+ *   path, and the mount point *is* remapped — recompute it against the new
+ *   mount-point id, exactly as the vault reader will after the restore;
+ * - a legacy (pre-cutover) `wardrobeItems` row is remapped by id like any
+ *   other row (see `remappedWardrobeItems`), so its ledger rows follow it.
+ */
+function buildWardrobeItemIdRemap(
+  data: BackupData,
+  remapper: UuidRemapper
+): Map<string, string> {
+  const map = new Map<string, string>();
+  const contentByFileId = new Map<string, unknown>(
+    (data.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
+  );
+  for (const link of data.docMountFileLinks || []) {
+    if (!isWardrobeItemDocumentPath(link.relativePath)) continue;
+    const content = contentByFileId.get(link.fileId);
+    if (typeof content !== 'string') continue;
+    const oldId = wardrobeItemIdForDocument({
+      mountPointId: link.mountPointId,
+      relativePath: link.relativePath,
+      content,
+    });
+    const newId = wardrobeItemIdForDocument({
+      mountPointId: remapper.remap(link.mountPointId),
+      relativePath: link.relativePath,
+      content,
+    });
+    map.set(oldId, newId);
+  }
+  for (const item of data.wardrobeItems || []) {
+    map.set(item.id, remapper.remap(item.id));
+  }
+  return map;
+}
+
+/** One wardrobe item whose current-picture pointer must follow its file's new id. */
+export interface WardrobeImagePointerFix {
+  /** The item's mount, already remapped. */
+  mountPointId: string;
+  /** The item's mount as the backup named it (before the remap). */
+  sourceMountPointId: string;
+  /** The item's id in the restored instance. */
+  itemId: string;
+  /** The picture's remapped `files` id. */
+  imageFileId: string;
+}
+
+/**
+ * New-account mode remaps `files.id`, but an item's `imageFileId` lives in its
+ * `Wardrobe/*.md` frontmatter, which this remap never rewrites. List the
+ * pointers that need to follow their file, for the restore to apply through
+ * the ordinary wardrobe update once the vaults have landed (that path
+ * re-projects the document, so content hashes stay consistent).
+ *
+ * Pass the ORIGINAL (pre-remap) backup data and the same remapper used for
+ * `remapBackupData`, so file ids resolve to the ids the rows received.
+ */
+export function planWardrobeImagePointerFixes(
+  original: BackupData,
+  remapper: UuidRemapper
+): WardrobeImagePointerFix[] {
+  const fileIds = new Set((original.files || []).map((f) => f.id));
+  const itemIdRemap = buildWardrobeItemIdRemap(original, remapper);
+  const contentByFileId = new Map<string, unknown>(
+    (original.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
+  );
+  const fixes: WardrobeImagePointerFix[] = [];
+  for (const link of original.docMountFileLinks || []) {
+    if (!isWardrobeItemDocumentPath(link.relativePath)) continue;
+    const content = contentByFileId.get(link.fileId);
+    if (typeof content !== 'string') continue;
+    const pointer = parseFrontmatter(content).data?.imageFileId;
+    if (typeof pointer !== 'string' || !fileIds.has(pointer)) continue;
+    const oldItemId = wardrobeItemIdForDocument({ mountPointId: link.mountPointId, relativePath: link.relativePath, content });
+    fixes.push({
+      mountPointId: remapper.remap(link.mountPointId),
+      sourceMountPointId: link.mountPointId,
+      itemId: itemIdRemap.get(oldItemId) ?? oldItemId,
+      imageFileId: remapper.remap(pointer),
+    });
+  }
+  return fixes;
+}
+
+/**
+ * The chat columns that hold participant ids as a JSON-encoded string array
+ * rather than a real array, so `remapArrayFields` cannot see them.
+ */
+const PARTICIPANT_ID_JSON_FIELDS = [
+  'turnQueue',
+  'spokenThisCycleParticipantIds',
+  'cycleOrderParticipantIds',
+] as const;
+
+/**
+ * Remap a JSON-encoded array of ids. A value that is not a JSON string array
+ * is returned untouched — the turn manager already reads a malformed value as
+ * empty, so there is nothing to gain by rewriting it.
+ */
+function remapJsonIdList(value: unknown, remapper: UuidRemapper): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) return value;
+    return JSON.stringify(remapper.remapArray(parsed as string[]));
+  } catch {
+    return value;
+  }
+}
+
+/**
  * Remaps all UUIDs in the backup data for new-account mode
  */
 export function remapBackupData(
@@ -78,13 +211,18 @@ export function remapBackupData(
     userId: targetUserId,
   }));
 
+  // Wardrobe item ids are not remapper keys (see buildWardrobeItemIdRemap).
+  // Built up front: a wardrobe picture's `files` row names its item in
+  // `linkedTo` / `tags`, and those must follow the item, not mint a stranger.
+  const wardrobeItemIdRemap = buildWardrobeItemIdRemap(data, remapper);
+  const remapLinkId = (id: string): string => wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
+
   // Remap files
-  // IMPORTANT: Chain remapFields → remapArrayFields so array spread doesn't overwrite remapped scalar fields
+  // IMPORTANT: Chain remapFields → array remaps so array spread doesn't overwrite remapped scalar fields
   const remappedFiles = data.files.map((file) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(file, ['id', 'projectId']),
-      ['linkedTo', 'tags']
-    ),
+    ...remapper.remapFields(file, ['id', 'projectId']),
+    ...(Array.isArray(file.linkedTo) ? { linkedTo: file.linkedTo.map(remapLinkId) } : {}),
+    ...(Array.isArray(file.tags) ? { tags: file.tags.map(remapLinkId) } : {}),
     userId: targetUserId,
   }));
 
@@ -92,7 +230,11 @@ export function remapBackupData(
   const remappedCharacters = data.characters.map((char) => {
     const remapped = {
       ...remapper.remapArrayFields(
-        remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
+        // The vault pointer is remapped like any FK (bug 185): the remapper
+        // maps one original id to one new id everywhere, so the pointer names
+        // the id its vault's mount-point row is restored under, and the
+        // restore binds the character to that vault rather than minting one.
+        remapper.remapFields(char, ['id', 'characterDocumentMountPointId', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
         ['tags']
       ),
       userId: targetUserId,
@@ -189,11 +331,34 @@ export function remapBackupData(
           'projectId',
           'storyBackgroundImageId',
           'imageProfileId',
+          // Message-id reference: messages are remapped below, so the
+          // "other-subject", episode and turn extraction watermarks must
+          // follow their messages.
+          'otherExtractionWatermarkMessageId',
+          'episodeExtractionWatermarkMessageId',
+          'turnExtractionWatermarkMessageId',
         ]),
         ['tags', 'impersonatingParticipantIds']
       ),
       userId: targetUserId,
     };
+
+    // The scenario source names a mount; mounts are remapped by the same
+    // remapper, so the pointer follows its store.
+    if (chat.scenarioSource) {
+      remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
+    }
+
+    // Turn-manager state names participants inside JSON strings; left alone,
+    // the rotation and turn queue would name seats the restore has renamed.
+    for (const field of PARTICIPANT_ID_JSON_FIELDS) {
+      if (field in chat) {
+        (remappedChat as Record<string, unknown>)[field] = remapJsonIdList(
+          (chat as unknown as Record<string, unknown>)[field],
+          remapper,
+        );
+      }
+    }
 
     // Remap participants
     remappedChat.participants = chat.participants.map((participant: ChatParticipantBase) => ({
@@ -209,7 +374,9 @@ export function remapBackupData(
     remappedChat.messages = chat.messages.map((msg) => ({
       ...remapper.remapArrayFields(
         remapper.remapFields(msg, ['id', 'swipeGroupId', 'participantId']),
-        ['attachments']
+        // `targetParticipantIds` is a whisper's audience: unremapped, a
+        // whisper would address seats that no longer exist.
+        ['attachments', 'targetParticipantIds']
       ),
     }));
 
@@ -219,10 +386,14 @@ export function remapBackupData(
   // Remap memories
   const remappedMemories = data.memories.map((memory) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId']),
-      ['tags', 'relatedMemoryIds']
+      // `supersededById` and `consolidatedFrom` are memory-id references (digest
+      // <-> cold members), remapped in lockstep with `id` exactly like
+      // `relatedMemoryIds`. Old backups lack them; remapFields/remapArrayFields
+      // skip absent or null values.
+      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId', 'supersededById']),
+      ['tags', 'relatedMemoryIds', 'consolidatedFrom']
     ),
-  })) as Memory[];
+  })) as SerializedMemory[];
 
   // Remap prompt templates
   const remappedPromptTemplates = data.promptTemplates.map((template) => ({
@@ -248,17 +419,20 @@ export function remapBackupData(
   // Remap projects
   const remappedProjects = data.projects.map((project) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
+      // officialMountPointId remapped in lockstep with the store's own row, so
+      // the restore can bind the project to its archived store (bug 185).
+      remapper.remapFields(project, ['id', 'officialMountPointId', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
       ['characterRoster']
     ),
     userId: targetUserId,
   })) as Project[];
 
-  // Remap groups. Only the id needs remapping — like projects, the
-  // officialMountPointId is discarded and re-provisioned by `groups.create`, so
-  // it's intentionally left alone (membership/links carry the group id forward).
+  // Remap groups. Like projects, officialMountPointId is remapped in lockstep
+  // with the store's own row so the restore binds the group to its archived
+  // store rather than minting a fresh one (bug 185); membership and links
+  // carry the group id forward.
   const remappedGroups = (data.groups || []).map((group) => ({
-    ...remapper.remapFields(group, ['id']),
+    ...remapper.remapFields(group, ['id', 'officialMountPointId']),
   })) as Group[];
 
   // Remap LLM logs.
@@ -286,11 +460,29 @@ export function remapBackupData(
     userId: targetUserId,
   })) as PluginConfig[];
 
-  // Remap chat settings
+  // Remap chat settings. A backup from before 4.10 carries the retired
+  // Concierge settings (dangerousContentSettings, the top-level vision
+  // fallback, the crafter under cheapLLMSettings) and no conciergeSettings;
+  // translate them here, exactly as add-concierge-settings-v1 does, before
+  // the repository's schema strips the old keys.
+  const backupHasUnmoderatedChats = (data.chats || []).some(
+    (chat) => getConciergeState(withConciergeModeFromLegacy(chat as Parameters<typeof withConciergeModeFromLegacy>[0])) === 'unmoderated',
+  );
   const remappedChatSettings = (data.chatSettings || []).map((settings) => {
     const remapped = {
-      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'uncensoredImageDescriptionProfileId', 'defaultRoleplayTemplateId']),
+      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'defaultRoleplayTemplateId']),
       userId: targetUserId,
+    };
+    const concierge = withConciergeSettingsFromLegacy(
+      settings as SettingsWithLegacyConcierge<ChatSettings>,
+      backupHasUnmoderatedChats,
+    ).conciergeSettings as ChatSettings['conciergeSettings'];
+    remapped.conciergeSettings = {
+      ...concierge,
+      ...(concierge.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(concierge.uncensoredTextProfileId) } : {}),
+      ...(concierge.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(concierge.uncensoredImageProfileId) } : {}),
+      ...(concierge.uncensoredVisionProfileId ? { uncensoredVisionProfileId: remapper.remap(concierge.uncensoredVisionProfileId) } : {}),
+      ...(concierge.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(concierge.imagePromptProfileId) } : {}),
     };
     // Remap nested cheapLLMSettings UUID fields
     if (remapped.cheapLLMSettings) {
@@ -298,15 +490,6 @@ export function remapBackupData(
         ...remapped.cheapLLMSettings,
         ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
         ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(remapped.cheapLLMSettings.imagePromptProfileId) } : {}),
-      };
-    }
-    // Remap nested dangerousContentSettings UUID fields
-    if (remapped.dangerousContentSettings) {
-      remapped.dangerousContentSettings = {
-        ...remapped.dangerousContentSettings,
-        ...(remapped.dangerousContentSettings.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredTextProfileId) } : {}),
-        ...(remapped.dangerousContentSettings.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredImageProfileId) } : {}),
       };
     }
     // Remap nested storyBackgroundsSettings UUID fields
@@ -314,6 +497,12 @@ export function remapBackupData(
       remapped.storyBackgroundsSettings = {
         ...remapped.storyBackgroundsSettings,
         defaultImageProfileId: remapper.remap(remapped.storyBackgroundsSettings.defaultImageProfileId),
+      };
+    }
+    if (remapped.wardrobeImageSettings?.imageProfileId) {
+      remapped.wardrobeImageSettings = {
+        ...remapped.wardrobeImageSettings,
+        imageProfileId: remapper.remap(remapped.wardrobeImageSettings.imageProfileId),
       };
     }
     return remapped as ChatSettings;
@@ -331,7 +520,8 @@ export function remapBackupData(
   // composites at parse time pass through this same path.
   const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(item, ['id', 'characterId']),
+      // imageFileId names a `files` row, remapped with the files above.
+      remapper.remapFields(item, ['id', 'characterId', 'imageFileId']),
       ['componentItemIds']
     ),
   })) as WardrobeItem[];
@@ -341,6 +531,25 @@ export function remapBackupData(
     ...remapper.remapFields(cd, ['id', 'chatId']),
   })) as ChatDocument[];
 
+  // Inform rows reference the chat, one of its participants (`participantId`
+  // is a seat id, never a character id), the Host record message and — once
+  // consumed — the assistant message that carried them. All four were remapped
+  // with the chat above, so the remapper answers with the same new ids.
+  // `batchId` is not a row anywhere; it is remapped anyway so the whole batch
+  // moves together and no id from the source instance survives the restore.
+  // The nullable fields are left alone when null — remapFields only touches
+  // strings.
+  const remappedChatInforms = (data.chatInforms || []).map((inform) => ({
+    ...remapper.remapFields(inform, [
+      'id',
+      'chatId',
+      'batchId',
+      'participantId',
+      'recordMessageId',
+      'consumedByMessageId',
+    ]),
+  })) as ChatInform[];
+
   // Conversation chunks reference chats and individual messages.
   const remappedConversationChunks = (data.conversationChunks || []).map((chunk) => ({
     ...remapper.remapArrayFields(
@@ -349,13 +558,9 @@ export function remapBackupData(
     ),
   })) as SerializedConversationChunk[];
 
-  // Vector index meta — id and characterId share the same value by convention.
-  const remappedVectorIndexMetas = (data.vectorIndexMetas || []).map((meta) => ({
-    ...remapper.remapFields(meta, ['id', 'characterId']),
-  })) as VectorIndexMeta[];
-
-  // Vector entries — id is typically the memory id (already remapped through
-  // the memory pass). characterId is also remapped.
+  // Legacy vector entries (pre-Phase-B archives) — id is the memory id
+  // (already remapped through the memory pass), so the restore can still match
+  // each to its memory. characterId is also remapped.
   const remappedVectorEntries = (data.vectorEntries || []).map((entry) => ({
     ...remapper.remapFields(entry, ['id', 'characterId']),
   })) as SerializedVectorEntry[];
@@ -412,6 +617,17 @@ export function remapBackupData(
     ...remapper.remapFields(member, ['id', 'groupId', 'characterId']),
   })) as GroupCharacterMember[];
 
+  // Wardrobe wear ledger. `id`, `wearerCharacterId` and `lastWornChatId` go
+  // through the remapper like any FK (a wearer or chat absent from the backup
+  // gets a fresh id that names nothing — the readers already label a missing
+  // wearer and "a chat since deleted"). `itemId` does not: see
+  // buildWardrobeItemIdRemap. An item id the backup carries no document for
+  // passes through unchanged.
+  const remappedWardrobeWear = (data.wardrobeWear || []).map((row) => ({
+    ...remapper.remapFields(row, ['id', 'wearerCharacterId', 'lastWornChatId']),
+    itemId: wardrobeItemIdRemap.get(row.itemId) ?? row.itemId,
+  })) as WardrobeWearStatsRow[];
+
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
@@ -448,11 +664,11 @@ export function remapBackupData(
       ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
     })) as ConversationAnnotation[],
     chatDocuments: remappedChatDocuments,
+    chatInforms: remappedChatInforms,
     instanceSettings: remappedInstanceSettings,
     embeddingStatus: remappedEmbeddingStatus,
     conversationChunks: remappedConversationChunks,
     tfidfVocabularies: remappedTfidfVocabularies,
-    vectorIndexMetas: remappedVectorIndexMetas,
     vectorEntries: remappedVectorEntries,
     docMountPoints: remappedDocMountPoints,
     docMountFolders: remappedDocMountFolders,
@@ -467,5 +683,6 @@ export function remapBackupData(
     // Text replacement rules: global config, no userId, no FKs to remapped
     // entities, and nothing references rule IDs — pass through unchanged.
     textReplacementRules: data.textReplacementRules || [],
+    wardrobeWear: remappedWardrobeWear,
   };
 }

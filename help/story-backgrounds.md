@@ -8,11 +8,11 @@ Story Backgrounds is a feature that automatically generates atmospheric backgrou
 
 ## How It Works
 
-When enabled, Quilltap generates a landscape scene image featuring your characters whenever a chat title is updated. The image appears as a subtle background behind your chat messages, adding atmosphere without interfering with readability.
+When enabled, Quilltap generates a landscape scene image featuring your characters whenever the Estate retitles a chat — the moment a new title is written being, by long custom, the Lantern's cue that the scene has shifted. The image appears as a subtle background behind your chat messages, adding atmosphere without interfering with readability.
 
 ### Generation Process
 
-1. **Trigger**: Background generation happens automatically after chat title updates (both automatic and manual)
+1. **Trigger**: A fresh background is commissioned whenever a chat's title actually changes at the hands of the automatic titler — whether at one of its periodic look-ins, when the Librarian folds older turns into the running summary and proposes a truer name for the evening, or when you tick **Use automatic naming** in the chat's rename dialog. A title typed in by hand does not summon the Lantern (use **Regenerate Background** for that), and a title that comes back unchanged commissions nothing, so the same scene is never painted twice.
 2. **Scene Understanding**: The system determines the current scene in one of two ways:
    - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
    - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
@@ -54,11 +54,11 @@ Consider using an image profile with a model optimized for landscape/scene gener
 
 A story that has wandered somewhere less than fully clothed presents the Lantern with a small difficulty of etiquette, and the answer depends entirely on which door the picture is going out through.
 
-**Ordinary image providers.** Most houses will simply decline the commission, so the Lantern practises what one might call cinematic discretion. The scene is rendered honestly — the mood, the hour, the tousled bedding, the clothing on the floor — but the figure itself is arranged behind a sheet slipped just so, a bedpost, a shoulder turned away, a doorway's shadow, or the merciful steam of a bath. Nothing about the story is altered; the camera has merely learned some manners. What the Lantern will *never* do is put everyone back into pyjamas and pretend a different evening took place.
+**Ordinary image providers.** Most houses will simply decline the commission, so the Lantern practises what one might call cinematic discretion. The scene is rendered honestly — the mood, the hour, the tousled bedding, the clothing on the floor — but the figure itself is arranged behind a sheet slipped just so, a bedpost, a shoulder turned away, a doorway's shadow, or the merciful steam of a bath. Nothing about the story is altered; the camera has merely learned some manners. What the Lantern will *never* do is put everyone back into pyjamas and pretend a different evening took place. The courtesy is extended to each figure in turn, not merely the one who first catches the eye: a character the story has left topless or wholly unclothed is draped individually, never passed through as a bare word and never dressed. When the Concierge's pre-screen finds a character's appearance too frank for the house, he trims the frank wording and hands the Lantern a discreet note that this figure wants the sheet — he no longer fetches a change of clothes.
 
-**Uncensored image providers.** If the conversation has been marked dangerous and you have nominated an uncensored image profile to the Concierge (**Chat** tab in Settings, `/settings?tab=chat&section=dangerous-content`), the drapery is dispensed with. There is no moderation to slip past at that door, so the Lantern describes the scene plainly instead of arranging occlusions nobody asked for. The framing rules survive intact — this remains a wide, calm background with the figures toward the edges of the frame, never an anatomical study.
+**Uncensored image providers.** If the conversation is **Unmoderated**, you have named an uncensored image profile on the Concierge's desk (**The Concierge** tab in Settings, `/settings?tab=concierge&section=uncensored-desk`), and the Concierge is on duty, the drapery is dispensed with. There is no moderation to slip past at that door, so the Lantern describes the scene plainly instead of arranging occlusions nobody asked for. The framing rules survive intact — this remains a wide, calm background with the figures toward the edges of the frame, never an anatomical study. With the Concierge off duty the sheet stays put: the picture cannot be carried to the uncensored door, so there is no point drafting it for one. The prompt itself is drafted by the **image-prompt crafter** named on the same desk, or by your ordinary cheap LLM when none is named.
 
-**When a provider changes its mind.** Should an ordinary provider accept the commission and then reject the finished plate on moderation grounds, the Concierge reroutes it to your uncensored profile — and the prompt is *rewritten* for the new door rather than posted through it unchanged. The second attempt therefore arrives candid, not still wrapped in a sheet intended for the house that just turned it away.
+**When a provider changes its mind.** Should an ordinary provider decline the commission on moderation grounds, the Concierge — on duty, and in any chat not **Locked** — carries the *same* prompt across the street to an uncensored image profile: the one you named, or failing that any profile ticked "Uncensored-compatible". The prompt is never rewritten on the way; a Moderated chat's backdrop arrives still wrapped in its sheet, merely painted by a less squeamish hand. The Concierge leaves a note in the chat either way, and the Lantern's announcement lists the painter who declined above the one who obliged. See [The Concierge](the-concierge.md) for the whole of the rule.
 
 ## Project Backgrounds
 
@@ -77,6 +77,7 @@ When a project is open beside a conversation in a split workspace, the conversat
 
 - Background images are generated as background jobs, so they won't slow down your chat
 - Images are cached and don't re-generate unless the title changes
+- A chat you have renamed by hand keeps its name: neither the periodic titler nor the Librarian's summary will overwrite it. Tick **Use automatic naming** in the rename dialog to hand the naming back to the Estate
 - The feature can be disabled at any time without affecting existing backgrounds
 
 ## Troubleshooting
@@ -92,6 +93,10 @@ When a project is open beside a conversation in a split workspace, the conversat
 - Try a different image generation model
 - Ensure characters have detailed physical descriptions
 - Use more descriptive chat titles
+
+**The painter refused the scene:**
+- Some image providers decline a backdrop on grounds of propriety. When that happens and the Concierge cannot carry it to an uncensored image profile, the Lantern leaves a note in the chat saying so, and the previous backdrop stays up. Nothing is marked as failed in the Tasks Queue: a refusal is an answer, not a breakdown
+- Press **Try uncensored** on the Lantern's note to commission the backdrop from the uncensored image profile instead (not offered on a Locked chat). See [The Concierge](the-concierge.md)
 
 **Generation failing:**
 - Check your image provider API key is valid and has credits
@@ -111,5 +116,5 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Topics
 
 - [Image Generation Profiles](image-generation-profiles.md)
-- [Chat Settings](chat-settings.md)
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#story-backgrounds-settings)
 - [Projects](projects.md)

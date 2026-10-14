@@ -61,7 +61,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
+  local top_cmds="db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion"
 
   # Flags that swallow the word after them. A flat list will not do: -o is the
   # valueless global --open but themes' valued --output, and `memories`
@@ -69,13 +69,15 @@ _quilltap_complete() {
   # makes a flag's value look like the subcommand's verb, which is how
   # `quilltap docs --limit 5 <TAB>` used to lose the verb list.
   local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
-  local vf_db=" --limit --grep --character --project --about --source --chat --message --field --tail --last --from --type --out --id --count "
+  local vf_db=" --limit --grep --character --project --about --source --tier --chat --message --field --tail --last --from --type --out --id --count "
   local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
+  local vf_sync=" --direction --prefer "
   local vf_themes=" -o --output -k --key -n --name "
-  local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
+  local vf_memories=" -d --data-dir --instance --passphrase -p --port --phases --cap --character --about --source --tier --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
   local vf_memory_diff=" --concurrency --out "
-  local vf_recall_replay=" --turn --char --limit --port "
+  local vf_recall_replay=" --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --port "
+  local vf_anchor_probe=" --limit --port "
   local vf_file_verify=" --stall-ms "
 
   # Get the subcommand (first non-option word after quilltap)
@@ -93,11 +95,13 @@ _quilltap_complete() {
     case "$subcommand" in
       db)            valued="$vf_global$vf_db" ;;
       docs)          valued="$vf_global$vf_docs" ;;
+      sync)          valued="$vf_global$vf_sync" ;;
       themes)        valued="$vf_global$vf_themes" ;;
       memories)      valued="$vf_memories" ;;
       logs)          valued="$vf_global$vf_logs" ;;
       memory-diff)   valued="$vf_global$vf_memory_diff" ;;
       recall-replay) valued="$vf_global$vf_recall_replay" ;;
+      anchor-probe)  valued="$vf_global$vf_anchor_probe" ;;
       file-verify)   valued="$vf_global$vf_file_verify" ;;
     esac
 
@@ -174,7 +178,15 @@ _quilltap_complete() {
       return
       ;;
     --source)
-      COMPREPLY=($(compgen -W "AUTO MANUAL" -- "$cur"))
+      COMPREPLY=($(compgen -W "AUTO MANUAL CONSOLIDATED" -- "$cur"))
+      return
+      ;;
+    --tier)
+      COMPREPLY=($(compgen -W "hot cold" -- "$cur"))
+      return
+      ;;
+    --phases)
+      COMPREPLY=($(compgen -W "fold-near-duplicates consolidate demote retire mirror" -- "$cur"))
       return
       ;;
     --sort)
@@ -197,6 +209,14 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "args json" -- "$cur"))
       return
       ;;
+    --direction)
+      COMPREPLY=($(compgen -W "both to-disk to-store" -- "$cur"))
+      return
+      ;;
+    --prefer)
+      COMPREPLY=($(compgen -W "newer store disk" -- "$cur"))
+      return
+      ;;
   esac
 
   # Subcommand-specific completion
@@ -204,7 +224,7 @@ _quilltap_complete() {
     db)
       local db_verbs="schema find chats messages logs message log memories characters optimize backup integrity"
       local db_flags="--instance --data-dir --passphrase --json --limit --grep \
-        --character --project --about --source --chat --message --rendered --field \
+        --character --project --about --source --tier --chat --message --rendered --field \
         --tail --last --full --from --type --out --id --diverged --blocked --help \
         --tables --count --repl --write --llm-logs --mount-points \
         --lock-status --lock-clean --lock-override"
@@ -239,6 +259,18 @@ _quilltap_complete() {
         COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
       else
         _quilltap_docs_positional "$subverb" "$positional_count" "$cur"
+      fi
+      ;;
+    sync)
+      local sync_flags="--dry-run --direction --prefer --no-delete --no-manifest \
+        --json --instance --data-dir --passphrase --port --help"
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "$sync_flags" -- "$cur"))
+      elif [[ "$positional_count" == "1" ]]; then
+        _quilltap_lines_compreply "$cur" \
+          <<< "$(command quilltap docs list --names-only "${ctx_flags[@]}" 2>/dev/null)"
+      else
+        COMPREPLY=($(compgen -d -- "$cur"))
       fi
       ;;
     themes)
@@ -289,13 +321,13 @@ _quilltap_complete() {
       fi
       ;;
     memories)
-      local mem_verbs="ls find grep show tree status validate"
-      local mem_flags="--character --about --source --chat --project --since --until \
+      local mem_verbs="ls find grep show tree status validate maintain"
+      local mem_flags="--character --about --source --tier --chat --project --since --until \
         --min-importance --min-reinforced --has-embedding --no-embedding \
         --sort -r --reverse --limit --full-titles --in --no-related --list \
         --ignore-case -i --paths-only -l --max --context --depth --max-nodes \
-        --semantic --top --threshold \
-        --instance --data-dir --passphrase --port --json --help"
+        --semantic --top --threshold --dry-run --phases --cap --repair --write \
+        --instance --data-dir --passphrase -p --port --json --help"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then
           COMPREPLY=($(compgen -W "$mem_flags" -- "$cur"))
@@ -311,8 +343,12 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
       ;;
     recall-replay)
-      local rr_flags="--turn --char --limit --port --json --help"
+      local rr_flags="--instance --data-dir --passphrase --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --as-of --port --json --help"
       COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
+      ;;
+    anchor-probe)
+      local ap_flags="--instance --data-dir --passphrase --limit --port --json --help"
+      COMPREPLY=($(compgen -W "$ap_flags" -- "$cur"))
       ;;
     logs)
       local logs_flags="--stream --tail -f --follow --grep \

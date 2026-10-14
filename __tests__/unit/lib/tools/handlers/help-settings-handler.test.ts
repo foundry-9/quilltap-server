@@ -176,7 +176,7 @@ describe('executeHelpSettingsTool', () => {
       memoryCascadePreferences: { cascadeStrength: 0.5 },
       defaultTimestampConfig: { format: 'ISO' },
       agentModeSettings: { enabled: true },
-      dangerousContentSettings: { trackDangerousContent: false },
+      conciergeSettings: { enabled: false },
       autoDetectRng: true,
       llmLoggingSettings: { logRequests: true },
       avatarDisplayMode: 'inline',
@@ -194,7 +194,31 @@ describe('executeHelpSettingsTool', () => {
     expect(result.success).toBe(true)
     expect(result.category).toBe('chat')
     expect(result.data?.tokenDisplaySettings).toBeDefined()
+    expect(result.data).not.toHaveProperty('conciergeSettings')
+    expect(result.data).not.toHaveProperty('dangerousContentSettings')
     expect(mockRepos.chatSettings.findByUserId).toHaveBeenCalledWith('user-123')
+  })
+
+  it('returns the Concierge settings, defaults filled, for the "concierge" category', async () => {
+    const mockRepos = {
+      chatSettings: {
+        findByUserId: jest.fn().mockResolvedValue({
+          userId: 'user-123',
+          conciergeSettings: { enabled: false, preScreen: { enabled: true } },
+        }),
+      },
+    }
+    mockGetRepositories.mockReturnValue(mockRepos as any)
+
+    const result = await executeHelpSettingsTool({ category: 'concierge' }, context)
+
+    expect(result.success).toBe(true)
+    expect(result.category).toBe('concierge')
+    const concierge = result.data?.conciergeSettings as Record<string, any>
+    expect(concierge.enabled).toBe(false)
+    expect(concierge.preScreen.enabled).toBe(true)
+    expect(concierge.preScreen.threshold).toBe(0.7)
+    expect(concierge.autoSwitchAfterRefusals).toBe(2)
   })
 
   it('mocks repos to return connections for "connections" category', async () => {

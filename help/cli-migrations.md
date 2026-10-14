@@ -70,6 +70,14 @@ Inspect the migration source in migrations/scripts/ for conditional logic.
 
 The actual running of migrations happens at server startup, where the loading screen and progress reporting are both available. The CLI is read-only; there is no `quilltap migrations run` without `--dry-run`. If you want to apply pending migrations, start (or restart) the server, and let the startup sequence handle it.
 
+## When a Migration Stumbles
+
+Most migrations are load-bearing walls: if one fails, the server declines to open its doors rather than let you wander about on a half-built floor, and the logs say why. A few are merely tidying passes over records that are already perfectly sound—the collapsing of duplicate avatar rolls is the chief example. Should one of those trip on the stair, the server notes the mishap in the log, leaves the ledger unsigned, and opens anyway. The next startup notices the unfinished work and quietly picks up where the last one left off, which is rather more than can be said for most house guests.
+
+## When a Table Has Been Tampered With
+
+A migration, once signed into the ledger, is never asked again—so a document-store table damaged *afterwards* (by a hand-edited column, say, or a restore that went sideways) used to go unremarked, and the Scriptorium simply came up empty without a word of explanation. Now, at every startup, Quilltap inspects the tables behind the document stores, the LLM logs and the help index, and checks that each is still a proper table with all its expected columns. If one is not, the server still starts (so that you may restore a backup), but the log names the culprit at ERROR, and the health check at `/api/health` reports a `structure` entry as **degraded**, listing each problem. Until the table is repaired, reads through it come back empty; restoring from a recent backup is the usual cure.
+
 ## In-Chat Navigation
 
 - **Help navigate** to settings: `help_navigate(url: "/settings?tab=system")`

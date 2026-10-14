@@ -10,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { serverError, successResponse } from '@/lib/api/responses';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
+import { resolveAvatarImageProfile } from '@/lib/image-gen/profile-resolution';
 import type { RequestContext } from '@/lib/api/middleware';
 
 /**
@@ -50,25 +51,15 @@ export async function handleToggleAvatarGeneration(
     // When toggling ON, generate initial avatars for all LLM-controlled characters
     if (newValue) {
       try {
-        // Resolve image profile: chat-level first, then default
-        let imageProfileId: string | null = null;
-
-        if (chat.imageProfileId) {
-          const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-          if (profile) {
-            imageProfileId = profile.id;
-          }
-        }
+        // Chat-level first, then the user's default, each checked for an API key.
+        const imageProfileId =
+          (await resolveAvatarImageProfile(user.id, repos, { chat }))?.id ?? null;
 
         if (!imageProfileId) {
-          const allProfiles = await repos.imageProfiles.findAll();
-          const defaultProfile = allProfiles.find((p) => p.isDefault) || null;
-          if (defaultProfile) {
-            imageProfileId = defaultProfile.id;
-          }
-        }
-
-        if (!imageProfileId) {
+          logger.debug('[Chats v1] No usable image profile; skipping initial avatar generation', {
+            chatId,
+            context: 'avatar-generation',
+          });
         } else {
           // Find all LLM-controlled character participants
           const llmCharacterParticipants = (updatedChat.participants || []).filter(

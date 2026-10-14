@@ -52,6 +52,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
+    handleAddCharacter,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
@@ -183,16 +184,19 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
         />
         <ScenariosCard
           projectId={projectId}
+          projectName={project.name}
           expanded={cardState.scenarios}
           onToggle={() => toggleCard('scenarios')}
         />
         <WardrobeCard
           projectId={projectId}
+          projectName={project.name}
           expanded={cardState.wardrobe}
           onToggle={() => toggleCard('wardrobe')}
         />
         <CharactersCard
           project={project}
+          onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
           onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
           expanded={cardState.characters}

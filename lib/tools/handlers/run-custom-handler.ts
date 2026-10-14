@@ -27,6 +27,7 @@ import {
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
+import { flattenProgressions } from '@/lib/progressions/engine';
 import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
@@ -119,6 +120,11 @@ export async function executeRunCustomTool(
   // CharacterVaultUnavailableError when that vault is broken — which lands on
   // the same Prospero error bubble as any other refused run, since neither a
   // gate nor a table that consults metadata can honestly be dealt without it.
+  // One clock reading for the whole run — the gate, the sheet `when.progress`
+  // tests, `{{now}}`, and the `updatedAt` the applier stamps all use it, so a
+  // tool cannot see one instant and record another.
+  const nowMs = Date.now();
+
   let metadata: Record<string, unknown> = {};
   if (context.characterId) {
     try {
@@ -135,6 +141,11 @@ export async function executeRunCustomTool(
       );
     }
   }
+
+  // The derived progress sheet, from the SAME snapshot the gates and the
+  // table read, against that one `nowMs`. Deriving costs no reads: the
+  // progressions live inside the metadata already in hand.
+  const progress = flattenProgressions(metadata, nowMs);
 
   // Resolved fresh: a definition added or edited mid-chat is live on this call.
   const roster = await resolveCustomToolRoster({
@@ -199,6 +210,8 @@ export async function executeRunCustomTool(
     result = await executeCustomTool(entry.definition, parameters ?? null, {
       private: isPrivate,
       metadata,
+      progress,
+      now: nowMs,
       state: toolState,
       // Only built when the definition wants one; the invoker resolves the
       // cheap-LLM selection fresh on each consult.
@@ -224,6 +237,7 @@ export async function executeRunCustomTool(
         cascade,
         characterId: context.characterId ?? null,
         metadataSnapshot: metadata,
+        nowMs,
       })
     : [];
 

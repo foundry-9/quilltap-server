@@ -54,12 +54,11 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
       chatDocuments: data.chatDocuments?.length || 0,
+      chatInforms: data.chatInforms?.length || 0,
       instanceSettings: data.instanceSettings?.length || 0,
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,
       tfidfVocabularies: data.tfidfVocabularies?.length || 0,
-      vectorIndexMetas: data.vectorIndexMetas?.length || 0,
-      vectorEntries: data.vectorEntries?.length || 0,
       docMountPoints: data.docMountPoints?.length || 0,
       docMountFolders: data.docMountFolders?.length || 0,
       docMountFiles: data.docMountFiles?.length || 0,
@@ -71,6 +70,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       groupDocMountLinks: data.groupDocMountLinks?.length || 0,
       groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
+      wardrobeWear: data.wardrobeWear?.length || 0,
       warnings: [],
     };
   } finally {

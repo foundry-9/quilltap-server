@@ -23,14 +23,10 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
-import {
-  ensureGroupScenariosFolder,
-  listGroupScenarios,
-} from '@/lib/mount-index/group-scenarios';
+import { resolveScenarioLocation } from '@/lib/scenarios/location';
 
 export const GET = createContextHandler(
-  async (req: NextRequest, { repos }: RequestContext) => {
+  async (req: NextRequest, { user, repos }: RequestContext) => {
     const includeArchived = readIncludeArchived(req);
     const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
     const requestedIds = raw
@@ -74,24 +70,16 @@ export const GET = createContextHandler(
 
     for (const groupId of groupIds) {
       try {
-        // findByIdRaw — we only need name + officialMountPointId, not the
-        // hydrated store content.
-        const group = await repos.groups.findByIdRaw(groupId);
-        if (!group) continue;
+        const location = await resolveScenarioLocation('group', groupId, repos, user.id, { ensure: true });
+        if (!location?.id) continue;
 
-        const ensured = await ensureGroupOfficialStore(group.id, group.name);
-        if (!ensured) continue;
-        await ensureGroupScenariosFolder(ensured.mountPointId);
-
-        const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId, {
-          includeArchived,
-        });
+        const { scenarios, warnings } = await location.list({ includeArchived });
         if (scenarios.length === 0) continue;
 
         groupScenarios.push({
-          groupId: group.id,
-          groupName: group.name,
-          mountPointId: ensured.mountPointId,
+          groupId: location.id,
+          groupName: location.ownerName,
+          mountPointId: location.mountPointId,
           scenarios,
           warnings,
         });

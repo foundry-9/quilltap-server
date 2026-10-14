@@ -8,9 +8,12 @@
  *
  * These helpers call the service functions directly (not the `doc_*` tool
  * handlers) because both the `send_mail` handler and the Commonplace-time mail
- * check run server-side without the tool-dispatch context. Everything here is
- * a content read/write or a folder ensure — no link/folder GC — so it is safe
- * to run from the forked background-jobs child via the buffered-write path.
+ * check run server-side without the tool-dispatch context. Everything here but
+ * {@link discardLetter} is a content read/write or a folder ensure — no
+ * link/folder GC. `discardLetter` goes through `deleteDatabaseDocument`, the
+ * same chokepoint `doc_delete_file` uses, whose `deleteWithGC` is buffered
+ * whole in the forked child and replayed (hard-link group and file-row GC
+ * included) on the parent. All of it is safe to run from the child.
  *
  * @module post-office/mailbox
  */
@@ -23,6 +26,7 @@ import {
   listDatabaseFiles,
   readDatabaseDocument,
   writeDatabaseDocument,
+  deleteDatabaseDocumentIfExists,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import {
@@ -83,6 +87,29 @@ export interface DeliverLetterParams {
   body: string;
   /** Path of the replied-to letter in the sender's mailbox, or null. */
   inReplyTo: string | null;
+}
+
+/** A letter's bare file name (`1718370000000-from-ariadne.md`) from its
+ *  vault-relative `Mail/…` path. This is the handle characters are given. */
+export function letterFileName(path: string): string {
+  const prefix = `${MAIL_FOLDER}/`;
+  return path.toLowerCase().startsWith(prefix.toLowerCase()) ? path.slice(prefix.length) : path;
+}
+
+/**
+ * Resolve a character-supplied letter reference to its vault-relative
+ * `Mail/…` path. Accepts the bare file name (the canonical handle), and — so a
+ * model echoing an older instruction still lands — the `Mail/…` path or its
+ * `qtap://self/Mail/…` URI. The `.md` extension is optional. Anything that
+ * would escape the `Mail/` folder (sub-paths, `..`) resolves to null.
+ */
+export function resolveMailPath(ref: string): string | null {
+  let name = ref.trim().replace(/^qtap:\/\/self\//i, '').replace(/^\/+/, '');
+  const prefix = `${MAIL_FOLDER}/`;
+  if (name.toLowerCase().startsWith(prefix.toLowerCase())) name = name.slice(prefix.length);
+  if (!name || name.includes('/') || name.includes('\\') || name === '.' || name === '..') return null;
+  if (!name.toLowerCase().endsWith('.md')) name = `${name}.md`;
+  return `${MAIL_FOLDER}/${name}`;
 }
 
 /**
@@ -256,6 +283,63 @@ export async function markAlerted(vaultId: string, path: string): Promise<void> 
     }
     throw err;
   }
+}
+
+/**
+ * The letters one turn announced to its character, owed an `alerted` flip once
+ * the turn has delivered them. `buildContext` collects and announces; it never
+ * marks — a provider failure or an abort before anything is persisted must
+ * leave the letters unalerted so the next attempt offers them again.
+ */
+export interface MailAlertsOwed {
+  vaultId: string;
+  paths: string[];
+}
+
+/**
+ * Mark a turn's announced letters `alerted`. Called only once the turn is known
+ * to have reached the model and ended in something the chat keeps: a persisted
+ * reply (finalizer or preserved partial), tool results saved without prose, or
+ * a deliberate pass. Warn-only per letter — a mail failure never breaks a turn.
+ */
+export async function markMailAlertsDelivered(
+  owed: MailAlertsOwed | null | undefined,
+  context: { chatId: string; via: string },
+): Promise<void> {
+  if (!owed || owed.paths.length === 0) return;
+  let marked = 0;
+  for (const path of owed.paths) {
+    try {
+      await markAlerted(owed.vaultId, path);
+      marked++;
+    } catch (err) {
+      logger.warn('markMailAlertsDelivered: could not mark letter alerted', {
+        chatId: context.chatId,
+        vaultId: owed.vaultId,
+        path,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  logger.debug('Mail alerts marked delivered', {
+    chatId: context.chatId,
+    vaultId: owed.vaultId,
+    via: context.via,
+    requested: owed.paths.length,
+    marked,
+  });
+}
+
+/**
+ * Discard a letter from a vault. Deletes through `deleteDatabaseDocument` —
+ * never a raw link delete — so a hard-linked letter loses only this link, a
+ * group of one is dissolved, and the file row and its content are collected
+ * once no link remains. Returns false when there was no such letter.
+ */
+export async function discardLetter(vaultId: string, path: string): Promise<boolean> {
+  const deleted = await deleteDatabaseDocumentIfExists(vaultId, path);
+  logger.debug('Letter discarded', { vaultId, path, deleted });
+  return deleted;
 }
 
 /** Sort summaries newest-first by `sentAt`, falling back to path order. */

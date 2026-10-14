@@ -36,6 +36,7 @@ const {
   resolveProjectMountPointIds,
   resolveProjectMountPointIdsForChat,
   resolveGroupMountPointIdsForCharacter,
+  resolveGroupMountsForCharacter,
 } = require('@/lib/mount-index/tiered-mount-pool') as typeof import('@/lib/mount-index/tiered-mount-pool')
 
 describe('tiered-mount-pool', () => {
@@ -409,6 +410,47 @@ describe('tiered-mount-pool', () => {
     it('fails soft to [] when the membership lookup throws', async () => {
       mockFindMembersByCharacterId.mockRejectedValue(new Error('degraded'))
       expect(await resolveGroupMountPointIdsForCharacter('c1')).toEqual([])
+    })
+  })
+
+  describe('resolveGroupMountsForCharacter', () => {
+    beforeEach(() => {
+      mockFindMembersByCharacterId.mockResolvedValue([{ groupId: 'G1' }, { groupId: 'G2' }])
+      mockFindGroupByIdRaw.mockImplementation(async (id: string) => ({
+        id,
+        name: id === 'G1' ? 'The Sisters' : 'The Regiment',
+        officialMountPointId: `${id}-official`,
+      }))
+      mockFindGroupLinks.mockImplementation(async (id: string) =>
+        id === 'G1'
+          ? [{ mountPointId: 'shared-linked' }]
+          : [{ mountPointId: 'shared-linked' }, { mountPointId: 'g2-linked' }],
+      )
+    })
+
+    it('keeps each group with its name, official store first, linked after', async () => {
+      expect(await resolveGroupMountsForCharacter('c1')).toEqual([
+        { group: { id: 'G1', name: 'The Sisters' }, mountPointIds: ['G1-official', 'shared-linked'] },
+        // A store linked to both groups is credited to the first only.
+        { group: { id: 'G2', name: 'The Regiment' }, mountPointIds: ['G2-official', 'g2-linked'] },
+      ])
+    })
+
+    it('flattens to exactly the flat resolver, in the same order', async () => {
+      const grouped = await resolveGroupMountsForCharacter('c1')
+      expect(await resolveGroupMountPointIdsForCharacter('c1')).toEqual(
+        grouped.flatMap((g) => g.mountPointIds),
+      )
+    })
+
+    it('drops a group whose lookup fails and keeps the rest', async () => {
+      mockFindGroupLinks.mockImplementation(async (id: string) => {
+        if (id === 'G1') throw new Error('store offline')
+        return [{ mountPointId: 'g2-linked' }]
+      })
+      expect(await resolveGroupMountsForCharacter('c1')).toEqual([
+        { group: { id: 'G2', name: 'The Regiment' }, mountPointIds: ['G2-official', 'g2-linked'] },
+      ])
     })
   })
 })

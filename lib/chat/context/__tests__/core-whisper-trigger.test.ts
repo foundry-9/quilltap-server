@@ -1,4 +1,4 @@
-import { shouldFireCoreWhisper } from '../core-whisper-trigger';
+import { findLastOwnTurnMs, shouldFireCoreWhisper } from '../core-whisper-trigger';
 import type { ChatEvent, MessageEvent } from '@/lib/schemas/chat.types';
 
 const ME = '00000000-0000-0000-0000-000000000001';
@@ -450,3 +450,98 @@ describe('shouldFireCoreWhisper', () => {
     expect(typeof USER).toBe('string');
   });
 });
+
+/**
+ * `findLastOwnTurnMs` — the cadence input character progressions share with
+ * the Core whisper. Same doctrine, same walk: a per-character cadence is
+ * derived from history, never stored.
+ */
+describe('findLastOwnTurnMs', () => {
+  /** A message with an explicit timestamp, so the walk can be pinned. */
+  function at(iso: string, overrides: Partial<MessageEvent> = {}): MessageEvent {
+    return {
+      type: 'message',
+      id: crypto.randomUUID(),
+      role: 'ASSISTANT',
+      content: 'reply',
+      attachments: [],
+      createdAt: iso,
+      participantId: ME,
+      ...overrides,
+    } as MessageEvent;
+  }
+
+  it('returns null when this character has never spoken here', () => {
+    expect(findLastOwnTurnMs([userMsg(), otherMsg()], ME)).toBeNull();
+  });
+
+  it('returns null for an empty history', () => {
+    expect(findLastOwnTurnMs([], ME)).toBeNull();
+  });
+
+  it('returns the timestamp of their most recent own turn', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      userMsg(),
+      at('2026-09-08T12:00:00.000Z'),
+      userMsg(),
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T12:00:00.000Z'));
+  });
+
+  it('ignores turns by anyone else, including the user', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      at('2026-09-08T11:00:00.000Z', { participantId: OTHER }),
+      { ...userMsg(), createdAt: '2026-09-08T13:00:00.000Z' } as MessageEvent,
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('ignores a Staff whisper addressed to them — that is not them speaking', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      at('2026-09-08T11:00:00.000Z', { systemSender: 'aurora', targetParticipantIds: [ME] } as Partial<MessageEvent>),
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('ignores a silent message and an empty tool-call-only turn', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      at('2026-09-08T11:00:00.000Z', { isSilentMessage: true } as Partial<MessageEvent>),
+      at('2026-09-08T12:00:00.000Z', { content: '   ' }),
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('ignores their own USER-role message — a user seat is not an assistant turn', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      at('2026-09-08T11:00:00.000Z', { role: 'USER' } as Partial<MessageEvent>),
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('skips non-message events entirely', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      { type: 'context-summary', id: crypto.randomUUID(), createdAt: '2026-09-08T11:00:00.000Z' } as unknown as ChatEvent,
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('keeps walking past a row whose timestamp will not parse', () => {
+    const events: ChatEvent[] = [
+      at('2026-09-08T10:00:00.000Z'),
+      at('not a date'),
+    ];
+    expect(findLastOwnTurnMs(events, ME)).toBe(Date.parse('2026-09-08T10:00:00.000Z'));
+  });
+
+  it('reads a Date as readily as an ISO string', () => {
+    const when = new Date('2026-09-08T10:00:00.000Z');
+    const events = [at('ignored', { createdAt: when } as unknown as Partial<MessageEvent>)];
+    expect(findLastOwnTurnMs(events, ME)).toBe(when.getTime());
+  });
+})

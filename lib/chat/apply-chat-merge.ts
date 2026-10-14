@@ -249,6 +249,8 @@ export async function applyChatMerge(
           scenarioText: targetChat.scenarioText ?? null,
           cheapLLMConfig,
           sourceChatId,
+          // A merge changes nobody's clothes: the slots are written, no wear is credited.
+          source: 'merge',
         });
       } catch (error) {
         logger.error('[ChatMerge] Failed to apply outfit for merged participant', {

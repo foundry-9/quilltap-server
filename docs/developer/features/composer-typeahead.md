@@ -186,6 +186,13 @@ Empty wrapper that does nothing on its own. Verifiable by mounting in a Storyboo
 
 ## Phase 2 — `@` mentions
 
+> **Shipped in a simpler form (4.10-dev).** `MentionTypeaheadPlugin` inserts the character's
+> **plain name**, not a `MentionNode` chip, and does not touch `targetParticipantIds`. The `@`
+> is dropped except at the start of a line, where it survives only as a Carina query
+> (`@Name:` / `@Name?` + whitespace). Logic: `lib/mentions/mention-typeahead.ts`. The chip,
+> transformer and server-side addressing below remain unbuilt; if they are ever built, they
+> should replace that plugin's commit path rather than sit beside it.
+
 ### Files
 
 **New:**

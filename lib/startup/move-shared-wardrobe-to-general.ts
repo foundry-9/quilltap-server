@@ -90,6 +90,7 @@ function rowToWardrobeItem(row: ArchetypeRow): WardrobeItem {
     replace: false,
     migratedFromClothingRecordId: row.migratedFromClothingRecordId ?? null,
     archivedAt: row.archivedAt ?? null,
+    folder: '',
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

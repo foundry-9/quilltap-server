@@ -127,12 +127,13 @@ function repoStub(overrides: Record<string, unknown> = {}) {
 
 const DERIVED_EMBEDDING_FILES = [
   'conversation-chunks.json',
-  'vector-entries.json',
-  'vector-index-metas.json',
   'tfidf-vocabularies.json',
   'embedding-status.json',
   'doc-mount-chunks.json',
 ];
+
+/** The retired vector mirror: never written, in any mode (memory rows carry the vectors). */
+const RETIRED_MIRROR_FILES = ['vector-entries.json', 'vector-index-metas.json'];
 
 describe('createBackup — compact mode', () => {
   const testUserId = 'user-compact';
@@ -159,11 +160,6 @@ describe('createBackup — compact mode', () => {
     });
     const globalRepos = repoStub({
       chatSettings: methodStub({ findByUserId: jest.fn().mockResolvedValue(null) }),
-      vectorIndices: methodStub({
-        getAllCharacterIds: jest.fn().mockResolvedValue([]),
-        findMetaByCharacterId: jest.fn().mockResolvedValue(null),
-        findEntriesByCharacterId: jest.fn().mockResolvedValue([]),
-      }),
       textReplacementRules: methodStub({ list: jest.fn().mockResolvedValue([]) }),
     });
 
@@ -188,13 +184,18 @@ describe('createBackup — compact mode', () => {
     for (const file of DERIVED_EMBEDDING_FILES) {
       expect(staged).toContain(file);
     }
+    for (const file of RETIRED_MIRROR_FILES) {
+      expect(staged).not.toContain(file);
+    }
+    expect(manifest.counts).not.toHaveProperty('vectorEntries');
+    expect(manifest.counts).not.toHaveProperty('vectorIndexMetas');
   });
 
   it('omits the derived embedding collections entirely when compact', async () => {
     const { manifest, staged } = await runBackup({ compact: true });
 
     expect(manifest.compact).toBe(true);
-    for (const file of DERIVED_EMBEDDING_FILES) {
+    for (const file of [...DERIVED_EMBEDDING_FILES, ...RETIRED_MIRROR_FILES]) {
       expect(staged).not.toContain(file);
     }
     // Everything the user actually wrote is still there.
@@ -218,6 +219,12 @@ describe('createBackup — compact mode', () => {
     const { memories } = await runBackup();
 
     expect(memories).toHaveLength(1);
-    expect(memories[0].embedding).not.toBeNull();
+    // A number[] — not JSON.stringify's index-keyed object, which the
+    // restore's MemorySchema refuses (bug 181).
+    const embedding = memories[0].embedding as number[];
+    expect(Array.isArray(embedding)).toBe(true);
+    expect(embedding).toHaveLength(3);
+    expect(embedding[0]).toBeCloseTo(0.1);
+    expect(embedding[2]).toBeCloseTo(0.3);
   });
 });

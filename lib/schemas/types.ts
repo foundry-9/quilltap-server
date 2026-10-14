@@ -66,9 +66,9 @@ export {
   TimestampFormatEnum,
   TimestampConfigSchema,
   TokenDisplaySettingsSchema,
-  DangerousContentModeEnum,
   DangerousContentDisplayModeEnum,
-  DangerousContentSettingsSchema,
+  ImpersonationVoiceModeEnum,
+  ConciergeSettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
   CoreWhisperSettingsSchema,
@@ -82,9 +82,9 @@ export type {
   TimestampFormat,
   TimestampConfig,
   TokenDisplaySettings,
-  DangerousContentMode,
   DangerousContentDisplayMode,
-  DangerousContentSettings,
+  ImpersonationVoiceMode,
+  ConciergeSettings,
   ChatSettings,
   GeneralSettings,
   CoreWhisperSettings,
@@ -240,6 +240,7 @@ export type {
 // ============================================================================
 export {
   MemorySourceEnum,
+  MemoryTierEnum,
   MemorySchema,
   MemoriesFileSchema,
   WitnessedContextEnum,
@@ -247,6 +248,7 @@ export {
 
 export type {
   MemorySource,
+  MemoryTier,
   Memory,
   MemoriesFile,
   WitnessedContext,
@@ -391,25 +393,6 @@ export type {
   LLMLogRequestHashes,
   LLMLog,
 } from './llm-log.types';
-
-// ============================================================================
-// VECTOR INDICES TYPES
-// ============================================================================
-export {
-  VectorMetadataSchema,
-  VectorEntrySchema,
-  VectorIndexSchema,
-  VectorIndexMetaSchema,
-  VectorEntryRowSchema,
-} from './vector-indices.types';
-
-export type {
-  VectorMetadata,
-  VectorEntry,
-  VectorIndex,
-  VectorIndexMeta,
-  VectorEntryRow,
-} from './vector-indices.types';
 
 // ============================================================================
 // EMBEDDING JOB TYPES (TF-IDF vocabulary and embedding status tracking)

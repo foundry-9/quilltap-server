@@ -28,11 +28,14 @@ jest.mock('@/lib/chat/initial-greeting', () => ({
   generateGreetingMessage: jest.fn().mockResolvedValue({ content: '' }),
 }))
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn().mockReturnValue({
-    settings: { mode: 'DISABLED' },
-  }),
-}))
+// The Concierge off duty: no Concierge state at creation, no uncensored greeting.
+jest.mock('@/lib/services/dangerous-content/resolver.service', () => {
+  const actual = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
+  return {
+    ...actual,
+    resolveConciergeSettings: jest.fn(() => actual.resolveConciergeSettings({ conciergeSettings: { enabled: false } })),
+  }
+})
 
 jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
   resolveProviderForDangerousContent: jest.fn(),
@@ -45,7 +48,7 @@ jest.mock('@/lib/chat/first-message-context', () => ({
   }),
 }))
 
-jest.mock('@/lib/memory/memory-recap', () => ({
+jest.mock('@/lib/memory/recall/recap', () => ({
   buildRecentConversationsBlock: jest.fn().mockResolvedValue(''),
   calculateRecentConversationsLimit: jest.fn().mockReturnValue(0),
 }))

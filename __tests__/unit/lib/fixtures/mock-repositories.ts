@@ -189,7 +189,7 @@ export interface MockDocMountLookupRepository {
   deleteByMountPointId: jest.Mock<(mountPointId: string) => Promise<number>>;
   linkDocumentContent: jest.Mock<(input: any) => Promise<any>>;
   bindLinkGroup: jest.Mock<(anchorId: string, memberId: string) => Promise<void>>;
-  updateExtractedText: jest.Mock<(id: string, data: any) => Promise<void>>;
+  updateExtractedText: jest.Mock<(id: string, data: any, linkId: string) => Promise<void>>;
 }
 
 export interface MockGlobalRepositories {
@@ -201,6 +201,8 @@ export interface MockGlobalRepositories {
   docMountFiles: MockDocMountLookupRepository;
   docMountFileLinks: MockDocMountLookupRepository;
   docMountBlobs: MockDocMountLookupRepository;
+  /** Raw character reads (import resolves memories to local characters, bug 240). */
+  characters: { findByIdRaw: jest.Mock };
 }
 
 // ============================================================================
@@ -469,7 +471,7 @@ function createMockDocMountLookupRepository(): MockDocMountLookupRepository {
         groupSiblings: [],
       })),
     bindLinkGroup: jest.fn<(anchorId: string, memberId: string) => Promise<void>>().mockResolvedValue(undefined),
-    updateExtractedText: jest.fn<(id: string, data: any) => Promise<void>>().mockResolvedValue(undefined),
+    updateExtractedText: jest.fn<(id: string, data: any, linkId: string) => Promise<void>>().mockResolvedValue(undefined),
   };
 }
 
@@ -483,6 +485,7 @@ export function createMockGlobalRepositories(): MockGlobalRepositories {
     docMountFiles: createMockDocMountLookupRepository(),
     docMountFileLinks: createMockDocMountLookupRepository(),
     docMountBlobs: createMockDocMountLookupRepository(),
+    characters: { findByIdRaw: jest.fn().mockResolvedValue(null) },
   };
 }
 

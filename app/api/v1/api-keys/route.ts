@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
-import { withCollectionActionDispatch, getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey, encryptWithPassphrase, decryptWithPassphrase, signWithPassphrase, verifyWithPassphrase } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
@@ -56,8 +56,6 @@ interface ImportFile {
 
 type DuplicateHandling = 'skip' | 'replace' | 'rename';
 
-const API_KEYS_POST_ACTIONS = ['auto-associate', 'export', 'import', 'import-preview'] as const;
-type ApiKeysPostAction = typeof API_KEYS_POST_ACTIONS[number];
 
 /**
  * GET /api/v1/api-keys
@@ -556,20 +554,15 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
 /**
  * POST /api/v1/api-keys - Action dispatch or create
  */
-export const POST = createContextHandler(async (req, { user }) => {
-  const action = getActionParam(req);
-
-  // No action or unknown action = create new key (existing behavior)
-  if (!action || !isValidAction(action, API_KEYS_POST_ACTIONS)) {
-    return handleCreate(req, user);
-  }
-
-  const actionHandlers: Record<ApiKeysPostAction, () => Promise<NextResponse>> = {
-    'auto-associate': () => handleAutoAssociate(req, user),
-    export: () => handleExport(req, user),
-    import: () => handleImport(req, user),
-    'import-preview': () => handleImportPreview(req, user),
-  };
-
-  return actionHandlers[action]();
-});
+export const POST = createContextHandler(async (req, { user }) =>
+  dispatchAction(
+    req,
+    {
+      'auto-associate': () => handleAutoAssociate(req, user),
+      export: () => handleExport(req, user),
+      import: () => handleImport(req, user),
+      'import-preview': () => handleImportPreview(req, user),
+    },
+    () => handleCreate(req, user)
+  )
+);

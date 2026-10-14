@@ -100,8 +100,8 @@ describe('validateHelpNavigateInput', () => {
       expect(validateHelpNavigateInput({ url: '/setup' })).not.toBeNull()
     })
 
-    it('returns true for /settings?tab=chat&section=dangerous-content', () => {
-      expect(validateHelpNavigateInput({ url: '/settings?tab=chat&section=dangerous-content' })).not.toBeNull()
+    it('returns true for /settings?tab=concierge&section=uncensored-desk', () => {
+      expect(validateHelpNavigateInput({ url: '/settings?tab=concierge&section=uncensored-desk' })).not.toBeNull()
     })
 
     it('returns true for /aurora/:id (pattern with subpaths)', () => {

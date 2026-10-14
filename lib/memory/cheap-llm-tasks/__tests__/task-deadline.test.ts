@@ -15,7 +15,7 @@ import {
   CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS,
   CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS,
 } from '../core-execution'
-import { extractMemorySearchKeywords } from '../memory-tasks'
+import { extractMemorySearchKeywords } from '../../recall/query'
 import { createLLMProvider } from '@/lib/llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'

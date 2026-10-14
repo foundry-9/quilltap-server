@@ -2,6 +2,20 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.7.1] - 2026-10-13
+
+Version-only republish of 2.7.0 (no code changes): 2.7.0 had not appeared on the registry yet when the plugins needed it.
+
+## [2.7.0] - 2026-10-13
+
+### Fixed
+
+- `OpenAICompatibleProvider` now reports `usage.promptTokens` / `usage.totalTokens` with prompt-cache hits excluded, matching every other Quilltap provider. Endpoints fold cached input into `prompt_tokens` and report it as `prompt_tokens_details.cached_tokens`; that count is now subtracted (floored at 0) and surfaced as `cacheUsage` (`cacheReadInputTokens`, `cachedTokens`). The final stream chunk also carries the endpoint's own `usage` block as `rawProviderUsage`. Endpoints that report no cached tokens are unchanged. Previously, cache hits on any plugin built on the base class counted against Quilltap's autonomous-room token budgets.
+
+### Added
+
+- `protected normalizeUsage(usage)` — the one place both `sendMessage` and `streamMessage` map a Chat Completions `usage` block. Subclasses that keep the base send/stream loops can override it for an endpoint that reports cache hits in a different field.
+
 ## [2.6.0] - 2026-08-27
 
 ### Removed

@@ -400,6 +400,33 @@ describe('streaming.service', () => {
       expect(decoded).toContain('VALIDATION_ERROR')
       expect(decoded).toContain('Invalid input')
     })
+
+    it('carries the persistence flags when given (bug 241)', () => {
+      const result = encodeErrorEvent(
+        encoder,
+        'Failed to generate response',
+        'Error',
+        'No API key configured for this connection profile',
+        { userMessagePersisted: false, pendingToolResultsPersisted: true }
+      )
+      const decoded = new TextDecoder().decode(result)
+      const payload = JSON.parse(decoded.replace(/^data: /, '').trim())
+
+      expect(payload).toEqual({
+        error: 'Failed to generate response',
+        errorType: 'Error',
+        details: 'No API key configured for this connection profile',
+        userMessagePersisted: false,
+        pendingToolResultsPersisted: true,
+      })
+    })
+
+    it('stays a three-field frame when no extras are passed', () => {
+      const decoded = new TextDecoder().decode(encodeErrorEvent(encoder, 'E', 'T', 'D'))
+      const payload = JSON.parse(decoded.replace(/^data: /, '').trim())
+
+      expect(Object.keys(payload).sort()).toEqual(['details', 'error', 'errorType'])
+    })
   })
 
   describe('encodeKeepAlive', () => {

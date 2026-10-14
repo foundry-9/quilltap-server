@@ -74,8 +74,9 @@ function item(title: string, overrides: Partial<WardrobeItem> = {}): WardrobeIte
   } as WardrobeItem;
 }
 
-function existingDoc(relativePath: string) {
-  return { id: `doc-${relativePath}`, relativePath };
+/** An item file as the projection wrote it (the sweep only touches item files). */
+function existingDoc(relativePath: string, content = '---\ntitle: Garment\ntypes:\n  - top\n---\n') {
+  return { id: `doc-${relativePath}`, relativePath, content };
 }
 
 beforeEach(() => {
@@ -120,6 +121,21 @@ describe('projectVaultWardrobe — archived garments survive a resave', () => {
 
     const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map((c) => c[1]);
     expect(deletedPaths).toContain('Wardrobe/Shelved hat.md');
+  });
+
+  it('never sweeps a file that is not an item — a note kept in a subfolder, or a half-written garment', async () => {
+    findManyByMountPointsInFolderMock.mockResolvedValue([
+      existingDoc('Wardrobe/Formal/notes.md', '# Notes on the formal wear\n\nPress the tails.'),
+      existingDoc('Wardrobe/Half-done.md', '---\ntitle: Half-done\n---\nNo slots yet.'),
+      existingDoc('Wardrobe/Formal/Old gown.md'),
+    ]);
+
+    await projectVaultWardrobe(MOUNT_ID, CHAR_ID, [item('Coat')]);
+
+    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map((c) => c[1]);
+    expect(deletedPaths).not.toContain('Wardrobe/Formal/notes.md');
+    expect(deletedPaths).not.toContain('Wardrobe/Half-done.md');
+    expect(deletedPaths).toContain('Wardrobe/Formal/Old gown.md');
   });
 
   it('leaves the dressing-instructions file alone either way', async () => {

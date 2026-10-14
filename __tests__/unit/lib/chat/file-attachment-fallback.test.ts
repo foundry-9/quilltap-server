@@ -25,8 +25,8 @@ import {
   generateImageDescription,
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
-  verifyImageReachedModel,
 } from '@/lib/chat/file-attachment-fallback'
+import { verifyImageReachedModel } from '@/lib/llm/vision-request'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 
@@ -70,6 +70,9 @@ const mockRepos = {
     findApiKeyByIdAndUserId: jest.fn(),
   },
   files: {
+    findById: jest.fn(),
+  },
+  chats: {
     findById: jest.fn(),
   },
 }
@@ -370,13 +373,18 @@ describe('lib/chat/file-attachment-fallback', () => {
   // the chat turn, describe_image, the gallery and exports, permanently.
 
   describe('verifyImageReachedModel', () => {
+    // The describe-fallback's instruction: what the request's text costs alone.
+    const INSTRUCTION =
+      'Please describe this image in great detail. Include all visible elements, colors, composition, mood, and any text or notable features. Be thorough and descriptive.'
+
     it('rejects a long, confident answer billed for the instruction alone', () => {
       // 38 prompt tokens is the number off the live llm_logs row.
       const verdict = verifyImageReachedModel(
         {
           usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
         } as any,
-        'file-1'
+        'file-1',
+        INSTRUCTION
       )
       expect(verdict.arrived).toBe(false)
       expect(verdict.arrived === false && verdict.reason).toContain('38 prompt tokens')
@@ -391,7 +399,8 @@ describe('lib/chat/file-attachment-fallback', () => {
             failed: [{ id: 'file-1', error: 'provider does not forward attachments' }],
           },
         } as any,
-        'file-1'
+        'file-1',
+        INSTRUCTION
       )
       expect(verdict.arrived).toBe(false)
       expect(verdict.arrived === false && verdict.reason).toContain('does not forward attachments')
@@ -404,18 +413,20 @@ describe('lib/chat/file-attachment-fallback', () => {
             usage: { promptTokens: 812, completionTokens: 240, totalTokens: 1052 },
             attachmentResults: { sent: ['file-1'], failed: [] },
           } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })
 
     it('treats silence about tokens as silence, not as evidence', () => {
       // A provider that reports nothing must not be failed for it.
-      expect(verifyImageReachedModel({} as any, 'file-1').arrived).toBe(true)
+      expect(verifyImageReachedModel({} as any, 'file-1', INSTRUCTION).arrived).toBe(true)
       expect(
         verifyImageReachedModel(
           { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })
@@ -430,7 +441,8 @@ describe('lib/chat/file-attachment-fallback', () => {
             usage: { promptTokens: 12, completionTokens: 200, totalTokens: 212 },
             cacheUsage: { cacheReadInputTokens: 1400 },
           } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })
@@ -439,7 +451,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   it('discards a confident description the model was never shown (bug 116)', async () => {
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: null,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: null },
     })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
@@ -476,7 +488,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     }
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: fallbackProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: fallbackProfile.id },
     })
     mockRepos.connections.findById.mockImplementation(async (id: string) =>
       id === baseProfile.id ? baseProfile : fallbackProfile
@@ -506,10 +518,45 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.processingMetadata?.usedUncensoredFallback).toBe(true)
   })
 
+  it.each([
+    ['Locked', { conciergeMode: 'locked' }],
+    ['exempt (help)', { chatType: 'help' }],
+  ])('never asks the uncensored vision fallback in a %s chat', async (_label, chatRow) => {
+    const fallbackProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '77777777-7777-7777-7777-777777777777',
+      name: 'Honest describer',
+      provider: 'OPENROUTER',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: fallbackProfile.id },
+    })
+    mockRepos.chats.findById.mockResolvedValue({ id: 'chat-1', ...chatRow })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : fallbackProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'A small fluffy kitten with large amber eyes, framed vertically.',
+      finishReason: 'stop',
+      usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId, { chatId: 'chat-1' })
+
+    expect(mockRepos.chats.findById).toHaveBeenCalledWith('chat-1')
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.processingMetadata?.usedUncensoredFallback).not.toBe(true)
+  })
+
   it('rejects a description when the plugin reported the attachment as dropped', async () => {
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: null,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: null },
     })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
@@ -597,7 +644,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     }
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: uncensoredProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: uncensoredProfile.id },
     })
     mockRepos.connections.findById.mockImplementation(async (id: string) =>
       id === baseProfile.id ? baseProfile : uncensoredProfile
@@ -628,10 +675,41 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.processingMetadata?.descriptionProfileId).toBe(uncensoredProfile.id)
   })
 
+  it('never falls back to the uncensored vision profile while the Concierge is off duty', async () => {
+    const uncensoredProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Uncensored vision',
+      provider: 'OPENROUTER',
+      modelName: 'uncensored-vision-model',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      conciergeSettings: { enabled: false, uncensoredVisionProfileId: uncensoredProfile.id },
+    })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : uncensoredProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'I cannot describe this image.',
+      finishReason: 'stop',
+      usage: visionUsage(8),
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.processingMetadata?.usedUncensoredFallback).not.toBe(true)
+  })
+
   it('does not retry when no uncensored fallback is configured', async () => {
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: null,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: null },
     })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
@@ -654,7 +732,7 @@ describe('lib/chat/file-attachment-fallback', () => {
   it('does not retry when the uncensored fallback is the same profile as the primary', async () => {
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: baseProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: baseProfile.id },
     })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
@@ -680,7 +758,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     }
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
-      uncensoredImageDescriptionProfileId: uncensoredProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: uncensoredProfile.id },
     })
     mockRepos.connections.findById.mockImplementation(async (id: string) =>
       id === baseProfile.id ? baseProfile : uncensoredProfile

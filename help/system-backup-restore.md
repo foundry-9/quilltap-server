@@ -210,6 +210,28 @@ A setting the archive *does* carry is never second-guessed, and this holds
 whether the data arrives as a backup or as a `.qtap` bundle — the two doors now
 open onto the same room.
 
+One further mishap of the older archives deserves its own line. A full backup
+made before October 2026 wrote each memory's search vector in a shape the
+restore then refused, and so every memory that had been indexed — which is to
+say, very nearly all of them — was turned away at the door, words and all,
+with a polite note in the warnings and a cheerful count in the summary. Such an
+archive is now read correctly: its memories come home with their vectors
+intact, and new backups write the vectors in a shape nobody need puzzle over.
+The **memories** figure in the restore summary now counts the memories actually
+restored, not merely those the archive offered, so a shortfall shows itself
+plainly.
+
+And one more, rather graver. Until October 2026 a restore, in either mode,
+brought every character's vault and every project's and group's store home
+faithfully — and then handed each of them a brand-new, empty store of its own,
+leaving the genuine article standing in the hall with no one to claim it. A
+restored character's wardrobe, prompts and album therefore looked bare as a
+pawned mantelpiece, though nothing whatever had been lost. Each character,
+project and group now goes straight back to the store it came with. Should an
+archive be damaged — a store missing from it, or two of its entries laying
+claim to the same one — the latecomer is given a fresh store instead, and the
+restore summary says precisely who and why.
+
 ## Restore Modes Explained
 
 **Replace Existing Data:**

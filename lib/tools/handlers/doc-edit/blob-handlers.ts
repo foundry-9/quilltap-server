@@ -21,6 +21,7 @@ import {
   logger,
   type DocEditToolContext,
   collectPeerCharacterIdsForReads,
+  actingCharacterIsOpaqueToVaults,
   assertWriteDoesNotTargetPeerVault,
   docStoreUriFor,
   buildDocStoreUriResolver,
@@ -51,12 +52,22 @@ async function resolveBlobMountPointForRead(
   mountPointRef: string,
   context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
-  if (!context.projectId && !context.characterId) return null;
+  if (!context.projectId && !context.characterId && !context.mountPool) return null;
   // Translate the reserved self-token to the acting character's own vault ID so
   // `mount_point: "self"` resolves here too, mirroring the path resolver.
   const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+  // The covenant applies to enumeration as well as resolution (bug 153): an
+  // opaque character finds no vault here, her own included, so the self-token
+  // translated above stays unresolvable.
+  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  const mountPoints = await getAccessibleMountPoints({
+    projectId: context.projectId,
+    characterId: context.characterId,
+    extraCharacterIds: peerCharacterIds,
+    hideCharacterVaults,
+    mountPool: context.mountPool,
+  });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
@@ -68,7 +79,7 @@ async function resolveBlobMountPointForWrite(
   mountPointRef: string,
   context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
-  if (!context.projectId && !context.characterId) return null;
+  if (!context.projectId && !context.characterId && !context.mountPool) return null;
   // Translate the reserved self-token before matching. "self" is always the
   // acting character's own vault, never a peer's, so the peer-vault guard below
   // can run against the original reference unchanged.
@@ -77,7 +88,14 @@ async function resolveBlobMountPointForWrite(
   // Writes must not land in a peer's vault — raise the dedicated read-only error
   // before we even enumerate accessible mounts.
   await assertWriteDoesNotTargetPeerVault(mountPointRef, peerCharacterIds);
-  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
+  // See the read helper (bug 153).
+  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  const mountPoints = await getAccessibleMountPoints({
+    projectId: context.projectId,
+    characterId: context.characterId,
+    hideCharacterVaults,
+    mountPool: context.mountPool,
+  });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef

@@ -88,6 +88,9 @@ export function resetCycleForUserSkip(currentState: TurnState): TurnState {
   return {
     ...currentState,
     spokenSinceUserTurn: [],
+    // Drop the drawn rotation too: a cycle that starts over draws a fresh order
+    // rather than replaying the tail of the one it abandoned.
+    cycleOrder: [],
     // Keep lastSpeakerId to avoid immediate repeat
     // Keep queue intact
   };

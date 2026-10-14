@@ -9,7 +9,8 @@ import { importSTChat, type STChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
 import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs'
-import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character, MessageEvent } from '@/lib/schemas/types'
+import { listExtractionTurns, loadChatMessageEvents } from '@/lib/services/chat-message/turn-transcript'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { enrichWithDefaultImage } from '@/lib/api/middleware/enrichment'
@@ -622,27 +623,21 @@ async function queueMemoryExtractionJobs(
     return 0
   }
 
-  const allImportedMessages = await repos.chats.getMessages(chatId)
-  const turnOpenerIds: string[] = []
-  for (const m of allImportedMessages) {
-    if (m.type !== 'message') continue
-    if (m.role !== 'USER') continue
-    if (m.systemSender) continue
-    turnOpenerIds.push(m.id)
-  }
+  const allImportedMessages = await loadChatMessageEvents(chatId)
+  const turns = listExtractionTurns(allImportedMessages, null)
 
-  if (turnOpenerIds.length === 0) return 0
+  if (turns.length === 0) return 0
 
   importLogger.info('Queueing per-turn memory extraction jobs', {
     chatId,
-    turnCount: turnOpenerIds.length,
+    turnCount: turns.length,
   })
 
   const jobIds = await enqueueMemoryExtractionBatch(
     userId,
     chatId,
     profileSource.connectionProfileId,
-    turnOpenerIds,
+    turns,
     { priority: 0 },
   )
 

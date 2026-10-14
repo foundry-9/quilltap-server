@@ -4,31 +4,30 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   getLanternBackgroundsStore,
   writeLanternBackgroundToMountStore,
 } from '@/lib/file-storage/lantern-store-bridge';
 
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
-import { buildImageGenParams, resolveProfileLoras } from '@/lib/image-gen/params-builder';
-import type { ImageGenParams } from '@quilltap/plugin-types';
+import { resolveProfileLoras } from '@/lib/image-gen/params-builder';
+import { decodeProviderImage, makeLoggedImageAttempt, type DecodedProviderImage } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
+import type { ImageGenParams, ImageOrientation } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
   GeneratedImageResult,
   validateImageGenerationInput,
 } from '@/lib/tools/image-generation-tool';
-import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
-import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
-import type { ChatSettings } from '@/lib/schemas/types';
+import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
+import type { ChatSettings, ImageProfile } from '@/lib/schemas/types';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
@@ -39,19 +38,20 @@ import {
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/error-utils';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
+  type ResolvedConciergePolicy,
 } from '@/lib/services/dangerous-content/resolver.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
-  resolveImageProviderForDangerousContent,
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service';
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
+import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
@@ -59,6 +59,9 @@ import {
   resolveDepictionGuidelines,
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
+
+/** The part of a chat the Concierge reads: its state. */
+type ConciergeChat = { conciergeMode?: ConciergeState | null; chatType?: string | null };
 
 /**
  * Execution context for image generation tool
@@ -69,6 +72,13 @@ export interface ImageToolExecutionContext {
   chatId?: string;
   /** ID of the participant calling the tool (for resolving {{me}}) */
   callingParticipantId?: string;
+  /**
+   * How `profileId` came to be asked. `'concierge'` when the operator's "Try
+   * uncensored" already put the Concierge's uncensored understudy in the chair
+   * (`retry-image-uncensored`); absent for an ordinary call, where the trail
+   * says `'concierge'` only if a pre-flight reroute swapped the profile.
+   */
+  primaryVia?: RouteAttemptVia;
 }
 
 /**
@@ -113,8 +123,7 @@ async function resolveRequesterName(
  * Save generated image to storage and database
  */
 async function saveGeneratedImage(
-  imageData: string, // Base64-encoded image data
-  mimeType: string,
+  decoded: DecodedProviderImage,
   userId: string,
   chatId: string | undefined, // Now used to tag the image with the chat
   callingParticipantId: string | undefined,
@@ -123,25 +132,17 @@ async function saveGeneratedImage(
     revisedPrompt?: string;
     model: string;
     provider: string;
+    /** The Concierge's call sheet, when the picture was refused on the way. */
+    routeTrail?: RouteAttempt[];
   }
 ): Promise<GeneratedImageResult> {
   try {
-    // Decode base64 to buffer and convert to WebP
-    const rawBuffer = Buffer.from(imageData, 'base64');
-    const providerExt = mimeType.split('/')[1] || 'png';
-    const providerFilename = `generated_${Date.now()}.${providerExt}`;
-    const converted = await convertToWebP(rawBuffer, mimeType, providerFilename);
-    const buffer = converted.buffer;
-    const finalMimeType = converted.mimeType;
-    const originalFilename = converted.filename;
-
-    const sha256 = sha256OfBuffer(buffer);
+    const { buffer, mimeType: finalMimeType, filename: originalFilename, sha256 } = decoded;
 
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];
 
     const repos = getRepositories();
-    const category: FileCategory = 'IMAGE';
 
     // Generate a new file ID
     const fileId = crypto.randomUUID();
@@ -168,26 +169,22 @@ async function saveGeneratedImage(
     // bytes (bitmaps → WebP), so the FileEntry's mime/size must reflect
     // what's on disk, not the input contentType/buffer length.
     // IMPORTANT: Pass the fileId to ensure metadata matches storage path
-    const fileEntry = await repos.files.create({
+    const fileEntry = await createGeneratedFileRow(repos, {
+      id: fileId,
       userId,
       sha256,
       originalFilename,
-      mimeType: written.storedMimeType,
-      size: written.sizeBytes,
-      // Actual dimensions measured from the stored bytes (see
-      // image-orientation-gating) rather than left null.
-      width: converted.width ?? null,
-      height: converted.height ?? null,
+      stored: written,
+      width: decoded.width,
+      height: decoded.height,
       linkedTo,
-      source: 'GENERATED' as FileSource,
-      category,
-      generationPrompt: metadata.prompt,
-      generationModel: metadata.model,
-      generationRevisedPrompt: metadata.revisedPrompt || null,
-      description: null,
       tags: inheritedTags,
-      storageKey: written.storageKey,
-    }, { id: fileId });
+      generation: {
+        prompt: metadata.prompt,
+        model: metadata.model,
+        revisedPrompt: metadata.revisedPrompt,
+      },
+    });
 
     // Always use API route for S3-backed files
     const filepath = `/api/v1/files/${fileEntry.id}`;
@@ -198,6 +195,7 @@ async function saveGeneratedImage(
         chatId,
         fileId: fileEntry.id,
         kind: { kind: 'character-image', requesterName },
+        routeTrail: metadata.routeTrail,
       });
     }
 
@@ -220,6 +218,28 @@ async function saveGeneratedImage(
       getErrorMessage(error)
     );
   }
+}
+
+/**
+ * The orientation this call should resolve, or undefined to leave the merged
+ * `size` / `aspectRatio` alone.
+ *
+ * Orientation outranks any raw size in the builder, by design — a caller asking
+ * for a shape means the shape, not a string. But defaulting an *absent*
+ * orientation to `'square'` made that precedence unconditional, so a `size` the
+ * model passed was always overwritten by square's 1024x1024 and the tool's
+ * `size` parameter could never do anything. Square stays the default only when
+ * the model named no size of its own.
+ *
+ * Exported for the regression test that pins this precedence (bug 149).
+ */
+export function requestedOrientation(
+  input: ImageGenerationToolInput,
+): ImageOrientation | undefined {
+  if (input.orientation) {
+    return input.orientation;
+  }
+  return input.size ? undefined : 'square';
 }
 
 /**
@@ -292,209 +312,113 @@ async function loadAndValidateProfile(
 }
 
 /**
+ * What a provider call produced, and who produced it.
+ */
+interface ProviderGenerationResult {
+  images: GeneratedImageResult[];
+  /** The profile that actually answered — the understudy after a Concierge reroute. */
+  answeringProfile: { provider: string; modelName: string; name: string; id: string };
+  /** The Concierge's call sheet; empty when the first profile answered. */
+  routeTrail: RouteAttempt[];
+}
+
+/**
  * Generate images using the provider
+ *
+ * The provider call runs through `generateImageWithConciergeFailover`: a
+ * content-moderation refusal is retried once on an uncensored understudy
+ * (when the Concierge policy allows failover), and whatever happened is returned as a route trail for
+ * the TOOL message.
  */
 async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   userId: string,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   chatId?: string,
-  callingParticipantId?: string
-): Promise<GeneratedImageResult[]> {
-  const provider = createImageProvider(imageProfile.provider);
-
-  // Get the API key
-  const decryptedKey: string = imageProfile.apiKey.key_value;
-
-  // One builder for every image call site: merges the profile's defaults under
-  // the tool's input, resolves the orientation onto this provider/model's own
-  // mechanism (orientation outranks any raw size the LLM passed), and attaches
-  // the profile's capped LoRA list plus its residual parameter bag.
-  // `toolInput.prompt` is already the expanded prompt, so whatever the builder
-  // appends lands in the intended final form.
-  const { params: mergedParams } = buildImageGenParams({
-    profile: imageProfile,
+  callingParticipantId?: string,
+  primaryVia: RouteAttemptVia = 'primary',
+  chat?: ConciergeChat | null
+): Promise<ProviderGenerationResult> {
+  // One call against one profile. Owns everything profile-specific: the
+  // shared builder merges that profile's defaults under the tool's input,
+  // resolves the orientation onto its own mechanism and appends its LoRA
+  // trigger phrases; the LLM-log line names it. `toolInput.prompt` is already
+  // the expanded prompt, so whatever the builder appends lands in final form.
+  const attempt = makeLoggedImageAttempt({
+    userId,
+    logType: 'IMAGE_GENERATION',
     prompt: toolInput.prompt,
-    overrides: toolInputOverrides(toolInput),
-    orientation: toolInput.orientation ?? 'square',
-    logContext: { context: 'tools.generate_image', chatId, profileId: imageProfile.id },
+    primaryProfileId: imageProfile.id,
+    chatId: chatId ?? null,
+    params: {
+      overrides: toolInputOverrides(toolInput),
+      orientation: requestedOrientation(toolInput),
+      logContext: { context: 'tools.generate_image', chatId },
+    },
   });
 
-  // Generate images. Tracks the profile that actually produced the final
-  // response — updated if the Concierge swaps in the uncensored profile
-  // after a post-hoc moderation rejection. Drives the saved-file metadata.
-  let activeProvider = imageProfile.provider as string;
-  let activeModel = imageProfile.modelName as string;
-  let generationResponse;
-  const genStartTime = Date.now();
+  let outcome;
   try {
-    generationResponse = await provider.generateImage(mergedParams, decryptedKey);
-
-    const genDurationMs = Date.now() - genStartTime;
-    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-    logLLMCall({
-      userId,
-      type: 'IMAGE_GENERATION',
-      chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: toolInput.prompt }],
-      },
-      response: {
-        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
-      },
-      durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[Image Generation] Failed to log image generation to LLM Inspector', {
-        error: getErrorMessage(err),
-      });
-    });
+    outcome = await generateImageWithConciergeFailover(
+      { profile: imageProfile as ImageProfile, apiKey: imageProfile.apiKey.key_value as string },
+      attempt,
+      { userId, chatId, purpose: 'tool', conciergePolicy, chat, primaryVia },
+    );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    const genDurationMs = Date.now() - genStartTime;
+    const trail = getConciergeTrail(error);
+    logger.error('Image generation failed:', {
+      errorMessage,
+      conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+    }, error as Error);
+    throw new ImageGenerationError(
+      'PROVIDER_ERROR',
+      trail && trail.length > 1
+        ? `Image generation failed after Concierge reroute: ${errorMessage}`
+        : `Image generation failed: ${errorMessage}`,
+      error
+    );
+  }
 
-    logLLMCall({
-      userId,
-      type: 'IMAGE_GENERATION',
-      chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: toolInput.prompt }],
-      },
-      response: {
-        content: '',
-        error: errorMessage,
-      },
-      durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
-
-    // Post-hoc Concierge reroute: if the provider rejected for content
-    // moderation and the user has AUTO_ROUTE on with a configured uncensored
-    // profile, take the second door. Pre-flight prompt expansion may already
-    // have routed us to the uncensored profile — the helper detects that and
-    // declines, so we won't loop.
-    const reroute = isImageModerationError(error)
-      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, userId)
-      : null;
-
-    if (!reroute) {
-      logger.error('Image generation failed:', {
-        errorMessage,
-        moderationRejection: isImageModerationError(error),
-      }, error as Error);
-      throw new ImageGenerationError(
-        'PROVIDER_ERROR',
-        `Image generation failed: ${errorMessage}`,
-        error
-      );
-    }
-
-    logger.info('[Image Generation] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
+  const generationResponse = outcome.result;
+  const activeProfile = outcome.profile;
+  if (outcome.rerouted) {
+    logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
       originalProfileId: imageProfile.id,
-      originalProvider: imageProfile.provider,
-      fallbackProfileId: reroute.profile.id,
-      fallbackProvider: reroute.profile.provider,
-      originalError: errorMessage,
+      fallbackProfileId: activeProfile.id,
+      fallbackProvider: activeProfile.provider,
+      fallbackModel: activeProfile.modelName,
     });
-
-    const rerouteProvider = createImageProvider(reroute.profile.provider);
-    // Rebuild from scratch for the reroute target: its shape mechanism, its
-    // LoRA support, and its stored parameters are all its own. The prompt was
-    // crafted against the original profile, so any trigger phrases the
-    // fallback's adapters want get appended here.
-    const { params: rerouteMergedParams } = buildImageGenParams({
-      profile: reroute.profile,
-      prompt: toolInput.prompt,
-      overrides: toolInputOverrides(toolInput),
-      orientation: toolInput.orientation ?? 'square',
-      logContext: {
-        context: 'tools.generate_image.concierge-reroute',
-        chatId,
-        profileId: reroute.profile.id,
-      },
-    });
-    const rerouteStartTime = Date.now();
-    try {
-      generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
-
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-      logLLMCall({
-        userId,
-        type: 'IMAGE_GENERATION',
-        chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: toolInput.prompt }],
-        },
-        response: {
-          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
-        },
-        durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
-
-      activeProvider = reroute.profile.provider;
-      activeModel = reroute.profile.modelName;
-
-      logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
-        fallbackProvider: reroute.profile.provider,
-        fallbackModel: reroute.profile.modelName,
-        rerouteDurationMs,
-      });
-    } catch (rerouteError) {
-      const rerouteErrorMessage = getErrorMessage(rerouteError);
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-
-      logLLMCall({
-        userId,
-        type: 'IMAGE_GENERATION',
-        chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: toolInput.prompt }],
-        },
-        response: {
-          content: '',
-          error: rerouteErrorMessage,
-        },
-        durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
-
-      logger.error('Image generation failed (Concierge reroute also failed):', {
-        originalError: errorMessage,
-        rerouteError: rerouteErrorMessage,
-      }, rerouteError as Error);
-      throw new ImageGenerationError(
-        'PROVIDER_ERROR',
-        `Image generation failed after Concierge reroute: ${rerouteErrorMessage}`,
-        rerouteError
-      );
-    }
   }
 
   // Save images and create database records
   try {
-    return await Promise.all(
-      generationResponse.images.map((img) =>
-        saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
+    const images = await Promise.all(
+      generationResponse.images.map(async (_img, index) => {
+        const decoded = await decodeProviderImage(generationResponse, 'generated', index);
+        if (!decoded) {
+          throw new ImageGenerationError('STORAGE_ERROR', 'The image provider returned an image with no data');
+        }
+        return saveGeneratedImage(decoded, userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
-          revisedPrompt: img.revisedPrompt,
-          model: activeModel,
-          provider: activeProvider,
-        })
-      )
+          revisedPrompt: decoded.revisedPrompt ?? undefined,
+          model: activeProfile.modelName,
+          provider: activeProfile.provider,
+          routeTrail: outcome.trail.length > 0 ? outcome.trail : undefined,
+        });
+      }),
     );
+    return {
+      images,
+      answeringProfile: {
+        id: activeProfile.id,
+        name: activeProfile.name,
+        provider: activeProfile.provider,
+        modelName: activeProfile.modelName,
+      },
+      routeTrail: outcome.trail,
+    };
   } catch (error) {
     logger.error('Failed to save images:', {}, error as Error);
     if (error instanceof ImageGenerationError) {
@@ -530,7 +454,8 @@ async function expandPromptWithDescriptions(
   cheapLLMSettings?: CheapLLMSettings,
   styleOptions?: PromptExpansionOptions,
   isDangerous?: boolean,
-  resolvedAppearances?: ResolvedCharacterAppearance[]
+  resolvedAppearances?: ResolvedCharacterAppearance[],
+  imagePromptProfileId?: string | null
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -564,10 +489,11 @@ async function expandPromptWithDescriptions(
     const repos = getRepositories();
     const allProfiles = await repos.connections.findByUserId(userId);
 
-    // Use the uncensored image prompt profile only when the prompt was flagged as dangerous
+    // Use the Concierge desk's image prompt crafter only when the prompt was
+    // flagged as dangerous (or the chat routes direct)
     let cheapLLMSelection: CheapLLMSelection | null = null;
-    if (isDangerous && cheapLLMSettings?.imagePromptProfileId) {
-      const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
+    if (isDangerous && imagePromptProfileId) {
+      const imagePromptProfile = allProfiles.find(p => p.id === imagePromptProfileId);
       if (imagePromptProfile) {
         // Create a direct selection from the uncensored override profile
         const isLocal = imagePromptProfile.provider === 'OLLAMA';
@@ -586,7 +512,7 @@ async function expandPromptWithDescriptions(
       } else {
         logger.warn('[Image Generation] Uncensored image prompt profile not found, falling back to global cheap LLM', {
           context: 'llm-api',
-          configuredProfileId: cheapLLMSettings.imagePromptProfileId,
+          configuredProfileId: imagePromptProfileId,
         });
       }
     }
@@ -741,7 +667,7 @@ async function classifyAndRouteForDangerousContent(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   context: ImageToolExecutionContext
 ): Promise<{
@@ -773,14 +699,52 @@ async function classifyAndRouteForDangerousContent(
     }
   }
 
+  // 5a. An Unmoderated chat goes straight to the uncensored desk: the verdict
+  // is already in, so there is no pre-screen to wait on (`routeDirect`).
+  if (conciergePolicy.routeDirect) {
+    imagePromptDangerous = true;
+    try {
+      const routeResult = await resolveImageProviderForDangerousContent(
+        imageProfile,
+        imageProfile.apiKey.key_value,
+        conciergePolicy,
+        context.userId
+      );
+      if (routeResult.rerouted) {
+        effectiveImageProfile = { ...routeResult.imageProfile, apiKey: imageProfile.apiKey };
+        const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+        if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+          effectiveImageProfile = reroutedProfileResult.profile;
+        }
+        logger.info('[Image Generation] Unmoderated chat routed direct to uncensored image provider', {
+          chatId: context.chatId,
+          originalProfile: imageProfile.name,
+          uncensoredProfile: routeResult.imageProfile.name,
+          reason: routeResult.reason,
+        });
+      } else {
+        logger.debug('[Image Generation] Unmoderated chat has no uncensored image provider; using original', {
+          chatId: context.chatId,
+          reason: routeResult.reason,
+        });
+      }
+    } catch (error) {
+      // Fail safe — the post-hoc failover still stands behind the call
+      logger.error('[Image Generation] Direct uncensored routing failed, continuing on the original profile', {
+        chatId: context.chatId,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
   // 5b. Classify user's image prompt before expansion (scanImagePrompts)
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts && cheapLLMSelection) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts && cheapLLMSelection) {
     try {
       const promptClassification = await classifyDangerousContent(
         toolInput.prompt,
         cheapLLMSelection,
         context.userId,
-        dangerSettings,
+        conciergePolicy,
         context.chatId
       );
 
@@ -790,15 +754,15 @@ async function classifyAndRouteForDangerousContent(
           chatId: context.chatId,
           score: promptClassification.score,
           categories: promptClassification.categories.map(c => c.category),
-          mode: dangerSettings.mode,
+          conciergeSource: conciergePolicy.source,
         });
 
-        // If AUTO_ROUTE, reroute the image provider
-        if (dangerSettings.mode === 'AUTO_ROUTE') {
+        // Where failover is allowed, reroute the image provider
+        if (conciergePolicy.failoverAllowed) {
           const routeResult = await resolveImageProviderForDangerousContent(
             imageProfile,
             imageProfile.apiKey.key_value,
-            dangerSettings,
+            conciergePolicy,
             context.userId
           );
 
@@ -863,7 +827,7 @@ async function classifyAndRouteForDangerousContent(
 async function resolveAppearances(
   toolInput: ImageGenerationToolInput,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   context: ImageToolExecutionContext
 ): Promise<{
@@ -916,7 +880,7 @@ async function resolveAppearances(
         appearanceLLMSelection = resolveUncensoredCheapLLMSelection(
           appearanceLLMSelection,
           true,
-          dangerSettings,
+          conciergePolicy,
           profilesForUncensored
         );
       }
@@ -975,17 +939,20 @@ async function resolveAppearances(
           );
           resolvedAppearances = resolutionResult.appearances;
 
-          // Determine if uncensored image provider is available
-          const hasUncensoredImageProvider = Boolean(
-            dangerSettings.uncensoredImageProfileId
-          );
+          // Only an Unmoderated chat with an uncensored image profile goes
+          // straight to the uncensored desk (step 5a); anywhere else a
+          // dangerous appearance may stay on the moderated provider and must
+          // be sanitized (bug 133).
+          const routesDangerousToUncensored =
+            conciergePolicy.routeDirect &&
+            Boolean(conciergePolicy.desk.imageProfileId);
 
           // Sanitize appearances through the Concierge
           resolvedAppearances = await sanitizeAppearancesIfNeeded(
             resolvedAppearances,
-            dangerSettings,
+            conciergePolicy,
             isDangerousChat,
-            hasUncensoredImageProvider,
+            routesDangerousToUncensored,
             appearanceLLMSelection,
             context.userId,
             context.chatId
@@ -1014,7 +981,7 @@ async function expandPromptWithContext(
   imageProfile: any,
   effectiveImageProfile: any,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   imagePromptDangerous: boolean,
   styleOptions: PromptExpansionOptions | undefined,
@@ -1036,7 +1003,8 @@ async function expandPromptWithContext(
       chatSettings?.cheapLLMSettings,
       styleOptions,
       imagePromptDangerous,
-      resolvedAppearances
+      resolvedAppearances,
+      conciergePolicy.desk.imagePromptProfileId
     );
     expandedPrompt = expandResult.expandedPrompt;
   } catch (error) {
@@ -1046,13 +1014,13 @@ async function expandPromptWithContext(
   }
 
   // 6b. Classify expanded prompt before image generation (scanImageGeneration)
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
     try {
       const expandedClassification = await classifyDangerousContent(
         expandedPrompt,
         cheapLLMSelection,
         context.userId,
-        dangerSettings,
+        conciergePolicy,
         context.chatId
       );
 
@@ -1062,14 +1030,14 @@ async function expandPromptWithContext(
           chatId: context.chatId,
           score: expandedClassification.score,
           categories: expandedClassification.categories.map(c => c.category),
-          mode: dangerSettings.mode,
+          conciergeSource: conciergePolicy.source,
         });
 
-        if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
+        if (conciergePolicy.failoverAllowed && effectiveImageProfile === imageProfile) {
           const routeResult = await resolveImageProviderForDangerousContent(
             imageProfile,
             imageProfile.apiKey.key_value,
-            dangerSettings,
+            conciergePolicy,
             context.userId
           );
 
@@ -1104,18 +1072,27 @@ async function expandPromptWithContext(
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
   chatSettings: ChatSettings | undefined,
-  chat?: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null
+  chat?: ConciergeChat | null
 ): Promise<{
-  dangerSettings: DangerousContentSettings;
+  conciergePolicy: ResolvedConciergePolicy;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings (chat may carry an operator override)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  // 4b. Resolve the Concierge policy (the chat's Concierge state applies)
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
+  logger.debug('[Image Generation] Concierge policy resolved', {
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    preScreen: conciergePolicy.preScreen.enabled,
+    failoverAllowed: conciergePolicy.failoverAllowed,
+    routeDirect: conciergePolicy.routeDirect,
+  });
 
-  // 4c. Build cheap LLM selection for dangerous content classification
+  // 4c. Build cheap LLM selection for the pre-screen classifier
   let cheapLLMSelection: CheapLLMSelection | null = null;
-  if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
+  if (
+    conciergePolicy.preScreen.enabled &&
+    (conciergePolicy.preScreen.scanImagePrompts || conciergePolicy.preScreen.scanImageGeneration)
+  ) {
     try {
       const resolved = await resolveCheapLLMSelectionForUser(getRepositories(), userId, chatSettings);
       cheapLLMSelection = resolved?.selection ?? null;
@@ -1126,7 +1103,7 @@ async function loadSettingsAndBuildCheapLLM(
     }
   }
 
-  return { dangerSettings, cheapLLMSelection };
+  return { conciergePolicy, cheapLLMSelection };
 }
 
 /**
@@ -1170,22 +1147,22 @@ async function runImageGenerationTool(
       });
     }
 
-    // Fetch chat once so any operator Concierge override is honored everywhere downstream.
-    let chatForOverride: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null = null;
+    // Fetch chat once so its Concierge state is honored everywhere downstream.
+    let chatForOverride: ConciergeChat | null = null;
     if (context.chatId) {
       try {
         const fetched = await repos.chats.findById(context.chatId);
         if (fetched) chatForOverride = fetched;
       } catch (err) {
-        logger.warn('[Image Generation] Could not load chat for Concierge override check', {
+        logger.warn('[Image Generation] Could not load chat for its Concierge state', {
           chatId: context.chatId,
           errorMessage: getErrorMessage(err),
         });
       }
     }
 
-    // 4b-4c. Resolve dangerous content settings and build cheap LLM selection
-    const { dangerSettings, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
+    // 4b-4c. Resolve the Concierge policy and build cheap LLM selection
+    const { conciergePolicy, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
       context.userId,
       chatSettings,
       chatForOverride
@@ -1200,7 +1177,7 @@ async function runImageGenerationTool(
       toolInput,
       imageProfile,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       context
     );
@@ -1211,7 +1188,7 @@ async function runImageGenerationTool(
     } = await resolveAppearances(
       toolInput,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       context
     );
@@ -1225,7 +1202,7 @@ async function runImageGenerationTool(
       imageProfile,
       profileAfterClassification,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       imagePromptDangerous,
       styleOptions,
@@ -1240,23 +1217,30 @@ async function runImageGenerationTool(
     };
 
     // 7. Generate images (using effective profile which may have been rerouted)
-    const savedImages = await generateImagesWithProvider(
+    // A pre-flight classifier reroute already swapped the profile: the trail
+    // says the Concierge sent it, not that it was first on the call sheet.
+    const { images: savedImages, answeringProfile, routeTrail } = await generateImagesWithProvider(
       finalInput,
       finalProfile,
       context.userId,
-      dangerSettings,
+      conciergePolicy,
       context.chatId,
-      context.callingParticipantId
+      context.callingParticipantId,
+      context.primaryVia ?? (finalProfile.id !== imageProfile.id ? 'concierge' : 'primary'),
+      chatForOverride
     );
 
-    // 8. Return success response
+    // 8. Return success response. Names the profile that actually answered —
+    // after a post-hoc Concierge reroute that is the understudy, not the
+    // profile the model's call was addressed to.
     return {
       success: true,
       images: savedImages,
-      message: `Successfully generated ${savedImages.length} image(s) using ${finalProfile.modelName}`,
-      provider: finalProfile.provider,
-      model: finalProfile.modelName,
+      message: `Successfully generated ${savedImages.length} image(s) using ${answeringProfile.modelName}`,
+      provider: answeringProfile.provider,
+      model: answeringProfile.modelName,
       expandedPrompt: expandedPrompt,
+      ...(routeTrail.length > 0 ? { routeTrail } : {}),
     };
   } catch (error) {
     logger.error('Image generation tool error:', {}, error as Error);
@@ -1267,6 +1251,14 @@ async function runImageGenerationTool(
       error: 'UNKNOWN_ERROR',
       message: `An unexpected error occurred`,
     };
+
+    // A refusal the Concierge could not get past still leaves its call sheet.
+    const failedTrail = getConciergeTrail(
+      error instanceof ImageGenerationError ? error.details : error
+    );
+    if (failedTrail) {
+      errorResponse.routeTrail = failedTrail;
+    }
 
     if (imageProfile) {
       errorResponse.provider = imageProfile.provider;

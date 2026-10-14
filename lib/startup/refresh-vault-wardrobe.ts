@@ -22,6 +22,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { projectVaultWardrobe } from '@/lib/database/repositories/character-properties-overlay';
+import { readLegacyWardrobeRows } from '@/migrations/lib/legacy-wardrobe-rows';
 
 const logger = createServiceLogger('Startup:VaultWardrobeRefresh');
 
@@ -64,7 +65,7 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
     const mountPointId = character.characterDocumentMountPointId;
 
     try {
-      const items = await repos.wardrobe.findByCharacterIdRaw(character.id);
+      const items = readLegacyWardrobeRows(character.id);
 
       // Outfit presets no longer exist as a separate concept — composite
       // wardrobe items (with `componentItemIds`) replace them entirely and

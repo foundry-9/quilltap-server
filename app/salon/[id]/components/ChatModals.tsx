@@ -2,6 +2,7 @@
 
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
+import { scrollToMessage } from '@/lib/chat/message-navigation'
 import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
@@ -22,7 +23,9 @@ import type { Chat, Message } from '../types'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
+import InformDialog from '@/components/chat/InformDialog'
 import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
+import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
 import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
@@ -32,7 +35,8 @@ interface ChatModalsProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
   fetchChat: () => Promise<void>
-  fetchChatPhotoCount: () => Promise<void>
+  /** Re-read the chat gallery after this client puts a new image in the chat. */
+  invalidateChatGallery: () => void
   setAttachedFiles: (fn: React.SetStateAction<any[]>) => void
   // Modal state
   modalImage: { src: string; filename: string; fileId?: string } | null
@@ -63,8 +67,12 @@ interface ChatModalsProps {
   closeStandaloneGenerateImage: () => void
   insertAnnouncementOpen: boolean
   closeInsertAnnouncement: () => void
+  informOpen: boolean
+  closeInform: () => void
   composeMailOpen: boolean
   closeComposeMail: () => void
+  /** In Their Own Words — the impersonated-seat voice rehearsal. */
+  impersonationVoice: import('../hooks').ImpersonationVoiceState
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
   // Complex modal states
@@ -104,7 +112,7 @@ export function ChatModals({
   setMessages,
   setChat,
   fetchChat,
-  fetchChatPhotoCount,
+  invalidateChatGallery,
   setAttachedFiles,
   // Modal state
   modalImage, setModalImage,
@@ -121,7 +129,9 @@ export function ChatModals({
   libraryFilePickerOpen, closeLibraryFilePicker,
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
   insertAnnouncementOpen, closeInsertAnnouncement,
+  informOpen, closeInform,
   composeMailOpen, closeComposeMail,
+  impersonationVoice,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
@@ -163,10 +173,11 @@ export function ChatModals({
         isOpen={galleryOpen}
         onClose={closeGallery}
         chatId={chatId}
-        characterId={firstCharacter?.id}
-        characterName={firstCharacter?.name}
-        userCharacterId={firstUserCharacter?.id}
-        userCharacterName={firstUserCharacter?.name}
+        onJumpToMessage={(messageId) => {
+          // The gallery closes itself first; give the transcript a tick to
+          // repaint before asking it to find the row.
+          setTimeout(() => scrollToMessage(messageId), 0)
+        }}
         onImageDeleted={(fileId) => {
           setMessages((prev) =>
             prev.map((msg) => {
@@ -180,7 +191,7 @@ export function ChatModals({
               return msg
             })
           )
-          fetchChatPhotoCount()
+          invalidateChatGallery()
         }}
       />
 
@@ -239,7 +250,7 @@ export function ChatModals({
               url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
             })),
           ])
-          fetchChatPhotoCount()
+          invalidateChatGallery()
         }}
       />
 
@@ -298,7 +309,7 @@ export function ChatModals({
               url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
             })),
           ])
-          fetchChatPhotoCount()
+          invalidateChatGallery()
         }}
       />
 
@@ -334,6 +345,53 @@ export function ChatModals({
           onPosted={() => {
             fetchChat()
           }}
+        />
+      )}
+
+      {informOpen && (
+        <InformDialog
+          isOpen={informOpen}
+          onClose={closeInform}
+          chatId={chatId}
+          audienceCandidates={(chat?.participants || [])
+            .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
+            .map(p => ({
+              participantId: p.id,
+              name: p.character!.name,
+              controlledBy: p.controlledBy ?? 'llm',
+              avatarUrl: p.character!.avatarUrl ?? null,
+              status: p.status,
+            }))}
+          onPosted={() => {
+            fetchChat()
+          }}
+        />
+      )}
+
+      {impersonationVoice.isOpen && impersonationVoice.target && (
+        <ImpersonationVoiceDialog
+          isOpen={impersonationVoice.isOpen}
+          characterName={impersonationVoice.target.characterName}
+          characterTitle={impersonationVoice.target.characterTitle}
+          avatarSrc={impersonationVoice.target.avatarSrc}
+          profileName={impersonationVoice.resolvedVoice?.profileName ?? impersonationVoice.target.profileName}
+          modelName={impersonationVoice.resolvedVoice?.modelName ?? impersonationVoice.target.modelName}
+          systemPrompts={impersonationVoice.target.systemPrompts}
+          selectedSystemPromptId={impersonationVoice.target.selectedSystemPromptId}
+          seed={impersonationVoice.seed}
+          onSeedChange={impersonationVoice.setSeed}
+          proposal={impersonationVoice.proposal}
+          onProposalChange={impersonationVoice.setProposal}
+          stage={impersonationVoice.stage === 'idle' ? 'draft' : impersonationVoice.stage}
+          profileOverride={impersonationVoice.profileOverride}
+          systemPromptOverride={impersonationVoice.systemPromptOverride}
+          onSend={impersonationVoice.send}
+          onSendAsWritten={impersonationVoice.sendAsWritten}
+          onRestate={impersonationVoice.restate}
+          onChangeProfile={impersonationVoice.changeProfile}
+          onChangeSystemPrompt={impersonationVoice.changeSystemPrompt}
+          onEditOriginal={impersonationVoice.editOriginal}
+          onCancel={impersonationVoice.cancel}
         />
       )}
 

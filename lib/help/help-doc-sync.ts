@@ -10,7 +10,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { getRepositories } from '@/lib/repositories/factory'
 import { buildHelpDocChunks } from '@/lib/help/help-doc-chunking'
 import { logger } from '@/lib/logger'
@@ -68,21 +68,9 @@ function findMarkdownFiles(dir: string): string[] {
 }
 
 /**
- * List the help documents present on disk, as repository-relative paths
- * (the form stored in `help_docs.path`).
- */
-function listHelpDocPathsOnDisk(): string[] {
-  if (!existsSync(HELP_DIR)) {
-    return []
-  }
-
-  return findMarkdownFiles(HELP_DIR).map(filePath => relative(process.cwd(), filePath))
-}
-
-/**
  * Parse YAML frontmatter from Markdown content
  */
-function parseFrontmatter(content: string): { url: string; body: string } {
+export function parseFrontmatter(content: string): { url: string; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
   if (!match) {
     return { url: '', body: content }
@@ -98,7 +86,7 @@ function parseFrontmatter(content: string): { url: string; body: string } {
 /**
  * Extract title from Markdown content (first H1) or fallback to filename
  */
-function extractTitle(content: string, filePath: string): string {
+export function extractTitle(content: string, filePath: string): string {
   const h1Match = content.match(/^#\s+(.+)$/m)
   if (h1Match) {
     return h1Match[1].trim()
@@ -128,8 +116,8 @@ function hashContent(content: string): string {
  *
  * Enqueues nothing — embedding is the caller's business, because the two
  * callers want different things: EMBEDDING_REINDEX_ALL re-embeds every doc
- * regardless of what changed, while {@link ensureHelpDocsSynced} only tops
- * up the docs that still lack an embedding.
+ * regardless of what changed, while {@link reconcileHelpDocs} queues only
+ * the docs left incomplete.
  *
  * @returns Sync result with counts and changed doc IDs
  */
@@ -194,32 +182,55 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
         continue
       }
 
-      // Upsert the doc (preserves embedding field — we clear it separately below)
-      const doc = await repos.helpDocs.upsertByPath(relPath, {
-        title,
-        path: relPath,
-        url,
-        content: body,
-        contentHash,
-      })
+      // The chunk rows below are keyed to this id, so it must be the id the
+      // row really has — never one handed back by a write. Inside the job
+      // child (EMBEDDING_REINDEX_ALL) writes are buffered and return a
+      // synthetic result: `upsertByPath` came back with a random UUID, the
+      // parent's replay updated the real row, and every chunk insert failed
+      // its foreign key, rolling back the whole reindex batch (bug 167). An
+      // existing row's id is already in hand; a new row's id is minted here and
+      // passed to `create`, which both the child proxy and the repository honour.
+      const fields = { title, path: relPath, url, content: body, contentHash }
+      let docId: string
+      if (existing) {
+        // Preserves the embedding field — we clear it separately below
+        await repos.helpDocs.update(existing.id, fields)
+        docId = existing.id
+      } else {
+        docId = randomUUID()
+        await repos.helpDocs.create(fields, { id: docId })
+      }
 
       // Re-slice the doc into section chunks. Boundaries move whenever the
       // prose above them changes, so the old rows are discarded wholesale
       // rather than diffed; their embeddings are filled by the HELP_DOC
       // embedding job that the caller enqueues for this doc.
       const chunks = buildHelpDocChunks(body)
-      await repos.helpDocChunks.replaceForDoc(doc.id, chunks)
+      await repos.helpDocChunks.replaceForDoc(docId, chunks)
       result.chunksWritten += chunks.length
 
       // Content changed — clear the old embedding so it gets re-generated
       if (existing) {
-        await repos.helpDocs.clearAllEmbeddingsForDoc(doc.id)
+        await repos.helpDocs.clearAllEmbeddingsForDoc(docId)
+        // A FAILED status belongs to the old text. Left in place it would keep
+        // the new text out of a partial reindex, which skips failed entities —
+        // a page that once overflowed the provider stayed unembedded after it
+        // was fixed (bug 168).
+        await repos.embeddingStatus.deleteByEntity('HELP_DOC', docId)
         result.updated++
       } else {
         result.created++
       }
 
-      result.changedIds.push(doc.id)
+      logger.debug('[HelpDocSync] Synced help doc', {
+        context: 'syncHelpDocs',
+        path: relPath,
+        docId,
+        action: existing ? 'updated' : 'created',
+        chunks: chunks.length,
+      })
+
+      result.changedIds.push(docId)
     } catch (error) {
       result.failed++
       logger.error('[HelpDocSync] Failed to sync file', {
@@ -286,156 +297,109 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
 }
 
 /**
- * Ensure help docs are synced (lazy initialization).
- *
- * Syncs when the help_docs collection is empty, and when the set of Markdown
- * files on disk no longer matches the set of rows — otherwise a doc added
- * after the first sync would never reach the database, since this is the only
- * sync trigger outside a full embedding reindex. Detecting divergence costs a
- * directory scan, not a read of every file; syncHelpDocs() itself skips
- * unchanged docs by content hash.
- *
- * Edits to an already-synced doc are still picked up only by the next
- * syncHelpDocs() call — a file's content is never read here. For a full
- * re-sync, call it directly.
+ * Result of a help doc reconcile: the sync's tallies plus what it found
+ * incomplete and queued for embedding.
  */
-let syncPromise: Promise<HelpDocSyncResult> | null = null
+export interface HelpDocReconcileResult {
+  sync: HelpDocSyncResult
+  /** Docs with no section rows, sliced by this pass */
+  sectionsBackfilled: number
+  /** Docs missing their own vector or any section vector */
+  incomplete: number
+}
 
-export async function ensureHelpDocsSynced(): Promise<void> {
+/**
+ * Bring the help index in line with the help files on disk, and queue the
+ * embedding work that leaves it complete.
+ *
+ * Runs at every startup (instrumentation Phase 3.66) and is the only help
+ * reconcile: {@link ensureHelpDocsSynced} shares the same once-per-process
+ * run. The steps are cheap when nothing changed — every file is read and
+ * hashed, and the index is checked with one row read of `help_docs` and one
+ * GROUP BY over `help_doc_chunks` — so a full content comparison is affordable
+ * on every boot. Before this, only a change in the *set* of file names
+ * triggered a sync, and an edited page stayed stale until a full reindex.
+ *
+ * 1. {@link syncHelpDocs}: new files are created, edited files are rewritten
+ *    and re-sliced with their vectors and failure status cleared, and rows
+ *    whose file is gone are pruned.
+ * 2. Any doc with no section rows is sliced now. (An instance whose reindex
+ *    was rolled back by bug 167 has an empty section table.)
+ * 3. A HELP_DOC embedding job is queued for every doc that lacks its own
+ *    vector or has any section without one. The job reuses section vectors
+ *    that already exist, so only what is missing costs a provider call.
+ *
+ * Must run in the parent process — its writes are immediate, and the ids it
+ * hands to section rows are ones it has read or minted itself.
+ */
+export async function reconcileHelpDocs(): Promise<HelpDocReconcileResult> {
+  const sync = await syncHelpDocs()
   const repos = getRepositories()
-  const existing = await repos.helpDocs.findAll()
 
-  if (existing.length > 0 && !helpDocsDivergeFromDisk(existing)) {
-    // Docs are current, but their section chunks may not exist at all — an
-    // instance that upgraded into `help_doc_chunks` has every content hash
-    // matching, so nothing above would ever slice them.
-    await backfillHelpDocChunks(existing)
-    return
-  }
+  const docs = await repos.helpDocs.findAll()
+  const sectionCounts = await repos.helpDocChunks.countByDoc()
 
-  // Prevent concurrent syncs
-  if (!syncPromise) {
-    syncPromise = syncHelpDocs().finally(() => {
-      syncPromise = null
-    })
-  }
+  let sectionsBackfilled = 0
+  const incompleteIds: string[] = []
 
-  await syncPromise
-  await enqueueMissingHelpDocEmbeddings()
-}
+  for (const doc of docs) {
+    let counts = sectionCounts.get(doc.id)
 
-/**
- * Slice any already-synced document that has no section chunks, and enqueue an
- * embedding job for it.
- *
- * The path that matters is the upgrade: an existing instance has a full,
- * unchanged `help_docs` table, so the content-hash check skips every file and
- * the chunks would stay empty forever — section search would silently never
- * engage. Docs whose chunks already exist are left alone, so this costs one
- * count query per boot once it has run.
- *
- * The embedding job is enqueued even though the *document's* own embedding is
- * present, because the job is what fills the chunk vectors.
- */
-async function backfillHelpDocChunks(
-  existing: Array<{ id: string; content: string }>
-): Promise<void> {
-  try {
-    const repos = getRepositories()
-
-    // One count, not a scan: chunk rows carry embedding BLOBs, and reading
-    // them all on every boot to answer "has this run yet?" would be absurd.
-    // A non-empty table means the backfill has already happened; docs added
-    // afterwards are sliced by syncHelpDocs on their content hash, and a
-    // half-finished backfill is healed by the next full reindex.
-    if (await repos.helpDocChunks.count() > 0) {
-      return
-    }
-
-    const missing = existing
-    if (missing.length === 0) {
-      return
-    }
-
-    logger.info('[HelpDocSync] Backfilling help doc sections', {
-      context: 'backfillHelpDocChunks',
-      docsMissingChunks: missing.length,
-    })
-
-    let written = 0
-    for (const doc of missing) {
+    if (!counts) {
       const chunks = buildHelpDocChunks(doc.content)
-      if (chunks.length === 0) {
-        continue
+      if (chunks.length > 0) {
+        await repos.helpDocChunks.replaceForDoc(doc.id, chunks)
+        sectionsBackfilled++
+        counts = { total: chunks.length, embedded: 0 }
       }
-      await repos.helpDocChunks.replaceForDoc(doc.id, chunks)
-      written += chunks.length
     }
 
-    logger.info('[HelpDocSync] Help doc sections backfilled', {
-      context: 'backfillHelpDocChunks',
-      chunksWritten: written,
-    })
-
-    await enqueueHelpDocEmbeddings(missing.map(doc => doc.id))
-  } catch (error) {
-    // Never block help from loading over this; whole-document search still works.
-    logger.warn('[HelpDocSync] Help doc section backfill failed', {
-      context: 'backfillHelpDocChunks',
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
-
-/**
- * Whether the help documents on disk and the rows in the database have parted
- * ways in either direction — a file with no row, or a row whose file is gone.
- *
- * Both directions come out of the same directory listing, and both need the
- * same fix: syncHelpDocs() creates the missing rows and prunes the stale ones.
- * Ignoring the deleted direction would leave the prune unreachable, since a
- * deletion alone would never trigger a sync.
- */
-function helpDocsDivergeFromDisk(existing: { path: string }[]): boolean {
-  const syncedPaths = new Set(existing.map(doc => doc.path))
-  const pathsOnDisk = listHelpDocPathsOnDisk()
-  const onDisk = new Set(pathsOnDisk)
-
-  const unsynced = pathsOnDisk.filter(path => !syncedPaths.has(path))
-  const deleted = [...syncedPaths].filter(path => !onDisk.has(path))
-
-  if (unsynced.length > 0 || deleted.length > 0) {
-    logger.info('[HelpDocSync] Help docs on disk diverge from the database', {
-      context: 'ensureHelpDocsSynced',
-      unsyncedCount: unsynced.length,
-      unsynced,
-      deletedCount: deleted.length,
-      deleted,
-    })
+    const docVectorMissing = doc.embedding == null || doc.embedding.length === 0
+    const sectionVectorMissing = counts !== undefined && counts.embedded < counts.total
+    if (docVectorMissing || sectionVectorMissing) {
+      incompleteIds.push(doc.id)
+    }
   }
 
-  return unsynced.length > 0 || deleted.length > 0
+  logger.info('[HelpDocSync] Help docs reconciled', {
+    context: 'reconcileHelpDocs',
+    created: sync.created,
+    updated: sync.updated,
+    deleted: sync.deleted,
+    unchanged: sync.unchanged,
+    sectionsBackfilled,
+    incomplete: incompleteIds.length,
+  })
+
+  await enqueueHelpDocEmbeddings(incompleteIds)
+
+  return { sync, sectionsBackfilled, incomplete: incompleteIds.length }
 }
 
+let reconcilePromise: Promise<HelpDocReconcileResult> | null = null
+
 /**
- * Enqueue embedding jobs for help docs that have no embedding — newly synced
- * docs, docs whose content changed (the sync clears their stale embedding),
- * and any left unembedded by an earlier failure. Without this a new doc lands
- * in the Guide but stays invisible to `help_search` until a full reindex.
+ * Wait for this process's help reconcile, starting it if nothing has.
  *
- * Per-entity dedup in enqueueEmbeddingGenerate keeps this from duplicating
- * jobs an EMBEDDING_REINDEX_ALL has already queued.
+ * Startup kicks the reconcile off; a help search that arrives first (or in a
+ * process where startup did not run it) starts it here instead. Either way it
+ * runs once per process. A failed run is forgotten so the next caller retries,
+ * and never throws to the caller — help still loads from whatever the table
+ * holds.
  */
-async function enqueueMissingHelpDocEmbeddings(): Promise<void> {
+export async function ensureHelpDocsSynced(): Promise<void> {
+  if (!reconcilePromise) {
+    reconcilePromise = reconcileHelpDocs().catch(error => {
+      reconcilePromise = null
+      throw error
+    })
+  }
+
   try {
-    const repos = getRepositories()
-    const needEmbedding = await repos.helpDocs.findAllNeedingEmbedding()
-    await enqueueHelpDocEmbeddings(needEmbedding.map(doc => doc.id))
+    await reconcilePromise
   } catch (error) {
-    // Best-effort, as below: the docs are already in the database and
-    // listable in the Guide, which is what the caller actually depends on.
-    logger.error('[HelpDocSync] Failed to look up help docs needing embedding', {
-      context: 'enqueueMissingHelpDocEmbeddings',
+    logger.warn('[HelpDocSync] Help doc reconcile failed; serving help from the existing index', {
+      context: 'ensureHelpDocsSynced',
       error: error instanceof Error ? error.message : String(error),
     })
   }

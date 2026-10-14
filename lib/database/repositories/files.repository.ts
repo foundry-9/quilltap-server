@@ -54,6 +54,23 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Find files by avatar configuration cache key.
+   *
+   * Backs `lookupCachedAvatar` (`lib/image-gen/avatar-cache.ts`), which owns the
+   * key format and the hit/miss policy — this is only the indexed read.
+   */
+  async findByGenerationKey(generationKey: string): Promise<FileEntry[]> {
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ generationKey } as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding files by generation key',
+      { generationKey }
+    );
+  }
+
+  /**
    * Find files by category
    */
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {
@@ -232,33 +249,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   // =========================================================================
 
   /**
-   * Find files in a specific folder (exact match)
-   * @param userId - The user ID for ownership verification
-   * @param projectId - The project ID (null for general files)
-   * @param folderPath - The folder path to search in
-   */
-  async findByFolder(
-    userId: string,
-    projectId: string | null,
-    folderPath: string
-  ): Promise<FileEntry[]> {
-    return this.safeQuery(
-      async () => {
-        const query: Record<string, unknown> = {
-          userId,
-          folderPath,
-          ...this.createNullableFilter('projectId', projectId),
-        };
-
-        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
-        return files;
-      },
-      'Error finding files in folder',
-      { userId, projectId, folderPath }
-    );
-  }
-
-  /**
    * Find files in a folder and all subfolders (recursive)
    * @param userId - The user ID for ownership verification
    * @param projectId - The project ID (null for general files)
@@ -288,45 +278,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       },
       'Error finding files in folder (recursive)',
       { userId, projectId, folderPath }
-    );
-  }
-
-  /**
-   * List unique folder paths for a user/project
-   * @param userId - The user ID for ownership verification
-   * @param projectId - The project ID (null for general files)
-   */
-  async listFolders(
-    userId: string,
-    projectId: string | null
-  ): Promise<string[]> {
-    return this.safeQuery(
-      async () => {
-        const query: Record<string, unknown> = {
-          userId,
-          ...this.createNullableFilter('projectId', projectId),
-        };
-
-        const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
-
-        // Extract unique folder paths and sort
-        const folderSet = new Set<string>();
-        files.forEach((file) => {
-          if (file.folderPath) {
-            folderSet.add(file.folderPath);
-          }
-        });
-
-        const folders = Array.from(folderSet).sort();
-
-        // Always include root if not present
-        if (!folders.includes('/')) {
-          folders.unshift('/');
-        }
-        return folders;
-      },
-      'Error listing folders',
-      { userId, projectId }
     );
   }
 

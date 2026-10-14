@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
-import { badRequest, notFound } from '@/lib/api/responses';
+import { dispatchAction } from '@/lib/api/middleware/actions';
+import { notFound } from '@/lib/api/responses';
 import { handleMoveFile, handlePromoteFile } from '../actions';
-import { FILE_ITEM_POST_ACTIONS, type FileItemPostAction } from '../shared';
 
 export async function handlePost(
   request: NextRequest,
@@ -15,17 +14,8 @@ export async function handlePost(
     return notFound('File');
   }
 
-  const action = getActionParam(request);
-  if (!isValidAction(action, FILE_ITEM_POST_ACTIONS)) {
-    return badRequest(
-      `Unknown action: ${action}. Available actions: ${FILE_ITEM_POST_ACTIONS.join(', ')}`
-    );
-  }
-
-  const actionHandlers: Record<FileItemPostAction, () => Promise<NextResponse>> = {
+  return dispatchAction(request, {
     move: () => handleMoveFile(request, ctx, fileId, file),
     promote: () => handlePromoteFile(request, ctx, fileId, file),
-  };
-
-  return actionHandlers[action]();
+  });
 }

@@ -6,18 +6,30 @@
  * A three-state modal for importing wardrobe items from a reference image:
  * 1. Upload state — file picker, optional guidance notes, "Analyze" button
  * 2. Analyzing state — loading spinner while LLM processes the image
- * 3. Review state — editable item cards with select/deselect, "Import Selected" button
+ * 3. Review state — editable item cards with select/deselect, "Import Selected" button,
+ *    plus an optional ensemble card that bundles the imported pieces into one
+ *    composite outfit. The pieces are created first; their returned ids become
+ *    the outfit's `componentItemIds`, so nothing needs an id assigned up front.
+ *
+ * Unless the operator declines, the photograph itself is attached to every
+ * piece (and the outfit) as its first picture, `kind=imported`. It is
+ * uploaded once, with the first piece; the rest link that picture
+ * (`?action=link-image`), so N pieces share one blob behind N links. A
+ * failed attachment never aborts the import — the garment stands without it.
  *
  * @module components/wardrobe/import-from-image-modal
  */
 
 import { useState, useRef, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { unionTypes } from '@/lib/wardrobe/composite-types'
+import { linkWardrobeItemImage, uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
+import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
 // ============================================================================
 // TYPES
@@ -37,7 +49,30 @@ interface ProposedItem {
   selected: boolean
 }
 
+interface ProposedOutfit {
+  title: string
+  description: string
+  appropriateness: string
+}
+
+interface OutfitDraft extends ProposedOutfit {
+  enabled: boolean
+  /** Composite equip behaviour — on by default, since this is a whole look. */
+  replace: boolean
+}
+
 type ModalState = 'upload' | 'analyzing' | 'review'
+
+/** An ensemble needs at least two pieces to be worth bundling. */
+const MIN_OUTFIT_PIECES = 2
+
+const EMPTY_OUTFIT: OutfitDraft = {
+  enabled: false,
+  title: '',
+  description: '',
+  appropriateness: '',
+  replace: true,
+}
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -56,7 +91,10 @@ export function ImportFromImageModal({
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [guidance, setGuidance] = useState('')
   const [proposedItems, setProposedItems] = useState<ProposedItem[]>([])
+  const [outfit, setOutfit] = useState<OutfitDraft>(EMPTY_OUTFIT)
   const [importing, setImporting] = useState(false)
+  /** Keep the photograph as each created piece's first picture. */
+  const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -124,6 +162,7 @@ export function ImportFromImageModal({
           types: WardrobeItemType[]
           appropriateness: string
         }>
+        proposedOutfit: ProposedOutfit | null
         provider: string
         model: string
       }>('/api/v1/wardrobe/analyze-image', {
@@ -148,6 +187,12 @@ export function ImportFromImageModal({
       }
 
       setProposedItems(items.map(item => ({ ...item, selected: true })))
+      const proposedOutfit = result.data.proposedOutfit
+      setOutfit(
+        proposedOutfit && items.length >= MIN_OUTFIT_PIECES
+          ? { ...EMPTY_OUTFIT, ...proposedOutfit, enabled: true }
+          : EMPTY_OUTFIT
+      )
       setState('review')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Analysis failed'
@@ -177,6 +222,9 @@ export function ImportFromImageModal({
   // ── Import ──────────────────────────────────────────────────────────────
 
   const selectedCount = proposedItems.filter(i => i.selected).length
+  const outfitAvailable = selectedCount >= MIN_OUTFIT_PIECES
+  const willCreateOutfit = outfitAvailable && outfit.enabled
+  const outfitTitleMissing = willCreateOutfit && outfit.title.trim().length === 0
 
   const handleImport = useCallback(async () => {
     const itemsToImport = proposedItems.filter(i => i.selected)
@@ -184,11 +232,44 @@ export function ImportFromImageModal({
 
     setImporting(true)
 
+    // Every create below posts to the character's own wardrobe, so that is
+    // the container each new piece (and the outfit) lives in.
+    const container: WardrobeContainer = { scope: 'character', id: characterId }
+    const photograph = keepPhotograph ? selectedFile : null
+    let pictureFailures = 0
+
+    /** The photograph's file id once it has been uploaded to the first piece. */
+    let photographFileId: string | null = null
+
+    /**
+     * Attach the photograph to a freshly created item; never throws. The bytes
+     * go up once, with the first piece; every later piece links that picture
+     * server-side rather than uploading it again.
+     */
+    const attachPhotograph = async (itemId: string, title: string): Promise<void> => {
+      if (!photograph) return
+      try {
+        if (photographFileId) {
+          await linkWardrobeItemImage(itemId, container, photographFileId)
+        } else {
+          const { image } = await uploadWardrobeItemImage(itemId, container, photograph, 'imported')
+          photographFileId = image.fileId
+        }
+      } catch (err) {
+        pictureFailures += 1
+        console.warn(
+          '[ImportFromImageModal] Failed to attach the photograph to item:',
+          title,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+
     try {
-      let importedCount = 0
+      const created: WardrobeItem[] = []
 
       for (const item of itemsToImport) {
-        const result = await fetchJson(
+        const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(
           `/api/v1/characters/${characterId}/wardrobe`,
           {
             method: 'POST',
@@ -203,30 +284,75 @@ export function ImportFromImageModal({
           }
         )
 
-        if (result.ok) {
-          importedCount++
+        if (result.ok && result.data?.wardrobeItem) {
+          created.push(result.data.wardrobeItem)
+          await attachPhotograph(result.data.wardrobeItem.id, item.title)
         } else {
           console.warn('[ImportFromImageModal] Failed to create item:', item.title, result.error)
         }
       }
 
-      if (importedCount > 0) {
-        showSuccessToast(
-          importedCount === 1
-            ? '1 wardrobe item imported from image'
-            : `${importedCount} wardrobe items imported from image`
-        )
-        onImported()
-        onClose()
-      } else {
+      if (created.length === 0) {
         showErrorToast('Failed to import wardrobe items')
+        return
       }
+
+      const importedCount = created.length
+      showSuccessToast(
+        importedCount === 1
+          ? '1 wardrobe item imported from image'
+          : `${importedCount} wardrobe items imported from image`
+      )
+
+      // Bundle whichever pieces actually landed. Their ids come back from the
+      // create calls above; the outfit's coverage is their slot union, exactly
+      // as the item editor computes it for a hand-built bundle.
+      if (willCreateOutfit && created.length >= MIN_OUTFIT_PIECES) {
+        const outfitResult = await fetchJson<{ wardrobeItem: WardrobeItem }>(
+          `/api/v1/characters/${characterId}/wardrobe`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: outfit.title.trim(),
+              description: outfit.description.trim() || null,
+              types: unionTypes(created),
+              appropriateness: outfit.appropriateness.trim() || null,
+              componentItemIds: created.map(c => c.id),
+              replace: outfit.replace,
+              isDefault: false,
+            }),
+          }
+        )
+        if (outfitResult.ok) {
+          if (outfitResult.data?.wardrobeItem) {
+            await attachPhotograph(outfitResult.data.wardrobeItem.id, outfit.title.trim())
+          }
+          showSuccessToast(`Outfit "${outfit.title.trim()}" assembled from ${created.length} pieces`)
+        } else {
+          console.warn('[ImportFromImageModal] Failed to create outfit:', outfit.title, outfitResult.error)
+          showErrorToast('The pieces were imported, but the outfit could not be assembled')
+        }
+      } else if (willCreateOutfit) {
+        showErrorToast('Too few pieces were imported to assemble an outfit')
+      }
+
+      if (pictureFailures > 0) {
+        showWarningToast(
+          pictureFailures === 1
+            ? 'One piece arrived without its photograph; the darkroom mislaid it. You may attach it by hand.'
+            : `${pictureFailures} pieces arrived without their photograph; the darkroom mislaid them. You may attach it by hand.`
+        )
+      }
+
+      onImported()
+      onClose()
     } catch (err) {
       showErrorToast('Failed to import wardrobe items')
     } finally {
       setImporting(false)
     }
-  }, [proposedItems, characterId, onImported, onClose])
+  }, [proposedItems, characterId, onImported, onClose, willCreateOutfit, outfit, keepPhotograph, selectedFile])
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -379,6 +505,7 @@ export function ImportFromImageModal({
                       onClick={() => {
                         setState('upload')
                         setProposedItems([])
+                        setOutfit(EMPTY_OUTFIT)
                         setError(null)
                       }}
                       className="qt-button-secondary qt-button-sm flex-shrink-0"
@@ -387,6 +514,24 @@ export function ImportFromImageModal({
                     </button>
                   </div>
                 )}
+
+                {/* Keep the photograph as each piece's first picture */}
+                <label className="flex items-start gap-3 cursor-pointer px-3 py-2 rounded qt-bg-muted">
+                  <input
+                    type="checkbox"
+                    checked={keepPhotograph}
+                    onChange={(e) => setKeepPhotograph(e.target.checked)}
+                    className="qt-checkbox mt-0.5"
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="text-sm text-foreground block">
+                      The photograph will be kept as each piece&apos;s first picture
+                    </span>
+                    <span className="text-xs qt-text-secondary block mt-0.5">
+                      Pressed into every garment&apos;s album, and the outfit&apos;s too. Untick it to leave the albums blank.
+                    </span>
+                  </span>
+                </label>
 
                 {/* Item cards */}
                 <div className="space-y-4">
@@ -403,6 +548,7 @@ export function ImportFromImageModal({
                           type="checkbox"
                           checked={item.selected}
                           onChange={(e) => updateItem(index, { selected: e.target.checked })}
+                          aria-label={`Import ${item.title || 'this item'}`}
                           className="qt-checkbox mt-1"
                         />
                         <div className="flex-1 min-w-0">
@@ -472,6 +618,95 @@ export function ImportFromImageModal({
                     </div>
                   ))}
                 </div>
+
+                {/* Ensemble — bundles the imported pieces into one outfit */}
+                <div
+                  className={`border qt-border-default rounded-lg p-4 space-y-3 transition-opacity ${
+                    willCreateOutfit ? '' : 'opacity-50'
+                  }`}
+                >
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={willCreateOutfit}
+                      disabled={!outfitAvailable}
+                      onChange={(e) => setOutfit(prev => ({ ...prev, enabled: e.target.checked }))}
+                      className="qt-checkbox mt-1"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground block">
+                        Also create an outfit from these pieces
+                      </span>
+                      <span className="text-xs qt-text-secondary block mt-0.5">
+                        {outfitAvailable
+                          ? `Bundles the ${selectedCount} selected items into a single outfit you can wear in one gesture.`
+                          : 'Select at least two items to bundle them into an outfit.'}
+                      </span>
+                    </span>
+                  </label>
+
+                  {willCreateOutfit && (
+                    <>
+                      <div className="ml-8">
+                        <label htmlFor="wardrobe-image-outfit-title" className="qt-label text-xs mb-1 block">
+                          Outfit title
+                        </label>
+                        <input
+                          id="wardrobe-image-outfit-title"
+                          type="text"
+                          value={outfit.title}
+                          onChange={(e) => setOutfit(prev => ({ ...prev, title: e.target.value }))}
+                          className="qt-input text-sm font-medium w-full"
+                          placeholder="e.g., Midnight Gala Ensemble"
+                        />
+                      </div>
+
+                      <div className="ml-8">
+                        <label htmlFor="wardrobe-image-outfit-appropriateness" className="qt-label text-xs mb-1 block">
+                          Appropriateness
+                        </label>
+                        <input
+                          id="wardrobe-image-outfit-appropriateness"
+                          type="text"
+                          value={outfit.appropriateness}
+                          onChange={(e) => setOutfit(prev => ({ ...prev, appropriateness: e.target.value }))}
+                          className="qt-input text-sm w-full"
+                          placeholder="e.g., formal, evening"
+                          maxLength={200}
+                        />
+                      </div>
+
+                      <div className="ml-8">
+                        <label htmlFor="wardrobe-image-outfit-description" className="qt-label text-xs mb-1 block">
+                          Description
+                        </label>
+                        <textarea
+                          id="wardrobe-image-outfit-description"
+                          value={outfit.description}
+                          onChange={(e) => setOutfit(prev => ({ ...prev, description: e.target.value }))}
+                          rows={2}
+                          className="qt-textarea text-sm w-full"
+                          placeholder="The overall look..."
+                        />
+                      </div>
+
+                      <label className="ml-8 flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={outfit.replace}
+                          onChange={(e) => setOutfit(prev => ({ ...prev, replace: e.target.checked }))}
+                          className="qt-checkbox mt-0.5"
+                        />
+                        <span className="text-sm text-foreground">
+                          Replace everything in its slots when worn
+                          <span className="block text-xs qt-text-secondary">
+                            Off layers the pieces over whatever is already on.
+                          </span>
+                        </span>
+                      </label>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -504,10 +739,10 @@ export function ImportFromImageModal({
               <FormActions
                 onCancel={onClose}
                 onSubmit={handleImport}
-                submitLabel={`Import ${selectedCount} Item${selectedCount !== 1 ? 's' : ''}`}
+                submitLabel={`Import ${selectedCount} Item${selectedCount !== 1 ? 's' : ''}${willCreateOutfit ? ' + Outfit' : ''}`}
                 cancelLabel="Cancel"
                 isLoading={importing}
-                isDisabled={selectedCount === 0}
+                isDisabled={selectedCount === 0 || outfitTitleMissing}
               />
             )}
           </div>

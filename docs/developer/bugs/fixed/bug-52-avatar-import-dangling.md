@@ -9,7 +9,7 @@
 | **Who it bites** | anyone importing a `characters` `.qtap` into a different instance — sharing a character with another person, or moving one between their own instances |
 | **Provenance** | Faithful — found by inspection during the archive/export-fidelity scoping pass (a real 4.8.0-dev.186 export measured 18 KB with no vault records), not by the v5 harness |
 | **Defect site** | `lib/export/ndjson-writer.ts:143` (`streamCharacters` exports no vault records or bytes) + `lib/import/quilltap-import/reconcile.ts:46–129` (`reconcileRelationships` never remaps or nulls `defaultImageId` / `avatarOverrides[].imageId`) |
-| **Fix site** | WP A2 of [character-archive-spec.md](../../features/character-archive-spec.md) — export the character's vault via a shared `streamOneStore`, carry link ids, remap avatars in reconcile |
+| **Fix site** | WP A2 of [character-archive-spec.md](../../features/complete/character-archive-spec.md) — export the character's vault via a shared `streamOneStore`, carry link ids, remap avatars in reconcile |
 | **v5 status** | Owed (Faithful) — v5 reproduces the omission; it inherits the A2 fix as a drift catch-up |
 | **Index** | [bugs.md](../../bugs.md) |
 
@@ -72,7 +72,7 @@ is invisible unless you go looking for the files.
 ### The fix
 
 Deliverable A of the archive/export-fidelity plan
-([character-archive-spec.md](../../features/character-archive-spec.md), WP A2):
+([character-archive-spec.md](../../features/complete/character-archive-spec.md), WP A2):
 
 - Extract the per-store body of `streamDocumentStores` into a shared
   `streamOneStore(mountPointId)` generator and have `streamCharacters` emit the

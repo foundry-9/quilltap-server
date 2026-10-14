@@ -16,7 +16,7 @@ import { logger } from '@/lib/logger';
 import { generateContextSummary } from '@/lib/chat/context-summary';
 import { throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { enqueueChatDangerClassification } from '../queue-service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { ContextSummaryPayload } from '../queue-service';
 
 /**
@@ -71,10 +71,18 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     summaryLength: result.summary?.length ?? 0,
   });
 
-  // Chain: enqueue danger classification after successful summary update
+  // Chain: enqueue danger classification after successful summary update —
+  // only when the chat's Concierge policy has the summary classifier on (on
+  // duty, Moderated, and opted in).
   try {
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-    if (dangerSettings.mode !== 'OFF') {
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
+    if (!conciergePolicy.summaryClassification) {
+      logger.debug('[ContextSummary] Summary classification off for this chat; not chaining', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        conciergeSource: conciergePolicy.source,
+      });
+    } else {
       await enqueueChatDangerClassification(
         job.userId,
         {

@@ -5,7 +5,10 @@
  */
 
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import {
+  DEFAULT_CONCIERGE_SETTINGS,
+  resolveConciergeSettings,
+} from '@/lib/services/dangerous-content/resolver.service'
 
 // Mock the dependencies using the same pattern as other codebase tests
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
@@ -55,25 +58,27 @@ const testSelection: CheapLLMSelection = {
 const testUserId = 'test-user-id'
 const testChatId = 'test-chat-id'
 
-const dangerOffSettings: DangerousContentSettings = {
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
+function conciergePolicy(
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked',
+  opts: { enabled?: boolean; preScreen?: boolean } = {},
+) {
+  return resolveConciergeSettings(
+    {
+      conciergeSettings: {
+        ...DEFAULT_CONCIERGE_SETTINGS,
+        enabled: opts.enabled ?? true,
+        preScreen: { ...DEFAULT_CONCIERGE_SETTINGS.preScreen, enabled: opts.preScreen ?? true },
+      },
+    },
+    { conciergeMode },
+  )
 }
 
-const dangerOnSettings: DangerousContentSettings = {
-  mode: 'DETECT_ONLY',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+/** The Concierge off duty. */
+const dangerOffSettings = conciergePolicy('moderated', { enabled: false })
+
+/** A Moderated chat with the pre-screen on. */
+const dangerOnSettings = conciergePolicy('moderated')
 
 // Helper to add required timestamp fields
 const ts = '2025-01-01T00:00:00.000Z'
@@ -500,8 +505,27 @@ describe('Appearance Resolution Module', () => {
       },
     ]
 
-    describe('Sanitization skipped when OFF', () => {
-      it('should return unchanged when Concierge mode is OFF', async () => {
+    describe('Sanitization skipped when the policy neither pre-screens nor routes direct', () => {
+      it.each([
+        ['a Moderated chat without the pre-screen', () => conciergePolicy('moderated', { preScreen: false })],
+        ['a Locked chat', () => conciergePolicy('locked')],
+      ])('should return unchanged for %s', async (_label, makePolicy) => {
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          makePolicy(),
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockClassifyContent).not.toHaveBeenCalled()
+        expect(mockSanitizeAppearance).not.toHaveBeenCalled()
+        expect(result).toBe(sampleAppearances)
+      })
+
+      it('should return unchanged when the Concierge is off duty', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOffSettings,
@@ -518,8 +542,8 @@ describe('Appearance Resolution Module', () => {
       })
     })
 
-    describe('Sanitization skipped for dangerous chat with uncensored provider', () => {
-      it('should return unchanged when isDangerousChat=true and hasUncensoredImageProvider=true', async () => {
+    describe('Sanitization skipped for dangerous chat routed to uncensored', () => {
+      it('should return unchanged when isDangerousChat=true and the scene routes uncensored', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
@@ -624,15 +648,77 @@ describe('Appearance Resolution Module', () => {
           ],
           testSelection,
           testUserId,
-          testChatId
+          testChatId,
+          'redress'
         )
 
         expect(result[0].wasSanitized).toBe(true)
         expect(result[0].physicalDescription).toBe('A young woman with red hair wearing casual clothes')
         expect(result[0].clothingDescription).toBe('') // Cleared
+        expect(result[0].needsConcealment).toBeUndefined()
       })
 
-      it('should NOT sanitize when dangerous but uncensored provider available', async () => {
+      it('should flag an undressed character for concealment in conceal mode', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            { characterId: 'char-1', appearanceText: 'A young woman with red hair, unclothed', undressed: true },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId,
+          'conceal'
+        )
+
+        expect(mockSanitizeAppearance.mock.calls[0][4]).toBe('conceal')
+        expect(result[0].physicalDescription).toBe('A young woman with red hair, unclothed')
+        expect(result[0].clothingDescription).toBe('')
+        expect(result[0].wasSanitized).toBe(true)
+        expect(result[0].needsConcealment).toBe(true)
+      })
+
+      it('should flag concealment even when the rewrite leaves the text unchanged', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            { characterId: 'char-1', appearanceText: 'A young woman with red hair. Blue jeans and t-shirt', undressed: true },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId,
+          'conceal'
+        )
+
+        expect(result[0].wasSanitized).toBe(false)
+        expect(result[0].clothingDescription).toBe('Blue jeans and t-shirt')
+        expect(result[0].needsConcealment).toBe(true)
+      })
+
+      it('should NOT sanitize when dangerous and the scene routes uncensored', async () => {
         mockClassifyContent.mockResolvedValue({
           isDangerous: true,
           score: 0.9,
@@ -643,7 +729,7 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOnSettings,
           false,
-          true, // hasUncensoredImageProvider
+          true, // routesDangerousToUncensored
           testSelection,
           testUserId,
           testChatId
@@ -651,6 +737,68 @@ describe('Appearance Resolution Module', () => {
 
         expect(mockSanitizeAppearance).not.toHaveBeenCalled()
         expect(result).toBe(sampleAppearances)
+      })
+
+      it('should sanitize an Unmoderated chat whose scene cannot reach the uncensored desk', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [{ characterId: 'char-1', appearanceText: 'A young woman in casual clothes' }],
+        })
+
+        // The pre-screen is off for an Unmoderated chat; routeDirect keeps the check.
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          conciergePolicy('unmoderated'),
+          true,
+          false, // no uncensored image profile to route to
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockClassifyContent).toHaveBeenCalledTimes(1)
+        expect(mockSanitizeAppearance).toHaveBeenCalledTimes(1)
+        expect(result[0].wasSanitized).toBe(true)
+      })
+
+      // Bug 133. The fourth argument used to be "an uncensored profile is
+      // configured", which is a different question from "this scene is going
+      // there". Story backgrounds never route up front, so a moderated chat
+      // handed raw "naked, barefoot" appearance text straight to the crafter.
+      it('should sanitize a moderated scene even when an uncensored profile exists elsewhere', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            {
+              characterId: 'char-1',
+              appearanceText: 'A young woman with red hair wearing casual clothes',
+            },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false, // moderated chat
+          false, // ...and this scene is NOT routed to the uncensored provider
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockSanitizeAppearance).toHaveBeenCalled()
+        expect(result[0].wasSanitized).toBe(true)
       })
 
       it('should only sanitize changed appearances', async () => {

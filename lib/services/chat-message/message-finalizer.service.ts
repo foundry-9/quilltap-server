@@ -5,19 +5,20 @@
  * assistant-side RNG auto-detection, and background memory/summary triggers.
  */
 
+import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
-  getActiveCharacterParticipants,
+  resolveCycleOrder,
+  loadRoomCharacters,
   isUsersTurn,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -35,6 +36,8 @@ import {
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { buildRouteTrail } from './route-trail'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -84,7 +87,7 @@ export async function finalizeMessageResponse({
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
-  const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
+  const { conciergePolicy, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const leadingStripped = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
@@ -213,7 +216,7 @@ export async function finalizeMessageResponse({
     globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true,
     cheapLLMSelection,
     connectionProfile,
-    dangerSettings,
+    conciergePolicy,
     allProfiles,
     onConfirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
       stage: 'confirming',
@@ -259,6 +262,10 @@ export async function finalizeMessageResponse({
     allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
   }
 
+  // The call sheet for this turn: null unless something stepped aside. Composed
+  // here, at the one place that knows the turn is over and who answered.
+  const routeTrail = buildRouteTrail(streaming, { chatId, messageId: assistantMessageId })
+
   await saveAssistantMessage(
     repos,
     chatId,
@@ -276,8 +283,44 @@ export async function finalizeMessageResponse({
     whisperContext,
     reasoningContent,
     rebasedReasoning,
-    { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent }
+    { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent },
+    routeTrail
   )
+
+  // The turn's recall record (stage trace, delivered pools, the ring line the
+  // replay reads back) rides on the message it shaped.
+  if (builtContext.recallDebugLog && builtContext.recallDebugLog.length > 0) {
+    try {
+      await repos.chats.updateMessage(chatId, assistantMessageId, { debugMemoryLogs: builtContext.recallDebugLog })
+    } catch (error) {
+      logger.warn('Failed to store the recall record on the assistant message', {
+        chatId,
+        messageId: assistantMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Consume this turn's informs. Tied to the *persisted* assistant message,
+  // never to context building: a provider failure that saved nothing must
+  // leave the rows pending for the seat's next attempt, and a turn-skip
+  // ([NOTHING TO ADD]) persists no message at all, so the passage waits until
+  // the character actually speaks. `informRowIds` is empty on a swipe — a
+  // swipe re-applies but never consumes. See `lib/chat/context/inform-block.ts`.
+  if (builtContext.informRowIds.length > 0) {
+    const consumed = await repos.chatInforms.markConsumed(builtContext.informRowIds, assistantMessageId)
+    logger.debug('Consumed informs for turn', {
+      chatId,
+      messageId: assistantMessageId,
+      participantId: characterParticipant.id,
+      requested: builtContext.informRowIds.length,
+      consumed,
+    })
+  }
+
+  // Mark the letters Suparṇā announced this turn, on the same footing as the
+  // informs above: only now that the reply is persisted. Null on a swipe.
+  await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'finalizer' })
 
   // Surface the resolved confirmation state to the live client (badge +, on a
   // revision, the replacement bubble text). The persisted columns carry it too,
@@ -329,7 +372,7 @@ export async function finalizeMessageResponse({
         userId,
         characterName: character.name,
         userName: 'User',
-        dangerSettings,
+        conciergePolicy,
         availableProfiles: allProfiles,
       },
     })
@@ -437,6 +480,9 @@ export async function finalizeMessageResponse({
     turn: turnInfo,
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
+    // Ride the done event so the client's optimistic message carries the trail
+    // without waiting for the post-turn fetchChat().
+    routeTrail,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
     // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
     reasoningContent: reasoningContent || null,
@@ -468,8 +514,6 @@ export async function finalizeMessageResponse({
   if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
-      dangerSettings,
-      isDangerousChat: shouldUseUncensoredRoute(chat),
     }
 
     // Per-turn memory extraction.
@@ -530,8 +574,6 @@ export async function finalizeMessageResponse({
       connectionProfile,
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
-        dangerSettings,
-        isDangerousChat: shouldUseUncensoredRoute(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
@@ -566,7 +608,10 @@ export async function saveAssistantMessage(
     confirmationRevised?: boolean | null
     confirmationNotes?: string | null
     confirmationOriginalContent?: string | null
-  }
+  },
+  // The turn's route trail — every profile tried, in order. NULL (the common
+  // case) when nothing failed; see buildRouteTrail in ./route-trail.
+  routeTrail?: RouteAttempt[] | null
 ): Promise<string> {
   // A check "ran" whenever a verdict (incl. null) was assigned. Persisted as a
   // real 1 so a reload can tell "unverified" from "never checked" (both leave
@@ -592,6 +637,7 @@ export async function saveAssistantMessage(
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,
+    routeTrail: routeTrail ?? null,
     isSilentMessage: characterParticipant.status === 'silent' || null,
     // Only include confirmation keys that were actually resolved, so an
     // untouched turn writes no confirmation fields at all.
@@ -655,21 +701,24 @@ export async function calculateNextSpeaker(
     participants: chat.participants,
     userParticipantId,
     spokenThisCycleParticipantIds: freshChat?.spokenThisCycleParticipantIds ?? chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: freshChat?.cycleOrderParticipantIds ?? chat.cycleOrderParticipantIds,
   })
 
-  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
-  const charactersMap = new Map<string, Character>()
+  // Every present seat, user-driven ones included — the rotation is drawn from
+  // their talkativeness. The character who just spoke is seeded from the copy
+  // already in hand rather than re-read.
+  const charactersMap = await loadRoomCharacters(repos, chat.participants, {
+    preloaded: [character],
+  })
 
-  for (const p of activeCharacterParticipants) {
-    if (p.characterId) {
-      const char = p.id === characterParticipant.id
-        ? character
-        : await repos.characters.findById(p.characterId)
-      if (char) {
-        charactersMap.set(p.characterId, char)
-      }
-    }
-  }
+  // Draw the cycle's rotation if this answer spent the last one, so the "who is
+  // next" this reports is the same seat the chain will actually call on.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  )
 
   const nextSpeakerResult = selectNextSpeaker(
     chat.participants,

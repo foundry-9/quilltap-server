@@ -25,7 +25,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { isParticipantPresent, type MessageEvent } from '@/lib/schemas/types';
-import { rampLimit } from '@/lib/memory/memory-recap';
+import { rampLimit } from '@/lib/memory/recall/recap';
 import {
   searchVaultConversationSummaries,
   renderRelevantConversationsBlock,
@@ -34,7 +34,7 @@ import {
   RELEVANT_CONVERSATIONS_MAX,
   RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
   RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
-} from '@/lib/memory/conversation-summary-search';
+} from '@/lib/memory/recall/conversations';
 import {
   buildCommonplacePersonaWhisper,
   buildCommonplaceLLMContext,

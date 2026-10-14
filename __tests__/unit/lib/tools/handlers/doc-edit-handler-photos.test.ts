@@ -561,6 +561,29 @@ describe('photo album handlers', () => {
       expect(mockAutoDescribe).not.toHaveBeenCalled();
     });
 
+    it('prefers the generation prompt over a stored description, and keeps the description in view (bug 132)', async () => {
+      // The story-background and wardrobe jobs used to stamp a label into
+      // `description`; served first, it told a character the chat title
+      // instead of what the backdrop showed. The prompt is the account of
+      // record for a generated image. Whatever is on file still rides along,
+      // so a human-written or vision-written description is never hidden.
+      mockGetImageById.mockResolvedValue({
+        ...imageEntry,
+        description: 'Story background for: Bite Order and Kisses',
+        generationPrompt: 'A candlelit dining room, two figures at a long table.',
+      } as never);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'file-1' }, baseContext);
+
+      expect(result.success).toBe(true);
+      const out = result.result as { source: string; description: string; stored_description?: string };
+      expect(out.source).toBe('generation-prompt');
+      expect(out.description).toBe('A candlelit dining room, two figures at a long table.');
+      expect(out.stored_description).toBe('Story background for: Bite Order and Kisses');
+      expect(result.formattedText).toMatch(/candlelit dining room[\s\S]*On file: Story background for/);
+      expect(mockAutoDescribe).not.toHaveBeenCalled();
+    });
+
     it('spends a vision call only when nothing is on file', async () => {
       mockGetImageById.mockResolvedValue({ ...imageEntry } as never);
       mockAutoDescribe.mockResolvedValue({

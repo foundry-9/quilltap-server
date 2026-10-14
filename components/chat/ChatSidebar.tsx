@@ -17,18 +17,23 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { patchChat } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
+import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerUrlDownload } from '@/lib/download-utils'
-import { getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { CONCIERGE_STATES, getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneTextClass,
+  describeConciergeState,
+  type ConciergeProvenanceNote,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
@@ -50,7 +55,7 @@ const WIDTH_KEY_STEP = 16
  * chat (sidebar ~MIN_WIDTH + chat MIN_CHAT_WIDTH). In a narrow pane the sidebar
  * therefore defaults to the mini strip and expands as a click-away overlay
  * instead of squeezing the chat. In a wide/full pane it behaves exactly as
- * before. See `docs/developer/features/tabbed-workspace.md`.
+ * before. See `docs/developer/features/complete/tabbed-workspace.md`.
  */
 const NARROW_PANE_WIDTH = 640
 
@@ -163,11 +168,11 @@ export interface ChatSidebarProps {
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void
   onRebuildSystemPrompt?: (participantId: string) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   chatId: string
   onRegenerateAvatar?: (participantId: string) => void
-  isDangerousChat?: boolean
 
   // --- Chat section ---
   agentModeEnabled?: boolean | null
@@ -186,8 +191,10 @@ export interface ChatSidebarProps {
   avatarGenerationEnabled?: boolean | null
   /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
   timelineMode?: 'realtime' | 'narrative' | null
-  /** Per-chat Concierge override ('OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored, null = follow global). */
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  /** The chat's Concierge state, as the server derived it. Absent reads as Moderated. */
+  conciergeState?: ConciergeState
+  /** Who set the Concierge state and why — the helper text's note. */
+  conciergeProvenance?: ConciergeProvenanceNote
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -219,7 +226,10 @@ export interface ChatSidebarProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
-  chatPhotoCount?: number
+  /** Discards the running context summary and lets the fold cadence rebuild it. */
+  onRebuildSummaryClick?: () => void
+  /** How many images the chat's gallery holds — `total` from `useChatGallery`. */
+  galleryCount?: number
   onGalleryClick?: () => void
   /** True when this chat is an autonomous room ("enclave") — gates the Edit Enclave control. */
   isAutonomousRoom?: boolean
@@ -259,6 +269,17 @@ export function ChatSidebar(props: ChatSidebarProps) {
     [participants]
   )
   const singleLlmCharacterId = llmCharacterIds.length === 1 ? llmCharacterIds[0] : null
+
+  // Everyone present, whoever holds the reins, for the Scenario Builder: the
+  // user's persona has a vault and groups too. Archived characters are
+  // tombstones and lend the Host nothing.
+  const castCharacters = useMemo(
+    () =>
+      participants
+        .filter((p) => p.status !== 'removed' && p.character?.id && !p.character.archivedAt)
+        .map((p) => ({ id: p.character!.id, name: p.character!.name })),
+    [participants]
+  )
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
@@ -399,11 +420,12 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const effectiveCollapsed = isNarrow ? !narrowOpen : isCollapsed
   const isOverlay = isNarrow && narrowOpen
 
-  // Overlay: a click outside the panel, or Escape, collapses it to the strip.
+  // Overlay: a click outside the panel (but not inside a dialog portaled from it),
+  // or Escape, collapses it to the strip.
   useEffect(() => {
     if (!isOverlay) return
     const onPointerDown = (e: PointerEvent) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) setNarrowOpen(false)
+      if (shouldDismissSidebarOverlay(sidebarRef.current, e.target)) setNarrowOpen(false)
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setNarrowOpen(false)
@@ -517,13 +539,14 @@ export function ChatSidebar(props: ChatSidebarProps) {
             scenarioText={props.scenarioText}
             llmCharacterIds={llmCharacterIds}
             singleLlmCharacterId={singleLlmCharacterId}
+            castCharacters={castCharacters}
             onProjectClick={props.onProjectClick}
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
             avatarGenerationEnabled={props.avatarGenerationEnabled}
             timelineMode={props.timelineMode}
-            isDangerousChat={props.isDangerousChat}
-            conciergeOverride={props.conciergeOverride}
+            conciergeState={props.conciergeState}
+            conciergeProvenance={props.conciergeProvenance}
             onToolSettingsClick={props.onToolSettingsClick}
             onRunToolClick={props.onRunToolClick}
             storyBackgroundsEnabled={props.storyBackgroundsEnabled}
@@ -567,7 +590,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
             onStateClick={props.onStateClick}
             onContinueChatClick={props.onContinueChatClick}
             onMergeConversationClick={props.onMergeConversationClick}
-            chatPhotoCount={props.chatPhotoCount}
+            onRebuildSummaryClick={props.onRebuildSummaryClick}
+            galleryCount={props.galleryCount}
             onGalleryClick={props.onGalleryClick}
             isAutonomousRoom={props.isAutonomousRoom}
             onEditEnclaveClick={props.onEditEnclaveClick}
@@ -839,6 +863,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               connectionProfiles={p.connectionProfiles}
               onConnectionProfileChange={p.onConnectionProfileChange}
               onSystemPromptChange={p.onSystemPromptChange}
+              onSubpromptsChange={p.onSubpromptsChange}
               onRebuildSystemPrompt={p.onRebuildSystemPrompt}
               onActiveChange={p.onParticipantSettingsChange
                 ? (pId, active) => p.onParticipantSettingsChange!(pId, { isActive: active })
@@ -849,7 +874,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
               onRegenerateAvatar={p.onRegenerateAvatar}
-              isDangerousChat={shouldShowDangerStyling({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
+              isDangerousChat={shouldShowDangerStyling({ conciergeState: p.conciergeState })}
             />
           )
         })}
@@ -887,13 +912,15 @@ interface ChatSectionProps {
   llmCharacterIds: string[]
   /** The lone LLM character's ID, or null when several share the room. */
   singleLlmCharacterId: string | null
+  /** Every present character (any controller), for the Scenario Builder. */
+  castCharacters: Array<{ id: string; name: string }>
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
   timelineMode?: 'realtime' | 'narrative' | null
-  isDangerousChat?: boolean
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  conciergeState?: ConciergeState
+  conciergeProvenance?: ConciergeProvenanceNote
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -912,13 +939,14 @@ function ChatSection({
   scenarioText,
   llmCharacterIds,
   singleLlmCharacterId,
+  castCharacters,
   onProjectClick,
   imageProfileId,
   alertCharactersOfLanternImages,
   avatarGenerationEnabled,
   timelineMode,
-  isDangerousChat,
-  conciergeOverride,
+  conciergeState: conciergeStateProp,
+  conciergeProvenance,
   onToolSettingsClick,
   onRunToolClick,
   storyBackgroundsEnabled,
@@ -931,6 +959,11 @@ function ChatSection({
   const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [conciergeSaving, setConciergeSaving] = useState(false)
+  // Off duty globally, the per-chat state does nothing; the select is
+  // disabled (not hidden) and points at the switch.
+  const { data: conciergeOnDuty = true } = useChatSettingsQuery(
+    (settings) => settings.conciergeSettings?.enabled !== false,
+  )
   const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
@@ -1074,13 +1107,11 @@ function ChatSection({
         throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
       }
       showSuccessToast(
-        next === 'monitored'
+        next === 'moderated'
           ? 'The Concierge is on watch'
-          : next === 'flagged'
-            ? 'Marked as flagged'
-            : next === 'vouched'
-              ? 'You have vouched for this chat'
-              : 'The uncensored door stands open'
+          : next === 'unmoderated'
+            ? 'The uncensored door stands open'
+            : 'Locked to the usual desks'
       )
       onChatUpdated?.()
     } catch (error) {
@@ -1116,16 +1147,14 @@ function ChatSection({
     ? 'inherit'
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
-  const conciergeState = getConciergeState({ isDangerousChat, conciergeOverride })
-  // Four states, one 2×2: rows are the route (ordinary vs uncensored),
-  // columns are the provenance (the Concierge's classifier vs the operator).
-  // The optgroups carry the provenance structurally; the helper text names
-  // the actor; the icon/color pair gives a third, colorblind-safe channel.
-  // All of it comes from the presentation table, which this section's own
-  // sentences seeded — so the list marks and the header pill say the same
+  const conciergeState = getConciergeState({ conciergeState: conciergeStateProp })
+  // Three states in a flat list. Who set Unmoderated — you or the Concierge —
+  // is a note in the helper text, never a separate option; the icon/colour
+  // pair is a second, colourblind-safe channel. All of it comes from the
+  // presentation table, so the list marks and the header pill say the same
   // words, and a copy edit here lands in all three.
   const conciergePresentation = CONCIERGE_STATE_PRESENTATION[conciergeState]
-  const conciergeHelperText = conciergePresentation.detail
+  const conciergeHelperText = describeConciergeState(conciergeState, conciergeProvenance).detail
   const conciergeStateIcon = {
     name: conciergePresentation.icon,
     className: conciergeToneTextClass(conciergePresentation.tone),
@@ -1133,7 +1162,7 @@ function ChatSection({
 
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">
-      {/* The Concierge — per-chat four-state */}
+      {/* The Concierge — per-chat state */}
       <label className="qt-label">
         <span className="mb-1 flex items-center gap-1.5">
           The Concierge
@@ -1142,19 +1171,18 @@ function ChatSection({
         <select
           value={conciergeState}
           onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
-          disabled={conciergeSaving}
+          disabled={conciergeSaving || !conciergeOnDuty}
           className="qt-select text-sm"
         >
-          <optgroup label="The Concierge decides">
-            <option value="monitored">Monitored</option>
-            <option value="flagged">Flagged</option>
-          </optgroup>
-          <optgroup label="You decide">
-            <option value="vouched">Vouched Safe</option>
-            <option value="uncensored">Uncensored</option>
-          </optgroup>
+          {CONCIERGE_STATES.map((value) => (
+            <option key={value} value={value}>{CONCIERGE_STATE_PRESENTATION[value].label}</option>
+          ))}
         </select>
-        <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
+        {conciergeOnDuty ? (
+          <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
+        ) : (
+          <ConciergeOffDutyHint className="block mt-1 qt-text-secondary text-xs" />
+        )}
       </label>
 
       {/* Agent Mode */}
@@ -1195,6 +1223,8 @@ function ChatSection({
         scenarioText={scenarioText}
         llmCharacterIds={llmCharacterIds}
         singleLlmCharacterId={singleLlmCharacterId}
+        castCharacters={castCharacters}
+        projectName={projectName}
         enabled={hasEverOpened}
         onChatUpdated={onChatUpdated}
       />
@@ -1545,7 +1575,8 @@ interface OrganizeSectionProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
-  chatPhotoCount?: number
+  onRebuildSummaryClick?: () => void
+  galleryCount?: number
   onGalleryClick?: () => void
   isAutonomousRoom?: boolean
   onEditEnclaveClick?: () => void
@@ -1557,7 +1588,8 @@ function OrganizeSection({
   onStateClick,
   onContinueChatClick,
   onMergeConversationClick,
-  chatPhotoCount = 0,
+  onRebuildSummaryClick,
+  galleryCount = 0,
   onGalleryClick,
   isAutonomousRoom = false,
   onEditEnclaveClick,
@@ -1638,6 +1670,18 @@ function OrganizeSection({
         </button>
       )}
 
+      {onRebuildSummaryClick && (
+        <button
+          type="button"
+          onClick={onRebuildSummaryClick}
+          className="qt-tool-palette-button"
+          title="Discard the running summary and rebuild it from the start of the conversation"
+        >
+          <Icon name="refresh" className="w-4 h-4" />
+          <span>Rebuild Summary…</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={handleExport}
@@ -1658,15 +1702,19 @@ function OrganizeSection({
         <span>Export Markdown</span>
       </button>
 
-      {chatPhotoCount > 0 && onGalleryClick && (
+      {/* Unconditional, deliberately. Gating this on a count is what hid the
+          gallery for months (bug 129) — and a chat with a cast is never empty
+          anyway, since the participants' own portraits put the total above
+          zero. The modal's empty state covers the case that cannot arise. */}
+      {onGalleryClick && (
         <button
           type="button"
           onClick={onGalleryClick}
           className="qt-tool-palette-button"
-          title="View gallery"
+          title="Every image in this conversation"
         >
           <Icon name="image" className="w-4 h-4" />
-          <span>Gallery ({chatPhotoCount})</span>
+          <span>Gallery ({galleryCount})</span>
         </button>
       )}
     </div>
@@ -1734,8 +1782,13 @@ function EditContentSection({
         <button
           type="button"
           onClick={onDeleteChatMemoriesClick}
+          disabled={chatMemoryCount === 0}
           className="qt-tool-palette-button qt-tool-palette-button-danger"
-          title="Delete chat memories"
+          title={
+            chatMemoryCount === 0
+              ? 'This chat has laid down no memories yet'
+              : 'Delete chat memories'
+          }
         >
           <Icon name="trash" className="w-4 h-4" />
           <span>Delete Memories ({chatMemoryCount})</span>

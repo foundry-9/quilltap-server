@@ -7,6 +7,7 @@ import { CompositionModeDefaultSettings } from '@/components/settings/chat-setti
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
 import { ComposerEmojiSettings } from '@/components/settings/chat-settings/ComposerEmojiSettings'
 import { ComposerUnicodeSettings } from '@/components/settings/chat-settings/ComposerUnicodeSettings'
+import { ImpersonationVoiceSettings } from '@/components/settings/chat-settings/ImpersonationVoiceSettings'
 import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
@@ -20,7 +21,6 @@ import { AgentModeSettings } from '@/components/settings/chat-settings/AgentMode
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { SmartTypographySettings } from '@/components/settings/chat-settings/SmartTypographySettings'
-import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
 import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
 import { TabooSettings } from '@/components/settings/chat-settings/TabooSettings'
@@ -36,25 +36,22 @@ export function ChatTabContent() {
     loading,
     saving,
     connectionProfiles,
-    imageProfiles,
     loadingProfiles,
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
-    handleUncensoredImageDescriptionProfileChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
-    handleDangerousContentUpdate,
-    handleCheapLLMUpdate,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
     handleAnswerConfirmationUpdate,
@@ -101,6 +98,11 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleComposerUnicodeChange}
+          />
+          <ImpersonationVoiceSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleImpersonationVoiceModeChange}
           />
         </CollapsibleCard>
 
@@ -159,7 +161,6 @@ export function ChatTabContent() {
             loadingProfiles={loadingProfiles}
             connectionProfiles={connectionProfiles}
             onProfileChange={handleImageDescriptionProfileChange}
-            onUncensoredProfileChange={handleUncensoredImageDescriptionProfileChange}
           />
         </CollapsibleCard>
 
@@ -205,19 +206,6 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onUpdate={handleAnswerConfirmationUpdate}
-          />
-        </CollapsibleCard>
-
-        <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior" sectionId="dangerous-content" forceOpen={activeSection === 'dangerous-content'}>
-          <DangerousContentSettings
-            settings={settings}
-            saving={saving}
-            connectionProfiles={connectionProfiles}
-            imageProfiles={imageProfiles}
-            loadingProfiles={loadingProfiles}
-            onUpdate={handleDangerousContentUpdate}
-            imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
-            onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
           />
         </CollapsibleCard>
 

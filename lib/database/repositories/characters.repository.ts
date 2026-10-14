@@ -58,6 +58,25 @@ export function validateCharacterArchivePatch(existing: Partial<Character> | nul
  * Characters Repository
  * Implements CRUD operations for characters with support for tags, personas, favorites, and physical descriptions.
  */
+/**
+ * Bring store names into line after a change to a character's name or vault
+ * (`lib/mount-index/reconcile-store-names.ts`). Never fails the caller's
+ * write: a naming miss is repaired at the next boot. Imported lazily, since
+ * the reconcile reads through the repository factory.
+ */
+async function reconcileVaultNames(trigger: string, characterId: string): Promise<void> {
+  try {
+    const { reconcileStoreNames } = await import('@/lib/mount-index/reconcile-store-names');
+    await reconcileStoreNames(trigger);
+  } catch (error) {
+    logger.warn('Store-name reconcile after a character change failed', {
+      trigger,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export class CharactersRepository extends TaggableBaseRepository<Character> {
   constructor() {
     super('characters', CharacterSchema);
@@ -117,6 +136,17 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
+   * Find the character whose vault is `mountPointId`, **without the vault
+   * overlay**. Used by the scenario location to classify a mount as a
+   * character's (it needs only `id`, `userId`, `archivedAt`) — hydrating the
+   * vault to answer "whose mount is this?" would be wasted work, and a broken
+   * vault must cost a classification rather than a throw.
+   */
+  async findByDocumentMountPointIdRaw(mountPointId: string): Promise<Character | null> {
+    return this.findOneByFilter({ characterDocumentMountPointId: mountPointId } as TypedQueryFilter<Character>);
+  }
+
+  /**
    * Find characters by user ID
    * @param userId The user ID
    * @returns Promise<Character[]> Array of characters belonging to the user
@@ -141,30 +171,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         return applyDocumentStoreOverlay(results);
       },
       'Error finding user-controlled characters',
-      { userId },
-      []
-    );
-  }
-
-  /**
-   * Find LLM-controlled characters by user ID
-   * @param userId The user ID
-   * @returns Promise<Character[]> Array of LLM-controlled characters
-   */
-  async findLLMControlled(userId: string): Promise<Character[]> {
-    return this.safeQuery(
-      async () => {
-        // Include characters with no controlledBy field (defaults to llm)
-        const results = await this.findByFilter({
-          userId,
-          $or: [
-            { controlledBy: 'llm' },
-            { controlledBy: { $exists: false } },
-          ],
-        } as TypedQueryFilter<Character>);
-        return applyDocumentStoreOverlay(results);
-      },
-      'Error finding LLM-controlled characters',
       { userId },
       []
     );
@@ -277,7 +283,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    *
    * Any `characterDocumentMountPointId` in `data` is dropped: a freshly-created
    * character always gets a freshly-provisioned vault, since pointing a new
-   * row at an existing vault would cross-link unrelated content.
+   * row at an existing vault would cross-link unrelated content. (A restore
+   * re-binding a row to the vault its archive carries uses
+   * {@link createBoundToVault} instead.)
    *
    * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)
@@ -293,23 +301,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         // vault. Importers that carry a source mountPointId in the payload
         // shouldn't reuse it; the import-reconciliation pass remaps that
         // pointer to a vault the importer separately created if applicable.
-        const { characterDocumentMountPointId: _droppedMountId, ...rest } = data as Record<string, unknown> & {
-          characterDocumentMountPointId?: string | null;
-        };
-
-        const characterData = {
-          ...rest,
-          tags: (rest as Partial<Character>).tags ?? [],
-          aliases: (rest as Partial<Character>).aliases ?? [],
-          pronouns: (rest as Partial<Character>).pronouns ?? null,
-          isFavorite: (rest as Partial<Character>).isFavorite ?? false,
-          partnerLinks: (rest as Partial<Character>).partnerLinks ?? [],
-          avatarOverrides: (rest as Partial<Character>).avatarOverrides ?? [],
-          physicalDescription: (rest as Partial<Character>).physicalDescription ?? null,
-          systemPrompts: (rest as Partial<Character>).systemPrompts ?? [],
-          scenarios: (rest as Partial<Character>).scenarios ?? [],
-          characterDocumentMountPointId: null,
-        } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
+        const characterData = this.withCreateDefaults(data, null);
 
         const created = await this._create(characterData, options);
 
@@ -318,6 +310,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         // writes every managed file via writeCharacterVaultManagedFields, and
         // updates the DB row with the new characterDocumentMountPointId.
         await ensureCharacterVault(created);
+        // An old vault left by a namesake may hold "<Name> Character Vault",
+        // in which case the new one was provisioned as "… (2)". Retire the old
+        // one and hand the new vault its plain name.
+        await reconcileVaultNames('character-created', created.id);
 
         logger.info('Character created', {
           characterId: created.id,
@@ -336,6 +332,64 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       'Error creating character',
       { userId: data.userId, name: data.name }
     );
+  }
+
+  /**
+   * Restore a character row bound to the vault a backup carries for it.
+   *
+   * The one sanctioned exception to {@link create}'s fresh-vault rule, and
+   * only for the restore: the archive's own vault for this character is being
+   * restored alongside the row, so minting a fresh one would leave the row
+   * pointing at an empty vault and the archived one orphaned (bug 185). The
+   * restore's claim map guarantees no two rows are given the same vault.
+   *
+   * Writes the slim row with `characterDocumentMountPointId` set and does
+   * nothing else — no provisioning, no projection of managed fields (the
+   * archived vault already holds them). The vault's rows usually arrive later
+   * in the restore than the character's, so the row is returned raw, never
+   * through the overlay, which would throw until they do.
+   */
+  async createBoundToVault(
+    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
+    mountPointId: string,
+    options?: CreateOptions
+  ): Promise<Character> {
+    return this.safeQuery(
+      async () => {
+        const created = await this._create(this.withCreateDefaults(data, mountPointId), options);
+        logger.info('Character restored bound to its archived vault', {
+          characterId: created.id,
+          userId: data.userId,
+          mountPointId,
+        });
+        return created;
+      },
+      'Error restoring character bound to its vault',
+      { userId: data.userId, name: data.name, mountPointId }
+    );
+  }
+
+  /** The create-time defaults, with the vault pointer set as given. */
+  private withCreateDefaults(
+    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
+    characterDocumentMountPointId: string | null
+  ): Omit<Character, 'id' | 'createdAt' | 'updatedAt'> {
+    const { characterDocumentMountPointId: _incomingMountId, ...rest } = data as Record<string, unknown> & {
+      characterDocumentMountPointId?: string | null;
+    };
+    return {
+      ...rest,
+      tags: (rest as Partial<Character>).tags ?? [],
+      aliases: (rest as Partial<Character>).aliases ?? [],
+      pronouns: (rest as Partial<Character>).pronouns ?? null,
+      isFavorite: (rest as Partial<Character>).isFavorite ?? false,
+      partnerLinks: (rest as Partial<Character>).partnerLinks ?? [],
+      avatarOverrides: (rest as Partial<Character>).avatarOverrides ?? [],
+      physicalDescription: (rest as Partial<Character>).physicalDescription ?? null,
+      systemPrompts: (rest as Partial<Character>).systemPrompts ?? [],
+      scenarios: (rest as Partial<Character>).scenarios ?? [],
+      characterDocumentMountPointId,
+    } as Omit<Character, 'id' | 'createdAt' | 'updatedAt'>;
   }
 
   /**
@@ -366,6 +420,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         const dbPatch = await applyDocumentStoreWriteOverlay(id, data);
         const hasDbWork = Object.keys(dbPatch).length > 0;
         const result = hasDbWork ? await this._update(id, dbPatch) : await this._findById(id);
+        // The vault is named after the character, so a rename renames it.
+        if (result && existing && data.name !== undefined && data.name !== existing.name) {
+          await reconcileVaultNames('character-renamed', id);
+        }
         return applyDocumentStoreOverlayOne(result);
       },
       'Error updating character',
@@ -453,6 +511,8 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
 
         if (result) {
           logger.info('Character deleted', { characterId: id });
+          // The vault outlives its character; retire its name.
+          await reconcileVaultNames('character-deleted', id);
         }
 
         return result;
@@ -660,47 +720,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
-  private async getFromSubArray<S extends { id: string }>(
-    characterId: string,
-    itemId: string,
-    getItems: (c: Character) => S[],
-    errorMsg: string
-  ): Promise<S | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return null;
-        }
-        return getItems(character).find((i) => i.id === itemId) ?? null;
-      },
-      errorMsg,
-      { characterId, itemId },
-      null
-    );
-  }
-
-  private async getAllFromSubArray<S>(
-    characterId: string,
-    getItems: (c: Character) => S[],
-    errorMsg: string
-  ): Promise<S[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return [];
-        }
-        return getItems(character);
-      },
-      errorMsg,
-      { characterId },
-      []
-    );
-  }
-
   // ============================================================================
   // PHYSICAL DESCRIPTION OPERATIONS
   // ============================================================================
@@ -708,6 +727,33 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   // ============================================================================
   // SYSTEM PROMPT OPERATIONS
   // ============================================================================
+
+  /**
+   * The patch every system-prompt write applies.
+   *
+   * The default prompt is recorded twice — as the `isDefault` flag inside the
+   * prompt and as the character's `defaultSystemPromptId` column — and every
+   * consumer (chat creation, the announcement dialog, the voice preview) reads
+   * the column *first*, falling back to the flag only when the column is null.
+   * A write that moved the flag alone therefore looked right in the editor and
+   * changed nothing about which prompt a new chat actually used. Both faces of
+   * the fact move together here, so no caller has to remember the second one.
+   */
+  private systemPromptsPatch(
+    items: CharacterSystemPrompt[],
+    transientId?: string
+  ): Partial<Character> {
+    const defaultId = items.find((p) => p.isDefault)?.id ?? null;
+    return {
+      systemPrompts: items,
+      // A prompt being added for the first time carries an id minted here, and
+      // the vault re-keys it from its file path on the very next read — so
+      // recording that id would leave the column naming nothing. Null instead,
+      // which sends every reader to the `isDefault` flag, which is correct; the
+      // next write to this character's prompts heals the column.
+      defaultSystemPromptId: defaultId === transientId ? null : defaultId,
+    };
+  }
 
   /**
    * Add a system prompt to a character
@@ -719,11 +765,15 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<CharacterSystemPrompt | null> {
+    let transientId: string | undefined;
     return this.addToSubArray<CharacterSystemPrompt>(
       characterId,
       (c) => c.systemPrompts ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ systemPrompts: items }),
+      (id, now) => {
+        transientId = id;
+        return { ...data, id, createdAt: now, updatedAt: now };
+      },
+      (items) => this.systemPromptsPatch(items, transientId),
       'Error adding system prompt',
       { promptName: data.name },
       (existingItems, newItem) => {
@@ -748,7 +798,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       promptId,
       (c) => c.systemPrompts ?? [],
       (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ systemPrompts: items }),
+      (items) => this.systemPromptsPatch(items),
       'Error updating system prompt',
       { promptId },
       (items, _index, updated) => {
@@ -768,7 +818,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       characterId,
       promptId,
       (c) => c.systemPrompts ?? [],
-      (items) => ({ systemPrompts: items }),
+      (items) => this.systemPromptsPatch(items),
       'Error deleting system prompt',
       (remaining) => {
         if (remaining.length > 0 && !remaining.some((p) => p.isDefault)) {
@@ -779,9 +829,15 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Set a system prompt as default
+   * Set a system prompt as default, or clear the default entirely with `null`.
+   *
+   * The one chokepoint for "which prompt does this character start with": it
+   * moves the `isDefault` flags and the `defaultSystemPromptId` column together
+   * (see {@link systemPromptsPatch}). Anything that changes the default — the
+   * star in the prompts editor, the picker on the character's Profiles tab —
+   * goes through here rather than writing one of the two by hand.
    */
-  async setDefaultSystemPrompt(characterId: string, promptId: string): Promise<Character | null> {
+  async setDefaultSystemPrompt(characterId: string, promptId: string | null): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
@@ -791,9 +847,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         }
 
         const prompts = character.systemPrompts ?? [];
-        const targetIndex = prompts.findIndex((p) => p.id === promptId);
+        const targetIndex = promptId === null ? -1 : prompts.findIndex((p) => p.id === promptId);
 
-        if (targetIndex === -1) {
+        if (promptId !== null && targetIndex === -1) {
           logger.warn('System prompt not found', { characterId, promptId });
           return null;
         }
@@ -804,33 +860,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           p.updatedAt = now;
         });
 
-        return this.update(characterId, { systemPrompts: prompts });
+        return this.update(characterId, this.systemPromptsPatch(prompts));
       },
       'Error setting default system prompt',
       { characterId, promptId }
-    );
-  }
-
-  /**
-   * Get a single system prompt by ID
-   */
-  async getSystemPrompt(characterId: string, promptId: string): Promise<CharacterSystemPrompt | null> {
-    return this.getFromSubArray<CharacterSystemPrompt>(
-      characterId,
-      promptId,
-      (c) => c.systemPrompts ?? [],
-      'Error getting system prompt'
-    );
-  }
-
-  /**
-   * Get all system prompts for a character
-   */
-  async getSystemPrompts(characterId: string): Promise<CharacterSystemPrompt[]> {
-    return this.getAllFromSubArray<CharacterSystemPrompt>(
-      characterId,
-      (c) => c.systemPrompts ?? [],
-      'Error getting system prompts'
     );
   }
 
@@ -848,7 +881,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: { title: string; content: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
-    return this.addToSubArray<CharacterScenario>(
+    // A vault-backed character re-keys each scenario from its file path when
+    // the vault is read back, so the id minted below is transient. Callers
+    // (the create route, and through it the Scenario Builder's picker
+    // selection) need the id a later read will return — bug 165. Note the
+    // projected ids already present, add, then re-read and return the new one.
+    const before = await this.findById(characterId);
+    const priorIds = new Set((before?.scenarios ?? []).map((s) => s.id));
+    const added = await this.addToSubArray<CharacterScenario>(
       characterId,
       (c) => c.scenarios ?? [],
       (id, now) => ({
@@ -864,6 +904,19 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       'Error adding scenario',
       { title: data.title }
     );
+    if (!added) return null;
+    const after = await this.findById(characterId);
+    const fresh = (after?.scenarios ?? []).filter((s) => !priorIds.has(s.id));
+    const projected =
+      fresh.find((s) => s.title === data.title) ?? (fresh.length === 1 ? fresh[0] : undefined);
+    if (projected && projected.id !== added.id) {
+      logger.debug('addScenario: returning the vault-projected scenario id', {
+        characterId,
+        transientId: added.id,
+        projectedId: projected.id,
+      });
+    }
+    return projected ?? added;
   }
 
   /**
@@ -914,19 +967,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       (c) => c.scenarios ?? [],
       (items) => ({ scenarios: items }),
       'Error removing scenario'
-    );
-  }
-
-  /**
-   * Get all scenarios for a character
-   * @param characterId The character ID
-   * @returns Promise<CharacterScenario[]> Array of all scenarios for the character
-   */
-  async getScenarios(characterId: string): Promise<CharacterScenario[]> {
-    return this.getAllFromSubArray<CharacterScenario>(
-      characterId,
-      (c) => c.scenarios ?? [],
-      'Error getting scenarios'
     );
   }
 }

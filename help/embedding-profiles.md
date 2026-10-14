@@ -159,7 +159,7 @@ Changing **Truncate output to** affects only *new* embeddings — your existing 
 Quilltap will queue a background job that:
 
 - Takes a `VACUUM INTO` backup of every affected database — `quilltap.bak-pre-truncation-<date>.db` next to the main database, and the same suffix on the mount-index database if document stores are involved. These are your rollback if anything goes sideways.
-- Walks every embedding-bearing table (`memories`, `vector_entries`, `conversation_chunks`, `help_docs`, and `doc_mount_chunks`).
+- Walks every embedding-bearing table (`memories`, `conversation_chunks`, `help_docs`, `help_doc_chunks`, and `doc_mount_chunks`).
 - For each stored vector longer than the target, slices the first N components, renormalises, and writes the result back inside a single transaction per table.
 - VACUUMs the source databases to reclaim freed space.
 
@@ -173,16 +173,28 @@ When you swap embedding models, the corpus often ends up with a few stragglers t
 
 For exactly this case the profile list offers a **Re-embed Mismatched** button on default non-built-in profiles. It enqueues an `EMBEDDING_GENERATE` job for every memory, conversation chunk, and help doc whose stored vector dimension differs from the active profile's target (its `truncateToDimensions` if set, otherwise its `dimensions`). Rows that already match are left alone — no provider call, no charge.
 
-Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not delete vector stores, cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
+Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
 
 ## One Standard, Kept Automatically
 
 There is precisely one embedding standard per Quilltap instance: whatever the default profile produces. Quilltap now keeps the entire corpus conformant to it without your intervention:
 
 - **Switching the default triggers a full re-embed.** Making a *different* profile the default — or changing the default profile's provider, model, or dimensions — automatically queues **Re-embed Everything**. Every memory, conversation excerpt, document chunk, and help page is re-embedded with the new standard. (Narrowing only the Matryoshka truncation queues the cheaper local re-apply instead; widening it queues the full re-embed, since vectors cannot grow.)
-- **Every startup audits the ledger.** A conformance pass runs on each boot and inspects every embedding in every database against the default profile's dimension. Vectors from a previous standard are swept out of the search indices (they were invisible to search anyway) and a targeted re-embed is queued for exactly the non-conforming rows — conforming rows are never re-embedded, so a healthy instance pays nothing. Dormant chats are left to their slumber; their excerpts are re-embedded when you next open them.
+- **Every startup audits the ledger.** A conformance pass runs on each boot and inspects every embedding in every database against the default profile's dimension. Vectors from a previous standard are swept out of the search indices (they were invisible to search anyway) and a targeted re-embed is queued for exactly the non-conforming rows — conforming rows are never re-embedded, so a healthy instance pays nothing. Dormant chats are treated the same as busy ones; their excerpts are re-embedded on the same footing, not left waiting for you to reopen them.
+- **Nothing is forgotten mid-re-embed.** While a re-embed is working through the corpus, old and new vectors sit side by side and cannot be compared with one another. A fresh memory is still checked against the old ones all the same: the Commonplace Book picks the likeliest old entries by their words and weighs those few afresh, so a character does not sprout duplicates merely because the ledger was being re-inked at the time.
+- **The help pages mind themselves.** On every startup Quilltap reads each of its own help pages and compares it with the copy it last indexed. A page that is new or has been rewritten since (as happens with nearly every upgrade) is re-indexed, and any page missing its embedding, or an embedding for one of its sections, is queued for one. Only help pages are touched, never your memories or document stores, so an upgrade never needs **Re-embed Everything** on the help's account. Each page is embedded section by section, so no page is too long for a given embedding model to read.
 
 Mind the meter: if a large corpus predates this housekeeping, the first restart after switching to a paid provider will queue a re-embedding of every stale row. The **Emb** badge in the header shows the queue draining.
+
+## The Built-in Profile, Tailored to Its Temperament
+
+The Built-in (TF-IDF) profile is a counting-house clerk rather than a poet: it tallies which words two passages share and thinks no further. It needs no key and no wire, but it reckons likeness on a far stingier scale than the cloud models — a fact told twice in different words scores about half what a neural model would give it. The Commonplace Book therefore keeps a separate set of measures for it:
+
+- **It ignores the margin notes.** Each memory carries a small anchor line recording when and where it happened. A neural model reads that as helpful context; the clerk, counting words, found the dates and place names drowning out the memory itself, so that one fact told on two different days looked like two strangers. Under the Built-in profile the anchor line is left out of the tally. When it happened is still minded — two accounts more than a week apart are still kept as separate occasions — it simply no longer muddles the arithmetic.
+- **Its own thresholds for duplicates.** When a fresh memory arrives, the Book decides whether it repeats, reinforces or merely relates to one already on file. Under the Built-in profile those decisions use cut-offs fitted to the clerk's sparser figures, so a restatement reinforces the original instead of filing a near-twin beside it. Cloud profiles keep their own measures unchanged.
+- **Its own consolidation threshold.** See **Cluster threshold (Built-in)** in [Memory Consolidation](/settings?tab=memory&section=memory-maintenance).
+- **Its vocabulary is refreshed only when it has grown stale.** The clerk's ledger of words is built from all your memories and the help pages. It used to be rebuilt — and every memory re-copied — whenever a single memory was written or edited by hand. Now a new memory is filed against the ledger already open, and the ledger is rebuilt only when a good many memories (twenty-five, or a tenth of the collection, whichever is larger) have arrived since it was last drawn up, when an import brings in a crate of them, or on the first start after this improvement arrived, so that every memory is re-copied once without its anchor line. The **Emb** badge shows that one-time re-copy draining.
+- **The help pages are indexed promptly.** On a Built-in instance the help pages were once skipped at startup because the indexing clerk arrived for work before his ledger had been unlocked; he now waits for it.
 
 ## Deleting an Embedding Profile
 
@@ -462,9 +474,9 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for cloud embedding providers (OpenAI)
-- [Chat Settings](chat-settings.md) — Memory cascade settings that use embeddings
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Memory cascade settings that use embeddings
 - [Connection Profiles](connection-profiles.md) — LLM used in conjunction with embeddings for memory operations
-- [Chat Settings](chat-settings.md) — Context management depends on embeddings
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Context management depends on embeddings
 
 ## Glossary
 

@@ -17,6 +17,7 @@ import {
 import { AbstractBaseRepository } from './base.repository';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
+import { logger } from '@/lib/logger';
 
 /**
  * Conversation Chunks Repository
@@ -24,8 +25,6 @@ import { rawQuery, registerBlobColumns } from '../manager';
  * chat-scoping and embedding storage.
  */
 export class ConversationChunksRepository extends AbstractBaseRepository<ConversationChunk> {
-  private blobColumnsRegistered = false;
-
   constructor() {
     super('conversation_chunks', ConversationChunkSchema);
   }
@@ -35,12 +34,17 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
    * The embedding column stores Float32 BLOBs.
    * Without this registration, BLOB embeddings are not deserialized to number[] and fail
    * Zod validation, causing chunks to be silently filtered out.
+   *
+   * Registration is keyed to the backend, so it is re-asserted on every call
+   * rather than remembered on this instance: a repository outlives the backend
+   * it first ran against (reconnect, or a dev-server reload), and a stale
+   * "already registered" flag would leave the fresh backend without blob
+   * handling — the write path would then persist an index-keyed object in place
+   * of the BLOB and corrupt the embedding. Merging an already-registered column
+   * is a no-op, so re-asserting is cheap. (Same rationale as `HelpDocsRepository`.)
    */
   protected async getCollection(): Promise<DatabaseCollection<ConversationChunk>> {
-    if (!this.blobColumnsRegistered) {
-      await registerBlobColumns('conversation_chunks', ['embedding']);
-      this.blobColumnsRegistered = true;
-    }
+    await registerBlobColumns('conversation_chunks', ['embedding']);
     return super.getCollection();
   }
 
@@ -195,7 +199,21 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           return updated;
         }
 
-        return this._create(input as Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>);
+        // Honour a caller-supplied id on insert. The job child's repository
+        // proxy hands an upsert's caller a synthetic row carrying an id it
+        // assigned (`syntheticWriteResult`) and ships that same input here;
+        // without this the parent minted a different id, so the id the render
+        // handler queued an embedding for named no row (bug 248).
+        const { id: suppliedId, ...data } = input as ConversationChunkInput & { id?: unknown };
+        logger.debug('Creating conversation chunk', {
+          chatId: input.chatId,
+          interchangeIndex: input.interchangeIndex,
+          suppliedId: typeof suppliedId === 'string',
+        });
+        return this._create(
+          data as Omit<ConversationChunk, 'id' | 'createdAt' | 'updatedAt'>,
+          typeof suppliedId === 'string' ? { id: suppliedId } : undefined
+        );
       },
       'Error upserting conversation chunk',
       { chatId: input.chatId, interchangeIndex: input.interchangeIndex }
@@ -232,46 +250,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
       },
       'Error deleting all chunks for chat',
       { chatId }
-    );
-  }
-
-  /**
-   * Cold-tier a chat's chunks: NULL every non-null embedding while keeping
-   * `content`/`messageIds`/`interchangeIndex` intact, so the chat stays
-   * keyword-searchable and can be re-embedded (embed-only, no re-chunk) when
-   * reopened. Idempotent — the `embedding IS NOT NULL` guard makes a second
-   * pass a no-op. Returns the number of rows cleared.
-   *
-   * `olderThan` (ISO-8601) restricts clearing to embeddings last written
-   * before that moment. The maintenance sweep passes its staleness cutoff
-   * here so an embedding minted by the reopen path (`cold-chunk-reembed`)
-   * survives for a full retention window from the reopen: a chat the user
-   * reads — without playing a message — stays semantically searchable
-   * instead of being re-embedded (paid) on every open and cleared again by
-   * every sweep. The embedding row's own `updatedAt` is the reopen signal;
-   * nothing else writes chunk rows on a stale chat, because renders only
-   * fire on played messages and the boot reconcile skips stale chats.
-   *
-   * Raw SQL rather than `_update` so a maintenance pass over a large stale
-   * chat is one statement, and so `updatedAt` stamping stays explicit.
-   */
-  async clearEmbeddingsForChat(chatId: string, olderThan?: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const ageGuard = olderThan !== undefined ? ' AND updatedAt < ?' : '';
-        const params: string[] = [new Date().toISOString(), chatId];
-        if (olderThan !== undefined) params.push(olderThan);
-        const result = await rawQuery<{ changes: number }>(
-          `UPDATE conversation_chunks SET embedding = NULL, updatedAt = ?
-            WHERE chatId = ? AND embedding IS NOT NULL${ageGuard}`,
-          params
-        );
-        const cleared = Number(result?.changes ?? 0);
-        return cleared;
-      },
-      'Error clearing chunk embeddings for chat',
-      { chatId, olderThan },
-      0
     );
   }
 

@@ -25,7 +25,6 @@ import {
 import {
   calculateContextBudget,
   buildSystemPrompt,
-  formatMemoriesForContext,
   formatSummaryForContext,
   selectRecentMessages,
   willExceedContextLimit,
@@ -34,25 +33,95 @@ import {
   attributeMessagesForCharacter,
   buildOtherParticipantsInfo,
   buildIdentityReinforcement,
-  formatInterCharacterMemoriesForContext,
   buildContext,
   type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
+import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
+import { resetFrozenArchiveCacheForTests } from '@/lib/memory/recall/archive'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchRecall } from '@/lib/memory/recall/search'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
+import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { buildSuparnaMailLLMContext, postSuparnaMailWhisper } from '@/lib/services/suparna-notifications/writer'
+import * as coreWhisper from '@/lib/services/aurora-notifications/core-whisper'
+import * as coreWhisperTrigger from '@/lib/chat/context/core-whisper-trigger'
+import * as progressionsSection from '@/lib/progressions/prompt-section'
+import * as narrationAnchor from '@/lib/chat/context/user-narration-anchor'
 
-jest.mock('@/lib/memory/memory-service', () => ({
-  searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
+// Pass-through by default; the bug-199 tests stand in a fixed recall text.
+jest.mock('@/lib/services/commonplace-notifications/writer', () => {
+  const actual = jest.requireActual('@/lib/services/commonplace-notifications/writer')
+  return { ...actual, buildCommonplaceLLMContext: jest.fn(actual.buildCommonplaceLLMContext) }
+})
+
+// Recall's search stage stands still (each test says what it finds); the query
+// stage embeds nothing, so the search would take the text strategy.
+jest.mock('@/lib/memory/recall/search', () => ({
+  searchRecall: jest.fn(),
+}))
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  ...jest.requireActual('@/lib/embedding/embedding-service'),
+  generateEmbeddingForUser: jest.fn().mockRejectedValue(new Error('no embedding profile in these tests')),
 }))
 
-const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>
+jest.mock('@/lib/post-office/mailbox', () => ({
+  ...jest.requireActual('@/lib/post-office/mailbox'),
+  collectUnalertedMail: jest.fn().mockResolvedValue([]),
+  markAlerted: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/lib/services/suparna-notifications/writer', () => ({
+  ...jest.requireActual('@/lib/services/suparna-notifications/writer'),
+  postSuparnaMailWhisper: jest.fn().mockResolvedValue(null),
+}))
+
+// Pass-through mocks: the real implementations run unless a test overrides
+// them, so the whole-tail ordering test can make every section fire at once.
+jest.mock('@/lib/services/aurora-notifications/core-whisper', () => {
+  const actual = jest.requireActual('@/lib/services/aurora-notifications/core-whisper')
+  return {
+    ...actual,
+    resolveCoreWhisperConfig: jest.fn(actual.resolveCoreWhisperConfig),
+    assembleCorePacket: jest.fn(actual.assembleCorePacket),
+    buildCoreWhisperLLMContext: jest.fn(actual.buildCoreWhisperLLMContext),
+    buildCoreWhisperContent: jest.fn(actual.buildCoreWhisperContent),
+    buildCoreWhisperOpaqueContent: jest.fn(actual.buildCoreWhisperOpaqueContent),
+    postCoreWhisper: jest.fn(actual.postCoreWhisper),
+  }
+})
+jest.mock('@/lib/chat/context/core-whisper-trigger', () => {
+  const actual = jest.requireActual('@/lib/chat/context/core-whisper-trigger')
+  return { ...actual, shouldFireCoreWhisper: jest.fn(actual.shouldFireCoreWhisper) }
+})
+jest.mock('@/lib/progressions/prompt-section', () => {
+  const actual = jest.requireActual('@/lib/progressions/prompt-section')
+  return { ...actual, buildProgressionsSection: jest.fn(actual.buildProgressionsSection) }
+})
+jest.mock('@/lib/chat/context/user-narration-anchor', () => {
+  const actual = jest.requireActual('@/lib/chat/context/user-narration-anchor')
+  return { ...actual, buildUserNarrationAnchor: jest.fn(actual.buildUserNarrationAnchor) }
+})
+
+const mockedSearchRecall = searchRecall as jest.MockedFunction<typeof searchRecall>
+/** A search that found nothing. */
+const noRecall = { candidates: [], ranked: [], strategy: 'text' as const, trace: [] }
+const mockedCollectUnalertedMail = collectUnalertedMail as jest.MockedFunction<typeof collectUnalertedMail>
+const mockedMarkAlerted = markAlerted as jest.MockedFunction<typeof markAlerted>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 
+beforeEach(() => {
+  mockedSearchRecall.mockResolvedValue(noRecall)
+})
+
 afterEach(() => {
-  mockedSearchMemories.mockReset()
-  mockedSearchMemories.mockResolvedValue([])
+  mockedSearchRecall.mockReset()
+  mockedSearchRecall.mockResolvedValue(noRecall)
   mockedGetRepositories.mockReset()
+  mockedCollectUnalertedMail.mockReset()
+  mockedCollectUnalertedMail.mockResolvedValue([])
+  mockedMarkAlerted.mockReset()
+  mockedMarkAlerted.mockResolvedValue(undefined)
 })
 
 describe('Token Counter', () => {
@@ -464,66 +533,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatMemoriesForContext', () => {
-    // These fixtures are the character's own memories (no aboutCharacterId),
-    // so no subject prefix is expected on any line.
-    const selfSubject = { selfCharacterId: 'char1', characterNames: new Map<string, string>() }
-    const mockMemories = [
-      {
-        memory: {
-          id: '1',
-          characterId: 'char1',
-          content: 'User likes coffee',
-          summary: 'User prefers coffee over tea',
-          keywords: ['coffee', 'preferences'],
-          tags: [],
-          importance: 0.8,
-          source: 'AUTO' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        score: 0.9,
-        usedEmbedding: true,
-      },
-      {
-        memory: {
-          id: '2',
-          characterId: 'char1',
-          content: 'User works as developer',
-          summary: 'User is a software developer',
-          keywords: ['developer', 'work'],
-          tags: [],
-          importance: 0.7,
-          source: 'AUTO' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        score: 0.8,
-        usedEmbedding: true,
-      },
-    ]
-
-    it('should format memories with header', () => {
-      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI', selfSubject)
-      expect(content).toContain('## Relevant Memories')
-      // Whisper lines now carry the full memory.content (not summary), so we
-      // assert against the content body — "User likes coffee" — rather than
-      // the summary text.
-      expect(content).toContain('User likes coffee')
-    })
-
-    it('should return empty for no memories', () => {
-      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI', selfSubject)
-      expect(content).toBe('')
-      expect(memoriesUsed).toBe(0)
-    })
-
-    it('should respect token limit', () => {
-      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI', selfSubject)
-      expect(tokenCount).toBeLessThanOrEqual(50)
-    })
-  })
-
   describe('formatSummaryForContext', () => {
     it('should format summary with header', () => {
       const summary = 'This is a conversation summary.'
@@ -786,39 +795,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatInterCharacterMemoriesForContext', () => {
-    const createdAt = new Date().toISOString()
-    const memory: Memory = {
-      id: 'mem-1',
-      characterId: 'char-1',
-      aboutCharacterId: 'char-2',
-      chatId: null,
-      content: 'Detailed note',
-      summary: 'Lyra trusts Iris',
-      keywords: [],
-      tags: [],
-      importance: 0.9,
-      embedding: null,
-      source: 'MANUAL',
-      sourceMessageId: null,
-      lastAccessedAt: null,
-      createdAt,
-      updatedAt: createdAt,
-    }
-
-    it('groups memories by character name and respects token budget', () => {
-      const result = formatInterCharacterMemoriesForContext([memory], new Map([['char-2', 'Iris']]), 1000, 'OPENAI')
-      expect(result.content).toContain('Iris')
-      expect(result.memoriesUsed).toBe(1)
-    })
-
-    it('returns empty payload when no memories fit', () => {
-      const result = formatInterCharacterMemoriesForContext([], new Map(), 10, 'OPENAI')
-      expect(result.content).toBe('')
-      expect(result.memoriesUsed).toBe(0)
-    })
-  })
-
   describe('buildContext multi-character integration', () => {
     const timestamp = new Date().toISOString()
     const participantA: ChatParticipantBase = {
@@ -939,10 +915,17 @@ describe('Context Manager', () => {
       const repoMock = {
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([memory]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
+        },
+        // buildContext always asks for this seat's pending informs; an empty
+        // answer is what "no inform block this turn" looks like.
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       const messagesWithParticipants: MessageWithParticipant[] = [
         { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
@@ -1000,6 +983,174 @@ describe('Context Manager', () => {
       expect(userMsg.content).toContain('## Memories About Other Characters')
     })
 
+    it('does not repeat an archive digest in the inter-character section (bug 224)', async () => {
+      resetFrozenArchiveCacheForTests()
+      const digest: Memory = {
+        ...memory,
+        id: 'digest-b',
+        content: 'Lyra and Iris crossed the Shivering Bridge together',
+        summary: 'Lyra and Iris crossed the Shivering Bridge together',
+        importance: 0.9,
+        source: 'CONSOLIDATED' as Memory['source'],
+      }
+      const partitionOnly: Memory = {
+        ...memory,
+        id: 'mem-partition',
+        content: 'Iris hums when she is nervous',
+        summary: 'Iris hums when she is nervous',
+      }
+      const repoMock = {
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([digest, partitionOnly]),
+          findHotDigests: jest.fn().mockImplementation(async (_holder: string, about: string) =>
+            about === 'char-b' ? [digest] : [],
+          ),
+          findMostImportant: jest.fn().mockResolvedValue([]),
+        },
+        characters: {
+          findNamesByIds: jest.fn().mockResolvedValue(new Map([['char-b', 'Iris'], ['char-a', 'Lyra']])),
+        },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      }
+      mockedGetRepositories.mockReturnValue(repoMock as any)
+      mockedSearchRecall.mockResolvedValue(noRecall)
+
+      const result = await buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-224',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: null,
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        embeddingProfileId: null,
+        skipMemories: false,
+        maxMemories: 1,
+        minMemoryImportance: 0.3,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      })
+
+      const everything = result.messages
+        .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n')
+      // The digest is in the archive, so it appears exactly once.
+      expect(everything.split('Shivering Bridge').length - 1).toBe(1)
+      // The inter-character section still carries what the archive does not.
+      expect(everything).toContain('You also recall about the others present')
+      expect(everything).toContain('Iris hums when she is nervous')
+    })
+
+    // Anti-committee §9: the chained-turn scene note. A chained turn carries no
+    // new user message, so the human's narration sits mid-history; the note
+    // rides first in the trailing user message and is absent otherwise.
+    describe('user narration anchor (chained turns)', () => {
+      const chainedRepos = () => ({
+        memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      })
+      const chat = {
+        id: 'chat-1',
+        userId: 'user',
+        participants: allParticipants,
+        title: 'Test Chat',
+        contextSummary: null,
+        sillyTavernMetadata: null,
+        tags: [],
+        messageCount: 2,
+        lastMessageAt: timestamp,
+        lastRenameCheckInterchange: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      const history: MessageWithParticipant[] = [
+        { role: 'USER', content: '((The engine stalls.))', id: 'u1', participantId: 'participant-user', createdAt: timestamp },
+        { role: 'ASSISTANT', content: 'The engine is running fine.', id: 'a1', participantId: 'participant-b', createdAt: timestamp },
+      ]
+      const run = (overrides: Record<string, unknown>) =>
+        buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat,
+          existingMessages: history.map(m => ({ role: m.role, content: m.content, id: m.id })),
+          embeddingProfileId: null,
+          skipMemories: true,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: history,
+          ...overrides,
+        } as any)
+
+      it('pushes the scene note as the trailing message on a chained turn', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const result = await run({ humanTurnMessageIds: new Set(['u1']) })
+        const tail = result.messages[result.messages.length - 1]
+        expect(tail.role).toBe('user')
+        expect(tail.content.startsWith("Scene note: Alex's most recent message is the current state of the scene.")).toBe(true)
+      })
+
+      it('leads the trailing message, ahead of the turn-skip note', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const result = await run({
+          humanTurnMessageIds: new Set(['u1']),
+          turnSkip: { offerSkip: true, recentlyAddressed: false, characterName: 'Lyra' },
+        })
+        const tail = result.messages[result.messages.length - 1].content
+        expect(tail.startsWith('Scene note:')).toBe(true)
+        expect(tail).toContain('\n\n---\n\n')
+        expect(tail.indexOf('Scene note:')).toBeLessThan(tail.indexOf('[NOTHING TO ADD]'))
+      })
+
+      it('is byte-identical to no anchor when the human has not spoken', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const withIds = await run({ humanTurnMessageIds: new Set(['not-in-window']) })
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const without = await run({})
+        expect(withIds.messages).toEqual(without.messages)
+        expect(without.messages.some(m => typeof m.content === 'string' && m.content.includes('Scene note:'))).toBe(false)
+      })
+
+      it('never fires on the first responder, who has the new user message', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const withIds = await run({ humanTurnMessageIds: new Set(['u1']), newUserMessage: 'Onward.' })
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const without = await run({ newUserMessage: 'Onward.' })
+        expect(withIds.messages).toEqual(without.messages)
+      })
+    })
+
     it('ignores summary/system messages when scanning off-scene mentions', async () => {
       const offSceneCharacter: Character = {
         ...characterA,
@@ -1007,6 +1158,10 @@ describe('Context Manager', () => {
         name: 'Morgan',
       }
       const repoMock = {
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
         characters: {
           findByUserId: jest.fn().mockResolvedValue([characterA, characterB, characterUser, offSceneCharacter]),
         },
@@ -1030,10 +1185,11 @@ describe('Context Manager', () => {
         },
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
-      mockedSearchMemories.mockResolvedValue([])
+      mockedSearchRecall.mockResolvedValue(noRecall)
 
       const result = await buildContext({
         provider: 'OPENAI',
@@ -1076,6 +1232,590 @@ describe('Context Manager', () => {
       expect(repoMock.chats.getMessages).toHaveBeenCalledTimes(1)
       expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       expect(result.messages.some(m => m.role === 'assistant' && m.content.includes('Off-Scene Character Mentioned'))).toBe(false)
+    })
+
+    // Bug 172: the unseated persona (the system-wide sole user-controlled
+    // character, which `{{user}}` resolves to) is the voice of USER messages in
+    // a Salon chat, so it is never "off scene" there. In an autonomous room
+    // nobody types as them, and the cast addressing them must get the Host's
+    // not-present introduction like anyone else.
+    describe('unseated persona (bug 172)', () => {
+      const persona: Character = { ...characterUser, id: 'char-charlie', name: 'Charlie' }
+      const seatedWithoutPersona = [participantA, participantB]
+
+      const buildReposFor = () => ({
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+        characters: {
+          findByUserId: jest.fn().mockResolvedValue([characterA, characterB, persona]),
+          findById: jest.fn().mockResolvedValue(null),
+        },
+        chats: {
+          findById: jest.fn().mockResolvedValue({ id: 'chat-1', participants: seatedWithoutPersona }),
+          getMessages: jest.fn().mockResolvedValue([
+            {
+              type: 'message',
+              role: 'ASSISTANT',
+              participantId: 'participant-b',
+              content: 'Charlie, you have not answered anything for an hour.',
+              createdAt: timestamp,
+            },
+          ]),
+          addMessage: jest.fn(),
+        },
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
+        },
+      })
+
+      const runFor = (chatType: 'salon' | 'autonomous') =>
+        buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Charlie', description: 'The proprietor' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            chatType,
+            participants: seatedWithoutPersona,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 1,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'ASSISTANT', content: 'Charlie, you have not answered anything for an hour.', id: 'm1' },
+          ],
+          embeddingProfileId: null,
+          skipMemories: true,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants: seatedWithoutPersona,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'ASSISTANT', content: 'Charlie, you have not answered anything for an hour.', participantId: 'participant-b', createdAt: timestamp },
+          ],
+        })
+
+      it('introduces the persona as off scene in an autonomous room', async () => {
+        const repoMock = buildReposFor()
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+
+        await runFor('autonomous')
+
+        expect(repoMock.chats.addMessage).toHaveBeenCalledTimes(1)
+        const [, posted] = repoMock.chats.addMessage.mock.calls[0]
+        expect(posted.systemKind).toBe('off-scene-characters')
+        expect(posted.hostEvent).toEqual({ introducedCharacterIds: ['char-charlie'] })
+        expect(posted.content).toContain('### Charlie')
+      })
+
+      it('still treats the persona as present in a Salon chat', async () => {
+        const repoMock = buildReposFor()
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+
+        await runFor('salon')
+
+        expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
+      })
+    })
+
+    // ------------------------------------------------------------------
+    // The inform block — the one sanctioned turn-variable system block.
+    // ------------------------------------------------------------------
+
+    const buildWithInforms = async (pendingRows: unknown[], newUserMessage: string | null = 'Ready for the next task?', character: Character = characterA) => {
+      mockedGetRepositories.mockReturnValue({
+        memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue(pendingRows),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      } as any)
+      mockedSearchRecall.mockResolvedValue(noRecall)
+
+      return buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-1',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: null,
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        } as any,
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: newUserMessage ?? undefined,
+        skipMemories: true,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      } as any)
+    }
+
+    const informRow = (id: string, contentMarkdown: string) => ({
+      id,
+      chatId: 'chat-1',
+      batchId: `batch-${id}`,
+      participantId: 'participant-a',
+      contentMarkdown,
+      recordMessageId: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      consumedAt: null,
+      consumedByMessageId: null,
+    })
+
+    it('adds nothing at all when the seat is owed no inform', async () => {
+      const result = await buildWithInforms([])
+
+      // Empty-is-absent: with nothing pending the builder must add NOTHING —
+      // no empty section, no stray rule. This is what keeps an ordinary turn
+      // byte-identical to one assembled before Inform existed.
+      expect(result.informRowIds).toEqual([])
+      const systemBlocks = result.messages.filter(m => m.role === 'system')
+      expect(systemBlocks).toHaveLength(2)
+      expect(systemBlocks[1].content).toContain('## Identity Reminder')
+      expect(result.messages[result.messages.length - 1].content).toBe('Ready for the next task?')
+    })
+
+    it('rides the new user message as a trailing section, under its header', async () => {
+      const withoutInform = await buildWithInforms([])
+      const withInform = await buildWithInforms([
+        informRow('row-1', 'You notice the clock has stopped.'),
+      ])
+
+      // The system prefix — the cacheable region — is untouched.
+      expect(withInform.messages.filter(m => m.role === 'system')).toEqual(
+        withoutInform.messages.filter(m => m.role === 'system'),
+      )
+
+      // Only the last message changed, and only by the appended section: the
+      // operator's words verbatim under the one vouching header, last in line.
+      expect(withInform.messages.slice(0, -1)).toEqual(withoutInform.messages.slice(0, -1))
+      const last = withInform.messages[withInform.messages.length - 1]
+      expect(last.role).toBe('user')
+      expect(last.content).toBe(
+        `Ready for the next task?\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nYou notice the clock has stopped.`,
+      )
+
+      expect(withInform.informRowIds).toEqual(['row-1'])
+    })
+
+    it('rides its own trailing user message on a turn with no new user message', async () => {
+      // Chained, nudged and autonomous turns run without a new user message;
+      // the inform must still reach them, last in line.
+      const result = await buildWithInforms([informRow('row-1', 'The lamp gutters.')], null)
+
+      const last = result.messages[result.messages.length - 1]
+      expect(last.role).toBe('user')
+      expect(last.content).toBe(`${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`)
+      expect(result.informRowIds).toEqual(['row-1'])
+    })
+
+    // ------------------------------------------------------------------
+    // The trailing sections keep one order on both kinds of turn.
+    // ------------------------------------------------------------------
+
+    describe('trailing sections on a turn with and without a new user message', () => {
+      const CORE = 'CORE-WHISPER-SECTION'
+      const PROGRESSIONS = 'PROGRESSIONS-SECTION'
+      const ANCHOR = 'SCENE-NOTE-SECTION'
+      const letter = {
+        path: 'Mail/2026-10-12-from-iris.md',
+        from: 'Iris',
+        sentAt: timestamp,
+        body: 'Meet me at the lighthouse.',
+        alerted: false,
+        inReplyTo: null,
+      }
+
+      const enable = (sections: { core?: boolean; everything?: boolean }) => {
+        ;(coreWhisper.resolveCoreWhisperConfig as jest.Mock).mockReturnValue({
+          enabled: true, interval: 12, silenceThreshold: 3, packetTokenBudget: 4096, fireOnContextTransition: true,
+        })
+        ;(coreWhisperTrigger.shouldFireCoreWhisper as jest.Mock).mockReturnValue({ fire: true, reason: 'periodic' })
+        ;(coreWhisper.assembleCorePacket as jest.Mock).mockResolvedValue({ entries: [] })
+        ;(coreWhisper.buildCoreWhisperContent as jest.Mock).mockReturnValue('persona')
+        ;(coreWhisper.buildCoreWhisperOpaqueContent as jest.Mock).mockReturnValue('opaque')
+        ;(coreWhisper.buildCoreWhisperLLMContext as jest.Mock).mockReturnValue(CORE)
+        ;(coreWhisper.postCoreWhisper as jest.Mock).mockResolvedValue(null)
+        if (sections.everything) {
+          ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+          ;(narrationAnchor.buildUserNarrationAnchor as jest.Mock).mockReturnValue(ANCHOR)
+          mockedCollectUnalertedMail.mockResolvedValue([letter])
+        }
+      }
+
+      afterEach(() => {
+        const restore = (mod: string, mocked: Record<string, unknown>, names: string[]) => {
+          const actual = jest.requireActual(mod)
+          for (const name of names) (mocked[name] as jest.Mock).mockReset().mockImplementation(actual[name])
+        }
+        restore('@/lib/services/aurora-notifications/core-whisper', coreWhisper as any, [
+          'resolveCoreWhisperConfig', 'assembleCorePacket', 'buildCoreWhisperLLMContext',
+          'buildCoreWhisperContent', 'buildCoreWhisperOpaqueContent', 'postCoreWhisper',
+        ])
+        restore('@/lib/chat/context/core-whisper-trigger', coreWhisperTrigger as any, ['shouldFireCoreWhisper'])
+        restore('@/lib/progressions/prompt-section', progressionsSection as any, ['buildProgressionsSection'])
+        restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
+      })
+
+      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean }) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue(opts.recall ? [memory] : []),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+          },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue(opts.inform ? [{
+              id: 'row-1', chatId: 'chat-1', batchId: 'batch-1', participantId: 'participant-a',
+              contentMarkdown: 'The lamp gutters.', recordMessageId: null,
+              createdAt: timestamp, updatedAt: timestamp, consumedAt: null, consumedByMessageId: null,
+            }] : []),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+          chatSettings: { findByUserId: jest.fn().mockResolvedValue(null) },
+          chats: { getMessages: jest.fn().mockResolvedValue([]) },
+        } as any)
+
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: { ...characterA, characterDocumentMountPointId: 'vault-a' } as any,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1', userId: 'user', participants: allParticipants, title: 'Test Chat',
+            contextSummary: null, sillyTavernMetadata: null, tags: [], messageCount: 2,
+            lastMessageAt: timestamp, lastRenameCheckInterchange: 0, createdAt: timestamp, updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          newUserMessage: opts.newUserMessage ?? undefined,
+          embeddingProfileId: null,
+          skipMemories: !opts.recall,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+          turnSkip: opts.offerSkip ? { offerSkip: true, characterName: 'Lyra', recentlyAddressed: false } : undefined,
+        } as any)
+      }
+
+      it('delivers the Core whisper on a turn with no new user message', async () => {
+        enable({ core: true })
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false })
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(CORE)
+      })
+
+      it('keeps every section in the same order on both paths, with the scene note leading the no-message tail', async () => {
+        enable({ everything: true })
+        const withMessage = await build({ newUserMessage: 'Onward.', recall: true, inform: true, offerSkip: true })
+        const withMessageTail = withMessage.messages[withMessage.messages.length - 1].content as string
+        expect(withMessageTail.startsWith('Onward.\n\n---\n\n')).toBe(true)
+        const sections = withMessageTail.slice('Onward.\n\n---\n\n'.length).split('\n\n---\n\n')
+
+        enable({ everything: true })
+        const withoutMessage = await build({ newUserMessage: null, recall: true, inform: true, offerSkip: true })
+        const withoutMessageTail = withoutMessage.messages[withoutMessage.messages.length - 1].content as string
+
+        // Same sections, same order; the scene note is the only addition and leads.
+        expect(withoutMessageTail).toBe([ANCHOR, ...sections].join('\n\n---\n\n'))
+
+        // And that order is the documented one.
+        const at = (needle: string) => {
+          const index = withoutMessageTail.indexOf(needle)
+          expect(index).toBeGreaterThanOrEqual(0)
+          return index
+        }
+        const order = [
+          at(ANCHOR),
+          at(CORE),
+          at('You also recall about the others present'),
+          at('Suparṇā of the Post Office has delivered new mail to you'),
+          at(PROGRESSIONS),
+          at(INFORM_BLOCK_HEADER),
+          at('[NOTHING TO ADD]'),
+        ]
+        expect([...order].sort((a, b) => a - b)).toEqual(order)
+      })
+    })
+
+    // ------------------------------------------------------------------
+    // Suparṇā's mail on a turn with no new user message (bugs 199, 227).
+    // ------------------------------------------------------------------
+
+    describe('mail on a turn with no new user message (bugs 199, 227)', () => {
+      const letter = {
+        path: 'Mail/2026-10-12-from-iris.md',
+        from: 'Iris',
+        sentAt: timestamp,
+        body: 'Meet me at the lighthouse.',
+        alerted: false,
+        inReplyTo: null,
+      }
+
+      const buildWithMail = async (newUserMessage: string | null, regenerationOfMessageIds?: string[]) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+        mockedCollectUnalertedMail.mockResolvedValue([letter])
+
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: { ...characterA, characterDocumentMountPointId: 'vault-a' } as any,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          newUserMessage: newUserMessage ?? undefined,
+          skipMemories: true,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+          regenerationOfMessageIds,
+        } as any)
+      }
+
+      it('rides its own trailing user message', async () => {
+        const result = await buildWithMail(null)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(buildSuparnaMailLLMContext([letter]))
+      })
+
+      it('owes the alerted flip to delivery instead of marking it here', async () => {
+        const result = await buildWithMail(null)
+
+        // Context building has not made the call yet: a provider failure must
+        // leave the letter unalerted, so the flip is handed to the finalizer.
+        expect(mockedMarkAlerted).not.toHaveBeenCalled()
+        expect(result.mailAlertsOwed).toEqual({ vaultId: 'vault-a', paths: [letter.path] })
+      })
+
+      it('skips the mail check on a swipe', async () => {
+        ;(postSuparnaMailWhisper as jest.Mock).mockClear()
+        const result = await buildWithMail(null, ['m2'])
+
+        // A re-roll of a line already spoken gets no new letter, posts no
+        // whisper and owes nothing — the swipe path never reaches the finalizer.
+        expect(mockedCollectUnalertedMail).not.toHaveBeenCalled()
+        expect(postSuparnaMailWhisper).not.toHaveBeenCalled()
+        expect(result.mailAlertsOwed).toBeNull()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content ?? '').not.toContain('Suparṇā')
+      })
+
+      it('still rides the new user message as a trailing section when there is one', async () => {
+        const result = await buildWithMail('Any post today?')
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(`Any post today?\n\n---\n\n${buildSuparnaMailLLMContext([letter])}`)
+      })
+    })
+
+    // Bug 199: a continue / chained turn computed recall, posted the whisper and
+    // stamped the rows accessed, but the trailing-only message left the recall
+    // text out — the model was shown nothing.
+    describe('recall on a turn with no new user message (bug 199)', () => {
+      const mockedRecall = buildCommonplaceLLMContext as jest.MockedFunction<typeof buildCommonplaceLLMContext>
+      afterEach(() => {
+        mockedRecall.mockImplementation(jest.requireActual('@/lib/services/commonplace-notifications/writer').buildCommonplaceLLMContext)
+      })
+
+      it('carries the recall text in the trailing user message', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([], null)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe('You remember the lighthouse.')
+      })
+
+      it('puts recall before the inform block, as on an ordinary turn', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([informRow('row-1', 'The lamp gutters.')], null)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content).toBe(
+          `You remember the lighthouse.\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`,
+        )
+      })
+
+      it('carries new mail too, and owes the letters their alerted flip (bug 227)', async () => {
+        const letter = { path: 'Mail/from-the-lighthouse.md', from: 'The Keeper', sentAt: timestamp, body: 'The lamp is lit.', alerted: false, inReplyTo: null }
+        ;(collectUnalertedMail as jest.Mock).mockResolvedValueOnce([letter])
+        ;(markAlerted as jest.Mock).mockResolvedValue(undefined)
+        ;(postSuparnaMailWhisper as jest.Mock).mockResolvedValueOnce(null)
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+
+        const result = await buildWithInforms([], null, { ...characterA, characterDocumentMountPointId: 'vault-a' } as Character)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(
+          `You remember the lighthouse.\n\n---\n\n${buildSuparnaMailLLMContext([letter])}`,
+        )
+        // Marked only once the turn is delivered (the finalizer), never here.
+        expect(markAlerted).not.toHaveBeenCalled()
+        expect(result.mailAlertsOwed).toEqual({ vaultId: 'vault-a', paths: [letter.path] })
+      })
+
+      it('delivers the head on a continue turn: stamped, in the ring, in the debug record', async () => {
+        resetFrozenArchiveCacheForTests()
+        const headMemory: Memory = {
+          ...memory,
+          id: 'mem-head',
+          aboutCharacterId: null,
+          summary: 'Lyra lit the lighthouse lamp at dusk',
+          content: 'Lyra lit the lighthouse lamp at dusk',
+        }
+        const repoMock = {
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+            findMostImportant: jest.fn().mockResolvedValue([]),
+            updateAccessTimeBulk: jest.fn().mockResolvedValue(1),
+          },
+          characters: { findNamesByIds: jest.fn().mockResolvedValue(new Map()) },
+          chats: { update: jest.fn().mockResolvedValue(null), getMessages: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        }
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+        mockedSearchRecall.mockResolvedValue({
+          candidates: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
+          ranked: [{ memory: headMemory, score: 0.8, usedEmbedding: false, salience: 0.5 }],
+          strategy: 'text',
+          trace: [],
+        } as any)
+
+        const result = await buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          chat: {
+            id: 'chat-continue',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          isContinueMode: true,
+          skipMemories: false,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [],
+        } as any)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toContain('Lyra lit the lighthouse lamp at dusk')
+        expect(repoMock.memories.updateAccessTimeBulk).toHaveBeenCalledWith('char-a', ['mem-head'])
+        expect(repoMock.chats.update).toHaveBeenCalledWith('chat-continue', { commonplaceRecallHistory: { turns: [['mem-head']] } })
+        expect(result.recallDebugLog).toContain('[Recall:ring] mem-head')
+      })
+
+      it('rides the new user message, not a second one, when there is one', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([])
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content).toBe('Ready for the next task?\n\n---\n\nYou remember the lighthouse.')
+        expect(result.messages.filter(m => m.role === 'user' && m.content === 'You remember the lighthouse.')).toHaveLength(0)
+      })
+    })
+
+    it('stacks several pending passages in posting order, rule-separated', async () => {
+      const result = await buildWithInforms([
+        informRow('row-1', 'First thing.'),
+        informRow('row-2', 'Second thing.'),
+      ])
+
+      const last = result.messages[result.messages.length - 1]
+      expect(last.content).toContain(`${INFORM_BLOCK_HEADER}\n\nFirst thing.\n\n---\n\nSecond thing.`)
+      expect(result.informRowIds).toEqual(['row-1', 'row-2'])
     })
   })
 

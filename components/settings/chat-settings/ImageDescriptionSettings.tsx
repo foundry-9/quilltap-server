@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, ConnectionProfile } from './types'
 
@@ -9,17 +10,14 @@ export interface ImageDescriptionSettingsProps {
   loadingProfiles: boolean
   connectionProfiles: ConnectionProfile[]
   onProfileChange: (profileId: string | null) => Promise<void>
-  onUncensoredProfileChange: (profileId: string | null) => Promise<void>
 }
 
 /**
  * ImageDescriptionSettings Component
  * Manages image description profile selection for vision-capable LLMs.
  *
- * Two profiles can be configured:
- *  - **Primary**: used for every attached image first.
- *  - **Uncensored fallback**: used when the primary refuses or returns an
- *    unusable response. Optional; usually a more permissive vision model.
+ * The uncensored fallback (used when this profile refuses) is the
+ * Concierge's vision profile, set on the Concierge tab.
  */
 export function ImageDescriptionSettings({
   settings,
@@ -27,14 +25,13 @@ export function ImageDescriptionSettings({
   loadingProfiles,
   connectionProfiles,
   onProfileChange,
-  onUncensoredProfileChange,
 }: ImageDescriptionSettingsProps) {
   const visionProfiles = connectionProfiles.filter(profile => profile.supportsImageUpload === true)
 
   return (
     <SettingsCard
       title="Image Description Profiles"
-      subtitle="When you attach an image to a chat with a provider that doesn't support images (like Ollama, OpenRouter, etc.), the primary profile describes it in text. If the primary refuses or returns an unusable response, the uncensored fallback profile tries instead."
+      subtitle="When you attach an image to a chat with a provider that doesn't support images (like Ollama, OpenRouter, etc.), this profile describes it in text."
     >
       <div className="space-y-4">
         <div>
@@ -68,31 +65,13 @@ export function ImageDescriptionSettings({
           )}
         </div>
 
-        <div>
-          <label className="block qt-text-label mb-2">
-            Uncensored fallback profile
-          </label>
-          <p className="qt-text-xs mb-2">
-            Optional. Used only when the primary profile refuses to describe an image. A more permissive vision model
-            (a local Ollama llava variant, an uncensored router model, etc.) is the usual choice. Leave blank to skip the fallback.
-          </p>
-          <select
-            value={settings?.uncensoredImageDescriptionProfileId || ''}
-            onChange={(e) => onUncensoredProfileChange(e.target.value || null)}
-            disabled={saving || loadingProfiles}
-            className="qt-select"
-          >
-            <option value="">No fallback (recommended for benign content)</option>
-            {visionProfiles.map((profile) => {
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
-          </select>
-        </div>
+        <p className="qt-text-xs">
+          The uncensored fallback, for when this profile refuses to describe an image, now keeps company with the
+          Concierge: see its vision profile under{' '}
+          <Link href="/settings?tab=concierge&section=uncensored-desk" className="qt-link">
+            The Concierge → The Uncensored Desk
+          </Link>.
+        </p>
       </div>
     </SettingsCard>
   )

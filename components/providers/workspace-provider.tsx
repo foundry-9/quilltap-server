@@ -11,7 +11,7 @@
  *
  * Keep-alive constraint: this store never decides whether a view is mounted —
  * the host renders every open tab and hides inactive ones via CSS. See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/providers/workspace-provider
  */

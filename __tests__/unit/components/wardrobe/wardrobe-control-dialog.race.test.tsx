@@ -9,8 +9,9 @@
 
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
 import { WardrobeDialogProvider, useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provider'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import React, { useEffect } from 'react'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import { showConfirmation } from '@/lib/alert'
 
 jest.mock('@/lib/toast', () => ({
@@ -99,8 +100,8 @@ function routeFetch(deferOutfit: boolean): void {
       return jsonResponse({ characters: [{ id: CHARACTER_ID, name: 'Alice' }] })
     }
     if (url.includes('/wardrobe')) {
-      // Both the dialog's own list and useOutfit's per-character fetch; the
-      // shared-archetype call answers empty so the merge stays deterministic.
+      // Every tier of the character's list (own vault, ?scope=group); the
+      // General call answers empty so the merge stays deterministic.
       return jsonResponse({ wardrobeItems: url.endsWith('/api/v1/wardrobe') ? [] : ITEMS })
     }
     if (url.includes('/api/v1/image-profiles')) {
@@ -124,7 +125,8 @@ function Opener(): null {
 }
 
 function renderDialog(): void {
-  render(
+  // The dialog invalidates the wear-ledger queries after an equip commits.
+  renderWithQuery(
     <WardrobeDialogProvider>
       <Opener />
       <WardrobeControlDialog />

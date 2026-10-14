@@ -32,3 +32,29 @@ export function buildContentDisposition(
   const encodedFilename = encodeExtValue(filename);
   return `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
 }
+
+/**
+ * Whether a request asked for the bytes as a download rather than inline.
+ *
+ * The three routes that serve image bytes — `/files/[id]`,
+ * `/files/proxy/[...key]` and `/mount-points/[id]/blobs/[...path]` — all
+ * answer `inline` by default (the Salon embeds them in `<img>`), and all honour
+ * `?download=1` by switching to `attachment`. One flag rather than a parallel
+ * set of download routes, and one predicate rather than three readings of the
+ * query string. `true` is accepted alongside `1` so a hand-typed URL behaves
+ * the way a reader expects.
+ */
+export function wantsAttachment(request?: { url: string } | null): boolean {
+  if (!request?.url) return false;
+  try {
+    const value = new URL(request.url).searchParams.get('download');
+    return value === '1' || value === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** `'attachment'` when the request asked for a download, else `'inline'`. */
+export function dispositionFor(request?: { url: string } | null): 'inline' | 'attachment' {
+  return wantsAttachment(request) ? 'attachment' : 'inline';
+}

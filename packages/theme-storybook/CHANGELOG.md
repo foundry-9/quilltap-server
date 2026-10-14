@@ -2,6 +2,16 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.71] - 2026-09-19
+
+### Added
+- `.qt-chat-message-regenerating`, `.qt-chat-regenerating`, `.qt-chat-regenerating-original` and `.qt-chat-regenerating-plate(-text)` — the Salon's new in-place regeneration: the line being re-rolled dims under a plate that says so, then gives way to the new prose as it streams.
+- The whole `.qt-chat-message-action-bar*` / `.qt-chat-message-action-icon*` family, which had never been mirrored, including the new `.qt-chat-message-action-bar-disabled` state.
+- The whole `.qt-chat-response-status*` family, also previously unmirrored: the stage strip above the composer, its per-stage colours (now including `regenerating` and `saving`), its fade-in keyframes and its reduced-motion rule.
+
+### Notes
+- The regeneration classes borrow `--qt-response-status-streaming-fg` rather than introducing tokens of their own; a theme that retunes the streaming status colour retunes the regeneration accent with it.
+
 ## [1.0.67] - 2026-08-30
 
 ### Added

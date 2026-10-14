@@ -28,10 +28,6 @@ jest.mock('@/lib/file-storage/manager', () => ({
   fileStorageManager: { deleteFile: jest.fn() },
 }));
 
-jest.mock('@/lib/memory/memory-gate', () => ({
-  deleteMemoriesWithUnlinkBatch: jest.fn().mockResolvedValue(0),
-}));
-
 const emptyUserRepos = {
   characters: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   chats: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
@@ -67,4 +63,12 @@ it('truncates conversation_annotations on a replace-mode / delete-all clear', as
 
   const truncated = rawQuery.mock.calls.map((c) => c[0] as string);
   expect(truncated).toContain('DELETE FROM "conversation_annotations"');
+});
+
+it('truncates wardrobe_wear_stats so a replace-mode restore replaces the ledger', async () => {
+  rawQuery.mockClear();
+  await deleteUserData('user-1');
+
+  const truncated = rawQuery.mock.calls.map((c) => c[0] as string);
+  expect(truncated).toContain('DELETE FROM "wardrobe_wear_stats"');
 });

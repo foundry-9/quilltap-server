@@ -29,6 +29,7 @@ export function isSQLiteBackend(): boolean {
 // ============================================================================
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
+import { registerTextCodecFunction } from '@/lib/database/backends/sqlite/text-codec-function';
 import fs from 'fs';
 import {
   getSQLiteDatabasePath,
@@ -146,6 +147,9 @@ export function openEncryptedSqlite(
       const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
       db.pragma(`key = "x'${keyHex}'"`);
     }
+    // Compressed text columns are BLOBs; a migration that reads or measures
+    // one needs qt_text() exactly as the runtime clients do.
+    registerTextCodecFunction(db);
     db.pragma('journal_mode = WAL');
     if (opts.foreignKeys) {
       db.pragma('foreign_keys = ON');

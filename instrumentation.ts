@@ -401,6 +401,22 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 0.75: Daily backup + optimize (before migrations)
+      // ================================================================
+      // First launch of each local day: back up (24 h gated, as ever), then
+      // VACUUM / ANALYZE / PRAGMA optimize all three databases, exactly as
+      // `quilltap db optimize` does. Never fatal.
+      try {
+        const { runDailyDbOptimize } = await import('./lib/startup/daily-db-optimize');
+        await runDailyDbOptimize();
+      } catch (optimizeErr) {
+        logger.error('Daily database optimize failed — continuing startup', {
+          context: 'instrumentation.register',
+          error: optimizeErr instanceof Error ? optimizeErr.message : String(optimizeErr),
+        });
+      }
+
+      // ================================================================
       // PHASE 1: Run Migrations FIRST - before anything else
       // ================================================================
       // This ensures data compatibility before any API requests
@@ -432,6 +448,7 @@ export async function register() {
         context: 'instrumentation.register',
         migrationsRun: migrationResult.migrationsRun,
         migrationsSkipped: migrationResult.migrationsSkipped,
+        deferred: migrationResult.deferred,
         totalDurationMs: migrationResult.totalDurationMs,
       });
 
@@ -565,6 +582,22 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.1: Verify structural tables (bug 176)
+      // ================================================================
+      // Ledgered migrations are never asked again, so this is the one boot
+      // step that looks at the mount-index and help-chunks tables. Damage is
+      // logged and reported by /api/health; it does not stop the boot.
+      try {
+        const { verifyStructuralTables } = await import('./lib/startup/verify-structural-tables');
+        await verifyStructuralTables();
+      } catch (verifyError) {
+        logger.warn('Structural table check could not run, continuing startup', {
+          context: 'instrumentation.register',
+          error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.25: Filesystem Reconciliation (after file storage init)
       // ================================================================
       try {
@@ -601,6 +634,16 @@ export async function register() {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
         vaultBackfillSettled = backfillCharacterVaults()
           .then(async () => {
+            // Store names: one case-insensitive namespace, each live vault
+            // named after its character, every unlinked vault retired to
+            // "<Name> Version <timestamp> Store". After the backfill, so a
+            // vault awaiting adoption is adopted before it could be retired.
+            // A no-op when the instance already conforms.
+            const { reconcileStoreNames } = await import(
+              './lib/mount-index/reconcile-store-names'
+            );
+            await reconcileStoreNames('boot');
+
             // Chained after backfill so newly created vaults (already in the
             // new shape) aren't visited a second time for no reason.
             const { migrateVaultPhysicalFiles } = await import(
@@ -764,10 +807,10 @@ export async function register() {
       // Scenarios/ folder. Idempotent and silent when the provisioning
       // migration hasn't run yet (returns null mountPointId).
       try {
-        const { ensureGeneralScenariosFolder } = await import(
-          './lib/mount-index/general-scenarios'
-        );
-        await ensureGeneralScenariosFolder();
+        const { resolveScenarioLocation } = await import('./lib/scenarios/location');
+        const { getRepositories } = await import('./lib/repositories/factory');
+        const { SINGLE_USER_ID } = await import('./lib/auth/single-user');
+        await resolveScenarioLocation('general', null, getRepositories(), SINGLE_USER_ID, { ensure: true });
       } catch (ensureError) {
         logger.warn('Error ensuring general scenarios folder, continuing startup', {
           context: 'instrumentation.register',
@@ -803,12 +846,15 @@ export async function register() {
         const { scheduleCleanup } = await import('./lib/background-jobs/scheduled-cleanup');
         scheduleCleanup();
 
-        const { scheduleHousekeeping } = await import('./lib/background-jobs/scheduled-housekeeping');
-        scheduleHousekeeping();
+        // Memory maintenance: one MEMORY_MAINTENANCE job per character, daily.
+        const { scheduleMemoryMaintenance } = await import('./lib/memory/maintenance/scheduler');
+        scheduleMemoryMaintenance();
 
         const { scheduleMaintenance } = await import('./lib/background-jobs/scheduled-maintenance');
         scheduleMaintenance();
 
+        // Opt-in: starts only when some user has the Concierge on duty with
+        // summary classification switched on (Settings → The Concierge).
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 
@@ -878,12 +924,55 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.65: Reconcile the chat-message full-text search index
+      // ================================================================
+      // The index is trigger-maintained, but a table rebuild of
+      // `chat_messages` would drop those triggers silently and leave search
+      // quietly stale. Replay the IF NOT EXISTS DDL and compare eligible rows
+      // against indexed rows; rebuild only on a mismatch. Two indexed counts
+      // on a healthy instance. Awaited rather than fire-and-forget: it is a
+      // no-op in the common case, and a stale index is what the search bar
+      // reads the moment the UI is up.
+      try {
+        const { reconcileChatMessageFts } = await import(
+          './lib/startup/reconcile-chat-message-fts'
+        );
+        await reconcileChatMessageFts();
+      } catch (ftsReconcileError) {
+        logger.warn('Chat message FTS reconciliation failed', {
+          context: 'instrumentation.register',
+          error: ftsReconcileError instanceof Error ? ftsReconcileError.message : String(ftsReconcileError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.66: Reconcile the help index against the help files on disk
+      // ================================================================
+      // Every help file is re-read and compared by content hash: new and
+      // edited pages are rewritten and re-sliced, deleted ones pruned, and a
+      // HELP_DOC embedding job is queued for any page missing its own vector
+      // or a section's. Only help docs are touched — never memories or store
+      // chunks. Awaited: it is file reads plus two small queries when nothing
+      // changed, and it must finish its writes before Phase 3.7 can enqueue a
+      // reindex whose job-child sync would otherwise race it.
+      try {
+        const { ensureHelpDocsSynced } = await import('./lib/help/help-doc-sync');
+        await ensureHelpDocsSynced();
+      } catch (helpReconcileError) {
+        logger.warn('Help doc reconciliation failed', {
+          context: 'instrumentation.register',
+          error: helpReconcileError instanceof Error ? helpReconcileError.message : String(helpReconcileError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.7: Reconcile embedding dimensions against the default profile
       // ================================================================
       // There is one embedding standard per instance — the default profile's
       // output. This pass deletes non-conforming vector-index entries, snaps
-      // index metadata, converges stale chats to the cold tier, and enqueues
-      // a mismatched-dim reindex for anything that needs re-embedding.
+      // index metadata, and enqueues a mismatched-dim reindex for anything
+      // that needs re-embedding (stale chats included — conversation-chunk
+      // embeddings are never cold-tiered).
       // Fire-and-forget: a large backlog must not delay readiness; a no-op
       // (COUNT-only) on a conforming corpus. Runs every boot because the gap
       // recurs (killed reindexes, restored backups, provider outages).
@@ -901,6 +990,24 @@ export async function register() {
         logger.warn('Failed to import embedding dimension reconciliation module', {
           context: 'instrumentation.register',
           error: dimReconcileImportError instanceof Error ? dimReconcileImportError.message : String(dimReconcileImportError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.8: Refit a Built-in (TF-IDF) vocabulary that is due
+      // ================================================================
+      // The dimension pass above skips BUILTIN defaults; their width is the
+      // fitted vocabulary's. Refit when there is no vocabulary, when it was
+      // fitted before the BUILTIN path stopped embedding anchor lines, or when
+      // the corpus has drifted (builtin-tfidf-memory-tuning §6). Fire-and-
+      // forget; a no-op on neural defaults and current vocabularies.
+      try {
+        const { checkBuiltinRefit } = await import('./lib/embedding/builtin-refit-policy');
+        void checkBuiltinRefit();
+      } catch (builtinRefitImportError) {
+        logger.warn('Failed to import the TF-IDF refit check', {
+          context: 'instrumentation.register',
+          error: builtinRefitImportError instanceof Error ? builtinRefitImportError.message : String(builtinRefitImportError),
         });
       }
 

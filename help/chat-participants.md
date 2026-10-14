@@ -15,7 +15,7 @@ Each drawer attends to a different aspect of running the conversation:
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
-- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
+- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and the Gallery, which is always present and holds every picture in the conversation.
 - **Edit Content** — the heavier instruments. Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
 
 Only one drawer stands open at a time, in the manner of a well-mannered campaign desk; opening another closes the previous. Participants is open by default whenever the sidebar is expanded.
@@ -63,7 +63,7 @@ When collapsed, the sidebar shows:
 
 **Mini Avatars:**
 - Small circular avatars for each participant
-- Stacked vertically on the right edge, sorted by predicted turn order
+- Stacked vertically on the right edge, sorted by turn order
 - Shows current speaker with glowing border
 - Turn position badges on all active participants (color-coded by status)
 - Status overlay icons on avatars indicate non-active states (silent, absent) so you can see at a glance who's participating even with the sidebar collapsed
@@ -140,6 +140,15 @@ Immediately beneath the connection profile selector, each LLM-controlled charact
 - Only shown for LLM-controlled characters that have at least one named prompt on file
 
 If you want a character to keep the same costume but change their register for an afternoon — swap them from their "Formal" variant to their "Casual" one here, and the switch takes effect with the very next line they speak.
+
+### Subprompts Dropdown
+
+Directly beneath the system prompt dropdown sits a second, smaller one labelled **Subprompts**, with a summary of how many are in play ("2 of 5 in play"). Open it and you are shown a checkbox for every [subprompt](character-subprompts.md) the character keeps in their vault's `Subprompts/` folder — the short, optional instructions that may be switched on or off for one conversation without editing the prompt itself.
+
+- **Tick or untick** any subprompt and the change takes hold at once: the chat's cached prompt is rebuilt and the character's next line is composed under the new arrangement. A toast confirms it.
+- **New subprompt…** at the foot of the list opens the editor right there in the drawer — title, instruction in Markdown, and the standing reminder to write in the second person. A subprompt created this way is ticked on for this chat automatically.
+- Each chat keeps its own selection, so the same character may be terse here and expansive elsewhere.
+- Only shown for LLM-controlled characters. A character with no subprompts on file shows "None on file" and still offers to create one.
 
 ### Rebuild System Prompt Button
 
@@ -227,11 +236,12 @@ If characters are queued:
 
 ### Pause/Resume Button
 
-Controls auto-response flow:
+Brings the room to a halt, and a halted room advances only at your invitation:
 
-- **Pause** — Stop automatic turn progression
-- **Resume** — Continue automatic responses
-- Most useful for all-LLM chats
+- **Pause** — Nothing happens by itself. Your remarks are set down in the record and answered by
+  nobody; the rotation waits where you left it
+- **Nudge** a character while paused — they take exactly one turn, and the room falls quiet again
+- **Resume** — Returns the company to its ordinary rotation
 
 ## Managing Participants
 
@@ -374,12 +384,12 @@ Adds characters to an ordered speaking list:
 
 ### Turn Order Badges
 
-Position badges on each participant show their predicted turn order:
+Position badges on each participant show the cycle's running order — drawn before the cycle begins, so the numbers are a schedule rather than a forecast (see [The Running Order](chat-turn-manager.md#the-running-order)):
 
 - **Green pulsing** — Currently generating (#1)
 - **Green static** — Next speaker
 - **Blue** — Queued to speak
-- **Neutral** — Eligible, sorted by talkativeness
+- **Neutral** — Still to come, in the order they will speak
 - **Amber** — Your turn position
 - **Dimmed** — Already spoke this cycle
 - **No badge** — Absent or removed participant
@@ -415,19 +425,30 @@ If impersonating multiple characters:
 2. If the character has no connection profile of its own, you'll be asked to pick one so it can answer under its own steam again
 3. The character resumes speaking for itself; nothing else about the seat is disturbed
 
+### In Their Own Words
+
+An optional amenity, switched off by the factory, addresses the perennial embarrassment of an impersonated character who sounds rather too much like you. Turn on **Impersonated lines in the character's own words** in the Composer card on the Chat tab in Settings, and a line you type while wearing a character's seat is handed first to that character — their own model, their own prompt, their own memory of the evening — and returned for your inspection before anything reaches the room. Send their restatement, have it attempted afresh, retire to the composer and rewrite, or send your own words exactly as typed; nothing posts until you choose. It fires only for seats taken with **Impersonate** — speaking as yourself, or as a seat you have set to *User (you type)*, is left entirely alone. See [In their own words](/settings?tab=chat&section=composer-spellcheck) for the full account.
+
 ## Pause and Resume
 
 ### The Pause Button
 
-Located in the sidebar header:
+Located in the sidebar header, and reading **Resume** whenever a pause is in force:
 
-- **Pause** (shown during auto-responses) — Stop automatic progression
-- **Resume** (shown when paused) — Continue auto-responses
+- **Pause** — The room stops dead. No rotation, no chain of replies, and no answer even to a remark
+  of your own: what you type is set down in the record in full and handed to nobody
+- **Nudge** or **Skip** while paused — borrows a single turn against the pause. One character
+  answers, the room falls quiet again, and the floor returns to you. The pause is *not* lifted
+- **Resume** — Returns the company to its ordinary rotation
+
+The first remark you enter into a paused room is answered with a quiet notice to that effect, lest
+the silence be mistaken for a message that never arrived.
 
 ### When to Pause
 
+- Laying down a long passage of scene-setting before anyone is allowed to respond to it
+- Inviting precisely one character to answer, and letting the rest of the table wait
 - Reading and absorbing a complex scene
-- Planning your next action carefully
 - Taking a break during long sessions
 - Preventing runaway all-LLM conversations
 
@@ -435,10 +456,13 @@ Located in the sidebar header:
 
 In all-LLM chats (no user-controlled characters):
 
-- System auto-pauses after several turns
-- Notification appears asking to continue
-- Click Resume or Pause to respond
+- The house calls a halt of its own accord after several turns
+- A dialogue appears asking whether the company should carry on
+- **Continue** lifts the pause and sets them going again; **Stop** leaves the floor yours
 - Prevents infinite conversation loops
+
+The same pause is pressed for you when a turn fails outright, and while the Courier holds a
+conversation waiting for a reply you must paste in by hand. **Resume** is the way out of all of them.
 
 ## The Other Four Drawers
 
@@ -453,7 +477,7 @@ The per-chat dials, formerly scattered across a Tools palette popover and a Chat
 - **Project** — assign this chat to a project (or none)
 - **Image Provider** — which image profile generates pictures for this chat
 - **Announce Generated Images** — whether the Lantern announces fresh images in-chat; see [The Lantern](lantern.md)
-- **Auto-generate Character Avatars** — when on, characters receive a fresh portrait each time their wardrobe shifts
+- **Auto-generate Character Avatars** — when on, characters receive a fresh portrait each time their wardrobe shifts. A costume they have sat for before needs no new sitting: the portrait already on file is brought out again. See [The Wardrobe](wardrobe.md)
 - **Tools…** — opens the per-chat tool allowlist modal
 - **Run Tool…** — opens the manual tool-invocation modal; see [Run Tool](run-tool.md)
 - **Regenerate Background** — only appears when story backgrounds are enabled; queues a fresh background; see [Story Backgrounds](story-backgrounds.md)
@@ -474,7 +498,7 @@ The chat as an object, rather than a conversation:
 - **State…** — open the chat state editor; see [Chat State](chat-state.md)
 - **Continue Elsewhere** — fork this conversation into a new chat with a different scenario or project
 - **Export** — download a SillyTavern-compatible export of the chat
-- **Gallery** — opens the photo gallery; appears only when there are pictures to display
+- **Gallery** — opens the chat gallery: every picture in the conversation, whatever brought it there — backdrops the Lantern painted, portraits Aurora repainted, the cast's standing portraits, pictures a character summoned or brought out of an album, photographs you uploaded, and pictures woven into the prose. Each one can be saved to a photo album or downloaded as a proper file. Always present; the count beside it is the tally. See [The Chat Gallery](chat-gallery.md)
 
 ### Edit Content
 
@@ -482,8 +506,19 @@ The heavier instruments — best wielded with deliberation:
 
 - **Replace** — find and replace text across the conversation
 - **Bulk Replace** — re-attribute messages between characters in bulk
-- **Re-extract Memories** — re-run the Commonplace Book extractor across the chat
-- **Delete Memories** — remove this chat's memories from the Commonplace Book (with a count of how many would go)
+- **Re-extract Memories** — re-run the Commonplace Book extractor across the chat, turn by turn (in an autonomous room, one turn for each character's contribution). It runs on the connection profile of one of the chat's characters, or failing that on your cheap LLM profile, and does not clear what is already on the shelf first
+- **Delete Memories** — remove the memories extracted from this chat from the Commonplace Book (with a count of how many are on record). Hand-written entries, archived entries and consolidated digests are left on the shelf; delete one of those from the Commonplace Book itself if you truly mean it
+
+The count on that last button keeps its own counsel and revises it as the
+evening wears on. Memories are laid down a minute or two behind the
+conversation, by the Commonplace Book's extractor working quietly in the back
+office, so a chat opened before its first memory was written begins at nought
+and climbs from there without any prompting from you — no reload, no leaving
+the tab and returning. Should the tally genuinely stand at nought, the button
+declines the invitation and greys itself out rather than accepting a click and
+doing nothing with it; hover over it and it will say as much. And the number
+quoted in the confirmation is always freshly asked for at the moment you press,
+never the one that happened to be painted on the button.
 
 ## Sidebar Behavior
 
@@ -493,7 +528,7 @@ The sidebar adapts to screen size:
 
 - **Wide screens** — Full expanded sidebar by default
 - **Medium screens** — Collapsed by default, expand on click
-- **Narrow screens** — Overlay mode, closes after action
+- **Narrow screens** — Overlay mode, closes after action. A click elsewhere on the page (or **Escape**) folds it back to its strip, but a click inside a dialog it opened — the Host's scene-setting apparatus, say, or **Save as scenario…** — is understood to be business with that dialog, and the cabinet stays politely open behind it
 
 ### Persistence
 

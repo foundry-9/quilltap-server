@@ -7,7 +7,7 @@
  * first activated; once mounted it is never unmounted by a tab switch (the host
  * hides inactive tabs with CSS). This is what lets a streaming Salon survive
  * tab switches without touching its SSE hooks. See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/workspace/TabView
  */

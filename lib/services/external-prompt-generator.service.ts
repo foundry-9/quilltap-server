@@ -14,7 +14,13 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { getSafeInputLimit } from '@/lib/llm/model-context-data';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
+import {
+  CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  GATED_COMPANION_TRUST_DISPOSITION,
+} from '@/lib/services/character-field-semantics';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const log = logger.child({ module: 'external-prompt-generator' });
 
@@ -40,7 +46,7 @@ export interface ExternalPromptResult {
 // Meta-Prompt
 // ============================================================================
 
-const META_SYSTEM_PROMPT = `You are a prompt engineering expert. Your task is to generate a standalone system prompt for an AI character, suitable for pasting into external tools like Claude Desktop, ChatGPT Custom Instructions, or similar hosted environments.
+export const META_SYSTEM_PROMPT = `You are a prompt engineering expert. Your task is to generate a standalone system prompt for an AI character, suitable for pasting into external tools like Claude Desktop, ChatGPT Custom Instructions, or similar hosted environments.
 
 **Requirements:**
 - Write the entire prompt in second person ("You are [Name]. You always...", etc.)
@@ -53,6 +59,14 @@ const META_SYSTEM_PROMPT = `You are a prompt engineering expert. Your task is to
 - Do NOT include meta-instructions about being an AI or breaking character
 - Do NOT reference Quilltap or any external system
 - The prompt should read as a coherent, well-structured character brief
+
+${CONVERSATIONAL_VOICE_DIRECTION}
+
+${TRUST_SAFEGUARDS_DIRECTION}
+
+${GATED_COMPANION_TRUST_DISPOSITION}
+
+The external tool will not substitute placeholders: wherever the directions above say {{user}}, the generated prompt names the person the character talks with in plain words ("the user", or their name if the character data gives one), never the literal {{user}} token.
 
 Stay within the token budget specified by the user. Be thorough but concise.`;
 
@@ -121,7 +135,7 @@ export async function generateExternalPrompt(
   const desc = character.physicalDescription;
   if (desc) {
     // Use the most detailed available description
-    descriptionContent = desc.fullDescription || desc.completePrompt || desc.longPrompt || desc.mediumPrompt || desc.shortPrompt || undefined;
+    descriptionContent = pickPhysicalDescription(desc, 'fullest') || undefined;
   }
 
   // Build the user message with all character data

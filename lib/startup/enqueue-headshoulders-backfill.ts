@@ -21,6 +21,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { enqueueCharacterHeadShouldersBackfill } from '@/lib/background-jobs/queue-service';
+import { hasPhysicalDescription } from '@/lib/characters/physical-description';
 
 const logger = createServiceLogger('Startup:HeadShouldersBackfill');
 
@@ -70,9 +71,7 @@ export async function enqueueHeadShouldersBackfill(): Promise<HeadShouldersBackf
       result.skipped++;
       continue;
     }
-    const hasSeed = Boolean(
-      pd.mediumPrompt || pd.shortPrompt || pd.longPrompt || pd.completePrompt || pd.fullDescription,
-    );
+    const hasSeed = hasPhysicalDescription(pd, 'scene');
     if (!hasSeed) {
       result.skipped++;
       continue;

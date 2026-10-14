@@ -38,10 +38,9 @@ export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> = {
   // ── Mem ──────────────────────────────────────────────────────────────────
   MEMORY_EXTRACTION: 'memory',
-  INTER_CHARACTER_MEMORY: 'memory',
   MEMORY_REGENERATE_CHAT: 'memory',
   MEMORY_REGENERATE_ALL: 'memory',
-  MEMORY_HOUSEKEEPING: 'memory',
+  MEMORY_MAINTENANCE: 'memory',
   CARINA_MEMORY_EXTRACTION: 'memory',
 
   // ── Emb ──────────────────────────────────────────────────────────────────
@@ -64,6 +63,7 @@ export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> =
   // ── Img ──────────────────────────────────────────────────────────────────
   STORY_BACKGROUND_GENERATION: 'image',
   CHARACTER_AVATAR_GENERATION: 'image',
+  WARDROBE_ITEM_IMAGE_GENERATION: 'image',
   CHARACTER_HEADSHOULDERS_BACKFILL: 'image',
 
   // ── Deliberately uncounted ───────────────────────────────────────────────
@@ -84,7 +84,7 @@ export const ACTIVITY_CHIPS: readonly {
   {
     kind: 'memory',
     label: 'Mem',
-    title: 'Memory work (extraction, regeneration, housekeeping)',
+    title: 'Memory work (extraction, regeneration, consolidation, housekeeping)',
     badgeClass: 'qt-queue-badge-memory',
   },
   {

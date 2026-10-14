@@ -9,7 +9,7 @@
  * decides anything: the option object both pipelines pass, and the guard that
  * suppresses the typographer for a template it would break. The end-to-end
  * behaviour is verified against the real pipeline — see the Part A matrix in
- * `docs/developer/features/composer-smart-typography.md`.
+ * `docs/developer/features/complete/composer-smart-typography.md`.
  */
 
 import {

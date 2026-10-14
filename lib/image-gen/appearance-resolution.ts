@@ -10,23 +10,26 @@
 
 import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
-import { resolveEquippedOutfitForCharacter, type ResolveEquippedRepos } from '@/lib/wardrobe/resolve-equipped'
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import { loadWearablePool } from '@/lib/wardrobe/pool'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 import {
   resolveAppearance,
   sanitizeAppearance,
   type ChatMessage,
   type CharacterAppearanceInput,
   type AppearanceResolutionItem,
+  type AppearanceSanitizeMode,
 } from '@/lib/memory/cheap-llm-tasks'
 import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
+import { pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 // ============================================================================
 // TYPES
@@ -58,6 +61,11 @@ export interface ResolvedCharacterAppearance {
   clothingSource: 'narrative' | 'stored' | 'default'
   /** Whether the Concierge sanitized this appearance */
   wasSanitized: boolean
+  /**
+   * Set by a `conceal`-mode sanitization when the character is undressed in
+   * the scene: the prompt crafter must drape them, never dress them.
+   */
+  needsConcealment?: boolean
 }
 
 /**
@@ -78,11 +86,7 @@ export interface AppearanceResolutionInput {
 }
 
 /** Repository surface for {@link equippedWardrobeItemsForAppearance}. */
-interface EquippedWardrobeRepos extends ResolveEquippedRepos {
-  chats: {
-    getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>
-  }
-}
+type EquippedWardrobeRepos = Pick<RepositoryContainer, 'wardrobe' | 'projects' | 'chats'>
 
 /**
  * Load a character's equipped outfit for a chat and flatten it into the
@@ -101,11 +105,9 @@ export async function equippedWardrobeItemsForAppearance(
 ): Promise<AppearanceResolutionInput['equippedWardrobeItems']> {
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId)
   if (!equippedSlots) return undefined
-  const resolved = await resolveEquippedOutfitForCharacter(
-    repos,
-    characterId,
+  const resolved = resolveEquippedOutfitForCharacter(
+    await loadWearablePool(repos, characterId, projectMountPointIds),
     equippedSlots,
-    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
   )
   const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = []
   for (const slot of WARDROBE_SLOT_TYPES) {
@@ -167,12 +169,7 @@ function buildDefaultAppearances(
   return characters.map(char => {
     const primary = char.physicalDescription
 
-    const physDesc =
-      primary?.completePrompt ||
-      primary?.longPrompt ||
-      primary?.mediumPrompt ||
-      primary?.shortPrompt ||
-      char.characterName
+    const physDesc = pickPhysicalDescription(primary, 'full-length') || char.characterName
 
     const hasWardrobe = char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
 
@@ -207,13 +204,7 @@ function mapResolutionResults(
     // selectedDescriptionId is informational only.
     const selectedDesc: PhysicalDescription | null = char.physicalDescription
 
-    const physDesc = selectedDesc
-      ? (selectedDesc.completePrompt ||
-         selectedDesc.longPrompt ||
-         selectedDesc.mediumPrompt ||
-         selectedDesc.shortPrompt ||
-         char.characterName)
-      : char.characterName
+    const physDesc = pickPhysicalDescription(selectedDesc, 'full-length') || char.characterName
 
     return {
       characterId: char.characterId,
@@ -262,7 +253,7 @@ export async function resolveCharacterAppearances(
       const sceneChar = sceneState.characters.find(sc => sc.characterId === char.characterId)
       const primary = char.physicalDescription
       const physDesc = sceneChar?.appearance
-        || primary?.completePrompt || primary?.longPrompt || primary?.mediumPrompt || primary?.shortPrompt
+        || pickPhysicalDescription(primary, 'full-length')
         || char.characterName
 
       return {
@@ -345,37 +336,70 @@ export async function resolveCharacterAppearances(
  * Sanitize resolved appearances through the Concierge if needed.
  *
  * Logic:
- * 1. If the Concierge mode is OFF → return unchanged
- * 2. If chat is marked dangerous AND an uncensored image provider exists → return unchanged
+ * 1. Unless the policy pre-screens (Moderated, pre-screen opted in) or routes
+ *    direct (Unmoderated) → return unchanged. Off duty, Locked, or a Moderated
+ *    chat without the pre-screen costs no classifier call.
+ * 2. If chat is marked dangerous AND the scene routes uncensored → return unchanged
  * 3. Classify concatenated appearance text; if safe → return unchanged
- * 4. If dangerous AND uncensored provider available → return unchanged (will route there)
- * 5. If dangerous AND NO uncensored provider → sanitize via cheap LLM
+ * 4. If dangerous AND the scene routes uncensored → return unchanged (it goes
+ *    to a provider that accepts it, so accuracy beats a draped sheet)
+ * 5. Otherwise → sanitize via cheap LLM
+ *
+ * The fourth parameter is deliberately NOT "an uncensored profile is
+ * configured" (bug 133). Whether one exists in settings and whether *this*
+ * scene will actually be generated by it are different questions, and only
+ * some callers route on the appearance classification:
+ *
+ * - The image-generation tool classifies each prompt and reroutes on the spot
+ *   when failover is allowed, so a dangerous appearance there really is bound for the
+ *   uncensored provider.
+ * - Story backgrounds never route up front; a moderated chat's background goes
+ *   to the moderated provider regardless. Passing mere existence there let raw
+ *   "naked, barefoot" appearance text through to a prompt crafter working for
+ *   a provider that promptly rejected it.
  *
  * @param appearances - Resolved character appearances
- * @param dangerSettings - the Concierge settings
+ * @param conciergePolicy - the chat's resolved Concierge policy
  * @param isDangerousChat - Whether the chat is marked as dangerous
- * @param hasUncensoredImageProvider - Whether an uncensored image provider is available
+ * @param routesDangerousToUncensored - Whether appearance text classified as
+ *   dangerous will actually be generated by the uncensored image provider
  * @param cheapLLMSelection - Cheap LLM provider for classification/sanitization
  * @param userId - Current user ID
  * @param chatId - Optional chat ID for logging
+ * @param mode - `redress` (default) swaps explicit states for neutral clothing;
+ *   `conceal` keeps the state and sets `needsConcealment`. Only a caller whose
+ *   crafter carries the concealment guidance (story backgrounds) may pass
+ *   `conceal` — anywhere else the flag would reach a moderated provider
+ *   with nothing downstream to act on it.
  * @returns Possibly-sanitized appearances (same array reference if unchanged)
  */
 export async function sanitizeAppearancesIfNeeded(
   appearances: ResolvedCharacterAppearance[],
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   isDangerousChat: boolean,
-  hasUncensoredImageProvider: boolean,
+  routesDangerousToUncensored: boolean,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  mode: AppearanceSanitizeMode = 'redress'
 ): Promise<ResolvedCharacterAppearance[]> {
-  // 1. The Concierge off → pass through
-  if (dangerSettings.mode === 'OFF') {
+  // 1. The appearance check is a classifier scan: a Moderated chat pays for
+  // it only when the pre-screen is on. An Unmoderated chat is already known to
+  // be dangerous, so when its scene cannot reach the uncensored desk the sheet
+  // still goes on rather than handing the moderated provider a refusal. Off
+  // duty or Locked → the Concierge keeps his hands off.
+  if (!conciergePolicy.preScreen.enabled && !conciergePolicy.routeDirect) {
+    logger.debug('[AppearanceResolution] Appearance sanitization not applicable under this Concierge policy', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      conciergeSource: conciergePolicy.source,
+    })
     return appearances
   }
 
-  // 2. Dangerous chat with uncensored provider → accurate appearances are fine
-  if (isDangerousChat && hasUncensoredImageProvider) {
+  // 2. Dangerous chat already bound for the uncensored provider → accurate
+  // appearances are fine; nobody asked for a sheet over this one.
+  if (isDangerousChat && routesDangerousToUncensored) {
     return appearances
   }
 
@@ -390,7 +414,7 @@ export async function sanitizeAppearancesIfNeeded(
       combinedText,
       cheapLLMSelection,
       userId,
-      dangerSettings,
+      conciergePolicy,
       chatId
     )
   } catch (error) {
@@ -413,19 +437,21 @@ export async function sanitizeAppearancesIfNeeded(
     chatId,
     score: classification.score,
     categories: classification.categories.map(c => c.category),
-    hasUncensoredImageProvider,
+    routesDangerousToUncensored,
   })
 
-  // 4. Dangerous but uncensored provider available → will be routed there
-  if (hasUncensoredImageProvider) {
+  // 4. Dangerous, and this scene really is bound for the uncensored provider
+  // → leave it accurate. Existence of such a profile is not enough (bug 133).
+  if (routesDangerousToUncensored) {
     return appearances
   }
 
-  // 5. Dangerous with NO uncensored provider → sanitize
+  // 5. Dangerous and staying on a moderated provider → sanitize
   logger.info('[AppearanceResolution] Sanitizing dangerous appearance descriptions', {
     context: 'image-gen.appearance-resolution',
     chatId,
     characterCount: appearances.length,
+    mode,
   })
 
   const toSanitize = appearances.map(a => ({
@@ -437,7 +463,8 @@ export async function sanitizeAppearancesIfNeeded(
     toSanitize,
     cheapLLMSelection,
     userId,
-    chatId
+    chatId,
+    mode
   )
 
   if (!sanitizeResult.success || !sanitizeResult.result) {
@@ -454,15 +481,20 @@ export async function sanitizeAppearancesIfNeeded(
     const sanitized = sanitizeResult.result!.find(
       s => s.characterId === appearance.characterId
     )
-    if (sanitized && sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()) {
-      return {
-        ...appearance,
-        // Use sanitized text as both physical + clothing combined
-        physicalDescription: sanitized.appearanceText,
-        clothingDescription: '',
-        wasSanitized: true,
-      }
+    if (!sanitized) return appearance
+    const textChanged = sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()
+    if (!textChanged && !sanitized.undressed) return appearance
+    return {
+      ...appearance,
+      ...(textChanged
+        ? {
+            // Use sanitized text as both physical + clothing combined
+            physicalDescription: sanitized.appearanceText,
+            clothingDescription: '',
+            wasSanitized: true,
+          }
+        : {}),
+      ...(sanitized.undressed ? { needsConcealment: true } : {}),
     }
-    return appearance
   })
 }

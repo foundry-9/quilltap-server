@@ -7,7 +7,7 @@
  * `/api/v1/system/home`, backed by the shared `home-data.service`) and renders
  * {@link HomeView}. Used for the workspace home tab, where the surrounding route
  * is client-rendered. The legacy `/` route renders `HomeView` directly with
- * server-fetched data. See `docs/developer/features/tabbed-workspace.md`.
+ * server-fetched data. See `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/homepage/HomeViewContainer
  */

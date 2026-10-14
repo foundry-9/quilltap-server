@@ -5,9 +5,9 @@
  *  - the relevant-conversations renderer prints frontmatter dates.
  */
 
-import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
-import { renderRelevantConversationsBlock } from '../conversation-summary-search'
-import type { SemanticSearchResult } from '../memory-service'
+import { renderHead } from '../recall/render'
+import { renderRelevantConversationsBlock } from '../recall/conversations'
+import type { RecallCandidate } from '../recall/types'
 import type { Memory } from '@/lib/schemas/types'
 
 /** These cases are about dates, not attribution: the memories are the character's own. */
@@ -37,24 +37,23 @@ function makeMemory(overrides: Partial<Memory>): Memory {
   } as Memory
 }
 
-describe('formatDynamicMemoryHead dates', () => {
+describe('renderHead dates', () => {
   it('prepends an age label computed from occurredAt (event clock, not write clock)', () => {
     const occurredAt = new Date(Date.now() - 8 * 86_400_000).toISOString() // ~ last week
-    const results: SemanticSearchResult[] = [
+    const results: RecallCandidate[] = [
       {
         memory: makeMemory({ occurredAt }),
         score: 0.8,
         usedEmbedding: true,
-        effectiveWeight: 0.7,
-        rawWeight: 0.7,
+        salience: 0.7,
       },
     ]
-    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)
+    const formatted = renderHead(results, 'ANTHROPIC' as never, SELF_SUBJECT, { maxTokens: 200, maxEntries: 5 })
     expect(formatted.content).toContain('[last week]')
   })
 
   it('carries narrativeTime verbatim alongside the age label', () => {
-    const results: SemanticSearchResult[] = [
+    const results: RecallCandidate[] = [
       {
         memory: makeMemory({
           occurredAt: new Date().toISOString(),
@@ -62,11 +61,10 @@ describe('formatDynamicMemoryHead dates', () => {
         }),
         score: 0.8,
         usedEmbedding: true,
-        effectiveWeight: 0.7,
-        rawWeight: 0.7,
+        salience: 0.7,
       },
     ]
-    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)
+    const formatted = renderHead(results, 'ANTHROPIC' as never, SELF_SUBJECT, { maxTokens: 200, maxEntries: 5 })
     expect(formatted.content).toContain('[today · the third night at sea]')
   })
 })

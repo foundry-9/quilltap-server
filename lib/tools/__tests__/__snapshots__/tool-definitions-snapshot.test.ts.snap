@@ -81,6 +81,23 @@ exports[`tool definitions: derived OpenAI parameters describeImage: parameters s
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters discardMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "letter": {
+      "description": "The letter's file name, exactly as list_mail or Suparṇā named it (e.g. "1718370000000-from-ariadne.md"). Just the name — no folder or path; the Post Office knows where your postbox is.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "letter",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1004,7 +1021,7 @@ exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters sn
   "additionalProperties": false,
   "properties": {
     "url": {
-      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=chat&section=dangerous-content", "/settings?tab=appearance", "/aurora", "/salon"",
+      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=concierge&section=uncensored-desk", "/settings?tab=appearance", "/aurora", "/salon"",
       "minLength": 1,
       "type": "string",
     },
@@ -1046,10 +1063,11 @@ exports[`tool definitions: derived OpenAI parameters helpSettings: parameters sn
   "additionalProperties": false,
   "properties": {
     "category": {
-      "description": "Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.",
+      "description": "Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, and agent mode settings. "concierge" returns the Concierge settings: whether he is on duty, the uncensored desk profiles, the refusal auto-switch, display of flagged content, and the optional classifier pre-screen. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.",
       "enum": [
         "overview",
         "chat",
+        "concierge",
         "connections",
         "embeddings",
         "images",
@@ -1121,27 +1139,32 @@ Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
       "type": "string",
     },
     "quality": {
-      "default": "standard",
-      "description": "Image quality. "standard" for regular quality (faster, lower cost). "hd" produces finer details and greater consistency (slower, higher cost).",
+      "description": "Optional, provider-dependent: how much effort the model spends. Omit it to use the image profile's own setting, which is almost always right. Newer OpenAI models take "auto", "low", "medium" and "high"; the older DALL-E models take "standard" and "hd". "xhigh" and "max" are premium tiers on GPT Image 2.5 only — markedly slower and more expensive, so use them only when the user has actually asked for the best possible quality. A tier the selected model does not offer is ignored.",
       "enum": [
+        "auto",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
         "standard",
         "hd",
       ],
       "type": "string",
     },
     "size": {
-      "default": "1024x1024",
-      "description": "Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Most providers ignore it. Prefer \`orientation\`.",
+      "description": "Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Omit it to use the image profile's own setting. Most providers ignore it, and a provider that does not support the exact size falls back to a square. Prefer \`orientation\`.",
       "enum": [
         "1024x1024",
         "1792x1024",
         "1024x1792",
+        "1536x1024",
+        "1024x1536",
       ],
       "type": "string",
     },
     "style": {
-      "default": "vivid",
-      "description": "Image style. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images.",
+      "description": "Image style, honoured only by DALL-E 3. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images. Omit it to use the image profile's own setting.",
       "enum": [
         "vivid",
         "natural",
@@ -1184,14 +1207,6 @@ exports[`tool definitions: derived OpenAI parameters keepImage: parameters snaps
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters listEmail: parameters snapshot 1`] = `
-{
-  "additionalProperties": false,
-  "properties": {},
-  "type": "object",
-}
-`;
-
 exports[`tool definitions: derived OpenAI parameters listImages: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1220,6 +1235,14 @@ exports[`tool definitions: derived OpenAI parameters listImages: parameters snap
       "type": "array",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters listMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
   "type": "object",
 }
 `;
@@ -1270,6 +1293,23 @@ exports[`tool definitions: derived OpenAI parameters readConversation: parameter
       "type": "integer",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters readMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "letter": {
+      "description": "The letter's file name, exactly as list_mail or Suparṇā named it (e.g. "1718370000000-from-ariadne.md"). Just the name — no folder or path; the Post Office knows where your postbox is.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "letter",
+  ],
   "type": "object",
 }
 `;
@@ -1516,6 +1556,53 @@ exports[`tool definitions: derived OpenAI parameters searchScriptoriumBrahma: pa
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters searchScriptoriumScenario: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 10,
+      "description": "Maximum number of results to return. Default is 10.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "What to look up in the document stores: a place, its history, a custom, an event, a season. Be specific.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "scope": {
+      "default": "all",
+      "description": ""all" (the default) searches every reachable store. "character" narrows to the cast's character vaults, "group" to their groups' stores, "project" to the project's stores.",
+      "enum": [
+        "all",
+        "project",
+        "character",
+        "group",
+      ],
+      "type": "string",
+    },
+    "sources": {
+      "description": "Which layers to search. Defaults to both. "documents" searches every file in every reachable store; "knowledge" searches only files under a \`Knowledge/\` folder inside those stores, tagged by tier.",
+      "items": {
+        "enum": [
+          "documents",
+          "knowledge",
+        ],
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1571,7 +1658,7 @@ exports[`tool definitions: derived OpenAI parameters sendMail: parameters snapsh
       "type": "string",
     },
     "in_reply_to": {
-      "description": "Optional. The message id (the Mail/… path) of a letter in YOUR OWN postbox that you are answering. When supplied, your reply is prefaced with a quoted copy of that original letter.",
+      "description": "Optional. The file name of a letter in YOUR OWN postbox that you are answering (as list_mail or Suparṇā names it, e.g. "1718370000000-from-ariadne.md"). When supplied, your reply is prefaced with a quoted copy of that original letter.",
       "minLength": 1,
       "type": "string",
     },
@@ -1778,6 +1865,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "description": "If true, wear the item immediately after creation. Defaults to false. Wearing honors the new item's replace flag: off (the default) layers it over what is already worn, on replaces those slots. For composites this places the composite (as a single id) into every slot it covers. The response reports the resulting effect (layered vs replaced).",
       "type": "boolean",
     },
+    "generate_image": {
+      "description": "Whether to have a picture of the new item drawn in the background. Omit to follow the operator's setting (on when they allow the wardrobe tools to make pictures). Pictures are only ever made when the operator allows it; the response says what happened.",
+      "type": "boolean",
+    },
     "image_prompt": {
       "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
       "type": "string",
@@ -1828,10 +1919,6 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
     },
     "include_equipped": {
       "description": "Whether to include currently equipped items in the results. Defaults to true.",
-      "type": "boolean",
-    },
-    "include_presets": {
-      "description": "Whether to include saved outfit presets in the response. Defaults to true.",
       "type": "boolean",
     },
     "type_filter": {
@@ -1931,6 +2018,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
     "description": {
       "description": "New description. Omit to leave unchanged.",
       "type": "string",
+    },
+    "generate_image": {
+      "description": "Whether to have a new picture of the item drawn in the background. Omit to follow the operator's setting: when they allow the wardrobe tools to make pictures, a change to how the item looks (title, image_prompt, types or components) redraws it. Pass true to redraw anyway (for instance, to give an item its first picture). Pictures are only ever made when the operator allows it; the response says what happened.",
+      "type": "boolean",
     },
     "image_prompt": {
       "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",

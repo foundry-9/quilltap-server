@@ -44,6 +44,12 @@ import { ChatMessagesOps, ChatMessageRowSchema } from './chats-messages.ops';
 import { ChatSearchReplaceOps } from './chats-search.ops';
 
 /**
+ * The chat's Concierge state columns — patch-only on this table (see
+ * `ChatsRepository.patchOnlyFields`).
+ */
+const CONCIERGE_MODE_FIELDS: readonly string[] = ['conciergeMode', 'conciergeModeSetBy', 'conciergeModeReason'];
+
+/**
  * Chats repository with database abstraction layer backend
  */
 export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
@@ -173,6 +179,13 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * Find the N most-recent salon chats for a character that have a contextSummary,
    * sorted by lastMessageAt descending. Used by the memory-recap "Recent Conversations"
    * block. Filter, sort, and limit are all pushed to SQL.
+   *
+   * The `$exists` filter is only as honest as the column. Until bug 158, chat
+   * creation seeded `contextSummary` with the chosen scenario, so every chat
+   * matched here from the moment it was made and this method handed the greeting
+   * a stage direction to open from. Only the summarizer writes that column now;
+   * the scenario lives in `scenarioText`. Anything that starts seeding it again
+   * re-opens the bug, and the seeding is what to look at, not this filter.
    *
    * Note: the participants JSON-array filter is the bottleneck at scale (no index can
    * cover it cheaply). If this is moved to a per-message hot path, consider denormalizing
@@ -504,6 +517,218 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
     return this.messagesOps.deleteMessagesByIds(chatId, messageIds);
+  }
+
+  /**
+   * Announce that this chat's transcript changed — bump the counter, publish
+   * the hint. Every message write already ends here; callers outside this
+   * repository need it only if they rewrite message rows some other way.
+   */
+  async announceTranscriptChange(chatId: string): Promise<void> {
+    return this.messagesOps.announceTranscriptChange(chatId);
+  }
+
+  /**
+   * The chat's transcript counter, or 0 when it has never changed.
+   *
+   * Read straight off the row rather than through the entity schema, because
+   * the column is deliberately not part of it — see
+   * `ChatMessagesOps.announceTranscriptChange` for why keeping it out is what
+   * makes the counter safe against concurrent writers.
+   */
+  async getTranscriptVersion(chatId: string): Promise<number> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter);
+      const version = (row as { transcriptVersion?: unknown } | null)?.transcriptVersion;
+      return typeof version === 'number' ? version : 0;
+    }, 'Failed to read transcript version', { chatId }, 0);
+  }
+
+  // ============================================================================
+  // CONCIERGE STATE
+  // ============================================================================
+  //
+  // `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` live in the
+  // schema (they travel in exports and restores), but they are patch-only: a
+  // whole-row `update` that does not name them leaves them alone, so a
+  // concurrent title or telemetry write cannot rewind a newer Concierge state
+  // from its stale snapshot. The one sanctioned writer is `applyConciergeFlip`
+  // (`lib/services/dangerous-content/manual-flip.ts`), through
+  // `setConciergeMode` below.
+
+  protected override patchOnlyFields(): readonly string[] {
+    return [...CONCIERGE_MODE_FIELDS];
+  }
+
+  /**
+   * Write a chat's Concierge state. With `expected`, the write is a
+   * compare-and-set: it lands only if the stored state is still `expected`
+   * (NULL counts as `'moderated'`), so a decision made on a snapshot can never
+   * overwrite a state that changed since. Returns whether a row was written.
+   *
+   * In the forked job child this is a buffered write (`set*` prefix) and
+   * returns nothing meaningful; the Concierge's own moves therefore run in the
+   * parent only.
+   */
+  async setConciergeMode(
+    chatId: string,
+    columns: {
+      conciergeMode: 'moderated' | 'unmoderated' | 'locked';
+      conciergeModeSetBy: 'operator' | 'concierge' | null;
+      conciergeModeReason: 'manual' | 'refusals' | 'classifier' | 'migration' | null;
+    },
+    expected?: 'moderated' | 'unmoderated' | 'locked',
+  ): Promise<boolean> {
+    const filter: Record<string, unknown> = { id: chatId };
+    if (expected) {
+      filter.$or = expected === 'moderated'
+        ? [{ conciergeMode: 'moderated' }, { conciergeMode: null }]
+        : [{ conciergeMode: expected }];
+    }
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        filter as QueryFilter,
+        { $set: columns } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to write the Concierge state', { chatId }, false);
+    logger.debug('Concierge state write', {
+      chatId,
+      ...columns,
+      expected,
+      written,
+    });
+    return written;
+  }
+
+  /**
+   * Record the chat-level danger classifier's verdict: its telemetry
+   * (`isDangerousChat`, score, categories, when, at which message count).
+   * Telemetry only — it never moves the chat's Concierge state.
+   *
+   * In the forked job child this is a buffered write (`set*` prefix). The
+   * parent's commit hook reads `verdict` off it and, for a dangerous verdict,
+   * asks `maybeSwitchAfterClassification` whether to move the chat.
+   *
+   * @param verdict What the Concierge's announcement would report, carried to
+   *   the parent's commit hook. Not stored.
+   */
+  async setDangerClassification(
+    chatId: string,
+    telemetry: {
+      isDangerousChat: boolean;
+      dangerScore: number | null;
+      dangerCategories: string[];
+      dangerClassifiedAt: string;
+      dangerClassifiedAtMessageCount: number;
+    },
+    verdict?: {
+      score: number;
+      threshold: number;
+      categories: Array<{ category: string; score: number; label?: string }>;
+      source?: 'moderation' | 'llm';
+      providerName?: string;
+    } | null,
+  ): Promise<ChatMetadata | null> {
+    const updated = await this.update(chatId, telemetry);
+    logger.debug('Chat danger classification recorded', {
+      chatId,
+      isDangerousChat: telemetry.isDangerousChat,
+      dangerScore: telemetry.dangerScore,
+      hasVerdict: !!verdict,
+    });
+    return updated;
+  }
+
+  // ============================================================================
+  // CONCIERGE REFUSAL LEDGER
+  // ============================================================================
+  //
+  // `moderationRefusalCount` / `lastModerationRefusalAt` are deliberately NOT
+  // declared in `ChatMetadataSchema`, for the reason `transcriptVersion` is not:
+  // every `update` rewrites the whole validated row from a snapshot read a
+  // moment earlier, so a counter inside the schema could be rewound by any
+  // concurrent chat-row write. Zod strips what it does not declare, so these
+  // three methods are the only things that touch the columns. The ledger's
+  // one writer above them is `recordModerationRefusal`
+  // (`lib/services/dangerous-content/refusal-ledger.ts`).
+
+  /**
+   * Record one stated moderation refusal on a chat: an atomic
+   * `moderationRefusalCount + 1` and a fresh `lastModerationRefusalAt`.
+   * Returns the new count (0 when the chat does not exist).
+   *
+   * In the forked job child this is a buffered write (`increment*` prefix)
+   * and returns nothing there; the parent replays it, and its commit hook
+   * runs the auto-switch check for the chat.
+   *
+   * @param refusedBy Who refused, for the log line and for the parent's
+   *   commit hook, which names them in the Concierge's announcement. Not stored.
+   */
+  async incrementModerationRefusalCount(
+    chatId: string,
+    at: string,
+    refusedBy?: { provider: string; modelName?: string | null } | null,
+  ): Promise<number> {
+    const updated = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $inc: { moderationRefusalCount: 1 }, $set: { lastModerationRefusalAt: at } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to record a moderation refusal', { chatId }, false);
+
+    if (!updated) {
+      logger.warn('Moderation refusal not recorded: chat not found', { chatId });
+      return 0;
+    }
+
+    const { count } = await this.getModerationRefusalLedger(chatId);
+    logger.debug('Moderation refusal recorded on the chat ledger', {
+      chatId,
+      count,
+      at,
+      provider: refusedBy?.provider,
+      modelName: refusedBy?.modelName ?? undefined,
+    });
+    return count;
+  }
+
+  /**
+   * The chat's refusal ledger, read straight off the row (the columns are not
+   * part of the entity schema — see above). A missing chat reads as empty.
+   */
+  async getModerationRefusalLedger(
+    chatId: string,
+  ): Promise<{ count: number; lastAt: string | null }> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter) as
+        { moderationRefusalCount?: unknown; lastModerationRefusalAt?: unknown } | null;
+      const count = typeof row?.moderationRefusalCount === 'number' ? row.moderationRefusalCount : 0;
+      const lastAt = typeof row?.lastModerationRefusalAt === 'string' ? row.lastModerationRefusalAt : null;
+      return { count, lastAt };
+    }, 'Failed to read the moderation refusal ledger', { chatId }, { count: 0, lastAt: null });
+  }
+
+  /**
+   * Empty the chat's refusal ledger. Called by `applyConciergeFlip` when the
+   * operator returns a chat to Moderated — a fresh start, so stale refusals
+   * cannot immediately undo the operator's decision.
+   */
+  async resetModerationRefusalLedger(chatId: string): Promise<void> {
+    await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { moderationRefusalCount: 0, lastModerationRefusalAt: null } } as never,
+      );
+      return true;
+    }, 'Failed to reset the moderation refusal ledger', { chatId }, false);
+    logger.debug('Moderation refusal ledger reset', { chatId });
   }
 
   // ============================================================================

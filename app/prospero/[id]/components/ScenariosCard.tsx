@@ -17,11 +17,13 @@ import { useProjectScenarios } from '../hooks'
 
 interface ScenariosCardProps {
   projectId: string
+  /** Offered as the Host's default save home ("Project: <name>"). */
+  projectName?: string | null
   expanded: boolean
   onToggle: () => void
 }
 
-export function ScenariosCard({ projectId, expanded, onToggle }: ScenariosCardProps) {
+export function ScenariosCard({ projectId, projectName, expanded, onToggle }: ScenariosCardProps) {
   const mutator = useProjectScenarios(projectId)
 
   return (
@@ -49,6 +51,7 @@ export function ScenariosCard({ projectId, expanded, onToggle }: ScenariosCardPr
           <ScenariosManager
             mutator={mutator}
             scopeLabel="project"
+            shelf={{ kind: 'project', projectId, projectName }}
             emptyMessage="No scenarios yet. Create one and it'll be offered when starting new chats in this project."
           />
         </div>

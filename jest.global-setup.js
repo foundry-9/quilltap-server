@@ -20,28 +20,26 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
-const { readCompiledAbi } = require('./packages/quilltap/lib/native-modules');
+const { readCompiledAbi, rebuildNativePackage } = require('./packages/quilltap/lib/native-modules');
 
 const ROOT = __dirname;
 
-// Each candidate copy: the package directory that may hold a binding, and how to
-// rebuild it. `rebuildTarget` is the npm name to `npm rebuild` from `cwd`. Note
-// the root copy's target is the ALIAS name `better-sqlite3` — rebuilding
-// `better-sqlite3-multiple-ciphers` at the root touches a phantom dir and leaves
-// the loaded module stale (see docs / the ABI memo).
+// Each candidate copy is addressed by its DIRECTORY, not by an npm package name.
+// This used to shell out to `npm rebuild <name>` and both spellings failed:
+// `better-sqlite3` (the root alias) is refused with EALLOWSCRIPTS because it is
+// not a key in the root package.json `allowScripts` map, and
+// `better-sqlite3-multiple-ciphers` at the root reports success while rebuilding
+// a phantom directory. `rebuildNativePackage` runs the package's own
+// `prebuild-install || node-gyp rebuild` chain in place instead, and verifies
+// the binding's ABI actually moved before calling it healed.
 const COPIES = [
   {
     label: 'better-sqlite3 (root alias)',
     pkgDir: path.join(ROOT, 'node_modules', 'better-sqlite3'),
-    cwd: ROOT,
-    rebuildTarget: 'better-sqlite3',
   },
   {
     label: 'better-sqlite3-multiple-ciphers (packages/quilltap)',
     pkgDir: path.join(ROOT, 'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers'),
-    cwd: path.join(ROOT, 'packages', 'quilltap'),
-    rebuildTarget: 'better-sqlite3-multiple-ciphers',
   },
 ];
 
@@ -61,12 +59,12 @@ function healCopy(copy) {
     `\n  [jest] Native ABI mismatch for ${copy.label} ` +
       `(built ${compiledAbi ?? 'missing'}, running ${running}). Rebuilding for Node ${process.version}...`,
   );
-  try {
-    execSync(`npm rebuild ${copy.rebuildTarget}`, { cwd: copy.cwd, stdio: 'inherit' });
-    console.log(`  [jest] Rebuilt ${copy.label}.\n`);
-  } catch (err) {
-    console.error(`  [jest] Failed to rebuild ${copy.label}: ${err.message}`);
-    console.error(`  [jest] Try: (cd ${copy.cwd} && npm rebuild ${copy.rebuildTarget})\n`);
+  const result = rebuildNativePackage(copy.pkgDir, bindingPath);
+  if (result.ok) {
+    console.log(`  [jest] Rebuilt ${copy.label} via ${result.reason}.\n`);
+  } else {
+    console.error(`  [jest] Failed to rebuild ${copy.label} — ${result.reason}`);
+    console.error(`  [jest] Try: (cd ${copy.pkgDir} && ./node_modules/.bin/prebuild-install)\n`);
   }
 }
 

@@ -46,5 +46,3 @@ export function OutfitSlotsPreview({ slots }: { slots: OutfitPreviewSlots }) {
     </div>
   )
 }
-
-export default OutfitSlotsPreview

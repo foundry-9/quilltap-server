@@ -49,6 +49,8 @@ function makeIdMaps(): IdMappingState {
     mountPoints: new Map(), docMountFileLinks: new Map(),
     characterVaultMounts: new Map(), skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
+    messages: new Map(),
   };
 }
 

@@ -25,8 +25,10 @@ import {
 } from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
 import { byChatActivityDesc } from '@/lib/chat/chat-activity'
-import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
+import { deriveScriptoriumStatus, type ScriptoriumStatus } from '@/lib/scriptorium/status'
 
 type Repos = RepositoryContainer
 
@@ -53,7 +55,7 @@ export interface ChatListPreloaded {
   memoryCounts: Map<string, number>
   /**
    * Conversation-chunk totals per chatId (absent when no chunks exist).
-   * Used together with `chat.renderedMarkdown` to derive `scriptoriumStatus`.
+   * The sole input to `scriptoriumStatus` (see lib/scriptorium/status.ts).
    */
   conversationChunkCounts: Map<string, { total: number; embedded: number }>
 }
@@ -170,6 +172,8 @@ export interface EnrichedParticipantDetail {
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
   selectedSystemPromptId: string | null
+  /** Ids of the character's subprompts in play for this chat. */
+  selectedSubpromptIds: string[]
   /** Per-chat talkativeness override (0.1–1.0). Null/undefined → inherit from character. */
   talkativeness?: number | null
   createdAt: string
@@ -218,16 +222,20 @@ export interface EnrichedChatSummary {
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
   /**
-   * The derived Concierge four-state. Lists carry this instead of the raw
-   * `isDangerousChat` / `conciergeOverride` pair so nothing downstream has to
-   * read the two stored fields together (and get it wrong).
+   * The derived Concierge state (Moderated / Unmoderated / Locked). Lists
+   * carry this instead of the stored columns so nothing downstream has to
+   * read them (and get it wrong).
    */
   conciergeState: ConciergeState
-  /** The classifier's categories, surfaced only for `'flagged'`. `[]` when none. */
+  /** Who put the chat in its state; `null` for Moderated. */
+  conciergeSetBy: ConciergeProvenance
+  /** Why the chat is in its state; `null` for Moderated. */
+  conciergeReason: ConciergeModeReason | null
+  /** The classifier's categories, for the mark's tooltip. `[]` when none. */
   dangerCategories: string[]
   chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
-  /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
-  scriptoriumStatus: 'none' | 'rendered' | 'embedded'
+  /** Scriptorium status, derived from chunk embeddings (lib/scriptorium/status.ts). */
+  scriptoriumStatus: ScriptoriumStatus
   _count: { messages: number; memories: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -479,6 +487,7 @@ export async function enrichParticipantDetail(
     connectionProfile,
     imageProfile,
     selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
+    selectedSubpromptIds: participant.selectedSubpromptIds ?? [],
     talkativeness: participant.talkativeness ?? null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
@@ -579,22 +588,13 @@ export async function enrichChatForList(
     ? preloaded.memoryCounts.get(chat.id) ?? 0
     : await repos.memories.countByChatId(chat.id)
 
-  const hasRenderedMarkdown = !!chat.renderedMarkdown
   let chunkStats: { total: number; embedded: number } | undefined
   if (preloaded) {
     chunkStats = preloaded.conversationChunkCounts.get(chat.id)
-  } else if (hasRenderedMarkdown) {
-    const chunks = await repos.conversationChunks.findByChatId(chat.id)
-    chunkStats = {
-      total: chunks.length,
-      embedded: chunks.filter((c) => c.embedding !== null && c.embedding !== undefined).length,
-    }
+  } else {
+    chunkStats = (await repos.conversationChunks.countByChatIds([chat.id])).get(chat.id)
   }
-  const scriptoriumStatus: 'none' | 'rendered' | 'embedded' = hasRenderedMarkdown
-    ? chunkStats && chunkStats.total > 0 && chunkStats.embedded >= chunkStats.total
-      ? 'embedded'
-      : 'rendered'
-    : 'none'
+  const scriptoriumStatus = deriveScriptoriumStatus(chunkStats)
 
   return {
     id: chat.id,
@@ -608,6 +608,8 @@ export async function enrichChatForList(
     project,
     storyBackground,
     conciergeState: getConciergeState(chat),
+    conciergeSetBy: getConciergeProvenance(chat),
+    conciergeReason: getConciergeReason(chat),
     dangerCategories: chat.dangerCategories ?? [],
     chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
     scriptoriumStatus,
@@ -659,13 +661,6 @@ export async function enrichChatsForList(
   }
 
   const chatIds = sortedChats.map((c) => c.id)
-  // Restrict the chunk-count query to chats that actually have rendered
-  // markdown — every other chat is unambiguously 'none' and querying for it
-  // is wasted work. Memory counts run over every chat ID since a chat can
-  // accrue memories without ever being rendered.
-  const renderedChatIds = sortedChats
-    .filter((c) => !!c.renderedMarkdown)
-    .map((c) => c.id)
 
   const [files, links, projects, memoryCounts, conversationChunkCounts] = await Promise.all([
     fileIds.size > 0 ? repos.files.findByIds(Array.from(fileIds)) : Promise.resolve([] as FileEntry[]),
@@ -676,8 +671,8 @@ export async function enrichChatsForList(
     chatIds.length > 0
       ? repos.memories.countByChatIds(chatIds)
       : Promise.resolve(new Map<string, number>()),
-    renderedChatIds.length > 0
-      ? repos.conversationChunks.countByChatIds(renderedChatIds)
+    chatIds.length > 0
+      ? repos.conversationChunks.countByChatIds(chatIds)
       : Promise.resolve(new Map<string, { total: number; embedded: number }>()),
   ])
 

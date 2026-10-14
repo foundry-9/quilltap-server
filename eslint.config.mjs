@@ -118,7 +118,7 @@ const eslintConfig = defineConfig([
     // `lib/char-insert/**` above: quilltap-v5 copies this directory wholesale
     // and rewrites only the Lexical adapter in components/chat/.
     //
-    // See docs/developer/features/composer-smart-typography.md. Adding an
+    // See docs/developer/features/complete/composer-smart-typography.md. Adding an
     // import here is not a lint failure to silence; it means the code belongs
     // in `components/chat/lexical/plugins/SmartTypographyPlugin.tsx` instead.
     files: ['lib/smart-typography/**/*.ts'],

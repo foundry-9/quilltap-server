@@ -65,7 +65,7 @@ describe('buildToolsForProvider — Brahma surface flags', () => {
   it('strips workspace tools, keeps search (no-memories) + doc_* + submit_final_response', async () => {
     const tools = await buildToolsForProvider('OPENAI', {
       agentMode: true,
-      documentEditing: true,
+      docToolsMode: 'full',
       includeWorkspaceTools: false,
       excludeMemorySearch: true,
       rng: false,
@@ -82,7 +82,9 @@ describe('buildToolsForProvider — Brahma surface flags', () => {
 
     // Stripped: the always-on workspace tools
     expect(names).not.toContain('send_mail')
-    expect(names).not.toContain('list_email')
+    expect(names).not.toContain('list_mail')
+    expect(names).not.toContain('read_mail')
+    expect(names).not.toContain('discard_mail')
     expect(names).not.toContain('read_conversation')
     expect(names).not.toContain('upsert_annotation')
     expect(names).not.toContain('delete_annotation')
@@ -113,7 +115,7 @@ describe('buildToolsForProvider — run_sql (Brahma SQL access)', () => {
   it('includes run_sql when sqlAccess is true (the Brahma Console surface)', async () => {
     const tools = await buildToolsForProvider('OPENAI', {
       agentMode: true,
-      documentEditing: true,
+      docToolsMode: 'full',
       includeWorkspaceTools: false,
       excludeMemorySearch: true,
       sqlAccess: true,

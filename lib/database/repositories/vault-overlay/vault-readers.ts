@@ -29,7 +29,6 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_WARDROBE_JSON_PATH,
   CHARACTER_WARDROBE_FOLDER,
-  isWardrobeInstructionsFileName,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
   CharacterVaultPropertiesSchema,
@@ -48,6 +47,7 @@ import {
   parseScenarioFile,
   parseWardrobeItemFile,
   resolveAndCheckComponentItems,
+  isWardrobeItemDocumentPath,
 } from './parsers';
 
 export async function readVaultTextFile(
@@ -307,9 +307,12 @@ export async function readCharacterVaultScenarios(
  * if neither the new folder layout nor the legacy `wardrobe.json` is usable.
  *
  * Read order:
- *   1. `Wardrobe/*.md` (current format). Composite items reference their
- *      components via the `componentItems:` slug array, resolved here against
- *      the in-vault slug map (slug-first, UUID fallback).
+ *   1. Every `.md` under `Wardrobe/`, at any depth (current format) — each
+ *      item's `folder` is its path under `Wardrobe/`; `images/` and every
+ *      `instructions.md` are skipped (`isWardrobeItemDocumentPath`).
+ *      Composite items reference their components via the `componentItems:`
+ *      slug array, resolved here against the slug map of every item in the
+ *      tier, whatever its folder (slug-first, UUID fallback).
  *   2. legacy `wardrobe.json` (still honored so existing vaults don't lose
  *      hand-edits between this change shipping and the migration running).
  *
@@ -321,30 +324,38 @@ export async function readCharacterVaultScenarios(
  *
  * Cycle and unknown-ref handling: cycles in the declared component graph
  * wipe the offending item's `componentItemIds` (logged) but leave the item
- * itself intact so vault hand-edits aren't silently destructive. Unknown
- * refs (slug or UUID that doesn't match anything in this vault) are dropped
- * from that item's component list with a warning.
+ * itself intact so vault hand-edits aren't silently destructive. An unknown
+ * UUID ref is kept (it names a part in another tier); an unknown slug is
+ * dropped from that item's component list with a warning.
  */
 export async function readCharacterVaultWardrobe(
   mountPointId: string,
   characterId?: string,
-  options?: { seedArchetypes?: boolean },
 ): Promise<CharacterVaultWardrobe | null> {
   const repos = getRepositories();
   const charId = characterId ?? mountPointId;
-  // The Quilltap General Wardrobe/ folder IS the archetype set, so reading it
-  // must NOT seed archetypes — that would recurse back through findArchetypes.
-  const seedArchetypes = options?.seedArchetypes ?? true;
 
+  // Recursive: the operator's subfolders (`Wardrobe/Formal/Evening/`) hold
+  // items too, and each item's `folder` is derived from its path.
   const allDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     CHARACTER_WARDROBE_FOLDER,
     '.md',
+    { recursive: true },
   );
-  // `Wardrobe/instructions.md` is dressing guidance, never a garment. Filter
-  // before the length check so a folder holding only the instructions file
-  // still falls through to the legacy wardrobe.json branch below.
-  const itemDocs = allDocs.filter((doc) => !isWardrobeInstructionsFileName(doc.fileName));
+  // `instructions.md` is dressing guidance, never a garment, and
+  // `Wardrobe/images/` holds item pictures — the one predicate says which
+  // documents are items. Filter before the length check so a folder holding
+  // only the instructions file still falls through to the legacy
+  // wardrobe.json branch below.
+  const itemDocs = allDocs.filter((doc) => isWardrobeItemDocumentPath(doc.relativePath));
+  if (itemDocs.length !== allDocs.length) {
+    logger.debug('Wardrobe read skipped non-item documents', {
+      characterId: charId,
+      mountPointId,
+      skipped: allDocs.length - itemDocs.length,
+    });
+  }
 
   if (itemDocs.length > 0) {
     const items = itemDocs
@@ -375,26 +386,10 @@ export async function readCharacterVaultWardrobe(
       itemBySlug.set(slug, item);
     }
 
-    // Seed shared archetypes into the lookup maps so bundles in this vault can
-    // reference them. Without this, refs to shared items (Fitbit, Apple Watch,
-    // etc.) get stripped on every read of any outfit that bundles them, since
-    // archetypes don't live in the character's vault folder. Personal items
-    // win slug collisions; archetypes are pure fallback.
-    const hasComponentRefs = items.some((item) => item.componentItemIds.length > 0);
-    if (hasComponentRefs && seedArchetypes) {
-      const archetypes = await repos.wardrobe.findArchetypes(true);
-      for (const arche of archetypes) {
-        if (!itemById.has(arche.id)) {
-          itemById.set(arche.id, arche);
-        }
-        const slug = slugifyWardrobeTitle(arche.title);
-        if (slug.length > 0 && !claimedSlugs.has(slug)) {
-          claimedSlugs.add(slug);
-          itemBySlug.set(slug, arche);
-        }
-      }
-    }
-
+    // Component refs resolve against this folder alone. A component in another
+    // tier is written as its UUID and survives parsing unresolved (bug 187);
+    // the per-request wearable pool (`lib/wardrobe/pool.ts`) resolves it. The
+    // reader never calls back into the repository.
     resolveAndCheckComponentItems(items, itemBySlug, itemById, charId, mountPointId);
 
     return { items };

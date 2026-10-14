@@ -2,8 +2,8 @@
  * Read Conversation Tool Handler
  * Project Scriptorium
  *
- * Executes the read_conversation tool by loading the rendered Markdown
- * for a chat, optionally merging or stripping annotations, and returning
+ * Executes the read_conversation tool by rendering a chat's transcript to
+ * Markdown on demand, optionally merging or stripping annotations, and returning
  * the result with message/interchange counts.
  */
 
@@ -15,6 +15,7 @@ import {
 import { mergeAnnotations, stripAnnotations } from '@/lib/scriptorium';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { renderChatConversation } from '@/lib/scriptorium/render-chat';
 
 const logger = createServiceLogger('ReadConversationHandler');
 
@@ -95,14 +96,17 @@ export async function executeReadConversationTool(
       }
     }
 
-    if (!chat.renderedMarkdown) {
+    // Rendered live from the stored messages — never a stored copy, so every
+    // conversation is readable however long it has been quiet.
+    const rendered = await renderChatConversation(chat);
+    if (!rendered || rendered.interchanges.length === 0) {
       return {
         success: false,
-        error: 'Conversation has not been rendered yet.',
+        error: 'Conversation has no messages to read yet.',
       };
     }
 
-    let markdown = chat.renderedMarkdown;
+    let markdown = rendered.markdown;
 
     if (exclude_annotations) {
       // Strip any inline annotations that may have been stored

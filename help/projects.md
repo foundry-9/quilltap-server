@@ -158,20 +158,20 @@ See [Project Files](project-files.md) for complete file management details.
 
 ## Character Roster
 
-Projects can control which characters participate:
+Projects can control which characters may use the project's files and shared wardrobe:
 
 ### Open Mode (Default)
 
-- Any character can start or join project chats
+- Every character in a project chat may use the project files and shared wardrobe
 - Most flexible option
 - Good for general-purpose projects
 
 ### Roster Mode
 
-- Only approved characters can participate
+- Only rostered characters may use the project files and shared wardrobe with their tools
+- Any character may still chat in the project
 - Enable by turning off "Allow Any Character"
-- Add characters to the roster manually
-- Characters are auto-added when they join a project chat
+- Add and remove characters by hand in the Characters card
 
 See [Project Characters](project-characters.md) for roster management.
 
@@ -321,17 +321,14 @@ For listing, reading, and searching files, characters use the Scriptorium docume
 - Check if file type is readable (text, PDF, code)
 - Try with smaller files or text extraction
 
-### Characters can't join project chats
+### A character can't reach the project files or wardrobe
 
 **Causes:**
-- Roster mode enabled without character in roster
-- Character missing connection profile
-- Project restrictions
+- Roster mode enabled without the character on the roster
 
 **Solutions:**
-- Add character to roster, or enable "Allow Any Character"
-- Verify character has valid connection profile
-- Check project character settings
+- Add the character to the roster, or enable "Allow Any Character"
+- The roster never blocks chatting — a character who can't join a chat has a different trouble, usually a missing connection profile
 
 ### Project not appearing in sidebar
 

@@ -67,6 +67,22 @@ export interface ToolVocabulary {
   stateWrites: string[];
   /** Metadata keys this tool's effects may WRITE on the rolling character. Sorted. */
   metadataWrites: string[];
+  /**
+   * Progression IDS this tool READS — from `when.progress` tests, from its
+   * availability gate, and from `{{progress.<id>.<field>}}` placeholders.
+   * Ids, not `<id>.<field>` keys: "this tool consults your cannon" is the
+   * honest sentence for a run dialog, where "it consults cannon.percent"
+   * edges toward the odds the roster deliberately withholds. Sorted.
+   */
+  progress: string[];
+  /**
+   * Progression ids this tool's effects may WRITE. A write is a different
+   * claim than a read — "it consults the cannon" and "it re-arms the cannon"
+   * deserve different sentences — so writes get their own list. Sorted.
+   */
+  progressWrites: string[];
+  /** True when some rendered string quotes `{{now}}`. */
+  now: boolean;
 }
 
 /** True when a tool quotes nothing at all, and so has no vocabulary to show. */
@@ -80,7 +96,10 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     vocabulary.metadata.length === 0 &&
     vocabulary.state.length === 0 &&
     vocabulary.stateWrites.length === 0 &&
-    vocabulary.metadataWrites.length === 0
+    vocabulary.metadataWrites.length === 0 &&
+    vocabulary.progress.length === 0 &&
+    vocabulary.progressWrites.length === 0 &&
+    !vocabulary.now
   );
 }
 
@@ -103,6 +122,9 @@ export function collectToolVocabulary(
     state: new Set<string>(),
     stateWrites: new Set<string>(),
     metadataWrites: new Set<string>(),
+    progress: new Set<string>(),
+    progressWrites: new Set<string>(),
+    now: false,
   };
 
   for (const outcome of definition.outcomes ?? []) {
@@ -110,6 +132,7 @@ export function collectToolVocabulary(
     // message, and that message may well quote a fact sheet.
     if (outcome.when !== true) {
       for (const key of Object.keys(outcome.when.metadata ?? {})) found.metadata.add(key);
+      for (const key of Object.keys(outcome.when.progress ?? {})) found.progress.add(progressionId(key));
     }
     collectPlaceholders(outcome.message, declared, found);
   }
@@ -121,6 +144,7 @@ export function collectToolVocabulary(
   // a roster listing at all, so this only ever describes one the reader has.
   for (const gate of [definition.availableWhen, definition.withheldWhen]) {
     for (const key of Object.keys(gate?.metadata ?? {})) found.metadata.add(key);
+    for (const key of Object.keys(gate?.progress ?? {})) found.progress.add(progressionId(key));
   }
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);
@@ -135,11 +159,14 @@ export function collectToolVocabulary(
   for (const effect of definition.effects ?? []) {
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
     for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
+    for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) continue; // load-rejected; nothing honest to report
     if (target.target.kind === 'state') {
       found.stateWrites.add(target.target.raw.slice(STATE_PREFIX.length));
+    } else if (target.target.kind === 'progress') {
+      found.progressWrites.add(target.target.id);
     } else {
       found.metadataWrites.add(target.target.key);
     }
@@ -160,7 +187,20 @@ export function collectToolVocabulary(
     state: sorted(found.state),
     stateWrites: sorted(found.stateWrites),
     metadataWrites: sorted(found.metadataWrites),
+    progress: sorted(found.progress),
+    progressWrites: sorted(found.progressWrites),
+    now: found.now,
   };
+}
+
+/**
+ * The progression id out of a `"<id>.<field>"` sheet key. A key that somehow
+ * carries no dot (load validation forbids it) names the whole string, which is
+ * the least surprising thing to report and never throws.
+ */
+function progressionId(key: string): string {
+  const dot = key.indexOf('.');
+  return dot > 0 ? key.slice(0, dot) : key;
 }
 
 function sorted(values: Set<string>): string[] {
@@ -179,6 +219,8 @@ function collectPlaceholders(
     params: Set<string>;
     metadata: Set<string>;
     state: Set<string>;
+    progress: Set<string>;
+    now: boolean;
   }
 ): void {
   for (const { ref } of scanPlaceholders(text)) {
@@ -203,6 +245,12 @@ function collectPlaceholders(
         break;
       case 'state':
         found.state.add(ref.path);
+        break;
+      case 'progress':
+        found.progress.add(ref.id);
+        break;
+      case 'now':
+        found.now = true;
         break;
       case 'unknown':
         break;

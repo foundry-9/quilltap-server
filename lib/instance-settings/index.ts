@@ -24,18 +24,26 @@ import {
   type BrahmaConsoleSettings,
   DataRetentionSettingsSchema,
   type DataRetentionSettings,
+  MemoryConsolidationSettingsSchema,
+  type MemoryConsolidationSettings,
   MemoryExtractionLimitsSchema,
   type MemoryExtractionLimits,
+  MemoryExtractionModeSettingsSchema,
+  type MemoryExtractionModeSettings,
   MemoryRecallSettingsSchema,
   type MemoryRecallSettings,
+  MemoryMaintenanceSettingsSchema,
+  type MemoryMaintenanceSettings,
   TabooSettingsSchema,
   type TabooSettings,
 } from '@/lib/schemas/settings.types';
 
 const KEY_MAX_CONCURRENT_JOBS = 'maxConcurrentJobs';
-const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_MEMORY_RECALL = 'memoryRecall';
+const KEY_MEMORY_CONSOLIDATION = 'memoryConsolidation';
+const KEY_MEMORY_EXTRACTION_MODE = 'memoryExtractionMode';
+const KEY_MEMORY_MAINTENANCE = 'memoryMaintenance';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
@@ -75,18 +83,14 @@ export const NON_PORTABLE_INSTANCE_SETTING_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 const DEFAULT_MAX_CONCURRENT_JOBS = 4;
-const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
-const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
-  enabled: false,
-  maxPerHour: 20,
-  softStartFraction: 0.7,
-  softFloor: 0.7,
-};
-const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
-  scopePolicy: 'down-weight',
-  expandRelated: false,
-  perTurnConversationSummaries: false,
-};
+// Memory defaults come from their Zod schemas' `.default()`s — one copy each.
+const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = MemoryExtractionLimitsSchema.parse({});
+const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = MemoryRecallSettingsSchema.parse({});
+const DEFAULT_MEMORY_MAINTENANCE_SETTINGS: MemoryMaintenanceSettings = MemoryMaintenanceSettingsSchema.parse({});
+const DEFAULT_MEMORY_CONSOLIDATION_SETTINGS: MemoryConsolidationSettings =
+  MemoryConsolidationSettingsSchema.parse({});
+const DEFAULT_MEMORY_EXTRACTION_MODE_SETTINGS: MemoryExtractionModeSettings =
+  MemoryExtractionModeSettingsSchema.parse({});
 const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
 };
@@ -178,26 +182,6 @@ export async function setMaxConcurrentJobs(value: number): Promise<void> {
 }
 
 /**
- * Read the per-instance MEMORY_EXTRACTION concurrency cap. Returns the
- * documented default (1) when the setting hasn't been written yet.
- */
-export async function getMemoryExtractionConcurrency(): Promise<number> {
-  const raw = await readSetting(KEY_MEMORY_EXTRACTION_CONCURRENCY);
-  if (raw === null) return DEFAULT_MEMORY_EXTRACTION_CONCURRENCY;
-  const parsed = Math.floor(Number(raw));
-  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MEMORY_EXTRACTION_CONCURRENCY;
-  return Math.max(1, Math.min(32, parsed));
-}
-
-export async function setMemoryExtractionConcurrency(value: number): Promise<void> {
-  if (!Number.isFinite(value)) {
-    throw new Error('Concurrency must be a finite number');
-  }
-  const clamped = Math.max(1, Math.min(32, Math.floor(value)));
-  await writeSetting(KEY_MEMORY_EXTRACTION_CONCURRENCY, String(clamped));
-}
-
-/**
  * Read the per-instance memory extraction rate limits. Returns the
  * documented defaults (off, 20/hour, soft-start 0.7, soft-floor 0.7)
  * when the setting hasn't been written yet.
@@ -229,10 +213,79 @@ export async function setMemoryRecallSettings(value: MemoryRecallSettings): Prom
 }
 
 /**
+ * Read the consolidation job's settings (`instance_settings['memoryConsolidation']`).
+ * Partial stored values are filled from the schema defaults.
+ */
+export async function getMemoryConsolidationSettings(): Promise<MemoryConsolidationSettings> {
+  return readJsonSetting(
+    KEY_MEMORY_CONSOLIDATION,
+    MemoryConsolidationSettingsSchema,
+    DEFAULT_MEMORY_CONSOLIDATION_SETTINGS,
+  );
+}
+
+export async function setMemoryConsolidationSettings(
+  value: Partial<MemoryConsolidationSettings>,
+): Promise<MemoryConsolidationSettings> {
+  const current = await getMemoryConsolidationSettings();
+  return writeJsonSetting(KEY_MEMORY_CONSOLIDATION, MemoryConsolidationSettingsSchema, {
+    ...current,
+    ...value,
+  });
+}
+
+/**
+ * Read the OTHER-pass grain setting (`instance_settings['memoryExtractionMode']`).
+ * Defaults to 'hybrid'.
+ */
+export async function getMemoryExtractionModeSettings(): Promise<MemoryExtractionModeSettings> {
+  return readJsonSetting(
+    KEY_MEMORY_EXTRACTION_MODE,
+    MemoryExtractionModeSettingsSchema,
+    DEFAULT_MEMORY_EXTRACTION_MODE_SETTINGS,
+  );
+}
+
+export async function setMemoryExtractionModeSettings(
+  value: Partial<MemoryExtractionModeSettings>,
+): Promise<MemoryExtractionModeSettings> {
+  const current = await getMemoryExtractionModeSettings();
+  return writeJsonSetting(KEY_MEMORY_EXTRACTION_MODE, MemoryExtractionModeSettingsSchema, {
+    ...current,
+    ...value,
+  });
+}
+
+/**
+ * Read the memory maintenance settings (`instance_settings['memoryMaintenance']`:
+ * enabled, the per-character cap and its overrides). Moved here from
+ * `chat_settings.autoHousekeepingSettings` by `move-memory-maintenance-settings-v1`.
+ * Read through `resolveMemorySettings` (`lib/memory/settings.ts`), whose
+ * `capFor` is the one cap resolver.
+ */
+export async function getMemoryMaintenanceSettings(): Promise<MemoryMaintenanceSettings> {
+  return readJsonSetting(
+    KEY_MEMORY_MAINTENANCE,
+    MemoryMaintenanceSettingsSchema,
+    DEFAULT_MEMORY_MAINTENANCE_SETTINGS,
+  );
+}
+
+export async function setMemoryMaintenanceSettings(
+  value: Partial<MemoryMaintenanceSettings>,
+): Promise<MemoryMaintenanceSettings> {
+  const current = await getMemoryMaintenanceSettings();
+  return writeJsonSetting(KEY_MEMORY_MAINTENANCE, MemoryMaintenanceSettingsSchema, {
+    ...current,
+    ...value,
+  });
+}
+
+/**
  * Read the per-instance data-retention settings (the stale-chat window that
- * governs the daily maintenance sweep's cache collapse, image collapse, and
- * conversation-chunk cold-tiering). Returns the documented default (30 days)
- * when the setting hasn't been written yet.
+ * governs the daily maintenance sweep's cache collapse and image collapse).
+ * Returns the documented default (30 days) when the setting hasn't been
+ * written yet.
  */
 export async function getDataRetentionSettings(): Promise<DataRetentionSettings> {
   return readJsonSetting(KEY_DATA_RETENTION, DataRetentionSettingsSchema, DEFAULT_DATA_RETENTION_SETTINGS);
@@ -344,7 +397,7 @@ export async function getUserUploadsMountPointId(): Promise<string | null> {
 
 /**
  * Read the Quilltap General mount-point id. The provisioning migration writes
- * this on first boot; runtime callers (`lib/mount-index/general-scenarios.ts`)
+ * this on first boot; runtime callers (`lib/scenarios/location.ts`)
  * read it to find the instance-wide store that houses general chat-starter
  * scenarios offered alongside project and character scenarios.
  */
@@ -426,14 +479,20 @@ export async function writeInstanceSetting(key: string, value: string): Promise<
 export {
   BrahmaConsoleSettingsSchema,
   DataRetentionSettingsSchema,
+  MemoryConsolidationSettingsSchema,
   MemoryExtractionLimitsSchema,
+  MemoryExtractionModeSettingsSchema,
+  MemoryMaintenanceSettingsSchema,
   MemoryRecallSettingsSchema,
   TabooSettingsSchema,
 };
 export type {
   BrahmaConsoleSettings,
   DataRetentionSettings,
+  MemoryConsolidationSettings,
   MemoryExtractionLimits,
+  MemoryExtractionModeSettings,
+  MemoryMaintenanceSettings,
   MemoryRecallSettings,
   TabooSettings,
 };

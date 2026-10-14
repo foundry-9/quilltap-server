@@ -17,6 +17,17 @@ interface GalleryGridProps {
   onDownloadImage: (e: React.MouseEvent, image: GalleryImageType) => void
   onDeleteImage: (e: React.MouseEvent, image: GalleryImageType) => void
   entityName: string
+  /**
+   * Optional "keep in the album" action. Passed only by the avatar-rolls
+   * grid; an album photo is already where this would put it.
+   */
+  onSaveToAlbum?: (e: React.MouseEvent, image: GalleryImageType) => void
+  /** Tiles whose bytes the album already holds — the keep button reads done. */
+  albumMemberIds?: Set<string>
+  /** The one tile with an action in flight, if any. */
+  busyImageId?: string | null
+  /** Per-image override for the delete button's resting tooltip. */
+  deleteTitleFor?: (image: GalleryImageType) => string | undefined
 }
 
 export function GalleryGrid({
@@ -33,6 +44,10 @@ export function GalleryGrid({
   onDownloadImage,
   onDeleteImage,
   entityName,
+  onSaveToAlbum,
+  albumMemberIds,
+  busyImageId,
+  deleteTitleFor,
 }: GalleryGridProps) {
   return (
     <div
@@ -62,6 +77,10 @@ export function GalleryGrid({
             onDownloadImage={(e) => onDownloadImage(e, image)}
             onDeleteImage={(e) => onDeleteImage(e, image)}
             entityName={entityName}
+            onSaveToAlbum={onSaveToAlbum ? (e) => onSaveToAlbum(e, image) : undefined}
+            isInAlbum={albumMemberIds?.has(image.id) ?? false}
+            isBusy={busyImageId === image.id}
+            deleteTitle={deleteTitleFor?.(image)}
           />
         )
       })}

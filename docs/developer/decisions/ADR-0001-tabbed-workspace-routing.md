@@ -4,7 +4,7 @@
 - **Date:** 2026-06-21
 - **Target release:** 4.8.0
 - **Deciders:** Charlie (+ Claude Code on execution)
-- **Related:** [Tabbed workspace feature spec](../features/tabbed-workspace.md)
+- **Related:** [Tabbed workspace feature spec](../features/complete/tabbed-workspace.md)
 
 ## Context
 

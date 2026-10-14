@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import {
   handleDeleteProject,
   handleRemoveCharacter,
@@ -19,8 +19,6 @@ import {
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
-const PROJECT_DELETE_ACTIONS = ['remove-character', 'remove-chat', 'remove-file', 'reset-state'] as const;
-type ProjectDeleteAction = typeof PROJECT_DELETE_ACTIONS[number];
 
 /**
  * DELETE handler for individual project
@@ -30,18 +28,16 @@ export async function handleDelete(
   ctx: RequestContext,
   projectId: string
 ): Promise<NextResponse> {
-  const action = getActionParam(req);
-
-  if (!action || !isValidAction(action, PROJECT_DELETE_ACTIONS)) {
-    return handleDeleteProject(projectId, ctx);
-  }
-
-  const actionHandlers: Record<ProjectDeleteAction, () => Promise<NextResponse>> = {
-    'remove-character': () => handleRemoveCharacter(req, projectId, ctx),
-    'remove-chat': () => handleRemoveChat(req, projectId, ctx),
-    'remove-file': () => handleRemoveFile(req, projectId, ctx),
-    'reset-state': () => handleResetState(projectId, ctx),
-  };
-
-  return actionHandlers[action]();
+  // The fallback deletes the whole project, so an unknown action must be a 400
+  // rather than falling through to it — `dispatchAction` guarantees that.
+  return dispatchAction(
+    req,
+    {
+      'remove-character': () => handleRemoveCharacter(req, projectId, ctx),
+      'remove-chat': () => handleRemoveChat(req, projectId, ctx),
+      'remove-file': () => handleRemoveFile(req, projectId, ctx),
+      'reset-state': () => handleResetState(projectId, ctx),
+    },
+    () => handleDeleteProject(projectId, ctx)
+  );
 }

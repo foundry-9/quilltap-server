@@ -23,3 +23,20 @@ export function combineScenarioText(
   const parts = [base, extra].filter((s): s is string => Boolean(s && s.length > 0))
   return parts.length > 0 ? parts.join('\n\n') : undefined
 }
+
+/**
+ * The preset body inside a stored `scenarioText`, given the notes that were
+ * layered beneath it — the inverse of `combineScenarioText`. Returns null when
+ * the text does not end in those notes the way `combineScenarioText` writes
+ * them (so the caller can fall back rather than guess).
+ */
+export function recoverPresetBody(
+  scenarioText: string | null | undefined,
+  notes: string | null | undefined,
+): string | null {
+  if (!scenarioText) return null
+  const extra = notes?.trim()
+  if (!extra) return scenarioText
+  const suffix = `\n\n${extra}`
+  return scenarioText.endsWith(suffix) ? scenarioText.slice(0, -suffix.length) : null
+}

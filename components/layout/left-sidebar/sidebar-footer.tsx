@@ -14,7 +14,6 @@ import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useHasDangerousChats } from '@/components/hooks/use-has-dangerous-chats'
 import { useTheme } from '@/components/providers/theme-provider'
 import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
@@ -104,7 +103,6 @@ type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
   const quickHide = useQuickHide()
-  const { hasDangerousChats } = useHasDangerousChats()
   const theme = useTheme()
   const helpChat = useHelpChatOptional()
   const brahmaConsole = useBrahmaConsoleOptional()
@@ -141,9 +139,9 @@ export function SidebarFooter() {
     }
   }, [openPopout])
 
-  // Show quick-hide button if there are tags, dangerous chats exist, or danger filter is active
-  const hasQuickHideFeatures = mounted && (quickHide.quickHideTags.length > 0 || quickHide.hideDangerousChats || hasDangerousChats)
-  const hasAnyHidden = mounted && (quickHide.hiddenTagIds.size > 0 || quickHide.hideDangerousChats)
+  // The Salon Images switch is always meaningful, so the quick-hide button is always offered
+  const hasQuickHideFeatures = mounted
+  const hasAnyHidden = mounted && (quickHide.hiddenTagIds.size > 0 || quickHide.hideDangerousChats || quickHide.hideSalonImages)
   // Check if theme selector should be shown in nav
   const showThemes = mounted && theme.showNavThemeSelector
 

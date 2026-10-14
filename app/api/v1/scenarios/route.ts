@@ -7,131 +7,68 @@
  *                                   default-conflict resolution applied.
  *                                   `?includeArchived=true` also returns
  *                                   archived scenarios (hidden by default).
+ * GET  /api/v1/scenarios?action=everywhere[&includeArchived=true]
+ *                                 — every scenario in the instance, grouped by
+ *                                   owner (General, projects, groups,
+ *                                   characters), with an excerpt instead of the
+ *                                   body. The scenario browser's catalogue.
+ * GET  /api/v1/scenarios?action=read&mountPointId=&path=
+ *                                 — one scenario, body included, by ref. 400
+ *                                   when the ref names no scenario owner, 404
+ *                                   when the file is gone.
  * POST /api/v1/scenarios          — create a new scenario file.
  *                                   Body: { filename, name?, description?,
  *                                   isDefault?, body }.
  *
- * Both routes call `ensureGeneralScenariosFolder` first so callers don't
- * have to wait for the next startup heal pass. GET tolerates the
- * pre-migration race (returns an empty list with `mountPointId: null`);
- * POST rejects writes in that window.
+ * Both heal General's `Scenarios/` folder first (the scenario location's
+ * `ensure`), so callers don't have to wait for the next startup heal pass.
+ * GET tolerates the pre-migration race (returns an empty list with
+ * `mountPointId: null`); POST rejects writes in that window. The bodies live
+ * in `lib/mount-index/scenario-item-route-factory.ts`.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createContextHandler } from '@/lib/api/middleware';
+import type { NextRequest } from 'next/server';
+import { createContextHandler, withCollectionActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
-import { z } from 'zod';
-import { logger } from '@/lib/logger';
-import { badRequest, serverError, created } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import {
-  ensureGeneralScenariosFolder,
-  listGeneralScenarios,
-  setGeneralScenarioDefault,
-  GENERAL_SCENARIOS_FOLDER,
-} from '@/lib/mount-index/general-scenarios';
-import { buildScenarioFileContent, createScenarioSchema } from '@/lib/mount-index/scenarios-common';
-import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
-import { sanitizeFileName } from '@/lib/mount-index/character-vault';
+import { logger } from '@/lib/logger';
+import { createScenarioCollectionBodies } from '@/lib/mount-index/scenario-item-route-factory';
+import { lookupScenarioRef } from '@/lib/scenarios/location';
+import { listScenariosEverywhere } from '@/lib/scenarios/everywhere';
 
-// ============================================================================
-// GET — list scenarios
-// ============================================================================
+const { list, create } = createScenarioCollectionBodies<Record<string, never>>({
+  scope: 'general',
+  ownerLabel: 'General',
+  logTag: '[General v1]',
+  logIdKey: 'ownerId',
+});
+
+async function handleEverywhere(req: NextRequest, { user, repos }: RequestContext) {
+  try {
+    const sources = await listScenariosEverywhere(repos, user.id, { includeArchived: readIncludeArchived(req) });
+    return successResponse({ sources });
+  } catch (error) {
+    logger.error('[General v1] Failed to list scenarios everywhere', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to list scenarios');
+  }
+}
+
+async function handleRead(req: NextRequest, { user, repos }: RequestContext) {
+  const mountPointId = req.nextUrl.searchParams.get('mountPointId');
+  const path = req.nextUrl.searchParams.get('path');
+  if (!mountPointId || !path) return badRequest('mountPointId and path are required');
+  const lookup = await lookupScenarioRef({ mountPointId, path }, repos, user.id);
+  if (lookup.status === 'refused') return badRequest(`Invalid scenario ref: ${lookup.reason}`);
+  if (lookup.status === 'missing') return notFound('Scenario');
+  const { location, scenario } = lookup;
+  return successResponse({
+    scenario,
+    owner: { scope: location.scope, id: location.id, name: location.ownerName, mountPointId: location.mountPointId },
+  });
+}
 
 export const GET = createContextHandler(
-  async (req: NextRequest, _ctx: RequestContext) => {
-    try {
-      const includeArchived = readIncludeArchived(req);
-      const ensured = await ensureGeneralScenariosFolder();
-      if (!ensured.mountPointId) {
-        // Pre-migration race: report empty list rather than 500.
-        return NextResponse.json({
-          mountPointId: null,
-          scenarios: [],
-          warnings: [],
-        });
-      }
-      const { mountPointId, scenarios, warnings } = await listGeneralScenarios({ includeArchived });
-      return NextResponse.json({ mountPointId, scenarios, warnings });
-    } catch (error) {
-      logger.error(
-        '[General v1] Failed to list general scenarios',
-        {},
-        error instanceof Error ? error : undefined,
-      );
-      return serverError('Failed to list general scenarios');
-    }
-  },
+  withCollectionActionDispatch({ everywhere: handleEverywhere, read: handleRead }, list),
 );
-
-// ============================================================================
-// POST — create a new scenario
-// ============================================================================
-
-export const POST = createContextHandler(
-  async (req: NextRequest, { user, repos }: RequestContext) => {
-    try {
-      const body = await req.json();
-      const validated = createScenarioSchema.parse(body);
-
-      const ensured = await ensureGeneralScenariosFolder();
-      if (!ensured.mountPointId) {
-        return badRequest('Quilltap General mount has not been provisioned yet — restart the server');
-      }
-      const mountPointId = ensured.mountPointId;
-
-      const cleanedFilename = sanitizeFileName(validated.filename).replace(/\.md$/i, '');
-      if (!cleanedFilename) {
-        return badRequest('Filename cannot be empty after sanitisation');
-      }
-      const relativePath = `${GENERAL_SCENARIOS_FOLDER}/${cleanedFilename}.md`;
-
-      const existing = await repos.docMountDocuments.findByMountPointAndPath(
-        mountPointId,
-        relativePath,
-      );
-      if (existing) {
-        return badRequest(`A scenario named "${cleanedFilename}" already exists`);
-      }
-
-      const fileContent = buildScenarioFileContent({
-        name: validated.name,
-        description: validated.description,
-        isDefault: validated.isDefault,
-        archived: validated.archived,
-        body: validated.body,
-      });
-
-      await writeDatabaseDocument(mountPointId, relativePath, fileContent);
-
-      if (validated.isDefault) {
-        await setGeneralScenarioDefault(relativePath);
-      }
-
-      logger.info('[General v1] Created general scenario', {
-        userId: user.id,
-        mountPointId,
-        relativePath,
-        isDefault: validated.isDefault === true,
-      });
-
-      const fresh = await listGeneralScenarios({ includeArchived: validated.archived === true });
-      return created({
-        mountPointId: fresh.mountPointId,
-        path: relativePath,
-        scenarios: fresh.scenarios,
-        warnings: fresh.warnings,
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
-      }
-      logger.error(
-        '[General v1] Failed to create general scenario',
-        {},
-        error instanceof Error ? error : undefined,
-      );
-      return serverError('Failed to create general scenario');
-    }
-  },
-);
+export const POST = createContextHandler((req, ctx) => create(req, ctx, {}));

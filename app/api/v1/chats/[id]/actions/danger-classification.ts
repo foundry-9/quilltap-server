@@ -22,7 +22,9 @@ export async function handleReclassifyDanger(
   const { user, repos } = ctx;
 
   try {
-    // Clear all danger classification fields
+    // Clear the classifier's telemetry. This never moves the chat's Concierge
+    // state (only `applyConciergeFlip` does): an Unmoderated or Locked chat
+    // stays put, and the re-queued job bails on anything but Moderated.
     await repos.chats.update(chatId, {
       isDangerousChat: null,
       dangerScore: null,

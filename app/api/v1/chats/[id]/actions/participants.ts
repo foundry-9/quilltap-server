@@ -30,6 +30,7 @@ import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { refreshAvatarForOutfit } from '@/lib/wardrobe/outfit-change-effects';
 
 /**
  * Start impersonating a participant
@@ -218,6 +219,7 @@ async function applyOutfitForAddedParticipant(
         projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
         scenarioText: chat.scenarioText ?? null,
         cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+        source: 'participant-added',
       },
     );
     logger.debug('[Chats v1] Outfit applied for added participant', {
@@ -230,6 +232,48 @@ async function applyOutfitForAddedParticipant(
       chatId,
       characterId,
       mode: selection.mode,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Bring an arriving character's per-chat avatar in line with what they are
+ * wearing, the same way chat-open does for the opening cast. Without this a
+ * character added (or re-added) mid-chat keeps showing their default avatar
+ * even in a chat that auto-updates avatars on wardrobe changes.
+ *
+ * Goes through the ordinary avatar job, so the configuration cache answers
+ * first: an outfit that has already been drawn is simply rebound, and only a
+ * new configuration costs a generation. Gated on the chat's
+ * `avatarGenerationEnabled` (and skipped for autonomous rooms) by
+ * `refreshAvatarForOutfit`. Never allowed to fail the join.
+ */
+async function refreshAvatarForArrivingCharacter(
+  chatId: string,
+  characterId: string,
+  userId: string,
+  repos: RequestContext['repos'],
+): Promise<void> {
+  try {
+    const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+    if (!equippedSlots) {
+      logger.debug('[Chats v1] No equipped outfit for arriving character, avatar left as-is', {
+        chatId,
+        characterId,
+      });
+      return;
+    }
+
+    await refreshAvatarForOutfit(repos, { userId, chatId, characterId }, '[Chats v1] participant-join');
+    logger.debug('[Chats v1] Avatar refresh requested for arriving character', {
+      chatId,
+      characterId,
+    });
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to request avatar refresh for arriving character', {
+      chatId,
+      characterId,
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -329,6 +373,12 @@ export async function handleAddParticipantAction(
         );
       }
 
+      // Whether or not the outfit was re-applied, the returning character's
+      // avatar should match what they now have on.
+      if (reactivatedParticipant?.characterId) {
+        await refreshAvatarForArrivingCharacter(chatId, reactivatedParticipant.characterId, user.id, repos);
+      }
+
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
     }
   }
@@ -402,6 +452,7 @@ export async function handleAddParticipantAction(
       user.id,
       repos,
     );
+    await refreshAvatarForArrivingCharacter(chatId, validatedData.characterId, user.id, repos);
   }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });
@@ -561,6 +612,24 @@ export async function handleRemoveParticipantAction(
     if (cleanedChat) {
       finalChat = cleanedChat;
     }
+  }
+
+  // A seat that has left can never collect what it was handed out of character,
+  // and a pending row would keep its name on the composer's chip forever. Never
+  // allowed to break the removal itself — the seat is already gone.
+  try {
+    const droppedInforms = await repos.chatInforms.deletePendingForParticipant(
+      chatId,
+      validatedData.participantId,
+    );
+    logger.debug('[Chats v1] Pending informs dropped with removed seat', {
+      chatId, participantId: validatedData.participantId, droppedInforms,
+    });
+  } catch (error) {
+    logger.warn('[Chats v1] Could not drop pending informs for removed seat', {
+      chatId, participantId: validatedData.participantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   logger.info('[Chats v1] Participant removed', {

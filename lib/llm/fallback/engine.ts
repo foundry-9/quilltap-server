@@ -32,6 +32,7 @@ import {
   isToolUnsupportedError,
 } from '@/lib/llm/errors'
 import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
+import { classifyRefusal } from '@/lib/services/dangerous-content/refusal'
 import { pickTierCandidate } from './tier-picker'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type {
@@ -97,7 +98,13 @@ const NETWORK_ERROR_PATTERNS = [
  *   would hide it behind a second provider producing the same crash.
  */
 export function classifyFallbackTrigger(error: unknown): FallbackTrigger | null {
-  // Non-triggers first: these are checked before the typed-error ladder
+  // A content-moderation refusal first of all. A thrown "400 … safety system"
+  // used to fall through every pattern below to the generic 4xx check and
+  // come back `null` — "our malformed request" — so a refusal that arrived as
+  // a throw never reached the Concierge's uncensored retry at all.
+  if (classifyRefusal({ error }).refused) return 'moderation-refusal'
+
+  // Non-triggers next: these are checked before the typed-error ladder
   // because several of them arrive *as* LLMProviderError subclasses.
   if (error instanceof TokenLimitError || error instanceof ContentLimitError) return null
   if (isTokenLimitError(error) || isContentLimitError(error)) return null
@@ -117,6 +124,11 @@ export function classifyFallbackTrigger(error: unknown): FallbackTrigger | null 
   // Quilltap, not the provider — but it means exactly the same thing to the
   // chain: this route did not answer in time, try another.
   if (name === 'CheapLLMTimeoutError') return 'network'
+
+  // Likewise the stream watchdog: the provider took the request, answered with
+  // headers and then went quiet. A silence is not a refusal, and the understudy
+  // is exactly what a chain is for.
+  if (name === 'LLMStreamStalledError') return 'network'
 
   if (NETWORK_ERROR_PATTERNS.some((p) => p.test(message))) return 'network'
   if (PROVIDER_ERROR_PATTERNS.some((p) => p.test(message))) return 'provider-error'

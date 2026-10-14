@@ -28,6 +28,7 @@ export function NewChatPageClient() {
     groupScenarios,
     showArchivedScenarios,
     setShowArchivedScenarios,
+    refetchScenarioTiers,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
@@ -38,6 +39,8 @@ export function NewChatPageClient() {
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState,
   } = useNewChat({
     initialCharacterId: characterIdParam,
     projectId: projectIdParam,
@@ -138,6 +141,9 @@ export function NewChatPageClient() {
             creating={creating}
             showSingleCharacterControls={false}
             autonomousSettingsHint={autonomousHint}
+            onScenarioTiersChanged={refetchScenarioTiers}
+            conciergeOnDuty={conciergeOnDuty}
+            conciergeDefaultState={conciergeDefaultState}
           />
         </div>
 

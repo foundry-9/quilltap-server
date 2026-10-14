@@ -8,6 +8,10 @@ url: /scenarios
 
 A scenario, as a reminder, is the sealed envelope handed to your characters at the moment a chat opens — a brief paragraph that sets the stage. **General Scenarios** are the envelopes you'd like Quilltap to keep on the hall table, ready to hand to every new conversation regardless of which project it belongs to (or whether it belongs to a project at all). They are the household standbys; the ones you don't want to draft afresh in every wing of the estate.
 
+## Asking the Host
+
+Beside **+ New scenario** stands **Ask the Host to set the scene**, which sends the Host off to draft a scene from a place and a time, reading Quilltap General (and, for a real place, the wider world). When he returns you may file the scene here — the General shelf is chosen for you — or in any project, any group, or any character's own collection. See [The Scenario Builder](scenario-builder.md).
+
 ## The Three Scopes, Briefly
 
 Quilltap now keeps scenarios in three places, each pitched at a different scale:
@@ -16,7 +20,9 @@ Quilltap now keeps scenarios in three places, each pitched at a different scale:
 - **General Scenarios** — instance-wide; available to *every* non-help chat you begin, project or no.
 - **Character Scenarios** — personal to one character; the parlour she returns to.
 
-When a chat is started, all three groups appear in the same **Starting Scenario** drop-down, neatly partitioned. Should both a project default and a general default be standing by, the project default wins pre-selection (the more particular wish wins out over the household custom). Character defaults remain a polite override — you'll see a note offering a one-click switch when applicable.
+When a chat is started, all three groups appear in the same **Starting Scenario** drop-down, neatly partitioned. Pre-selection follows the order the chat itself obeys: a single character's own default first, then the project default, then the general default (the more particular wish wins out over the household custom). What the drop-down shows is exactly what the chat will be given. When the project default is showing and the character has a default of her own, a note offers a one-click switch.
+
+And should the scene you want live on some *other* shelf — another project's, another character's — **Browse all scenarios…** in the same drop-down opens the [Scenario Browser](scenario-browser.md), which searches every shelf in the house.
 
 ## The Files Themselves
 
@@ -85,6 +91,8 @@ A project default still pre-selects when present; otherwise the general default 
 
 Beneath the drop-down sits a writing-desk that never leaves the room. Choose **Custom...** and whatever you compose there *is* the scenario, plain and simple. But pick a ready-made scenario from any group and the desk politely remains — anything you jot beneath it is **added below** the chosen scenario rather than replacing it. So you may begin from a trusted envelope and then pencil in tonight's particulars ("...and a storm has knocked out the lights") without rewriting the whole thing. Your pencilled notes survive a change of selection, too, should you reconsider which envelope to start from.
 
+Would you rather not write the scene yourself? The **Ask the Host to set the scene** button beside the **Starting Scenario** label sends the Host to research the place and time you name and bring back a scene — which you may then **Save as scenario…** straight into this collection. See [The Scenario Builder](scenario-builder.md).
+
 ## Keeping the Folder Healthy
 
 Should the Quilltap General store or its `Scenarios/` folder be deleted by some moment of housekeeping zeal, both are reconstructed at the next server start. Previously-deleted files, however, do not reappear.
@@ -110,4 +118,6 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Pages
 
 - [Project Scenarios](project-scenarios.md) — Per-project scenarios offered alongside the general ones.
+- [The Scenario Builder](scenario-builder.md) — Having the Host research and draft a scene.
+- [The Scenario Browser](scenario-browser.md) — Plucking a scene from any shelf in the house.
 - [The Scriptorium](scriptorium.md) — Browsing and editing document stores directly.

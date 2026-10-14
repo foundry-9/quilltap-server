@@ -30,6 +30,7 @@ interface UseProjectDetailReturn {
   handleSaveDefaultRoleplayTemplate: (templateId: string | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleSaveAlertCharactersOfLanternImages: (enabled: boolean | null) => Promise<void>
+  handleAddCharacter: (characterId: string) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
 
@@ -96,7 +97,9 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       if (!res.ok) throw new Error('Failed to update project')
       const data = await res.json()
       setProject(data.project)
-      showSuccessToast(data.project.allowAnyCharacter ? 'Any character can now participate' : 'Only roster characters can participate')
+      showSuccessToast(data.project.allowAnyCharacter
+        ? 'Every character may now use the project files and wardrobe'
+        : 'Only roster characters may use the project files and wardrobe')
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update setting'
       console.error('useProjectDetail: toggle error', errorMsg)
@@ -265,6 +268,27 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleAddCharacter = useCallback(async (characterId: string) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}?action=add-character`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Failed to add character')
+      }
+      await fetchProject()
+      showSuccessToast('Character added to the roster')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to add character'
+      console.error('useProjectDetail: add character error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId, fetchProject])
+
   const handleRemoveCharacter = useCallback(async (characterId: string) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
@@ -275,7 +299,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
 
       if (!res.ok) throw new Error('Failed to remove character')
       await fetchProject()
-      showSuccessToast('Character removed from project')
+      showSuccessToast('Character removed from the roster')
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to remove character'
       console.error('useProjectDetail: remove character error', errorMsg)
@@ -301,6 +325,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
+    handleAddCharacter,
     handleRemoveCharacter,
   }
 }

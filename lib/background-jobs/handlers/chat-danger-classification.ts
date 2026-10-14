@@ -6,10 +6,15 @@
  *
  * Key behaviors:
  * - Prefers compressed chat contextSummary as input
- * - Falls back to concatenated raw messages (truncated to 4000 chars) when no summary exists
- * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
+ * - Falls back to the chat's chosen scenario before its first summary fold
+ * - Falls back to concatenated raw messages (truncated to 4000 chars) when neither exists
+ * - A dangerous verdict moves the chat to Unmoderated through
+ *   `maybeSwitchAfterClassification` in the parent (after the batch commits);
+ *   the classifier only runs on Moderated chats, so it never re-checks one it
+ *   has moved
  * - Once classified as safe, stays safe (sticky) unless new messages are added
- * - Bails if mode is OFF or no content available (no summary AND no messages)
+ * - Bails unless the chat's Concierge policy has `summaryClassification` on
+ *   (on duty, Moderated, opted in), or when no content is available
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
@@ -17,9 +22,9 @@ import { isModerationExemptChatType } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
-import { postConciergeDangerAnnouncement } from '@/lib/services/concierge-notifications/writer';
+import { maybeSwitchAfterClassification } from '@/lib/services/dangerous-content/classifier-switch';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { ChatDangerClassificationPayload } from '../queue-service';
@@ -51,9 +56,9 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     return;
   }
 
-  // Vouched Safe / Uncensored: the operator has already returned the verdict
-  // for this chat. A job may already be in the queue from before that flip —
-  // bail.
+  // Only a Moderated chat is the Concierge's to move. Unmoderated has nowhere
+  // further to go and Locked is the operator's; a job may already be in the
+  // queue from before that flip — bail.
   if (!isClassifierOnDuty(chat)) {
     return;
   }
@@ -70,13 +75,26 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     return;
   }
 
-  // Determine classification input: prefer context summary, fall back to raw messages
+  // Determine classification input: prefer the context summary, then the chosen
+  // scenario, then raw messages.
+  //
+  // The scenario arm is deliberate and it is not new — it is what this branch
+  // was already doing, unknowingly. Until bug 158, chat creation seeded
+  // `contextSummary` with the scenario, so a pre-fold chat took the first arm
+  // and was classified on its stage direction while the log said `summary`.
+  // The seed is gone; the bootstrap is kept, because a scenario is a real and
+  // early signal about where a chat is going and waiting for the first fold
+  // would leave the Concierge blind for the turns that need it most. It now
+  // reads its source on purpose and says which one it used.
   let classificationInput: string;
-  let inputSource: 'summary' | 'messages';
+  let inputSource: 'summary' | 'scenario' | 'messages';
 
   if (chat.contextSummary) {
     classificationInput = chat.contextSummary;
     inputSource = 'summary';
+  } else if (chat.scenarioText) {
+    classificationInput = chat.scenarioText;
+    inputSource = 'scenario';
   } else {
     // No context summary — fall back to concatenated raw messages.
     // Exclude:
@@ -113,12 +131,19 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     inputSource = 'messages';
   }
 
-  // Get user's chat settings for danger mode check
+  // Get user's chat settings for the Concierge policy
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
 
-  // Resolve danger settings — bail if mode is OFF
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  if (dangerSettings.mode === 'OFF') {
+  // Resolve the Concierge policy for this chat — the summary classifier runs
+  // only when he is on duty, the chat is Moderated, and the user opted in.
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
+  if (!conciergePolicy.summaryClassification) {
+    logger.debug('[ChatDangerClassification] Summary classification is off for this chat, skipping', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
+    });
     return;
   }
 
@@ -165,7 +190,7 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     classificationInput,
     cheapLLMSelection,
     job.userId,
-    dangerSettings,
+    conciergePolicy,
     payload.chatId
   );
 
@@ -189,29 +214,36 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   const updatedChat = await repos.chats.findById(payload.chatId);
   const finalMessageCount = updatedChat?.messageCount ?? chat.messageCount ?? 0;
 
-  // Update chat with classification results
+  // Record the verdict as telemetry. A dangerous verdict also moves the chat
+  // to Unmoderated — but that decision is the parent's, made against the chat
+  // as it stands when this batch commits (the operator may have locked it
+  // while the classifier was thinking): the job dispatcher's commit hook reads
+  // the verdict off this write and calls `maybeSwitchAfterClassification`.
+  // Run in the parent instead, we call it ourselves.
   const now = new Date().toISOString();
-  await repos.chats.update(payload.chatId, {
+  const verdict = result.isDangerous
+    ? {
+        score: result.score,
+        threshold: conciergePolicy.preScreen.threshold,
+        categories: result.categories,
+        source: result.source,
+        providerName: result.providerName,
+      }
+    : null;
+  await repos.chats.setDangerClassification(payload.chatId, {
     isDangerousChat: result.isDangerous,
     dangerScore: result.score,
     dangerCategories: result.categories.map(c => c.category),
     dangerClassifiedAt: now,
     dangerClassifiedAtMessageCount: finalMessageCount,
-  });
+  }, verdict);
 
-  // Sticky-true: the early-return at the top of this handler ensures we only
-  // reach this point when the chat newly transitions to dangerous, so the
-  // Concierge announces exactly once per chat.
-  if (result.isDangerous) {
-    await postConciergeDangerAnnouncement({
+  if (verdict && process.env.QUILLTAP_JOB_CHILD !== '1') {
+    const { switched } = await maybeSwitchAfterClassification(payload.chatId, verdict);
+    logger.debug('[ChatDangerClassification] Dangerous verdict applied in the parent', {
+      jobId: job.id,
       chatId: payload.chatId,
-      details: {
-        score: result.score,
-        threshold: dangerSettings.threshold,
-        categories: result.categories,
-        source: result.source,
-        providerName: result.providerName,
-      },
+      switched,
     });
   }
 

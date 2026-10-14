@@ -430,6 +430,39 @@ export class OpenAICompatibleProvider implements TextProvider {
   }
 
   /**
+   * Normalizes a Chat Completions `usage` block into Quilltap's shape.
+   *
+   * OpenAI-compatible endpoints fold prompt-cache hits into `prompt_tokens`
+   * (reported separately as `prompt_tokens_details.cached_tokens`). Quilltap's
+   * convention is that `promptTokens` / `totalTokens` EXCLUDE cache reads, so
+   * cached input never counts against token budgets; `cacheUsage` still
+   * carries the cache reads for display. Endpoints that report no
+   * `cached_tokens` are unaffected.
+   */
+  protected normalizeUsage(
+    usage: OpenAI.Completions.CompletionUsage | null | undefined
+  ): Pick<LLMResponse, 'usage' | 'cacheUsage'> {
+    const cachedTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+    if (cachedTokens > 0) {
+      this.logger.debug(`${this.providerName} usage: excluding prompt-cache hits from prompt/total`, {
+        context: `${this.providerName}Provider.normalizeUsage`,
+        promptTokens: usage?.prompt_tokens ?? 0,
+        cachedTokens,
+      });
+    }
+    return {
+      usage: {
+        promptTokens: Math.max(0, (usage?.prompt_tokens ?? 0) - cachedTokens),
+        completionTokens: usage?.completion_tokens ?? 0,
+        totalTokens: Math.max(0, (usage?.total_tokens ?? 0) - cachedTokens),
+      },
+      ...(cachedTokens > 0
+        ? { cacheUsage: { cacheReadInputTokens: cachedTokens, cachedTokens } }
+        : {}),
+    };
+  }
+
+  /**
    * Sends a message and returns the complete response.
    *
    * @param params - LLM parameters including messages, model, and settings
@@ -454,11 +487,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       return {
         content: choice.message.content ?? '',
         finishReason: choice.finish_reason,
-        usage: {
-          promptTokens: response.usage?.prompt_tokens ?? 0,
-          completionTokens: response.usage?.completion_tokens ?? 0,
-          totalTokens: response.usage?.total_tokens ?? 0,
-        },
+        ...this.normalizeUsage(response.usage),
         raw: response,
         attachmentResults,
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
@@ -496,7 +525,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       let chunkCount = 0;
 
       // Track usage - it may come in a separate final chunk
-      let accumulatedUsage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null = null;
+      let accumulatedUsage: OpenAI.Completions.CompletionUsage | null = null;
       // Tool-call fragments arrive index-keyed, with `arguments` split across
       // deltas as raw string pieces; accumulate per index and assemble at the
       // end rather than trying to parse mid-stream.
@@ -511,11 +540,7 @@ export class OpenAICompatibleProvider implements TextProvider {
 
         // Track usage when we get it (may come in a separate final chunk)
         if (hasUsage) {
-          accumulatedUsage = {
-            prompt_tokens: chunk.usage?.prompt_tokens,
-            completion_tokens: chunk.usage?.completion_tokens,
-            total_tokens: chunk.usage?.total_tokens,
-          };
+          accumulatedUsage = chunk.usage ?? null;
         }
 
         if (choice?.delta?.tool_calls) {
@@ -552,11 +577,12 @@ export class OpenAICompatibleProvider implements TextProvider {
       yield {
         content: '',
         done: true,
-        usage: accumulatedUsage ? {
-          promptTokens: accumulatedUsage.prompt_tokens ?? 0,
-          completionTokens: accumulatedUsage.completion_tokens ?? 0,
-          totalTokens: accumulatedUsage.total_tokens ?? 0,
-        } : undefined,
+        ...(accumulatedUsage
+          ? {
+              ...this.normalizeUsage(accumulatedUsage),
+              rawProviderUsage: accumulatedUsage as unknown as Record<string, unknown>,
+            }
+          : {}),
         attachmentResults,
         // Only synthesized when the stream actually carried tool calls: the
         // host's tool detection reads `rawResponse`, and an empty one on every

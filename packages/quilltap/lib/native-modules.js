@@ -62,6 +62,84 @@ function betterSqlite3NeedsRebuild() {
   }
 }
 
+// Locate an executable installed by a dependency, given the package directory
+// that needs it. Checks the package's own `.bin` first, then the `.bin` beside
+// it (the hoisted case, which is the usual one). Returns null when absent.
+function findBinFor(pkgDir, tool) {
+  const fs = require('fs');
+  const names = process.platform === 'win32' ? [`${tool}.cmd`, `${tool}.exe`, tool] : [tool];
+  const dirs = [
+    path.join(pkgDir, 'node_modules', '.bin'),  // nested install
+    path.join(pkgDir, '..', '.bin'),            // hoisted alongside the package
+  ];
+  for (const dir of dirs) {
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+// Rebuild ONE native package in place, addressed by its directory.
+//
+// Deliberately does NOT go through `npm rebuild <name>`, which fails this job
+// two different ways:
+//
+//   1. npm refuses install scripts for any package not listed in the root
+//      package.json `allowScripts` map (keyed `name@version`). The root
+//      SQLCipher copy is installed under the ALIAS `better-sqlite3`, which is
+//      not a key there, so the rebuild dies with EALLOWSCRIPTS.
+//   2. Asking for the real name (`better-sqlite3-multiple-ciphers`) at the root
+//      instead resolves a phantom directory: npm reports "rebuilt dependencies
+//      successfully" and the binding on disk is untouched. A success message is
+//      worse than an error.
+//
+// Running the package's own build chain (`prebuild-install || node-gyp rebuild`,
+// exactly what its `install` script does) in its own directory sidesteps both:
+// no name resolution, no npm script policy. `prebuild-install` downloads the
+// prebuilt binary for the running ABI and needs network; node-gyp compiles and
+// needs a toolchain.
+//
+// Returns { ok, reason }. Never throws. Verifies the result rather than trusting
+// the exit code — see (2): the whole failure mode here is a rebuild that claims
+// to have worked.
+function rebuildNativePackage(pkgDir, bindingPath) {
+  const fs = require('fs');
+  if (!fs.existsSync(pkgDir)) return { ok: false, reason: `no package at ${pkgDir}` };
+
+  const before = fs.existsSync(bindingPath) ? readCompiledAbi(bindingPath) : null;
+  const attempts = [];
+
+  const prebuild = findBinFor(pkgDir, 'prebuild-install');
+  if (prebuild) attempts.push({ label: 'prebuild-install', cmd: `"${prebuild}"` });
+
+  const nodeGyp = findBinFor(pkgDir, 'node-gyp');
+  if (nodeGyp) attempts.push({ label: 'node-gyp rebuild', cmd: `"${nodeGyp}" rebuild --release` });
+
+  if (attempts.length === 0) {
+    return { ok: false, reason: 'neither prebuild-install nor node-gyp is installed' };
+  }
+
+  const failures = [];
+  for (const attempt of attempts) {
+    try {
+      execSync(attempt.cmd, { cwd: pkgDir, stdio: 'inherit' });
+    } catch (err) {
+      failures.push(`${attempt.label}: ${err.message.split('\n')[0]}`);
+      continue;
+    }
+    // Trust nothing but the binary. A tool can exit 0 having done nothing.
+    const after = fs.existsSync(bindingPath) ? readCompiledAbi(bindingPath) : null;
+    if (after === process.versions.modules) return { ok: true, reason: attempt.label };
+    failures.push(
+      `${attempt.label}: exited 0 but the binding is still ${after ?? 'missing'} ` +
+      `(wanted ${process.versions.modules}${before ? `, was ${before}` : ''})`,
+    );
+  }
+  return { ok: false, reason: failures.join('; ') };
+}
+
 // Rebuild the named native modules against the current Node ABI. Prints a
 // friendly notice rather than throwing; returns true on success, false on
 // failure. Backfills node-pty's spawn-helper afterward.
@@ -96,7 +174,27 @@ function ensureDatabaseNativeModule() {
   } catch {
     return true; // detection hiccup — let the real load be the source of truth
   }
-  return rebuildModules(['better-sqlite3-multiple-ciphers']);
+
+  const bindingPath = betterSqlite3BindingPath();
+  if (!bindingPath) {
+    console.error('  Warning: could not locate the SQLCipher binding to rebuild.');
+    return false;
+  }
+  // build/Release/better_sqlite3.node → the package directory above it.
+  const pkgDir = path.resolve(path.dirname(bindingPath), '..', '..');
+
+  console.log(`  Rebuilding the SQLCipher binding for Node.js ${process.version}...`);
+  const result = rebuildNativePackage(pkgDir, bindingPath);
+  if (result.ok) {
+    console.log(`  Done (${result.reason}).`);
+    console.log('');
+    return true;
+  }
+  console.error('');
+  console.error(`  Warning: failed to rebuild the SQLCipher binding — ${result.reason}`);
+  console.error(`  Try running: (cd ${pkgDir} && ./node_modules/.bin/prebuild-install)`);
+  console.error('');
+  return false;
 }
 
 // node-pty needs a `spawn-helper` executable beside the pty.node it loads, or
@@ -194,7 +292,10 @@ function ensureNativeModules() {
 module.exports = {
   resolveModuleDir,
   readCompiledAbi,
+  betterSqlite3BindingPath,
   betterSqlite3NeedsRebuild,
+  findBinFor,
+  rebuildNativePackage,
   ensureDatabaseNativeModule,
   ensureNativeModules,
   reconcileNodePtySpawnHelper,

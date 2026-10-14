@@ -18,6 +18,8 @@ interface ComposerGutterToolsProps {
   onInsertAnnouncementClick: () => void
   /** Callback to open the Compose Mail dialog (The Post Office) */
   onComposeMailClick: () => void
+  /** Callback to open the Inform dialog — out-of-character word to the cast */
+  onInformClick: () => void
   /** Chat ID for RNG API calls */
   chatId: string
   /** Callback when RNG result is ready */
@@ -40,8 +42,10 @@ interface ComposerGutterToolsProps {
  * - Row 1: Insert Announcement (megaphone), Compose Mail (envelope)
  * - Row 2: Library file (document), Generate image (camera)
  * - Row 3: Attach file (paperclip), RNG (dice)
- * - Row 4: Custom tools (wand) — present only when `customToolsAvailable`, so
- *   the grid is 3×2 without it and 4×2 (last row half-full) with it.
+ * - Row 4: Custom tools (wand) — present only when `customToolsAvailable` —
+ *   then Inform (info). With Pascal in the roster row 4 reads *Pascal, Inform*
+ *   and the grid is a full 4×2; without him Inform falls to row 4 column 1 on
+ *   its own, leaving the last row half-full.
  *
  * These are positioned in the left gutter of the composer for quick access.
  */
@@ -52,6 +56,7 @@ export function ComposerGutterTools({
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
   onComposeMailClick,
+  onInformClick,
   chatId,
   onPendingToolResult,
   customToolsAvailable = false,
@@ -149,6 +154,19 @@ export function ComposerGutterTools({
           variant="gutter"
         />
       )}
+
+      {/* Row 4, Col 2 (or Col 1 when Pascal is absent): Inform — a quiet word
+          out of character, delivered to a seat before it next speaks */}
+      <button
+        type="button"
+        onClick={onInformClick}
+        disabled={disabled}
+        className="qt-composer-gutter-button"
+        title="Inform the cast"
+        aria-label="Inform the cast"
+      >
+        <Icon name="info" className="w-5 h-5" />
+      </button>
     </div>
   )
 }

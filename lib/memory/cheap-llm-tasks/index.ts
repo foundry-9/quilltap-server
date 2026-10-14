@@ -7,7 +7,7 @@
 
 // Types
 export type {
-  MemoryCandidate,
+  MemoryDraft,
   ChatMessage,
   Attachment,
   CheapLLMTaskResult,
@@ -19,6 +19,8 @@ export type {
   CompressionResult,
   AppearanceResolutionItem,
   CharacterAppearanceInput,
+  AppearanceSanitizeMode,
+  SanitizedAppearance,
 } from './types'
 
 // Execution surface — the deadline machinery and the two helpers a caller
@@ -30,35 +32,46 @@ export {
   throwIfLostToTimeout,
 } from './core-execution'
 
-// Memory tasks
-export {
-  extractSelfMemoriesFromTurn,
-  extractOtherMemoriesFromTurn,
-  batchExtractMemories,
-  extractMemorySearchKeywords,
-  summarizeMemoryRecap,
-  extractEpisodesFromFold,
-  FOLD_EPISODE_CAP,
-} from './memory-tasks'
-export type {
-  OtherSubjectInput,
-  OrientingContext,
-  ExtractionClock,
-  FoldEpisode,
-  FoldEpisodeMessage,
-  MemorySearchExtraction,
-} from './memory-tasks'
+// Recall's cheap-LLM tasks, re-exported here for their callers (the
+// extraction prompts live in `lib/memory/extraction/`).
+export { extractMemorySearchKeywords, type MemorySearchExtraction } from '../recall/query'
+export { summarizeMemoryRecap } from '../recall/recap-summary'
 
 // Canon block loader (used by the memory orchestrator to feed extractor prompts)
 export {
   renderSelfCanonBlock,
   renderOtherCanonBlock,
   loadCanonForSelf,
+  loadCanonForSelfWithCommonplace,
   loadCanonForObserverAboutSubject,
+  loadCommonplaceCanon,
   NO_CANON_FALLBACK,
+  CANON_BLOCK_TOKEN_CAP,
   type CanonSource,
   type SelfCanon,
 } from './canon'
+
+// Consolidation (one call per memory cluster — see lib/memory/consolidation.ts)
+export {
+  consolidateMemoryCluster,
+  validateConsolidationOutput,
+  parseConsolidationResponse,
+  buildConsolidationUserMessage,
+  ConsolidationOutputSchema,
+  ConsolidationDigestSchema,
+  ConsolidationContradictionSchema,
+  CONSOLIDATION_SYSTEM_PROMPT,
+  CONSOLIDATION_TASK_TYPE,
+} from './consolidation-tasks'
+export type {
+  ConsolidationOutput,
+  ConsolidationDigestOutput,
+  ConsolidationContradiction,
+  ConsolidationValidation,
+  ValidatedConsolidation,
+  ConsolidationCallInput,
+  ConsolidationMemberInput,
+} from './consolidation-tasks'
 
 // Chat tasks
 export {
@@ -85,6 +98,7 @@ export {
   craftStoryBackgroundPrompt,
   resolveAppearance,
   sanitizeAppearance,
+  CONCEALMENT_MARKER,
 } from './image-scene-tasks'
 
 // Compression tasks

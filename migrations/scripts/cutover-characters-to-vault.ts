@@ -69,6 +69,7 @@ import {
 import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
 import { loadMountIndexConfig } from '../../lib/database/config';
 import { getRepositories } from '../../lib/repositories/factory';
+import { readLegacyWardrobeRows } from '../lib/legacy-wardrobe-rows';
 import { writeDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Character } from '../../lib/schemas/character.types';
 
@@ -590,7 +591,7 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
   // `readPropertiesFromDocumentStore` flag, so the only remaining path is
   // "DB row is authoritative; push it into the vault wholesale".
   try {
-    const wardrobeItems = await getRepositories().wardrobe.findByCharacterIdRaw(character.id);
+    const wardrobeItems = readLegacyWardrobeRows(character.id);
     await writeCharacterVaultManagedFields(mountPointId, { character });
     // Wardrobe is projected separately now that the full-character writer no
     // longer handles it. The raw DB rows are still the source here (the table

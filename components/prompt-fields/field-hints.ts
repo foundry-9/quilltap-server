@@ -81,6 +81,12 @@ export const PROMPT_FIELD_HINTS = {
       'Stage direction for the model playing the character — voice, pacing, boundaries, interaction style — addressed to the character directly.',
     example: 'You are Ariadne. You answer plainly and you never flatter.',
   },
+  subprompt: {
+    label: 'Subprompt',
+    helper:
+      'A smaller instruction the character may carry into a particular chat, switched on or off per conversation. Written to the character directly, in the second person, exactly as a system prompt is — it lands immediately after the system prompt and is read by nobody else.',
+    example: 'You keep every reply under three sentences unless asked for more.',
+  },
   physicalDescription: {
     label: 'Physical Description',
     helper:

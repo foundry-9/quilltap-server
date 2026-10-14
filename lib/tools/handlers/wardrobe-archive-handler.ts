@@ -1,8 +1,10 @@
 /**
  * Archive Wardrobe Item Tool Handler
  *
- * Soft-retires a wardrobe item via `WardrobeRepository.archive` (sets
- * `archivedAt`). Never hard-deletes — restoring is a human-only UI action.
+ * Soft-retires a wardrobe item through `setItemArchived` — the same
+ * idempotent rule the item routes use, so archiving an already-archived item
+ * keeps its original date (bug 188). Never hard-deletes — restoring is a
+ * human-only UI action.
  * Resolves the target across every tier to LOCATE it, then enforces
  * own-items-only: shared archetypes (project / Quilltap General) are read-only
  * and the call is refused.
@@ -16,24 +18,21 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeArchiveToolInput, WardrobeArchiveToolOutput } from '../wardrobe-archive-tool';
 import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { setItemArchived } from '@/lib/wardrobe/item-mutations';
+import { resolveWardrobeLocation } from '@/lib/wardrobe/location';
+import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { findInPool } from '@/lib/wardrobe/wear-ops';
 import {
   findEquippedSlots,
-  isOwnWardrobeItem,
+  loadToolPool,
   normalizeNoItemSentinel,
-  notifyWardrobeChanged,
-  resolveWardrobeItemAcrossTiers,
   sharedWardrobeItemReadOnlyMessage,
   wardrobeItemNotFoundMessage,
+  type WardrobeToolContext,
 } from './wardrobe-handler-shared';
 
-export interface WardrobeArchiveToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-  /** Per-turn announcement queue. Forwarded from `ToolExecutionContext`. */
-  pendingWardrobeAnnouncements?: Set<string>;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeArchiveToolContext = WardrobeToolContext;
 
 function buildFailureResponse(error: string): WardrobeArchiveToolOutput {
   return { success: false, item_id: '', title: '', action: 'archived', error };
@@ -60,21 +59,23 @@ export async function executeWardrobeArchiveTool(
 
   try {
     const { item_id, item_title } = parsed;
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+    const pool = await loadToolPool(repos, context.chatId, context.characterId);
 
-    const item = await resolveWardrobeItemAcrossTiers(
-      repos,
-      context.characterId,
-      normalizeNoItemSentinel(item_id),
-      normalizeNoItemSentinel(item_title),
-      tiers,
-    );
+    const item = findInPool(pool, {
+      itemId: normalizeNoItemSentinel(item_id),
+      itemTitle: normalizeNoItemSentinel(item_title),
+    });
     if (!item) {
       return buildFailureResponse(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
-    if (!isOwnWardrobeItem(item, context.characterId)) {
+    if (!pool.owns(item)) {
       return buildFailureResponse(sharedWardrobeItemReadOnlyMessage(item.title, 'archived'));
+    }
+
+    const location = await resolveWardrobeLocation('character', context.characterId, repos, context.userId);
+    if (!location) {
+      return buildFailureResponse(`Failed to archive wardrobe item "${item.title}"`);
     }
 
     // Is the item currently equipped? (Archive doesn't clear equipped slots, but
@@ -82,8 +83,18 @@ export async function executeWardrobeArchiveTool(
     const equipped = await repos.chats.getEquippedOutfitForCharacter(context.chatId, context.characterId);
     const wasEquipped = findEquippedSlots(item.id, equipped).length > 0;
 
-    const archived = await repos.wardrobe.archive(item.id, item.characterId);
-    if (!archived) {
+    const { item: archived, changed } = await setItemArchived(location, item, true);
+    if (!changed) {
+      if (archived) {
+        logger.debug('Wardrobe item already archived; keeping its original date', {
+          context: 'wardrobe-archive-handler',
+          chatId: context.chatId,
+          characterId: context.characterId,
+          itemId: item.id,
+          archivedAt: item.archivedAt,
+        });
+        return { success: true, item_id: item.id, title: item.title, action: 'archived', already_archived: true };
+      }
       return buildFailureResponse(`Failed to archive wardrobe item "${item.title}"`);
     }
 
@@ -130,6 +141,9 @@ export async function executeWardrobeArchiveTool(
 export function formatWardrobeArchiveResults(output: WardrobeArchiveToolOutput): string {
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
+  }
+  if (output.already_archived) {
+    return `"${output.title}" (${output.item_id}) was already archived; nothing changed.`;
   }
   return `Archived "${output.title}" (${output.item_id}). It's hidden from listings and can't be worn; a human can restore it.`;
 }

@@ -91,6 +91,8 @@ Summon From Lore distinguishes the character fields by *vantage point*, plus the
 
 If your source material describes a character's looks, those details flow into the physical descriptions; her habitual coat flows into the wardrobe, not into her body's description. Similarly, foundational tenets (core beliefs, immutable principles) flow into the manifesto, not into personality or description.
 
+The system prompts the wizard writes also carry the safeguards described under [Whose story it is](prompts.md): what you narrate is what happened, the conversation outranks the character's notes, no setting facts are invented to win an argument, nothing binds you unless you agreed in plain words, and disagreement never hardens into votes, sign-offs, or standing conditions on your persona. They are written in the character's own voice and idiom, not pasted in as a rule list, and they bind a sworn enemy as surely as a dear friend. A *disposition of trust* is added only when the source material (or the wizard's own reading of the character's relationships) establishes the character as your companion, partner, family, or crew; when the relationship is neutral, professional, adversarial, or simply unknown, it is left out.
+
 ## Tips
 
 - **Better source material = better results.** Detailed wiki pages or character sheets produce more accurate characters than brief notes.

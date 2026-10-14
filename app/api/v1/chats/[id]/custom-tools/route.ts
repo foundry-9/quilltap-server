@@ -61,6 +61,7 @@ import {
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
+import { flattenProgressions } from '@/lib/progressions/engine';
 import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
@@ -447,6 +448,14 @@ async function handleRun(
   // borrowing some arbitrary participant's secrets to decide it.
   const metadata = body.asCharacterId ? perspective.metadata : {};
 
+  // One clock reading for the whole run, shared by the progress sheet, {{now}}
+  // and the applier's `updatedAt` stamp. The sheet follows metadata's
+  // asymmetry exactly: a run nobody made rolls against an empty one, so every
+  // `progress` test declines rather than consulting an arbitrary
+  // participant's countdowns.
+  const nowMs = Date.now();
+  const progress = flattenProgressions(metadata, nowMs);
+
   // The state cascade the run's `$state` references resolve against — retained
   // WHOLE, not just `.merged`, because the effect applier needs the per-tier
   // objects to decide where a write lives. Read once; never re-read. The group
@@ -478,6 +487,8 @@ async function handleRun(
     result = await executeCustomTool(entry.definition, body.parameters ?? undefined, {
       private: body.private,
       metadata,
+      progress,
+      now: nowMs,
       state: toolState,
       ...(entry.definition.llm
         ? { llmInvoke: buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: id }) }
@@ -518,6 +529,7 @@ async function handleRun(
         cascade,
         characterId: body.asCharacterId ? perspective.characterId : null,
         metadataSnapshot: metadata,
+        nowMs,
       })
     : [];
 

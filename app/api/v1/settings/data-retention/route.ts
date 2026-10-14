@@ -7,8 +7,9 @@
  * Instance-wide setting (`instance_settings['dataRetention']`), not a
  * `chat_settings` column — same class as the memory-recall knobs. Read daily
  * by the maintenance sweep (`lib/background-jobs/scheduled-maintenance.ts`)
- * to decide when a quiet chat's regenerable caches and cold-tier embeddings
- * are collapsed.
+ * to decide when a quiet chat's regenerable caches are collapsed.
+ * Conversation-chunk embeddings are never cold-tiered and are unaffected by
+ * this window.
  */
 
 import { createInstanceSettingHandlers } from '@/lib/api/instance-setting-handlers';

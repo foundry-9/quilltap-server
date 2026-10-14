@@ -13,6 +13,7 @@ import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -29,6 +30,15 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
 }))
 jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
   resolveWardrobeInstructions: jest.fn().mockResolvedValue(null),
+}))
+// The real wearable pool runs; only its tier resolution is stubbed. Quilltap
+// General is the one shared mount, and nobody belongs to a group.
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
+  resolveGroupMountsForCharacter: jest.fn().mockResolvedValue([]),
+  resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
+}))
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: jest.fn().mockResolvedValue('general-mp'),
 }))
 
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
@@ -95,8 +105,12 @@ function makeRepos(shared: WardrobeItem[] = [item('house-coat', { isDefault: tru
       },
       wardrobe: {
         findByCharacterId: jest.fn().mockResolvedValue([]),
-        findArchetypes: jest.fn().mockResolvedValue(shared),
-        findWearablePoolForCharacter: jest.fn().mockResolvedValue([]),
+        readSharedTiers: jest.fn(
+          async (mountPointIds: string[], _includeArchived: boolean, originOf: (mp: string) => unknown) =>
+            mountPointIds.includes('general-mp')
+              ? shared.map((it) => ({ ...it, origin: originOf('general-mp') }))
+              : [],
+        ),
       },
       connections: {
         findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]),
@@ -105,6 +119,7 @@ function makeRepos(shared: WardrobeItem[] = [item('house-coat', { isDefault: tru
         setEquippedOutfit,
         getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
       },
+      wardrobeWear: ledgerOver({ setEquippedOutfit }),
     },
   }
 }
@@ -117,11 +132,11 @@ const chose = (slots: Partial<typeof EMPTY>, deliberatelyUnclothed = false) =>
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockResolve.mockResolvedValue({
+  mockResolve.mockReturnValue({
     outfitValues: EMPTY,
     leafItemsBySlot: EMPTY,
     itemsById: new Map(),
-  } as unknown as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>)
+  } as unknown as ReturnType<typeof resolveEquippedOutfitForCharacter>)
 })
 
 describe('applyOutfitSelections — concurrent resolve, serial commit', () => {

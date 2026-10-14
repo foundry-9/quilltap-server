@@ -10,10 +10,12 @@
  * got told to file the image first, which is filing advice in answer to a
  * looking question (bug 92).
  *
- * The description usually costs nothing: chat uploads are auto-described on
- * arrival (`lib/photos/auto-describe-attachment.ts`) and Quilltap-generated
- * images carry the prompt that made them. The handler only spends a vision
- * call when neither exists.
+ * The description usually costs nothing: Quilltap-generated images carry the
+ * prompt that made them, and chat uploads are auto-described on arrival
+ * (`lib/photos/auto-describe-attachment.ts`). The handler prefers the prompt,
+ * then the stored description, and only spends a vision call when neither
+ * exists. The prompt outranks the stored column because that column has held
+ * labels rather than descriptions for generated images (bug 132).
  */
 
 import { z } from 'zod';
@@ -60,8 +62,14 @@ export interface DescribeImageOutput {
   /** The description itself. */
   description: string;
   /**
-   * Where the text came from: a description stored at upload time, the prompt
-   * that generated the image, or a vision call made just now.
+   * Where the text came from: the prompt that generated the image, a
+   * description stored on the file, or a vision call made just now.
    */
   source: 'stored-description' | 'generation-prompt' | 'vision-call';
+  /**
+   * When the answer is the generation prompt and the file also carries a
+   * stored description, that description — so nothing a person or a vision
+   * pass wrote is hidden behind the prompt.
+   */
+  stored_description?: string;
 }

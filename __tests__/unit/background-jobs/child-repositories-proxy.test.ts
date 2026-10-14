@@ -59,6 +59,7 @@ function makeFakeRepos() {
       getMessages: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ id: 'c-1' }),
       updateMessage: jest.fn().mockResolvedValue(undefined),
+      addMessage: jest.fn().mockResolvedValue(undefined),
     },
     embeddingStatus: {
       markAsEmbedded: jest.fn().mockResolvedValue(undefined),
@@ -438,18 +439,97 @@ describe('child repository proxy — read-your-writes detector', () => {
     const proxied = getChildRepositoriesProxy();
 
     await runWithJobScope('job-rww-unmapped', async () => {
-      await (proxied.memories as unknown as typeof repos.memories).create({ content: 'x' } as never);
-      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      await (proxied.chats as unknown as typeof repos.chats).update('c-1', { title: 'x' } as never);
+      await (proxied.chats as unknown as typeof repos.chats).findById('c-1');
       // Dedup is per (jobId, readMethod): a second identical read stays quiet.
-      await (proxied.memories as unknown as typeof repos.memories).findById('m-existing');
+      await (proxied.chats as unknown as typeof repos.chats).findById('c-1');
       flushPendingWrites();
     });
 
     const warnings = readYourWritesWarnings();
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toEqual(expect.objectContaining({
-      readMethod: 'memories.findById',
-      table: 'memories',
+      readMethod: 'chats.findById',
+      table: 'chats',
     }));
+  });
+
+  it('stays quiet for memories reads the job overlay answers (bug 209)', async () => {
+    const repos = makeFakeRepos();
+    // The snapshot cannot hold a row this job only buffered.
+    repos.memories.findById.mockResolvedValue(null);
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    let seen: unknown;
+    await runWithJobScope('job-rww-memories', async () => {
+      const created = await (proxied.memories as unknown as typeof repos.memories).create({ content: 'x' } as never);
+      seen = await (proxied.memories as unknown as typeof repos.memories).findById((created as { id: string }).id);
+      flushPendingWrites();
+    });
+
+    expect(readYourWritesWarnings()).toHaveLength(0);
+    expect(seen).toEqual(expect.objectContaining({ content: 'x' }));
+  });
+});
+
+/**
+ * Autonomous turns run `handleSendMessage` inside the child, so an assistant
+ * message written there — route trail and all — reaches the database only by
+ * riding the buffered write over IPC. The trail is plain JSON with no class
+ * instances, dates or functions in it, which is exactly what makes that free;
+ * this pins that it stays so.
+ */
+describe('an assistant message written in the child carries its route trail', () => {
+  it('buffers the trail verbatim and survives the IPC serialization', async () => {
+    const repos = makeFakeRepos();
+    mockedFactory.mockReturnValue(repos as never);
+    const proxied = getChildRepositoriesProxy();
+
+    const routeTrail = [
+      {
+        profileId: '00000000-0000-4000-8000-00000000000a',
+        profileName: 'OpenAI gpt-5',
+        provider: 'openai',
+        modelName: 'gpt-5',
+        via: 'primary',
+        outcome: 'failed',
+        trigger: 'network',
+        detail: 'Connection error.',
+      },
+      {
+        profileId: '00000000-0000-4000-8000-00000000000b',
+        profileName: 'Anthropic Sonnet',
+        provider: 'anthropic',
+        modelName: 'claude-sonnet-5',
+        via: 'understudy',
+        outcome: 'answered',
+      },
+    ];
+
+    const writes = await runWithJobScope('job-route-trail', async () => {
+      await (proxied.chats as unknown as { addMessage: (chatId: string, msg: unknown) => Promise<void> })
+        .addMessage('chat-1', {
+          id: '00000000-0000-4000-8000-000000000001',
+          type: 'message',
+          role: 'ASSISTANT',
+          content: 'The understudy speaks.',
+          createdAt: '2026-09-09T00:00:00.000Z',
+          provider: 'anthropic',
+          modelName: 'claude-sonnet-5',
+          routeTrail,
+        });
+      return flushPendingWrites();
+    });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0].method).toBe('chats.addMessage');
+    // Nothing ran the parent's write yet — the child only buffers.
+    expect(repos.chats.addMessage).not.toHaveBeenCalled();
+
+    // What the parent will apply, after the structured-clone-shaped hop.
+    const shipped = JSON.parse(JSON.stringify(writes[0].args[1])) as { routeTrail: unknown; provider: string };
+    expect(shipped.routeTrail).toEqual(routeTrail);
+    expect(shipped.provider).toBe('anthropic');
   });
 });

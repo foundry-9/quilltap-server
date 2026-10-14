@@ -11,7 +11,7 @@
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate';
+import { retireMemories } from '@/lib/memory/retire';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -22,7 +22,7 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
 /**
  * Truncate the format-3 tables (mount-index + new main-DB tables) before a
  * replace-mode restore. Done via raw DELETEs because per-row repository
- * deletes are expensive at scale (especially vector_entries and
+ * deletes are expensive at scale (especially conversation_chunks and
  * doc_mount_chunks). Each statement is independently guarded — if a table
  * doesn't exist on a very old database, the rest still run.
  *
@@ -34,6 +34,14 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
 async function clearFormat3Entities(): Promise<void> {
   const mainTables = [
     'chat_documents',
+    // Inform rows. No userId column (single-user), so the per-row scoped
+    // deletion never reaches them; without this a replace-mode restore would
+    // collide on the preserved primary keys, exactly as chat_documents does.
+    'chat_informs',
+    // Fold-pass extraction cursors (no userId). The chat delete's cascade would
+    // remove them, but clearing them here keeps a restore from merging cursors
+    // of a chat id it is about to recreate.
+    'memory_extraction_cursors',
     'conversation_chunks',
     // Per-message annotations. On no delete path in v4, so "delete all my data"
     // left them behind (a privacy leak) and a restore into a migrated instance
@@ -43,9 +51,11 @@ async function clearFormat3Entities(): Promise<void> {
     'conversation_annotations',
     'tfidf_vocabularies',
     'embedding_status',
-    'vector_entries',
-    'vector_indices',
     'text_replacement_rules',
+    // The wardrobe wear ledger. Global like the rest of this list (no userId),
+    // and its unique (itemId, wearer) index would otherwise make a
+    // replace-mode restore merge into stale tallies rather than replace them.
+    'wardrobe_wear_stats',
   ];
   for (const table of mainTables) {
     try {
@@ -127,7 +137,7 @@ export async function deleteUserData(
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders, wardrobeItems] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -143,7 +153,6 @@ export async function deleteUserData(
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
-      globalRepos.wardrobe.findAll(),
     ]);
 
   // Delete memories for each character first, through the deletion chokepoint.
@@ -157,7 +166,7 @@ export async function deleteUserData(
       memoryIds.push(memory.id);
     }
   }
-  await deleteMemoriesWithUnlinkBatch(memoryIds);
+  await retireMemories(memoryIds, { reason: 'restore-replace' });
 
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
@@ -177,7 +186,6 @@ export async function deleteUserData(
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
-    ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id, w.characterId ?? null)),
   ]);
 
   // Delete files from storage. Archived-character bundles are spared when
@@ -232,7 +240,6 @@ export async function deleteUserData(
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
       folders: folders.length,
-      wardrobeItems: wardrobeItems.length,
     },
   });
 }

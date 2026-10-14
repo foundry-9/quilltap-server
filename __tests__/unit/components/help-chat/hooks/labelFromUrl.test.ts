@@ -47,6 +47,11 @@ describe('labelFromUrl', () => {
     expect(labelFromUrl('/settings?tab=appearance')).toBe('Settings → Appearance')
   })
 
+  it('labels the Concierge tab', () => {
+    expect(labelFromUrl('/settings?tab=concierge')).toBe('Settings → Concierge')
+    expect(labelFromUrl('/settings?tab=concierge&section=uncensored-desk')).toBe('Settings → Concierge → Uncensored Desk')
+  })
+
   it('capitalizes tab name', () => {
     expect(labelFromUrl('/settings?tab=system')).toBe('Settings → System')
   })

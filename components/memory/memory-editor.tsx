@@ -7,6 +7,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { importanceBand } from '@/lib/memory/scoring/importance'
 
 interface Tag {
   id: string
@@ -22,7 +23,7 @@ interface Memory {
   tags: string[]
   tagDetails?: Tag[]
   importance: number
-  source: 'AUTO' | 'MANUAL'
+  source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
   createdAt: string
   updatedAt: string
 }
@@ -62,14 +63,13 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         summary: form.formData.summary,
         keywords,
         importance: form.formData.importance,
-        source: 'MANUAL' as const,
       }
 
       const url = isEditing
         ? `/api/v1/memories/${memory.id}`
         : `/api/v1/memories`
 
-      const result = await fetchJson<{ id: string }>(url, {
+      const result = await fetchJson<{ memory?: { id: string }; action?: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -83,7 +83,12 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         throw new Error(result.error || 'Failed to save memory')
       }
 
-      showSuccessToast(isEditing ? 'Memory updated' : 'Memory created')
+      // A new memory that admission folded into an existing one comes back as
+      // 200 with admission's action rather than 201.
+      const merged = !isEditing && result.status === 200
+      showSuccessToast(
+        isEditing ? 'Memory updated' : merged ? 'Already on file — the existing memory has been reinforced instead' : 'Memory created'
+      )
       onSave()
     })
   }
@@ -92,11 +97,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     handleFormSubmit(new Event('submit') as any)
   }
 
-  const importanceLabel = form.formData.importance >= 0.7
-    ? 'High'
-    : form.formData.importance >= 0.4
-      ? 'Medium'
-      : 'Low'
+  const band = importanceBand(form.formData.importance)
+  const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
 
   return (
     <div className="qt-dialog-overlay p-4">

@@ -1,12 +1,17 @@
 /**
  * Image Profile Resolution
  *
- * Shared utility for resolving which image profile to use for story
- * background generation. Used by both the title-update background job
- * handler and the story-background API action.
+ * The one place a picture's image profile is chosen: story backgrounds
+ * (`resolveImageProfileForChat`), wardrobe item pictures
+ * (`resolveWardrobeImageProfile`) and character avatars
+ * (`resolveAvatarImageProfile`). Each checks a candidate exists, belongs to the
+ * user and carries an API key before taking it.
  */
 
+import { logger } from '@/lib/logger';
 import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types';
+
+const LOG_CONTEXT = 'image-gen.profile-resolution';
 
 /** Minimal profile shape returned by findById/findDefault */
 interface ProfileResult {
@@ -88,5 +93,118 @@ export async function resolveImageProfileForChat(
     return defaultProfile.id;
   }
 
+  return null;
+}
+
+/** Minimal repository interface for wardrobe image profile resolution */
+interface WardrobeProfileRepos<P extends ProfileResult> {
+  imageProfiles: {
+    findById(id: string): Promise<P | null>;
+    findDefault(userId: string): Promise<P | null>;
+  };
+  chatSettings: {
+    findByUserId(userId: string): Promise<Pick<ChatSettings, 'wardrobeImageSettings'> | null>;
+  };
+}
+
+/**
+ * Resolve the image profile that draws a wardrobe item's picture.
+ *
+ * Priority order:
+ * 1. The per-generation override (the editor's "▾" pick)
+ * 2. `chatSettings.wardrobeImageSettings.imageProfileId` (Settings → Images)
+ * 3. The user's default image profile
+ *
+ * Each candidate must exist, belong to the user, and carry an API key — the
+ * same three checks `resolveImageProfileForChat` makes. The Lantern's
+ * `storyBackgroundsSettings.defaultImageProfileId` is deliberately NOT
+ * consulted: the backdrop desk is chosen for landscapes, not for a garment a
+ * provider might refuse.
+ */
+export async function resolveWardrobeImageProfile<P extends ProfileResult>(
+  userId: string,
+  repos: WardrobeProfileRepos<P>,
+  override?: string | null,
+): Promise<P | null> {
+  const usable = (profile: P | null): profile is P =>
+    !!profile && profile.userId === userId && !!profile.apiKeyId;
+
+  if (override) {
+    const profile = await repos.imageProfiles.findById(override);
+    if (usable(profile)) return profile;
+  }
+
+  const settings = await repos.chatSettings.findByUserId(userId);
+  const designatedId = settings?.wardrobeImageSettings?.imageProfileId;
+  if (designatedId) {
+    const profile = await repos.imageProfiles.findById(designatedId);
+    if (usable(profile)) return profile;
+  }
+
+  const fallback = await repos.imageProfiles.findDefault(userId);
+  if (fallback && fallback.apiKeyId) return fallback;
+
+  return null;
+}
+
+/** Minimal repository interface for avatar image profile resolution */
+interface AvatarProfileRepos<P extends ProfileResult> {
+  imageProfiles: {
+    findById(id: string): Promise<P | null>;
+    findDefault(userId: string): Promise<P | null>;
+  };
+}
+
+/**
+ * Resolve the image profile that paints a character's avatar — the chat
+ * avatar job (queued by the wardrobe triggers, the regenerate button and the
+ * toggle-on sweep) and the wardrobe dialog's out-of-chat preview.
+ *
+ * Priority order:
+ * 1. The one-shot override (the wardrobe dialog's model pick)
+ * 2. The chat's own image profile, when there is a chat
+ * 3. The user's default image profile
+ *
+ * Each candidate must exist, belong to the user, and carry an API key — the
+ * checks `resolveImageProfileForChat` and `resolveWardrobeImageProfile` make.
+ * A candidate that fails them is passed over for the next rather than handed
+ * to a job that would only skip for want of a key.
+ */
+export async function resolveAvatarImageProfile<P extends ProfileResult>(
+  userId: string,
+  repos: AvatarProfileRepos<P>,
+  options: {
+    override?: string | null;
+    chat?: Pick<ChatMetadata, 'imageProfileId'> | null;
+  } = {},
+): Promise<P | null> {
+  const usable = (profile: P | null): profile is P =>
+    !!profile && profile.userId === userId && !!profile.apiKeyId;
+
+  if (options.override) {
+    const profile = await repos.imageProfiles.findById(options.override);
+    if (usable(profile)) return profile;
+    logger.debug('[ProfileResolution] Avatar override profile unusable; falling back', {
+      context: LOG_CONTEXT,
+      override: options.override,
+      found: !!profile,
+    });
+  }
+
+  const chatProfileId = options.chat?.imageProfileId;
+  if (chatProfileId) {
+    const profile = await repos.imageProfiles.findById(chatProfileId);
+    if (usable(profile)) return profile;
+    logger.debug('[ProfileResolution] Chat image profile unusable for avatars; falling back', {
+      context: LOG_CONTEXT,
+      chatProfileId,
+      found: !!profile,
+    });
+  }
+
+  const fallback = await repos.imageProfiles.findDefault(userId);
+  if (fallback && fallback.apiKeyId) return fallback;
+
+  logger.debug('[ProfileResolution] No usable avatar image profile', { context: LOG_CONTEXT, userId });
   return null;
 }

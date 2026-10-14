@@ -22,6 +22,10 @@ import {
   collectUnalertedMail,
   listMailbox,
   markAlerted,
+  markMailAlertsDelivered,
+  resolveMailPath,
+  letterFileName,
+  discardLetter,
   type MailFrontmatter,
 } from '../mailbox';
 
@@ -30,6 +34,7 @@ import {
   writeDatabaseDocument,
   readDatabaseDocument,
   listDatabaseFiles,
+  deleteDatabaseDocumentIfExists,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 
@@ -40,6 +45,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
     writeDatabaseDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
     listDatabaseFiles: jest.fn(),
+    deleteDatabaseDocumentIfExists: jest.fn(),
   };
 });
 jest.mock('@/lib/mount-index/folder-paths', () => ({
@@ -230,5 +236,83 @@ describe('collectUnalertedMail + markAlerted', () => {
 
   it('markAlerted is a no-op (no throw) when the letter was already deleted', async () => {
     await expect(markAlerted('rv', 'Mail/gone.md')).resolves.toBeUndefined();
+  });
+});
+
+describe('markMailAlertsDelivered', () => {
+  it('marks every owed letter, so the next turn announces none of them', async () => {
+    const first = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Ariadne', fromCharacterId: 'c-1',
+      sentAt: '2026-06-14T00:00:00.000Z', body: 'one', inReplyTo: null,
+    });
+    const second = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Theseus', fromCharacterId: 'c-2',
+      sentAt: '2026-06-15T00:00:00.000Z', body: 'two', inReplyTo: null,
+    });
+
+    await markMailAlertsDelivered({ vaultId: 'rv', paths: [first.path, second.path] }, { chatId: 'chat-1', via: 'finalizer' });
+
+    expect(await collectUnalertedMail('rv')).toEqual([]);
+  });
+
+  it('does nothing when nothing is owed', async () => {
+    await markMailAlertsDelivered(null, { chatId: 'chat-1', via: 'finalizer' });
+    await markMailAlertsDelivered({ vaultId: 'rv', paths: [] }, { chatId: 'chat-1', via: 'finalizer' });
+
+    expect(writeDatabaseDocument).not.toHaveBeenCalled();
+  });
+
+  it('keeps going past a letter it cannot write, and never throws', async () => {
+    const ok = await deliverLetter({
+      recipientVaultId: 'rv', fromName: 'Ariadne', fromCharacterId: 'c-1',
+      sentAt: '2026-06-14T00:00:00.000Z', body: 'one', inReplyTo: null,
+    });
+    jest.mocked(readDatabaseDocument).mockRejectedValueOnce(new Error('disk on fire'));
+
+    await expect(
+      markMailAlertsDelivered({ vaultId: 'rv', paths: ['Mail/broken.md', ok.path] }, { chatId: 'chat-1', via: 'finalizer' }),
+    ).resolves.toBeUndefined();
+
+    expect(await collectUnalertedMail('rv')).toEqual([]);
+  });
+});
+
+describe('resolveMailPath / letterFileName', () => {
+  it('puts the Mail/ folder on a bare file name', () => {
+    expect(resolveMailPath('111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('adds a missing .md extension', () => {
+    expect(resolveMailPath('111-from-ariadne')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('accepts the Mail/ path and the qtap://self/ URI forms', () => {
+    expect(resolveMailPath('Mail/111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+    expect(resolveMailPath('qtap://self/Mail/111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('refuses anything that would leave the Mail/ folder', () => {
+    expect(resolveMailPath('Notes/secret.md')).toBeNull();
+    expect(resolveMailPath('../secret.md')).toBeNull();
+    expect(resolveMailPath('Mail/../secret.md')).toBeNull();
+    expect(resolveMailPath('..')).toBeNull();
+    expect(resolveMailPath('   ')).toBeNull();
+  });
+
+  it('strips the Mail/ folder back off for display', () => {
+    expect(letterFileName('Mail/111-from-ariadne.md')).toBe('111-from-ariadne.md');
+  });
+});
+
+describe('discardLetter', () => {
+  it('deletes through the database-store GC chokepoint', async () => {
+    jest.mocked(deleteDatabaseDocumentIfExists).mockResolvedValue(true);
+    await expect(discardLetter('rv', 'Mail/111-from-ariadne.md')).resolves.toBe(true);
+    expect(deleteDatabaseDocumentIfExists).toHaveBeenCalledWith('rv', 'Mail/111-from-ariadne.md');
+  });
+
+  it('reports false when there was no such letter', async () => {
+    jest.mocked(deleteDatabaseDocumentIfExists).mockResolvedValue(false);
+    await expect(discardLetter('rv', 'Mail/gone.md')).resolves.toBe(false);
   });
 });

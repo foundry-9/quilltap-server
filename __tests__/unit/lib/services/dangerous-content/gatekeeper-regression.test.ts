@@ -1,7 +1,7 @@
 /**
  * Regression tests for the Concierge Gatekeeper service
  *
- * Covers the DETECT_ONLY empty response bug where an empty LLM response
+ * Covers the (formerly DETECT_ONLY) empty response bug where an empty LLM response
  * should fail safe (isDangerous: false) rather than crashing or blocking,
  * along with related edge cases in parsing, moderation mapping, caching,
  * and provider fallback behavior.
@@ -16,7 +16,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { resolveConciergeSettings, type ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ModerationResult } from '@/lib/plugins/interfaces/moderation-provider-plugin'
 
@@ -49,15 +49,23 @@ jest.mock('@/lib/plugins/moderation-provider-registry', () => ({
   },
 }))
 
-const mockSettings: DangerousContentSettings = {
-  mode: 'DETECT_ONLY',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+// A Moderated chat with the pre-screen on at the default threshold.
+const mockSettings: ResolvedConciergePolicy = resolveConciergeSettings({
+  conciergeSettings: {
+    enabled: true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: true,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: false,
+    },
+  },
+})
 
 const mockCheapLLMSelection: CheapLLMSelection = {
   provider: 'OPENAI',

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution'
+import {
+  resolveAvatarImageProfile,
+  resolveImageProfileForChat,
+  resolveWardrobeImageProfile,
+} from '@/lib/image-gen/profile-resolution'
 
 describe('resolveImageProfileForChat', () => {
   let repos: {
@@ -132,5 +136,128 @@ describe('resolveImageProfileForChat', () => {
     )
 
     expect(result).toBeNull()
+  })
+})
+
+describe('resolveWardrobeImageProfile', () => {
+  type Profile = { id: string; userId: string; apiKeyId: string | null }
+  let profiles: Record<string, Profile>
+  let repos: {
+    imageProfiles: { findById: jest.Mock; findDefault: jest.Mock }
+    chatSettings: { findByUserId: jest.Mock }
+  }
+
+  const good = (id: string): Profile => ({ id, userId: 'user-1', apiKeyId: `key-${id}` })
+
+  beforeEach(() => {
+    profiles = {
+      override: good('override'),
+      designated: good('designated'),
+      lantern: good('lantern'),
+    }
+    repos = {
+      imageProfiles: {
+        findById: jest.fn(async (id: string) => profiles[id] ?? null),
+        findDefault: jest.fn().mockResolvedValue(good('default')),
+      },
+      chatSettings: {
+        findByUserId: jest.fn().mockResolvedValue({
+          wardrobeImageSettings: { imageProfileId: 'designated' },
+          storyBackgroundsSettings: { enabled: true, defaultImageProfileId: 'lantern' },
+        }),
+      },
+    }
+  })
+
+  it('prefers the per-generation override', async () => {
+    const result = await resolveWardrobeImageProfile('user-1', repos as any, 'override')
+    expect(result?.id).toBe('override')
+    expect(repos.chatSettings.findByUserId).not.toHaveBeenCalled()
+    expect(repos.imageProfiles.findDefault).not.toHaveBeenCalled()
+  })
+
+  it('falls to the designated wardrobe profile without an override', async () => {
+    const result = await resolveWardrobeImageProfile('user-1', repos as any)
+    expect(result?.id).toBe('designated')
+    expect(repos.imageProfiles.findDefault).not.toHaveBeenCalled()
+  })
+
+  it('falls to the default profile when nothing is designated', async () => {
+    repos.chatSettings.findByUserId.mockResolvedValue({ wardrobeImageSettings: { imageProfileId: null } })
+    const result = await resolveWardrobeImageProfile('user-1', repos as any)
+    expect(result?.id).toBe('default')
+  })
+
+  it('rejects an override without an API key and moves on', async () => {
+    profiles.override = { ...good('override'), apiKeyId: null }
+    const result = await resolveWardrobeImageProfile('user-1', repos as any, 'override')
+    expect(result?.id).toBe('designated')
+  })
+
+  it('rejects an override that belongs to another user', async () => {
+    profiles.override = { ...good('override'), userId: 'user-2' }
+    const result = await resolveWardrobeImageProfile('user-1', repos as any, 'override')
+    expect(result?.id).toBe('designated')
+  })
+
+  it('rejects a designated profile without an API key, or of another user', async () => {
+    profiles.designated = { ...good('designated'), apiKeyId: null }
+    expect((await resolveWardrobeImageProfile('user-1', repos as any))?.id).toBe('default')
+
+    profiles.designated = { ...good('designated'), userId: 'user-2' }
+    expect((await resolveWardrobeImageProfile('user-1', repos as any))?.id).toBe('default')
+  })
+
+  it('rejects a default profile without an API key, returning null', async () => {
+    profiles.designated = { ...good('designated'), apiKeyId: null }
+    repos.imageProfiles.findDefault.mockResolvedValue({ ...good('default'), apiKeyId: null })
+    expect(await resolveWardrobeImageProfile('user-1', repos as any)).toBeNull()
+  })
+
+  it('never consults the Lantern\'s storyBackgroundsSettings profile', async () => {
+    repos.chatSettings.findByUserId.mockResolvedValue({
+      storyBackgroundsSettings: { enabled: true, defaultImageProfileId: 'lantern' },
+    })
+    repos.imageProfiles.findDefault.mockResolvedValue(null)
+
+    const result = await resolveWardrobeImageProfile('user-1', repos as any)
+    expect(result).toBeNull()
+    expect(repos.imageProfiles.findById).not.toHaveBeenCalledWith('lantern')
+  })
+})
+
+describe('resolveAvatarImageProfile', () => {
+  const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, userId: 'user-1', apiKeyId: `key-${id}`, ...extra })
+  let repos: { imageProfiles: { findById: jest.Mock; findDefault: jest.Mock } }
+
+  beforeEach(() => {
+    const byId: Record<string, unknown> = {
+      override: profile('override'),
+      chat: profile('chat'),
+      keyless: profile('keyless', { apiKeyId: null }),
+      foreign: profile('foreign', { userId: 'user-2' }),
+    }
+    repos = {
+      imageProfiles: {
+        findById: jest.fn(async (id: unknown) => byId[id as string] ?? null),
+        findDefault: jest.fn(async () => profile('default')),
+      },
+    }
+  })
+
+  it('takes the override first, then the chat, then the default', async () => {
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'override', chat: { imageProfileId: 'chat' } }))?.id).toBe('override')
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { chat: { imageProfileId: 'chat' } }))?.id).toBe('chat')
+    expect((await resolveAvatarImageProfile('user-1', repos as never))?.id).toBe('default')
+  })
+
+  it('passes over a keyless, foreign or missing candidate', async () => {
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'keyless', chat: { imageProfileId: 'foreign' } }))?.id).toBe('default')
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'gone', chat: { imageProfileId: 'chat' } }))?.id).toBe('chat')
+  })
+
+  it('answers null when even the default has no key', async () => {
+    repos.imageProfiles.findDefault.mockResolvedValue(profile('default', { apiKeyId: null }) as never)
+    expect(await resolveAvatarImageProfile('user-1', repos as never)).toBeNull()
   })
 })

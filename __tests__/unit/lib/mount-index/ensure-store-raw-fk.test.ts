@@ -1,5 +1,5 @@
 /**
- * Regression tests for ensure{Group,Project}OfficialStore FK persistence.
+ * Regression tests for ensureOwnerOfficialStore FK persistence.
  *
  * The provisioning helpers run BEFORE the store files (properties.json et al.)
  * exist — group/project `create()` writes those only after ensure() returns.
@@ -16,8 +16,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 
 jest.mock('@/lib/repositories/factory');
 
@@ -69,7 +68,7 @@ function makeRepos(opts: {
   return { entityRepo, linksRepo, docMountPoints };
 }
 
-describe('ensureGroupOfficialStore — raw FK write contract', () => {
+describe('ensureOwnerOfficialStore(group) — raw FK write contract', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('creates a fresh store and persists the FK via setOfficialMountPointId, not update', async () => {
@@ -80,7 +79,7 @@ describe('ensureGroupOfficialStore — raw FK write contract', () => {
       createdMountPointId: 'mp-1',
     });
 
-    const result = await ensureGroupOfficialStore('g1', 'Cabal');
+    const result = await ensureOwnerOfficialStore('group', 'g1', 'Cabal');
 
     expect(result).toEqual({ mountPointId: 'mp-1', created: true });
     expect(docMountPoints.create).toHaveBeenCalledTimes(1);
@@ -104,7 +103,7 @@ describe('ensureGroupOfficialStore — raw FK write contract', () => {
       mountPointsById: { 'mp-existing': adopted },
     });
 
-    const result = await ensureGroupOfficialStore('g1', 'Cabal');
+    const result = await ensureOwnerOfficialStore('group', 'g1', 'Cabal');
 
     expect(result).toEqual({ mountPointId: 'mp-existing', created: false });
     expect(entityRepo.setOfficialMountPointId).toHaveBeenCalledWith('g1', 'mp-existing');
@@ -118,7 +117,7 @@ describe('ensureGroupOfficialStore — raw FK write contract', () => {
       mountPointsById: { 'mp-1': { id: 'mp-1' } },
     });
 
-    const result = await ensureGroupOfficialStore('g1', 'Cabal');
+    const result = await ensureOwnerOfficialStore('group', 'g1', 'Cabal');
 
     expect(result).toEqual({ mountPointId: 'mp-1', created: false });
     expect(entityRepo.setOfficialMountPointId).not.toHaveBeenCalled();
@@ -126,7 +125,7 @@ describe('ensureGroupOfficialStore — raw FK write contract', () => {
   });
 });
 
-describe('ensureProjectOfficialStore — raw FK write contract', () => {
+describe('ensureOwnerOfficialStore(project) — raw FK write contract', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('creates a fresh store and persists the FK via setOfficialMountPointId, not update', async () => {
@@ -137,7 +136,7 @@ describe('ensureProjectOfficialStore — raw FK write contract', () => {
       createdMountPointId: 'mp-2',
     });
 
-    const result = await ensureProjectOfficialStore('p1', 'Saga');
+    const result = await ensureOwnerOfficialStore('project', 'p1', 'Saga');
 
     expect(result).toEqual({ mountPointId: 'mp-2', created: true });
     expect(docMountPoints.create).toHaveBeenCalledTimes(1);

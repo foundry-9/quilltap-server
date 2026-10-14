@@ -1,9 +1,10 @@
 /**
  * Chat Message Danger Orchestrator Service
  *
- * Resolves dangerous-content settings, optionally classifies the current user message,
- * synthesizes message flags for dangerous chats, and reroutes to uncensored providers
- * when Concierge Auto-Route is enabled.
+ * Resolves the Concierge policy for the chat, optionally pre-screens the current
+ * user message (flagging it when the pre-screen finds it dangerous), and routes to
+ * the uncensored desk when the policy says so (an Unmoderated chat routes
+ * direct; a Moderated chat's pre-screen flag reroutes when failover is allowed).
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -13,10 +14,9 @@ import type { DangerFlag } from '@/lib/schemas/chat.types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 import { encodeStatusEvent, safeEnqueue } from './streaming.service'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import type { DangerResolutionResult } from './types'
 
 const logger = createServiceLogger('ChatDangerOrchestrator')
@@ -59,27 +59,33 @@ export async function resolveMessageDangerState({
   let effectiveProfile = connectionProfile
   let effectiveApiKey = apiKey
 
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings, chat)
-  const dangerSettings = dangerousContentResolved.settings
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat)
 
-  if (shouldUseUncensoredRoute(chat) && dangerSettings.mode !== 'OFF' && !isContinueMode && content) {
+  logger.debug('[DangerousContent] Resolved Concierge policy for message send', {
+    chatId,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    routeDirect: conciergePolicy.routeDirect,
+    preScreen: conciergePolicy.preScreen.enabled,
+    scanTextChat: conciergePolicy.preScreen.scanTextChat,
+  })
 
-    const categories = chat.dangerCategories && chat.dangerCategories.length > 0
-      ? chat.dangerCategories
-      : ['unspecified']
-
-    dangerFlags = categories.map(cat => ({
-      category: cat,
-      score: 1.0,
-      userOverridden: false,
-      wasRerouted: false,
-    }))
-
-    if (dangerSettings.mode === 'AUTO_ROUTE' && !effectiveProfile.isDangerousCompatible) {
+  // Unmoderated chat: straight to the uncensored desk, no pre-screen needed.
+  //
+  // No per-message flags are written here. The chat's route is already decided
+  // by its state, so a badge on every user message would say nothing the
+  // header pill and the assistant row's route trail do not already say (the
+  // orchestrator tags the turn `routeVia: 'concierge'` when the profile was
+  // swapped). `routedDirect` carries the one thing the flags used to carry for
+  // the failover service: this turn's content is headed for the uncensored
+  // desk, so an empty body reads as a refusal and a stand-in must be cleared
+  // for it.
+  if (conciergePolicy.routeDirect && !isContinueMode && content) {
+    if (!effectiveProfile.isDangerousCompatible) {
       const routeResult = await resolveProviderForDangerousContent(
         effectiveProfile,
         effectiveApiKey,
-        dangerSettings,
+        conciergePolicy,
         userId
       )
 
@@ -87,26 +93,34 @@ export async function resolveMessageDangerState({
         effectiveProfile = routeResult.connectionProfile
         effectiveApiKey = routeResult.apiKey
 
-        dangerFlags = markFlagsAsRerouted(dangerFlags, routeResult.connectionProfile.provider, routeResult.connectionProfile.modelName)
-
-        logger.info('[DangerousContent] Rerouted to uncensored provider (permanently dangerous chat)', {
+        logger.info('[DangerousContent] Rerouted to uncensored provider (Unmoderated chat)', {
           chatId,
           originalProfile: connectionProfile.name,
           uncensoredProfile: routeResult.connectionProfile.name,
         })
+      } else {
+        logger.debug('[DangerousContent] Unmoderated chat not rerouted', {
+          chatId,
+          reason: routeResult.reason,
+        })
       }
-    } else if (dangerSettings.mode === 'AUTO_ROUTE') {
+    } else {
+      logger.debug('[DangerousContent] Unmoderated chat already on an uncensored-compatible profile', {
+        chatId,
+        profile: effectiveProfile.name,
+      })
     }
 
     return {
-      dangerSettings,
-      dangerFlags,
+      conciergePolicy,
+      dangerFlags: undefined,
+      routedDirect: true,
       effectiveProfile,
       effectiveApiKey,
     }
   }
 
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && content && cheapLLMSelection) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanTextChat && !isContinueMode && content && cheapLLMSelection) {
     try {
       safeEnqueue(controller, encodeStatusEvent(encoder, {
         stage: 'classifying',
@@ -119,7 +133,7 @@ export async function resolveMessageDangerState({
         content,
         cheapLLMSelection,
         userId,
-        dangerSettings,
+        conciergePolicy,
         chatId
       )
 
@@ -135,10 +149,10 @@ export async function resolveMessageDangerState({
           chatId,
           score: classificationResult.score,
           categories: classificationResult.categories.map(c => c.category),
-          mode: dangerSettings.mode,
+          conciergeSource: conciergePolicy.source,
         })
 
-        if (dangerSettings.mode === 'AUTO_ROUTE') {
+        if (conciergePolicy.failoverAllowed) {
           if (!effectiveProfile.isDangerousCompatible) {
             safeEnqueue(controller, encodeStatusEvent(encoder, {
               stage: 'rerouting',
@@ -150,7 +164,7 @@ export async function resolveMessageDangerState({
             const routeResult = await resolveProviderForDangerousContent(
               effectiveProfile,
               effectiveApiKey,
-              dangerSettings,
+              conciergePolicy,
               userId
             )
 
@@ -171,7 +185,6 @@ export async function resolveMessageDangerState({
                 reason: routeResult.reason,
               })
             }
-          } else {
           }
         }
 
@@ -200,8 +213,9 @@ export async function resolveMessageDangerState({
   }
 
   return {
-    dangerSettings,
+    conciergePolicy,
     dangerFlags,
+    routedDirect: false,
     effectiveProfile,
     effectiveApiKey,
   }

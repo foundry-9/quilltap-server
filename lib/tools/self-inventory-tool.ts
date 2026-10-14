@@ -208,7 +208,7 @@ export interface SelfInventorySemanticMemoryItem {
   summary: string;
   importance: number;
   score: number;
-  effectiveWeight: number;
+  salience: number;
 }
 
 export interface SelfInventoryInterCharacterMemoryItem {

@@ -34,6 +34,18 @@ export interface ParentInvalidateMessage {
   key: string;
 }
 
+/**
+ * Bring the child's memory-index cache in step with rows the parent just wrote
+ * (admission over host-RPC): put each entry's vector and tier into the
+ * character's cache if it is loaded, leaving the rest of the cache — and any
+ * in-place updates a running child job made to it — alone.
+ */
+export interface ParentMemoryIndexPatchMessage {
+  type: 'memory-index-patch';
+  characterId: string;
+  entries: Array<{ id: string; embedding: Float32Array; tier: 'hot' | 'cold' }>;
+}
+
 /** Begin graceful drain. Child stops accepting new jobs and exits when idle. */
 export interface ParentShutdownMessage {
   type: 'shutdown';
@@ -57,6 +69,7 @@ export interface ParentHostRpcResponseMessage {
 export type ParentToChildMessage =
   | ParentJobMessage
   | ParentInvalidateMessage
+  | ParentMemoryIndexPatchMessage
   | ParentShutdownMessage
   | ParentHostRpcResponseMessage;
 
@@ -90,6 +103,12 @@ export interface ChildJobResultMessage {
   jobId: string;
   ok: boolean;
   writes: ChildWritePayload[];
+  /**
+   * What the handler handed back (`setJobResult`), for the parent's commit
+   * hooks — the maintenance job's summary, which the parent records in its
+   * ledger once the batch has landed. Absent for most jobs.
+   */
+  result?: unknown;
   error?: { message: string; stack?: string };
 }
 
@@ -140,7 +159,15 @@ export interface ChildShutdownAckMessage {
  *     participant character's vault
  *   - `removeConversationSummariesFromVaults` — sweep a deleted conversation's
  *     summary out of every participant vault
- * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore` embed a
+ *   - `admitMemory` — memory admission (`admitPrepared`): the child extracts and
+ *     embeds, the parent searches, decides and writes against the real rows
+ *   - `countRecentAdmissions` — the extraction rate limit's read of the
+ *     parent's ledger of recent admissions (`admission/rate-ledger.ts`)
+ *   - `foldNearDuplicates` — maintenance's near-duplicate fold
+ *     (`applyNearDuplicateFolds`): the child plans, the parent folds under
+ *     admission's per-character lock and retires the folded rows
+ * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
+ * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
  * pre-existing blob) into the returned `storageKey`, which the handler persists
  * into `files.create` — a buffered/synthetic id would dangle, hence host-RPC
@@ -157,9 +184,13 @@ export interface ChildHostRpcRequestMessage {
     | 'uploadFile'
     | 'writeCharacterAvatarToVault'
     | 'writeLanternBackgroundToMountStore'
+    | 'writeWardrobeItemImage'
     | 'writeConversationSummaryToVaults'
     | 'removeConversationSummariesFromVaults'
-    | 'startScheduledAutonomousRun';
+    | 'startScheduledAutonomousRun'
+    | 'admitMemory'
+    | 'countRecentAdmissions'
+    | 'foldNearDuplicates';
   args: unknown[];
 }
 
@@ -200,5 +231,5 @@ export function isChildToParentMessage(value: unknown): value is ChildToParentMe
 export function isParentToChildMessage(value: unknown): value is ParentToChildMessage {
   if (!value || typeof value !== 'object') return false;
   const t = (value as { type?: unknown }).type;
-  return t === 'job' || t === 'invalidate' || t === 'shutdown' || t === 'host-rpc-response';
+  return t === 'job' || t === 'invalidate' || t === 'memory-index-patch' || t === 'shutdown' || t === 'host-rpc-response';
 }

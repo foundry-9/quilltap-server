@@ -8,8 +8,8 @@
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
-import { getVectorStoreManager } from '@/lib/embedding/vector-store'
-import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { retireMemories } from '@/lib/memory/retire'
+import { memoryIndex } from '@/lib/memory/index-store'
 import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar'
 import { removeFromCharacterGallery } from '@/lib/photos/character-gallery-service'
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types'
@@ -370,26 +370,21 @@ export async function executeCascadeDelete(
   }
 
   // Always delete memories associated with the character. Route through the
-  // chokepoint so cross-character relatedMemoryIds get scrubbed before the
-  // rows go away — otherwise every neighbour outside this character keeps
-  // a dangling reference to the deleted memory.
+  // deletion chokepoint so cross-character links get scrubbed before the rows
+  // go away — otherwise every neighbour outside this character keeps a
+  // dangling reference to the deleted memory.
   if (preview.memoryCount > 0) {
     try {
       const memories = await repos.memories.findByCharacterId(characterId)
       const memoryIds = memories.map(m => m.id)
-      deletedMemories = await deleteMemoriesWithUnlinkBatch(memoryIds)
+      deletedMemories = (await retireMemories(memoryIds, { reason: 'character-delete' })).retired
     } catch (err) {
       logger.error(`Failed to delete memories for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
     }
   }
 
-  // Delete the character's vector index (embeddings)
-  try {
-    const vectorStoreManager = getVectorStoreManager()
-    await vectorStoreManager.deleteStore(characterId)
-  } catch (err) {
-    logger.error(`Failed to delete vector store for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
-  }
+  // The vectors lived on the memory rows just retired; drop the cached index.
+  memoryIndex.reload(characterId)
 
   // Delete plugin data associated with the character
   try {
@@ -399,6 +394,17 @@ export async function executeCascadeDelete(
     }
   } catch (err) {
     logger.error(`Failed to delete plugin data for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
+  }
+
+  // Fold the character's wear-ledger rows into each item's unattributed row:
+  // the garments' totals survive the wearer, the attribution does not. A fold
+  // rather than SET NULL because the ledger's unique index admits only one
+  // unattributed row per item.
+  try {
+    await repos.wardrobeWear.foldWearerIntoUnattributed(characterId)
+    logger.debug('[CascadeDelete] Folded wear-ledger rows into unattributed', { context: { characterId } })
+  } catch (err) {
+    logger.error(`Failed to fold wear-ledger rows for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
   }
 
   // Finally delete the character

@@ -2,8 +2,8 @@
  * Project Document Mount Links Repository
  *
  * Backend-agnostic repository for ProjectDocMountLink entities.
- * Overrides getCollection() to route all operations to the dedicated
- * mount index database (quilltap-mount-index.db), isolating document
+ * Lives in the dedicated mount index database (quilltap-mount-index.db)
+ * via `AbstractDedicatedDbRepository`, isolating document
  * mount tracking data from the main database.
  *
  * ProjectDocMountLink is a join table linking projects to mount points.
@@ -15,53 +15,20 @@
  * empty arrays, null, etc. The rest of the app continues normally.
  */
 
-import { logger } from '@/lib/logger';
 import { ProjectDocMountLink, ProjectDocMountLinkSchema } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 
 /**
  * Project Document Mount Links Repository
  * Implements CRUD operations for the project-to-mount-point join table.
  * Uses the mount index database instead of the main database.
  */
-export class ProjectDocMountLinksRepository extends AbstractBaseRepository<ProjectDocMountLink> {
-  private mountIndexCollectionInitialized = false;
-
+export class ProjectDocMountLinksRepository extends AbstractDedicatedDbRepository<ProjectDocMountLink> {
   constructor() {
-    super('project_doc_mount_links', ProjectDocMountLinkSchema);
-  }
-
-  /**
-   * Override getCollection to return a collection from the dedicated mount index
-   * database instead of the main database.
-   */
-  protected async getCollection(): Promise<DatabaseCollection<ProjectDocMountLink>> {
-    const db = requireMountIndexDb();
-
-    // Ensure the table exists in the mount index DB on first access
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure project_doc_mount_links table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<ProjectDocMountLink>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    super('project_doc_mount_links', ProjectDocMountLinkSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
   // ============================================================================

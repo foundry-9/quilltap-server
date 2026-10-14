@@ -240,20 +240,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   }
 
   /**
-   * Find all built-in roleplay templates
-   */
-  async findBuiltIn(): Promise<RoleplayTemplate[]> {
-    return this.safeQuery(
-      async () => {
-        return await this.findByFilter({ isBuiltIn: true });
-      },
-      'Error finding built-in roleplay templates',
-      {},
-      []
-    );
-  }
-
-  /**
    * Find all templates available to a user (built-in + user's own templates)
    */
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {

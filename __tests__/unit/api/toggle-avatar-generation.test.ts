@@ -51,7 +51,9 @@ function createContext(options: {
       },
       imageProfiles: {
         findById: jest.fn().mockResolvedValue(options.chatProfile ?? null),
-        findAll: jest.fn().mockResolvedValue(options.profiles ?? []),
+        findDefault: jest.fn().mockResolvedValue(
+          (options.profiles as Array<{ isDefault?: boolean }> | undefined)?.find((p) => p.isDefault) ?? null,
+        ),
       },
     },
   } as unknown as RequestContext
@@ -80,7 +82,7 @@ describe('handleToggleAvatarGeneration', () => {
           { id: 'p-3', type: 'NARRATOR', characterId: 'char-3', controlledBy: 'assistant' },
         ],
       },
-      chatProfile: { id: 'profile-chat' },
+      chatProfile: { id: 'profile-chat', userId: 'user-1', apiKeyId: 'key-1' },
     })
 
     const response = await handleToggleAvatarGeneration('chat-1', ctx)

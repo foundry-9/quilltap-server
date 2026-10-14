@@ -4,8 +4,8 @@
  * Two kinds of failover, both landing in the same `StreamingState`:
  *
  *  - **Empty response** — the call succeeded and produced nothing. Retry the
- *    same provider once (usually transient), then, in Concierge Auto-Route
- *    territory, the uncensored profile, then the profile's own fallback chain.
+ *    same provider once (usually transient), then, when the Concierge policy
+ *    allows failover, the uncensored profile, then the profile's own fallback chain.
  *  - **Hard error** — the call did not succeed at all (auth, rate limit,
  *    network, missing model, 5xx). Walk the profile's fallback chain.
  *
@@ -16,7 +16,15 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
-import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy'
+import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
+import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
+import {
+  conciergeStateMayFailOver,
+  type ConciergeState,
+} from '@/lib/services/dangerous-content/chat-override'
+import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
+import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
   adaptMessagesForProfile,
@@ -31,7 +39,7 @@ import {
   type FallbackRepos,
 } from '@/lib/llm/fallback'
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 /**
  * Reads only. `findApiKeyById` is needed on top of the engine's own surface
@@ -50,14 +58,46 @@ import {
   flushReasoningSegment,
 } from './streaming.service'
 import type { StreamingState } from './types'
+import { recordRouteFailure, setRouteVia, classifyEmptyBody, viaOf } from './route-trail'
 
 const logger = createServiceLogger('ProviderFailover')
+
+/**
+ * Put a refused text turn on the chat's refusal ledger once its recovery has
+ * run its course. The ledger drops anything but a stated refusal (an
+ * `inferred` one never counts) and decides on the auto-switch. Never throws.
+ */
+async function recordTextRefusal(
+  chatId: string,
+  refusing: Pick<ConnectionProfile, 'id' | 'name' | 'provider' | 'modelName'>,
+  evidence: RefusalEvidence | undefined,
+  rerouted: boolean,
+): Promise<void> {
+  await recordModerationRefusal({
+    chatId,
+    kind: 'text',
+    purpose: 'chat',
+    refusedProfileId: refusing.id,
+    refusedProfileName: refusing.name,
+    provider: refusing.provider,
+    modelName: refusing.modelName,
+    evidence,
+    rerouted,
+  })
+}
 
 export interface AttemptEmptyResponseRecoveryOptions {
   state: StreamingState
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
+  /**
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the policy says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
   connectionProfile: ConnectionProfile
   formattedMessages: Array<{
     role: string
@@ -109,8 +149,8 @@ export async function attemptEmptyResponseRecovery({
   state,
   toolMessagesLength,
   contentWasFlaggedDangerous,
-  dangerSettings,
-  connectionProfile,
+  conciergePolicy,
+  conciergeState,
   formattedMessages,
   modelParams,
   actualTools,
@@ -141,6 +181,30 @@ export async function attemptEmptyResponseRecovery({
 
   if (state.fullResponse.trim().length !== 0 || toolMessagesLength > 0) {
     return flags()
+  }
+
+  // The call that opened this recovery produced nothing. Record it on the
+  // turn's route trail once, here, while `state.rawResponse` still holds the
+  // finish reason that tells a stated refusal from a plain empty body —
+  // `resetStreamingBuffersForSwap` clears it further down the chain.
+  //
+  // `state.routeVia` is whatever the effective profile already was: 'primary'
+  // normally, 'concierge' when the Concierge's *pre-call* reroute installed
+  // this profile before anything was tried.
+  const openingVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+  recordRouteFailure(state, state.effectiveProfile, state.routeVia, openingVerdict.outcome,
+    openingVerdict.trigger, openingVerdict.detail, openingVerdict.evidence)
+  const openingProfile = state.effectiveProfile
+  let uncensoredRecovered = false
+  // The turn's refusal, for the chat's ledger: the opening verdict, or — when
+  // the opening was a plain empty body — a refusal the same-provider retry
+  // then stated. One per turn either way. Recorded on the way out so the log
+  // can say whether the Concierge's reroute answered.
+  let turnRefusal: { profile: typeof openingProfile; evidence: typeof openingVerdict.evidence } | null =
+    openingVerdict.outcome === 'refused' ? { profile: openingProfile, evidence: openingVerdict.evidence } : null
+  const recordOpeningRefusal = async (): Promise<void> => {
+    if (!turnRefusal) return
+    await recordTextRefusal(chatId, turnRefusal.profile, turnRefusal.evidence, uncensoredRecovered)
   }
 
   if (!contentWasFlaggedDangerous) {
@@ -176,6 +240,7 @@ export async function attemptEmptyResponseRecovery({
       })
 
       if (state.fullResponse.trim().length > 0) {
+        setRouteVia(state, 'retry')
         logger.info('[EmptyResponse] Same-provider retry succeeded', {
           chatId,
           provider: state.effectiveProfile.provider,
@@ -183,6 +248,15 @@ export async function attemptEmptyResponseRecovery({
           responseLength: state.fullResponse.length,
         })
       } else {
+        // Classify BEFORE anything downstream resets the buffers: the finish
+        // reason that tells a refusal from a plain empty body lives in
+        // `state.rawResponse`, which `resetStreamingBuffersForSwap` clears.
+        const retryVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+        recordRouteFailure(state, state.effectiveProfile, 'retry', retryVerdict.outcome,
+          retryVerdict.trigger, retryVerdict.detail, retryVerdict.evidence)
+        if (!turnRefusal && retryVerdict.outcome === 'refused') {
+          turnRefusal = { profile: state.effectiveProfile, evidence: retryVerdict.evidence }
+        }
         logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
           chatId,
           provider: state.effectiveProfile.provider,
@@ -190,105 +264,68 @@ export async function attemptEmptyResponseRecovery({
         })
       }
     } catch (retryError) {
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+      recordRouteFailure(state, state.effectiveProfile, 'retry', 'failed',
+        classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
       logger.error('[EmptyResponse] Same-provider retry failed', {
         chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
+        error: retryMessage,
       })
     }
   }
 
-  if (
-    state.fullResponse.trim().length === 0 &&
-    dangerSettings.mode === 'AUTO_ROUTE' &&
-    dangerSettings.uncensoredTextProfileId
-  ) {
-    uncensoredRetryAttempted = true
-    logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
+  // Read at refusal time, not when the turn began: the operator may have
+  // locked the chat while the provider was thinking.
+  const lockedOut = state.fullResponse.trim().length === 0
+    && !conciergeStateMayFailOver(await readCurrentConciergeState(chatId, conciergeState))
+  if (state.fullResponse.trim().length === 0 && lockedOut && turnRefusal) {
+    // A Locked chat's refusal stands. Say so, once, and let the ordinary
+    // chain below have its turn.
+    logger.info('[EmptyResponse] Refusal not rerouted: the chat is Locked', {
       chatId,
-      originalProvider: state.effectiveProfile.provider,
-      originalModel: state.effectiveProfile.modelName,
-      contentWasFlaggedDangerous,
-      sameProviderRetryAttempted,
+      provider: turnRefusal.profile.provider,
+      model: turnRefusal.profile.modelName,
     })
+    await postConciergeRefusalAnnouncement({
+      chatId,
+      kind: 'refusal-not-permitted',
+      details: {
+        refusingProvider: turnRefusal.profile.provider,
+        refusingModel: turnRefusal.profile.modelName,
+        purpose: 'text',
+        reason: 'locked',
+      },
+    })
+  }
 
-    try {
-      const routeResult = await resolveProviderForDangerousContent(
-        state.effectiveProfile,
-        state.effectiveApiKey,
-        dangerSettings,
-        userId,
-        // What the array is actually carrying, so the scan does not offer a
-        // substitute the payload rules out (bug 106).
-        collectAttachmentMimeTypes(formattedMessages)
-      )
-
-      if (routeResult.rerouted && routeResult.connectionProfile.id === state.effectiveProfile.id) {
-      } else if (routeResult.rerouted) {
-        triedProfileIds.push(routeResult.connectionProfile.id)
-
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'rerouting',
-          message: 'Retrying with uncensored provider...',
-          characterName: character.name,
-          characterId: character.id,
-        }))
-
-        // The array was built for the profile that just refused. An explicitly
-        // configured uncensored profile is honoured ahead of the scan, so it
-        // may still be one that cannot read this turn's images — re-decide
-        // before spending the attempt, or the gateway 400s and the last line
-        // of defence never runs (bug 106).
-        const reroutedMessages = repos
-          ? await adaptMessagesForProfile(
-              formattedMessages,
-              routeResult.connectionProfile,
-              repos,
-              userId,
-              { chatId },
-            )
-          : formattedMessages
-
-        await restreamInto(state, {
-          connectionProfile: routeResult.connectionProfile,
-          apiKey: routeResult.apiKey,
-          formattedMessages: reroutedMessages,
-          modelParams,
-          actualTools,
-          useNativeWebSearch,
-          userId,
-          chatId,
-          character,
-          controller,
-          encoder,
-          preGeneratedAssistantMessageId,
-        })
-
-        if (state.fullResponse.trim().length > 0) {
-          state.effectiveProfile = routeResult.connectionProfile
-          state.effectiveApiKey = routeResult.apiKey
-
-          logger.info('[DangerousContent] Uncensored retry succeeded', {
-            chatId,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
-            responseLength: state.fullResponse.length,
-          })
-        } else {
-          logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
-            chatId,
-            safeProvider: connectionProfile.provider,
-            safeModel: connectionProfile.modelName,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
-          })
-        }
-      }
-    } catch (retryError) {
-      logger.error('[DangerousContent] Uncensored retry failed', {
-        chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
-      })
-    }
+  // The policy was resolved when the turn began; the Concierge may have been
+  // sent off duty since. Only asked when there is a refusal to act on.
+  if (
+    state.fullResponse.trim().length === 0 && !lockedOut && conciergePolicy.failoverAllowed
+    && await readCurrentConciergeOnDuty(userId, conciergePolicy.onDuty)
+  ) {
+    const uncensored = await attemptUncensoredRetry({
+      state,
+      conciergePolicy,
+      formattedMessages,
+      modelParams,
+      actualTools,
+      useNativeWebSearch,
+      userId,
+      chatId,
+      character,
+      controller,
+      encoder,
+      preGeneratedAssistantMessageId,
+      repos,
+      alreadyTried: triedProfileIds,
+      contentWasFlaggedDangerous,
+      refusalWasStated: openingVerdict.outcome === 'refused',
+      substitute: false,
+    })
+    uncensoredRetryAttempted = uncensored.attempted
+    uncensoredRecovered = uncensored.recovered
+    if (uncensored.understudyId) triedProfileIds.push(uncensored.understudyId)
   }
 
   // Third and last: the effective profile's own fallback chain.
@@ -328,6 +365,7 @@ export async function attemptEmptyResponseRecovery({
       stop,
     })
 
+    await recordOpeningRefusal()
     return {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
@@ -336,7 +374,195 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
+  await recordOpeningRefusal()
   return flags()
+}
+
+export interface AttemptUncensoredRetryOptions {
+  state: StreamingState
+  conciergePolicy: ResolvedConciergePolicy
+  formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
+  modelParams: Record<string, unknown>
+  actualTools: unknown[]
+  useNativeWebSearch: boolean
+  userId: string
+  chatId: string
+  character: Pick<Character, 'id' | 'name'>
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  preGeneratedAssistantMessageId?: string
+  /** Present re-adapts the message array for the understudy (bug 106). */
+  repos?: FailoverRepos
+  /** Profile ids already spent on this call; the understudy is never one of them. */
+  alreadyTried: string[]
+  /** Passed to the empty-body classifier when the understudy comes back empty. */
+  contentWasFlaggedDangerous: boolean
+  /**
+   * Whether the failure that opened this retry was a stated or inferred
+   * content refusal. Only then does "nobody to ask" earn the Concierge's
+   * `refusal-no-understudy` bubble — the one text case the user can act on.
+   */
+  refusalWasStated: boolean
+  /**
+   * Clear the streaming buffers before the understudy streams. The hard-error
+   * path needs it (the primary may have left reasoning behind); the empty-body
+   * path keeps its historical append.
+   */
+  substitute: boolean
+  stop?: string[]
+}
+
+export interface UncensoredRetryResult {
+  /** An understudy was found and asked. */
+  attempted: boolean
+  /** It answered; `state` now holds its response and it is the effective profile. */
+  recovered: boolean
+  /** The understudy that was asked, for the caller's loop guard. */
+  understudyId?: string
+}
+
+/**
+ * Ask the Concierge's uncensored understudy to take a turn the effective
+ * profile refused or left empty.
+ *
+ * The *policy* — `conciergePolicy.failoverAllowed` only — is the caller's,
+ * stated at its call site.
+ * This function asks `resolveUncensoredTextUnderstudy` (the configured
+ * uncensored profile, else any `isDangerousCompatible` one), excluding every
+ * profile already tried, streams one attempt, and records the outcome on the
+ * route trail. Used by the empty-body recovery and by the hard-error failover
+ * when the error was a content refusal.
+ */
+export async function attemptUncensoredRetry(
+  opts: AttemptUncensoredRetryOptions
+): Promise<UncensoredRetryResult> {
+  const {
+    state, conciergePolicy, formattedMessages, modelParams, actualTools, useNativeWebSearch,
+    userId, chatId, character, controller, encoder, preGeneratedAssistantMessageId, repos,
+    alreadyTried, contentWasFlaggedDangerous, refusalWasStated, substitute, stop,
+  } = opts
+
+  const understudy = await resolveUncensoredTextUnderstudy({
+    userId,
+    conciergePolicy,
+    exclude: [...alreadyTried, state.effectiveProfile.id],
+    // What the array is actually carrying, so the scan does not offer a
+    // substitute the payload rules out (bug 106).
+    turnAttachmentMimeTypes: collectAttachmentMimeTypes(formattedMessages),
+  })
+
+  if (!understudy) {
+    logger.warn('[DangerousContent] No uncensored understudy to retry this turn with', {
+      chatId,
+      provider: state.effectiveProfile.provider,
+      model: state.effectiveProfile.modelName,
+      refusalWasStated,
+    })
+    if (refusalWasStated) {
+      await postConciergeRefusalAnnouncement({
+        chatId,
+        kind: 'refusal-no-understudy',
+        details: {
+          refusingProvider: state.effectiveProfile.provider,
+          refusingModel: state.effectiveProfile.modelName,
+          purpose: 'text',
+        },
+      })
+    }
+    return { attempted: false, recovered: false }
+  }
+
+  const reroute = understudy.profile
+  logger.warn('[DangerousContent] Attempting uncensored retry', {
+    chatId,
+    originalProvider: state.effectiveProfile.provider,
+    originalModel: state.effectiveProfile.modelName,
+    uncensoredProfileId: reroute.id,
+    uncensoredProvider: reroute.provider,
+    uncensoredModel: reroute.modelName,
+    contentWasFlaggedDangerous,
+    refusalWasStated,
+  })
+
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'rerouting',
+    message: 'Retrying with uncensored provider...',
+    characterName: character.name,
+    characterId: character.id,
+  }))
+
+  try {
+    // The array was built for the profile that just refused. An explicitly
+    // configured uncensored profile is honoured ahead of the scan, so it may
+    // still be one that cannot read this turn's images — re-decide before
+    // spending the attempt, or the gateway 400s (bug 106).
+    const reroutedMessages = repos
+      ? await adaptMessagesForProfile(formattedMessages, reroute, repos, userId, { chatId }, { chatId })
+      : formattedMessages
+
+    if (substitute) resetStreamingBuffersForSwap(state)
+
+    await restreamInto(state, {
+      connectionProfile: reroute,
+      apiKey: understudy.apiKey,
+      formattedMessages: reroutedMessages,
+      modelParams,
+      actualTools,
+      useNativeWebSearch,
+      userId,
+      chatId,
+      character,
+      controller,
+      encoder,
+      preGeneratedAssistantMessageId,
+      stop,
+    })
+
+    if (state.fullResponse.trim().length > 0) {
+      state.effectiveProfile = reroute
+      state.effectiveApiKey = understudy.apiKey
+      setRouteVia(state, 'concierge')
+      logger.info('[DangerousContent] Uncensored retry succeeded', {
+        chatId,
+        uncensoredProvider: reroute.provider,
+        uncensoredModel: reroute.modelName,
+        responseLength: state.fullResponse.length,
+      })
+      return { attempted: true, recovered: true, understudyId: reroute.id }
+    }
+
+    // Recorded from `reroute`, NOT from `state`: the swap above only happens
+    // on success, so an uncensored profile that comes back empty is otherwise
+    // absent from every record — and this row is precisely the one the user
+    // asked for. Classified here, before anything resets the buffers.
+    const verdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+    recordRouteFailure(state, reroute, 'concierge', verdict.outcome, verdict.trigger,
+      verdict.detail, verdict.evidence)
+    logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+      chatId,
+      safeProvider: state.effectiveProfile.provider,
+      safeModel: state.effectiveProfile.modelName,
+      uncensoredProvider: reroute.provider,
+      uncensoredModel: reroute.modelName,
+    })
+  } catch (retryError) {
+    const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+    const refusal = classifyRefusal({ error: retryError })
+    if (refusal.refused) {
+      recordRouteFailure(state, reroute, 'concierge', 'refused', 'moderation-refusal',
+        refusal.detail ?? retryMessage, refusal.evidence)
+    } else {
+      recordRouteFailure(state, reroute, 'concierge', 'failed',
+        classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
+    }
+    logger.error('[DangerousContent] Uncensored retry failed', {
+      chatId,
+      error: retryMessage,
+    })
+  }
+
+  if (substitute) resetStreamingBuffersForSwap(state)
+  return { attempted: true, recovered: false, understudyId: reroute.id }
 }
 
 export function getEmptyResponseReason({
@@ -389,7 +615,7 @@ export function getEmptyResponseReason({
   }
 
   if (contentWasFlaggedDangerous) {
-    return `The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider enabling Auto-Route mode in the Concierge settings to automatically reroute dangerous content to an uncensored provider.${understudyRoll}`
+    return `The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider configuring an uncensored text profile in the Concierge settings so refused content can be rerouted to an uncensored provider.${understudyRoll}`
   }
 
   if (sameProviderRetryAttempted) {
@@ -593,6 +819,7 @@ async function walkFallbackChain(
         reason: keyResolution.reason,
       })
       attempts.push(recordAttempt(understudy, 'auth', new Error(keyResolution.reason)))
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', 'auth', keyResolution.reason)
       continue
     }
 
@@ -623,7 +850,9 @@ async function walkFallbackChain(
       })
     } catch (understudyError) {
       const understudyTrigger = classifyFallbackTrigger(understudyError) ?? 'provider-error'
+      const understudyMessage = understudyError instanceof Error ? understudyError.message : String(understudyError)
       attempts.push(recordAttempt(understudy, understudyTrigger, understudyError))
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', understudyTrigger, understudyMessage)
       logger.warn('[Failover] Understudy also failed', {
         chatId,
         understudyId: understudy.id,
@@ -639,6 +868,12 @@ async function walkFallbackChain(
 
     if (state.fullResponse.trim().length === 0) {
       attempts.push(recordAttempt(understudy, 'empty-response', new Error('empty response')))
+      // Classified HERE, before the next iteration's `resetStreamingBuffersForSwap`
+      // wipes `state.rawResponse` — that is where the finish reason lives, and
+      // it is the only thing that tells a stated refusal from a blank body.
+      const understudyVerdict = classifyEmptyBody(state, context.dangerous)
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), understudyVerdict.outcome,
+        understudyVerdict.trigger, understudyVerdict.detail, understudyVerdict.evidence)
       logger.warn('[Failover] Understudy returned an empty response', {
         chatId,
         understudyId: understudy.id,
@@ -650,6 +885,7 @@ async function walkFallbackChain(
 
     state.effectiveProfile = understudy
     state.effectiveApiKey = keyResolution.apiKey
+    setRouteVia(state, viaOf(candidate.kind))
 
     logger.info('[Failover] Understudy answered', {
       chatId,
@@ -685,6 +921,19 @@ async function walkFallbackChain(
 export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOptions {
   /** The error that ended the primary attempt. */
   error: unknown
+  /**
+   * The Concierge policy for this chat. When the error is a content refusal
+   * and the policy allows failover, the uncensored understudy is tried before
+   * the chain. Absent means no uncensored retry.
+   */
+  conciergePolicy?: ResolvedConciergePolicy
+  /**
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the policy says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
 }
 
 /**
@@ -727,6 +976,8 @@ export async function attemptHardErrorFailover(
     return { recovered: false, attempts: [], tierPickWasOffered: false }
   }
 
+  const failureMessage = error instanceof Error ? error.message : String(error)
+
   logger.warn('[Failover] Primary call failed; walking the fallback chain', {
     chatId,
     profileId: state.effectiveProfile.id,
@@ -734,17 +985,115 @@ export async function attemptHardErrorFailover(
     model: state.effectiveProfile.modelName,
     trigger,
     purpose: context.purpose,
-    error: error instanceof Error ? error.message : String(error),
+    error: failureMessage,
   })
 
-  return walkFallbackChain(opts, recordAttempt(state.effectiveProfile, trigger, error))
+  const openingAttempt = recordAttempt(state.effectiveProfile, trigger, error)
+
+  if (trigger === 'moderation-refusal') {
+    // A thrown refusal reroutes like an empty one: the uncensored understudy
+    // first, and only if that also fails, the profile's own chain — cleared
+    // for the content, since a mainstream stand-in would hand it straight back
+    // to the moderation that refused it. Same-provider retry stays skipped:
+    // resending refused content to the provider that refused it is futile.
+    //
+    // The failure that opens the trail is recorded as a refusal. `state.routeVia`
+    // is whatever the effective profile already was — 'primary' normally,
+    // 'concierge' when the Concierge's pre-call reroute had already swapped it.
+    const refusal = classifyRefusal({ error })
+    recordRouteFailure(state, state.effectiveProfile, state.routeVia, 'refused', trigger,
+      refusal.detail ?? failureMessage, refusal.evidence)
+    const refusingProfile = state.effectiveProfile
+
+    const alreadyTried = [...context.alreadyTried]
+    // The caller's gate, stated here: a Locked chat's refusal stands, and
+    // otherwise the Concierge reroutes only when his policy allows failover.
+    // Read at refusal time, not when the turn began.
+    if (!conciergeStateMayFailOver(await readCurrentConciergeState(chatId, opts.conciergeState))) {
+      logger.info('[Failover] Refusal not rerouted to an uncensored profile: the chat is Locked', { chatId })
+      await postConciergeRefusalAnnouncement({
+        chatId,
+        kind: 'refusal-not-permitted',
+        details: {
+          refusingProvider: refusingProfile.provider,
+          refusingModel: refusingProfile.modelName,
+          purpose: 'text',
+          reason: 'locked',
+        },
+      })
+      await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+      return walkFallbackChain(opts, openingAttempt)
+    }
+    // Re-asked at refusal time: the Concierge may have gone off duty mid-call.
+    if (
+      opts.conciergePolicy?.failoverAllowed
+      && await readCurrentConciergeOnDuty(context.userId, opts.conciergePolicy.onDuty)
+    ) {
+      const uncensored = await attemptUncensoredRetry({
+        state,
+        conciergePolicy: opts.conciergePolicy,
+        formattedMessages: opts.formattedMessages,
+        modelParams: opts.modelParams,
+        actualTools: opts.actualTools,
+        useNativeWebSearch: opts.useNativeWebSearch,
+        userId: context.userId,
+        chatId,
+        character: opts.character,
+        controller: opts.controller,
+        encoder: opts.encoder,
+        preGeneratedAssistantMessageId: opts.preGeneratedAssistantMessageId,
+        repos: opts.repos,
+        alreadyTried,
+        contentWasFlaggedDangerous: context.dangerous,
+        refusalWasStated: true,
+        substitute: true,
+        stop: opts.stop,
+      })
+      if (uncensored.recovered) {
+        await recordTextRefusal(chatId, refusingProfile, refusal.evidence, true)
+        return { recovered: true, attempts: [openingAttempt], tierPickWasOffered: false }
+      }
+      if (uncensored.understudyId) alreadyTried.push(uncensored.understudyId)
+      await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+
+      // `state.effectiveProfile` is still the profile that refused (the swap
+      // only happens on success), so this is the refusing profile's own
+      // chain; the understudy is in `alreadyTried` and never re-offered.
+      logger.debug('[Failover] Uncensored retry did not recover a refusal; walking the chain cleared for the content', {
+        chatId,
+        profileId: state.effectiveProfile.id,
+        understudyId: uncensored.understudyId,
+        alreadyTried,
+      })
+      return walkFallbackChain(
+        { ...opts, context: { ...context, dangerous: true, alreadyTried } },
+        openingAttempt,
+      )
+    }
+
+    logger.info('[Failover] Refusal not rerouted to an uncensored profile: the Concierge policy does not permit it', {
+      chatId,
+      conciergeSource: opts.conciergePolicy?.source,
+      conciergeState: opts.conciergePolicy?.state,
+    })
+    await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+    return walkFallbackChain(opts, openingAttempt)
+  }
+
+  // The failure that opens the chain is the trail's first row. `state.routeVia`
+  // is whatever the effective profile already was — 'primary' normally,
+  // 'concierge' when the Concierge's pre-call reroute had already swapped it.
+  recordRouteFailure(state, state.effectiveProfile, state.routeVia, 'failed', trigger, failureMessage)
+
+  return walkFallbackChain(opts, openingAttempt)
 }
+
 
 /**
  * Walk the effective profile's fallback chain after an *empty* response.
  *
  * Runs last in the empty-response order — after the same-profile retry and,
- * in Auto-Route territory, after the uncensored reroute. Those two come first
+ * when the Concierge allows failover, after the uncensored reroute. Those two come first
  * on purpose: an empty body is usually transient, and when it isn't it is
  * usually a refusal, which is a content problem the uncensored profile exists
  * to answer. Only once both have come back empty is it worth concluding the

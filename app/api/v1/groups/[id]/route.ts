@@ -7,11 +7,13 @@
  *
  * Actions:
  * GET /api/v1/groups/[id]?action=members - List member characters
- * GET /api/v1/groups/[id]?action=stores - List linked document stores
  * POST /api/v1/groups/[id]?action=addMember - Add character to group
  * DELETE /api/v1/groups/[id]?action=removeMember - Remove character from group
- * POST /api/v1/groups/[id]?action=linkStore - Link a document store to group
- * DELETE /api/v1/groups/[id]?action=unlinkStore - Unlink a document store from group
+ * GET /api/v1/groups/[id]?action=get-state - Get group state
+ * PUT /api/v1/groups/[id]?action=set-state - Set group state
+ * DELETE /api/v1/groups/[id]?action=reset-state - Reset group state to empty
+ *
+ * Linked document stores live under /api/v1/groups/[id]/mount-points.
  */
 
 import { createContextParamsHandler } from '@/lib/api/middleware';

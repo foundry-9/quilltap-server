@@ -4,7 +4,7 @@
  * A wardrobe item is either a **garment** (a leaf: a shirt, a pair of boots,
  * or a dress covering `["top","bottom"]` — multi-slot, but still one thing you
  * put on) or a **composed outfit** (a composite: an item assembled out of
- * other items via `componentItemIds`). The distinction is `isBundle`, and this
+ * other items via `componentItemIds`). The distinction is `isComposite`, and this
  * module is only the sorted selection built on top of it.
  *
  * The composer surfaces the two differently: outfits hang off the single
@@ -15,7 +15,7 @@
  * @module wardrobe/composed-outfits
  */
 
-import { isBundle } from '@/lib/wardrobe/dissolve-bundles';
+import { isComposite } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /**
@@ -26,9 +26,9 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
  * Archived items are already gone from the pool the composer is handed (see
  * `mergeWearablePool`); nothing is re-filtered here.
  */
-export function selectComposedOutfits(items: WardrobeItem[]): WardrobeItem[] {
+export function selectComposedOutfits<T extends WardrobeItem>(items: T[]): T[] {
   return items
-    .filter((item) => isBundle(item))
+    .filter((item) => isComposite(item))
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
@@ -36,6 +36,6 @@ export function selectComposedOutfits(items: WardrobeItem[]): WardrobeItem[] {
  * The garments in a wearable pool — everything that isn't a composed outfit.
  * Order is the caller's; the slot pickers apply their own filtering.
  */
-export function selectGarments(items: WardrobeItem[]): WardrobeItem[] {
-  return items.filter((item) => !isBundle(item));
+export function selectGarments<T extends WardrobeItem>(items: T[]): T[] {
+  return items.filter((item) => !isComposite(item));
 }

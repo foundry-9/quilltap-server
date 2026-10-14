@@ -6,7 +6,6 @@
 
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { handleMemoryExtraction } from './memory-extraction';
-import { handleInterCharacterMemory } from './inter-character-memory';
 import { handleContextSummary } from './context-summary';
 import { handleTitleUpdate } from './title-update';
 import { handleLLMLogCleanup } from './llm-log-cleanup';
@@ -18,8 +17,9 @@ import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
+import { handleWardrobeItemImageGeneration } from './wardrobe-item-image';
 import { handleConversationRender } from './conversation-render';
-import { handleMemoryHousekeeping } from './memory-housekeeping';
+import { handleMemoryMaintenance } from './memory-maintenance';
 import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
 import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
@@ -39,7 +39,6 @@ export type JobHandler = (job: import('@/lib/schemas/types').BackgroundJob) => P
  */
 const handlers: Record<BackgroundJobType, JobHandler> = {
   MEMORY_EXTRACTION: handleMemoryExtraction,
-  INTER_CHARACTER_MEMORY: handleInterCharacterMemory,
   CONTEXT_SUMMARY: handleContextSummary,
   TITLE_UPDATE: handleTitleUpdate,
   LLM_LOG_CLEANUP: handleLLMLogCleanup,
@@ -51,8 +50,9 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
+  WARDROBE_ITEM_IMAGE_GENERATION: handleWardrobeItemImageGeneration,
   CONVERSATION_RENDER: handleConversationRender,
-  MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
+  MEMORY_MAINTENANCE: handleMemoryMaintenance,
   MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,
   MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
@@ -76,7 +76,6 @@ export function getHandler(type: BackgroundJobType): JobHandler {
 
 // Re-export handlers
 export { handleMemoryExtraction };
-export { handleInterCharacterMemory };
 export { handleContextSummary };
 export { handleTitleUpdate };
 export { handleLLMLogCleanup };
@@ -89,7 +88,7 @@ export { handleChatDangerClassification };
 export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
 export { handleConversationRender };
-export { handleMemoryHousekeeping };
+export { handleMemoryMaintenance };
 export { handleMemoryRegenerateChat };
 export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };

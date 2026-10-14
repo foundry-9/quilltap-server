@@ -25,17 +25,134 @@ export interface WardrobeContainer {
 
 export const GENERAL_CONTAINER: WardrobeContainer = { scope: 'general', id: null }
 
+/** Display name of the singleton General library, as an origin chip spells it. */
+export const GENERAL_WARDROBE_NAME = 'Quilltap General'
+
 /**
- * The container an item is addressed through in the *character view*, where
- * the list is a merge of every tier the character can reach: a
- * character-owned item lives in that character's vault; anything else is
- * treated as a Quilltap General archetype (the only shared tier whose items
- * the character view offers full management on).
+ * Which wardrobe a collection read found an item in. A read-time annotation
+ * attached by the list endpoints on the way out — never persisted, never
+ * exported, never accepted on create/update. A garment has no idea which
+ * project it lives in; the read that found it does.
  */
-export function homeContainerForItem(
-  item: Pick<WardrobeItem, 'characterId'>,
+export interface WardrobeOrigin {
+  scope: WardrobeContainerScope
+  /** Container id; null for `general`. */
+  id: string | null
+  /** Display name, resolved server-side. */
+  name: string
+}
+
+/** The origin every Quilltap General read attaches. */
+export const GENERAL_WARDROBE_ORIGIN: WardrobeOrigin = {
+  scope: 'general',
+  id: null,
+  name: GENERAL_WARDROBE_NAME,
+}
+
+export type WardrobeItemWithOrigin = WardrobeItem & { origin: WardrobeOrigin }
+
+/**
+ * A listed item that may carry an origin — the prop type for list components,
+ * which also render items from callers that never fetched through a
+ * collection read (a fixture, an equipped id resolved from elsewhere).
+ */
+export type ListedWardrobeItem = WardrobeItem & { origin?: WardrobeOrigin }
+
+/**
+ * The one place the origin chip text is spelled. Returns null for a
+ * character-owned item (a garment in its own vault is not "shared from"
+ * anywhere) and for an item that arrived without an origin.
+ */
+export function wardrobeOriginLabel(origin: WardrobeOrigin | null | undefined): string | null {
+  if (!origin) return null
+  switch (origin.scope) {
+    case 'general':
+      return `Shared · ${GENERAL_WARDROBE_NAME}`
+    case 'project':
+      return `Project · ${origin.name}`
+    case 'group':
+      return `Group · ${origin.name}`
+    case 'character':
+      return null
+  }
+}
+
+/** Tag every item in a collection read with the container it came from. */
+export function withOrigin(
+  items: readonly WardrobeItem[],
+  origin: WardrobeOrigin,
+): WardrobeItemWithOrigin[] {
+  return items.map((item) => ({ ...item, origin }))
+}
+
+/**
+ * The container a listed item is addressed through — where its item routes
+ * (edit, star, archive, delete, picture) live. The `origin` the collection
+ * read attached wins: a garment borrowed from a group or project is addressed
+ * through that group or project, never through Quilltap General. Without an
+ * origin (a fixture, an item resolved from elsewhere) a character-owned item
+ * lives in its character's vault and anything else is taken for a General
+ * archetype, the only shared tier that needs no id to address.
+ */
+export function containerForListedItem(
+  item: Pick<WardrobeItem, 'characterId'> & { origin?: WardrobeOrigin | null },
 ): WardrobeContainer {
+  if (item.origin) return { scope: item.origin.scope, id: item.origin.id }
   return item.characterId ? { scope: 'character', id: item.characterId } : GENERAL_CONTAINER
+}
+
+/**
+ * One readable wardrobe tier: a container's own collection, or (with
+ * `groups`) the merged group tier a character reaches, served by
+ * `GET /api/v1/characters/[id]/wardrobe?scope=group`.
+ */
+export interface WardrobeTier {
+  container: WardrobeContainer
+  /** Character scope only: read the character's group tier instead of their vault. */
+  groups?: boolean
+}
+
+/** Cache identity of a tier — the `tierKey` half of `queryKeys.wardrobe.list`. */
+export function wardrobeTierKey(tier: WardrobeTier): string {
+  return `${encodeWardrobeContainer(tier.container)}${tier.groups ? '|groups' : ''}`
+}
+
+/** Collection URL of a tier, honouring the archived opt-in. */
+export function wardrobeTierUrl(tier: WardrobeTier, opts?: { includeArchived?: boolean }): string {
+  if (!tier.groups) return wardrobeCollectionUrl(tier.container, opts)
+  return withWardrobeArchivedParam(
+    `${baseCollectionUrl(tier.container)}?scope=group`,
+    opts?.includeArchived === true,
+  )
+}
+
+/**
+ * Merge tier lists into one pool, nearest first (character > group > project
+ * > general); the first copy of an id wins.
+ *
+ * Without `includeArchived` this is `mergeWearableTiers`
+ * (`lib/wardrobe/wearable-pool.ts`): archived items leave EACH tier before the
+ * shadowing, so an archived personal copy never hides a live shared item of
+ * the same id. With it (a "Show archived" view, the editor's candidate list,
+ * a composite's resolution pool), the full per-tier lists are shadowed as they
+ * stand.
+ */
+export function mergeWardrobeTiers<T extends Pick<WardrobeItem, 'id' | 'archivedAt'>>(
+  tiers: ReadonlyArray<readonly T[] | undefined>,
+  opts?: { includeArchived?: boolean },
+): T[] {
+  const includeArchived = opts?.includeArchived === true
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const tier of tiers) {
+    for (const item of tier ?? []) {
+      if (!includeArchived && item.archivedAt) continue
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      out.push(item)
+    }
+  }
+  return out
 }
 
 /** Serialize a container for use as a `<select>` option value (`scope:id`). */
@@ -100,6 +217,15 @@ function baseCollectionUrl(container: WardrobeContainer): string {
 export function withWardrobeArchivedParam(url: string, includeArchived: boolean): string {
   if (!includeArchived) return url
   return `${url}${url.includes('?') ? '&' : '?'}includeArchived=true`
+}
+
+/**
+ * A collection action endpoint for a container — the folder actions
+ * (`folders`, `create-folder`, `rename-folder`, `delete-folder`,
+ * `move-items`) and `instructions`.
+ */
+export function wardrobeCollectionActionUrl(container: WardrobeContainer, action: string): string {
+  return `${baseCollectionUrl(container)}?action=${encodeURIComponent(action)}`
 }
 
 /** Item endpoint for a container (GET / PUT / DELETE one item). */

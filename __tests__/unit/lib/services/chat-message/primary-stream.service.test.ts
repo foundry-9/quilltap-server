@@ -42,6 +42,11 @@ const mockAttemptHardErrorFailover = jest.fn<() => Promise<{ recovered: boolean;
 const mockIsToolUnsupportedError = jest.fn<(e: unknown) => boolean>(() => false)
 const mockIsRecoverableRequestError = jest.fn<(e: unknown) => boolean>(() => false)
 
+const mockMarkMailAlertsDelivered = jest.fn()
+jest.mock('@/lib/post-office/mailbox', () => ({
+  markMailAlertsDelivered: (...args: unknown[]) => mockMarkMailAlertsDelivered(...args),
+}))
+
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
     debug: jest.fn(),
@@ -110,6 +115,8 @@ function makeStreaming(overrides: Partial<Record<string, unknown>> = {}) {
     rawResponse: null,
     thoughtSignature: undefined,
     hasStartedStreaming: false,
+    routeFailures: [],
+    routeVia: 'primary',
     ...overrides,
   } as any
 }
@@ -217,6 +224,111 @@ describe('primary-stream.service', () => {
       })
 
       await expect(preserve(new Error('boom'))).resolves.toBeUndefined()
+    })
+
+    // A preserved partial IS a persisted assistant turn, and the model read the
+    // inform before the stream fell over. If this path did not consume, the
+    // same out-of-character passage would arrive again on the seat's next turn.
+    it('consumes the turn\'s informs against the preserved message', async () => {
+      mockSaveAssistantMessage.mockResolvedValueOnce('pre')
+      const markConsumed = jest.fn().mockResolvedValue(1)
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'partial response here',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: ['row-1'],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).toHaveBeenCalledWith(['row-1'], 'pre')
+    })
+
+    it('touches nothing when the turn carried no inform', async () => {
+      const markConsumed = jest.fn()
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'partial response here',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: [],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).not.toHaveBeenCalled()
+    })
+
+    it('leaves the rows pending when the preserve itself fails to persist', async () => {
+      mockSaveAssistantMessage.mockRejectedValueOnce(new Error('db-down'))
+      const markConsumed = jest.fn()
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'something',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: ['row-1'],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).not.toHaveBeenCalled()
+    })
+
+    it('marks the turn\'s announced letters alerted against the preserved message', async () => {
+      mockSaveAssistantMessage.mockResolvedValueOnce('pre')
+      mockMarkMailAlertsDelivered.mockClear()
+      const owed = { vaultId: 'vault-a', paths: ['Mail/one.md'] }
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed: jest.fn() } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming: makeStreaming({ hasStartedStreaming: true, fullResponse: 'partial response here' }),
+        preGeneratedAssistantMessageId: 'pre',
+        mailAlertsOwed: owed,
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(mockMarkMailAlertsDelivered).toHaveBeenCalledWith(owed, { chatId: 'c', via: 'preserved-partial' })
+    })
+
+    it('leaves the letters unalerted when the preserve itself fails to persist', async () => {
+      mockSaveAssistantMessage.mockRejectedValueOnce(new Error('db-down'))
+      mockMarkMailAlertsDelivered.mockClear()
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed: jest.fn() } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming: makeStreaming({ hasStartedStreaming: true, fullResponse: 'something' }),
+        preGeneratedAssistantMessageId: 'pre',
+        mailAlertsOwed: { vaultId: 'vault-a', paths: ['Mail/one.md'] },
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(mockMarkMailAlertsDelivered).not.toHaveBeenCalled()
     })
   })
 

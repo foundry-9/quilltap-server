@@ -8,6 +8,11 @@
  * state version either shows "Custom…" forever (tiers arrived too late) or
  * stomps a choice the user already made (tiers arrived too early).
  *
+ * A chat that recorded where its scene came from (`?action=scenario-source`)
+ * is seeded from that source instead — the body match is only the fallback
+ * for a chat with no source. The provenance line and "Reload from source"
+ * hang off the same answer.
+ *
  * Also pinned: "Show archived" belongs to the query key, so the plain and
  * archived answers cache separately instead of one overwriting the other.
  */
@@ -18,6 +23,13 @@ import userEvent from '@testing-library/user-event'
 import { renderWithQuery } from '@/__tests__/helpers/renderWithQuery'
 import { ChatScenarioControl } from '@/components/chat/ChatScenarioControl'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import type { ScenarioSourceInfo } from '@/components/chat/ChatScenarioControl'
+
+// react-markdown is ESM-only; the scenario browser renders previews through it.
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
 
 jest.mock('@/lib/toast', () => ({
   showSuccessToast: jest.fn(),
@@ -25,26 +37,60 @@ jest.mock('@/lib/toast', () => ({
 }))
 
 const GENERAL = [
-  { path: 'general/masquerade.md', title: 'A Masquerade', body: 'Masks are worn.' },
+  { path: 'general/masquerade.md', filename: 'masquerade.md', name: 'A Masquerade', isDefault: false, body: 'Masks are worn.' },
 ]
 const PROJECT = [
-  { path: 'project/atrium.md', title: 'The Atrium', body: 'Glass overhead.' },
+  { path: 'project/atrium.md', filename: 'atrium.md', name: 'The Atrium', isDefault: false, body: 'Glass overhead.' },
 ]
-const CHARACTER = [{ id: 'sc-1', name: 'Her Study', content: 'Books to the ceiling.' }]
+const CHARACTER = [{ id: 'sc-1', title: 'Her Study', content: 'Books to the ceiling.' }]
 const GROUP = [
   {
     groupId: 'g-1',
     groupName: 'The Company',
-    scenarios: [{ path: 'group/parlour.md', title: 'The Parlour', body: 'A low fire.' }],
+    scenarios: [{ path: 'group/parlour.md', filename: 'parlour.md', name: 'The Parlour', isDefault: false, body: 'A low fire.' }],
   },
 ]
 
-/** Route each tier's endpoint to its payload; anything else is an empty tier. */
-function stubTiers() {
+/** A chat that recorded no source — the body match decides. */
+const NO_SOURCE: ScenarioSourceInfo = {
+  source: null,
+  owner: null,
+  scenarioName: null,
+  scenarioId: null,
+  exists: false,
+  changed: false,
+  notes: null,
+}
+
+/** A chat whose scene was taken from the project's Atrium. */
+function atriumSource(overrides: Partial<ScenarioSourceInfo> = {}): ScenarioSourceInfo {
+  return {
+    source: { mountPointId: 'mp-proj', path: 'project/atrium.md', bodySha256: 'abc' },
+    owner: { scope: 'project', id: 'proj-1', name: 'Glasshouse' },
+    scenarioName: 'The Atrium',
+    scenarioId: null,
+    exists: true,
+    changed: false,
+    notes: null,
+    ...overrides,
+  }
+}
+
+const isScenarioSource = (url: string) => url.includes('action=scenario-source')
+/** The save endpoint — not to be confused with the `scenario-source` read. */
+const isScenarioSave = (url: string) => url.endsWith('?action=scenario')
+
+/**
+ * Route each tier's endpoint to its payload; anything else is an empty tier.
+ * The chat's recorded source answers `?action=scenario-source`.
+ */
+function stubTiers(source: ScenarioSourceInfo = NO_SOURCE) {
   const seen: string[] = []
   ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => {
     seen.push(url)
     const body = (() => {
+      if (isScenarioSource(url)) return source
+      if (isScenarioSave(url)) return { message: 'Scenario updated' }
       if (url.startsWith('/api/v1/scenarios')) return { scenarios: GENERAL }
       if (url.includes('/projects/')) return { scenarios: PROJECT }
       if (url.includes('/groups/scenarios')) return { groupScenarios: GROUP }
@@ -54,6 +100,16 @@ function stubTiers() {
     return { ok: true, status: 200, json: async () => body }
   })
   return seen
+}
+
+/** The one POST to `?action=scenario`, parsed. */
+function savedPayload(): Record<string, unknown> {
+  const call = (global.fetch as jest.Mock).mock.calls.find(
+    ([url, init]) => typeof url === 'string' && isScenarioSave(url) && init?.method === 'POST'
+  )
+  expect(call).toBeDefined()
+  expect(call[0]).toBe('/api/v1/chats/chat-1?action=scenario')
+  return JSON.parse(call[1].body)
 }
 
 function renderControl(props: Partial<React.ComponentProps<typeof ChatScenarioControl>> = {}) {
@@ -121,6 +177,91 @@ describe('ChatScenarioControl', () => {
     })
   })
 
+  describe('seeding from the recorded source', () => {
+    it('prefers the source over the body match, preselecting a project preset whose body no longer matches', async () => {
+      stubTiers(atriumSource({ notes: 'And the glass is cracked.' }))
+      // The stored text matches nothing — the shelf copy has moved on, or
+      // notes were layered beneath. The source still names the Atrium.
+      renderControl({ scenarioText: 'Glass overhead, once.\n\nAnd the glass is cracked.' })
+
+      const select = (await screen.findByLabelText('Scenario')) as HTMLSelectElement
+      await waitFor(() => expect(select.value).toBe('project:project/atrium.md'))
+      expect(screen.queryByLabelText('Custom scenario text')).not.toBeInTheDocument()
+      // The notes beneath the scene come from the source answer, not the text.
+      expect(screen.getByLabelText('Notes beneath the scene')).toHaveValue('And the glass is cracked.')
+    })
+
+    it('falls back to the body match when the chat recorded no source', async () => {
+      stubTiers(NO_SOURCE)
+      renderControl({ scenarioText: 'Glass overhead.' })
+
+      const select = (await screen.findByLabelText('Scenario')) as HTMLSelectElement
+      await waitFor(() => expect(select.value).toBe('project:project/atrium.md'))
+      expect(screen.queryByText(/^From:/)).not.toBeInTheDocument()
+    })
+
+    it('shows a source outside the hierarchy under "Elsewhere", labelled Owner › Name', async () => {
+      stubTiers(
+        atriumSource({
+          source: { mountPointId: 'mp-far', path: 'Scenarios/attic.md', bodySha256: 'x' },
+          owner: { scope: 'project', id: 'proj-other', name: 'Farhouse' },
+          scenarioName: 'The Attic',
+        })
+      )
+      renderControl({ scenarioText: 'Dust and trunks.' })
+
+      const select = (await screen.findByLabelText('Scenario')) as HTMLSelectElement
+      await waitFor(() => expect(select.value).toBe('store:mp-far:Scenarios/attic.md'))
+      const elsewhere = select.querySelector('optgroup[label="Elsewhere"]')
+      expect(elsewhere?.textContent).toBe('Farhouse › The Attic')
+    })
+  })
+
+  describe('provenance', () => {
+    it('names where the scene came from, with no reload offered while the shelf copy is unchanged', async () => {
+      stubTiers(atriumSource())
+      renderControl({ scenarioText: 'Glass overhead.' })
+
+      expect(await screen.findByText('Glasshouse')).toBeInTheDocument()
+      expect(screen.getByText(/^From:/)).toHaveTextContent('From: Glasshouse › The Atrium')
+      expect(screen.queryByRole('button', { name: 'Reload from source' })).not.toBeInTheDocument()
+    })
+
+    it('says so when the shelf copy is gone', async () => {
+      stubTiers(atriumSource({ exists: false }))
+      renderControl({ scenarioText: 'Glass overhead.' })
+
+      expect(await screen.findByText(/the shelf copy is gone/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Reload from source' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the scene it has when the shelf copy is gone, rather than a ref that would save as notes alone', async () => {
+      stubTiers(atriumSource({ exists: false, notes: 'Keep the cracked pane.' }))
+      const scene = 'Glass overhead.\n\nKeep the cracked pane.'
+      renderControl({ scenarioText: scene })
+
+      await screen.findByText(/the shelf copy is gone/)
+      expect(screen.getByLabelText('Custom scenario text')).toHaveValue(scene)
+    })
+
+    it('offers Reload when the shelf copy changed, and reload posts the ref with the same notes', async () => {
+      stubTiers(atriumSource({ changed: true, notes: 'Keep the cracked pane.' }))
+      const onChatUpdated = jest.fn()
+      renderControl({ scenarioText: 'Glass overhead, once.\n\nKeep the cracked pane.', onChatUpdated })
+
+      expect(await screen.findByText(/the shelf copy has been revised/)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Reload from source' }))
+
+      await waitFor(() => expect(onChatUpdated).toHaveBeenCalled())
+      expect(savedPayload()).toEqual({
+        scenarioRef: { mountPointId: 'mp-proj', path: 'project/atrium.md' },
+        scenario: 'Keep the cracked pane.',
+        // Only Reload asks for the revised copy; an ordinary save keeps the scene.
+        reload: true,
+      })
+    })
+  })
+
   describe('the archived toggle', () => {
     it('re-fetches every tier with includeArchived so the two answers cache apart', async () => {
       const seen = stubTiers()
@@ -149,18 +290,50 @@ describe('ChatScenarioControl', () => {
 
       await waitFor(() => expect(onChatUpdated).toHaveBeenCalled())
 
-      const call = (global.fetch as jest.Mock).mock.calls.find(
-        ([url]) => typeof url === 'string' && url.includes('action=scenario')
-      )
-      expect(call).toBeDefined()
-      expect(call[0]).toBe('/api/v1/chats/chat-1?action=scenario')
-      expect(JSON.parse(call[1].body)).toEqual({ scenario: 'Rain on the conservatory glass.' })
+      expect(savedPayload()).toEqual({ scenario: 'Rain on the conservatory glass.' })
       expect(showSuccessToast).toHaveBeenCalled()
+    })
+
+    it('posts the preset pointer with the notes beneath it as `scenario`', async () => {
+      stubTiers()
+      const onChatUpdated = jest.fn()
+      renderControl({ onChatUpdated })
+
+      await screen.findByLabelText('Custom scenario text')
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'A Masquerade' })).toBeInTheDocument()
+      )
+      await userEvent.selectOptions(screen.getByLabelText('Scenario'), 'general:general/masquerade.md')
+      await userEvent.type(screen.getByLabelText('Notes beneath the scene'), 'One guest lies.')
+      await userEvent.click(screen.getByRole('button', { name: 'Change scenario' }))
+
+      await waitFor(() => expect(onChatUpdated).toHaveBeenCalled())
+      expect(savedPayload()).toEqual({
+        generalScenarioPath: 'general/masquerade.md',
+        scenario: 'One guest lies.',
+      })
+    })
+
+    it('does not carry a custom scene beneath a preset picked over it', async () => {
+      stubTiers()
+      const onChatUpdated = jest.fn()
+      renderControl({ onChatUpdated })
+
+      await userEvent.type(await screen.findByLabelText('Custom scenario text'), 'A storm at sea.')
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'A Masquerade' })).toBeInTheDocument()
+      )
+      await userEvent.selectOptions(screen.getByLabelText('Scenario'), 'general:general/masquerade.md')
+      expect(screen.getByLabelText('Notes beneath the scene')).toHaveValue('')
+      await userEvent.click(screen.getByRole('button', { name: 'Change scenario' }))
+
+      await waitFor(() => expect(onChatUpdated).toHaveBeenCalled())
+      expect(savedPayload()).toEqual({ generalScenarioPath: 'general/masquerade.md', scenario: '' })
     })
 
     it('surfaces the server\'s own error text instead of a bare status code', async () => {
       ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => {
-        if (url.includes('action=scenario')) {
+        if (isScenarioSave(url)) {
           return { ok: false, status: 409, statusText: 'Conflict', json: async () => ({ error: 'That scene is archived' }) }
         }
         return { ok: true, status: 200, json: async () => ({}) }
@@ -175,7 +348,7 @@ describe('ChatScenarioControl', () => {
 
     it('re-enables the button after a failed save rather than staying stuck', async () => {
       ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => {
-        if (url.includes('action=scenario')) throw new Error('network down')
+        if (isScenarioSave(url)) throw new Error('network down')
         return { ok: true, status: 200, json: async () => ({}) }
       })
       renderControl()
@@ -190,16 +363,20 @@ describe('ChatScenarioControl', () => {
   })
 
   describe('the dropdown', () => {
-    it('is hidden entirely when no tier has anything to offer', async () => {
-      ;(global.fetch as jest.Mock).mockImplementation(async () => ({
+    it('is rendered even when no tier has anything to offer, so Browse is always reachable', async () => {
+      ;(global.fetch as jest.Mock).mockImplementation(async (url: string) => ({
         ok: true,
         status: 200,
-        json: async () => ({ scenarios: [], groupScenarios: [] }),
+        json: async () => (isScenarioSource(url) ? NO_SOURCE : { scenarios: [], groupScenarios: [] }),
       }))
       renderControl()
 
       await screen.findByLabelText('Custom scenario text')
-      expect(screen.queryByLabelText('Scenario')).not.toBeInTheDocument()
+      const select = screen.getByLabelText('Scenario')
+      expect(Array.from(select.querySelectorAll('option')).map((o) => o.getAttribute('value'))).toEqual([
+        '__custom__',
+        '__browse__',
+      ])
     })
 
     it('appears once any tier has options', async () => {

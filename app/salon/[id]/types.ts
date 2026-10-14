@@ -1,4 +1,5 @@
-import type { TagVisualStyle } from '@/lib/schemas/types'
+import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 export interface MessageAttachment {
   id: string
@@ -29,6 +30,12 @@ export interface Message {
   provider?: string | null
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName?: string | null
+  /** Every connection profile tried for this turn, in the order tried, with why each one
+   *  stepped aside. NULL/undefined unless the turn had at least one failure; when it is
+   *  null the avatar falls back to the plain provider/model badge, exactly as before, and
+   *  when it is a non-empty array the avatar renders the call sheet instead. The last
+   *  entry always agrees with `provider`/`modelName`. Set once at save; never mutated. */
+  routeTrail?: RouteAttempt[] | null
   /** Target participant IDs for whisper messages (null = public, array = private) */
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
@@ -192,6 +199,8 @@ export interface Participant {
   } | null
   /** Selected named system prompt from the character's systemPrompts[] array */
   selectedSystemPromptId?: string | null
+  /** Ids of the character's subprompts in play for this chat */
+  selectedSubpromptIds?: string[]
   removedAt?: string | null
   // Multi-character chat fields
   hasHistoryAccess?: boolean
@@ -215,6 +224,12 @@ export interface Chat {
     image?: string | null
   }
   messages: Message[]
+  /**
+   * The transcript counter as of this read. Seeds the conditional re-read a
+   * realtime `chats` hint drives: the tab hands it back and the server answers
+   * "unchanged" without serializing the conversation again.
+   */
+  transcriptVersion?: number
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
@@ -229,6 +244,8 @@ export interface Chat {
   allLLMPauseTurnCount?: number
   /** JSON-encoded array of participantIds that have spoken in the current rotation cycle */
   spokenThisCycleParticipantIds?: string
+  /** JSON-encoded rotation for the current cycle: who has yet to speak, in order */
+  cycleOrderParticipantIds?: string
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
   /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
@@ -281,8 +298,14 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
-  /** Per-chat Concierge override: NULL = follow global, 'OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored. */
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  /** The chat's Concierge state, derived server-side (`getConciergeState`). */
+  conciergeState?: ConciergeState
+  /** Who put the chat in its state; `null` for Moderated. */
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the chat is in its state (`'manual'`, `'refusals'`, `'classifier'`, `'migration'`); `null` for Moderated. */
+  conciergeReason?: ConciergeModeReason | null
+  /** Moderation refusals on the Concierge's ledger since the chat was last Moderated. */
+  conciergeRefusalCount?: number
   /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
   offSceneCharacters?: Array<{
     id: string
@@ -292,53 +315,28 @@ export interface Chat {
   }>
 }
 
-export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
+/**
+ * Chat-settings shapes the Salon renders with, re-exported from the settings
+ * module rather than re-declared here. See the note on `ChatSettings` below.
+ */
+export type {
+  MemoryCascadeAction,
+  MemoryCascadePreferences,
+  TokenDisplaySettings,
+  StoryBackgroundsSettings,
+  ConciergeSettings,
+} from '@/components/settings/chat-settings/types'
 
-export interface MemoryCascadePreferences {
-  onMessageDelete: MemoryCascadeAction
-  onSwipeRegenerate: MemoryCascadeAction
-}
-
-export interface TokenDisplaySettings {
-  showPerMessageTokens: boolean
-  showPerMessageCost: boolean
-  showChatTotals: boolean
-  showSystemEvents: boolean
-}
-
-export interface StoryBackgroundsSettings {
-  enabled: boolean
-  defaultImageProfileId?: string | null
-}
-
-export interface DangerousContentSettings {
-  mode: 'OFF' | 'DETECT_ONLY' | 'AUTO_ROUTE'
-  threshold: number
-  scanTextChat: boolean
-  scanImagePrompts: boolean
-  scanImageGeneration: boolean
-  displayMode: 'SHOW' | 'BLUR' | 'COLLAPSE'
-  showWarningBadges: boolean
-}
-
-export interface ChatSettings {
-  id: string
-  userId: string
-  avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
-  avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
-  tagStyles?: Record<string, TagVisualStyle>
-  memoryCascadePreferences?: MemoryCascadePreferences
-  tokenDisplaySettings?: TokenDisplaySettings
-  llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
-  storyBackgroundsSettings?: StoryBackgroundsSettings
-  dangerousContentSettings?: DangerousContentSettings
-  /** Global defaults for showing reasoning models' thinking. DISPLAY ONLY. */
-  thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
-  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom). DISPLAY ONLY. */
-  autoScrollOnResponseComplete?: boolean
-  createdAt: string
-  updatedAt: string
-}
+/**
+ * The instance's chat-settings row, as the Salon reads it.
+ *
+ * A re-export, not a copy. This file used to carry its own leaner declaration,
+ * and a second declaration is how two readers of the same endpoint come to
+ * disagree: the Salon's snapshot and the composer's live query described the
+ * same row in different words, so nothing flagged that one of them had gone
+ * stale (bug 134). There is one shape, and it is the settings module's.
+ */
+export type { ChatSettings } from '@/components/settings/chat-settings/types'
 
 export interface AttachedFile {
   id: string

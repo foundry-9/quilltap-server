@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatParticipantBaseInput, ChatEvent } from '@/lib/schemas/types';
@@ -20,8 +20,6 @@ const logger = createServiceLogger('HelpChatsRoute');
 
 type Repos = RepositoryContainer;
 
-const GET_ACTIONS = ['eligibility'] as const;
-type GetAction = typeof GET_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -220,23 +218,13 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
  * GET /api/v1/help-chats
  * List help chats or check eligibility
  */
-export const GET = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  if (!action) {
-    return handleList(req, context);
-  }
-
-  if (!isValidAction(action, GET_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${GET_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<GetAction, () => Promise<NextResponse>> = {
-    eligibility: () => handleEligibility(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+export const GET = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    { eligibility: () => handleEligibility(req, context) },
+    () => handleList(req, context)
+  )
+);
 
 /**
  * POST /api/v1/help-chats

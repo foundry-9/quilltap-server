@@ -13,15 +13,13 @@ import {
   writeLanternBackgroundToMountStore,
 } from '@/lib/file-storage/lantern-store-bridge';
 
-import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
@@ -35,25 +33,29 @@ import {
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
-  isImageModerationError as isImageModerationErrorShared,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service';
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
-import { convertToWebP } from '@/lib/files/webp-conversion';
-import { buildImageGenParams } from '@/lib/image-gen/params-builder';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
+import { decodeProviderImage, makeLoggedImageAttempt } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
+import {
+  postLanternImageNotification,
+  postLanternRefusalNotification,
+} from '@/lib/services/lantern-notifications/writer';
+import {
+  composeRetryRouteTrail,
+  resolveImageRetryUnderstudy,
+} from '@/lib/services/dangerous-content/retry-uncensored';
+import type { ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
-import type { Character } from '@/lib/schemas/types';
-
-// Detection helper lives in the shared dangerous-content service so the
-// character-avatar and inline `generate_image` handlers can reuse it.
-const isImageModerationError = isImageModerationErrorShared;
+import type { Character, ImageProfile } from '@/lib/schemas/types';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -61,12 +63,7 @@ function escapeRegex(s: string): string {
 
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
-  const desc =
-    primary?.mediumPrompt ||
-    primary?.shortPrompt ||
-    primary?.longPrompt ||
-    primary?.fullDescription ||
-    char.name;
+  const desc = pickPhysicalDescription(primary, 'scene') || char.name;
   return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
 }
 
@@ -189,8 +186,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
 
   // 6. Get cheap LLM selection for prompt crafting. The standard cheap LLM
-  // makes the initial attempt at story backgrounds (imagePromptProfileId is
-  // used as a retry fallback if the safe provider returns empty).
+  // makes the initial attempt at story backgrounds (the Concierge desk's
+  // imagePromptProfileId is used as a retry fallback if the safe provider returns empty).
   const resolvedCheapLLM = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
 
   if (!resolvedCheapLLM) {
@@ -204,24 +201,62 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const { allProfiles } = resolvedCheapLLM;
   let cheapLLMSelection: CheapLLMSelection | null = resolvedCheapLLM.selection;
 
-  // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  // Resolve the Concierge policy early (needed for uncensored routing and appearance sanitization)
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
   const isDangerousChat = shouldUseUncensoredRoute(chat);
-  const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+  const hasUncensoredImageProvider = Boolean(conciergePolicy.desk.imageProfileId);
   // A dangerous-marked chat with an uncensored image profile configured is
   // already headed for a provider that accepts adult content — appearance
   // sanitization steps aside for exactly this case (see
   // `sanitizeAppearancesIfNeeded`), so the prompt crafter should too rather
   // than draping a sheet over a scene nobody asked to have covered.
-  const uncensoredImageTarget = isDangerousChat && hasUncensoredImageProvider;
+  //
+  // Only when the policy routes direct (on duty and Unmoderated): a candid
+  // prompt is never crafted for a chat the Concierge will not send to the
+  // uncensored desk, or its franker prompt would go straight to the moderated
+  // provider.
+  //
+  // "Try uncensored" (`payload.forceUncensored`) puts the Concierge's
+  // uncensored understudy in the painter's chair for this one job, whatever
+  // the chat's state, so its prompt is crafted candidly too. The lookup is
+  // repeated here rather than trusted from the request: the chat may have
+  // been Locked, or the understudy removed, while the job waited.
+  let forcedUnderstudy: ImageUnderstudy | null = null;
+  if (payload.forceUncensored) {
+    const gate = await resolveImageRetryUnderstudy({
+      userId: job.userId,
+      chat,
+      chatSettings: chatSettings ?? null,
+      excludeProfileIds: [imageProfile.id],
+    });
+    if (!gate.ok) {
+      logger.info('[StoryBackground] Uncensored retry abandoned at run time', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        reason: gate.reason,
+      });
+      return;
+    }
+    forcedUnderstudy = gate.understudy;
+  }
+  const uncensoredImageTarget =
+    forcedUnderstudy !== null
+    || (isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect);
+  logger.debug('[StoryBackground] Concierge policy resolved', {
+    context: 'background-jobs.story-background',
+    jobId: job.id,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    uncensoredImageTarget,
+  });
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
   if (isDangerousChat) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection!,
       true,
-      dangerSettings,
+      conciergePolicy,
       allProfiles
     );
   }
@@ -268,7 +303,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   // Build uncensored LLM selection once (used for appearance resolution and prompt crafting)
   let uncensoredLLMSelection: CheapLLMSelection | null = null;
-  const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+  const uncensoredProfileId = conciergePolicy.desk.imagePromptProfileId;
   if (uncensoredProfileId) {
     const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
     if (uncensoredProfile) {
@@ -406,12 +441,18 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     try {
       resolvedAppearances = await sanitizeAppearancesIfNeeded(
         resolvedAppearances,
-        dangerSettings,
+        conciergePolicy,
         isDangerousChat,
-        hasUncensoredImageProvider,
+        // Story backgrounds never route up front — only `uncensoredImageTarget`
+        // scenes actually reach the uncensored provider (bug 133).
+        uncensoredImageTarget,
         cheapLLMSelection,
         job.userId,
-        payload.chatId
+        payload.chatId,
+        // This crafter carries the concealment guidance, so an undressed
+        // character is flagged for draping rather than re-dressed — the
+        // re-dressed text would hand the crafter a different scene.
+        'conceal'
       );
     } catch (error) {
       logger.warn('[StoryBackground] Appearance sanitization failed, using unsanitized', {
@@ -434,6 +475,14 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       if (resolved.clothingDescription) {
         descParts.push(`Wearing: ${resolved.clothingDescription}`);
       }
+      if (resolved.needsConcealment) {
+        descParts.push(CONCEALMENT_MARKER);
+        logger.debug('[StoryBackground] Character flagged for cinematic concealment', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+          characterId: char!.id,
+        });
+      }
       return {
         name: char!.name,
         description: descParts.join('. '),
@@ -442,7 +491,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     // Fallback: simple first-description logic
     const primary = char!.physicalDescription;
-    const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
+    const descParts = [genderPrefix + (pickPhysicalDescription(primary, 'scene') || char!.name)];
     return {
       name: char!.name,
       description: descParts.join('. '),
@@ -460,13 +509,46 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   ]);
   const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
 
+  // An Unmoderated chat with an uncensored image profile goes straight to the
+  // uncensored desk (`routeDirect`): the candid prompt crafted below must
+  // never be sent to the ordinary painter first.
+  let primaryImageProfile: ImageProfile = imageProfile;
+  let primaryImageKey: string = apiKey.key_value;
+  if (forcedUnderstudy) {
+    primaryImageProfile = forcedUnderstudy.profile;
+    primaryImageKey = forcedUnderstudy.apiKey;
+    logger.info('[StoryBackground] "Try uncensored": painting on the uncensored understudy', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      profileId: primaryImageProfile.id,
+      profileName: primaryImageProfile.name,
+    });
+  } else if (uncensoredImageTarget) {
+    const route = await resolveImageProviderForDangerousContent(
+      imageProfile,
+      apiKey.key_value,
+      conciergePolicy,
+      job.userId,
+    );
+    if (route.rerouted) {
+      primaryImageProfile = route.imageProfile;
+      primaryImageKey = route.apiKey;
+    }
+    logger.info('[StoryBackground] Unmoderated chat: routed direct to the uncensored desk', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      rerouted: route.rerouted,
+      profileId: primaryImageProfile.id,
+    });
+  }
+
   // 10. Craft the background prompt using cheap LLM
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
       sceneContext,
       characters: characterDescriptions,
-      provider: imageProfile.provider,
+      provider: primaryImageProfile.provider,
       sceneAesthetic,
       characterAesthetic,
       depictionGuidelines,
@@ -512,7 +594,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         {
           sceneContext,
           characters: characterDescriptions,
-          provider: imageProfile.provider,
+          provider: primaryImageProfile.provider,
           sceneAesthetic,
           characterAesthetic,
           depictionGuidelines,
@@ -608,265 +690,113 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
 
-  // 10. Generate the image
-  const provider = createImageProvider(imageProfile.provider);
-
-  const decryptedKey = apiKey.key_value;
-
-  // Tracks which profile actually produced the final image — updated if we
-  // reroute through the Concierge's uncensored fallback after a moderation
-  // rejection. Used downstream for file metadata (`generationModel`).
-  let activeImageProfile = imageProfile;
-
-  let generationResponse;
-  const genStartTime = Date.now();
-  // Backgrounds default to landscape; the shared builder maps that onto the
-  // provider's own size / aspect ratio / prompt wording and attaches the
-  // profile's LoRAs and residual options, so a profile configured in the
-  // Lantern's settings behaves the same here as it does in the Salon.
-  // Natural style works better for ambient backgrounds, so it is fixed.
-  const { params: backgroundParams } = buildImageGenParams({
-    profile: imageProfile,
+  // 10. Generate the image — through the Concierge's failover chokepoint.
+  //
+  // A refusal is retried once on an uncensored understudy while the Concierge
+  // is on duty, in any chat that is not Locked (the chokepoint asks
+  // `failoverAllowed` against the current state). The
+  // old gate (bug 133) barred that for a chat still Monitored (now Moderated), on the ground that a refusal should not "promote" the chat.
+  // That concern belongs to the chat *switch*, not to a retry that resends the
+  // same prompt to a provider that will take it: the prompt is never
+  // re-crafted here, so a moderated chat's concealed prompt stays concealed.
+  //
+  // Backgrounds default to landscape; the shared builder maps that onto each
+  // profile's own size / aspect ratio / prompt wording and attaches its LoRAs
+  // and residual options. Natural style works better for ambient backgrounds,
+  // so it is fixed.
+  const attemptBackground = makeLoggedImageAttempt({
+    userId: job.userId,
+    logType: 'IMAGE_GENERATION',
     prompt: finalPrompt!,
-    overrides: { n: 1, style: 'natural' },
-    orientation: 'landscape',
-    logContext: {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-      chatId: payload.chatId,
+    primaryProfileId: imageProfile.id,
+    chatId: payload.chatId,
+    params: {
+      overrides: { n: 1, style: 'natural' },
+      orientation: 'landscape',
+      logContext: { context: 'background-jobs.story-background', jobId: job.id, chatId: payload.chatId },
     },
   });
+
+  let failover;
   try {
-    generationResponse = await provider.generateImage(backgroundParams, decryptedKey);
-
-    const genDurationMs = Date.now() - genStartTime;
-    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: finalPrompt }],
+    failover = await generateImageWithConciergeFailover(
+      { profile: primaryImageProfile, apiKey: primaryImageKey },
+      attemptBackground,
+      {
+        userId: job.userId,
+        chatId: payload.chatId,
+        purpose: 'lantern',
+        conciergePolicy,
+        chat,
+        primaryVia: forcedUnderstudy ? 'concierge' : 'primary',
+        // The Lantern reports a refusal nobody got past in its own bubble.
+        announceUnresolvedRefusal: false,
       },
-      response: {
-        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
-      },
-      durationMs: genDurationMs,
-    });
+    );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    const genDurationMs = Date.now() - genStartTime;
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: finalPrompt }],
-      },
-      response: {
-        content: '',
-        error: errorMessage,
-      },
-      durationMs: genDurationMs,
-    });
-
-    // If the provider post-hoc rejected the generated image for content
-    // moderation, the Concierge has a second door: retry with the configured
-    // uncensored image profile. Mirrors the appearance-resolution and
-    // prompt-crafting fallbacks above.
-    const reroute = isImageModerationError(error)
-      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, job.userId)
-      : null;
-
-    if (!reroute) {
-      logger.error('[StoryBackground] Image generation failed', {
+    const trail = getConciergeTrail(error);
+    const refused = trail?.find((a) => a.outcome === 'refused');
+    if (refused && !trail!.some((a) => a.outcome === 'answered')) {
+      // A refusal is an outcome, not a failure: the operator is told (with a
+      // retry to hand) and the job completes, leaving the backdrop as it was.
+      logger.info('[StoryBackground] Painter refused the scene; posting the Lantern\'s refusal', {
         context: 'background-jobs.story-background',
         jobId: job.id,
-        error: errorMessage,
-        moderationRejection: isImageModerationError(error),
-        hasUncensoredImageProvider,
-      }, error as Error);
-      throw new Error(`Image generation failed: ${errorMessage}`);
+        chatId: payload.chatId,
+        refusingProvider: refused.provider,
+        refusingModel: refused.modelName,
+        conciergeTrail: trail!.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+      });
+      await postLanternRefusalNotification({
+        chatId: payload.chatId,
+        refusal: { kind: 'background-refused', provider: refused.provider, modelName: refused.modelName },
+        routeTrail: trail,
+      });
+      return;
     }
+    logger.error('[StoryBackground] Image generation failed', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      error: errorMessage,
+      isDangerousChat,
+      hasUncensoredImageProvider,
+      conciergeSource: conciergePolicy.source,
+      conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+    }, error as Error);
+    throw new Error(
+      trail && trail.length > 1
+        ? `Image generation failed after Concierge reroute: ${errorMessage}`
+        : `Image generation failed: ${errorMessage}`,
+    );
+  }
 
-    logger.info('[StoryBackground] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
+  const generationResponse = failover.result;
+  // The profile that actually produced the image — the understudy after a
+  // reroute. Drives the file's `generationModel`.
+  const activeImageProfile = failover.profile;
+  if (failover.rerouted) {
+    logger.info('[StoryBackground] Concierge uncensored reroute succeeded', {
       context: 'background-jobs.story-background',
       jobId: job.id,
       originalProfileId: imageProfile.id,
-      originalProvider: imageProfile.provider,
-      fallbackProfileId: reroute.profile.id,
-      fallbackProvider: reroute.profile.provider,
-      originalError: errorMessage,
+      fallbackProfileId: activeImageProfile.id,
+      fallbackProvider: activeImageProfile.provider,
+      fallbackModel: activeImageProfile.modelName,
     });
-
-    // The prompt that just got rejected was crafted for a moderated provider,
-    // so unless the chat was already flagged it carries the cinematic-
-    // concealment guidance. The reroute target accepts adult content, so
-    // re-craft candidly rather than sending a needlessly draped scene to a
-    // provider that never asked for one. Best-effort: any failure keeps the
-    // prompt we already have, so the reroute still happens.
-    let rerouteBasePrompt = finalPrompt!;
-    if (!uncensoredImageTarget && cheapLLMSelection) {
-      try {
-        const recraftResult = await craftStoryBackgroundPrompt(
-          {
-            sceneContext,
-            characters: characterDescriptions,
-            provider: reroute.profile.provider,
-            sceneAesthetic,
-            characterAesthetic,
-            depictionGuidelines,
-            uncensoredImageTarget: true,
-          },
-          uncensoredLLMSelection ?? cheapLLMSelection,
-          job.userId,
-          payload.chatId
-        );
-        if (recraftResult.success && recraftResult.result) {
-          // A fresh prompt needs the step-9b enumeration pass re-run over it —
-          // the one applied above belongs to the prompt we are replacing.
-          rerouteBasePrompt = appendMissingCharacterEnumerations(
-            recraftResult.result,
-            nonParticipantCharacters,
-          ).prompt;
-          logger.info('[StoryBackground] Re-crafted prompt candidly for the uncensored reroute target', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            promptLengthBefore: finalPrompt!.length,
-            promptLengthAfter: rerouteBasePrompt.length,
-            usedUncensoredCrafter: Boolean(uncensoredLLMSelection),
-          });
-        } else {
-          logger.warn('[StoryBackground] Candid re-craft for the reroute target returned nothing, reusing the concealed prompt', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            error: recraftResult.error,
-          });
-        }
-      } catch (recraftError) {
-        logger.warn('[StoryBackground] Candid re-craft for the reroute target failed, reusing the concealed prompt', {
-          context: 'background-jobs.story-background',
-          jobId: job.id,
-          error: getErrorMessage(recraftError),
-        });
-      }
-    }
-
-    const rerouteProvider = createImageProvider(reroute.profile.provider);
-    const rerouteStartTime = Date.now();
-    // Rebuild for the reroute provider/model — its shape mechanism, its LoRA
-    // support, and its stored options are all its own.
-    const { params: rerouteParams } = buildImageGenParams({
-      profile: reroute.profile,
-      prompt: rerouteBasePrompt,
-      overrides: { n: 1, style: 'natural' },
-      orientation: 'landscape',
-      logContext: {
-        context: 'background-jobs.story-background.concierge-reroute',
-        jobId: job.id,
-        chatId: payload.chatId,
-      },
-    });
-    try {
-      generationResponse = await rerouteProvider.generateImage(rerouteParams, reroute.apiKey);
-
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: rerouteBasePrompt }],
-        },
-        response: {
-          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
-        },
-        durationMs: rerouteDurationMs,
-      });
-
-      activeImageProfile = reroute.profile;
-
-      logger.info('[StoryBackground] Concierge uncensored reroute succeeded', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        fallbackProvider: reroute.profile.provider,
-        fallbackModel: reroute.profile.modelName,
-        rerouteDurationMs,
-      });
-    } catch (rerouteError) {
-      const rerouteErrorMessage = getErrorMessage(rerouteError);
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
-        request: {
-          messages: [{ role: 'user', content: rerouteBasePrompt }],
-        },
-        response: {
-          content: '',
-          error: rerouteErrorMessage,
-        },
-        durationMs: rerouteDurationMs,
-      });
-
-      logger.error('[StoryBackground] Image generation failed (Concierge reroute also failed)', {
-        context: 'background-jobs.story-background',
-        jobId: job.id,
-        originalError: errorMessage,
-        rerouteError: rerouteErrorMessage,
-      }, rerouteError as Error);
-      throw new Error(`Image generation failed after Concierge reroute: ${rerouteErrorMessage}`);
-    }
   }
 
   // 11. Save the generated image
-  if (!generationResponse.images || generationResponse.images.length === 0) {
-    logger.warn('[StoryBackground] No images returned from provider', {
+  const decoded = await decodeProviderImage(generationResponse, 'story_background');
+  if (!decoded) {
+    logger.warn('[StoryBackground] No image data returned from provider', {
       context: 'background-jobs.story-background',
       jobId: job.id,
+      imageCount: generationResponse.images?.length ?? 0,
     });
     return;
   }
-
-  const imageData = generationResponse.images[0];
-  const rawData = imageData.data || imageData.b64Json;
-  if (!rawData) {
-    logger.warn('[StoryBackground] Generated image has no data', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-    });
-    return;
-  }
-  const rawBuffer = Buffer.from(rawData, 'base64');
-  const providerMimeType = imageData.mimeType || 'image/png';
-  const providerExt = providerMimeType.split('/')[1] || 'png';
-  const providerFilename = `story_background_${Date.now()}.${providerExt}`;
-
-  // Convert to WebP for consistent storage
-  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
-  const buffer = converted.buffer;
-  const mimeType = converted.mimeType;
-  const originalFilename = converted.filename;
-
-  const sha256 = sha256OfBuffer(buffer);
+  const { buffer, mimeType, filename: originalFilename } = decoded;
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs
@@ -911,7 +841,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         content: buffer,
         contentType: mimeType,
         subfolder: 'generated',
-        description: `Story background for: ${payload.sceneContext || chat.title}`,
       });
       storageKey = written.storageKey;
       storedMimeType = written.storedMimeType;
@@ -935,31 +864,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       });
     }
 
-    const category: FileCategory = 'IMAGE';
-    const source: FileSource = 'GENERATED';
-
-    await repos.files.create({
+    // No label: createGeneratedFileRow leaves `description` null (bug 132) —
+    // the prompt is the account of record.
+    await createGeneratedFileRow(repos, {
+      id: fileId,
       userId: job.userId,
-      sha256,
+      sha256: decoded.sha256,
       originalFilename,
-      mimeType: storedMimeType,
-      size: storedSize,
-      // Actual dimensions measured from the stored bytes (see
-      // image-orientation-gating) — providers may return a different shape.
-      width: converted.width ?? null,
-      height: converted.height ?? null,
+      stored: { storageKey, storedMimeType, sizeBytes: storedSize },
+      width: decoded.width,
+      height: decoded.height,
       linkedTo,
-      source,
-      category,
-      generationPrompt: finalPrompt,
-      generationModel: activeImageProfile.modelName,
-      generationRevisedPrompt: imageData.revisedPrompt || null,
-      description: `Story background for: ${payload.sceneContext || chat.title}`,
-      tags: [],
-      storageKey,
+      generation: {
+        prompt: finalPrompt,
+        model: activeImageProfile.modelName,
+        revisedPrompt: decoded.revisedPrompt,
+      },
       projectId: folderProjectId,
       folderPath: fileFolderPath,
-    }, { id: fileId });
+    });
 
     logger.info('[StoryBackground] Image saved successfully', {
       context: 'background-jobs.story-background',
@@ -1003,5 +926,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     fileId,
     kind: { kind: 'background' },
     prompt: finalPrompt,
+    // A "Try uncensored" backdrop answered first time still says who sent it.
+    routeTrail: forcedUnderstudy && failover.trail.length === 0
+      ? composeRetryRouteTrail(null, activeImageProfile, 'image')
+      : failover.trail,
   });
 }

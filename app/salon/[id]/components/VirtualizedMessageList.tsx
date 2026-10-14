@@ -15,6 +15,8 @@ import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
+import type { RegenerationState } from '../hooks/useRegeneration'
+import type { ConciergeRetryHandlers } from '../concierge-retry'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
 interface VirtualizedMessageListProps {
@@ -37,7 +39,8 @@ interface VirtualizedMessageListProps {
   swipeStates: Record<string, SwipeState>
   setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
   // Appearance
-  chatSettings: ChatSettings | null
+  /** `undefined` while the settings query is in flight; every read below defaults. */
+  chatSettings: ChatSettings | null | undefined
   roleplayRenderingPatterns: RenderingPattern[] | undefined
   roleplayDialogueDetection: DialogueDetection | null | undefined
   // Multi-char
@@ -48,7 +51,6 @@ interface VirtualizedMessageListProps {
   streamingContent: string
   waitingForResponse: boolean
   userParticipantId: string | null
-  isPaused: boolean
   respondingParticipantId: string | null
   /** Chat ID for terminal embed rendering */
   chatId: string
@@ -59,12 +61,17 @@ interface VirtualizedMessageListProps {
     cancelEdit: () => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
-    generateSwipe: (messageId: string, fetchChat: () => Promise<void>) => void
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
     copyMessageContent: (content: string) => void
     resendMessage: (message: Message) => Promise<void>
     canResendMessage: (messageId: string) => boolean
   }
+  /**
+   * The in-flight regeneration, if any, and the door to starting one. The state
+   * reaches exactly the row whose id it names; every other row is untouched.
+   */
+  regeneration: RegenerationState | null
+  onRegenerate: (messageId: string) => void
   turnManagement: {
     handleNudge: (participantId: string) => void | Promise<void>
     handleQueue: (participantId: string) => void
@@ -73,8 +80,12 @@ interface VirtualizedMessageListProps {
   }
   // Handlers
   setEditContent: (content: string) => void
-  onTogglePause: () => void
   onOverrideDangerFlag: (messageId: string) => void
+  /**
+   * The Concierge's "Try uncensored" handlers for text lines, pictures and the
+   * Lantern's refused backdrop. Absent on a Locked chat, which hides the buttons.
+   */
+  conciergeRetry?: ConciergeRetryHandlers
   onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
@@ -104,6 +115,12 @@ interface VirtualizedMessageListProps {
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /**
+   * How flagged content looks in this chat — `resolveConciergeSettings(...).display`,
+   * resolved per chat by the caller (plain when off duty, no badges on an
+   * Unmoderated chat).
+   */
+  conciergeDisplay?: NonNullable<ChatSettings['conciergeSettings']>['display']
   /** Resolved per-chat thinking visibility (chat.showThinking ?? global default). DISPLAY ONLY. */
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
@@ -139,14 +156,15 @@ export function VirtualizedMessageList({
   streamingContent,
   waitingForResponse,
   userParticipantId,
-  isPaused,
   respondingParticipantId,
   chatId,
+  regeneration,
+  onRegenerate,
   messageActions,
   turnManagement,
   setEditContent,
-  onTogglePause,
   onOverrideDangerFlag,
+  conciergeRetry,
   onRemoveCharacter,
   onReattribute,
   onImageClick,
@@ -163,6 +181,7 @@ export function VirtualizedMessageList({
   currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
+  conciergeDisplay,
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
@@ -266,6 +285,7 @@ export function VirtualizedMessageList({
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}
+                    onTryUncensored={conciergeRetry?.onRetryPicture}
                   />
                 </div>
               )
@@ -313,11 +333,10 @@ export function VirtualizedMessageList({
                   streaming={streaming}
                   waitingForResponse={waitingForResponse}
                   userParticipantId={userParticipantId}
-                  isPaused={isPaused}
-                  onTogglePause={onTogglePause}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
-                  dangerousContentSettings={chatSettings?.dangerousContentSettings}
+                  conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
+                  conciergeRetry={conciergeRetry}
                   character={getCharacterForMessage(message)}
                   chatId={chatId}
                   onEditStart={messageActions.startEdit}
@@ -326,7 +345,8 @@ export function VirtualizedMessageList({
                   onEditChange={setEditContent}
                   onToggleSourceView={messageActions.toggleSourceView}
                   onDelete={messageActions.deleteMessage}
-                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                  onGenerateSwipe={onRegenerate}
+                  regeneration={regeneration?.messageId === message.id ? regeneration : null}
                   onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
                   onCopyContent={messageActions.copyMessageContent}
                   onResend={messageActions.resendMessage}

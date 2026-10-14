@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { successResponse, badRequest, notFound, validationError } from '@/lib/api/responses';
@@ -41,8 +41,6 @@ const deleteFolderSchema = z.object({
   projectId: z.uuid().nullable().optional(),
 });
 
-const FOLDERS_POST_ACTIONS = ['create', 'rename', 'delete'] as const;
-type FoldersPostAction = typeof FOLDERS_POST_ACTIONS[number];
 
 // ============================================================================
 // Helper Functions
@@ -175,21 +173,13 @@ export const GET = createContextHandler(async (request, { user, repos }) => {
 // POST Handler - Action dispatch
 // ============================================================================
 
-export const POST = createContextHandler(async (request, { user, repos }) => {
-  const action = getActionParam(request);
-
-  if (!isValidAction(action, FOLDERS_POST_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${FOLDERS_POST_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<FoldersPostAction, () => Promise<NextResponse>> = {
+export const POST = createContextHandler(async (request, { user, repos }) =>
+  dispatchAction(request, {
     create: () => handleCreateFolder(request, user, repos),
     rename: () => handleRenameFolder(request, user, repos),
     delete: () => handleDeleteFolder(request, user, repos),
-  };
-
-  return actionHandlers[action]();
-});
+  })
+);
 
 // ============================================================================
 // Action: Create Folder

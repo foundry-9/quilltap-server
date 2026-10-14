@@ -1,48 +1,72 @@
 /**
- * Vault-first wardrobe writes.
+ * Wardrobe writes — the one place a wardrobe item reaches disk.
  *
- * Post-cutover the per-character document vault (and the singleton "Quilltap
- * General" mount, for shared archetypes) is the *write* target for wardrobe
- * items — the `wardrobe_items` DB table is no longer written. Each mutation
- * reads the target folder's current items, applies the change in memory, and
- * re-projects the whole `Wardrobe/` folder via `projectVaultWardrobe` (which
- * dedupes filenames, renames on title change, and sweeps removed files).
+ * Every wardrobe tier is a `Wardrobe/` folder in some mount: a character's
+ * vault, Quilltap General, a project store or a group store. Each mutation
+ * reads the folder's current items, applies the change in memory, and
+ * re-projects the whole folder via `projectVaultWardrobe` (which dedupes
+ * filenames, renames on title change, and sweeps removed files). The
+ * `wardrobe_items` DB table is gone; nothing here writes a row.
  *
  * Writes to a given mount are serialized through a per-mount promise chain so
  * two concurrent mutations can't each read a stale snapshot and clobber one
- * another — the same guard the old DB→vault sync used per character.
+ * another.
  *
- * Every helper returns a discriminated result so the repository can fall back
- * to the legacy DB path when no vault mount resolves (e.g. the General mount
- * hasn't been provisioned yet on a freshly-cloned instance).
+ * Callers address a folder through a {@link WardrobeMount}. New code gets one
+ * from `resolveWardrobeLocation` (`lib/wardrobe/location.ts`), which also owns
+ * the archived-character tombstone; {@link resolveWardrobeMount} is the
+ * character-id-or-General resolver the repository's legacy adapters and the
+ * location module share.
  *
  * @module database/repositories/vault-overlay/wardrobe-writes
  */
 
+import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { CharacterArchivedError } from '../characters.repository';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { isComposite } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
+import {
+  folderName,
+  folderSegments,
+  isSameFolder,
+  isUnderFolder,
+  isSafeWardrobeFolderPath,
+  joinFolder,
+  normalizeWardrobeFolderPathOrRoot,
+  parentFolder,
+  rebaseFolder,
+  wardrobeFolderStorePath,
+  WardrobeFolderConflictError,
+  WardrobeFolderNotFoundError,
+  WardrobeFolderPathError,
+  WardrobeItemNotInLocationError,
+  WARDROBE_RESERVED_FOLDER_SEGMENTS,
+  type WardrobeFolder,
+} from '@/lib/wardrobe/folders';
+import {
+  DatabaseStoreError,
+  deleteDatabaseFolder,
+  moveDatabaseFolder,
+} from '@/lib/mount-index/database-store';
+import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
+import { hasStableWardrobeItemId, isWardrobeItemDocument } from './parsers';
+import { CHARACTER_WARDROBE_FOLDER } from './schema';
 import { readCharacterVaultWardrobe } from './vault-readers';
 import { projectVaultWardrobe } from './wardrobe-sync';
 
-/**
- * Where a wardrobe item's files live: a character vault, Quilltap General, or a
- * project document store.
- */
-export interface WardrobeLocation {
-  mountPointId: string;
-  /** Logging/parse scope passed to the projector and reader. */
-  scopeId: string;
-  /** null = shared item (Quilltap General archetype or a project-store item). */
-  characterId: string | null;
-  /** Which tier this mount represents — governs archetype seeding & cycle peers. */
-  scope: 'character' | 'general' | 'project';
-}
+/** The four wardrobe tiers. */
+export type WardrobeMountScope = 'character' | 'group' | 'project' | 'general';
 
-/** `{ handled: false }` ⇒ no vault mount resolved; caller should use the DB fallback. */
-export type VaultWriteResult<T> = { handled: true; value: T } | { handled: false };
+/** A wardrobe tier's folder on disk. */
+export interface WardrobeMount {
+  mountPointId: string;
+  scope: WardrobeMountScope;
+  /** Owning character for the `character` scope; null for every shared tier. */
+  characterId: string | null;
+}
 
 // Per-mount serialization so concurrent writes don't read a stale folder.
 const writeChains = new Map<string, Promise<unknown>>();
@@ -60,191 +84,576 @@ function runSerialized<T>(mountPointId: string, fn: () => Promise<T>): Promise<T
 }
 
 /**
- * Resolve the mount + scope for a characterId. `null` → Quilltap General
- * (shared archetypes). Returns null when no vault is available (character has
- * no linked vault, or General not yet provisioned) — callers fall back to DB.
+ * Resolve the folder for a character id, or Quilltap General for `null`.
+ * Returns null when no mount is available (no linked vault, General not yet
+ * provisioned). Throws `CharacterArchivedError` for an archived character: a
+ * pruned vault is still live, so refusing here is what keeps the tombstone.
  */
 export async function resolveWardrobeMount(
   characterId: string | null | undefined,
-): Promise<WardrobeLocation | null> {
+): Promise<WardrobeMount | null> {
   if (characterId == null) {
     const mountPointId = await getGeneralMountPointId();
     if (!mountPointId) return null;
-    return { mountPointId, scopeId: mountPointId, characterId: null, scope: 'general' };
+    return { mountPointId, scope: 'general', characterId: null };
   }
-  const repos = getRepositories();
-  const character = await repos.characters.findByIdRaw(characterId);
-  // Archived characters keep a live vault (§4.2a prunes in place), so the old
-  // null-mount skip no longer fires for them. Throw rather than return null:
-  // a null here sends the caller down the DB-fallback write path, which would
-  // silently mutate an archived character's wardrobe instead of refusing.
+  const character = await getRepositories().characters.findByIdRaw(characterId);
   if (character?.archivedAt) {
     throw new CharacterArchivedError(characterId);
   }
   const mountPointId = character?.characterDocumentMountPointId;
   if (!mountPointId) return null;
-  return { mountPointId, scopeId: characterId, characterId, scope: 'character' };
+  return { mountPointId, scope: 'character', characterId };
 }
 
-/** Build a project-store wardrobe location for an explicit project mount. */
-export function projectWardrobeLocation(mountPointId: string): WardrobeLocation {
-  return { mountPointId, scopeId: mountPointId, characterId: null, scope: 'project' };
-}
-
-/** Read every item (incl. archived) currently in the location's `Wardrobe/` folder. */
-async function readMountItems(loc: WardrobeLocation): Promise<WardrobeItem[]> {
-  const vault = await readCharacterVaultWardrobe(loc.mountPointId, loc.scopeId, {
-    // Only character vaults seed shared archetypes — the General and project
-    // folders ARE the shared set and must not re-seed (would recurse).
-    seedArchetypes: loc.scope === 'character',
-  });
-  if (!vault) return [];
-  return vault.items.map((item) => ({ ...item, characterId: loc.characterId }));
+/** A shared-tier folder (project or group store) addressed by its mount. */
+export function mountWardrobeLocation(
+  mountPointId: string,
+  scope: Exclude<WardrobeMountScope, 'character'> = 'project',
+): WardrobeMount {
+  return { mountPointId, scope, characterId: null };
 }
 
 /**
- * Build the id→item map used for cycle detection: the location's current items
- * plus, for character and project mounts, the shared Quilltap General archetypes
- * (a character or project composite may bundle a household archetype component).
- * The General mount itself doesn't add them — its folder already IS that set.
+ * Every item (archived included) currently in the folder, `characterId`
+ * coerced to the folder's owner. Component refs that live in another tier
+ * stay as UUIDs (see `resolveAndCheckComponentItems`).
+ */
+export async function readMountItems(mount: WardrobeMount): Promise<WardrobeItem[]> {
+  const vault = await readCharacterVaultWardrobe(
+    mount.mountPointId,
+    mount.characterId ?? undefined,
+  );
+  if (!vault) return [];
+  return vault.items.map((item) => ({ ...item, characterId: mount.characterId }));
+}
+
+/**
+ * The id→item map a save-time cycle check walks: the folder's own items, then
+ * every other item the folder's composites could reach. A character's composite
+ * can gather parts from any tier the character wears from, so its peers are the
+ * character's whole wearable pool; a shared composite's are General's items.
  */
 async function buildCyclePeers(
-  loc: WardrobeLocation,
+  mount: WardrobeMount,
   current: readonly WardrobeItem[],
 ): Promise<Map<string, WardrobeItem>> {
   const map = new Map<string, WardrobeItem>();
   for (const item of current) map.set(item.id, item);
-  if (loc.scope !== 'general') {
-    try {
-      const { readGeneralWardrobe } = await import('@/lib/mount-index/general-wardrobe');
-      for (const arche of await readGeneralWardrobe(true)) {
-        if (!map.has(arche.id)) map.set(arche.id, arche);
+  try {
+    if (mount.characterId) {
+      const { loadWearablePool } = await import('@/lib/wardrobe/pool');
+      const pool = await loadWearablePool(getRepositories(), mount.characterId, undefined, {
+        ownItems: current,
+      });
+      for (const item of pool.byId.values()) {
+        if (!map.has(item.id)) map.set(item.id, item);
       }
-    } catch {
-      /* archetypes unavailable — cycle check proceeds with local items only */
+    } else if (mount.scope !== 'general') {
+      const { readGeneralWardrobe } = await import('@/lib/mount-index/general-wardrobe');
+      for (const item of await readGeneralWardrobe(true)) {
+        if (!map.has(item.id)) map.set(item.id, item);
+      }
     }
+  } catch (error) {
+    logger.warn('Wardrobe cycle check could not load peer tiers; checking the folder alone', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      context: 'wardrobe',
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
   return map;
 }
 
-function assertNoCycles(item: WardrobeItem, peers: Map<string, WardrobeItem>): void {
-  if (item.componentItemIds.length === 0) return;
-  // Ensure the item itself is in the map so transitive walks see its components.
-  peers.set(item.id, item);
-  const cycles = detectComponentCycles(item.id, item.componentItemIds, peers);
-  if (cycles.length > 0) {
-    throw new Error(
-      `Wardrobe item ${item.id} would create a component cycle: ${cycles
+/** The message every cycle refusal carries; the routes map it to a 400. */
+export const COMPONENT_CYCLE_MESSAGE = 'component cycle';
+
+/** Thrown when a save would make a composite contain itself. */
+export class WardrobeComponentCycleError extends Error {
+  constructor(itemId: string, cycles: string[][]) {
+    super(
+      `Wardrobe item ${itemId} would create a ${COMPONENT_CYCLE_MESSAGE}: ${cycles
         .map((c) => c.join(' → '))
         .join('; ')}`,
     );
+    this.name = 'WardrobeComponentCycleError';
   }
 }
 
-/** Create an item at an explicit location (shared inner logic). */
-async function createAtLocation(loc: WardrobeLocation, item: WardrobeItem): Promise<WardrobeItem> {
-  return runSerialized(loc.mountPointId, async () => {
-    const current = await readMountItems(loc);
-    assertNoCycles(item, await buildCyclePeers(loc, current));
-    const stored: WardrobeItem = { ...item, characterId: loc.characterId };
-    await projectVaultWardrobe(loc.mountPointId, loc.scopeId, [...current, stored]);
+function assertNoCycles(item: WardrobeItem, peers: Map<string, WardrobeItem>): void {
+  if (!isComposite(item)) return;
+  peers.set(item.id, item);
+  const cycles = detectComponentCycles(item.id, item.componentItemIds, peers);
+  if (cycles.length > 0) {
+    throw new WardrobeComponentCycleError(item.id, cycles);
+  }
+}
+
+/**
+ * The folder an item is written to: a structurally safe folder as given
+ * (normal form, or a hand-made folder the store already holds), anything else
+ * (an imported bundle's `../x`) normalised, or the root when it can't be. The
+ * operator-facing paths resolve folders first (`resolveWardrobeFolder`); this
+ * is the last line of defence for the ones that don't.
+ */
+function safeFolder(folder: string | null | undefined): string {
+  if (!folder) return '';
+  if (isSafeWardrobeFolderPath(folder)) return folder;
+  const normalised = normalizeWardrobeFolderPathOrRoot(folder);
+  logger.debug('Wardrobe write normalised an incoming folder', { folder, normalised, context: 'wardrobe' });
+  return normalised;
+}
+
+/** Create an item in the folder. */
+export async function createInMount(mount: WardrobeMount, item: WardrobeItem): Promise<WardrobeItem> {
+  return runSerialized(mount.mountPointId, async () => {
+    const current = await readMountItems(mount);
+    assertNoCycles(item, await buildCyclePeers(mount, current));
+    const stored: WardrobeItem = { ...item, folder: safeFolder(item.folder), characterId: mount.characterId };
+    await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, [
+      ...current,
+      stored,
+    ]);
+    logger.debug('Wardrobe item created in folder', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      wardrobeItemId: stored.id,
+      folder: stored.folder,
+      context: 'wardrobe',
+    });
     return stored;
   });
 }
 
-/** Create an item in its resolved vault folder. */
-export async function createVaultWardrobeItem(
-  item: WardrobeItem,
-): Promise<VaultWriteResult<WardrobeItem>> {
-  const loc = await resolveWardrobeMount(item.characterId ?? null);
-  if (!loc) return { handled: false };
-  return { handled: true, value: await createAtLocation(loc, item) };
+/** Patch an item in the folder; null when the id isn't there. */
+export async function updateInMount(
+  mount: WardrobeMount,
+  id: string,
+  patch: Partial<WardrobeItem>,
+): Promise<WardrobeItem | null> {
+  const [updated] = await updateManyInMount(mount, [{ id, patch }]);
+  return updated ?? null;
 }
 
-/** Create an item directly in a project store's `Wardrobe/` folder. */
-export async function createProjectWardrobeItem(
-  mountPointId: string,
-  item: WardrobeItem,
-): Promise<WardrobeItem> {
-  return createAtLocation(projectWardrobeLocation(mountPointId), item);
+/** One item's patch in an {@link updateManyInMount} batch. */
+export interface WardrobeItemPatch {
+  id: string;
+  patch: Partial<WardrobeItem>;
+}
+
+/** Options for {@link updateManyInMount}. */
+export interface UpdateManyOptions {
+  /**
+   * Refuse the whole batch — before anything is written — when any id isn't
+   * in the folder (`WardrobeItemNotInLocationError`). Without it a missing id
+   * is skipped.
+   */
+  requireAll?: boolean;
 }
 
 /**
- * Update an item. `characterIdHint` (the owning character, or null for an
- * archetype) locates the mount; without it we cannot cheaply find the item, so
- * the repository must pass it. Returns `{ handled: true, value: null }` when the
- * id isn't present in the resolved folder.
+ * Patch several items in the folder with one read and **one** projection.
+ * Returns the updated items in patch order; an id that isn't in the folder is
+ * skipped (or, with `requireAll`, refuses the batch).
  */
-async function updateAtLocation(
-  loc: WardrobeLocation,
-  id: string,
-  patch: Partial<WardrobeItem>,
-): Promise<WardrobeItem | null> {
-  return runSerialized(loc.mountPointId, async () => {
-    const current = await readMountItems(loc);
-    const idx = current.findIndex((i) => i.id === id);
-    if (idx < 0) return null;
+export async function updateManyInMount(
+  mount: WardrobeMount,
+  patches: readonly WardrobeItemPatch[],
+  opts: UpdateManyOptions = {},
+): Promise<WardrobeItem[]> {
+  if (patches.length === 0) return [];
+  return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches, opts));
+}
 
+/** The body of {@link updateManyInMount}, for callers already on the mount's chain. */
+async function updateManyUnserialized(
+  mount: WardrobeMount,
+  patches: readonly WardrobeItemPatch[],
+  opts: UpdateManyOptions = {},
+): Promise<WardrobeItem[]> {
+  const current = await readMountItems(mount);
+  const indexById = new Map(current.map((item, idx) => [item.id, idx]));
+  if (opts.requireAll) {
+    const missing = patches.map((p) => p.id).filter((id) => !indexById.has(id));
+    if (missing.length > 0) throw new WardrobeItemNotInLocationError(Array.from(new Set(missing)));
+  }
+  const next = current.slice();
+  const now = new Date().toISOString();
+  const updatedIds: string[] = [];
+  let peers: Map<string, WardrobeItem> | null = null;
+  let movesFolder = false;
+
+  for (const { id, patch } of patches) {
+    const idx = indexById.get(id);
+    if (idx === undefined) continue;
+    const before = next[idx];
     const merged: WardrobeItem = {
-      ...current[idx],
+      ...before,
       ...patch,
-      id: current[idx].id,
-      characterId: loc.characterId,
-      createdAt: current[idx].createdAt,
-      updatedAt: new Date().toISOString(),
+      ...(patch.folder !== undefined && { folder: safeFolder(patch.folder) }),
+      id: before.id,
+      characterId: mount.characterId,
+      createdAt: before.createdAt,
+      updatedAt: now,
     };
-    assertNoCycles(merged, await buildCyclePeers(loc, current));
-
-    const next = current.slice();
+    if (isComposite(merged)) {
+      peers ??= await buildCyclePeers(mount, current);
+      assertNoCycles(merged, peers);
+    }
+    if ((merged.folder ?? '') !== (before.folder ?? '')) movesFolder = true;
     next[idx] = merged;
-    await projectVaultWardrobe(loc.mountPointId, loc.scopeId, next);
-    return merged;
+    updatedIds.push(id);
+  }
+  if (updatedIds.length === 0) return [];
+
+  await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, next);
+  logger.debug('Wardrobe items updated in folder', {
+    mountPointId: mount.mountPointId,
+    scope: mount.scope,
+    wardrobeItemIds: updatedIds,
+    count: updatedIds.length,
+    movesFolder,
+    context: 'wardrobe',
+  });
+
+  return updatedIds.map((id) => next[indexById.get(id) as number]);
+}
+
+// ============================================================================
+// Folders — the operator's filing under `Wardrobe/`
+// ============================================================================
+
+/**
+ * Every folder under the tier's `Wardrobe/`: the union of the store's folder
+ * rows (empty folders persist as rows) and the folders implied by item paths,
+ * minus `images/`. `itemCount` counts non-archived items directly inside.
+ * Sorted by path, case-insensitively.
+ */
+export async function listFoldersInMount(mount: WardrobeMount): Promise<WardrobeFolder[]> {
+  const repos = getRepositories();
+  const [rows, items] = await Promise.all([
+    repos.docMountFolders.findByMountPointId(mount.mountPointId),
+    readMountItems(mount),
+  ]);
+
+  const byKey = new Map<string, string>();
+  const add = (folder: string) => {
+    // Every ancestor is a folder too, even when only a deep path has a row.
+    const segments = folderSegments(folder);
+    for (let depth = 1; depth <= segments.length; depth++) {
+      const path = segments.slice(0, depth).join('/');
+      if (!byKey.has(path.toLowerCase())) byKey.set(path.toLowerCase(), path);
+    }
+  };
+  for (const row of rows) {
+    const folder = folderUnderWardrobe(row.path);
+    if (folder) add(folder);
+  }
+  for (const item of items) {
+    if (item.folder) add(item.folder);
+  }
+
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.archivedAt || !item.folder) continue;
+    const key = item.folder.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const folders = Array.from(byKey.entries())
+    .map(([key, path]) => ({ path, name: folderName(path), itemCount: counts.get(key) ?? 0 }))
+    .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' }));
+  logger.debug('Wardrobe folders listed', {
+    mountPointId: mount.mountPointId,
+    scope: mount.scope,
+    folderRowCount: rows.length,
+    folderCount: folders.length,
+    context: 'wardrobe',
+  });
+  return folders;
+}
+
+/**
+ * The paths of every folder under the tier's `Wardrobe/`, from the store's
+ * folder rows alone (every item's folder has one — writes create them), minus
+ * `images/`. One query, no item parse: what `resolveWardrobeFolder` resolves
+ * an operator's request against.
+ */
+export async function listFolderPathsInMount(mount: WardrobeMount): Promise<string[]> {
+  const rows = await getRepositories().docMountFolders.findByMountPointId(mount.mountPointId);
+  return rows
+    .map((row) => folderUnderWardrobe(row.path))
+    .filter((folder): folder is string => folder !== null);
+}
+
+/**
+ * The folder path under `Wardrobe/` for a store folder path, or null when the
+ * path is `Wardrobe` itself, outside it, or under the reserved `images/`.
+ */
+function folderUnderWardrobe(storePath: string): string | null {
+  const prefix = `${CHARACTER_WARDROBE_FOLDER}/`;
+  if (!storePath.toLowerCase().startsWith(prefix.toLowerCase())) return null;
+  const folder = storePath.slice(prefix.length);
+  if (!folder) return null;
+  const first = folderSegments(folder)[0].toLowerCase();
+  if (WARDROBE_RESERVED_FOLDER_SEGMENTS.includes(first)) return null;
+  return folder;
+}
+
+/** The stored casing of a folder that exists, or null. */
+async function findStoredFolder(mountPointId: string, folder: string): Promise<string | null> {
+  const row = await getRepositories().docMountFolders.findByMountPointAndPath(
+    mountPointId,
+    wardrobeFolderStorePath(folder),
+  );
+  return row ? folderUnderWardrobe(row.path) : null;
+}
+
+/**
+ * Create a folder (and its missing ancestors). Idempotent and
+ * case-insensitive: creating `formal` beside `Formal` answers `Formal`.
+ * `folder` must already be normalised.
+ */
+export async function createFolderInMount(mount: WardrobeMount, folder: string): Promise<WardrobeFolder> {
+  if (!folder) throw new WardrobeFolderPathError('The wardrobe root already exists');
+  return runSerialized(mount.mountPointId, async () => {
+    await ensureFolderPath(mount.mountPointId, wardrobeFolderStorePath(folder));
+    const stored = (await findStoredFolder(mount.mountPointId, folder)) ?? folder;
+    const items = await readMountItems(mount);
+    const itemCount = items.filter((i) => !i.archivedAt && isSameFolder(i.folder, stored)).length;
+    logger.debug('Wardrobe folder ensured', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      requested: folder,
+      folder: stored,
+      itemCount,
+      context: 'wardrobe',
+    });
+    return { path: stored, name: folderName(stored), itemCount };
   });
 }
 
-export async function updateVaultWardrobeItem(
-  id: string,
-  patch: Partial<WardrobeItem>,
-  characterIdHint: string | null,
-): Promise<VaultWriteResult<WardrobeItem | null>> {
-  const loc = await resolveWardrobeMount(characterIdHint);
-  if (!loc) return { handled: false };
-  return { handled: true, value: await updateAtLocation(loc, id, patch) };
+/**
+ * Rename a folder in place (`newName` is one normalised segment). Its items,
+ * subfolders and any other files move with it — the path is the truth, so
+ * every item's `folder` follows. A sibling already holding the name (in any
+ * casing) is a {@link WardrobeFolderConflictError}; a case-only rename is
+ * allowed.
+ */
+export async function renameFolderInMount(
+  mount: WardrobeMount,
+  folder: string,
+  newName: string,
+): Promise<WardrobeFolder> {
+  if (!folder) throw new WardrobeFolderPathError('The wardrobe root cannot be renamed');
+  return runSerialized(mount.mountPointId, async () => {
+    const from = await findStoredFolder(mount.mountPointId, folder);
+    if (!from) throw new WardrobeFolderNotFoundError(folder);
+    const to = joinFolder(parentFolder(from), newName);
+    if (to !== from) {
+      // The store moves the files without rewriting them, and an item file
+      // with no frontmatter `id` takes its id from its path — moving it would
+      // mint a new one and orphan its outfit slots, ledger, outfits and
+      // pictures. Stamp every such file with the id it has now, first.
+      const docs = await getRepositories().docMountDocuments.findManyByMountPointsInFolder(
+        [mount.mountPointId],
+        wardrobeFolderStorePath(from),
+        '.md',
+        { recursive: true },
+      );
+      const unstamped = docs.filter(
+        (doc) => isWardrobeItemDocument(doc) && !hasStableWardrobeItemId(doc.content),
+      );
+      if (unstamped.length > 0) {
+        logger.debug('Stamping ids into wardrobe files before a folder rename', {
+          mountPointId: mount.mountPointId,
+          folder: from,
+          count: unstamped.length,
+          context: 'wardrobe',
+        });
+        await projectVaultWardrobe(
+          mount.mountPointId,
+          mount.characterId ?? mount.mountPointId,
+          await readMountItems(mount),
+        );
+      }
+      try {
+        await moveDatabaseFolder(
+          mount.mountPointId,
+          wardrobeFolderStorePath(from),
+          wardrobeFolderStorePath(to),
+        );
+      } catch (error) {
+        if (error instanceof DatabaseStoreError && error.code === 'CONFLICT') {
+          throw new WardrobeFolderConflictError(to);
+        }
+        if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+          throw new WardrobeFolderNotFoundError(folder);
+        }
+        throw error;
+      }
+    }
+    const items = await readMountItems(mount);
+    const itemCount = items.filter((i) => !i.archivedAt && isSameFolder(i.folder, to)).length;
+    logger.debug('Wardrobe folder renamed', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      from,
+      to,
+      itemCount,
+      context: 'wardrobe',
+    });
+    return { path: to, name: folderName(to), itemCount };
+  });
 }
 
-/** Update an item directly in a project store's `Wardrobe/` folder. */
-export async function updateProjectWardrobeItem(
-  mountPointId: string,
-  id: string,
-  patch: Partial<WardrobeItem>,
-): Promise<WardrobeItem | null> {
-  return updateAtLocation(projectWardrobeLocation(mountPointId), id, patch);
+/**
+ * Delete a folder, sending everything in it up one level: its items (archived
+ * included) to the parent, its subfolders to sit beside it — merging into a
+ * same-named folder there, case-insensitively. Nothing is deleted but folder
+ * rows. A folder holding files that are not wardrobe items (a picture, a
+ * nested `instructions.md`, a `.txt`) is refused before anything moves.
+ */
+export async function deleteFolderInMount(
+  mount: WardrobeMount,
+  folder: string,
+): Promise<{ movedItems: number; movedFolders: number; parent: string }> {
+  if (!folder) throw new WardrobeFolderPathError('The wardrobe root cannot be deleted');
+  return runSerialized(mount.mountPointId, async () => {
+    const repos = getRepositories();
+    const from = await findStoredFolder(mount.mountPointId, folder);
+    if (!from) throw new WardrobeFolderNotFoundError(folder);
+    const parent = parentFolder(from);
+    const storeFrom = wardrobeFolderStorePath(from);
+    const storePrefix = `${storeFrom}/`.toLowerCase();
+
+    // Everything is checked before anything moves, so a refusal leaves the
+    // wardrobe exactly as it was.
+    //
+    // 1. Files the wardrobe doesn't own — a picture, a `.txt`, a note or a
+    //    nested `instructions.md` (the projection never sweeps those, so the
+    //    folder could not empty).
+    const links = (await repos.docMountFileLinks.findByMountPointId(mount.mountPointId)).filter(
+      (link) => link.relativePath.toLowerCase().startsWith(storePrefix),
+    );
+    const docsByPath = new Map(
+      (
+        await repos.docMountDocuments.findManyByMountPointsInFolder(
+          [mount.mountPointId],
+          storeFrom,
+          '.md',
+          { recursive: true },
+        )
+      ).map((doc) => [doc.relativePath.toLowerCase(), doc]),
+    );
+    const strays = links.filter((link) => {
+      const doc = docsByPath.get(link.relativePath.toLowerCase());
+      return !doc || !isWardrobeItemDocument(doc);
+    });
+    if (strays.length > 0) {
+      throw new WardrobeFolderConflictError(
+        from,
+        `Folder "${from}" holds ${strays.length} file(s) that are not wardrobe items; move them in the Scriptorium first`,
+      );
+    }
+
+    // 2. A subfolder sharing the folder's own name (`Formal/Formal`) would be
+    //    sent up into the very place being removed.
+    const rows = (await repos.docMountFolders.findByMountPointId(mount.mountPointId))
+      .filter((row) => row.path.toLowerCase().startsWith(storePrefix))
+      .sort((a, b) => b.path.length - a.path.length);
+    const items = await readMountItems(mount);
+    const moving = items.filter((item) => isUnderFolder(item.folder ?? '', from));
+    const landsInside = [
+      ...moving.map((item) => item.folder ?? ''),
+      ...rows.map((row) => folderUnderWardrobe(row.path) ?? ''),
+    ].some((sub) => sub && isUnderFolder(rebaseFolder(sub, from, parent), from));
+    if (landsInside) {
+      throw new WardrobeFolderConflictError(
+        from,
+        `Folder "${from}" holds a subfolder of the same name; rename one of them first`,
+      );
+    }
+
+    // Items: one batch, one projection. Each is re-rooted from under the
+    // folder to under its parent, so subfolder contents keep their shape.
+    if (moving.length > 0) {
+      await updateManyUnserialized(
+        mount,
+        moving.map((item) => ({
+          id: item.id,
+          patch: { folder: rebaseFolder(item.folder ?? '', from, parent) },
+        })),
+      );
+    }
+
+    // Subfolders: re-create each (empty ones included) under the parent,
+    // then drop the old rows deepest first.
+    for (const row of rows) {
+      const sub = folderUnderWardrobe(row.path);
+      if (!sub) continue;
+      await ensureFolderPath(mount.mountPointId, wardrobeFolderStorePath(rebaseFolder(sub, from, parent)));
+    }
+    try {
+      for (const row of rows) {
+        await deleteDatabaseFolder(mount.mountPointId, row.path);
+      }
+      await deleteDatabaseFolder(mount.mountPointId, storeFrom);
+    } catch (error) {
+      // The checks above should make this unreachable; if a file arrived in
+      // the meantime, say so as a conflict rather than a 500.
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_EMPTY') {
+        throw new WardrobeFolderConflictError(from, `Folder "${from}" is not empty yet; its items were moved up`);
+      }
+      throw error;
+    }
+
+    // The subfolders that moved up are the folder's direct children.
+    const childDepth = folderSegments(from).length + 1;
+    const movedFolders = rows.filter(
+      (row) => folderSegments(folderUnderWardrobe(row.path) ?? '').length === childDepth,
+    ).length;
+    logger.debug('Wardrobe folder deleted; contents sent up', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      folder: from,
+      parent,
+      movedItems: moving.length,
+      movedFolders,
+      context: 'wardrobe',
+    });
+    return { movedItems: moving.length, movedFolders, parent };
+  });
 }
 
-async function deleteAtLocation(loc: WardrobeLocation, id: string): Promise<boolean> {
-  return runSerialized(loc.mountPointId, async () => {
-    const current = await readMountItems(loc);
+/** Delete an item from the folder; false when the id isn't there. */
+export async function deleteInMount(mount: WardrobeMount, id: string): Promise<boolean> {
+  return runSerialized(mount.mountPointId, async () => {
+    const current = await readMountItems(mount);
     const next = current.filter((i) => i.id !== id);
     if (next.length === current.length) return false;
-    await projectVaultWardrobe(loc.mountPointId, loc.scopeId, next);
+    await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, next);
+    logger.debug('Wardrobe item deleted from folder', {
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      wardrobeItemId: id,
+      context: 'wardrobe',
+    });
     return true;
   });
 }
 
-/** Delete an item from its resolved vault folder. */
-export async function deleteVaultWardrobeItem(
-  id: string,
-  characterIdHint: string | null,
-): Promise<VaultWriteResult<boolean>> {
-  const loc = await resolveWardrobeMount(characterIdHint);
-  if (!loc) return { handled: false };
-  return { handled: true, value: await deleteAtLocation(loc, id) };
-}
-
-/** Delete an item directly from a project store's `Wardrobe/` folder. */
-export async function deleteProjectWardrobeItem(
+/**
+ * Patch an item addressed by mount alone. The restore pass uses this for every
+ * tier: it addresses the folder by mount, and a vault's frontmatter carries no
+ * characterId to disturb.
+ */
+export function updateMountWardrobeItem(
   mountPointId: string,
   id: string,
-): Promise<boolean> {
-  return deleteAtLocation(projectWardrobeLocation(mountPointId), id);
+  patch: Partial<WardrobeItem>,
+): Promise<WardrobeItem | null> {
+  return updateInMount(mountWardrobeLocation(mountPointId), id, patch);
 }
+

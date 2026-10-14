@@ -58,18 +58,13 @@ export {
 // JSON column utilities
 export {
   toJson,
-  fromJson,
   fromJsonSafe,
   shouldStoreAsJson,
   prepareForStorage,
-  hydrateRow,
   documentToRow,
-  rowToDocument,
-  detectJsonColumns,
   jsonExtract,
   jsonArrayContains,
   jsonArrayContainsAny,
-  jsonArrayLength,
   embeddingToBlob,
   blobToEmbedding,
 } from './json-columns';

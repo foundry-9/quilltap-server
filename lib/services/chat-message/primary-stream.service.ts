@@ -28,6 +28,7 @@
  * whole turn — subsequent callers no-op.
  */
 
+import { markMailAlertsDelivered, type MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   encodeContentChunk,
@@ -39,9 +40,11 @@ import {
   type StreamOptions,
 } from './streaming.service'
 import { saveAssistantMessage } from './message-finalizer.service'
+import { buildRouteTrail } from './route-trail'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { attemptHardErrorFailover } from './provider-failover.service'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import { summarizeFallbackAttempts } from '@/lib/llm/fallback'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -49,6 +52,7 @@ import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { AttachedFile, ProcessMessageResult, StreamingState } from './types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('PrimaryStream')
 
@@ -59,6 +63,19 @@ export interface MakePreservePartialOnErrorOptions {
   characterParticipant: { id: string }
   streaming: StreamingState
   preGeneratedAssistantMessageId: string
+  /**
+   * This turn's inform rows (`BuiltContext.informRowIds`). A preserved partial
+   * IS a persisted assistant message, and the passage was delivered — the
+   * model read it before the stream fell over — so these are consumed here
+   * too. Empty on a swipe and on turns with no informs.
+   */
+  informRowIds?: string[]
+  /**
+   * This turn's announced letters (`BuiltContext.mailAlertsOwed`). Marked
+   * alerted here for the same reason as the informs: the model read them and
+   * the turn is now a persisted message.
+   */
+  mailAlertsOwed?: MailAlertsOwed | null
 }
 
 /**
@@ -70,7 +87,7 @@ export interface MakePreservePartialOnErrorOptions {
 export function makePreservePartialOnError(
   opts: MakePreservePartialOnErrorOptions
 ): (error: unknown) => Promise<void> {
-  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId } = opts
+  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId, informRowIds, mailAlertsOwed } = opts
   let partialPreserved = false
 
   return async function preservePartialOnError(error: unknown): Promise<void> {
@@ -101,8 +118,25 @@ export function makePreservePartialOnError(
         streaming.effectiveProfile.modelName,
         undefined,
         streaming.reasoningContent,
-        streaming.reasoningSegments
+        streaming.reasoningSegments,
+        undefined,
+        // A preserved partial is still this turn's record: whoever fell over
+        // before it belongs on the call sheet. Null when nothing did.
+        buildRouteTrail(streaming, { chatId, messageId: preGeneratedAssistantMessageId })
       )
+      // The content reached the model, and it is now a persisted turn — so the
+      // informs it carried are spent. Failing to consume here would deliver the
+      // same passage again on the seat's next turn.
+      if (informRowIds && informRowIds.length > 0) {
+        const consumed = await repos.chatInforms.markConsumed(informRowIds, preservedMessageId)
+        logger.debug('Consumed informs on preserved partial response', {
+          chatId,
+          messageId: preservedMessageId,
+          requested: informRowIds.length,
+          consumed,
+        })
+      }
+      await markMailAlertsDelivered(mailAlertsOwed, { chatId, via: 'preserved-partial' })
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,
         messageId: preservedMessageId,
@@ -152,6 +186,12 @@ export interface RunPrimaryStreamOptions {
    * to the moderation that refused it.
    */
   isDangerousRouted?: boolean
+  /**
+   * The chat's Concierge policy. A thrown content refusal is retried on the
+   * uncensored understudy, when the policy allows failover, before the
+   * fallback chain runs.
+   */
+  conciergePolicy?: ResolvedConciergePolicy
   /** Mutated in place. */
   streaming: StreamingState
   controller: ReadableStreamDefaultController<Uint8Array>
@@ -176,7 +216,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
     previousResponseId, stop, preGeneratedAssistantMessageId,
-    attachedFiles, originalMessage, connectionProfile, isDangerousRouted,
+    attachedFiles, originalMessage, connectionProfile, isDangerousRouted, conciergePolicy,
     streaming, controller, encoder, preservePartialOnError,
     repos,
   } = opts
@@ -365,6 +405,8 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
     const failover = await attemptHardErrorFailover({
       state: streaming,
       error: streamingError,
+      conciergePolicy,
+      conciergeState: getConciergeState(chat),
       repos,
       context: {
         userId,

@@ -7,29 +7,33 @@
  *     longer one);
  *  2. superseded generated story-backgrounds & wardrobe avatars of *stale*
  *     chats (collapse down to the currently-referenced ones);
- *  3. regenerable caches of stale chats (compression cache, rendered
- *     markdown/HTML, raw provider payloads, thinking traces, memory-gate
- *     debug logs) plus cold-tiering of their conversation-chunk embeddings;
+ *  3. regenerable caches of stale chats (compression cache, precompiled
+ *     identity stacks, raw provider payloads, thinking traces, memory-gate
+ *     debug logs) — conversation-chunk embeddings are deliberately left
+ *     alone (tiny, and cold-tiering them cost semantic recall);
  *  4. orphaned store children (links/folders/documents whose mount point
  *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
  *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
  *  6. closed terminal (Ariel) PTY sessions and their transcript files;
- *  7. orphaned thumbnail-cache entries whose source file is gone.
+ *  7. orphaned thumbnail-cache entries whose source file is gone;
+ *  8–9. the fold OTHER and episode catch-ups;
+ *  10. the Built-in (TF-IDF) vocabulary drift check (`checkBuiltinRefit`).
  *
  * ## Why parent-side, not a forked-child job
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
  * a write transaction on the raw mount-index DB. The forked job child runs
  * against a readonly connection with buffered writes and cannot do that. So
- * there is no `MAINTENANCE` job type, no child handler, and no queue row — this
- * runs inline on the parent (the only DB writer), exactly like the LLM-log
- * cleanup and memory-housekeeping schedulers.
+ * there is no job type, no child handler, and no queue row — this runs inline
+ * on the parent (the only DB writer), like the LLM-log cleanup. (Memory
+ * maintenance is the opposite case: `lib/memory/maintenance/scheduler.ts`
+ * enqueues `MEMORY_MAINTENANCE` jobs that run in the child.)
  *
  * ## Dev-restart friendliness
  * These are in-process `setInterval` timers, not durable cron: "daily" means
  * "24h after process start." The startup tick is deferred by a 5-minute grace
  * and short-circuits if a successful sweep ran within the last 20h, so frequent
- * `npm run dev` restarts don't re-sweep on every boot. Unlike the housekeeping
- * scheduler (which peeks recent job rows), this tick has no job rows, so it
+ * `npm run dev` restarts don't re-sweep on every boot. Unlike the memory
+ * maintenance scheduler (which peeks recent job rows), this tick has no job rows, so it
  * reads/writes `lastMaintenanceSweepAt` in `instance_settings` instead. The
  * 24h interval fires regardless of the startup short-circuit.
  */
@@ -44,6 +48,10 @@ import { cleanupFinishedJobs } from './queue-service';
 import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-assets';
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
+import { enqueueFoldCatchups } from './maintenance/fold-catchup';
+import { checkBuiltinRefit } from '@/lib/embedding/builtin-refit-policy';
+import type { ExtractionCursorMap } from '@/lib/schemas/memory-extraction-cursor.types';
+import type { ChatMetadata } from '@/lib/schemas/types';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
@@ -72,12 +80,15 @@ export interface MaintenanceSweepSummary {
     chatsCollapsed: number;
     chatRowsCleared: number;
     messageRowsCleared: number;
-    chunkEmbeddingsCleared: number;
   };
   orphanedFilesSwept: number;
   orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
   terminals: { rows: number; transcripts: number };
   orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
+  foldOtherCatchup: { enqueued: number; deferred: number };
+  foldEpisodeCatchup: { enqueued: number; deferred: number };
+  /** Why the Built-in (TF-IDF) vocabulary was refit this pass, if it was. */
+  builtinRefit: { reason: string | null; enqueued: boolean };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
 }
@@ -189,12 +200,14 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       chatsCollapsed: 0,
       chatRowsCleared: 0,
       messageRowsCleared: 0,
-      chunkEmbeddingsCleared: 0,
     },
     orphanedFilesSwept: 0,
     orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
     terminals: { rows: 0, transcripts: 0 },
     orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
+    foldOtherCatchup: { enqueued: 0, deferred: 0 },
+    foldEpisodeCatchup: { enqueued: 0, deferred: 0 },
+    builtinRefit: { reason: null, enqueued: false },
     failures: [],
   };
 
@@ -214,7 +227,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       };
     });
 
-  // 3. Stale-chat cache collapse + conversation-chunk cold-tiering.
+  // 3. Stale-chat cache collapse.
   await runSweep(summary, 'caches', 'Stale-chat cache collapse failed — continuing',
     () => collapseStaleChatCaches(),
     (result) => {
@@ -223,7 +236,6 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
         chatsCollapsed: result.chatsCollapsed,
         chatRowsCleared: result.chatRowsCleared,
         messageRowsCleared: result.messageRowsCleared,
-        chunkEmbeddingsCleared: result.chunkEmbeddingsCleared,
       };
     });
 
@@ -251,6 +263,39 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   await runSweep(summary, 'orphan-thumbnails', 'Orphaned-thumbnail sweep failed — continuing',
     () => sweepOrphanedThumbnails(),
     (result) => { summary.orphanedThumbnailsSwept = result; });
+
+  // Steps 8 and 9 select from the same chat list and cursor table; read each
+  // once for both. A failed read leaves each catch-up to read its own.
+  let catchupChats: ChatMetadata[] | undefined;
+  let catchupCursors: Map<string, ExtractionCursorMap> | undefined;
+  try {
+    catchupChats = await getRepositories().chats.findAll();
+    catchupCursors = await getRepositories().memoryExtractionCursors.findAllByChat();
+  } catch (error) {
+    moduleLogger.warn('Could not list chats for the fold catch-ups; each will read its own', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // 8. Fold-grain OTHER catch-up: enqueue a MEMORY_EXTRACTION job for each chat
+  //    idle > 2 h whose tail is past its other-fold cursor (short chats never fold).
+  await runSweep(summary, 'fold-other-catchup', 'Fold-grain OTHER catch-up failed — continuing',
+    () => enqueueFoldCatchups('other-fold', { chats: catchupChats, cursors: catchupCursors }),
+    (result) => { summary.foldOtherCatchup = result; });
+
+  // 9. Fold episode catch-up: enqueue a MEMORY_EXTRACTION job for each chat
+  //    idle > 2 h whose episode-fold cursor is behind its fold boundary, so a
+  //    capped backlog drains without waiting for more folds (bug 232).
+  await runSweep(summary, 'fold-episode-catchup', 'Fold episode catch-up failed — continuing',
+    () => enqueueFoldCatchups('episode-fold', { chats: catchupChats, cursors: catchupCursors }),
+    (result) => { summary.foldEpisodeCatchup = result; });
+
+  // 10. Built-in (TF-IDF) vocabulary drift: AUTO memories never ask for a
+  //     refit themselves, so the pass checks whether the corpus has outgrown
+  //     the vocabulary (no-op on neural defaults).
+  await runSweep(summary, 'builtin-refit', 'TF-IDF refit check failed — continuing',
+    () => checkBuiltinRefit(),
+    (result) => { summary.builtinRefit = { reason: result.reason, enqueued: result.enqueued }; });
 
   try {
     await setLastMaintenanceSweepAt();

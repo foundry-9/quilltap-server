@@ -16,6 +16,7 @@ const {
   resolveProject,
 } = require('./db-helpers');
 const { getLockStatus } = require('./lock-helpers');
+const { decodeText } = require('./text-codec');
 
 // Tables grouped by domain for `db schema` (with-no-arg) overview, and for
 // DB-routing when a verb names a specific table. Keep this list short — it's
@@ -477,6 +478,11 @@ function cmdMessages(args, ctx) {
     params.push(last);
     const rows = db.prepare(sql).all(...params).reverse(); // oldest first
 
+    // `content` may be a brotli BLOB (see lib/text-codec.js). Decode before
+    // anything prints or JSON-serializes it — a raw BLOB prints as binary and
+    // JSON.stringify turns it into a byte array.
+    for (const r of rows) r.content = decodeText(r.content);
+
     if (json) return printJson({ chat, total: totalRow.n, returned: rows.length, messages: rows });
 
     console.log(`Chat: ${chat.title} (${chat.id}) — showing ${rows.length} of ${totalRow.n} matching messages`);
@@ -557,6 +563,13 @@ function cmdMessage(args, ctx) {
   try {
     const row = db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(id);
     if (!row) throw new Error(`No chat_message with id ${id}`);
+
+    // The four large text columns may be brotli BLOBs (see lib/text-codec.js).
+    // Decode before anything prints or JSON-serializes them.
+    for (const col of ['content', 'opaqueContent', 'description', 'context']) {
+      if (col in row) row[col] = decodeText(row[col]);
+    }
+
     if (json) return printJson(row);
 
     printRecord(`Message ${row.id}`, {
@@ -596,6 +609,13 @@ function cmdLog(args, ctx) {
   try {
     const row = db.prepare('SELECT * FROM llm_logs WHERE id = ?').get(id);
     if (!row) throw new Error(`No llm_log with id ${id}`);
+
+    // request/response may be brotli BLOBs (see lib/text-codec.js). Decode
+    // before anything reads, prints or JSON-serializes them — a raw BLOB
+    // would print as binary and JSON.stringify as a byte array.
+    row.request = decodeText(row.request);
+    row.response = decodeText(row.response);
+
     if (json) return printJson(row);
 
     let finishReason = null;
@@ -638,10 +658,20 @@ function cmdMemories(args, ctx) {
   const { flags } = parseSubArgs(args);
   const json = asBool(flags.json);
   const limit = asInt(flags.limit, 50);
-  if (!flags.character) throw new Error('Usage: quilltap db memories --character <id|name> [--about <id|name>] [--source AUTO|MANUAL] [--limit N]');
+  if (!flags.character) throw new Error('Usage: quilltap db memories --character <id|name> [--about <id|name>] [--source AUTO|MANUAL|CONSOLIDATED] [--tier hot|cold] [--limit N]');
+  const tier = flags.tier === undefined ? null : String(flags.tier).toLowerCase();
+  if (tier !== null && tier !== 'hot' && tier !== 'cold') {
+    throw new Error(`--tier must be hot or cold (got '${flags.tier === true ? '' : flags.tier}')`);
+  }
 
   const db = ctx.openMain();
   try {
+    // Instances that predate the memory tiers have no `tier` column: every
+    // row reads as hot there.
+    let hasTier = false;
+    try {
+      hasTier = db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === 'tier');
+    } catch { /* treat as absent */ }
     const holder = resolveCharacter(db, String(flags.character), ctx.openMounts);
     const conditions = ['characterId = ?'];
     const params = [holder.id];
@@ -654,8 +684,13 @@ function cmdMemories(args, ctx) {
       conditions.push('source = ?');
       params.push(String(flags.source).toUpperCase());
     }
+    if (tier) {
+      if (hasTier) conditions.push(tier === 'hot' ? "COALESCE(tier, 'hot') = 'hot'" : "tier = 'cold'");
+      else if (tier === 'cold') conditions.push('0');
+    }
+    const tierSelect = hasTier ? "COALESCE(tier, 'hot') AS tier" : "'hot' AS tier";
     const rows = db.prepare(`
-      SELECT id, createdAt, source, importance, reinforcementCount,
+      SELECT id, createdAt, source, ${tierSelect}, importance, reinforcementCount,
              aboutCharacterId, chatId, summary
       FROM memories WHERE ${conditions.join(' AND ')}
       ORDER BY createdAt DESC LIMIT ?
@@ -665,11 +700,12 @@ function cmdMemories(args, ctx) {
 
     if (json) return printJson({ holder, total: totalRow.n, returned: rows.length, memories: rows });
 
-    console.log(`Memories held by ${holder.name} (${holder.id}) — ${rows.length} of ${totalRow.n}`);
+    console.log(`Memories held by ${holder.name} (${holder.id})${tier ? ` [${tier}]` : ''} — ${rows.length} of ${totalRow.n}`);
     printTable(rows.map(r => ({
       createdAt: r.createdAt,
       id: r.id,
       src: r.source,
+      tier: r.tier,
       imp: r.importance,
       rein: r.reinforcementCount,
       about: r.aboutCharacterId === holder.id ? 'self' : (r.aboutCharacterId || ''),

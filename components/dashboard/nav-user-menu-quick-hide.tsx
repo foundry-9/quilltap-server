@@ -27,9 +27,11 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
     hiddenTagIds,
     hideDangerousChats,
     includeAutonomousRooms,
+    hideSalonImages,
     toggleTag,
     toggleHideDangerousChats,
     toggleIncludeAutonomousRooms,
+    toggleHideSalonImages,
     loading,
   } = useQuickHide()
 
@@ -53,6 +55,11 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
 
   const handleAutonomousToggle = () => {
     toggleIncludeAutonomousRooms()
+    onVisibilityChanged?.()
+  }
+
+  const handleSalonImagesToggle = () => {
+    toggleHideSalonImages()
     onVisibilityChanged?.()
   }
 
@@ -103,6 +110,16 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
         >
           <span className="text-sm">Show Autonomous Rooms</span>
           <Icon name={includeAutonomousRooms ? 'eye' : 'eye-off'} className="w-4 h-4 flex-shrink-0" />
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSalonImagesToggle}
+          className={`qt-navbar-dropdown-item ${hideSalonImages ? 'qt-navbar-dropdown-item-active' : ''}`}
+          title="Hide backgrounds, avatars and attached images in the Salon"
+        >
+          <span className="text-sm">Salon Images</span>
+          <Icon name={hideSalonImages ? 'eye-off' : 'eye'} className="w-4 h-4 flex-shrink-0" />
         </button>
       </div>
     </div>

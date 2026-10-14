@@ -4,7 +4,7 @@
  * embedding is supplied, the stale vector is NULLed so the render handler
  * re-embeds. Load-bearing for interchange sub-chunking, where a formerly
  * oversize interchange splits and downstream chunks shift to new content at
- * existing indices.
+ * existing indices. Also: an insert keeps a caller-supplied id (Bug 248).
  */
 
 jest.mock('@/lib/database/manager', () => ({
@@ -101,5 +101,51 @@ describe('ConversationChunksRepository.upsert — embedding preservation', () =>
 
     const [, patch] = updateSpy.mock.calls[0] as [string, Partial<ConversationChunk>];
     expect(patch.embedding).toBe(fresh);
+  });
+
+  // Bug 248: the job child's proxy assigns the id it hands back from a buffered
+  // upsert and ships it in the input; the insert must keep it, or the render
+  // handler queues an embedding for an id no row has.
+  describe('insert id (bug 248)', () => {
+    let createSpy: jest.SpiedFunction<any>;
+
+    beforeEach(() => {
+      jest.spyOn(repo as any, 'findOneByFilter').mockResolvedValue(null);
+      createSpy = jest.spyOn(repo as any, '_create').mockImplementation(
+        async (data: unknown, options: unknown) => ({
+          ...(data as object),
+          id: (options as { id?: string } | undefined)?.id ?? 'generated',
+        }),
+      );
+    });
+
+    it('keeps a caller-supplied id on insert, and keeps it out of the row data', async () => {
+      const created = await repo.upsert({
+        id: 'child-assigned',
+        chatId: 'chat-1',
+        interchangeIndex: 6,
+        content: 'a new chunk',
+        participantNames: [],
+        messageIds: [],
+      } as any);
+
+      const [data, options] = createSpy.mock.calls[0] as [Record<string, unknown>, { id?: string }];
+      expect(options).toEqual({ id: 'child-assigned' });
+      expect('id' in data).toBe(false);
+      expect(created.id).toBe('child-assigned');
+    });
+
+    it('lets the base repository mint an id when none is supplied', async () => {
+      await repo.upsert({
+        chatId: 'chat-1',
+        interchangeIndex: 6,
+        content: 'a new chunk',
+        participantNames: [],
+        messageIds: [],
+      });
+
+      const [, options] = createSpy.mock.calls[0] as [unknown, unknown];
+      expect(options).toBeUndefined();
+    });
   });
 });

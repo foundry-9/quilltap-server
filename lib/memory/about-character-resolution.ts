@@ -5,7 +5,7 @@
  * matches the memory content, and for collapsing it to the holder character
  * (self-reference) when the about-character isn't named in the text.
  *
- * Used at runtime by `createMemoryWithGate` (memory creation chokepoint) and
+ * Used at runtime by admission (`admission/prepare.ts`) and
  * at backfill time by the `align-about-character-id` migrations so both paths
  * apply identical rules.
  */

@@ -4,7 +4,7 @@
  * The workspace is a two-pane (left/right) tab host that renders every open
  * tab's view kept-alive (hidden via CSS, never unmounted) so streaming Salon
  * conversations survive tab switches. See
- * `docs/developer/features/tabbed-workspace.md` and
+ * `docs/developer/features/complete/tabbed-workspace.md` and
  * `docs/developer/decisions/ADR-0001-tabbed-workspace-routing.md`.
  *
  * @module lib/workspace/types

@@ -11,6 +11,7 @@ import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import { titleChat, titleHelpChat, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import type { RequestContext } from '@/lib/api/middleware';
 import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/types';
+import { applyAutoTitle } from '@/lib/chat/auto-title';
 
 /**
  * Regenerate a chat's title using LLM
@@ -75,13 +76,17 @@ export async function handleRegenerateTitle(
 
     const newTitle = result.result;
 
-    await repos.chats.update(chatId, {
+    // Through the chokepoint so a changed title also cues the Lantern (bug 163).
+    const outcome = await applyAutoTitle({
+      userId: user.id,
+      chatId,
       title: newTitle,
-      isManuallyRenamed: false,
-      updatedAt: new Date().toISOString(),
+      chatSettings,
+      clearManualRename: true,
+      source: 'regenerate',
     });
 
-    logger.info('[Chats v1] Title regenerated', { chatId, newTitle });
+    logger.info('[Chats v1] Title regenerated', { chatId, newTitle, outcome });
 
     return NextResponse.json({ success: true, title: newTitle });
   } catch (error) {

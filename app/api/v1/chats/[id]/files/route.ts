@@ -9,10 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, getFilePath } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction, getFilePath, type RequestContext } from '@/lib/api/middleware';
 import { uploadChatFile, type ConflictResolution } from '@/lib/chat-files-v2';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { postLibrarianAttachAnnouncement } from '@/lib/services/librarian-notifications/writer';
 import { generateImageDescription } from '@/lib/chat/file-attachment-fallback';
 import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
@@ -21,6 +21,8 @@ import { nativeTextAttachmentMime } from '@/lib/mount-index/path-utils';
 import type { RepositoryContainer } from '@/lib/database/repositories';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import type { FileAttachment } from '@/lib/llm/base';
+import type { ChatMetadata } from '@/lib/schemas/types';
+import { resolveMessageAttachmentEntries } from '@/lib/photos/chat-gallery';
 
 /**
  * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
@@ -31,26 +33,35 @@ import type { FileAttachment } from '@/lib/llm/base';
  */
 export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id: chatId }) => {
-    try {
-      // Verify chat belongs to user
-      const chat = await repos.chats.findById(chatId);
+    // Verify chat belongs to user
+    const chat = await repos.chats.findById(chatId);
 
-      if (!chat) {
-        return notFound('Chat');
-      }
+    if (!chat) {
+      return notFound('Chat');
+    }
 
-      // Check for action dispatch
-      const action = req.nextUrl.searchParams.get('action');
+    return dispatchAction(
+      req,
+      {
+        link: () => handleLinkFile(req, repos, chatId),
+        'attach-mount-file': () => handleAttachMountFile(req, repos, user.id, chatId),
+      },
+      () => handleUploadFile(req, repos, user.id, chat)
+    );
+  }
+);
 
-      if (action === 'link') {
-        return handleLinkFile(req, repos, chatId);
-      }
-
-      if (action === 'attach-mount-file') {
-        return handleAttachMountFile(req, repos, user.id, chatId);
-      }
-
-      // Default: file upload flow
+/**
+ * Default POST: upload a new file via FormData and attach it to the chat.
+ */
+async function handleUploadFile(
+  req: NextRequest,
+  repos: RepositoryContainer,
+  userId: string,
+  chat: ChatMetadata,
+): Promise<NextResponse> {
+  const chatId = chat.id;
+  try {
       // Get the file from form data
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -63,14 +74,15 @@ export const POST = createContextParamsHandler<{ id: string }>(
       const resolution = formData.get('resolution') as ConflictResolution | null;
       const conflictingFileId = formData.get('conflictingFileId') as string | null;// Upload the file (creates file entry automatically)
       // Pass projectId so files in project chats become project files
-      const uploadResult = await uploadChatFile(file, chatId, user.id, {
+      const uploadResult = await uploadChatFile(file, chatId, userId, {
         projectId: chat.projectId,
         resolution: resolution || undefined,
         conflictingFileId: conflictingFileId || undefined,
       });
 
       // Check if this is a duplicate detection result
-      if ('duplicate' in uploadResult && uploadResult.duplicate) {return NextResponse.json({
+      if ('duplicate' in uploadResult && uploadResult.duplicate) {
+        return successResponse({
           duplicate: true,
           conflictType: uploadResult.conflictType,
           existingFile: uploadResult.existingFile,
@@ -91,40 +103,63 @@ export const POST = createContextParamsHandler<{ id: string }>(
         filename: successResult.filename,
       });
 
-      return NextResponse.json({
-        file: {
+      return successResponse({
+        file: chatFilePayload({
           id: successResult.id,
           filename: successResult.filename,
           filepath,
           mimeType: successResult.mimeType,
           size: successResult.size,
-          url: filepath,
-        },
+        }),
       });
-    } catch (error) {
-      logger.error('[Chats v1 Files] Error uploading chat file', { chatId }, error as Error);
+  } catch (error) {
+    logger.error('[Chats v1 Files] Error uploading chat file', { chatId }, error as Error);
 
-      if (error instanceof Error) {
-        // Return validation errors with 400
-        if (
-          error.message.includes('Invalid file type') ||
-          error.message.includes('File size exceeds')
-        ) {
-          return badRequest(error.message);
-        }
+    if (error instanceof Error) {
+      // Return validation errors with 400
+      if (
+        error.message.includes('Invalid file type') ||
+        error.message.includes('File size exceeds')
+      ) {
+        return badRequest(error.message);
       }
-
-      return serverError('Failed to upload file');
     }
+
+    return serverError('Failed to upload file');
   }
-);
+}
+
+/**
+ * The one shape every file this route hands back takes, whether it was
+ * uploaded, linked from the library, or attached from a document store.
+ * `url` is always the same value as `filepath`; both are kept because clients
+ * read both.
+ */
+function chatFilePayload(entry: {
+  id: string;
+  filename: string;
+  filepath: string;
+  mimeType: string;
+  size: number;
+  type?: 'mountFile';
+}) {
+  return {
+    id: entry.id,
+    filename: entry.filename,
+    filepath: entry.filepath,
+    mimeType: entry.mimeType,
+    size: entry.size,
+    url: entry.filepath,
+    ...(entry.type ? { type: entry.type } : {}),
+  };
+}
 
 /**
  * Handle linking an existing library file to a chat
  */
 async function handleLinkFile(
   req: NextRequest,
-  repos: { files: { findById: (id: string) => Promise<any>; addLink: (fileId: string, entityId: string) => Promise<any> } },
+  repos: RepositoryContainer,
   chatId: string
 ): Promise<NextResponse> {
   const body = await req.json();
@@ -154,15 +189,14 @@ async function handleLinkFile(
     filename: linkedFile.originalFilename,
   });
 
-  return NextResponse.json({
-    file: {
+  return successResponse({
+    file: chatFilePayload({
       id: linkedFile.id,
       filename: linkedFile.originalFilename,
       filepath,
       mimeType: linkedFile.mimeType,
       size: linkedFile.size,
-      url: filepath,
-    },
+    }),
   });
 }
 
@@ -190,7 +224,8 @@ async function handleLinkFile(
 async function ensureImageDescription(
   repos: RepositoryContainer,
   userId: string,
-  blob: { id: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
+  chatId: string,
+  blob: { id: string; linkId: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
 ): Promise<string> {
   if (!blob.storedMimeType.toLowerCase().startsWith('image/')) {
     return '';
@@ -222,7 +257,7 @@ async function ensureImageDescription(
     data: bytes.toString('base64'),
   };
 
-  const result = await generateImageDescription(fileAttachment, repos, userId);
+  const result = await generateImageDescription(fileAttachment, repos, userId, { chatId });
   if (result.type !== 'image_description' || !result.imageDescription) {
     logger.warn('[Chats v1 Files] Image description generation did not return a description', {
       blobId: blob.id,
@@ -234,7 +269,7 @@ async function ensureImageDescription(
 
   const description = result.imageDescription.trim();
   try {
-    await repos.docMountBlobs.updateDescription(blob.id, description);
+    await repos.docMountBlobs.updateDescription(blob.id, description, blob.linkId);
     logger.info('[Chats v1 Files] Cached generated image description on blob', {
       blobId: blob.id,
       descriptionLength: description.length,
@@ -293,16 +328,15 @@ async function handleAttachMountDocument(
     mimeType,
   });
 
-  return NextResponse.json({
-    file: {
+  return successResponse({
+    file: chatFilePayload({
       id: mountFile.id,
       filename: displayTitle,
       filepath: url,
       mimeType,
       size: mountFile.fileSizeBytes,
-      url,
-      type: 'mountFile' as const,
-    },
+      type: 'mountFile',
+    }),
     announcement: {
       id: announcement.id,
       createdAt: announcement.createdAt,
@@ -371,7 +405,7 @@ async function handleAttachMountFile(
     }
   }
   if (!description) {
-    description = await ensureImageDescription(repos, userId, blob);
+    description = await ensureImageDescription(repos, userId, chatId, blob);
     if (description) {
       descriptionSource = blob.description?.trim() ? 'vision-llm-cached' : 'vision-llm-generated';
     }
@@ -403,16 +437,15 @@ async function handleAttachMountFile(
     descriptionSource,
   });
 
-  return NextResponse.json({
-    file: {
+  return successResponse({
+    file: chatFilePayload({
       id: mountFile.id,
       filename: blob.originalFileName || mountFile.fileName,
       filepath: url,
       mimeType: blob.storedMimeType,
       size: blob.sizeBytes,
-      url,
-      type: 'mountFile' as const,
-    },
+      type: 'mountFile',
+    }),
     announcement: {
       id: announcement.id,
       createdAt: announcement.createdAt,
@@ -459,69 +492,45 @@ export const GET = createContextParamsHandler<{ id: string }>(
       }));
 
       // Mount-file attachments are recorded only on Librarian announcement
-      // messages (no link table). Walk the chat's messages and collect any
-      // attachment ids that resolve through doc_mount_files.
+      // messages (no link table). The walk that resolves them lives in
+      // `lib/photos/chat-gallery.ts` alongside the chat gallery's own passes,
+      // so this listing and the gallery can never disagree about which
+      // attachments a message carries.
       const seenIds = new Set(allFiles.map((f) => f.id));
-      try {
-        const events = await repos.chats.getMessages(chatId);
-        for (const event of events) {
-          if (event.type !== 'message') continue;
-          const ids = Array.isArray(event.attachments) ? event.attachments : [];
-          for (const attachmentId of ids) {
-            if (seenIds.has(attachmentId)) continue;
-            // Try as a link id (modern) or fall back to file id.
-            let mountLink = await repos.docMountFileLinks.findByIdWithContent(attachmentId);
-            if (!mountLink) {
-              const links = await repos.docMountFileLinks.findByFileId(attachmentId);
-              mountLink = links[0] ?? null;
-            }
-            if (!mountLink) continue;
-            const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
-            if (blob) {
-              const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
-              allFiles.push({
-                id: mountLink.id,
-                filename: mountLink.originalFileName ?? mountLink.fileName,
-                filepath: url,
-                mimeType: blob.storedMimeType,
-                size: blob.sizeBytes,
-                url,
-                createdAt: event.createdAt,
-                type: 'mountFile',
-              });
-              seenIds.add(mountLink.id);
-              continue;
-            }
-            // No blob → native-text document (Bug 38). Surface it from the
-            // document row so the attached markdown shows in the chat file list.
-            const textMime = nativeTextAttachmentMime(mountLink.relativePath);
-            if (!textMime) continue;
-            const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
-            if (!document) continue;
-            const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
-            allFiles.push({
-              id: mountLink.id,
-              filename: mountLink.originalFileName ?? mountLink.fileName,
-              filepath: url,
-              mimeType: textMime,
-              size: mountLink.fileSizeBytes,
-              url,
-              createdAt: event.createdAt,
-              type: 'mountFile',
-            });
-            seenIds.add(mountLink.id);
-          }
-        }
-      } catch (err) {
-        logger.warn('[Chats v1 Files] Failed to enumerate mount-file attachments', {
+      // A message read that fails costs the mount-file attachments and nothing
+      // else; the linked files are already in hand and are the better half of
+      // the answer. This listing has always degraded rather than 500'd here.
+      const events = await repos.chats.getMessages(chatId).catch((err: unknown) => {
+        logger.warn('[Chats v1 Files] Failed to read messages for attachment walk', {
           chatId,
           error: err instanceof Error ? err.message : String(err),
         });
+        return [];
+      });
+      const mountAttachments = await resolveMessageAttachmentEntries(events, repos, {
+        skipIds: seenIds,
+      });
+      for (const attachment of mountAttachments) {
+        allFiles.push({
+          id: attachment.id,
+          filename: attachment.filename,
+          filepath: attachment.url,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          url: attachment.url,
+          createdAt: attachment.createdAt,
+          type: 'mountFile',
+        });
       }
+      logger.debug('[Chats v1 Files] Resolved mount-file attachments', {
+        chatId,
+        linkedFiles: seenIds.size,
+        mountAttachments: mountAttachments.length,
+      });
 
       // Sort by creation time, newest first
       allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      return NextResponse.json({
+      return successResponse({
         files: allFiles,
       });
     } catch (error) {

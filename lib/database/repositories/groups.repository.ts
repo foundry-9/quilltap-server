@@ -28,7 +28,7 @@ import {
   applyGroupStoreWriteOverlay,
   writeGroupStoreManagedFields,
 } from '@/lib/groups/group-store/write-overlay';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 
 /**
  * Groups Repository
@@ -47,6 +47,6 @@ export class GroupsRepository extends AbstractStoreBackedRepository<Group> {
     applyOverlayOne: applyGroupStoreOverlayOne,
     applyWriteOverlay: applyGroupStoreWriteOverlay,
     writeManagedFields: writeGroupStoreManagedFields,
-    ensureOfficialStore: ensureGroupOfficialStore,
+    ensureOfficialStore: (id, name) => ensureOwnerOfficialStore('group', id, name),
   };
 }

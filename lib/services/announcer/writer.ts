@@ -17,6 +17,11 @@
  * (`filterWhisperMessages`), and the Salon shows it to the operator with the usual
  * whisper chrome. Callers must have already verified that every id is a current
  * participant of this chat.
+ *
+ * `postInformRecord` (below) shares the shape but not the purpose: it writes the
+ * operator-facing *record* of an Inform. That record is stripped from every
+ * model's context — the inform itself is delivered as its own system block on
+ * the prompt path — so it carries no framing at all.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -127,6 +132,99 @@ export async function postAdhocAnnouncement(
       context: 'announcer',
       chatId: params.chatId,
       senderKind: params.sender.kind,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}
+
+export interface InformRecordParams {
+  chatId: string;
+  /** Exactly what the operator typed. Persisted verbatim (trimmed only). */
+  contentMarkdown: string;
+  /**
+   * Chat participant ids the record is whispered to, or null when the batch
+   * covered every eligible seat (a public record). Callers must have already
+   * verified every id against the chat's current participants.
+   */
+  targetParticipantIds: string[] | null;
+}
+
+/**
+ * Post the transcript **record** for an Inform.
+ *
+ * This message documents the post for the operator; it is never delivered to a
+ * model (the inform itself arrives as its own system block, built on the prompt
+ * path). So there is deliberately no framing here: no "The Host informs the
+ * company", no preamble, no persona voicing — the body is what was typed and
+ * nothing else. `opaqueContent` mirrors `content` for exactly that reason: the
+ * dual-body convention is honoured, and there is simply no persona to strip.
+ *
+ * Public when `targetParticipantIds` is null, whispered to the named seats
+ * otherwise — the same distinction an ad-hoc announcement draws.
+ *
+ * Returns the persisted message, or null on empty content / unknown chat /
+ * failure. Errors never propagate: the established Staff-announcer convention,
+ * and a lost record must not cost the operator the batch itself.
+ */
+export async function postInformRecord(
+  params: InformRecordParams,
+): Promise<MessageEvent | null> {
+  const trimmed = params.contentMarkdown?.trim() ?? '';
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(params.chatId);
+    if (!chat) {
+      logger.warn('[Announcer] Inform record skipped — unknown chat', {
+        context: 'announcer',
+        chatId: params.chatId,
+      });
+      return null;
+    }
+
+    const messageId = randomUUID();
+    const now = new Date().toISOString();
+
+    // Same normalization as the ad-hoc announcer: "public" has exactly one
+    // representation on the row, because a stored `[]` reads as "whispered to
+    // nobody" to every downstream whisper check.
+    const targets = params.targetParticipantIds?.length ? [...params.targetParticipantIds] : null;
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: messageId,
+      role: 'ASSISTANT',
+      content: trimmed,
+      opaqueContent: trimmed,
+      attachments: [],
+      createdAt: now,
+      participantId: null,
+      systemSender: 'host',
+      systemKind: 'inform',
+      targetParticipantIds: targets,
+      customAnnouncer: null,
+    };
+
+    await repos.chats.addMessage(params.chatId, message);
+
+    logger.debug('[Announcer] Inform record posted', {
+      context: 'announcer',
+      chatId: params.chatId,
+      messageId,
+      audience: targets ? 'whisper' : 'public',
+      targetCount: targets?.length ?? 0,
+    });
+
+    return message;
+  } catch (error) {
+    logger.error('[Announcer] Failed to post inform record', {
+      context: 'announcer',
+      chatId: params.chatId,
       error: getErrorMessage(error),
     }, error as Error);
     return null;

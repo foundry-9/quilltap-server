@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
-import { HousekeepingDialog } from './housekeeping-dialog'
+import { MaintenanceDialog } from './maintenance-dialog'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 import { showConfirmation } from '@/lib/alert'
@@ -27,7 +28,13 @@ interface Memory {
   tags: string[]
   tagDetails?: Tag[]
   importance: number
-  source: 'AUTO' | 'MANUAL'
+  source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  /** 'cold' rows are archived: out of everyday recall, still on the shelf. */
+  tier?: 'hot' | 'cold'
+  /** The digest that replaced this row, when it has been folded. */
+  supersededById?: string | null
+  /** The notes a digest was folded from. */
+  consolidatedFrom?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -55,12 +62,14 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL'>('ALL')
+  const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED'>('ALL')
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'hot' | 'cold'>('ALL')
+  const [viewedDigest, setViewedDigest] = useState<Memory | null>(null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [showEditor, setShowEditor] = useState(false)
-  const [showHousekeeping, setShowHousekeeping] = useState(false)
+  const [showMaintenance, setShowMaintenance] = useState(false)
 
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
@@ -80,6 +89,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       params.set('sortOrder', sortOrder)
       if (currentSearch) params.set('search', currentSearch)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
+      if (tierFilter !== 'ALL') params.set('tier', tierFilter)
 
       const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
         `/api/v1/memories?${params}`
@@ -118,7 +128,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       setIsLoading(false)
       setLoadingMore(false)
     }
-  }, [characterId, sortBy, sortOrder, sourceFilter])
+  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter])
 
   // Reset and refetch when filters change or refreshKey changes
   useEffect(() => {
@@ -182,6 +192,18 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
     }
   }, [])
 
+  const handleViewDigest = useCallback(async (digestId: string) => {
+    try {
+      const result = await fetchJson<{ memory: Memory }>(`/api/v1/memories/${digestId}`)
+      if (!result.ok || !result.data?.memory) {
+        throw new Error(result.error || 'The digest could not be found')
+      }
+      setViewedDigest(result.data.memory)
+    } catch (err) {
+      showErrorToast(getErrorMessage(err, 'Failed to load the digest'))
+    }
+  }, [])
+
   const handleEdit = useCallback((memory: Memory) => {
     setEditingMemory(memory)
     setShowEditor(true)
@@ -205,8 +227,9 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
     fetchMemories(0, search, false)
   }, [fetchMemories, search])
 
-  const handleHousekeepingComplete = useCallback(() => {
-    setShowHousekeeping(false)
+  // A real run is queued and works in the background; re-read the first page
+  // so anything it has already finished shows.
+  const handleMaintenanceQueued = useCallback(() => {
     setPage(0)
     fetchMemories(0, search, false)
   }, [fetchMemories, search])
@@ -230,11 +253,11 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         />
         {memories.length > 0 && (
           <button
-            onClick={() => setShowHousekeeping(true)}
+            onClick={() => setShowMaintenance(true)}
             className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg qt-hover-accent"
-            title="Clean up old and low-importance memories"
+            title="Fold repetitions, consolidate, and keep this character under the cap"
           >
-            Cleanup
+            Maintenance
           </button>
         )}
       </div>
@@ -268,12 +291,23 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         </button>
         <select
           value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL')}
+          onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED')}
            className="qt-select w-auto"
         >
           <option value="ALL">All Sources</option>
           <option value="AUTO">Auto-generated</option>
           <option value="MANUAL">Manual</option>
+          <option value="CONSOLIDATED">Consolidated (digests)</option>
+        </select>
+        <select
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value as 'ALL' | 'hot' | 'cold')}
+          className="qt-select w-auto"
+          aria-label="Filter by tier"
+        >
+          <option value="ALL">All Memories</option>
+          <option value="hot">Active</option>
+          <option value="cold">Archived</option>
         </select>
       </div>
 
@@ -304,6 +338,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
               memory={memory}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onViewDigest={handleViewDigest}
               isDeleting={deletingId === memory.id}
             />
           ))}
@@ -333,12 +368,33 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         />
       )}
 
-      {/* Housekeeping Dialog */}
-      {showHousekeeping && (
-        <HousekeepingDialog
+      {/* Digest viewer (portalled so the overlay clears any stacking context) */}
+      {viewedDigest && typeof document !== 'undefined' && createPortal(
+        <div className="qt-dialog-overlay p-4 z-[100]">
+          <div className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="qt-dialog-header">
+              <h2 className="qt-dialog-title">The Digest</h2>
+              <p className="qt-dialog-description">The denser note that took this one&rsquo;s place on the active shelf.</p>
+            </div>
+            <div className="p-6">
+              <MemoryCard memory={viewedDigest} />
+            </div>
+            <div className="qt-dialog-footer flex justify-end">
+              <button type="button" className="qt-button qt-button-secondary" onClick={() => setViewedDigest(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Maintenance Dialog */}
+      {showMaintenance && (
+        <MaintenanceDialog
           characterId={characterId}
-          onClose={() => setShowHousekeeping(false)}
-          onComplete={handleHousekeepingComplete}
+          onClose={() => setShowMaintenance(false)}
+          onQueued={handleMaintenanceQueued}
         />
       )}
     </div>

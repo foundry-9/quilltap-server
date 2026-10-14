@@ -38,6 +38,15 @@ export interface ValidationResult<T> {
   error?: string;
 }
 
+/**
+ * Which SQLite database a repository's rows live in. The main database is
+ * the default; a repository on one of the dedicated databases extends
+ * `AbstractDedicatedDbRepository` (`./dedicated-db.repository`) and says so
+ * here. The background-job applier partitions a child's buffered writes by
+ * this same set of targets (`lib/background-jobs/host/write-partition.ts`).
+ */
+export type RepositoryDbTarget = 'main' | 'mountIndex' | 'llmLogs';
+
 // ============================================================================
 // Abstract Base Repository
 // ============================================================================
@@ -47,6 +56,8 @@ export interface ValidationResult<T> {
  * that work with any database backend.
  */
 export abstract class AbstractBaseRepository<T extends BaseEntity> {
+  /** The database this repository's table lives in. */
+  readonly dbTarget: RepositoryDbTarget = 'main';
   protected readonly collectionName: string;
   protected readonly schema: z.ZodType;
   private collectionInitialized = false;
@@ -321,6 +332,19 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   }
 
   /**
+   * Fields a whole-row `_update` writes only when the caller's patch names
+   * them. `_update` rebuilds the row from a snapshot it read a moment earlier,
+   * so any schema field it writes back can rewind a newer value written
+   * between that read and its own write. A field listed here is left out of
+   * the `$set` unless the patch sets it, so an unrelated update (a title, a
+   * counter) can never carry a stale copy of it back over a newer one.
+   * Default: none.
+   */
+  protected patchOnlyFields(): readonly string[] {
+    return [];
+  }
+
+  /**
    * Create entity (default implementation)
    */
   protected async _create(
@@ -380,9 +404,18 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       const validated = this.validate(updated);
       const collection = await this.getCollection();
 
+      // Leave out the patch-only fields the caller did not name, so this
+      // write cannot rewind them from the snapshot read above.
+      let toSet: Record<string, unknown> = validated as unknown as Record<string, unknown>;
+      const skipped = this.patchOnlyFields().filter((field) => !(field in data));
+      if (skipped.length > 0) {
+        toSet = { ...toSet };
+        for (const field of skipped) delete toSet[field];
+      }
+
       await collection.updateOne(
         { id } as TypedQueryFilter<T>,
-        { $set: validated } as UpdateSpec<T>
+        { $set: toSet } as UpdateSpec<T>
       );
       return validated;
     }, 'Error updating entity', { id });
@@ -411,26 +444,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
 
       return true;
     }, 'Error deleting entity', { id });
-  }
-
-  /**
-   * Create or update an entity by ID.
-   * Used for sync operations where the ID is known.
-   */
-  async createOrUpdate(
-    id: string,
-    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: { createdAt?: string }
-  ): Promise<T> {
-    const existing = await this.findById(id);
-    if (existing) {
-      const updated = await this.update(id, data as Partial<T>);
-      if (!updated) {
-        throw new Error(`Failed to update entity ${id}`);
-      }
-      return updated;
-    }
-    return this.create(data, { id, createdAt: options?.createdAt });
   }
 
   /**

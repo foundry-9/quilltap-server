@@ -17,7 +17,7 @@
  * available through the individual `--qt-workspace-tab-*` / `-divider-*` /
  * `-drop-zone-*` hooks.
  *
- * See `docs/developer/features/tabbed-workspace.md`.
+ * See `docs/developer/features/complete/tabbed-workspace.md`.
  */
 
 @layer components {

@@ -21,7 +21,7 @@ const { triggerAvatarGenerationIfEnabled } = require('@/lib/wardrobe/avatar-gene
 describe('triggerAvatarGenerationIfEnabled', () => {
   let repos: {
     chats: { findById: jest.Mock }
-    imageProfiles: { findById: jest.Mock; findAll: jest.Mock }
+    imageProfiles: { findById: jest.Mock; findDefault: jest.Mock }
   }
 
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       },
       imageProfiles: {
         findById: jest.fn(),
-        findAll: jest.fn(),
+        findDefault: jest.fn(),
       },
     }
   })
@@ -61,7 +61,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       avatarGenerationEnabled: true,
       imageProfileId: 'profile-chat',
     })
-    repos.imageProfiles.findById.mockResolvedValue({ id: 'profile-chat' })
+    repos.imageProfiles.findById.mockResolvedValue({ id: 'profile-chat', userId: 'user-1', apiKeyId: 'key-1' })
 
     await triggerAvatarGenerationIfEnabled(repos as never, {
       userId: 'user-1',
@@ -75,7 +75,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       characterId: 'char-1',
       imageProfileId: 'profile-chat',
     })
-    expect(repos.imageProfiles.findAll).not.toHaveBeenCalled()
+    expect(repos.imageProfiles.findDefault).not.toHaveBeenCalled()
   })
 
   it('falls back to the default image profile when the chat profile is missing', async () => {
@@ -85,10 +85,7 @@ describe('triggerAvatarGenerationIfEnabled', () => {
       imageProfileId: 'profile-missing',
     })
     repos.imageProfiles.findById.mockResolvedValue(null)
-    repos.imageProfiles.findAll.mockResolvedValue([
-      { id: 'profile-a', isDefault: false },
-      { id: 'profile-default', isDefault: true },
-    ])
+    repos.imageProfiles.findDefault.mockResolvedValue({ id: 'profile-default', userId: 'user-1', apiKeyId: 'key-1', isDefault: true })
 
     await triggerAvatarGenerationIfEnabled(repos as never, {
       userId: 'user-1',

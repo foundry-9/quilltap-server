@@ -17,17 +17,22 @@ import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
-import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
+import { sortBySalience } from '@/lib/memory/scoring';
 import { parseLLMJson, stripCodeFences } from '@/lib/llm/llm-json';
 import {
   FIELD_SEMANTICS_PREAMBLE,
   FULL_FIELD_SEMANTICS,
   PROPERTIES_SEMANTICS,
   WARDROBE_SEMANTICS,
+  CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  COMPANION_TRUST_DISPOSITION,
+  COMMITTEE_DRIFT_GUARDRAIL,
+  EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { memoryIndex } from '@/lib/memory/index-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -315,6 +320,9 @@ Look for:
 - Concrete physical/appearance details the memories establish — scars, hair, height (these inform the physical description, not behaviour)
 - Habitual garments, outfits, or accessories the memories establish — a signature coat, a locket always worn (these inform the WARDROBE, never the physical description)
 - Nicknames or alternate names other characters repeatedly use for this character (these inform the ALIASES property)
+- Committee drift — the character governing {{user}}'s persona (sign-offs, votes, conditions), contradicting narrated events, or treating silence as consent. Surface it as a pattern to CORRECT, labelled as such, never as a trait.
+
+${COMMITTEE_DRIFT_GUARDRAIL}
 
 Respond with JSON:
 {
@@ -329,7 +337,7 @@ Respond with JSON:
 }`;
 }
 
-const SUGGESTION_SCHEMA_PREAMBLE = `Each suggestion object in the JSON array must follow this schema:
+export const SUGGESTION_SCHEMA_PREAMBLE = `Each suggestion object in the JSON array must follow this schema:
 {
   "field": "identity|description|manifesto|personality|exampleDialogues|talkativeness|scenarios|systemPrompt|physicalDescription|wardrobeItems|aliases",
   "subId": "ID of the existing scenario, system prompt, or wardrobe item being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt",
@@ -349,7 +357,8 @@ Rules that apply to every suggestion:
 - Preserve the character's existing voice and style while incorporating the behavioral patterns.
 - Keep each field's form of address exactly as its definition states, even when the current value gets it wrong elsewhere: manifesto, personality, and system prompts speak TO the character ("You keep your worry behind your teeth"); identity and description speak ABOUT the character from outside ("She finishes other people's sentences"); physical-description sub-fields are bare noun phrases ("auburn hair cut short; grey eyes"). Never flip a field from one form to another while rewording it.
 - Do NOT propose brand-new scenarios. Existing scenarios may be refined, but creating new scenarios is out of scope.
-- Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.`;
+- Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.
+- Never propose a trait, rule, or condition that constrains what {{user}}'s persona may do, or that requires {{user}}'s actions to be approved, witnessed, or co-signed. A pattern of that kind in the memories is drift to correct, not behaviour to capture.`;
 
 /**
  * Suggestions prompt for the general, character-wide fields: identity,
@@ -375,6 +384,8 @@ The vantage-point rule is strict:
 - A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
 - A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
 - Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
+- Do NOT codify repetition. A gesture, prop, phrase, or sentence construction that turns up in most of the character's replies is a tic to ration, not a trait to reinforce; never write it into a field as something the character does constantly.
+- A suggestion for EXAMPLEDIALOGUES must keep the examples modelling listening and proportion as well as voice. ${EXAMPLE_DIALOGUE_COVERAGE}
 - Do NOT suggest edits to title, scenarios, system prompts, the physical description, the wardrobe, or aliases in this response — those are out of scope for this pass (title is never editable here; the rest are each handled by their own dedicated passes).
 
 If you see nothing worth changing in the general fields, respond with an empty JSON array.
@@ -451,6 +462,13 @@ Additional rules specific to system-prompt refinement:
 - currentValue must be the existing prompt content verbatim.
 - proposedValue must be a complete replacement for the prompt content.
 - Do NOT change the prompt's evident interaction style (e.g. a "terse" prompt should stay terse); only sharpen its articulation of the character.
+- Never remove or weaken the prompt's direction about listening and conversational register (reading jokes and exaggeration for what they mean, sizing replies to the moment, rationing signature habits, saving formal language for moments that call for it).
+- Do NOT codify repetition. A gesture, prop, phrase, or construction that turns up in most replies is a tic to ration, not a trait to reinforce.
+- Never remove or weaken the prompt's trust safeguards (narration is fact, the conversation outranks notes, no invented setting facts, consent only in plain words, disagreement without procedure); add them in the prompt's own voice where they are missing:
+${TRUST_SAFEGUARDS_DIRECTION}
+- ${COMMITTEE_DRIFT_GUARDRAIL}
+- If the prompt under review frames the character as {{user}}'s companion, partner, family, or crew, preserve or add the companion trust disposition; otherwise do not add it.
+${COMPANION_TRUST_DISPOSITION}
 
 Respond with a JSON array of at most one suggestion.`;
 }
@@ -598,6 +616,10 @@ ${SUGGESTION_SCHEMA_PREAMBLE}
 Additional rules specific to this pass:
 - For each new system prompt: field="systemPrompt", omit subId, include a "name" field with a short descriptive label, and put the complete prompt text in proposedValue. currentValue should be the empty string.
 - Be conservative: only propose a new prompt if there is a clear interaction style the existing set does not cover.
+- ${CONVERSATIONAL_VOICE_DIRECTION}
+- ${TRUST_SAFEGUARDS_DIRECTION}
+- If the existing prompts frame the character as {{user}}'s companion, partner, family, or crew, the new prompt carries the companion trust disposition; otherwise do not add it.
+${COMPANION_TRUST_DISPOSITION}
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }
@@ -712,8 +734,7 @@ export async function runCharacterOptimizer(
           const embeddingAvailable = await isEmbeddingAvailable(userId);
           if (embeddingAvailable) {
             const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
-            const vectorStore = await getCharacterVectorStore(characterId);
-            const results = vectorStore.search(embeddingResult.embedding, 500);
+            const results = await memoryIndex.search(characterId, embeddingResult.embedding, { limit: 500, hotOnly: true });
             const matchedIds = new Set(results.map(r => r.id));
             const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
             candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));
@@ -737,6 +758,9 @@ export async function runCharacterOptimizer(
       candidateMemories = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
     }
 
+    // Hot tier only: archived shards were folded into digests.
+    candidateMemories = candidateMemories.filter(m => m.tier !== 'cold');
+
     // Apply date filters
     if (sinceDate) {
       const sinceTimestamp = new Date(`${sinceDate}T00:00:00.000Z`).getTime();
@@ -747,8 +771,8 @@ export async function runCharacterOptimizer(
       candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
     }
 
-    // Rank by weight and filter by reinforcement
-    const ranked = rankMemoriesByWeight(candidateMemories);
+    // Rank by salience (reinforced importance × time decay) and filter by reinforcement
+    const ranked = sortBySalience(candidateMemories).map(memory => ({ memory }));
     const reinforced = ranked.filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES);
     const filteredCount = reinforced.length;
     const qualifyingMemories = reinforced.slice(0, maxMemories);

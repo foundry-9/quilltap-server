@@ -175,16 +175,24 @@ By default, every one of these is read from the character's database row — the
 }
 ```
 
-Booleans, numbers, strings, lists, nested objects — any JSON value is welcome. There are no reserved keys and no schema to satisfy; the only rule is that the file must hold an **object** (a `{ … }`), not a list or a bare value.
+Booleans, numbers, strings, lists, nested objects — any JSON value is welcome, and no schema is imposed on any of it; the only general rule is that the file must hold an **object** (a `{ … }`), not a list or a bare value.
+
+There is now exactly **one reserved key**: `progressions`, which holds the
+character's timed spans — a gestation, a recharging weapon — and *is* checked
+for shape. See **[Progressions](character-progressions.md)** for what goes in
+it and the editor that spares you writing it by hand. Every other key remains
+entirely yours, as it always was; an entry under `progressions` that Quilltap
+cannot read is dropped by itself, leaving the rest of your sheet undisturbed.
 
 A few points of etiquette worth knowing:
 
 - **You are the only author.** No generation system will ever write here — not character creation, not summoning from lore, not the optimizer. Nothing invents a fact about your character behind your back, and nothing tidies away a key you meant to keep.
-- **It is not a prompt field.** The fact sheet is never injected into any character's context. A model does not read your character's clearance level merely by being your character; it must go and look, like anyone else.
+- **It is not a prompt field.** The raw fact sheet is never injected into any character's context. A model does not read your character's clearance level merely by being your character; it must go and look, like anyone else. The single sanctioned exception is the reserved `progressions` key, whose *derived* report — "you are 20 weeks along" — is the whole purpose of that key; the stored timestamps themselves are still never shown.
 - **It is an ordinary vault file for all that.** A character with **system transparency** enabled may read — and edit — `metadata.json` through the `doc_*` tools, their own and their tablemates', exactly as with any other document in the vault. An opaque character cannot see it at all. No new permissions, no special cases.
-- **The file manager is the editing desk.** There is no form for it in the editor (yet); open the character's vault in the Scriptorium and edit the JSON directly.
 - **Its absence is not a fault.** Characters created before the fact sheet existed simply have no such file, and Quilltap reads that as an empty sheet rather than a broken vault. New characters are seeded with `{}`. Should the file ever fail to parse — a comma out of place at midnight — the sheet reads as empty for that reading and a warning goes to the log; the rest of your character is entirely undisturbed.
 - **Saving through the API replaces the whole object.** The file is one field's property, so a `metadata` write is the new sheet entire, not a merge into the old one. Editing the file by hand, of course, does exactly what you'd expect.
+
+- **The editing desk depends on the key.** Progressions have their own card on the **System Prompts** tab, described in [Progressions](character-progressions.md). Everything else is edited by opening the character's vault in the Scriptorium and writing the JSON directly.
 
 **What it is for.** The fact sheet exists so that [custom tools](custom-tools.md) may consult it: an outcome table can branch on `hasAnsibleAccess`, so the same lock opens for the character carrying the key and stays shut for everyone else. Anything else you file there is yours to use as you see fit.
 
@@ -689,6 +697,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character Creation](character-creation.md) — Creating new characters
 - [Character System Prompts](character-system-prompts.md) — Deep dive on prompts
+- [Progressions](character-progressions.md) — Timed spans a character carries, reported each turn
 - [Organizing Characters](character-organization.md) — Tags and management
 - [Chats](chats.md) — Testing character in conversations
 - [Characters Overview](characters.md) — About characters

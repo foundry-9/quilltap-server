@@ -108,6 +108,7 @@ describe('every subcommand has its own completion arm', () => {
 const HELP_SOURCES = {
   db: ['bin/quilltap.js', 'printDbHelp'],
   docs: ['lib/docs-commands.js', 'printDocsHelp'],
+  sync: ['lib/sync-command.js', 'printSyncHelp'],
   memories: ['lib/memories-commands.js', 'printMemoriesHelp'],
   themes: ['lib/theme-commands.js', 'printHelp'],
   instances: ['lib/instances-commands.js', 'printHelp'],
@@ -117,6 +118,7 @@ const HELP_SOURCES = {
   'file-verify': ['lib/file-verify-commands.js', 'printHelp'],
   'memory-diff': ['lib/memory-diff-command.js', 'printMemoryDiffHelp'],
   'recall-replay': ['lib/recall-replay-command.js', 'printRecallReplayHelp'],
+  'anchor-probe': ['lib/anchor-probe-command.js', 'printAnchorProbeHelp'],
   completion: ['lib/completion-commands.js', 'printCompletionHelp'],
 };
 

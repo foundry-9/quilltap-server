@@ -10,8 +10,9 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
+import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -19,7 +20,9 @@ import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
-import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
+import { buildExtractionContext, runFoldPass } from '@/lib/memory/extraction'
+import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
+import { applyAutoTitle } from '@/lib/chat/auto-title'
 
 /**
  * Rolling-window summarization cadence.
@@ -288,11 +291,21 @@ export function partitionMessagesIntoTurns(
   return turns
 }
 
-function turnsToChatMessages(turns: FoldedTurn[]): Array<ChatMessage & { createdAt?: string | null }> {
-  const result: Array<ChatMessage & { createdAt?: string | null }> = []
+/**
+ * Render folded turns for the fold prompt. Every line carries a speaker label
+ * resolved from the chat's seats — a bare `USER:` / `ASSISTANT:` transcript is
+ * what let a model invent a name for the character nobody happened to address
+ * (bug 161).
+ */
+function turnsToChatMessages(
+  turns: FoldedTurn[],
+  names: SpeakerNames,
+): Array<ChatMessage & { speaker: string; createdAt?: string | null }> {
+  const result: Array<ChatMessage & { speaker: string; createdAt?: string | null }> = []
   for (const t of turns) {
     for (const m of t.messages) {
       result.push({
+        speaker: speakerLabel(m, names),
         role: m.role.toLowerCase() as 'user' | 'assistant',
         content: m.content,
         // Message dates feed the fold summary's Timeline section.
@@ -344,12 +357,17 @@ export async function generateContextSummary(
     }
 
     if (shouldUseUncensoredRoute(chat)) {
-      const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
-      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger, chat)
+      const chatSettingsForConcierge = await repos.chatSettings.findByUserId(userId)
+      const conciergePolicy = resolveConciergeSettings(chatSettingsForConcierge, chat)
+      logger.debug('[Context Summary] Unmoderated chat; resolving uncensored cheap LLM', {
+        chatId,
+        conciergeSource: conciergePolicy.source,
+        routeDirect: conciergePolicy.routeDirect,
+      })
       cheapLLM = resolveUncensoredCheapLLMSelection(
         cheapLLM,
         true,
-        dangerSettings,
+        conciergePolicy,
         availableProfiles
       )
     }
@@ -383,7 +401,17 @@ export async function generateContextSummary(
     }
 
     const turnsToFold = allTurns.slice(foldFromTurn - 1, foldThroughTurn)
-    const newTurnsContent = turnsToChatMessages(turnsToFold)
+    const speakerNames = await resolveSpeakerNames(chat)
+    const unresolvedParticipantIds = chat.participants
+      .filter(p => !speakerNames.has(p.id))
+      .map(p => p.id)
+    logger.debug('[Context Summary] Resolved speaker names for fold', {
+      chatId,
+      seatCount: chat.participants.length,
+      resolvedCount: speakerNames.size,
+      unresolvedParticipantIds,
+    })
+    const newTurnsContent = turnsToChatMessages(turnsToFold, speakerNames)
 
     if (newTurnsContent.length === 0) {
       return { success: false, error: 'No content in turns to fold', wasGenerated: false }
@@ -517,24 +545,32 @@ export async function generateContextSummary(
       logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
-    // Episodic spine: fold-time episode pass. Over the just-folded window, ask
-    // the cheap LLM for 0–2 consolidated episode records and write them as
-    // dated `kind: 'episodic'` memories linked to the window's per-turn
-    // fragments. Piggybacks the fold cadence — no new trigger. Best-effort:
-    // a failed episode pass never fails the fold.
+    // Both fold memory passes — the episode pass and the fold-grain OTHER
+    // pass — run on one extraction context: the chat, its cast, the project,
+    // the Concierge-resolved cheap LLM and its uncensored fallback (bug 213),
+    // all read once. Each reads from its own cursor through the end of the
+    // folded window, so a hard rebuild's turns-1..N window only reads what that
+    // pass has not (bug 207). The transcript this fold already read places the
+    // cursors. Best-effort: a failed memory pass never fails the fold.
+    const foldTranscript = allChatMessages.filter(
+      (m): m is MessageEvent => m.type === 'message',
+    ) as unknown as MessageEvent[]
+    const foldWindowMessages = turnsToFold.flatMap(t => t.messages)
     try {
-      const windowMessages = turnsToFold.flatMap(t => t.messages)
-      await runFoldEpisodePass({
-        chatId,
-        userId,
-        windowMessages,
-        cheapLLM,
-        timelineMode: chat.timelineMode ?? 'realtime',
-        projectId: chat.projectId ?? null,
-        inAutonomousRoom: chat.chatType === 'autonomous',
+      const extraction = await buildExtractionContext(chatId, userId, {
+        chat,
+        messages: foldTranscript,
+        connectionProfile,
+        chatContextSummary: newSummary,
       })
+      // Episodic spine: 0–2 dated episode records over the folded window,
+      // linked to the window's per-turn fragments.
+      await runFoldPass(extraction, 'episode-fold', { windowMessages: foldWindowMessages })
+      // What each present character took away about the others across the
+      // folded window, each thread stated once ('fold' and 'hybrid' modes).
+      await runFoldPass(extraction, 'other-fold', { windowMessages: foldWindowMessages })
     } catch (e) {
-      logger.error('[Context Summary] Fold episode pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+      logger.error('[Context Summary] Fold memory passes failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
@@ -558,16 +594,29 @@ export async function generateContextSummary(
       }
     }
 
+    // A hand-renamed chat keeps its title, so don't pay for one (bug 164).
+    // applyAutoTitle re-checks after the call in case the user renames mid-flight.
+    if (chat.isManuallyRenamed) {
+      logger.debug('[Context Summary] Chat renamed by hand; skipping fold title', { chatId })
+      return result
+    }
+
     try {
       const titleResult = isHelpLikeChatType(chat.chatType)
         ? await generateHelpChatTitleFromSummary(newSummary, cheapLLM, userId, chatId)
         : await generateTitleFromSummary(newSummary, cheapLLM, userId, chatId)
       if (titleResult.success && titleResult.result) {
-        await repos.chats.update(chatId, {
+        // A changed title is the Lantern's scene-change cue, same as the
+        // checkpoint title check (bug 163).
+        const chatSettings = await repos.chatSettings.findByUserId(userId)
+        const outcome = await applyAutoTitle({
+          userId,
+          chatId,
           title: titleResult.result,
-          updatedAt: new Date().toISOString(),
+          chatSettings,
+          source: 'summary-fold',
         })
-        logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+        logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`, { outcome })
 
         if (titleResult.usage && (titleResult.usage.promptTokens > 0 || titleResult.usage.completionTokens > 0)) {
           try {

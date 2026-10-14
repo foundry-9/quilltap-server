@@ -33,10 +33,25 @@ export const LLMLogTypeEnum = z.enum([
   'AUTO_CONFIGURE',
   'IMAGE_GENERATION',
   'WARDROBE_IMAGE_ANALYSIS',
+  'WARDROBE_ITEM_IMAGE',
   'ANSWER_CONFIRMATION',
   'CUSTOM_TOOL_CONSULT',
+  'VOICE_REWRITE',
+  'SCENARIO_BUILDER',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
+
+/**
+ * Every log type that records an image-provider call, and so counts as image
+ * spend. The Almanack's per-image-profile roll-up filters on exactly this, and
+ * `makeLoggedImageAttempt` (`lib/image-gen/image-attempt.ts`) accepts nothing
+ * else. A wardrobe item's picture keeps its own type so the Inspector can tell
+ * it apart, but it is spend all the same (bug 196).
+ */
+export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE'] as const satisfies readonly LLMLogType[];
+
+/** An image-provider call's log type. */
+export type ImageSpendLogType = (typeof IMAGE_SPEND_LOG_TYPES)[number];
 
 // ============================================================================
 // LLM LOG MESSAGE SUMMARY

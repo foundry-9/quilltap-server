@@ -38,11 +38,13 @@ fi
 if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then
   CHANNEL=""
   BADGE_COLOR="green"
-elif [[ "$CURRENT_BRANCH" == "main" ]]; then
-  CHANNEL="dev"
+elif [[ "$CURRENT_BRANCH" == "bugfix" || "$CURRENT_BRANCH" == bugfix/* ]]; then
+  CHANNEL="bugfix"
   BADGE_COLOR="yellow"
 else
-  CHANNEL=$(echo "$CURRENT_BRANCH" | sed 's/\//-/g')
+  # main and every feature/session branch share the dev channel, so a version
+  # never carries a branch name into package.json or the README badge.
+  CHANNEL="dev"
   BADGE_COLOR="yellow"
 fi
 

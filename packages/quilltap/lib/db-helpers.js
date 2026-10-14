@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { registerTextCodecFunction } = require('./text-codec');
 
 const CTRL_C = String.fromCharCode(3);
 const CTRL_D = String.fromCharCode(4);
@@ -199,6 +200,17 @@ function openEncryptedDb(dbPath, pepper, { readonly = true, friendlyName = 'data
     db.close();
     throw new Error(`Cannot open ${friendlyName}: ${err.message}\n` +
       'The database may be encrypted with a different key, or the .dbkey file may be missing.');
+  }
+
+  // Compressed text columns (llm_logs.request/response, chat_messages.content
+  // and friends) are BLOBs; qt_text() lets raw SQL and the repl read inside
+  // them. It is also REQUIRED for any --write that touches chat_messages: the
+  // message search triggers call it, so a connection without it fails the
+  // write loudly rather than letting the index drift.
+  try {
+    registerTextCodecFunction(db);
+  } catch {
+    // An old better-sqlite3 without db.function must not block a read.
   }
 
   return db;

@@ -1,5 +1,7 @@
 # Concierge Marks on Chat Lists
 
+> **Superseded by [concierge-overhaul-phase-3-three-states.md](concierge-overhaul-phase-3-three-states.md) (4.10).** The four states described here are now three — Moderated / Unmoderated / Locked, stored in `conciergeMode` with provenance in `conciergeModeSetBy` / `conciergeModeReason`. `conciergeOverride` is no longer written. This document is kept as the historical record of the four-state design.
+
 **Status:** Implemented (4.9-dev, 2026-09-02)
 **Scope:** quilltap-server — homepage Recent Chats (primary), Quick-hide's
 "Dangerous Chats" filter, Salon header badge and sidebar (shared copy), `ChatCard`
@@ -158,9 +160,11 @@ The list shapes stop carrying the raw pair and carry the derived state instead:
   at the same spot that currently copies `isDangerousChat` / `conciergeOverride`,
   line 602) and `dangerCategories: string[]` (from the chat row, `[]` default).
   Drop `isDangerousChat` and `conciergeOverride` from the summary once no
-  consumer reads them — the list route's `hasDangerous` at
-  [chats/route.ts:898](../../../../app/api/v1/chats/route.ts) is the one server-side
-  reader, and it moves to `conciergeStateUsesUncensoredRoute` (see Quick-hide below).
+  consumer reads them. *(At the time of this design the list route's
+  `has-dangerous` action was the one server-side reader of the raw label and
+  moved to the uncensored row — see Quick-hide below. That action was removed
+  in 4.10, once the quick-hide button became always visible, so no such reader
+  remains.)*
 - **`RecentChat`** ([types.ts](../../../../components/homepage/types.ts)):
   `isDangerousChat` → `conciergeState: ConciergeState`, plus `dangerCategories?: string[]`.
   `getHomeData` ([home-data.service.ts:67](../../../../lib/services/home-data.service.ts))
@@ -196,7 +200,9 @@ The sidebar footer's "there is something to hide" affordance
 ([sidebar-footer.tsx:145](../../../../components/layout/left-sidebar/sidebar-footer.tsx))
 reads `hasDangerousChats` from the chats list route, which computes it from the raw
 label at line 898; that becomes "any chat on the uncensored row" so the toggle
-appears exactly when it would hide something. The `localStorage` key and the menu
+appears exactly when it would hide something. *(Superseded in 4.10: the quick-hide
+button is always shown, and both the `useHasDangerousChats` hook and the
+`GET /api/v1/chats?action=has-dangerous` action are gone.)* The `localStorage` key and the menu
 label ("Dangerous Chats") do not change — the word still fits what is hidden.
 
 ### A `ConciergeMark` component
@@ -361,7 +367,7 @@ Delegate 1, 2, and 6 freely — they are fully specified above.
   `ChatCardData` shapes and transforms; `home-data.service.ts` pass-through.
 - Character-conversations and Prospero chat-list serialisers: add `conciergeState`
   where missing.
-- `hasDangerous` in `chats/route.ts` → uncensored row.
+- `hasDangerous` in `chats/route.ts` → uncensored row. *(Action since removed; see above.)*
 - Tests: transforms (`lib/chat-utils` tests) and the home service test if one
   exists; otherwise a focused test that `getHomeData` emits the state for each of
   the four stored combinations.

@@ -39,6 +39,8 @@ const logger = createServiceLogger('Photos:AutoDescribe');
 export interface AutoDescribeInput {
   fileEntryId: string;
   userId: string;
+  /** The chat the image arrived in, if any — its Concierge state decides whether the uncensored vision fallback may stand in. */
+  chatId?: string | null;
   repos: ReturnType<typeof getRepositories>;
 }
 
@@ -70,7 +72,7 @@ const EMPTY_RESULT: AutoDescribeOutput = {
 export async function autoDescribeChatImageAttachment(
   input: AutoDescribeInput
 ): Promise<AutoDescribeOutput> {
-  const { fileEntryId, userId, repos } = input;
+  const { fileEntryId, userId, repos, chatId } = input;
 
   const entry = await repos.files.findById(fileEntryId);
   if (!entry) {
@@ -106,7 +108,7 @@ export async function autoDescribeChatImageAttachment(
     data: buffer.toString('base64'),
   };
 
-  const result = await generateImageDescription(fileAttachment, repos, userId);
+  const result = await generateImageDescription(fileAttachment, repos, userId, { chatId });
   if (result.type !== 'image_description' || !result.imageDescription) {
     logger.info('auto-describe: vision describe did not produce a description', {
       fileEntryId,

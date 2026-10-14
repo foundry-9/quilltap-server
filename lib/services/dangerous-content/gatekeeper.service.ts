@@ -20,7 +20,7 @@ import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { stripCodeFences } from '@/lib/llm/llm-json'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from './resolver.service'
 import { createHash } from 'node:crypto'
 import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'
 import type { ModerationResult } from '@/lib/plugins/interfaces/moderation-provider-plugin'
@@ -238,7 +238,7 @@ export function mapModerationResult(
 async function classifyWithModerationProvider(
   content: string,
   userId: string,
-  settings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   chatId?: string
 ): Promise<DangerClassificationResult | null> {
   // Check if a moderation provider is registered
@@ -274,7 +274,7 @@ async function classifyWithModerationProvider(
   const moderationDurationMs = Date.now() - moderationStartedAt
 
   // Map to our classification result format
-  const result = mapModerationResult(moderationResult, settings.threshold)
+  const result = mapModerationResult(moderationResult, conciergePolicy.preScreen.threshold)
   result.source = 'moderation'
   result.providerName = provider.metadata.providerName
 
@@ -323,7 +323,7 @@ async function classifyWithModerationProvider(
  * @param content - The text content to classify
  * @param cheapLLMSelection - The cheap LLM provider selection (fallback)
  * @param userId - The user ID for API key retrieval
- * @param settings - The dangerous content settings
+ * @param conciergePolicy - The resolved Concierge policy (threshold and custom prompt from `preScreen`)
  * @param chatId - Optional chat ID for logging
  * @returns Classification result (fail-safe: returns not dangerous on any error)
  */
@@ -331,7 +331,7 @@ export async function classifyContent(
   content: string,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
-  settings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   chatId?: string
 ): Promise<DangerClassificationResult> {
   // Every Concierge classification — the per-message one in the send path, the
@@ -339,7 +339,7 @@ export async function classifyContent(
   // for as long as it takes. Re-entrant by kind, so the classification job's
   // own row is not double-counted.
   return trackActivity('danger', () =>
-    runClassification(content, cheapLLMSelection, userId, settings, chatId)
+    runClassification(content, cheapLLMSelection, userId, conciergePolicy, chatId)
   )
 }
 
@@ -347,7 +347,7 @@ async function runClassification(
   content: string,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
-  settings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   chatId?: string
 ): Promise<DangerClassificationResult> {
   const safeFallback: DangerClassificationResult = {
@@ -366,7 +366,7 @@ async function runClassification(
 
     // Try moderation provider first (free, purpose-built, no token cost)
     const moderationResult = await classifyWithModerationProvider(
-      content, userId, settings, chatId
+      content, userId, conciergePolicy, chatId
     )
     if (moderationResult) {
       cacheResult(contentHash, moderationResult)
@@ -383,8 +383,8 @@ async function runClassification(
 
     // Build classification prompt
     let systemPrompt = CLASSIFICATION_SYSTEM_PROMPT
-    if (settings.customClassificationPrompt) {
-      systemPrompt += `\n\nADDITIONAL INSTRUCTIONS:\n${settings.customClassificationPrompt}`
+    if (conciergePolicy.preScreen.customClassificationPrompt) {
+      systemPrompt += `\n\nADDITIONAL INSTRUCTIONS:\n${conciergePolicy.preScreen.customClassificationPrompt}`
     }
 
     const messages: LLMMessage[] = [
@@ -439,7 +439,7 @@ async function runClassification(
     })
 
     // Parse the response
-    const result = parseClassificationResponse(response.content, settings.threshold)
+    const result = parseClassificationResponse(response.content, conciergePolicy.preScreen.threshold)
     result.usage = response.usage
     result.source = 'llm'
     result.providerName = cheapLLMSelection.provider

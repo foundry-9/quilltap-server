@@ -5,7 +5,7 @@
  * wrong in both directions: a chat the operator had vouched safe still carried
  * the label underneath and still vanished, while an uncensored chat — which
  * takes every spicy route — was never hidden at all. The toggle now follows
- * the Concierge state's uncensored row: Flagged and Uncensored, nothing else.
+ * the Concierge state: Unmoderated (whoever set it), nothing else.
  */
 
 import { act, render, screen, waitFor } from '@testing-library/react'
@@ -34,11 +34,10 @@ function Probe({ chats }: { chats: Array<{ id: string; characterTags?: string[];
   )
 }
 
-const FOUR_STATES: Array<{ id: string; conciergeState: ConciergeState }> = [
-  { id: 'monitored', conciergeState: 'monitored' },
-  { id: 'flagged', conciergeState: 'flagged' },
-  { id: 'vouched', conciergeState: 'vouched' },
-  { id: 'uncensored', conciergeState: 'uncensored' },
+const THREE_STATES: Array<{ id: string; conciergeState: ConciergeState }> = [
+  { id: 'moderated', conciergeState: 'moderated' },
+  { id: 'unmoderated', conciergeState: 'unmoderated' },
+  { id: 'locked', conciergeState: 'locked' },
 ]
 
 async function renderProbe(chats: Parameters<typeof Probe>[0]['chats']) {
@@ -68,23 +67,22 @@ describe('QuickHideProvider — shouldHideChat', () => {
   })
 
   it('hides nothing while the toggle is off, whatever the state', async () => {
-    await renderProbe(FOUR_STATES)
+    await renderProbe(THREE_STATES)
 
-    for (const { id } of FOUR_STATES) {
+    for (const { id } of THREE_STATES) {
       expect(screen.getByTestId(`chat-${id}`)).toHaveTextContent('visible')
     }
   })
 
-  it('hides the uncensored row — and only that — when the toggle is on', async () => {
-    await renderProbe(FOUR_STATES)
+  it('hides the Unmoderated chat — and only that — when the toggle is on', async () => {
+    await renderProbe(THREE_STATES)
     await turnDangerHidingOn()
 
-    expect(screen.getByTestId('chat-flagged')).toHaveTextContent('hidden')
-    expect(screen.getByTestId('chat-uncensored')).toHaveTextContent('hidden')
-    // Monitored is the default; Vouched Safe takes the ordinary route, even
+    expect(screen.getByTestId('chat-unmoderated')).toHaveTextContent('hidden')
+    // Moderated is the default; Locked takes the ordinary route, even
     // with a dangerous label preserved underneath.
-    expect(screen.getByTestId('chat-monitored')).toHaveTextContent('visible')
-    expect(screen.getByTestId('chat-vouched')).toHaveTextContent('visible')
+    expect(screen.getByTestId('chat-moderated')).toHaveTextContent('visible')
+    expect(screen.getByTestId('chat-locked')).toHaveTextContent('visible')
   })
 
   it('leaves a chat with no state visible', async () => {
@@ -96,8 +94,8 @@ describe('QuickHideProvider — shouldHideChat', () => {
 
   it('hides by character tag independently of the danger toggle', async () => {
     await renderProbe([
-      { id: 'tagged', characterTags: ['tag-hidden'], conciergeState: 'monitored' },
-      { id: 'untagged', characterTags: ['tag-other'], conciergeState: 'monitored' },
+      { id: 'tagged', characterTags: ['tag-hidden'], conciergeState: 'moderated' },
+      { id: 'untagged', characterTags: ['tag-other'], conciergeState: 'moderated' },
     ])
 
     await waitFor(() => expect(screen.getByTestId('chat-tagged')).toHaveTextContent('visible'))
@@ -117,7 +115,7 @@ describe('QuickHideProvider — shouldHideChat', () => {
   })
 
   it('hides a tagged chat even when its state is one the danger toggle ignores', async () => {
-    await renderProbe([{ id: 'both', characterTags: ['tag-hidden'], conciergeState: 'vouched' }])
+    await renderProbe([{ id: 'both', characterTags: ['tag-hidden'], conciergeState: 'locked' }])
 
     await act(async () => {
       window.localStorage.setItem('quilltap.quickHide.activeTags', JSON.stringify(['tag-hidden']))

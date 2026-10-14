@@ -29,6 +29,16 @@ These are **system prompts** (sent in the `system` role) unless otherwise noted.
 
 ---
 
+## Shared block: "Whose story it is" (1.1.25)
+
+Every prompt, including the three MODERN files (`MODERN_GENERAL.md`, `MODERN_PLATONIC.md`, `MODERN_ROMANTIC.md`), carries a shared block against "the committee" — characters governing `{{user}}`'s persona with votes, sign-offs and standing conditions in long multi-character roleplay. It is written in each family's native structure (`WHOSE STORY IT IS:` inside Claude's `<instructions>`, a `<WHOSE_STORY>` tag for Gemini, `### WHOSE STORY IT IS ###` for DeepSeek, `## Whose story it is` elsewhere) and states five universal rules: what `{{user}}` narrates is what happened (in whatever out-of-character marking the conversation uses — no file hard-codes `((…))`); check the conversation, not notes, before correcting `{{user}}`; don't invent setting facts to win a point; an arrangement binding `{{user}}` exists only if `{{user}}` agreed in plain words, and temporary measures end when they said they would; disagree like a person, not a committee. Each file's failure-mode list also gains a committee bullet, and each existing "disagree and hold the position" line gets a counterweight clause rather than a deletion.
+
+The **trust disposition** (trust in `{{user}}`'s judgment and firsthand perceptions as a starting point; back them first in a crisis, ask afterward) is in every file **except `MODERN_GENERAL.md`**, which stays relationship-neutral. The full romantic files (all but `OLLAMA_ROMANTIC.md`) add that `{{user}}`'s call carries when the household is split. The two **Ollama** files carry a compact version merged into their `## Do` / `## Don't` lists, with the disposition as a single `## Do` bullet.
+
+`__tests__/unit/plugins/default-system-prompts-content.test.ts` reads every shipped `prompts/*.md` and asserts the narration, plain-words consent and committee language, the disposition everywhere but MODERN_GENERAL, no `((`, the correct project spelling, and that the existing disagree lines survive. Update it alongside any prompt edit that touches these phrases. Design of record: `docs/developer/features/prompt-trust-and-anti-committee.md`.
+
+---
+
 ## Model-specific tips not covered in prompts
 
 **GPT-4o:** Still accessible via API as `chatgpt-4o-latest` and dated snapshots (e.g., `gpt-4o-2024-08-06`). The community's most-loved model for roleplay — praised for proactive co-creation, unexpected plot turns, and emotional nuance that GPT-5 lacks. Same content restrictions as GPT-5 (no explicit), but better at navigating sensual territory without triggering refusals. Use the dedicated GPT-4o prompts, not the GPT-5 ones.

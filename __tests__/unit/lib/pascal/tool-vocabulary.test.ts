@@ -36,6 +36,9 @@ describe('collectToolVocabulary', () => {
       state: [],
       stateWrites: [],
       metadataWrites: [],
+      progress: [],
+      progressWrites: [],
+      now: false,
     })
   })
 
@@ -174,6 +177,9 @@ describe('collectToolVocabulary', () => {
       state: [],
       stateWrites: [],
       metadataWrites: [],
+      progress: [],
+      progressWrites: [],
+      now: false,
     })
   })
 

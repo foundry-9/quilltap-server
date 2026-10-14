@@ -66,6 +66,45 @@ describe('Bug 38 — mount document resolves to a text FileAttachment', () => {
     expect(attachments[0].size).toBe(Buffer.byteLength(DOC_CONTENT, 'utf-8'));
   });
 
+  it('bug 174 — sets no url on a document attachment, only filepath', async () => {
+    getRepositories.mockReturnValue(reposWithDocument());
+
+    const [attachment] = await loadChatFilesForLLM(['link-1']);
+
+    expect(attachment.url).toBeUndefined();
+    expect(attachment.filepath).toBe('/api/v1/mount-points/mp-1/files/Notes/field.md');
+  });
+
+  it('bug 174 — sets no url on a blob (vault image) attachment, only filepath', async () => {
+    const bytes = Buffer.from('RIFF0000WEBP');
+    getRepositories.mockReturnValue(
+      reposWithDocument({
+        docMountFileLinks: {
+          findByIdWithContent: jest.fn(async () => ({
+            id: 'link-2',
+            fileId: 'file-2',
+            mountPointId: 'mp-1',
+            relativePath: 'photos/laura.webp',
+            fileName: 'laura.webp',
+            originalFileName: null,
+          })),
+          findByFileId: jest.fn(async () => []),
+        },
+        docMountBlobs: {
+          findByFileId: jest.fn(async () => ({ id: 'blob-2', storedMimeType: 'image/webp' })),
+          readData: jest.fn(async () => bytes),
+        },
+      }),
+    );
+
+    const [attachment] = await loadChatFilesForLLM(['link-2']);
+
+    expect(attachment.url).toBeUndefined();
+    expect(attachment.filepath).toBe('/api/v1/mount-points/mp-1/blobs/photos/laura.webp');
+    expect(attachment.data).toBe(bytes.toString('base64'));
+    expect(attachment.mimeType).toBe('image/webp');
+  });
+
   it('still returns nothing when neither a blob nor a document exists', async () => {
     getRepositories.mockReturnValue(
       reposWithDocument({ docMountDocuments: { findByFileId: jest.fn(async () => null) } }),

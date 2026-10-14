@@ -11,6 +11,7 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
   PathResolutionError,
@@ -122,9 +123,17 @@ export async function handleOpenDocument(
     filePath = `${uuid}.md`;
 
     // Determine save location based on project context
-    const targetScope = context.projectId ? 'project' : 'general';
+    // Lands in the project store only when the roster admits the character;
+    // otherwise it falls back to Quilltap General.
+    const targetScope =
+      context.projectId && (await projectRosterAdmits(context.projectId, context.characterId))
+        ? 'project'
+        : 'general';
     try {
-      const resolved = await resolveDocEditPath(targetScope as DocEditScope, filePath, { projectId: context.projectId });
+      const resolved = await resolveDocEditPath(targetScope as DocEditScope, filePath, {
+        projectId: context.projectId,
+        characterId: context.characterId,
+      });
       // Create the blank file
       await fs.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
       await fs.writeFile(resolved.absolutePath, '', 'utf-8');

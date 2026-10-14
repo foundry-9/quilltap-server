@@ -92,17 +92,14 @@ flowchart TD
     SP17 -->|No| SP18
     SP17a --> SP18["18. Identity reinforcement<br/><i>'Respond only as {char}...'</i>"]
 
-    SP18 --> MEM[Inject memories]
+    SP18 --> MEM["assembleRecall()<br/><i>lib/memory/recall/assemble.ts</i>"]
 
-    MEM --> MEM1["generateMemoryRecap()<br/><i>memory-recap.ts</i><br/>Tiered: high/medium/low importance"]
-    MEM1 --> MEM2[Cheap LLM summarizes into<br/>'What You Remember' narrative]
-    MEM2 --> MEM3["searchMemoriesSemantic()<br/>Cosine similarity + effective weight"]
-    MEM3 --> MEM4["formatMemoriesForContext()<br/><i>memory-injector.ts</i><br/>With age labels"]
-
-    MEM4 --> MULTI{"Multi-char<br/>memories?"}
-    MULTI -->|Yes| MULTI1["formatInterCharacterMemoriesForContext()<br/>Grouped by character"]
-    MULTI -->|No| FMT
-    MULTI1 --> FMT
+    MEM --> MEM1["buildRecallQuery()<br/>distil + embed ONCE"]
+    MEM1 --> MEM2["searchRecall()<br/>gather → hydrate → score → select"]
+    MEM2 --> MEM3["frozen archive → recap (chat start) → head → inter-character<br/>a row in at most one pool"]
+    MEM3 --> MEM4["render.ts<br/>age · subject · words · keywords — no debug labels"]
+    MEM4 --> DELIVER["deliverRecall()<br/>after compression + request assembly:<br/>stamp delivered lines, append ring, debug record"]
+    DELIVER --> FMT
 
     FMT["formatMessagesForProvider()<br/>Provider-specific formatting"]
     FMT --> STREAM["streamMessage()<br/><i>streaming.service.ts</i><br/>Call LLM API"]
@@ -162,68 +159,68 @@ flowchart TD
 
 From chat messages landing in the database through extraction, gating, reinforcement, and storage.
 
-Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/memory-weighting.ts`
+Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/extraction/`, `lib/memory/admission/`, `lib/memory/scoring/`
 
 ```mermaid
 flowchart TD
-    subgraph Trigger["Message Trigger"]
-        A[Assistant message saved to DB] --> B["triggerMemoryExtraction()<br/><i>memory-trigger.service.ts</i><br/>Fire-and-forget async"]
+    subgraph Trigger["Units of work"]
+        A[Turn closes / autonomous speaker finishes] --> B["triggerTurnMemoryExtraction()<br/><i>memory-trigger.service.ts</i>"]
+        B --> E["enqueueMemoryExtraction()<br/>MEMORY_EXTRACTION pass: 'turn'"]
+        CA[Carina answer posted] --> CE["CARINA_MEMORY_EXTRACTION"]
+        FO[Context summary folds] --> FX["generateContextSummary()<br/><i>context-summary.ts</i>"]
+        SW[Daily sweep / regenerate] --> CU["MEMORY_EXTRACTION pass: 'other-fold' / 'episode-fold'<br/><i>maintenance/fold-catchup.ts</i>"]
     end
 
-    subgraph Queue["Two Processing Paths"]
-        B --> C{"Source?"}
-        C -->|Real-time chat| D["processMessageForMemoryAsync()<br/><i>memory-processor.ts</i><br/>Direct async, no queue"]
-        C -->|Import / batch| E["enqueueMemoryExtraction()<br/><i>queue-service.ts</i><br/>MEMORY_EXTRACTION job"]
-        E --> F["Job Processor<br/><i>processor.ts</i><br/>Poll every 2s, 3min timeout"]
-        F --> G["Memory extraction handler<br/><i>handlers/memory-extraction.ts</i>"]
-        G --> D2["processMessageForMemory()"]
-        D --> D2
+    subgraph Context["One context per unit of work"]
+        E --> CTX["buildExtractionContext()<br/><i>extraction/context.ts</i><br/>cast, project, route, clock, settings,<br/>rate limiter, cursors — read once"]
+        CE --> CTX
+        FX --> CTX
+        CU --> CTX
     end
 
-    subgraph Extract["Parallel LLM Extraction"]
-        D2 --> EX1["extractMemoryFromMessage()<br/><i>User memories</i><br/>'What did the USER reveal?'"]
-        D2 --> EX2["extractCharacterMemoryFromMessage()<br/><i>Character memories</i><br/>'What did the CHARACTER reveal?'"]
-        D2 --> EX3{"Multi-char<br/>chat?"}
-        EX3 -->|Yes| EX4["extractInterCharacterMemoryFromMessage()<br/><i>What did observer learn about subject?</i>"]
-        EX3 -->|No| PARSE
-
-        EX1 --> PARSE[Parse JSON response<br/>Filter to significant: true only]
-        EX2 --> PARSE
-        EX4 --> PARSE
+    subgraph Extract["Passes (runPass, extraction/run.ts)"]
+        CTX --> P1["self-turn<br/>one call per slice"]
+        CTX --> P2["other-turn<br/>one call per observer<br/>(mode turn / hybrid)"]
+        CTX --> P3["other-fold<br/>per observer per 60-message slice<br/>cursor advanced per slice"]
+        CTX --> P4["episode-fold<br/>per slice, for every present character"]
+        P1 --> PARSE["parse → cap (passCap + event slot)<br/>→ hybrid / rate-limit floor<br/><i>extraction/parse.ts, rate-limit.ts</i>"]
+        P2 --> PARSE
+        P3 --> PARSE
+        P4 --> PARSE
     end
 
-    subgraph Gate["Memory Gate Decision"]
-        PARSE --> CAND["For each MemoryCandidate:<br/>content, summary, keywords, importance"]
-        CAND --> EMB["Generate embedding<br/><i>embedding-service.ts</i>"]
-        EMB --> SIM["Search top 5 similar memories<br/><i>vector-store.ts</i><br/>Cosine similarity"]
-        SIM --> THRESH{"Similarity<br/>score?"}
+    subgraph Gate["Admission (admitCandidate)"]
+        PARSE --> CAND["For each MemoryCandidate:<br/>name-presence + episodic anchor safety nets<br/><i>admission/prepare.ts</i>"]
+        CAND --> EMB["Embed (one retry; failure → reject, nothing written)<br/><i>caller's process — the job child for extraction</i>"]
+        EMB --> RPC["admitMemory host-RPC → parent<br/><i>admitPrepared, admission/admit.ts</i>"]
+        RPC --> SIM["gatherNeighbours: top 5 live rows, both tiers;<br/>superseded members → their digest<br/><i>admission/neighbours.ts</i>"]
+        SIM --> THRESH{"decideAdmission (pure)<br/>closest eligible neighbour?"}
 
-        THRESH -->|">= 0.80"| REINFORCE
-        THRESH -->|"0.70 - 0.80"| RELATED
+        THRESH -->|">= 0.90 same subject/kind/occasion"| ABSORB
+        THRESH -->|"0.85 - 0.90 same subject/kind/occasion"| REINFORCE
+        THRESH -->|"cold, not superseded"| PROMOTE
+        THRESH -->|"0.70 - 0.85, or close but ineligible"| RELATED
         THRESH -->|"< 0.70"| INSERT
     end
 
-    subgraph Actions["Gate Actions"]
-        REINFORCE["REINFORCE<br/><i>memory-gate.ts</i>"]
-        REINFORCE --> R1[Increment reinforcementCount]
-        R1 --> R2[Update lastReinforcedAt]
-        R2 --> R3["extractNovelDetails()<br/><i>Regex-based, no LLM</i><br/>Proper nouns, dates, numbers,<br/>currency, technical terms"]
-        R3 --> R4{"Novel details<br/>found?"}
-        R4 -->|Yes| R5["Append as footnotes<br/>[+] new detail"]
-        R4 -->|No| R6[Keep existing content]
-        R5 --> R7["Recalc reinforcedImportance<br/>min(1.0, base + log2(count+1) * 0.05)"]
-        R6 --> R7
-        R7 --> R8[Re-embed if content changed]
+    subgraph Actions["Admission Actions (parent, real rows)"]
+        ABSORB["absorb<br/>incrementReinforcement(1) only"] --> DONE
+        PROMOTE["promote-and-reinforce<br/>memoryIndex.setTier(hot)"] --> REINFORCE
+        REINFORCE["reinforce<br/><i>foldInto → applyFold</i>"]
+        REINFORCE --> R3["extractNovelDetails()<br/><i>Regex-based, no LLM</i>"]
+        R3 --> R5["appendReinforcementFootnotes (delta, cap 8)"]
+        R5 --> R7["incrementReinforcement(by)<br/>reinforcedImportance = min(1, i + log2(n) * 0.05)"]
+        R7 --> R8[Re-embed through memoryIndex if the embedded text changed]
         R8 --> DONE
 
-        RELATED["INSERT_RELATED"]
-        RELATED --> REL1[Create new memory]
-        REL1 --> REL2[Bidirectional link with<br/>similar memories via relatedMemoryIds]
+        RELATED["insert-linked"]
+        RELATED --> REL1[Create new memory with its embedding]
+        REL1 --> REL2[addRelatedMemoryIds on both sides]
         REL2 --> DONE
 
-        INSERT["INSERT"]
-        INSERT --> INS1[Create new memory record]
-        INS1 --> INS2[Store embedding in vector store]
+        INSERT["insert"]
+        INSERT --> INS1[Create new memory record with its embedding]
+        INS1 --> INS2[memoryIndex.indexInserted]
         INS2 --> DONE
     end
 
@@ -231,16 +228,11 @@ flowchart TD
         DONE[Memory stored] --> W1["Memory retrieval request"]
         W1 --> W2["daysOld = now - max(createdAt, lastReinforcedAt)"]
         W2 --> W3["timeDecay = 0.5 ^ (daysOld / 30)<br/><i>Half-life: 30 days</i>"]
-        W3 --> W4["rawWeight = reinforcedImportance * timeDecay"]
-        W4 --> W5["minWeight = reinforcedImportance * 0.70<br/><i>Floor: 70% of importance retained</i>"]
-        W5 --> W6["effectiveWeight = max(rawWeight, minWeight)"]
-        W6 --> W7{"effectiveWeight<br/>> 0.05?"}
-        W7 -->|Yes| W8[Include in search results]
-        W7 -->|No| W9[Filter out]
+        W3 --> W4["salience = reinforcedImportance * timeDecay<br/><i>no floor; lib/memory/scoring</i>"]
     end
 
     subgraph Result["Return to Caller"]
-        W8 --> RES["MemoryProcessingResult<br/>memoryIds[], reinforcedMemoryIds[],<br/>relatedMemoryIds[], tokenUsage, debugLogs"]
+        W4 --> RES["MemoryProcessingResult<br/>memoryIds[], reinforcedMemoryIds[],<br/>relatedMemoryIds[], tokenUsage, debugLogs"]
         RES --> STORE["Debug logs stored on<br/>source message in DB"]
     end
 ```
@@ -272,7 +264,7 @@ flowchart TD
         CS6 --> CS7[Save to chat.contextSummary]
         CS7 --> CS8[Update lastRenameCheckInterchange]
         CS8 --> CS9["Chain: title update job"]
-        CS8 --> CS10["Chain: CHAT_DANGER_CLASSIFICATION job"]
+        CS8 --> CS10["Chain: CHAT_DANGER_CLASSIFICATION job<br/><i>only when summaryClassification is on (opt-in)</i>"]
     end
 
     subgraph SceneState["Scene State Tracking Pipeline"]
@@ -403,10 +395,11 @@ Key files: `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/serv
 
 ```mermaid
 flowchart TD
-    subgraph Modes["Operating Modes"]
-        M1["OFF: No scanning or routing"]
-        M2["DETECT_ONLY: Flag content, don't reroute"]
-        M3["AUTO_ROUTE: Flag AND reroute to<br/>uncensored provider"]
+    subgraph Policy["Concierge policy (resolveConciergeSettings)"]
+        M1["Off duty (conciergeSettings.enabled = false):<br/>no failover, no pre-screen, no auto-switch"]
+        M2["On duty, Moderated chat: failover on refusal;<br/>pre-screen below only if preScreen.enabled (opt-in)"]
+        M3["On duty, Unmoderated chat: routeDirect<br/>(uncensored desk, no classification)"]
+        M4["Locked chat: ordinary providers only"]
     end
 
     subgraph Classification["Content Classification"]
@@ -424,8 +417,8 @@ flowchart TD
         RESULT["Classification Result:<br/>isDangerous: boolean<br/>categories: nsfw, violence, hate_speech,<br/>self_harm, illegal_activity, disturbing<br/>scores: 0-1 per category"]
     end
 
-    subgraph Routing["Provider Routing (AUTO_ROUTE mode)"]
-        RESULT --> ROUTE{"isDangerous<br/>AND mode =<br/>AUTO_ROUTE?"}
+    subgraph Routing["Provider Routing (pre-screen flag)"]
+        RESULT --> ROUTE{"isDangerous<br/>AND failoverAllowed?"}
         ROUTE -->|No| ORIG[Use original provider]
         ROUTE -->|Yes| R1{"Explicit uncensored<br/>profile configured?"}
         R1 -->|Yes| R2[Use configured uncensored profile]
@@ -453,7 +446,7 @@ flowchart TD
 
     subgraph Background["Scheduled Background Scans"]
         BG["Scheduled danger scan<br/><i>Every 10 minutes</i>"]
-        BG --> BG1{"Any user has<br/>danger mode enabled?"}
+        BG --> BG1{"Any user opted into<br/>preScreen.summaryClassification?"}
         BG1 -->|No| BG2[Skip]
         BG1 -->|Yes| BG3[Find unclassified chats]
         BG3 --> BG4["Enqueue CHAT_DANGER_CLASSIFICATION<br/>jobs for each"]
@@ -576,8 +569,8 @@ flowchart TD
 | System | Key Files |
 |--------|-----------|
 | **System Prompt** | `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/context-builder.service.ts`, `lib/services/chat-message/orchestrator.service.ts` |
-| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/memory-weighting.ts` |
-| **Memory Storage** | `lib/memory/memory-service.ts`, `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
+| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/extraction/`, `lib/memory/admission/`, `lib/memory/scoring/` |
+| **Memory Storage** | `lib/memory/admission/`, `lib/memory/index-store/`, `lib/memory/retire.ts`, `lib/memory/recall/` (search, assemble, deliver), `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
 | **Context Summary** | `lib/chat/context-summary.ts`, `lib/background-jobs/handlers/context-summary.ts`, `lib/memory/cheap-llm-tasks/chat-tasks.ts` |
 | **Scene State** | `lib/background-jobs/handlers/scene-state-tracking.ts`, `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` |
 | **Story Backgrounds** | `lib/background-jobs/handlers/story-background.ts`, `lib/background-jobs/handlers/title-update.ts`, `lib/image-gen/appearance-resolution.ts` |

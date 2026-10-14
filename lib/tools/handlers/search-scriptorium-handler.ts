@@ -6,7 +6,11 @@
  * merging and ranking results by relevance.
  */
 
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemories as searchCharacterMemories } from '@/lib/memory/recall/search'
+import { stampAccessed } from '@/lib/memory/recall/deliver'
+import { filterImportance, importanceBand, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
+import { zonedDayBoundsIso } from '@/lib/memory/time/calendar'
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
@@ -23,6 +27,7 @@ import {
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool'
 import { getRepositories } from '@/lib/repositories/factory'
+import { rosterGatedProjectId } from '@/lib/projects/roster-access'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   SearchScriptoriumToolInput,
@@ -48,6 +53,14 @@ export interface SearchScriptoriumToolContext {
    * and conversations are searched operator-wide (all the user's chats).
    */
   operatorSurface?: boolean
+  /**
+   * A pre-built pool — "what this chat could see" before the chat exists (the
+   * Scenario Builder; `resolveScenarioBuilderMountPool`). When set, the pool is
+   * used as-is instead of resolved, the cast vaults (participant tier) are
+   * searched, and only `documents` / `knowledge` run: memories and
+   * conversations are forced off. Never combined with `operatorSurface`.
+   */
+  mountPool?: TieredMountPool
 }
 
 /**
@@ -80,17 +93,23 @@ export async function executeSearchScriptoriumTool(
       sources = ['memories', 'conversations', 'documents', 'knowledge'],
       scope = 'all',
       limit = 10,
-      minImportance = 0,
+      minImportance = TOOL_MIN_IMPORTANCE,
       since,
       until,
       aboutCharacter,
     } = parsed
 
-    // Time filters (episodic recall): normalize date-only bounds to full-day
-    // coverage. Applied to memories via occurredAt ?? createdAt and to
-    // conversation hits via the source chat's timestamps.
-    const sinceIso = since ? (since.length === 10 ? `${since}T00:00:00.000Z` : since) : null
-    const untilIso = until ? (until.length === 10 ? `${until}T23:59:59.999Z` : until) : null
+    // Time filters (episodic recall): date-only bounds widen to full LOCAL
+    // days on the memory calendar (bug 212), the calendar memories are dated
+    // on — never UTC days. Applied to memories via occurredAt ?? createdAt
+    // and to conversation hits via the source chat's timestamps.
+    const memoryTimeZone = since || until ? await refreshMemoryTimeZone() : null
+    const sinceIso = since
+      ? (since.length === 10 ? zonedDayBoundsIso(since, memoryTimeZone!)?.from ?? `${since}T00:00:00.000Z` : since)
+      : null
+    const untilIso = until
+      ? (until.length === 10 ? zonedDayBoundsIso(until, memoryTimeZone!)?.to ?? `${until}T23:59:59.999Z` : until)
+      : null
     const timeWindow =
       sinceIso || untilIso
         ? {
@@ -104,9 +123,13 @@ export async function executeSearchScriptoriumTool(
     // Operator surface (Brahma Console): no character, no memories. Memory
     // search is forced off here defensively even if a caller somehow requests
     // it — the console never reads anyone's commonplace book.
-    const operatorWide = !!context.operatorSurface
-    const searchMemories = sources.includes('memories') && !operatorWide && !!context.characterId
-    const searchConversations = sources.includes('conversations')
+    const operatorWide = !!context.operatorSurface && !context.mountPool
+    // A pre-built pool is a documents-only surface (Scenario Builder): its
+    // schema never offers memories or conversations, and the handler enforces
+    // the same exclusion defensively.
+    const prebuiltPool = context.mountPool ?? null
+    const searchMemories = sources.includes('memories') && !operatorWide && !prebuiltPool && !!context.characterId
+    const searchConversations = sources.includes('conversations') && !prebuiltPool
     const searchDocuments = sources.includes('documents')
     const searchKnowledge = sources.includes('knowledge')
 
@@ -135,15 +158,26 @@ export async function executeSearchScriptoriumTool(
     let operatorStoreIds: string[] = []
 
     if (searchDocuments || searchKnowledge) {
-      if (operatorWide) {
+      if (prebuiltPool) {
+        pool = prebuiltPool
+        // The caller vetted the cast before building the pool.
+        ownsCharacter = true
+        logger.debug('Search using pre-built mount pool', {
+          participants: pool.participantMountPointIds.length,
+          groups: pool.groupMountPointIds.length,
+          projects: pool.projectMountPointIds.length,
+          hasGlobal: !!pool.globalMountPointId,
+        })
+      } else if (operatorWide) {
         const enabled = await repos.docMountPoints.findEnabled()
         operatorStoreIds = enabled.map((mp) => mp.id)
       } else {
+        // The project tier is roster-gated (lib/projects/roster-access.ts).
         pool = await resolveTieredMountPool(
           {
             userId: context.userId,
             characterId: context.characterId,
-            projectId: context.projectId,
+            projectId: await rosterGatedProjectId(context.projectId, context.characterId),
           },
           { requireOwnership: true },
         )
@@ -158,7 +192,9 @@ export async function executeSearchScriptoriumTool(
     // (`all` is the union; `project` is project-linked stores; `character` is
     // the character's own vault only).
     const buildDocumentsPool = (): string[] =>
-      operatorWide ? operatorStoreIds : flattenTierPool(pool, { scope })
+      operatorWide
+        ? operatorStoreIds
+        : flattenTierPool(pool, { scope, includeParticipants: !!prebuiltPool })
 
     // Tiers for the `knowledge` source — same pools, each constrained to
     // `Knowledge/` paths, with tier-specific literal-phrase boosts so a hit in
@@ -186,6 +222,10 @@ export async function executeSearchScriptoriumTool(
       const wantGlobal = scope === 'all'
       if (wantCharacter && pool.characterMountPointId) {
         tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      }
+      // Pre-built pool: the cast vaults stand where the character tier would.
+      if (wantCharacter && prebuiltPool && pool.participantMountPointIds.length > 0) {
+        tiers.push({ tier: 'character', mountPointIds: pool.participantMountPointIds, boost: LITERAL_BOOST_CHARACTER })
       }
       if (wantGroup && pool.groupMountPointIds.length > 0) {
         tiers.push({ tier: 'group', mountPointIds: pool.groupMountPointIds, boost: LITERAL_BOOST_GROUP })
@@ -228,7 +268,7 @@ export async function executeSearchScriptoriumTool(
 
           const memoryResults = aboutCharacterUnresolved
             ? []
-            : await searchMemoriesSemantic(
+            : await searchCharacterMemories(
                 characterId,
                 query,
                 {
@@ -236,12 +276,16 @@ export async function executeSearchScriptoriumTool(
                   embeddingProfileId: context.embeddingProfileId,
                   limit,
                   minImportance,
-                  applyLiteralPhraseBoost: true,
+                  literalPhrase: true,
                   aboutCharacterId,
                   // Tool path: a plain hard filter on event time (no
                   // recallContext, so no soft fallback — the caller asked
                   // for a window).
-                  occurredWithin: timeWindow,
+                  window: timeWindow,
+                  // The drill-down tool sees the archive too: cold shards are
+                  // returned labelled, so a character can find what a digest
+                  // replaced.
+                  includeCold: true,
                 }
               )
 
@@ -253,10 +297,11 @@ export async function executeSearchScriptoriumTool(
               metadata: {
                 memoryId: mr.memory.id,
                 summary: mr.memory.summary,
-                importance: mr.memory.importance,
-                effectiveWeight: mr.effectiveWeight,
+                importance: filterImportance(mr.memory),
+                salience: mr.salience,
                 createdAt: mr.memory.createdAt,
                 source: mr.memory.source,
+                archivedLabel: memoryArchivedLabel(mr.memory),
                 occurredAt: mr.memory.occurredAt ?? null,
                 narrativeTime: mr.memory.narrativeTime ?? null,
                 kind: mr.memory.kind ?? 'semantic',
@@ -491,6 +536,16 @@ export async function executeSearchScriptoriumTool(
     results.sort((a, b) => b.relevanceScore - a.relevanceScore)
     const limitedResults = results.slice(0, limit)
 
+    // Only the memories that survived the cross-source cut reach the model;
+    // those, and only those, count as accessed.
+    if (context.characterId) {
+      const returnedMemoryIds = limitedResults
+        .filter(r => r.sourceType === 'memory')
+        .map(r => r.metadata.memoryId)
+        .filter((id): id is string => typeof id === 'string')
+      stampAccessed(context.characterId, returnedMemoryIds)
+    }
+
     logger.info('Search scriptorium completed', {
       context: 'search-scriptorium-handler',
       userId: context.userId,
@@ -532,6 +587,18 @@ export async function executeSearchScriptoriumTool(
 }
 
 /**
+ * Label for a cold-tier memory in `search` results: `(archived — superseded by
+ * <digest id>)` when a digest replaced it, `(archived)` otherwise. Hot rows get
+ * no label.
+ */
+export function memoryArchivedLabel(memory: { tier?: string; supersededById?: string | null }): string | undefined {
+  if (memory.tier !== 'cold') return undefined
+  return memory.supersededById
+    ? `(archived — superseded by ${memory.supersededById})`
+    : '(archived)'
+}
+
+/**
  * Format search scriptorium results for inclusion in conversation context
  */
 export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[]): string {
@@ -541,8 +608,8 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
 
   const formatted = results.map((result, index) => {
     if (result.sourceType === 'memory') {
-      const importanceLabel = (result.metadata.importance ?? 0) >= 0.7 ? 'High' :
-        (result.metadata.importance ?? 0) >= 0.4 ? 'Medium' : 'Low'
+      const band = importanceBand(result.metadata.importance ?? 0)
+      const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
 
       // Episodic spine: surface event time + source conversation so the model
       // can confirm "when" and drill into the transcript.
@@ -554,7 +621,8 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
         ? `\nSource conversation: ${result.metadata.conversationId} (readable via read_conversation)`
         : ''
 
-      return `[Result ${index + 1} - Memory] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
+      const archived = result.metadata.archivedLabel ? ` ${result.metadata.archivedLabel}` : ''
+      return `[Result ${index + 1} - Memory${archived}] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
 Summary: ${result.metadata.summary || 'No summary'}${whenLine}${sourceLine}
 Details: ${result.content}`
     } else if (result.sourceType === 'conversation') {

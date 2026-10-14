@@ -9,6 +9,7 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
   readFileWithMtime,
@@ -48,6 +49,7 @@ import {
   type DocEditToolContext,
   applyQtapUriToInput,
   collectPeerCharacterIdsForReads,
+  actingCharacterIsOpaqueToVaults,
   buildReadResolutionContext,
   buildWriteResolutionContext,
   buildDocStoreUriResolver,
@@ -587,7 +589,9 @@ export async function handleGrep(
   rawInput: DocGrepInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocGrepOutput; error?: string; formattedText?: string }> {
-  if (!context.projectId) {
+  // A pre-built mount pool (Scenario Builder) stands in for the project: a
+  // General-only scene has no project and must still be able to grep.
+  if (!context.projectId && !context.mountPool) {
     return { success: false, error: 'Grep requires a project context' };
   }
   const input = applyQtapUriToInput(rawInput);
@@ -792,7 +796,17 @@ export async function handleGrep(
       ? await resolveMountPointRef(input.mount_point, context.characterId)
       : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+    // Enumeration honours the same covenant resolution does: an opaque
+    // character must not SEE the vault names she would then be refused
+    // (bug 153). Derived from the one helper the context builders use.
+    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    const mountPoints = await getAccessibleMountPoints({
+      projectId: context.projectId,
+      characterId: context.characterId,
+      extraCharacterIds: peerCharacterIds,
+      hideCharacterVaults,
+      mountPool: context.mountPool,
+    });
 
     for (const mp of mountPoints) {
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
@@ -827,7 +841,11 @@ export async function handleGrep(
   // directory would either duplicate matches or, post-migration, search a
   // stale snapshot. We only walk the legacy fs for projects that haven't
   // been migrated to a database-backed official store yet.
-  if (!input.mount_point) {
+  if (
+    !input.mount_point &&
+    context.projectId &&
+    (await projectRosterAdmits(context.projectId, context.characterId))
+  ) {
     const officialMount = await resolveOfficialProjectMount(context.projectId);
     if (!officialMount) {
       const { getFilesDir } = await import('@/lib/paths');
@@ -880,7 +898,8 @@ export async function handleListFiles(
   rawInput: DocListFilesInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocListFilesOutput; error?: string; formattedText?: string }> {
-  if (!context.projectId) {
+  // See doc_grep: a pre-built mount pool stands in for the project.
+  if (!context.projectId && !context.mountPool) {
     return { success: false, error: 'List files requires a project context' };
   }
 
@@ -977,8 +996,13 @@ export async function handleListFiles(
   const shouldIncludeProject = !input.scope || input.scope === 'project';
   const shouldIncludeGeneral = !input.scope || input.scope === 'general';
 
-  // Resolve group mount IDs once so per-mount tagging is O(1)
-  const groupMountIds = new Set(await resolveGroupMountPointIdsForCharacter(context.characterId));
+  // Resolve group mount IDs once so per-mount tagging is O(1). A pre-built
+  // pool already carries the whole cast's group tier.
+  const groupMountIds = new Set(
+    context.mountPool
+      ? context.mountPool.groupMountPointIds
+      : await resolveGroupMountPointIdsForCharacter(context.characterId)
+  );
 
   // List document store files. Translate the reserved self-token to the acting
   // character's own vault ID so `mount_point: "self"` filters to it, mirroring
@@ -988,7 +1012,16 @@ export async function handleListFiles(
       ? await resolveMountPointRef(input.mount_point, context.characterId)
       : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+    // See doc_grep: the listing must not advertise what resolution will refuse
+    // (bug 153).
+    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    const mountPoints = await getAccessibleMountPoints({
+      projectId: context.projectId,
+      characterId: context.characterId,
+      extraCharacterIds: peerCharacterIds,
+      hideCharacterVaults,
+      mountPool: context.mountPool,
+    });
     for (const mp of mountPoints) {
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
@@ -1034,7 +1067,12 @@ export async function handleListFiles(
   // a stale on-disk directory from before the migration — or duplicating
   // entries the document-store branch already emitted — we route through
   // the official mount when one exists.
-  if (shouldIncludeProject) {
+  // Roster-gated: a character off the project roster lists no project files.
+  if (
+    shouldIncludeProject &&
+    context.projectId &&
+    (await projectRosterAdmits(context.projectId, context.characterId))
+  ) {
     const officialMount = await resolveOfficialProjectMount(context.projectId);
     if (officialMount) {
       // When listing every scope (no input.scope filter) the document-store

@@ -97,6 +97,11 @@ Group's secrets among its own.
 > *Group Scenarios: {the Group's name}*. A starting scenario is a menu laid out at
 > the door, not a key pressed into anyone's hand — so here, and only here, a
 > Group's Scenarios are shown to the whole table when a member is present.
+>
+> (The [Scenario Browser](scenario-browser.md) — **Browse all scenarios…** in
+> that same menu — goes further still and lists every Group's shelf, member or
+> no, for you to pluck a scene from by hand. A scene so plucked is copied into
+> the chat; no Group's Knowledge comes with it.)
 
 ## Tending Your Groups
 
@@ -110,6 +115,13 @@ characters.
   invited into a chat.
 - **Link or unlink stores** — attach any of your existing document stores to the
   Group so its members can reach them as well.
+- **Tend the Scenarios shelf** — the **Scenarios** card on a Group's page lists its
+  scenarios and lets you create, edit, rename, archive, restore, delete, and elect a
+  default, exactly as a project's card does (see
+  [Project Scenarios](project-scenarios.md)). Its **Ask the Host to set the scene**
+  button sends the Host to draft a scene from the Group's own store, the stores
+  linked to it, and Quilltap General; he files it with this Group by default, or
+  wherever else you choose (see [The Scenario Builder](scenario-builder.md)).
 - **Edit the particulars** — name, description, standing instructions, colour, and
   icon are all yours to change. The Instructions get a proper writing desk — the
   same rich Markdown editor the Projects enjoy — and may run to 10,000 characters.
@@ -160,3 +172,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Projects Overview](/prospero) — the file-and-chat counterpart to Groups
 - [The Scriptorium](/scriptorium) — where document stores are made and managed
+- [The Scenario Builder](scenario-builder.md) — asking the Host to draft a scene

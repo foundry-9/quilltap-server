@@ -58,9 +58,13 @@ export interface AnyExportData {
   documents?: ExportedDocumentStoreDocument[];
   blobs?: ExportedDocumentStoreBlob[];
   projectLinks?: ExportedProjectDocMountLink[];
-  // Chat sidecars (per-chat annotations + Document Mode pane state)
+  // Chat sidecars (per-chat annotations + Document Mode pane state + Informs)
   conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
+  chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
+  // Wear-ledger rows for the bundle's wardrobe items (characters and
+  // document-stores exports)
+  wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];
   // General file library (files + folders; folders share the field above)
   files?: ExportedFileWithBytes[];
   // Configuration / catalogue export types
@@ -217,6 +221,24 @@ export interface IdMappingState {
    * claimed id exists at all.
    */
   preserveIdsSkips: Set<string>;
+  /**
+   * Source wardrobe item id → the id `importCharacterWardrobeItems` minted for
+   * it. Read by the wear-ledger import; a `Wardrobe/*.md` document carried in
+   * an imported store (the character's own vault included) overrides it,
+   * because the bundle's vault wins over the scaffold those items landed in.
+   */
+  wardrobeItems: Map<string, string>;
+  /**
+   * Source chat id → (source message id → the id the chat import minted for
+   * it). Present only for chats created under a fresh id (the `duplicate`
+   * strategy, or any import without `preserveIds`), whose messages are
+   * reminted because `chat_messages.id` is global (bug 228). Keyed per chat
+   * because two chats in one bundle can share source message ids, and an
+   * entry is recorded only once its message has actually been inserted.
+   * Read through `remapImportedMessageId` by every sidecar that names a
+   * message: informs, conversation annotations, memories, file `linkedTo`.
+   */
+  messages: Map<string, Map<string, string>>;
 }
 
 export interface ImportCounts {

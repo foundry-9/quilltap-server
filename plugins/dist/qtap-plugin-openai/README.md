@@ -1,12 +1,12 @@
 # OpenAI Provider Plugin for Quilltap
 
-This plugin provides integration with OpenAI's API, enabling Quilltap to use GPT models for chat completions and DALL-E models for image generation.
+This plugin provides integration with OpenAI's API, enabling Quilltap to use GPT models for chat completions and the GPT Image and DALL-E families for image generation.
 
 ## Features
 
 - **Chat Completions**: Access to GPT-4, GPT-4o, GPT-3.5 Turbo, and other OpenAI models
 - **Vision Capabilities**: Analyze images with vision-enabled models (GPT-4V, GPT-4o)
-- **Image Generation**: Create images using DALL-E 2, DALL-E 3, or gpt-image-1
+- **Image Generation**: Create images using the GPT Image families (2.5 Sunburst/Flare, 2, 1.5, 1, 1-mini) or the legacy DALL-E 2 / DALL-E 3
 - **Function Calling**: Use tools and function calling for structured outputs
 - **Web Search**: Native web search integration with search-capable models
 - **Streaming**: Support for streaming responses for real-time chat
@@ -48,13 +48,26 @@ This plugin requires the following:
 
 ### Image Generation Models
 
-- **gpt-image-1**: Latest image generation model with improved quality
-- **dall-e-3**: High quality, improved prompt following
-- **dall-e-2**: Stable, widely available model
+- **gpt-image-2.5-sunburst**: Premium tier — highest quality, best at precise editing
+- **gpt-image-2.5-flare**: Speed tier — GPT Image 2 quality at roughly half the latency, and cheaper
+- **gpt-image-2**: Previous flagship
+- **gpt-image-1.5**, **gpt-image-1**, **gpt-image-1-mini**: Earlier GPT Image generations
+- **dall-e-3**: Legacy; high quality, improved prompt following
+- **dall-e-2**: Legacy; stable, widely available
+
+Dated snapshots (`gpt-image-2.5-flare-2026-09-08`, `gpt-image-2-2026-04-21`, …) resolve to their
+family's capabilities by longest-prefix match. The per-family table is
+[`image-models.ts`](./image-models.ts) — the wire logic, the host's model declarations and the
+profile-editor schema all read from it.
 
 #### Size Support by Model
 
-**gpt-image-1**:
+**gpt-image-2.5-sunburst**, **gpt-image-2.5-flare**, **gpt-image-2**:
+- Any `WIDTHxHEIGHT` with both edges divisible by 16, aspect ratio between 1:3 and 3:1, no edge
+  over 3840px, and within the 3840x2160 pixel budget. Above 2560x1440 is experimental.
+- `auto`, plus the standard 1024x1024 / 1024x1536 / 1536x1024
+
+**gpt-image-1.5**, **gpt-image-1**, **gpt-image-1-mini**:
 - 1024x1024
 - 1024x1536
 - 1536x1024
@@ -69,6 +82,15 @@ This plugin requires the following:
 - 256x256
 - 512x512
 - 1024x1024
+
+#### Quality Tiers by Model
+
+| Model | Tiers |
+|---|---|
+| gpt-image-2.5-sunburst, gpt-image-2.5-flare | auto, low, medium, high, **xhigh**, **max** |
+| gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini | auto, low, medium, high |
+| dall-e-3 | standard, hd |
+| dall-e-2 | standard |
 
 ## File Attachment Support
 
@@ -100,12 +122,27 @@ Images are automatically encoded to base64 and sent with your message for analys
 
 ### Image Generation Parameters
 
-- **model**: Image model ('dall-e-3', 'dall-e-2', or 'gpt-image-1')
+Read off `ImageGenParams`:
+
+- **model**: Image model (see *Image Generation Models* above)
 - **prompt**: Text description of the image
-- **size**: Image dimensions (varies by model)
-- **quality**: 'standard' or 'hd' (DALL-E 3 only)
+- **size**: Image dimensions (varies by model; see above)
+- **quality**: The selected model's tier (see above)
 - **style**: 'vivid' or 'natural' (DALL-E 3 only)
-- **n**: Number of images to generate (1-10)
+- **n**: Number of images to generate (1-10; DALL-E 3 caps at 1)
+
+Read off `ImageGenParams.profileParameters`, under their OpenAI wire names, and sent only to the
+GPT Image families:
+
+- **background**: 'auto', 'opaque' or 'transparent'. Transparent requires a `png` or `webp` output
+  format; asking for it with `jpeg` switches the format to `png`.
+- **output_format**: 'png', 'jpeg' or 'webp'. Also determines the returned image's `mimeType`.
+- **output_compression**: 0-100, applied only for `webp` and `jpeg`; dropped for `png`.
+- **moderation**: 'auto' or 'low'. Less restrictive, not off.
+
+A parameter the selected model does not accept is dropped with a warning rather than forwarded —
+the Images API rejects the whole request over one unknown value. An unusable size is the exception:
+it falls back to `1024x1024`, since the request needs some dimensions.
 
 ## Web Search
 
@@ -189,9 +226,10 @@ const response = await provider.sendMessage({
 ```typescript
 const result = await provider.generateImage({
   prompt: 'A serene mountain landscape at sunset',
-  model: 'dall-e-3',
-  size: '1024x1792',
-  quality: 'hd',
+  model: 'gpt-image-2.5-sunburst',
+  size: '1536x864',
+  quality: 'max',
+  profileParameters: { output_format: 'webp', output_compression: 90 },
 }, apiKey);
 ```
 

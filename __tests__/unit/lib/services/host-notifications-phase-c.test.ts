@@ -50,6 +50,7 @@ import {
   buildJoinScenarioContent,
   buildTimestampContent,
   buildOffSceneCharactersContent,
+  buildOffSceneCharactersOpaqueContent,
   findIntroducedOffSceneCharacterIds,
   postHostOffSceneCharactersAnnouncement,
   postHostNoUserCharacterAnnouncement,
@@ -312,6 +313,43 @@ describe('postHostNoUserCharacterAnnouncement', () => {
 // ---------------------------------------------------------------------------
 // Off-scene character introductions
 // ---------------------------------------------------------------------------
+
+describe('buildOffSceneCharactersContent — left behind (bug 171)', () => {
+  const charlie = {
+    id: 'c-charlie',
+    name: 'Charlie',
+    pronouns: { subject: 'he', object: 'him', possessive: 'his' },
+    identity: 'The proprietor of the Estate.',
+  }
+
+  it('says the character stayed in the earlier scene and cannot hear or answer', () => {
+    const result = buildOffSceneCharactersContent([charlie], null, 'left-behind')
+    expect(result).toContain('did not make the journey')
+    expect(result).toContain('not in this room, unable to hear what is said here, and unable to answer')
+    expect(result).toContain('### Charlie')
+    expect(result).not.toContain('begs leave to introduce')
+  })
+
+  it('uses plural framing for several left behind', () => {
+    const result = buildOffSceneCharactersContent(
+      [charlie, { id: 'c-ariel', name: 'Ariel' }],
+      null,
+      'left-behind',
+    )
+    expect(result).toContain('certain members of the previous company')
+    expect(result.indexOf('### Ariel')).toBeLessThan(result.indexOf('### Charlie'))
+  })
+
+  it('has a plain opaque form', () => {
+    const result = buildOffSceneCharactersOpaqueContent([charlie], null, 'left-behind')
+    expect(result).toContain('did not come along')
+    expect(result).not.toContain('The Host')
+  })
+
+  it('defaults to the mentioned framing', () => {
+    expect(buildOffSceneCharactersContent([charlie])).toContain('begs leave to introduce')
+  })
+})
 
 describe('buildOffSceneCharactersContent', () => {
   it('renders a single-character introduction with name, pronouns, and description', () => {

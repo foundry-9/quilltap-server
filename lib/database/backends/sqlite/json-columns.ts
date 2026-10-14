@@ -31,25 +31,6 @@ export function toJson(value: unknown): string | null {
 }
 
 /**
- * Parse a JSON string from SQLite back to a JavaScript value
- */
-export function fromJson<T = unknown>(value: string | null): T | null {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch (error) {
-    logger.error('Failed to parse JSON value', {
-      value: typeof value === 'string' ? value.substring(0, 100) : value,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
-/**
  * Safely parse JSON, returning null on failure instead of throwing
  */
 export function fromJsonSafe<T = unknown>(value: string | null, defaultValue: T | null = null): T | null {
@@ -125,31 +106,6 @@ export function prepareForStorage(value: unknown): string | number | Buffer | nu
 
   // Fallback to JSON
   return toJson(value);
-}
-
-/**
- * Hydrate a row from SQLite, parsing JSON columns
- * @param row The raw row from SQLite
- * @param jsonColumns Array of column names that should be parsed as JSON
- */
-export function hydrateRow<T = Record<string, unknown>>(
-  row: Record<string, unknown>,
-  jsonColumns: string[]
-): T {
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(row)) {
-    if (jsonColumns.includes(key) && typeof value === 'string') {
-      result[key] = fromJsonSafe(value);
-    } else if (typeof value === 'number' && key.startsWith('is')) {
-      // Boolean columns starting with 'is' (e.g., isFavorite)
-      result[key] = value === 1;
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result as T;
 }
 
 // ============================================================================
@@ -256,14 +212,6 @@ export function jsonArrayObjectMatchAny(
   };
 }
 
-/**
- * Generate SQL for getting the length of a JSON array
- * @param column The column name containing a JSON array
- */
-export function jsonArrayLength(column: string): string {
-  return `json_array_length("${column}")`;
-}
-
 // ============================================================================
 // BLOB Serialization (Float32 embeddings)
 // ============================================================================
@@ -271,6 +219,7 @@ export function jsonArrayLength(column: string): string {
 // re-exported here so existing SQLite-backend imports keep working.
 
 import { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
+import { textToBlob } from '@/lib/database/text-compression';
 export { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText };
 
 // ============================================================================
@@ -284,11 +233,27 @@ export { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText };
 export function documentToRow(
   document: Record<string, unknown>,
   jsonColumns: string[] = [],
-  blobColumns: Set<string> = new Set()
+  blobColumns: Set<string> = new Set(),
+  compressedColumns: Set<string> = new Set()
 ): Record<string, string | number | Buffer | null> {
   const row: Record<string, string | number | Buffer | null> = {};
 
   for (const [key, value] of Object.entries(document)) {
+    // Compressed text columns are checked FIRST: the value may also be a JSON
+    // column (llm_logs.request is both), in which case it is serialized to
+    // JSON and then handed to the codec. Encoding last, after the JSON branch
+    // had already written a string, would mean every new branch has to
+    // remember the codec exists.
+    if (compressedColumns.has(key)) {
+      if (value === null || value === undefined) {
+        row[key] = null;
+      } else {
+        const text = typeof value === 'string' ? value : toJson(value);
+        row[key] = typeof text === 'string' ? (textToBlob(text) as string | Buffer) : text;
+      }
+      continue;
+    }
+
     // BLOB columns: convert Float32Array or number[] to Float32 Buffer
     if (blobColumns.has(key) && value instanceof Float32Array) {
       row[key] = value.length === 0 ? null : embeddingToBlob(value);
@@ -316,30 +281,5 @@ export function documentToRow(
   }
 
   return row;
-}
-
-/**
- * Convert a SQLite row back to a document
- */
-export function rowToDocument<T = Record<string, unknown>>(
-  row: Record<string, unknown>,
-  jsonColumns: string[] = []
-): T {
-  return hydrateRow<T>(row, jsonColumns);
-}
-
-/**
- * Detect which columns in a schema should be treated as JSON
- */
-export function detectJsonColumns(sampleDocument: Record<string, unknown>): string[] {
-  const jsonColumns: string[] = [];
-
-  for (const [key, value] of Object.entries(sampleDocument)) {
-    if (shouldStoreAsJson(value)) {
-      jsonColumns.push(key);
-    }
-  }
-
-  return jsonColumns;
 }
 

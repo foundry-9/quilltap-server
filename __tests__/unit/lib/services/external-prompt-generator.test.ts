@@ -41,7 +41,13 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
   logLLMCall: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
+import { generateExternalPrompt, META_SYSTEM_PROMPT } from '@/lib/services/external-prompt-generator.service';
+import {
+  CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  COMPANION_TRUST_DISPOSITION,
+  COMPANION_TRUST_DISPOSITION_GATE,
+} from '@/lib/services/character-field-semantics';
 import { createLLMProvider } from '@/lib/llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 
@@ -407,5 +413,22 @@ describe('generateExternalPrompt', () => {
     await generateExternalPrompt('char-1', request, 'user-1', repos);
 
     expect(createLLMProvider).toHaveBeenCalledWith('openai', 'https://custom.api.example.com');
+  });
+});
+
+describe('META_SYSTEM_PROMPT', () => {
+  it('carries the shared listening direction and trust safeguards', () => {
+    expect(META_SYSTEM_PROMPT).toContain(CONVERSATIONAL_VOICE_DIRECTION);
+    expect(META_SYSTEM_PROMPT).toContain(TRUST_SAFEGUARDS_DIRECTION);
+  });
+
+  it('gates the companion trust disposition', () => {
+    const gate = META_SYSTEM_PROMPT.indexOf(COMPANION_TRUST_DISPOSITION_GATE);
+    expect(gate).toBeGreaterThan(-1);
+    expect(META_SYSTEM_PROMPT.indexOf(COMPANION_TRUST_DISPOSITION)).toBeGreaterThan(gate);
+  });
+
+  it('tells the model not to leave the {{user}} placeholder in a standalone prompt', () => {
+    expect(META_SYSTEM_PROMPT).toMatch(/never the literal \{\{user\}\} token/);
   });
 });

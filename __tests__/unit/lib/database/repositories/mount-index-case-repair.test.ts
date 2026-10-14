@@ -28,6 +28,8 @@ import {
   ensureFolderNocaseUniqueIndex,
   ensureLinkNocaseUniqueIndex,
   repairMountPointNameCollisions,
+  ensureMountPointNameUniqueIndex,
+  MOUNT_POINT_NAME_NOCASE_INDEX,
   FOLDER_NOCASE_INDEX,
   LINK_NOCASE_INDEX,
 } from '@/lib/database/repositories/mount-index-case-repair';
@@ -248,6 +250,29 @@ describe('repairMountPointNameCollisions', () => {
 
     // Second pass is a no-op.
     expect(repairMountPointNameCollisions(db)).toBe(0);
+  });
+});
+
+describe('ensureMountPointNameUniqueIndex (bug 186)', () => {
+  let db: any;
+  afterEach(() => db.close());
+
+  it('repairs collisions, then refuses a second store of the same name in any casing', () => {
+    db = freshDb();
+    const ins = db.prepare(`INSERT INTO doc_mount_points (id, name, createdAt) VALUES (?, ?, ?)`);
+    ins.run('a', 'Tester Character Vault', '2024-01-01T00:00:00.000Z');
+    ins.run('b', 'tester character vault', '2024-02-01T00:00:00.000Z');
+
+    ensureMountPointNameUniqueIndex(db);
+
+    expect(db.prepare(`SELECT name FROM doc_mount_points WHERE id = 'b'`).get().name).toBe('tester character vault (2)');
+    expect(() => ins.run('c', 'TESTER CHARACTER VAULT', '2024-03-01T00:00:00.000Z')).toThrow(/UNIQUE/);
+    const sql = db.prepare(`SELECT sql FROM sqlite_master WHERE name = ?`).get(MOUNT_POINT_NAME_NOCASE_INDEX).sql;
+    expect(sql).toMatch(/UNIQUE/i);
+
+    // Idempotent: a second init keeps the index and renames nothing.
+    ensureMountPointNameUniqueIndex(db);
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM doc_mount_points`).get().n).toBe(2);
   });
 });
 

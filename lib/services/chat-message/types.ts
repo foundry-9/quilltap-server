@@ -10,7 +10,9 @@ import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { DangerousContentSettings, ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
+import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
 
 /**
  * Context passed through the message handling pipeline
@@ -203,6 +205,8 @@ export interface ToolMessage {
     provider?: string
     model?: string
     expandedPrompt?: string
+    /** generate_image: the Concierge's call sheet when a provider refused on the way. */
+    routeTrail?: RouteAttempt[]
   }
 }
 
@@ -313,11 +317,17 @@ export interface ProcessMessageResult {
 }
 
 /**
- * Resolved dangerous-content state for a message send.
+ * Resolved Concierge policy and danger flags for a message send.
  */
 export interface DangerResolutionResult {
-  dangerSettings: import('@/lib/schemas/settings.types').DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   dangerFlags?: import('@/lib/schemas/chat.types').DangerFlag[]
+  /**
+   * The turn went the Unmoderated chat's direct route to the uncensored desk.
+   * Such a turn carries no per-message flags, but its content is treated as
+   * dangerous by the failover service exactly as flagged content is.
+   */
+  routedDirect: boolean
   effectiveProfile: ConnectionProfile
   effectiveApiKey: string
 }
@@ -356,6 +366,19 @@ export interface StreamingState {
    */
   nextTurnSeq?: number
   hasStartedStreaming: boolean
+  /**
+   * Every attempt for this turn that did NOT answer, in the order tried.
+   * Written only by `route-trail.ts` — never push here directly.
+   */
+  routeFailures: RouteAttempt[]
+  /**
+   * How `effectiveProfile` came to hold the turn. Set beside every
+   * `effectiveProfile` swap (via `setRouteVia`) so the composed trail labels
+   * the answering row honestly. Initialised to 'primary' — or 'concierge' when
+   * the Concierge's pre-call reroute installed the profile before anything was
+   * tried.
+   */
+  routeVia: RouteAttemptVia
 }
 
 /**
@@ -375,7 +398,7 @@ export interface CompressionContext {
  * Background trigger context for memory, danger classification, and scene tracking.
  */
 export interface TriggerContext {
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   chatSettings: ChatSettings | null
   participantCharacters: Map<string, Character>
   resolvedIdentity: { name: string; description: string; characterId?: string | null }

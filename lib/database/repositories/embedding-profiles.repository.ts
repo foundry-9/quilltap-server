@@ -68,6 +68,20 @@ export class EmbeddingProfilesRepository extends TaggableBaseRepository<Embeddin
   }
 
   /**
+   * Find the instance's default embedding profile, whoever owns it — for
+   * instance-level passes (boot, scheduled maintenance) that have no user in
+   * hand. Single-user instances hold one default.
+   */
+  async findInstanceDefault(): Promise<EmbeddingProfile | null> {
+    return this.safeQuery(
+      async () => (await this.findOneByFilter({ isDefault: true })) ?? null,
+      'Error finding the instance default embedding profile',
+      {},
+      null
+    );
+  }
+
+  /**
    * Create a new embedding profile
    */
   async create(

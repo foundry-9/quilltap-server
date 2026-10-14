@@ -5,7 +5,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { getRepositories } from '@/lib/repositories/factory'
-import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer'
+import { postLanternImageNotification, postLanternRefusalNotification } from '@/lib/services/lantern-notifications/writer'
 
 jest.mock('@/lib/repositories/factory')
 jest.mock('@/lib/logger', () => ({
@@ -241,5 +241,51 @@ describe('postLanternImageNotification', () => {
         kind: { kind: 'background' },
       })
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('postLanternRefusalNotification', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('posts a background-refused Lantern bubble with no attachment, whatever the image-alert setting says', async () => {
+    const addMessage = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined)
+    // Alerts off at both levels: the refusal is for the operator, not the cast.
+    mockGetRepositories.mockReturnValue(makeRepos({
+      chat: { id: 'chat-1', alertCharactersOfLanternImages: false, projectId: null },
+      addMessage: addMessage as never,
+    }) as never)
+
+    const trail = [{ profileId: 'p', profileName: 'Gemini', provider: 'GOOGLE', modelName: 'imagen-4', via: 'primary', outcome: 'refused', profileKind: 'image' }]
+    const posted = await postLanternRefusalNotification({
+      chatId: 'chat-1',
+      refusal: { kind: 'background-refused', provider: 'GOOGLE', modelName: 'imagen-4' },
+      routeTrail: trail as never,
+    })
+
+    expect(posted).not.toBeNull()
+    const message = addMessage.mock.calls[0][1] as Record<string, unknown>
+    expect(message).toMatchObject({
+      role: 'ASSISTANT',
+      systemSender: 'lantern',
+      systemKind: 'background-refused',
+      attachments: [],
+      routeTrail: trail,
+    })
+    expect(message.content).toContain('would not take the scene')
+    expect(message.content).toContain('GOOGLE imagen-4')
+    expect(message.opaqueContent).toBe('Story background refused by GOOGLE imagen-4 on content grounds; the previous backdrop is unchanged.')
+  })
+
+  it('never throws', async () => {
+    mockGetRepositories.mockReturnValue(makeRepos({
+      chat: { id: 'chat-1' },
+      addMessage: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockRejectedValue(new Error('db down')) as never,
+    }) as never)
+    await expect(postLanternRefusalNotification({
+      chatId: 'chat-1',
+      refusal: { kind: 'background-refused', provider: 'GOOGLE', modelName: 'imagen-4' },
+    })).resolves.toBeNull()
   })
 })

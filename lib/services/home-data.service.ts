@@ -6,7 +6,7 @@
  * Extracted from `app/page.tsx` so it can feed both the server-rendered `/`
  * route and the client-fetched workspace home tab
  * (`/api/v1/system/home` → `HomeViewContainer`). See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module lib/services/home-data.service
  */
@@ -71,6 +71,8 @@ export async function getHomeData(
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
     conciergeState: chat.conciergeState,
+    conciergeSetBy: chat.conciergeSetBy,
+    conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     participants: chat.participants.map((p) => ({

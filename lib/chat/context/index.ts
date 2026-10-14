@@ -5,7 +5,7 @@
  */
 
 export * from './system-prompt-builder'
-export * from './memory-injector'
+export * from './scene-state'
 export * from './message-attribution'
 export * from './message-selector'
 export * from './mentioned-characters'

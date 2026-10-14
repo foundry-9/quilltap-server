@@ -1,13 +1,25 @@
-import { logger } from '@/lib/logger';
 import { WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
-import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
+import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
+
+export { wardrobeItemNotFoundMessage } from '@/lib/wardrobe/wear-ops';
+
+/**
+ * The context every `wardrobe_*` tool runs in. The executor builds it once
+ * from the tool-execution context, so the turn's announcement set reaches
+ * every tool that changes an outfit — none can be the one that forgets it.
+ */
+export interface WardrobeToolContext {
+  userId: string;
+  chatId: string;
+  characterId: string;
+  /** Per-turn announcement queue the orchestrator threads through. */
+  pendingWardrobeAnnouncements?: Set<string>;
+}
 
 /** The full repository container the wardrobe tool handlers operate on. */
 export type WardrobeRepos = ReturnType<typeof getRepositories>;
@@ -16,7 +28,7 @@ export type WardrobeRepos = ReturnType<typeof getRepositories>;
  * Sentinels an LLM sometimes emits for "no item". Treated as undefined so a
  * stray `item_id: "none"` doesn't get looked up as a real id.
  */
-export const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
+const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
 
 export function normalizeNoItemSentinel(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
@@ -24,71 +36,16 @@ export function normalizeNoItemSentinel(value: string | undefined): string | und
 }
 
 /**
- * Resolve a wardrobe item across every tier — the character's own wardrobe,
- * their groups' stores, the project store(s), and Quilltap General — by id
- * (preferred) or title (case-insensitive fallback).
- *
- * - by id: `findByIdForCharacter` spans character → group → project → general
- *   (and includes archived items, which callers reject as needed).
- * - by title: scan the character's own items first (character wins on
- *   collision), then the merged archetype set.
- *
- * `tiers` comes from `resolveSharedWardrobeTiersForChat` — pass the whole
- * object rather than picking a tier out of it.
+ * The wearable pool a character's tool call sees: their own vault, their
+ * groups' stores, the chat's project stores (behind the project roster), and
+ * Quilltap General. One read per tier for the whole tool call.
  */
-export async function resolveWardrobeItemAcrossTiers(
+export function loadToolPool(
   repos: WardrobeRepos,
+  chatId: string,
   characterId: string,
-  itemId: string | undefined,
-  itemTitle: string | undefined,
-  tiers?: SharedWardrobeTiers,
-): Promise<WardrobeItem | null> {
-  if (itemId) {
-    const found = await repos.wardrobe.findByIdForCharacter(characterId, itemId, tiers);
-    if (found) return found;
-  }
-
-  if (itemTitle) {
-    const lower = itemTitle.trim().toLowerCase();
-    const own = await repos.wardrobe.findByCharacterId(characterId, true);
-    const ownMatch = own.find((i) => i.title.toLowerCase() === lower);
-    if (ownMatch) return ownMatch;
-
-    const archetypes = await repos.wardrobe.findArchetypes(false, tiers);
-    const archMatch = archetypes.find((i) => i.title.toLowerCase() === lower);
-    if (archMatch) return archMatch;
-  }
-
-  return null;
-}
-
-/**
- * True when the item belongs to THIS character (editable), false when it is a
- * shared archetype (project / Quilltap General; `characterId === null`) or owned
- * by someone else. The single guard standing between the model and a repo
- * update/archive that would mutate a communal item for everyone.
- */
-export function isOwnWardrobeItem(item: WardrobeItem, characterId: string): boolean {
-  return item.characterId === characterId;
-}
-
-interface WardrobeReposForSummary {
-  chats: {
-    getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>;
-  };
-  wardrobe: {
-    findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIdsForCharacter(
-      characterId: string,
-      ids: string[],
-      opts?: SharedWardrobeTiers,
-    ): Promise<WardrobeItem[]>;
-  };
-}
-
-/** Fresh all-empty equipped state (fresh arrays per slot). */
-export function emptyEquippedState(): EquippedSlots {
-  return makeEmptyEquippedSlots();
+): Promise<WearablePool> {
+  return loadWearablePool(repos, characterId, undefined, { chatId });
 }
 
 /**
@@ -219,29 +176,32 @@ export function buildWardrobeMutationFailure(error: string): {
   return {
     success: false,
     operations: [],
-    current_state: emptyEquippedState(),
+    current_state: makeEmptyEquippedSlots(),
     coverage_summary: '',
     error,
   };
 }
 
 /**
- * Finalize a wear/take-off mutation: fire the avatar + announcement side
- * effects ONCE (only if at least one operation actually landed), then reload
- * the equipped state and coverage summary and assemble the tool output.
- * Generic over the per-operation result type so both tools share it.
+ * Finalize a wear/take-off mutation: fire the outfit-change side effects ONCE
+ * (only if at least one operation actually landed), then reload the equipped
+ * state and coverage summary and assemble the tool output. Generic over the
+ * per-operation result type so both tools share it.
  */
 export async function finalizeWardrobeMutation<TOpResult>(
   repos: WardrobeRepos,
-  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'> & {
+  context: {
+    userId: string;
+    chatId: string;
     characterId: string;
+    pendingWardrobeAnnouncements?: Set<string>;
   },
   sourceContext: string,
   args: {
     appliedCount: number;
     results: TOpResult[];
     failedError: string | undefined;
-    tiers: SharedWardrobeTiers;
+    pool: WearablePool;
   },
 ): Promise<{
   success: boolean;
@@ -250,27 +210,12 @@ export async function finalizeWardrobeMutation<TOpResult>(
   coverage_summary: string;
   error?: string;
 }> {
-  // Fire side effects ONCE, only if at least one operation actually landed.
   if (args.appliedCount > 0) {
-    await notifyWardrobeChanged(
-      repos,
-      {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      },
-      sourceContext,
-    );
+    await notifyWardrobeChanged(repos, context, sourceContext);
   }
 
   const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-  const coverageSummary = await buildWardrobeCoverageSummaryFromState(
-    repos,
-    context.characterId,
-    currentState,
-    args.tiers,
-  );
+  const coverageSummary = buildWardrobeCoverageSummaryFromState(args.pool, currentState);
 
   return {
     success: args.failedError === undefined,
@@ -282,67 +227,21 @@ export async function finalizeWardrobeMutation<TOpResult>(
 }
 
 export async function loadCurrentWardrobeState(
-  repos: WardrobeReposForSummary,
+  repos: Pick<WardrobeRepos, 'chats'>,
   chatId: string,
   characterId: string,
 ): Promise<EquippedSlots> {
   const equippedOutfit = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-  return equippedOutfit ?? emptyEquippedState();
+  return equippedOutfit ?? makeEmptyEquippedSlots();
 }
 
 /**
  * Build the human-readable `coverage_summary` returned to the LLM in wardrobe
- * tool results. Delegates to `resolveEquippedOutfitForCharacter` so the LLM
- * sees the same canonical resolution Aurora uses — composites expanded
- * (loading components via `findByCharacterId`, not just `findByIds` on
- * equipped slot IDs) and multi-slot atomic items routed by their own `types`.
+ * tool results — the same canonical resolution Aurora uses (composites
+ * expanded, multi-slot items routed by their own `types`).
  */
-export async function buildWardrobeCoverageSummaryFromState(
-  repos: WardrobeReposForSummary,
-  characterId: string,
-  slots: EquippedSlots,
-  opts?: SharedWardrobeTiers,
-): Promise<string> {
-  const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots, opts);
-  return describeOutfit(resolved.outfitValues);
-}
-
-export async function scheduleWardrobeAnnouncement(
-  sourceContext: string,
-  args: {
-    userId: string;
-    chatId: string;
-    characterId: string;
-    extraLogFields?: Record<string, unknown>;
-  },
-): Promise<void> {
-  try {
-    await enqueueWardrobeOutfitAnnouncement(args.userId, {
-      chatId: args.chatId,
-      characterId: args.characterId,
-    });
-  } catch (error) {
-    logger.warn('Failed to schedule wardrobe outfit announcement', {
-      context: sourceContext,
-      chatId: args.chatId,
-      characterId: args.characterId,
-      ...(args.extraLogFields ?? {}),
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
- * The "not found" message the wardrobe tools return when an item can't be
- * resolved by id or title. Phrased identically across `wardrobe_read`,
- * `wardrobe_update`, `wardrobe_wear`, `wardrobe_take_off`, and
- * `wardrobe_archive`.
- */
-export function wardrobeItemNotFoundMessage(
-  itemId: string | undefined,
-  itemTitle: string | undefined,
-): string {
-  return `Wardrobe item not found${itemId ? ` with ID "${itemId}"` : ''}${itemTitle ? ` with title "${itemTitle}"` : ''}`;
+export function buildWardrobeCoverageSummaryFromState(pool: WearablePool, slots: EquippedSlots): string {
+  return describeOutfit(resolveEquippedOutfitForCharacter(pool, slots).outfitValues);
 }
 
 /**
@@ -359,89 +258,4 @@ export function sharedWardrobeItemReadOnlyMessage(
     `"${title}" is a shared wardrobe item — you can wear it but not edit or retire it. ` +
     `Only items in your own wardrobe can be ${verb}.`
   );
-}
-
-/**
- * Fire the two side effects that must follow any equipped-state change: refresh
- * the character's avatar (if enabled) and queue Aurora's wardrobe announcement.
- * Both the caller-context label (avatar) and source-context label
- * (announcement) share the handler's name. Called ONCE per turn after a wardrobe
- * mutation actually lands.
- */
-export async function notifyWardrobeChanged(
-  repos: WardrobeRepos,
-  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'> & {
-    characterId: string;
-  },
-  sourceContext: string,
-): Promise<void> {
-  await triggerAvatarGenerationIfEnabled(repos, {
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: context.characterId,
-    callerContext: sourceContext,
-  });
-  await recordPendingWardrobeAnnouncement(
-    {
-      userId: context.userId,
-      chatId: context.chatId,
-      pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-    },
-    { sourceContext, characterId: context.characterId },
-  );
-}
-
-/**
- * Record that the given character's wardrobe was modified during this turn.
- *
- * If the tool execution context has a `pendingWardrobeAnnouncements` Set
- * (the orchestrator initializes one per turn), the characterId is added to
- * it and Aurora's notification is deferred until the orchestrator drains the
- * Set at end-of-turn — collapsing N wardrobe edits in a single LLM response
- * into a single announcement.
- *
- * If the Set is missing (legacy callers without orchestrator threading), the
- * announcement is enqueued immediately so behavior degrades safely.
- */
-export async function recordPendingWardrobeAnnouncement(
-  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'>,
-  args: {
-    sourceContext: string;
-    characterId: string;
-    extraLogFields?: Record<string, unknown>;
-  },
-): Promise<void> {
-  if (context.pendingWardrobeAnnouncements) {
-    context.pendingWardrobeAnnouncements.add(args.characterId);
-    return;
-  }
-  await scheduleWardrobeAnnouncement(args.sourceContext, {
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: args.characterId,
-    extraLogFields: args.extraLogFields,
-  });
-}
-
-/**
- * Drain the per-turn `pendingWardrobeAnnouncements` Set, scheduling one
- * Aurora announcement per character. Idempotent — clearing the Set after the
- * drain means later calls in the same turn produce no duplicate announcements.
- *
- * Safe to call when the Set is missing or empty (no-op).
- */
-export async function flushPendingWardrobeAnnouncements(
-  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'>,
-): Promise<void> {
-  const pending = context.pendingWardrobeAnnouncements;
-  if (!pending || pending.size === 0) return;
-  const characterIds = Array.from(pending);
-  pending.clear();
-  for (const characterId of characterIds) {
-    await scheduleWardrobeAnnouncement('orchestrator-turn-end', {
-      userId: context.userId,
-      chatId: context.chatId,
-      characterId,
-    });
-  }
 }

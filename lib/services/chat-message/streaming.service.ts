@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
-import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -15,11 +15,14 @@ import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
+import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -54,6 +57,8 @@ export interface StreamOptions {
    * `stop_sequences`, Google: `stopSequences`). Pseudo-tool strategies that
    * want a hard termination on their closing marker set this. */
   stop?: string[]
+  /** LLM log row type for this call. Defaults to `CHAT_MESSAGE`. */
+  logType?: LLMLogType
 }
 
 /**
@@ -131,6 +136,19 @@ function isToolDisabled(
 }
 
 /**
+ * Surface-specific narrowing for `buildTools`. Every field only ever removes
+ * tools relative to the positional flags and the profile.
+ */
+export interface BuildToolsExtras {
+  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
+  pluginToolAllowlist?: string[]
+  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
+  documentsOnlySearch?: boolean
+  /** `false` withholds `search_web` even when the profile allows it. */
+  webSearch?: boolean
+}
+
+/**
  * Build tools for the provider
  */
 export async function buildTools(
@@ -156,8 +174,12 @@ export async function buildTools(
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
-  /** Whether document editing tools are enabled (project has linked document stores or files) */
-  documentEditingEnabled?: boolean,
+  /**
+   * Which `doc_*` tools to build: `'full'` (the whole family — chat surfaces
+   * with linked stores, the Brahma Console), `'read'` (the read-only five — the
+   * Scenario Builder), or `'off'`.
+   */
+  docToolsMode?: DocToolsMode,
   /** Whether the ask_carina tool is enabled for this character */
   askCarinaEnabled?: boolean,
   /**
@@ -189,7 +211,9 @@ export async function buildTools(
    * turns: a `.tool.json` edited mid-chat must be live on the next call (see
    * the freshness note atop `lib/pascal/custom-tools.ts`).
    */
-  customToolContext?: RosterContext | null
+  customToolContext?: RosterContext | null,
+  /** Surface-specific narrowing, applied at construction (never a post-filter). */
+  extras?: BuildToolsExtras
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -261,7 +285,8 @@ export async function buildTools(
   let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
-    webSearch: connectionProfile.allowWebSearch,
+    // A surface may narrow web search further (never widen it past the profile).
+    webSearch: !!connectionProfile.allowWebSearch && extras?.webSearch !== false,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
@@ -276,7 +301,9 @@ export async function buildTools(
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
-    documentEditing: !!documentEditingEnabled,
+    docToolsMode: docToolsMode ?? 'off',
+    pluginToolAllowlist: extras?.pluginToolAllowlist,
+    documentsOnlySearch: !!extras?.documentsOnlySearch,
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
@@ -358,7 +385,7 @@ export async function* streamMessage(
   thoughtSignature?: string
   reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE' } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -390,21 +417,32 @@ export async function* streamMessage(
   const cacheKey = buildCharacterCacheKey(characterId)
   const sampling = resolveSamplingParams(modelParams)
 
-  for await (const chunk of provider.streamMessage(
+  // A provider that answers with headers and then goes silent would otherwise
+  // hold this `for await` open forever — the SDK's own timeout stops at the
+  // headers. The watchdog turns that into an ordinary throw, which the fallback
+  // engine reads as `network` and routes to the understudy.
+  for await (const chunk of withStallWatchdog(
+    provider.streamMessage(
+      {
+        messages: llmMessages,
+        model: connectionProfile.modelName,
+        temperature: sampling.temperature,
+        maxTokens: sampling.maxTokens,
+        topP: sampling.topP,
+        tools: tools.length > 0 ? tools : undefined,
+        webSearchEnabled: useNativeWebSearch,
+        profileParameters: modelParams,
+        cacheKey,
+        previousResponseId,
+        stop,
+      },
+      apiKey
+    ),
     {
-      messages: llmMessages,
-      model: connectionProfile.modelName,
-      temperature: sampling.temperature,
-      maxTokens: sampling.maxTokens,
-      topP: sampling.topP,
-      tools: tools.length > 0 ? tools : undefined,
-      webSearchEnabled: useNativeWebSearch,
-      profileParameters: modelParams,
-      cacheKey,
-      previousResponseId,
-      stop,
-    },
-    apiKey
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
+    }
   )) {
     chunkCount++
     if (chunk.content) {
@@ -443,7 +481,7 @@ export async function* streamMessage(
 
         logLLMCall({
           userId,
-          type: 'CHAT_MESSAGE',
+          type: logType,
           messageId,
           chatId,
           characterId,
@@ -636,6 +674,10 @@ export function encodeDoneEvent(
     emptyResponseReason?: string
     provider?: string
     modelName?: string
+    /** The turn's route trail — every profile tried, in order — so the client's
+     *  optimistic assistant push carries it without a refetch. Null (the common
+     *  case) when nothing failed. */
+    routeTrail?: RouteAttempt[] | null
     isSilentMessage?: boolean
     /** The Courier: signals that this done event closes a parked placeholder turn,
      * not an actual streamed response. The Salon should skip its optimistic
@@ -660,15 +702,34 @@ export function encodeDoneEvent(
 }
 
 /**
+ * Extra fields an error frame may carry beside `error` / `errorType` /
+ * `details`. Optional and additive, so older clients that read only the three
+ * base fields are unaffected.
+ */
+export interface ErrorEventExtras {
+  /**
+   * Whether the user's message row was saved before the failure. The Salon
+   * reads it to decide whether to hand the operator's text back to the
+   * composer: a send that died before the row landed (a missing API key, a
+   * profile that will not resolve) has nothing on the server to fall back on
+   * (bug 241).
+   */
+  userMessagePersisted?: boolean
+  /** Whether the staged tool results were saved as TOOL rows before the failure. */
+  pendingToolResultsPersisted?: boolean
+}
+
+/**
  * Encode an error event
  */
 export function encodeErrorEvent(
   encoder: TextEncoder,
   error: string,
   errorType: string,
-  details: string
+  details: string,
+  extras?: ErrorEventExtras
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ error, errorType, details })}\n\n`)
+  return encoder.encode(`data: ${JSON.stringify({ error, errorType, details, ...extras })}\n\n`)
 }
 
 /**
@@ -744,6 +805,13 @@ export function encodeChainCompleteEvent(
      * the room fall silent with no explanation (bug 123).
      */
     paused?: boolean
+    /**
+     * The stop IS the user's own message: a paused chat recorded what they
+     * typed and gave it to nobody. Distinguishes that from a chain that ran and
+     * then stopped, which is the difference between "your remark is in, the room
+     * is still paused" and no explanation at all.
+     */
+    heldUserTurn?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)

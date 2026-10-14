@@ -41,6 +41,8 @@ jest.mock('@/lib/startup/startup-state', () => ({
     isPepperResolved: jest.fn().mockReturnValue(true),
     getPepperState: jest.fn().mockReturnValue('resolved'),
     setPepperState: jest.fn(),
+    setStructuralProblems: jest.fn(),
+    getStructuralProblems: jest.fn().mockReturnValue([]),
   },
 }))
 
@@ -262,21 +264,15 @@ jest.mock('@/lib/database/manager', () => ({
   getDatabase: jest.fn(),
   getDatabaseAsync: jest.fn(),
   initializeDatabase: jest.fn(),
-  isDatabaseInitialized: jest.fn().mockReturnValue(false),
-  isDatabaseConnected: jest.fn().mockResolvedValue(false),
   closeDatabase: jest.fn().mockResolvedValue(undefined),
   suspendDatabase: jest.fn().mockResolvedValue(false),
   resumeDatabase: jest.fn().mockResolvedValue(null),
   getCollection: jest.fn(),
   ensureCollection: jest.fn().mockResolvedValue(undefined),
-  listCollections: jest.fn().mockResolvedValue([]),
   getBackendType: jest.fn().mockReturnValue(null),
-  getBackendCapabilities: jest.fn().mockReturnValue(null),
   supportsCapability: jest.fn().mockReturnValue(false),
-  healthCheck: jest.fn(),
   withTransaction: jest.fn(),
   _resetForTesting: jest.fn(),
-  _setBackendForTesting: jest.fn(),
 }))
 
 // Mock file storage manager - used by cascade-delete and other modules
@@ -430,27 +426,36 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   getUserEmbeddingProfiles: jest.fn().mockResolvedValue([]),
 }))
 
-// Mock vector store for embedding operations
-jest.mock('@/lib/embedding/vector-store', () => ({
-  getVectorStoreManager: jest.fn().mockReturnValue({
-    deleteStore: jest.fn().mockResolvedValue(undefined),
-    getStore: jest.fn().mockResolvedValue(null),
-  }),
-  getCharacterVectorStore: jest.fn().mockResolvedValue({
+// Mock the in-process memory-index cache (only `lib/memory/index-store` uses it)
+jest.mock('@/lib/embedding/vector-store', () => {
+  const store = {
     getAllEntries: jest.fn().mockReturnValue([]),
     search: jest.fn().mockReturnValue([]),
     addVector: jest.fn(),
-    updateVector: jest.fn(),
-    removeVector: jest.fn(),
+    removeVector: jest.fn().mockResolvedValue(false),
     hasVector: jest.fn().mockReturnValue(false),
-    save: jest.fn(),
-  }),
-  CharacterVectorStore: jest.fn().mockImplementation(() => ({
-    addMemory: jest.fn().mockResolvedValue(undefined),
-    searchSimilar: jest.fn().mockResolvedValue([]),
-    deleteMemory: jest.fn().mockResolvedValue(undefined),
-  })),
-}))
+    tierOf: jest.fn().mockReturnValue(undefined),
+    setTier: jest.fn(),
+    getDimensions: jest.fn().mockReturnValue(null),
+    countWithDimensions: jest.fn().mockReturnValue(0),
+    clear: jest.fn(),
+    size: 0,
+  }
+  const manager = {
+    getStore: jest.fn().mockResolvedValue(store),
+    getLoadedStore: jest.fn().mockResolvedValue(undefined),
+    unloadStore: jest.fn().mockReturnValue(false),
+    unloadAll: jest.fn(),
+    getStats: jest.fn().mockReturnValue({ loadedStores: 0, totalVectors: 0 }),
+  }
+  return {
+    getVectorStoreManager: jest.fn(() => manager),
+    getCharacterVectorStore: jest.fn().mockResolvedValue(store),
+    isHotVector: jest.fn((metadata: { tier?: string }) => metadata.tier !== 'cold'),
+    CharacterVectorStore: jest.fn(),
+    VectorStoreManager: jest.fn(),
+  }
+})
 
 global.fetch = jest.fn(() =>
   Promise.resolve({

@@ -96,6 +96,25 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Find the PENDING or PROCESSING jobs of a type, by status rather than by
+   * recency, so a pending job in backoff is never crowded out of a window by
+   * newer finished ones. Used to avoid stacking a second TF-IDF refit.
+   */
+  async findActiveByType(type: BackgroundJobType): Promise<BackgroundJob[]> {
+    return this.safeQuery(
+      async () => {
+        return await this.findByFilter(
+          { type, status: { $in: ['PENDING', 'PROCESSING'] } } as TypedQueryFilter<BackgroundJob>,
+          { sort: { createdAt: 1 as any } },
+        );
+      },
+      'Error finding active background jobs by type',
+      { type },
+      []
+    );
+  }
+
+  /**
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import {
   handleDeleteGroup,
   handleRemoveMember,
@@ -14,8 +14,6 @@ import {
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
-const GROUP_DELETE_ACTIONS = ['removeMember', 'reset-state'] as const;
-type GroupDeleteAction = typeof GROUP_DELETE_ACTIONS[number];
 
 /**
  * DELETE handler for individual group
@@ -25,16 +23,14 @@ export async function handleDelete(
   ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
-  const action = getActionParam(req);
-
-  if (!action || !isValidAction(action, GROUP_DELETE_ACTIONS)) {
-    return handleDeleteGroup(groupId, ctx);
-  }
-
-  const actionHandlers: Record<GroupDeleteAction, () => Promise<NextResponse>> = {
-    removeMember: () => handleRemoveMember(req, groupId, ctx),
-    'reset-state': () => handleResetState(groupId, ctx),
-  };
-
-  return actionHandlers[action]();
+  // The fallback deletes the whole group, so an unknown action must be a 400
+  // rather than falling through to it — `dispatchAction` guarantees that.
+  return dispatchAction(
+    req,
+    {
+      removeMember: () => handleRemoveMember(req, groupId, ctx),
+      'reset-state': () => handleResetState(groupId, ctx),
+    },
+    () => handleDeleteGroup(groupId, ctx)
+  );
 }

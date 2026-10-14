@@ -10,6 +10,12 @@ import * as tokenTracking from '@/lib/services/token-tracking.service'
 import * as costEstimation from '@/lib/services/cost-estimation.service'
 import * as rngDetector from '@/lib/services/chat-message/rng-pattern-detector.service'
 import * as rngHandler from '@/lib/tools/handlers/rng-handler'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
+
+jest.mock('@/lib/post-office/mailbox', () => ({
+  markMailAlertsDelivered: jest.fn(),
+}))
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -72,11 +78,16 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     reason: 'round_robin',
     cycleComplete: false,
   }),
-  getActiveCharacterParticipants: jest.fn((participants: unknown[]) => participants),
+  // The room's character map is loaded once per selection; these tests assert on
+  // the reported next speaker, so it stands in as "no characters resolved".
+  loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
   isUsersTurn: jest.fn(
     (result: { nextSpeakerId: string | null; reason?: string }) =>
       result.nextSpeakerId === null || result.reason === 'user_turn',
   ),
+  // The cycle rotation is resolved before the speaker pick; these tests assert
+  // on the reported next speaker, so it stands in as "no rotation on file".
+  resolveCycleOrder: jest.fn().mockResolvedValue([]),
 }))
 
 const createMockRepos = () => ({
@@ -176,11 +187,13 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: 'thought-1',
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
         content: 'Hello there',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: true,
         cheapLLMSelection: { provider: 'OPENAI', modelName: 'gpt-4.1-mini', isLocal: false } as any,
         contextCompressionSettings: {
@@ -193,7 +206,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -278,11 +291,13 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -295,7 +310,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -361,11 +376,13 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -378,7 +395,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -447,11 +464,13 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -464,7 +483,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -521,13 +540,15 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [
           { type: 'message', role: 'ASSISTANT', content: 'Hi', participantId: 'participant-2' },
         ] as any,
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -540,7 +561,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: true,
@@ -555,5 +576,276 @@ describe('message-finalizer.service', () => {
     })
 
     expect(rngHandler.executeRngTool).toHaveBeenCalled()
+  })
+})
+
+/**
+ * The route trail on the way out: what `saveAssistantMessage` writes, what the
+ * `done` event carries, and the invariant that ties the trail's last entry to
+ * the columns every existing reader consults.
+ */
+describe('message-finalizer.service — the route trail', () => {
+  const understudy = { id: 'profile-2', name: 'Anthropic Sonnet', provider: 'ANTHROPIC', modelName: 'claude-sonnet-5' }
+
+  const TRAIL = [
+    {
+      profileId: 'profile-1', profileName: 'OpenAI gpt-4.1', provider: 'OPENAI', modelName: 'gpt-4.1',
+      via: 'primary' as const, outcome: 'failed' as const, trigger: 'network' as const,
+      detail: 'Connection error.',
+    },
+    {
+      profileId: 'profile-2', profileName: 'Anthropic Sonnet', provider: 'ANTHROPIC', modelName: 'claude-sonnet-5',
+      via: 'understudy' as const, outcome: 'answered' as const,
+    },
+  ]
+
+  const finalizeWith = (streamingOverrides: Record<string, unknown>, repos: ReturnType<typeof createMockRepos>, controller: { enqueue: jest.Mock }) =>
+    finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: ['Al'], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-trail',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller: controller as any,
+      encoder: new TextEncoder(),
+      streaming: {
+        fullResponse: 'A reply, at length.',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: null,
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
+        ...streamingOverrides,
+      } as any,
+      compression: {
+        existingMessages: [],
+        content: 'Hello there',
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: { enabled: false } as any,
+        allProfiles: [],
+      },
+      triggers: {
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
+        chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('saveAssistantMessage persists a trail it is handed', async () => {
+    const repos = createMockRepos()
+
+    await saveAssistantMessage(
+      repos as any, 'chat-1',
+      { id: 'char-1', name: 'Alice' }, { id: 'participant-1', status: 'active' },
+      'Final response', null, null, undefined, [], [],
+      'assistant-1', 'ANTHROPIC', 'claude-sonnet-5',
+      undefined, null, null, undefined,
+      TRAIL,
+    )
+
+    expect(repos.chats.addMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      provider: 'ANTHROPIC',
+      modelName: 'claude-sonnet-5',
+      routeTrail: TRAIL,
+    }))
+  })
+
+  it('saveAssistantMessage writes NULL when it is handed no trail', async () => {
+    const repos = createMockRepos()
+
+    await saveAssistantMessage(
+      repos as any, 'chat-1',
+      { id: 'char-1', name: 'Alice' }, { id: 'participant-1', status: 'active' },
+      'Final response', null, null, undefined, [], [],
+      'assistant-1', 'OPENAI', 'gpt-4.1',
+    )
+
+    expect(repos.chats.addMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      routeTrail: null,
+    }))
+  })
+
+  it('composes the trail from the turn\'s failures, persists it, and sends it on the done event', async () => {
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() }
+
+    await finalizeWith({
+      effectiveProfile: understudy as any,
+      routeVia: 'understudy',
+      routeFailures: [TRAIL[0]],
+    }, repos, controller)
+
+    const saved = repos.chats.addMessage.mock.calls[0][1] as any
+    expect(saved.routeTrail).toEqual(TRAIL)
+    // The columns every existing reader consults still name who answered, and
+    // the trail's last entry agrees with them.
+    expect(saved.provider).toBe('ANTHROPIC')
+    expect(saved.modelName).toBe('claude-sonnet-5')
+    const last = saved.routeTrail[saved.routeTrail.length - 1]
+    expect(last.provider).toBe(saved.provider)
+    expect(last.modelName).toBe(saved.modelName)
+
+    expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: 'assistant-trail',
+      routeTrail: TRAIL,
+    }))
+  })
+
+  it('leaves the trail NULL on a turn where nothing stepped aside', async () => {
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() }
+
+    await finalizeWith({}, repos, controller)
+
+    expect((repos.chats.addMessage.mock.calls[0][1] as any).routeTrail).toBeNull()
+    expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({ routeTrail: null }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Inform consumption
+// ---------------------------------------------------------------------------
+
+describe('message-finalizer.service — inform consumption', () => {
+  const informRepos = () => {
+    const repos = createMockRepos() as ReturnType<typeof createMockRepos> & {
+      chatInforms: { markConsumed: jest.Mock }
+    }
+    repos.chatInforms = { markConsumed: jest.fn().mockResolvedValue(1) }
+    return repos
+  }
+
+  const finalize = (
+    informRowIds: string[],
+    repos: ReturnType<typeof informRepos>,
+    mailAlertsOwed: { vaultId: string; paths: string[] } | null = null,
+  ) =>
+    finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: [], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-inform',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller: { enqueue: jest.fn() } as any,
+      encoder: new TextEncoder(),
+      streaming: {
+        fullResponse: 'She glances at the clock.',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: null,
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
+      } as any,
+      compression: {
+        existingMessages: [],
+        content: 'Hello there',
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds, mailAlertsOwed } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: { enabled: false } as any,
+        allProfiles: [],
+      },
+      triggers: {
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
+        chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('marks this turn\'s rows consumed by the message that was actually saved', async () => {
+    const repos = informRepos()
+
+    await finalize(['row-1', 'row-2'], repos)
+
+    expect(repos.chatInforms.markConsumed).toHaveBeenCalledWith(['row-1', 'row-2'], 'assistant-inform')
+  })
+
+  it('does not touch the table on a turn that carried no inform', async () => {
+    const repos = informRepos()
+
+    await finalize([], repos)
+
+    expect(repos.chatInforms.markConsumed).not.toHaveBeenCalled()
+  })
+
+  it('leaves the rows pending when the save throws — the passage was never delivered', async () => {
+    const repos = informRepos()
+    repos.chats.addMessage.mockRejectedValueOnce(new Error('disk on fire'))
+
+    await expect(finalize(['row-1'], repos)).rejects.toThrow('disk on fire')
+
+    expect(repos.chatInforms.markConsumed).not.toHaveBeenCalled()
+  })
+
+  // Suparṇā's letters ride the same rule: marked alerted only once the reply
+  // that read them is saved (bug 227), never at context-building time.
+  it('marks the turn\'s announced letters alerted once the reply is saved', async () => {
+    const repos = informRepos()
+    const owed = { vaultId: 'vault-a', paths: ['Mail/one.md'] }
+
+    await finalize([], repos, owed)
+
+    expect(markMailAlertsDelivered).toHaveBeenCalledWith(owed, { chatId: 'chat-1', via: 'finalizer' })
+  })
+
+  it('leaves the letters unalerted when the save throws', async () => {
+    const repos = informRepos()
+    repos.chats.addMessage.mockRejectedValueOnce(new Error('disk on fire'))
+
+    await expect(finalize([], repos, { vaultId: 'vault-a', paths: ['Mail/one.md'] })).rejects.toThrow('disk on fire')
+
+    expect(markMailAlertsDelivered).not.toHaveBeenCalled()
   })
 })

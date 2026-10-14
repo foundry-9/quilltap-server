@@ -14,10 +14,13 @@ import {
   addToQueue,
   removeFromQueue,
   getQueuePosition,
-  getActiveCharacterParticipants,
+  loadRoomCharacters,
   findUserParticipant,
   getSelectionExplanation,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterSkip,
+  parseCycleOrder,
+  resolveCycleOrder,
   computeSkipEligibility,
   qualifiesForTurnSkipping,
   isUsersTurn,
@@ -26,7 +29,7 @@ import {
 import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer';
 import { turnActionSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
-import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
+import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
 /**
@@ -72,11 +75,13 @@ export async function handleTurnAction(
     participants: chat.participants,
     userParticipantId,
     spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
   });
 
-  // Pre-computed cycle update for skipUserTurn — written below alongside
+  // Pre-computed cycle updates for skipUserTurn — written below alongside
   // the turn queue.
   let skipCycleUpdate: string | null | undefined = undefined;
+  let skipOrderUpdate: string | null | undefined = undefined;
 
   switch (turnAction) {
     case 'nudge':
@@ -145,6 +150,12 @@ export async function handleTurnAction(
           }
         }
       }
+      // A skipped seat leaves the cycle's rotation exactly as a posted message
+      // would take it out — the turn was theirs and it has been used.
+      skipOrderUpdate = computeCycleOrderAfterSkip(participantId!, chat.cycleOrderParticipantIds);
+      if (skipOrderUpdate !== null && skipOrderUpdate !== undefined) {
+        turnState = { ...turnState, cycleOrder: parseCycleOrder(skipOrderUpdate) };
+      }
       turnState = { ...turnState, lastSpeakerId: participantId! };
       // Post a Host turn-pass record so human passes feed the same stall guard
       // as LLM passes — but only in chats where turn-skipping applies. In a
@@ -162,16 +173,20 @@ export async function handleTurnAction(
     }
   }
 
-  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants);
-  const charactersMap = new Map<string, Character>();
-  for (const p of activeCharacterParticipants) {
-    if (p.characterId) {
-      const char = await repos.characters.findById(p.characterId);
-      if (char) {
-        charactersMap.set(p.characterId, char);
-      }
-    }
-  }
+  // Every present seat, user-driven ones included. Besides feeding the draw its
+  // talkativeness, this is what lets the response name a user seat instead of
+  // reporting the human's own character as `null` / "Unknown".
+  const charactersMap = await loadRoomCharacters(repos, chat.participants);
+
+  // `query` is read-only in every other respect, but a spent rotation still has
+  // to be redrawn for the answer to mean anything — and drawing it here is what
+  // lets the sidebar show the cycle to come rather than a guess at it.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  );
 
   const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId, chat.impersonatingParticipantIds);
 
@@ -183,6 +198,13 @@ export async function handleTurnAction(
     };
     if (turnAction === 'skipUserTurn' && skipCycleUpdate !== null && skipCycleUpdate !== undefined) {
       updatePayload.spokenThisCycleParticipantIds = skipCycleUpdate;
+    }
+    if (turnAction === 'skipUserTurn' && skipOrderUpdate !== undefined) {
+      // Persist the post-resolve rotation, not the raw consumption: if skipping
+      // this seat spent the cycle, `resolveCycleOrder` has already drawn the next
+      // one into `turnState.cycleOrder`, and writing the emptied list back over
+      // it would throw that draw away.
+      updatePayload.cycleOrderParticipantIds = JSON.stringify(turnState.cycleOrder);
     }
     await repos.chats.update(chatId, updatePayload);
   }
@@ -209,6 +231,7 @@ export async function handleTurnAction(
     },
     state: {
       queue: turnState.queue,
+      cycleOrder: turnState.cycleOrder,
     },
   };
 

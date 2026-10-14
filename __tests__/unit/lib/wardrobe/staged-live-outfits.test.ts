@@ -9,12 +9,12 @@
 
 import {
   classifyStagedOutfits,
-  equippedSlotsEqual,
-  rebaseStagedSlots,
+  rebaseStagedGestures,
+  type SlotsMutator,
 } from '@/lib/wardrobe/staged-live-outfits'
-import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
+import { EMPTY_EQUIPPED_SLOTS, equippedSlotsEqual } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
+import { wearItemIntoSlots } from '@/lib/wardrobe/slot-ops'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 const slots = (partial: Partial<EquippedSlots>): EquippedSlots => ({
@@ -40,7 +40,14 @@ describe('equippedSlotsEqual', () => {
   })
 })
 
-describe('rebaseStagedSlots', () => {
+/** Replay plain slot mutations (no bundle claims) through the production rebase. */
+const rebaseStagedSlots = (worn: EquippedSlots, pending: SlotsMutator[]): EquippedSlots =>
+  rebaseStagedGestures(
+    worn,
+    pending.map((mutate) => ({ mutate, wornBundleIds: [] })),
+  ).slots
+
+describe('rebaseStagedGestures (slots)', () => {
   it('returns the worn snapshot untouched when nothing was staged early', () => {
     const worn = slots({ top: ['shirt'], bottom: ['trousers'] })
     const seeded = rebaseStagedSlots(worn, [])

@@ -8,13 +8,18 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 
-// cascade-delete now routes memory deletion through the memory-gate
-// chokepoint. Stub the batch helper to mirror the legacy bulkDelete contract
-// (returns the count of IDs deleted) so the test doesn't need a real DB.
-jest.mock('@/lib/memory/memory-gate', () => ({
+// cascade-delete routes memory deletion through `retireMemories`, the one
+// deletion chokepoint, then drops the character's cached index. Stub both so
+// the test doesn't need a real DB (the chokepoint has its own tests).
+jest.mock('@/lib/memory/retire', () => ({
   __esModule: true,
-  deleteMemoriesWithUnlinkBatch: jest.fn(((ids: string[]) =>
-    Promise.resolve(ids.length))),
+  retireMemories: jest.fn(((ids: string[]) =>
+    Promise.resolve({ retired: ids.length, retiredIds: ids }))),
+}))
+
+jest.mock('@/lib/memory/index-store', () => ({
+  __esModule: true,
+  memoryIndex: { reload: jest.fn() },
 }))
 
 import { getRepositories } from '@/lib/repositories/factory'
@@ -26,14 +31,19 @@ jest.mock('@/lib/repositories/factory')
 
 const mockGetRepositories = jest.mocked(getRepositories)
 
-// The cascade-delete module needs to be loaded *after* the memory-gate mock
-// is registered so the relative-path import inside it picks up the mocked
-// chokepoint helper. Loading via isolateModules + require keeps it tidy.
+// The cascade-delete module needs to be loaded *after* the retire mock is
+// registered so the import inside it picks up the mocked chokepoint. Loading via isolateModules + require keeps it tidy.
 let findExclusiveChatsForCharacter: typeof import('@/lib/cascade-delete').findExclusiveChatsForCharacter
 let findExclusiveImagesForCharacter: typeof import('@/lib/cascade-delete').findExclusiveImagesForCharacter
 let findExclusiveImagesForChats: typeof import('@/lib/cascade-delete').findExclusiveImagesForChats
 let getCascadeDeletePreview: typeof import('@/lib/cascade-delete').getCascadeDeletePreview
 let executeCascadeDelete: typeof import('@/lib/cascade-delete').executeCascadeDelete
+const { retireMemories: mockRetireMemories } = jest.requireMock('@/lib/memory/retire') as {
+  retireMemories: jest.Mock
+}
+const { memoryIndex: mockMemoryIndex } = jest.requireMock('@/lib/memory/index-store') as {
+  memoryIndex: { reload: jest.Mock }
+}
 
 beforeAll(() => {
   jest.isolateModules(() => {
@@ -557,7 +567,6 @@ describe('Cascade Delete Utilities', () => {
       const memoriesRepo = {
         countByCharacterId: jest.fn().mockResolvedValue(2),
         findByCharacterId: jest.fn().mockResolvedValue(memories),
-        bulkDelete: jest.fn().mockResolvedValue(2),
       }
 
       const filesRepo = {
@@ -579,8 +588,6 @@ describe('Cascade Delete Utilities', () => {
         docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
-      // getVectorStoreManager is already mocked in jest.setup.ts
-
       const result = await executeCascadeDelete('char-1', {
         deleteExclusiveChats: false,
         deleteExclusiveImages: false,
@@ -590,6 +597,9 @@ describe('Cascade Delete Utilities', () => {
       expect(result.deletedChats).toBe(0)
       expect(result.deletedImages).toBe(0)
       expect(result.deletedMemories).toBe(2)
+      expect(mockRetireMemories).toHaveBeenCalledWith(['mem-1', 'mem-2'], { reason: 'character-delete' })
+      // The vectors lived on the retired rows: the character's cache is dropped.
+      expect(mockMemoryIndex.reload).toHaveBeenCalledWith('char-1')
       expect(charsRepo.delete).toHaveBeenCalledWith('char-1')
     })
 
@@ -615,7 +625,6 @@ describe('Cascade Delete Utilities', () => {
       const memoriesRepo = {
         countByCharacterId: jest.fn().mockResolvedValue(0),
         findByCharacterId: jest.fn().mockResolvedValue([]),
-        bulkDelete: jest.fn().mockResolvedValue(0),
       }
 
       const filesRepo = {
@@ -637,14 +646,78 @@ describe('Cascade Delete Utilities', () => {
         docMountFileLinks: docMountFileLinksRepo as any,
       } as any)
 
-      // getVectorStoreManager is already mocked in jest.setup.ts
-
       await executeCascadeDelete('char-1', {
         deleteExclusiveChats: false,
         deleteExclusiveImages: false,
       })
 
       expect(charsRepo.delete).toHaveBeenCalledWith('char-1')
+    })
+
+    function minimalReposFor(character: unknown, wardrobeWear: unknown, order?: string[]) {
+      return {
+        characters: {
+          findByIdRaw: jest.fn().mockResolvedValue(character),
+          findByDefaultImageId: jest.fn().mockResolvedValue([]),
+          findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
+          delete: jest.fn().mockImplementation(async () => {
+            order?.push('delete-character')
+          }),
+        },
+        chats: {
+          findByCharacterId: jest.fn().mockResolvedValue([]),
+          getMessages: jest.fn().mockResolvedValue([]),
+        },
+        personas: { findByDefaultImageId: jest.fn().mockResolvedValue([]) },
+        memories: {
+          countByCharacterId: jest.fn().mockResolvedValue(0),
+          findByCharacterId: jest.fn().mockResolvedValue([]),
+        },
+        files: {
+          findById: jest.fn().mockResolvedValue(null),
+          findByIds: jest.fn().mockResolvedValue([]),
+          delete: jest.fn().mockResolvedValue(true),
+        },
+        docMountFileLinks: { findByIdWithContent: jest.fn().mockResolvedValue(null) },
+        characterPluginData: { deleteByCharacterId: jest.fn().mockResolvedValue(0) },
+        wardrobeWear,
+      }
+    }
+
+    it("folds the character's wear-ledger rows into unattributed before deleting the character", async () => {
+      const order: string[] = []
+      const wardrobeWear = {
+        foldWearerIntoUnattributed: jest.fn().mockImplementation(async () => {
+          order.push('fold')
+        }),
+      }
+      const repos = minimalReposFor(createMockCharacter('char-1'), wardrobeWear, order)
+      mockGetRepositories.mockReturnValue(repos as any)
+
+      const result = await executeCascadeDelete('char-1', {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      })
+
+      expect(result.success).toBe(true)
+      expect(wardrobeWear.foldWearerIntoUnattributed).toHaveBeenCalledWith('char-1')
+      expect(order).toEqual(['fold', 'delete-character'])
+    })
+
+    it('still deletes the character when the wear-ledger fold fails', async () => {
+      const wardrobeWear = {
+        foldWearerIntoUnattributed: jest.fn().mockRejectedValue(new Error('ledger busy') as never),
+      }
+      const repos = minimalReposFor(createMockCharacter('char-1'), wardrobeWear)
+      mockGetRepositories.mockReturnValue(repos as any)
+
+      const result = await executeCascadeDelete('char-1', {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      })
+
+      expect(result.success).toBe(true)
+      expect(repos.characters.delete).toHaveBeenCalledWith('char-1')
     })
   })
 })

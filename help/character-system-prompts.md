@@ -305,6 +305,8 @@ Example of casual: "Yeah, so like..."
 Maintain this voice consistently.
 ```
 
+Examples steer a character's voice more firmly than any instruction, so choose them with care. The most useful set shows the character **catching a joke** and answering in kind, **answering a casual line briefly**, and **turning serious** when something truly matters. The **Example Dialogues** field works the same way, and the AI Wizard, Summon From Lore, and the Character Optimizer all now write example dialogues that cover those three moments.
+
 ### Technique 4: Response Framework
 
 Guide how AI should structure responses:
@@ -341,6 +343,24 @@ Current context:
 - Current goal: [What they're trying to do]
 - Current relationship with user: [How they see you]
 ```
+
+### Technique 6: Listening and Register
+
+Characters left to their own devices tend to hear everything as a formal statement. Jokes get analyzed, exaggeration gets taken literally, and a casual "what's next?" gets a bolded report. They also drift into one polished register and a vocabulary the whole cast ends up sharing. A few lines prevent most of it:
+
+```
+Listen the way a person does. People joke, exaggerate, and trail off;
+answer what they mean. A joke gets a joke back. When you honestly can't
+tell whether someone is serious, ask.
+
+Match the size of your reply to what you were handed, and don't restate
+what was said before answering it. Your signature gestures and phrases
+are seasoning — a few times a scene, not every reply. Keep your most
+careful, formal language for vows, real disagreements, and matters of
+weight, so it still means something when it appears.
+```
+
+A character who is formal by design should stay formal. The point is that formality is a register the character *chooses*, and they still hear the joke and still answer small things briefly. Every sample prompt carries this guidance already.
 
 ## System Prompt Template Library
 
@@ -562,6 +582,39 @@ Make values more explicit and connected to behaviors:
 When faced with [situation], you will [specific response]."
 ```
 
+## Keeping Several Prompts, and Choosing Among Them
+
+A character may hold as many system prompts as you please, each with its own
+name — one for the drawing room, one for the front line, one for the long
+autumnal silences. Only one of them is in play at a time. The rest wait their
+turn.
+
+Exactly one prompt at a time wears the **Default** badge, and it is the one a
+new chat reaches for when you don't say otherwise. To move the badge, press the
+**star** beside whichever prompt should have it. The badge moves at once; there
+is no Save button to hunt for, and nothing else on the page needs your
+attention. (The **Set as default prompt** checkbox inside the Edit Prompt dialog
+does the very same thing, should you happen to be in there already.)
+
+Two further conveniences, so that no character is ever left prompt-less:
+
+- The **first** prompt you give a character becomes the default without being
+  asked.
+- Delete the default and the badge passes to whichever prompt remains, rather
+  than vanishing along with it.
+
+The Details tab carries a **default system prompt** picker saying the same thing
+in a different chair; the two stay in agreement whichever one you use. And none
+of this binds you at the table — the New Chat dialog and the Participants drawer
+will both let you choose a different prompt for a particular conversation,
+leaving the default exactly where it stands.
+
+## Subprompts: The Smaller Instrument
+
+Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts on this tab, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).
+
+Below both of those sits a third card, **Progressions** — not instructions at all, but things the character is *carrying*: a gestation, a recharging weapon, a countdown. Quilltap works out how far along each one is and tells the character so at the top of their turn. See [Progressions](character-progressions.md).
+
 ## Using Prompt Templates from AI Wizard
 
 If you used the AI Wizard to generate system prompt:
@@ -589,6 +642,8 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character Creation](character-creation.md) — Creating characters with prompts
 - [Editing Characters](character-editing.md) — Modifying system prompts
+- [Character Subprompts](character-subprompts.md) — Smaller instructions switched on per chat
+- [Progressions](character-progressions.md) — Timed spans reported to the character each turn, listed on this same tab
 - [Characters Overview](characters.md) — About the character system
 - [Chats](chats.md) — Testing characters in conversation
 - [Settings: Connection Profiles](connection-profiles.md) — LLM selection affects prompts
