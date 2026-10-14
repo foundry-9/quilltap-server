@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Release checklist 12: CLI docs, completions and tooling
+
+- Checked every CLI flag and verb added since 4.9.2 (`sync`, `anchor-probe`, `memories maintain`, `validate --repair`, the `recall-replay` tuning flags, `--tier`, `--cap`) against the README, the subcommand `--help` text and the bash/zsh/fish completions. All were present.
+- `quilltap migrations status` / `pending` now read ids declared as `id: MIGRATION_ID`. They read only string-literal ids before, so 62 migrations were missing from the source list and those already run were reported as "retired".
+- The `anchor-probe` summary in `quilltap --help` and the zsh/fish completions no longer refers to the Memory Gate, which admission replaced.
+- The CLI README now documents the flags it was missing: `docs ls --recursive` / `--reverse`, `docs tree --long`, `memories --full-titles` / `--paths-only`, the `themes registry` verbs and their `--key` / `--name` / `--output` flags, and the `--names-only` listing the completions use.
+
 #### Release checklist 10: backup/restore completeness
 
 - Audited every table and column added since 4.9.2. All are backed up and restored, including the new `chat_informs`, `memory_extraction_cursors` and `wardrobe_wear_stats` tables. The FTS index, `chats.transcriptVersion` and the Concierge refusal ledger are not carried.

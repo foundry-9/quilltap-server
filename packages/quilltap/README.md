@@ -234,7 +234,8 @@ quilltap docs list                              # All mounts
 quilltap docs show <mount>                      # One mount, with counts
 quilltap docs files <mount> [--folder <path>]   # Flat file list for a mount
 quilltap docs ls <mount> [path] [--links]       # POSIX-flavoured listing (alias: dir)
-quilltap docs tree <mount> [path]               # ASCII tree of a folder hierarchy (--depth, --max-nodes)
+quilltap docs ls <mount> [path] -R --sort time -r  # Recursive, grouped by folder, sorted by time and reversed
+quilltap docs tree <mount> [path]               # ASCII tree of a folder hierarchy (--depth, --max-nodes, --long)
 quilltap docs read [--rendered] <mount> <path>  # File contents → stdout
 quilltap docs export <mount> <outputDir>        # Mount → directory
 quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
@@ -257,6 +258,8 @@ quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>  # Hard-link (serve
 quilltap docs rmdir <mount> <path>                            # Delete an empty folder (server-required)
 quilltap docs mvdir <mount> <fromPath> <toPath>               # Rename/move a folder (server-required)
 ```
+
+`ls` flags: `--recursive` / `-R` lists every file below the path, grouped by folder; `--sort name|time|size|links` (default `name`) with `--reverse` / `-r` to flip it; `--links` lists the other mount/path entries under each file that has more than one hard link. `tree` takes `--depth N` (default 20), `--max-nodes N` (default 1000) and `--long`, which is accepted but reserved — it does not yet add columns.
 
 Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex`, `embed`, `link`, `rmdir`, and `mvdir` refuse to run without a reachable server. `grep --semantic` goes through `POST /api/v1/mount-points?action=semantic-search`, because the embedding provider lives in the server; it defaults to `--top 20`, `--threshold 0.5`, `--port 3000`.
 
@@ -337,6 +340,7 @@ quilltap memories ls                                                   # All hol
 quilltap memories ls --character Ariadne --sort created --limit 10     # One holder, newest first
 quilltap memories find "concrete examples"                             # Substring match on summary (--in content|both)
 quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern search inside content, with snippets
+quilltap memories grep -l "concrete examples"                          # Matching memory IDs only, one per line (--paths-only)
 quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
 quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
 quilltap memories status [--character <name|id>] [--port <n>]          # Per-holder rollup, maintenance ledger + dangling-edge check
@@ -348,7 +352,7 @@ quilltap memories maintain --character Ariadne --phases consolidate    # Queue a
 quilltap memories maintain --character all [--phases demote,retire]    # Queue maintenance for every character
 ```
 
-Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source` (AUTO / MANUAL / CONSOLIDATED), `--tier` (hot / cold; both by default, cold rows are starred in the `src` column), `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. `validate` is `status`'s terse twin — read-only; it counts dangling `relatedMemoryIds` edges, dangling `consolidatedFrom` members (digests naming notes that are gone), dangling `supersededById` pointers, and rows with no embedding. It exits 1 if any dangling link remains (a missing embedding only warns), and `--list` prints the offending IDs. `grep --semantic` defaults to `--top 20`, `--threshold 0.5`, and scopes to **one holder at a time**: `--character all` is rejected. The legacy `quilltap db memories --character <name>` verb remains, now with `--tier hot|cold` (rows with no tier count as hot).
+Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source` (AUTO / MANUAL / CONSOLIDATED), `--tier` (hot / cold; both by default, cold rows are starred in the `src` column), `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` / `--reverse` to flip it, `--limit N` (default 50) and `--full-titles` to stop chat titles being truncated to 32 characters) apply to `ls`, `find`, and `grep`. `grep -l` / `--paths-only` prints only the IDs of matching memories, one per line. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. `validate` is `status`'s terse twin — read-only; it counts dangling `relatedMemoryIds` edges, dangling `consolidatedFrom` members (digests naming notes that are gone), dangling `supersededById` pointers, and rows with no embedding. It exits 1 if any dangling link remains (a missing embedding only warns), and `--list` prints the offending IDs. `grep --semantic` defaults to `--top 20`, `--threshold 0.5`, and scopes to **one holder at a time**: `--character all` is rejected. The legacy `quilltap db memories --character <name>` verb remains, now with `--tier hot|cold` (rows with no tier count as hot).
 
 Verbs that call the server (`grep --semantic`, `status`'s ledger, `maintain`, `validate --repair`) take `--port`; without it they use the port recorded in the `--instance` / `--data-dir` instance's lock, else 3000.
 
@@ -480,7 +484,13 @@ quilltap themes create sunset           # Scaffold a new theme
 quilltap themes search "dark"           # Search registries
 quilltap themes update                  # Check for theme updates
 quilltap themes registry list           # List configured registries
-quilltap themes registry add <url>      # Add a registry source
+quilltap themes registry add <url>      # Add a registry source (--key <pubkey>, --name <name>)
+quilltap themes registry remove <name>  # Remove a registry source
+quilltap themes registry refresh        # Refresh all registry indexes
+
+# For registry operators
+quilltap themes registry keygen [--output <dir>]     # Generate an Ed25519 keypair
+quilltap themes registry sign <dir> --key <private>  # Sign a registry directory
 ```
 
 ## Shell Completion
@@ -559,7 +569,7 @@ Fish picks new completion files up automatically — no shell restart needed.
 
 Completions **parse the line rather than counting words**, so a flag typed anywhere the CLI itself accepts one does not derail them: `quilltap docs --instance Friday <TAB>` still offers the `docs` verbs. bash and zsh also reuse the `-i` / `-d` / `--passphrase` already on the line when looking store names up, so the names offered come from the instance you are addressing rather than the default one. fish completes `--mount` but not the positionals, and always reads the default instance.
 
-Dynamic completions shell out to `quilltap`'s own subcommands. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
+Dynamic completions shell out to `quilltap`'s own subcommands — `quilltap instances list --names-only` and `quilltap docs list --names-only`, which print one name per line and are handy in scripts too. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
 
 ## Requirements
 

@@ -43,7 +43,7 @@ _quilltap() {
     'memories:Search, browse, and graph memories'
     'memory-diff:Dump existing memories and dry-run re-extraction'
     'recall-replay:Replay a turn'\''s memory recall, old vs episodic ranking'
-    'anchor-probe:Probe whether episodic anchor lines suppress Memory Gate reinforcement'
+    'anchor-probe:Probe whether episodic anchor lines suppress reinforcement at admission'
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
     'maintenance:Run retention/cleanup sweeps'

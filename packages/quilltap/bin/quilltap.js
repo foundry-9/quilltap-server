@@ -103,7 +103,7 @@ Subcommands:
   file-verify                   Force-download cloud-evicted data files (iCloud, etc.)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
   recall-replay <chatId>        Replay a turn's memory recall, old vs episodic ranking
-  anchor-probe <characterId>    Probe whether episodic anchor lines suppress Memory Gate reinforcement
+  anchor-probe <characterId>    Probe whether episodic anchor lines suppress reinforcement at admission
   completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
 Options:
