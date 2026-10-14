@@ -524,6 +524,49 @@ describe('remapBackupData() - project FK remapping', () => {
     expect(result.chats[0].scenarioNotes).toBe('Rain.')
   })
 
+  it('re-points the turn rotation, turn queue and whisper audiences at the renamed seats', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      chats: [
+        {
+          id: 'chat-old',
+          participants: [{ id: 'seat-a' }, { id: 'seat-b' }],
+          turnQueue: JSON.stringify(['seat-b']),
+          spokenThisCycleParticipantIds: JSON.stringify(['seat-a']),
+          cycleOrderParticipantIds: JSON.stringify(['seat-b', 'seat-a']),
+          messages: [{ id: 'msg-old', participantId: 'seat-a', targetParticipantIds: ['seat-b'] }],
+        },
+      ] as unknown as BackupData['chats'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const chat = result.chats[0] as unknown as Record<string, string>
+    const [seatA, seatB] = result.chats[0].participants.map((p) => p.id)
+
+    expect(seatA).not.toBe('seat-a')
+    expect(JSON.parse(chat.turnQueue)).toEqual([seatB])
+    expect(JSON.parse(chat.spokenThisCycleParticipantIds)).toEqual([seatA])
+    expect(JSON.parse(chat.cycleOrderParticipantIds)).toEqual([seatB, seatA])
+    expect(result.chats[0].messages[0].targetParticipantIds).toEqual([seatB])
+  })
+
+  it('leaves a malformed or absent turn-rotation value as it found it', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      chats: [
+        { id: 'chat-old', participants: [], messages: [], cycleOrderParticipantIds: 'not json' },
+      ] as unknown as BackupData['chats'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const chat = result.chats[0] as unknown as Record<string, unknown>
+
+    expect(chat.cycleOrderParticipantIds).toBe('not json')
+    expect(chat).not.toHaveProperty('turnQueue')
+  })
+
   it('remaps project.defaultImageProfileId to the same new id as its image profile', () => {
     const remapper = new UuidRemapper()
     const data: BackupData = {

@@ -172,6 +172,32 @@ export function planWardrobeImagePointerFixes(
 }
 
 /**
+ * The chat columns that hold participant ids as a JSON-encoded string array
+ * rather than a real array, so `remapArrayFields` cannot see them.
+ */
+const PARTICIPANT_ID_JSON_FIELDS = [
+  'turnQueue',
+  'spokenThisCycleParticipantIds',
+  'cycleOrderParticipantIds',
+] as const;
+
+/**
+ * Remap a JSON-encoded array of ids. A value that is not a JSON string array
+ * is returned untouched — the turn manager already reads a malformed value as
+ * empty, so there is nothing to gain by rewriting it.
+ */
+function remapJsonIdList(value: unknown, remapper: UuidRemapper): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) return value;
+    return JSON.stringify(remapper.remapArray(parsed as string[]));
+  } catch {
+    return value;
+  }
+}
+
+/**
  * Remaps all UUIDs in the backup data for new-account mode
  */
 export function remapBackupData(
@@ -323,6 +349,17 @@ export function remapBackupData(
       remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
     }
 
+    // Turn-manager state names participants inside JSON strings; left alone,
+    // the rotation and turn queue would name seats the restore has renamed.
+    for (const field of PARTICIPANT_ID_JSON_FIELDS) {
+      if (field in chat) {
+        (remappedChat as Record<string, unknown>)[field] = remapJsonIdList(
+          (chat as unknown as Record<string, unknown>)[field],
+          remapper,
+        );
+      }
+    }
+
     // Remap participants
     remappedChat.participants = chat.participants.map((participant: ChatParticipantBase) => ({
       ...remapper.remapFields(participant, [
@@ -337,7 +374,9 @@ export function remapBackupData(
     remappedChat.messages = chat.messages.map((msg) => ({
       ...remapper.remapArrayFields(
         remapper.remapFields(msg, ['id', 'swipeGroupId', 'participantId']),
-        ['attachments']
+        // `targetParticipantIds` is a whisper's audience: unremapped, a
+        // whisper would address seats that no longer exist.
+        ['attachments', 'targetParticipantIds']
       ),
     }));
 

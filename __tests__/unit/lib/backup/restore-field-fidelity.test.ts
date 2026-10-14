@@ -226,6 +226,7 @@ function buildRepoMocks() {
   )
   const chatSettingsCreate = jest.fn().mockResolvedValue({})
   const setCursor = jest.fn().mockResolvedValue(undefined)
+  const tfidfCreate = jest.fn().mockResolvedValue({})
   const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
   )
@@ -247,6 +248,7 @@ function buildRepoMocks() {
     get(_t, prop: string) {
       if (prop === 'chatSettings') return repoStub({ create: chatSettingsCreate })
       if (prop === 'memoryExtractionCursors') return repoStub({ setCursor })
+      if (prop === 'tfidfVocabularies') return repoStub({ create: tfidfCreate })
       // Memories restore through the global repository, owner checked by a raw
       // character read (bug 185: the user-scoped read goes through the vault
       // overlay, which throws for a vault not yet restored).
@@ -268,6 +270,7 @@ function buildRepoMocks() {
     memoriesCreate,
     chatSettingsCreate,
     setCursor,
+    tfidfCreate,
     connectionsCreate,
     imageProfilesCreate,
   }
@@ -891,5 +894,109 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     expect(memoriesCreate).toHaveBeenCalledTimes(2)
     expect(summary.memories).toBe(1)
     expect(summary.warnings.some((w: string) => w.startsWith('Failed to restore memory'))).toBe(true)
+  })
+})
+
+describe('restore field fidelity — 4.10 data-model additions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  /** Columns added to chats in 4.10, as a 4.10 archive carries them. */
+  const NEW_410_CHAT_FIELDS = {
+    conciergeMode: 'locked',
+    conciergeModeSetBy: 'operator',
+    conciergeModeReason: 'manual',
+    scenarioSource: { mountPointId: 'store-1', path: 'Scenarios/tea.md', bodySha256: 'a'.repeat(64) },
+    scenarioNotes: 'It is raining.',
+    cycleOrderParticipantIds: JSON.stringify(['seat-b', 'seat-a']),
+  }
+
+  const NEW_410_MESSAGE_FIELDS = {
+    routeTrail: [
+      { profileId: 'profile-1', profileName: 'Primary', provider: 'ANTHROPIC', modelName: 'm', via: 'primary', outcome: 'failed', trigger: 'timeout' },
+      { profileId: 'profile-2', profileName: 'Understudy', provider: 'OPENAI', modelName: 'n', via: 'fallback', outcome: 'answered' },
+    ],
+  }
+
+  const NEW_410_CHAT_SETTINGS_FIELDS = {
+    impersonationVoiceMode: 'ask',
+    wardrobeImageSettings: { imageProfileId: 'img-1', toolImagesEnabled: true },
+  }
+
+  it('carries every new 4.10 chats and chat_messages column through restore', async () => {
+    const { chatsCreate, addMessage } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Conversation',
+            participants: [],
+            tags: [],
+            ...NEW_410_CHAT_FIELDS,
+            messages: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello', ...NEW_410_MESSAGE_FIELDS }],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // A 4.10 archive's Concierge state is restored as stored, not re-derived.
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject(NEW_410_CHAT_FIELDS)
+    expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_410_MESSAGE_FIELDS)
+  })
+
+  it("carries a memory's supersededAt (cold-retention clock) through restore", async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-1',
+            characterId: 'char-1',
+            content: 'Superseded.',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+            tier: 'cold',
+            supersededById: 'mem-digest',
+            supersededAt: '2026-10-02T00:00:00.000Z',
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ supersededAt: '2026-10-02T00:00:00.000Z' })
+  })
+
+  it('carries every new 4.10 chat_settings column through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [{ id: 'settings-1', userId: 'old-user', ...NEW_410_CHAT_SETTINGS_FIELDS }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject(NEW_410_CHAT_SETTINGS_FIELDS)
+  })
+
+  it("carries a TF-IDF vocabulary's textShapeVersion through restore", async () => {
+    const { tfidfCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        tfidfVocabularies: [{ id: 'voc-1', userId: 'old-user', profileId: 'emb-1', textShapeVersion: 2 }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(tfidfCreate.mock.calls[0][0]).toMatchObject({ textShapeVersion: 2, userId: 'user-1' })
   })
 })

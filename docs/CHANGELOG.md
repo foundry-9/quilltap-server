@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### Release checklist 10: backup/restore completeness
+
+- Audited every table and column added since 4.9.2. All are backed up and restored, including the new `chat_informs`, `memory_extraction_cursors` and `wardrobe_wear_stats` tables. The FTS index, `chats.transcriptVersion` and the Concierge refusal ledger are not carried.
+- New-account restore now remaps the participant ids inside `chats.turnQueue`, `spokenThisCycleParticipantIds` and `cycleOrderParticipantIds`, and in each message's `targetParticipantIds`. Before this, a restored whisper named seats that no longer existed, and the turn rotation and queue pointed at old seat ids.
+- Added restore field-fidelity tests for the 4.10 columns: the chat Concierge state, scenario source and notes, cycle order, message route trail, `memories.supersededAt`, `chat_settings.impersonationVoiceMode` / `wardrobeImageSettings`, and `tfidf_vocabularies.textShapeVersion`.
+
 #### Release checklist 8: plugin self-containment
 
 - Audited all 15 distributed plugins. None import app internals; all use only `@quilltap/plugin-types`, `@quilltap/plugin-utils`, third-party SDKs and Node built-ins, and every bundle inlines `plugin-utils`.
