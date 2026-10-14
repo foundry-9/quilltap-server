@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### Docs: README rewritten for the undecided reader
+
+- `README.md` is cut from 436 to ~290 lines. The pitch, comparison table, and install guide are kept; the Core Features section (which had grown by accretion into a changelog, with "now" relative to nothing, duplicated sentences, and unintroduced Staff names) is replaced by a one-paragraph-per-subsystem "Tour of the House" that introduces each name, plus a "Your First Ten Minutes" walkthrough after install. Image and badges unchanged.
+- The displaced detail moves to new `docs/FEATURES.md`, with the "now" phrasing removed and duplicates dropped.
+- Corrected two false claims: the databases are encrypted with ChaCha20-Poly1305 (the default cipher of SQLite3 Multiple Ciphers), not SQLCipher; and the journal mode defaults to TRUNCATE for cloud-sync safety, with WAL opt-in — the README no longer says "WAL mode". `CLAUDE.md`'s CLI note is corrected to match.
+
 #### Fix: conversation chunks left without embeddings after a render (bug 248)
 
 - The conversation render job decided which chunks to embed by re-reading them after its upsert. Jobs run in the forked child, where writes are buffered until the job ends, so the read saw the old row: a chunk whose content changed kept its old vector until the buffered write cleared it, and a new chunk did not exist yet. Neither was queued. New chunks were embedded one render late, and the last render of a chat (or a bulk re-render, such as an upgrade) left its chunks unembedded until the next boot.

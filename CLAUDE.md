@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository. This file is loaded on
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
-- **Already implemented:** see the [README](README.md).
+- **Already implemented:** see the [README](README.md) for the overview and [docs/FEATURES.md](docs/FEATURES.md) for the long-form feature tour.
 - **Roadmap:** `docs/developer/features/`; completed work in `docs/developer/features/complete/`.
 
 ## Standing rules (apply on every task)
@@ -196,7 +196,7 @@ An **instance** is a self-contained base directory you point Quilltap at, holdin
 
 > When I say I'm "in the `~/iCloud/Quilltap/Friday` instance," the troubleshooting paths are `~/iCloud/Quilltap/Friday/{data,files,logs}/`. Logs there include `combined.log` / `error.log` (auto-rolled every 2–3 MB) plus `quilltap-{stdout,stderr}.log`, `startup.log`, and sometimes `stdout.log`.
 
-**Databases are SQLCipher-encrypted — the `sqlite3` binary can't open them. Use `npx quilltap`.** Prefer high-level subcommands over raw SQL; they auto-pick the database, resolve names to UUIDs, and are read-only unless you pass `--write`. **Full command reference: [packages/quilltap/README.md](packages/quilltap/README.md)** (developer-only notes — repo scripts, module maps, completion-template internals — in [CLI.md](docs/developer/CLI.md)). Database schema: [DDL.md](docs/developer/DDL.md).
+**Databases are encrypted (ChaCha20 via SQLite3 Multiple Ciphers — not SQLCipher, despite the identifiers) — the `sqlite3` binary can't open them. Use `npx quilltap`.** Prefer high-level subcommands over raw SQL; they auto-pick the database, resolve names to UUIDs, and are read-only unless you pass `--write`. **Full command reference: [packages/quilltap/README.md](packages/quilltap/README.md)** (developer-only notes — repo scripts, module maps, completion-template internals — in [CLI.md](docs/developer/CLI.md)). Database schema: [DDL.md](docs/developer/DDL.md).
 
 ## Themes
 
