@@ -472,8 +472,10 @@ export const MessageEventSchema = z.object({
    * the outcome table was tested against; `outcomeIndex` names the winning
    * entry and `state` its semantic verdict. `metadataTested` records the
    * invoking character's metadata as the winning row read it. `invokedBy`
-   * distinguishes a model's reach for the tool from a user's own Run-Tool, and
-   * `callerParticipantId` names the participant who rolled, when there was one.
+   * distinguishes a model's reach for the tool from a user's own Run-Tool and
+   * from a trigger phrase overheard in the chat ('trigger', with the phrase in
+   * `triggerPhrase`), and `callerParticipantId` names the participant who
+   * rolled (or spoke the phrase), when there was one.
    *
    * NULL on every non-Pascal message.
    */
@@ -544,7 +546,9 @@ export const MessageEventSchema = z.object({
       next: z.unknown(),
       tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
     })).optional(),
-    invokedBy: z.enum(['llm', 'user']),
+    invokedBy: z.enum(['llm', 'user', 'trigger']),
+    /** The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'. */
+    triggerPhrase: z.string().optional(),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
   /**

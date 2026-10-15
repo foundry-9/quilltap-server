@@ -97,6 +97,8 @@ export interface ChatSettings {
   autoDetectRng?: boolean
   /** Whether Pascal's custom pseudo-tools are offered to models and the composer gutter button is shown */
   customTools?: boolean
+  /** Whether a custom tool's trigger phrases, said by anyone in a chat, run it automatically with its defaults */
+  customToolTriggers?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
@@ -499,7 +501,15 @@ export const AUTOMATION_OPTIONS = [
     label: 'Auto-Detect RNG Calls',
     description: 'Automatically detect dice rolls (e.g., 2d6), coin flips, and "spin the bottle" in your messages and execute them',
   },
+  {
+    key: 'customToolTriggers' as const,
+    label: 'Auto-Run Custom Tools on Trigger Phrases',
+    description: 'When anyone in a chat says a phrase one of Pascal\'s custom tools declares, run that tool automatically with its defaults. Requires Custom Tools.',
+  },
 ] as const
+
+/** The settings an Automation row toggles. */
+export type AutomationKey = (typeof AUTOMATION_OPTIONS)[number]['key']
 
 /**
  * Default automation settings
@@ -510,6 +520,11 @@ export const DEFAULT_AUTO_DETECT_RNG = true
  * Default custom-tools setting
  */
 export const DEFAULT_CUSTOM_TOOLS = true
+
+/**
+ * Default trigger-phrase setting — off: overhearing is a surprise the first time
+ */
+export const DEFAULT_CUSTOM_TOOL_TRIGGERS = false
 
 /**
  * Agent Mode Settings

@@ -110,6 +110,7 @@ async function fetchCategorySettings(
         agentModeSettings: settings.agentModeSettings,
         autoDetectRng: settings.autoDetectRng,
         customTools: settings.customTools,
+        customToolTriggers: settings.customToolTriggers,
         llmLoggingSettings: settings.llmLoggingSettings,
         avatarDisplayMode: settings.avatarDisplayMode,
         avatarDisplayStyle: settings.avatarDisplayStyle,

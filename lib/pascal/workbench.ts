@@ -39,6 +39,8 @@ export interface CustomToolLibraryEntry {
   rollForm: 'range' | 'dice';
   /** Whether the tool consults an LLM mid-run. */
   llm: boolean;
+  /** How many trigger phrases the tool listens for (0 = none). */
+  triggerCount: number;
   parameterCount: number;
   outcomeCount: number;
   mountPointId: string;
@@ -189,6 +191,7 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
     rollForm: typeof entry.definition.roll === 'string' ? 'dice' : 'range',
     llm: entry.definition.llm !== undefined,
+    triggerCount: entry.definition.triggers?.length ?? 0,
     parameterCount: Object.keys(entry.definition.parameters ?? {}).length,
     outcomeCount: entry.definition.outcomes.length,
     mountPointId: entry.mountPointId,

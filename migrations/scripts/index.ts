@@ -441,6 +441,8 @@ import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-me
 import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-version-v1';
 // Memory: MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION folded into MEMORY_MAINTENANCE (refactor phase F)
 import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
+// Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-field';
 
 /**
  * All available migrations.
@@ -901,6 +903,8 @@ export const migrations: Migration[] = [
   addTfidfTextShapeVersionMigration,
   // Memory: the retired MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION job rows (Phase F)
   dropHousekeepingConsolidationJobsMigration,
+  // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+  addCustomToolTriggersFieldMigration,
 ];
 
 export {
@@ -1338,5 +1342,7 @@ export {
   // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
   addTfidfTextShapeVersionMigration,
   dropHousekeepingConsolidationJobsMigration,
+  // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+  addCustomToolTriggersFieldMigration,
 };
 

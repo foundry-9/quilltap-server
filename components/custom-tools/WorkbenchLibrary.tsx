@@ -238,6 +238,14 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             oracle
           </span>
         )}
+        {tool.triggerCount > 0 && (
+          <span
+            className="qt-badge qt-badge-outline"
+            title="Listens for trigger phrases — said in a chat with the setting on, they run this tool"
+          >
+            ✦ {tool.triggerCount} phrase{tool.triggerCount === 1 ? '' : 's'}
+          </span>
+        )}
         {tool.parameterCount > 0 && (
           <span className="qt-badge qt-badge-outline">
             {tool.parameterCount} param{tool.parameterCount === 1 ? '' : 's'}

@@ -18,19 +18,8 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
-import {
-  resolveCustomToolRoster,
-  executeCustomTool,
-  CustomToolRunError,
-  type CustomToolRunResult,
-  type DiscoveredCustomTool,
-} from '@/lib/pascal/custom-tools';
-import { displayTitle } from '@/lib/pascal/custom-tool.types';
-import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
-import { flattenProgressions } from '@/lib/progressions/engine';
-import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
-import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
-import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
+import { resolveCustomToolRoster, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
+import { runCustomTool, type RunCustomToolOutcome } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
 import { validateRunCustomInput, type RunCustomToolInput, type RunCustomToolOutput } from '../run-custom-tool';
@@ -142,11 +131,6 @@ export async function executeRunCustomTool(
     }
   }
 
-  // The derived progress sheet, from the SAME snapshot the gates and the
-  // table read, against that one `nowMs`. Deriving costs no reads: the
-  // progressions live inside the metadata already in hand.
-  const progress = flattenProgressions(metadata, nowMs);
-
   // Resolved fresh: a definition added or edited mid-chat is live on this call.
   const roster = await resolveCustomToolRoster({
     userId: context.userId,
@@ -177,113 +161,39 @@ export async function executeRunCustomTool(
     );
   }
 
-  // The state cascade (chat → project → group → general) the run's `$state`
-  // references resolve against — retained WHOLE, not just `.merged`, because
-  // the effect applier needs the per-tier objects to decide where a write
-  // lives. Read once here; never re-read (the job-child contract). Scoped to
-  // the rolling character's own groups (Knowledge's rule). Fail-soft: every
-  // `$state` ref carries a required fallback, so a run is always dealable even
-  // if state can't be read — state effects then skip.
-  let cascade: StateCascadeResult | null = null;
+  // The deal itself — cascade, roll, effects, Pascal's post — is the shared
+  // run service's (lib/pascal/run-service.ts); this entrance only resolves the
+  // roster from the caller's perspective and reports back to the model.
+  let outcome: RunCustomToolOutcome;
   try {
-    const chat = await getRepositories().chats.findById(context.chatId);
-    if (chat) {
-      cascade = await resolveStateCascade({
-        chat,
-        groupScope: context.characterId
-          ? { kind: 'character', characterId: context.characterId }
-          : { kind: 'none' },
-      });
-    }
-  } catch (error) {
-    logger.debug('run_custom: state cascade unavailable, defaulting to {}', {
-      context: CONTEXT,
+    outcome = await runCustomTool({
+      userId: context.userId,
       chatId: context.chatId,
-      error: getErrorMessage(error),
-    });
-    cascade = null;
-  }
-  const toolState = cascade?.merged ?? {};
-
-  let result: CustomToolRunResult;
-  try {
-    result = await executeCustomTool(entry.definition, parameters ?? null, {
+      entry,
+      parameters: parameters ?? null,
       private: isPrivate,
+      characterId: context.characterId ?? null,
       metadata,
-      progress,
-      now: nowMs,
-      state: toolState,
-      // Only built when the definition wants one; the invoker resolves the
-      // cheap-LLM selection fresh on each consult.
-      ...(entry.definition.llm
-        ? { llmInvoke: buildCustomToolLlmInvoker({ userId: context.userId, chatId: context.chatId }) }
-        : {}),
+      // A private roll is whispered to the rolling character alone: every
+      // other participant's context excludes it. The human operator sees it
+      // regardless — Pascal is one of the operator-facing senders the Salon's
+      // whisper filter exempts (see app/salon/[id]/whisper-visibility.ts).
+      whisperTargetIds: context.callerParticipantId ? [context.callerParticipantId] : null,
+      invokedBy: 'llm',
+      callerParticipantId: context.callerParticipantId ?? null,
+      nowMs,
     });
   } catch (error) {
-    const reason = error instanceof CustomToolRunError ? error.message : getErrorMessage(error);
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
-    return reportFailure(context, toolName, reason, whisper);
+    return reportFailure(context, toolName, getErrorMessage(error), whisper);
   }
 
-  // Effects apply BEFORE the Pascal post: if the post then fails, the effects
-  // stand — they happened, and the existing "outcome could not be posted"
-  // failure path still tells the model. (A throw inside executeCustomTool
-  // means no effects were ever applied.) The applier never throws.
-  const appliedEffects = result.effects?.length
-    ? await applyCustomToolEffects({
-        chatId: context.chatId,
-        toolName: result.tool,
-        effects: result.effects,
-        cascade,
-        characterId: context.characterId ?? null,
-        metadataSnapshot: metadata,
-        nowMs,
-      })
-    : [];
+  if (!outcome.ok) {
+    return reportFailure(context, toolName, outcome.reason, outcome.whisper);
+  }
 
+  const { result, posted } = outcome;
   const whispered = result.visibility === 'whisper';
-
-  // A private roll is whispered to the rolling character alone: every other
-  // participant's context excludes it. The human operator sees it regardless —
-  // Pascal is one of the operator-facing senders the Salon's whisper filter
-  // exempts (see app/salon/[id]/whisper-visibility.ts).
-  const targetParticipantIds =
-    whispered && context.callerParticipantId ? [context.callerParticipantId] : null;
-
-  const toolTitle = displayTitle(entry.definition);
-
-  const { content, opaqueContent } = buildPascalResultContent({
-    toolTitle,
-    ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-    message: result.message,
-  });
-
-  const posted = await postPascalResult({
-    chatId: context.chatId,
-    content,
-    opaqueContent,
-    targetParticipantIds,
-    pascalMeta: {
-      tool: result.tool,
-      toolTitle,
-      ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-      definitionTier: entry.tier,
-      definitionMountId: entry.mountPointId,
-      params: result.params,
-      rollForm: result.rollForm,
-      ...(result.notation ? { notation: result.notation } : {}),
-      raw: result.raw,
-      ...(result.diceRolls ? { diceRolls: result.diceRolls } : {}),
-      value: result.value,
-      state: result.state,
-      outcomeIndex: result.outcomeIndex,
-      ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
-      ...(result.llm ? { llm: result.llm } : {}),
-      ...(appliedEffects.length ? { effects: appliedEffects } : {}),
-      invokedBy: 'llm',
-      ...(context.callerParticipantId ? { callerParticipantId: context.callerParticipantId } : {}),
-    },
-  });
 
   if (posted) {
     context.onPosted?.(posted);

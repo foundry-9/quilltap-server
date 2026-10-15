@@ -54,18 +54,12 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/types';
 import {
   resolveCustomToolRoster,
-  executeCustomTool,
-  CustomToolRunError,
   type CustomToolRoster,
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
-import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
-import { flattenProgressions } from '@/lib/progressions/engine';
 import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
-import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
-import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
-import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
+import { runCustomTool } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 
 const HANDLER = 'api.v1.chats.custom-tools';
@@ -436,142 +430,59 @@ async function handleRun(
   // "show all whispers" toggle still reveals it to the human. This mirrors how
   // a user-initiated private Prospero run targets itself
   // (app/api/v1/chats/[id]/actions/run-tool.ts).
-  const whispered = body.private === true;
-  const targetParticipantIds = whispered ? [ctx.user.id] : null;
-
+  //
   // Metadata comes from the character the run is made AS. The popup always
   // names one (every listing carries an `asCharacterId`, labelled or not), so
   // in practice a popup run consults that character's sheet — consistent with
   // the roster itself, which already resolved through that character's vault
   // tier. A run that names nobody is one nobody made: it rolls against an empty
-  // sheet, every metadata test declines, and the catch-all answers, rather than
-  // borrowing some arbitrary participant's secrets to decide it.
-  const metadata = body.asCharacterId ? perspective.metadata : {};
-
-  // One clock reading for the whole run, shared by the progress sheet, {{now}}
-  // and the applier's `updatedAt` stamp. The sheet follows metadata's
-  // asymmetry exactly: a run nobody made rolls against an empty one, so every
-  // `progress` test declines rather than consulting an arbitrary
-  // participant's countdowns.
-  const nowMs = Date.now();
-  const progress = flattenProgressions(metadata, nowMs);
-
-  // The state cascade the run's `$state` references resolve against — retained
-  // WHOLE, not just `.merged`, because the effect applier needs the per-tier
-  // objects to decide where a write lives. Read once; never re-read. The group
-  // tier follows the same asymmetry as metadata above: it is scoped to the
-  // named character's own groups, or skipped entirely for a run nobody made
-  // (no `asCharacterId`), rather than borrowing an arbitrary participant's
-  // groups. Fail-soft — required fallbacks keep every run dealable, and state
-  // effects skip when the cascade cannot be read.
-  let cascade: StateCascadeResult | null = null;
-  try {
-    cascade = await resolveStateCascade({
-      chat,
-      groupScope: body.asCharacterId
-        ? { kind: 'character', characterId: body.asCharacterId }
-        : { kind: 'none' },
-    });
-  } catch (error) {
-    logger.debug('Manual custom-tool run: state cascade unavailable, defaulting to {}', {
-      context: HANDLER,
-      chatId: id,
-      error: getErrorMessage(error),
-    });
-    cascade = null;
-  }
-  const toolState = cascade?.merged ?? {};
-
-  let result;
-  try {
-    result = await executeCustomTool(entry.definition, body.parameters ?? undefined, {
-      private: body.private,
-      metadata,
-      progress,
-      now: nowMs,
-      state: toolState,
-      ...(entry.definition.llm
-        ? { llmInvoke: buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: id }) }
-        : {}),
-    });
-  } catch (error) {
-    if (error instanceof CustomToolRunError) {
-      // Pascal never announces a run that did not happen — the failure is
-      // Prospero's to report.
-      logger.debug('Manual custom-tool run refused', {
-        context: HANDLER,
-        chatId: id,
-        tool: body.tool,
-        reason: error.message,
-      });
-      await postProsperoCustomToolError({
-        chatId: id,
-        toolName: body.tool,
-        reason: error.message,
-        whisper: whispered,
-        callerParticipantId: whispered ? ctx.user.id : null,
-      });
-      return badRequest(error.message);
-    }
-    throw error;
-  }
-
-  // Effects apply BEFORE the Pascal post; if the post then fails, the effects
-  // stand — they happened. `characterId` follows the same asymmetry as the
-  // metadata rule above: only a run made AS a character (body.asCharacterId)
-  // writes to that character's sheet — a run nobody made writes to nobody's,
-  // because an unattributed operator roll must not edit an arbitrary character.
-  const appliedEffects = result.effects?.length
-    ? await applyCustomToolEffects({
-        chatId: id,
-        toolName: result.tool,
-        effects: result.effects,
-        cascade,
-        characterId: body.asCharacterId ? perspective.characterId : null,
-        metadataSnapshot: metadata,
-        nowMs,
-      })
-    : [];
-
+  // sheet (and an empty progress sheet), every metadata test declines, the
+  // catch-all answers, its group tier is skipped, and its metadata effects
+  // write to nobody — an unattributed operator roll must not borrow, or edit,
+  // an arbitrary participant's secrets.
+  //
   // Pascal's announcement is the ONLY thing posted for a manual run, and it is
   // identical to the one a character's roll produces — the transcript does not
   // record that the operator was the one who reached for the tool, nor what
   // they set. A companion USER message ("*I ran unlock (scale: 1)*") used to
   // publish exactly that: the human's hand on the scale, from which a character
-  // could infer the roll was arranged.
-  const toolTitle = displayTitle(entry.definition);
-
-  const { content, opaqueContent } = buildPascalResultContent({
-    toolTitle,
-    ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-    message: result.message,
-  });
-
-  const pascalMessage = await postPascalResult({
+  // could infer the roll was arranged. The deal itself is the shared run
+  // service's (lib/pascal/run-service.ts).
+  const outcome = await runCustomTool({
+    userId: ctx.user.id,
     chatId: id,
-    content,
-    opaqueContent,
-    targetParticipantIds,
-    pascalMeta: {
-      tool: result.tool,
-      toolTitle,
-      ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-      definitionTier: entry.tier,
-      definitionMountId: entry.mountPointId,
-      params: result.params,
-      rollForm: result.rollForm,
-      ...(result.notation ? { notation: result.notation } : {}),
-      raw: result.raw,
-      ...(result.diceRolls ? { diceRolls: result.diceRolls } : {}),
-      value: result.value,
-      state: result.state,
-      outcomeIndex: result.outcomeIndex,
-      ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
-      ...(result.llm ? { llm: result.llm } : {}),
-      ...(appliedEffects.length ? { effects: appliedEffects } : {}),
-      invokedBy: 'user',
-    },
+    chat,
+    entry,
+    parameters: body.parameters ?? null,
+    private: body.private,
+    characterId: body.asCharacterId ? perspective.characterId : null,
+    metadata: body.asCharacterId ? perspective.metadata : {},
+    whisperTargetIds: [ctx.user.id],
+    invokedBy: 'user',
+    callerParticipantId: null,
   });
+
+  if (!outcome.ok) {
+    // Pascal never announces a run that did not happen — the failure is
+    // Prospero's to report.
+    logger.debug('Manual custom-tool run refused', {
+      context: HANDLER,
+      chatId: id,
+      tool: body.tool,
+      reason: outcome.reason,
+    });
+    await postProsperoCustomToolError({
+      chatId: id,
+      toolName: body.tool,
+      reason: outcome.reason,
+      whisper: outcome.whisper,
+      callerParticipantId: outcome.whisper ? ctx.user.id : null,
+    });
+    return badRequest(outcome.reason);
+  }
+
+  const { result, posted: pascalMessage } = outcome;
+  const whispered = result.visibility === 'whisper';
 
   logger.info('[Pascal] Manual custom-tool run completed', {
     context: HANDLER,

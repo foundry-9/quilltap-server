@@ -31,6 +31,7 @@ import type { MessageEvent, ConnectionProfile, Character, ChatMetadataBase } fro
 
 import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
+import { runUserMessageTriggers } from './trigger-phrase-sites'
 import {
   resolveRespondingParticipant,
   loadAllParticipantData,
@@ -865,6 +866,30 @@ async function processMessage(
       }
     }
   }
+
+  // ============================================================================
+  // Pascal trigger phrases — user-message path
+  // ============================================================================
+  // When the chat setting is on, a custom tool whose `triggers` phrase appears
+  // in what the operator just said runs with its defaults. Unlike the dice
+  // above (thrown BEFORE the message is saved, so their TOOL rows precede it),
+  // Pascal's announcement must FOLLOW the words that caused it, so it runs
+  // here, after the persist. The seat speaks for itself: a user-driven or
+  // impersonated character's words are that character's, and its roster is
+  // theirs; the bare operator rolls as nobody. Posts are spliced into this
+  // turn's context so the responding model hears them. Never throws.
+  await runUserMessageTriggers({
+    userId,
+    chatId,
+    chat,
+    content,
+    isContinueMode,
+    userParticipant,
+    userParticipantId,
+    chatSettings,
+    existingMessages,
+    onPosted: (message) => safeEnqueue(controller, encodePascalResultEvent(encoder, message)),
+  })
 
   // ============================================================================
   // Carina (inline LLM queries) — user-message path

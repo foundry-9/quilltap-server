@@ -325,6 +325,30 @@ Your characters never see the template — like `title`, it is display furniture
 }
 ```
 
+## Words that pull the lever — `triggers`
+
+A dice roll typed into a chat is thrown at once, without anybody reaching for a tool. A custom tool has, until now, lacked that reflex: it waited for a character to call it or for you to open the dialog. Yet a great many tools are *about* something that gets said. *"I draw my sword"* could roll for initiative; *"Abracadabra"* could set the transformation going; *"Let us see what the oracle says"* could, with a certain inevitability, consult the oracle. You know the words. Now you may tell Pascal to listen for them:
+
+```json
+{ "triggers": ["abracadabra", "open sesame"] }
+```
+
+Up to eight phrases per tool, each between three and eighty characters. When a message in the chat contains one, Pascal runs the tool on the spot and announces the outcome exactly as he would for any other run.
+
+**What counts as a match.** The plainest rule there is: the phrase appears in the message, in any mixture of capitals. No wildcards, no word boundaries, no cleverness. `"fire"` will go off at *"warm by the fireplace"* as readily as at *"Fire!"* — if you want precision, write a longer phrase. A phrase must not begin or end with a space, and two phrases of one tool may not differ only in their capitals.
+
+**Who can set one off.** Everyone who speaks: you, a character you are playing, and every character the models are playing, autonomous rooms included. The tool runs *as the speaker* — their fact sheet, their groups, their version of the tool if it is defined differently for different characters — so a tool gated away from a character cannot be triggered by them, either. When you speak as nobody in particular, the tool rolls as nobody: every metadata test declines, and effects that need a character are skipped.
+
+**What Pascal never listens to.** His own announcements, Carina's answers, and the remarks of the rest of the staff — the Host, the Lantern, Aurora, Prospero and the Post Office. A [Carina](carina.md) question line (`@Name: …`) is set aside too: it is addressed to the reference desk, not spoken in the scene. A regenerated reply fires nothing, just as dice in a swipe are not re-thrown.
+
+**How it rolls.** Every parameter at its default — there is nobody to fill in a form. Visibility follows the tool's own `defaultVisibility`: a whispering tool whispers to whoever spoke the words. The announcement lands *after* the message that caused it (dice, by long habit, land before yours; Pascal is more of a respecter of sequence).
+
+**At most four tools per message.** Should one sentence happen to contain the phrases of six tools, the first four to appear are dealt and the rest are noted in the logs, not run — a sentence should not be able to spend six oracle consultations on your account.
+
+**A word on echoes.** Pascal never hears himself, but a character who *repeats* Pascal's announcement in their own reply will say whatever words it contains — and if those include the tool's own trigger, the tool goes off again on that reply, and possibly again on the next. The Workbench warns you when an outcome message, the chip label or an oracle prompt quotes one of the tool's own phrases. Heed it.
+
+**It must be switched on.** All of this sleeps until you turn on **Auto-Run Custom Tools on Trigger Phrases** under Settings → Chat → Automation. It is off by default — being overheard is a surprise the first time — and it does nothing at all while Custom Tools itself is switched off. The phrases are never shown to any model; `run_custom` remains a character's own way to reach for the tool.
+
 ## Recording consequences — side effects
 
 A roll can now leave a mark. A tool may carry an `effects` array — up to sixteen entries, applied in order after the table has dealt — each writing one value into the story's **persistent state** or onto the rolling character's own **fact sheet**. The third failed lockpick really can break the pick, and nobody has to *ask* the model to record it — the write happens on the server, as part of the roll, entirely beyond a model's power to fudge:
@@ -543,11 +567,13 @@ If a roll fails while it's actually running — a bound that ended up above its 
 
 ## Limits
 
-Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, a thousand characters per message, five hundred per description, eighty per title. An oracle's prompt runs to four thousand characters and its error line to a thousand; its answer is trimmed to eight thousand before anything tests or prints it, unless the tool's own `maxOutput` says otherwise — anywhere from one character to a hundred thousand, with the call's token budget following along. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
+Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, eight trigger phrases per tool (three to eighty characters each) and four triggered tools per message, a thousand characters per message, five hundred per description, eighty per title. An oracle's prompt runs to four thousand characters and its error line to a thousand; its answer is trimmed to eight thousand before anything tests or prints it, unless the tool's own `maxOutput` says otherwise — anywhere from one character to a hundred thousand, with the call's token budget following along. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
 
 ## Turning it off
 
-The **Custom tools** setting on Settings → Chat governs the whole arrangement. Switched off, `run_custom` is never offered to any model and the gutter button goes away. Your files stay exactly where they are.
+The **Custom tools** setting on Settings → Chat governs the whole arrangement. Switched off, `run_custom` is never offered to any model, the gutter button goes away, and no trigger phrase is listened for. Your files stay exactly where they are.
+
+Trigger phrases have a switch of their own besides — **Auto-Run Custom Tools on Trigger Phrases**, under Settings → Chat → Automation, off unless you turn it on.
 
 ## In-Chat Navigation
 

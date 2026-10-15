@@ -25,7 +25,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
-import { encodeDoneEvent, encodeCarinaAnswerEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
+import { encodeDoneEvent, encodeCarinaAnswerEvent, encodePascalResultEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
 import { maybeConfirmAnswer } from './answer-confirmation.service'
 import {
   triggerTurnMemoryExtraction,
@@ -36,6 +36,7 @@ import {
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { runReplyTriggers } from './trigger-phrase-sites'
 import { buildRouteTrail } from './route-trail'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
@@ -436,6 +437,29 @@ export async function finalizeMessageResponse({
       }
     }
   }
+
+  // ============================================================================
+  // Pascal trigger phrases — assistant-reply path
+  // ============================================================================
+  // When the chat setting is on, a custom tool whose `triggers` phrase this
+  // character just said runs with its defaults, from this character's own
+  // perspective (their roster, their sheet). Runs AFTER the reply is saved so
+  // the announcement follows the words that caused it, and BEFORE the done
+  // event so the client's post-turn refetch includes it. No in-memory splice:
+  // a chained next speaker re-reads the transcript. No wardrobe announcement
+  // set either — the turn's tool-execution context is already drained here.
+  // A swipe never reaches this path (regenerate-swipe.service.ts), so a swipe
+  // fires nothing, matching the dice. Never throws.
+  await runReplyTriggers({
+    userId,
+    chatId,
+    chat,
+    content: cleanedResponse,
+    characterParticipantId: characterParticipant.id,
+    characterId: character.id,
+    chatSettings,
+    onPosted: (msg) => safeEnqueue(controller, encodePascalResultEvent(encoder, msg)),
+  })
 
   // ============================================================================
   // Carina (inline LLM queries) — assistant-markup path

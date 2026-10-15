@@ -32,6 +32,14 @@
       "maxLength": 160,
       "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
     },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 3, "maxLength": 80 },
+      "description": "Phrases that run this tool automatically, with every parameter at its default, when a message from anyone in the chat contains one — exact substrings, case-insensitive, no wildcards ('fire' matches 'fireplace'; write a longer phrase for precision). Only honoured when the chat setting 'Auto-Run Custom Tools on Trigger Phrases' is on (it is off by default). Each phrase must have no leading or trailing whitespace, and no two phrases may be equal ignoring case — the loader enforces both, this schema cannot. Never sent to the model."
+    },
     "description": {
       "type": "string",
       "minLength": 1,

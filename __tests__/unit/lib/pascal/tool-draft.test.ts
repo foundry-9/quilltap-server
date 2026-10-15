@@ -913,3 +913,70 @@ describe('effects in the draft', () => {
     expect(validateDraft(draft).some((i) => i.message.includes('at most 16 effects'))).toBe(true)
   })
 })
+
+describe('trigger phrases in the draft', () => {
+  const BASE = {
+    name: 'spell',
+    description: 'Cast it.',
+    outcomes: [{ when: true, message: 'The air shimmers.', state: 'info' }],
+  }
+
+  const triggerIssues = (draft: ReturnType<typeof newDraft>) =>
+    validateDraft(draft).filter((i) => i.where.section === 'triggers')
+
+  it('round-trips triggers, as written and in order', () => {
+    expectRoundTrip({ ...BASE, triggers: ['Abracadabra', 'open sesame'] })
+  })
+
+  it('emits triggers right after chipLabel, and none while empty', () => {
+    const draft = draftFromDefinition({ ...BASE, chipLabel: 'Spell', triggers: ['abracadabra'] })
+    expect(Object.keys(definitionFromDraft(draft)).slice(0, 5)).toEqual([
+      '$schema',
+      'name',
+      'chipLabel',
+      'triggers',
+      'description',
+    ])
+    draft.triggers = []
+    expect('triggers' in definitionFromDraft(draft)).toBe(false)
+  })
+
+  it('errors on a phrase too short, padded, or repeated ignoring case', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = ['ok', ' abracadabra', 'Hocus', 'HOCUS']
+    const issues = triggerIssues(draft)
+    expect(issues.every((i) => i.severity === 'error')).toBe(true)
+    expect(issues.map((i) => (i.where as { index?: number }).index)).toEqual([0, 1, 3])
+  })
+
+  it('errors past the cap', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = Array.from({ length: 9 }, (_, i) => `phrase ${i}`)
+    expect(triggerIssues(draft).some((i) => i.severity === 'error')).toBe(true)
+  })
+
+  it('warns — never errors — when an outcome message echoes its own trigger', () => {
+    const draft = draftFromDefinition({
+      ...BASE,
+      outcomes: [{ when: true, message: 'You cry ABRACADABRA and the door opens.', state: 'info' }],
+    })
+    draft.triggers = ['abracadabra']
+    const outcomeId = draft.outcomes[0].id
+    const echoes = validateDraft(draft).filter((i) => i.where.section === 'message' && i.where.id === outcomeId)
+    expect(echoes).toHaveLength(1)
+    expect(echoes[0].severity).toBe('warning')
+    expect(echoes[0].message).toContain('"abracadabra"')
+  })
+
+  it('warns when the chip label or consult prompt echoes a trigger', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = ['abracadabra']
+    draft.chipLabel = 'Abracadabra!'
+    draft.llmEnabled = true
+    draft.llmPrompt = 'Say abracadabra back.'
+    draft.llmErrorMessage = 'Silence.'
+    const issues = validateDraft(draft)
+    expect(issues.some((i) => i.severity === 'warning' && i.where.section === 'identity' && i.where.field === 'chipLabel' && i.message.includes('trigger'))).toBe(true)
+    expect(issues.some((i) => i.severity === 'warning' && i.where.section === 'llm' && i.message.includes('trigger'))).toBe(true)
+  })
+})

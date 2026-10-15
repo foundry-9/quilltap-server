@@ -969,7 +969,8 @@
                 }
               }
             },
-            "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
+            "invokedBy": { "type": "string", "enum": ["llm", "user", "trigger"], "description": "Whether the model reached for the tool, the user ran it themselves, or a trigger phrase said in the chat set it off." },
+            "triggerPhrase": { "type": "string", "description": "The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'." },
             "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
           }
         },

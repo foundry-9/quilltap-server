@@ -24,6 +24,9 @@ import {
   CONTAINMENT_KEYS,
   IDENTIFIER_PATTERN,
   MAX_CHIP_LABEL_LENGTH,
+  MAX_TRIGGERS,
+  MIN_TRIGGER_PHRASE_LENGTH,
+  MAX_TRIGGER_PHRASE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_EFFECTS,
   MAX_LLM_OUTPUT_CEILING,
@@ -58,6 +61,7 @@ import {
   type WhenObject,
 } from './custom-tool.types';
 import { parseDiceNotation } from './dice-notation';
+import { foldTriggerText, triggersContainedIn } from './trigger-phrases';
 import { parseProgressKey } from '@/lib/progressions/schema';
 import { parseExpression } from './expressions';
 import { escapeRegex } from '@/lib/utils/regex';
@@ -212,6 +216,8 @@ export interface ToolDraft {
   title: string;
   /** Templated chip/heading label. '' = omitted — the title labels the chip. */
   chipLabel: string;
+  /** Trigger phrases, as written. Empty = no `triggers` key emitted. */
+  triggers: string[];
   description: string;
   disabled: boolean;
   /** Which availability clause the tool declares, if any. */
@@ -269,6 +275,7 @@ export function newDraft(): ToolDraft {
     name: '',
     title: '',
     chipLabel: '',
+    triggers: [],
     description: '',
     disabled: false,
     gateMode: 'none',
@@ -603,6 +610,7 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
     name: definition.name,
     title: definition.title ?? '',
     chipLabel: definition.chipLabel ?? '',
+    triggers: [...(definition.triggers ?? [])],
     description: definition.description,
     disabled: definition.disabled ?? false,
     gateMode: definition.availableWhen ? 'available' : definition.withheldWhen ? 'withheld' : 'none',
@@ -801,6 +809,7 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   doc.name = draft.name;
   if (draft.title.trim() !== '') doc.title = draft.title;
   if (draft.chipLabel.trim() !== '') doc.chipLabel = draft.chipLabel;
+  if (draft.triggers.length > 0) doc.triggers = [...draft.triggers];
   doc.description = draft.description;
   if (draft.disabled) doc.disabled = true;
   if (draft.gateMode !== 'none') {
@@ -867,6 +876,7 @@ export interface DraftIssue {
   /** Where in the form the issue lives, for anchoring UI state. */
   where:
     | { section: 'identity'; field: 'name' | 'title' | 'chipLabel' | 'description' }
+    | { section: 'triggers'; index?: number }
     | { section: 'gate'; conditionId?: string }
     | { section: 'options' }
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
@@ -1341,6 +1351,7 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
     );
   }
   validateChipLabelPlaceholders(draft, issues);
+  validateDraftTriggers(draft, issues);
   if (draft.description.trim() === '') {
     issues.push(err({ section: 'identity', field: 'description' }, 'description is required'));
   } else if (draft.description.length > MAX_DESCRIPTION_LENGTH) {
@@ -1491,6 +1502,54 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
   }
 
   return issues;
+}
+
+/**
+ * Trigger phrases: the loader's rules (count, length, no padding, no repeats
+ * ignoring case) as errors, plus the self-echo warning — a phrase quoted in
+ * this tool's own outcome message, chip label or consult prompt. Pascal's
+ * announcement is never scanned, but a model that narrates it back will say
+ * the words, and the tool fires again on its next reply.
+ */
+function validateDraftTriggers(draft: ToolDraft, issues: DraftIssue[]): void {
+  if (draft.triggers.length === 0) return;
+
+  if (draft.triggers.length > MAX_TRIGGERS) {
+    issues.push(err({ section: 'triggers' }, `at most ${MAX_TRIGGERS} trigger phrases`));
+  }
+  const seen = new Set<string>();
+  draft.triggers.forEach((phrase, index) => {
+    const where = { section: 'triggers' as const, index };
+    if (phrase.length < MIN_TRIGGER_PHRASE_LENGTH) {
+      issues.push(err(where, `a trigger phrase needs at least ${MIN_TRIGGER_PHRASE_LENGTH} characters`));
+    } else if (phrase.length > MAX_TRIGGER_PHRASE_LENGTH) {
+      issues.push(err(where, `a trigger phrase is at most ${MAX_TRIGGER_PHRASE_LENGTH} characters`));
+    }
+    if (phrase !== phrase.trim()) {
+      issues.push(err(where, 'a trigger phrase must not begin or end with a space'));
+    }
+    const folded = foldTriggerText(phrase);
+    if (seen.has(folded)) {
+      issues.push(err(where, `"${phrase}" is listed twice (phrases match regardless of case)`));
+    }
+    seen.add(folded);
+  });
+
+  const echo = (text: string, where: DraftIssue['where'], what: string): void => {
+    for (const phrase of triggersContainedIn(text, draft.triggers)) {
+      issues.push(
+        warn(
+          where,
+          `${what} contains the trigger "${phrase}" — a character who repeats Pascal's line will set this tool off again`
+        )
+      );
+    }
+  };
+  for (const outcome of draft.outcomes) {
+    echo(outcome.message, { section: 'message', id: outcome.id }, 'this message');
+  }
+  echo(draft.chipLabel, { section: 'identity', field: 'chipLabel' }, 'the chip label');
+  if (draft.llmEnabled) echo(draft.llmPrompt, { section: 'llm', field: 'prompt' }, 'the consult prompt');
 }
 
 /** True when nothing blocks a save. */

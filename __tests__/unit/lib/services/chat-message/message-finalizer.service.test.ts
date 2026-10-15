@@ -12,6 +12,11 @@ import * as rngDetector from '@/lib/services/chat-message/rng-pattern-detector.s
 import * as rngHandler from '@/lib/tools/handlers/rng-handler'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
+import { runTriggeredCustomTools } from '@/lib/pascal/trigger-runner'
+
+jest.mock('@/lib/pascal/trigger-runner', () => ({
+  runTriggeredCustomTools: jest.fn().mockResolvedValue([]),
+}))
 
 jest.mock('@/lib/post-office/mailbox', () => ({
   markMailAlertsDelivered: jest.fn(),
@@ -576,6 +581,22 @@ describe('message-finalizer.service', () => {
     })
 
     expect(rngHandler.executeRngTool).toHaveBeenCalled()
+
+    // Pascal's trigger phrases are scanned in the same reply, from this
+    // character's own perspective, AFTER the reply (and the dice) were saved.
+    const runner = runTriggeredCustomTools as jest.Mock
+    expect(runner).toHaveBeenCalledTimes(1)
+    expect(runner.mock.calls[0][0]).toMatchObject({
+      userId: 'user-1',
+      chatId: 'chat-1',
+      content: 'Please roll 1d20',
+      speaker: { participantId: 'participant-1', characterId: 'char-1' },
+      characterIds: ['char-1', 'char-2'],
+    })
+    const runnerOrder = runner.mock.invocationCallOrder[0]
+    for (const order of repos.chats.addMessage.mock.invocationCallOrder) {
+      expect(order).toBeLessThan(runnerOrder)
+    }
   })
 })
 

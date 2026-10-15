@@ -61,6 +61,7 @@ interface UseChatSettingsReturn {
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleCustomToolsChange: (value: boolean) => Promise<void>
+  handleCustomToolTriggersChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
@@ -359,6 +360,22 @@ export function useChatSettings(): UseChatSettingsReturn {
         { customTools: value },
         'Failed to update custom tools setting',
         'Failed to update custom tools setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
+   * Update custom-tool trigger-phrase setting
+   */
+  const handleCustomToolTriggersChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { customToolTriggers: value },
+        'Failed to update trigger phrase setting',
+        'Failed to update trigger phrase setting'
       )
     },
     [settings, patchChatSettings]
@@ -753,6 +770,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
+    handleCustomToolTriggersChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,

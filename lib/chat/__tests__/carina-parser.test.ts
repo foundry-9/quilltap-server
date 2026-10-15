@@ -1,4 +1,4 @@
-import { isCarinaInvocableName, parseCarinaQuery } from '../carina-parser'
+import { isCarinaInvocableName, parseCarinaQuery, stripCarinaQueryLines } from '../carina-parser'
 
 describe('parseCarinaQuery', () => {
   describe('basic syntax', () => {
@@ -424,3 +424,23 @@ describe('isCarinaInvocableName', () => {
     expect(parseCarinaQuery(`@${name}: hello`)?.characterName).not.toBe(name);
   });
 });
+
+describe('stripCarinaQueryLines', () => {
+  it('removes every query line, public and whisper', () => {
+    expect(stripCarinaQueryLines('@Alice: one\nsaid aloud\n@Bob? two')).toBe('said aloud')
+  })
+
+  it('removes a query line in the middle of a message', () => {
+    expect(stripCarinaQueryLines('before\n@Alice: “quoted”\nafter')).toBe('before\nafter')
+  })
+
+  it('keeps lines that do not parse as a query', () => {
+    const text = 'an @Alice: mid-line mention\n@Alice:\n@X: too short a name'
+    expect(stripCarinaQueryLines(text)).toBe(text)
+  })
+
+  it('normalises CRLF and passes empty text through', () => {
+    expect(stripCarinaQueryLines('a\r\n@Alice: q\r\nb')).toBe('a\nb')
+    expect(stripCarinaQueryLines('')).toBe('')
+  })
+})

@@ -403,7 +403,7 @@ Per the standing rule, propagate additions to the stylebook and `packages/theme-
 
 ## Settings
 
-One toggle in the Chat tab (`components/settings/tabs/ChatTabContent.tsx`), grouped under Pascal's existing area: **"Custom tools"** (default on). Off = `run_custom` never offered to models and the gutter button hidden. No further settings in v1 (per-tool configuration lives in the JSON files themselves).
+One toggle in the Chat tab (`components/settings/tabs/ChatTabContent.tsx`), grouped under Pascal's existing area: **"Custom tools"** (default on). Off = `run_custom` never offered to models, the gutter button hidden, and (since 4.11) no trigger phrase listened for. The trigger phrases' own toggle, **"Auto-Run Custom Tools on Trigger Phrases"** (`customToolTriggers`, default off), sits in the Automation card beside Auto-Detect RNG. No further settings in v1 (per-tool configuration lives in the JSON files themselves).
 
 ## Error handling
 
@@ -435,6 +435,8 @@ Load-time validation failures do not error at run time; they simply keep the too
 - `lib/tools/run-custom-tool.ts` + `lib/tools/handlers/run-custom-handler.ts`.
 - `components/chat/CustomToolsDropdown.tsx`.
 - `app/api/v1/chats/[id]/custom-tools/route.ts`.
+
+**Correction (4.11) — three entrances, one run service.** A custom tool is now reached three ways: a model's `run_custom`, the operator's popup, and a [trigger phrase](pascal-trigger-phrases.md) overheard in the chat (`lib/pascal/trigger-runner.ts`). Each entrance resolves the roster its own way and reports failure its own way; the sequence between — state cascade, `executeCustomTool`, `applyCustomToolEffects`, Pascal's post with its `pascalMeta` — lives once in `runCustomTool` (`lib/pascal/run-service.ts`). A new entrance calls it rather than copying the sequence.
 
 ## Engineering tasks
 
@@ -498,6 +500,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 14. **The LLM consult is a fifth test subject, and its failure is an outcome, not an error** (added post-ship; see [The `llm` consult](#the-llm-consult)). The author supplies the failure's words (`errorMessage`, required), the run never fails because the oracle went quiet, and the technical reason stays out of the fiction. The provider call arrives through an injected `llmInvoke` seam so the core stays testable and the audit stays free; answer comparisons are deliberately forgiving (trim, case-insensitive eq, numeric coercion for ordering) because the subject is a model's prose, not a declared value.
 15. **`contains`/`ncontains` are substring comparators, not a grammar** (added post-ship; see [Containment](#when--comparators-not-expressions)). Two more AND-composed keys rather than any pattern language: no regex, no globs, nothing to parse or inject. Per-context strictness follows each subject's `eq` precedent — exact and case-sensitive on `params`/`metadata`, trimmed case-insensitive on `llm` — and the operand is a non-empty string literal or a `$param` to a string parameter, so an outcome can ask whether one input appears inside another (or inside the consult's answer).
 
+16. **Trigger phrases run a tool when its words are said** (added 4.11; design of record [pascal-trigger-phrases.md](pascal-trigger-phrases.md)). A `triggers` key on the definition (case-insensitive substrings, no grammar) plus an off-by-default `chatSettings.customToolTriggers` toggle under the `customTools` master switch. A triggered run is an ordinary run with every parameter at its default, recorded as `pascalMeta.invokedBy: 'trigger'` with the `triggerPhrase`; only the operator's message and a character's reply are scanned.
 
 ## Addition — the `progress` family (v4.10, 2026-09-08)
 

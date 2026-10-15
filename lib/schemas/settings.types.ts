@@ -798,6 +798,12 @@ export const ChatSettingsSchema = z.object({
   autoDetectRng: z.boolean().default(true),
   /** Offer Pascal's custom pseudo-tools (`run_custom`) to models and show the composer gutter button (default: true) */
   customTools: z.boolean().default(true),
+  /**
+   * Run a custom tool automatically, with its defaults, when a message from
+   * anyone in a chat contains one of its declared `triggers` phrases (default:
+   * false). Dead while `customTools` is off.
+   */
+  customToolTriggers: z.boolean().default(false),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */

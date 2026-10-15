@@ -50,6 +50,7 @@ export function ChatTabContent() {
     handleImageDescriptionProfileChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
+    handleCustomToolTriggersChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleAutonomousRoomSettingsUpdate,
@@ -169,6 +170,7 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onAutoDetectRngChange={handleAutoDetectRngChange}
+            onCustomToolTriggersChange={handleCustomToolTriggersChange}
           />
         </CollapsibleCard>
 

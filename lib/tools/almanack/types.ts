@@ -274,6 +274,7 @@ export interface FeatureConfigInfo {
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };
   autoDetectRng: boolean;
   customTools: boolean;
+  customToolTriggers: boolean;
   avatarDisplay: { mode: string; style: string };
   coreWhisper: {
     enabled: boolean;

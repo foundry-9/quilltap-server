@@ -19,6 +19,7 @@ import {
   MAX_TITLE_LENGTH,
   MAX_CHIP_LABEL_LENGTH,
   MAX_EFFECTS,
+  KNOWN_TOP_LEVEL_KEYS,
 } from '@/lib/pascal/custom-tool.types'
 
 import mirror from '@/public/schemas/qtap-custom-tool.schema.json'
@@ -635,6 +636,12 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an empty outcome condition on an effect', withEffects([{ when: { outcome: {} }, target: 'state.x', value: 1 }])],
     ['an unknown outcome state in an effect condition', withEffects([{ when: { outcome: { eq: 'triumph' } }, target: 'state.x', value: 1 }])],
     ['an outcome subject inside an effect condition ANDed with a value test', withEffects([{ when: { gt: 0.5, outcome: { neq: 'failure' } }, target: 'state.x', value: 1 }])],
+    ['a trigger list', { ...BASE, triggers: ['abracadabra', 'open sesame'] }],
+    ['an empty trigger list', { ...BASE, triggers: [] }],
+    ['a too-short trigger', { ...BASE, triggers: ['ok'] }],
+    ['an over-long trigger', { ...BASE, triggers: ['x'.repeat(81)] }],
+    ['more triggers than the cap', { ...BASE, triggers: Array.from({ length: 9 }, (_, i) => `phrase ${i}`) }],
+    ['an exact duplicate trigger', { ...BASE, triggers: ['abracadabra', 'abracadabra'] }],
     ['more effects than the cap', withEffects(Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 })))],
   ]
 
@@ -691,6 +698,17 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(userOnly)).toBe(false)
   })
 
+  it('is deliberately weaker than Zod on trigger case-folding and whitespace', () => {
+    // JSON Schema's uniqueItems is case-sensitive and it has no trim rule; both
+    // are stated in the `triggers` description and enforced by the loader.
+    const caseDuplicate = { ...BASE, triggers: ['Abracadabra', 'abracadabra'] }
+    const padded = { ...BASE, triggers: [' abracadabra'] }
+    expect(validate(caseDuplicate)).toBe(true)
+    expect(accepts(caseDuplicate)).toBe(false)
+    expect(validate(padded)).toBe(true)
+    expect(accepts(padded)).toBe(false)
+  })
+
   it('is deliberately weaker than Zod on effect cross-item rules', () => {
     // Undeclared params and a missing llm block are cross-item facts the
     // mirror cannot see from inside an effect.
@@ -700,5 +718,31 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(ghostParam)).toBe(false)
     expect(validate(orphanLlm)).toBe(true)
     expect(accepts(orphanLlm)).toBe(false)
+  })
+})
+
+describe('triggers', () => {
+  const issues = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('stores phrases as written', () => {
+    const parsed = QtapCustomToolSchema.parse({ ...BASE, triggers: ['Open Sesame'] })
+    expect(parsed.triggers).toEqual(['Open Sesame'])
+  })
+
+  it('rejects leading or trailing whitespace, naming the trigger', () => {
+    expect(issues({ ...BASE, triggers: ['abracadabra', 'open sesame '] })).toContain(
+      'trigger 2 has leading or trailing whitespace',
+    )
+  })
+
+  it('rejects a phrase that repeats another ignoring case', () => {
+    expect(issues({ ...BASE, triggers: ['Abracadabra', 'ABRACADABRA'] })).toContain('trigger 2 repeats trigger 1')
+  })
+
+  it('is a known top-level key', () => {
+    expect(KNOWN_TOP_LEVEL_KEYS).toContain('triggers')
   })
 })

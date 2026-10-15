@@ -77,6 +77,8 @@ Controls automatic behavior during chat interactions.
 - Creates immersive tabletop RPG experiences where dice mentions become real rolls
 - Both you and the AI can trigger random events naturally through conversation
 
+- **Auto-Run Custom Tools on Trigger Phrases** — Off by default. When on, a message from anyone in the chat that contains one of a custom tool's declared trigger phrases runs that tool automatically, with every parameter at its default, and Pascal announces the outcome after the message. Phrases are matched as plain text in any case, Carina question lines and staff announcements are never listened to, and at most four tools fire per message. Does nothing while **Custom tools** is off — the checkbox is greyed out until it is on. See [Words that pull the lever](custom-tools.md#words-that-pull-the-lever--triggers).
+
 **When to disable:**
 
 - When discussing dice or probability without wanting actual rolls

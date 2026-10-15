@@ -724,6 +724,7 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
 
   push("#### Pascal's Workbench (Custom Tools)", '');
   push(`- **Custom tools offered to models**: ${yesNo(fc.customTools)}`);
+  push(`- **Auto-Run on Trigger Phrases**: ${yesNo(fc.customToolTriggers)}`);
   push(
     '- *(the inventory of definitions lives in the Scriptorium section — they are documents, not settings)*',
     '',

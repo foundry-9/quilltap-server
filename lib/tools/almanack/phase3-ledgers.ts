@@ -627,6 +627,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     },
     autoDetectRng: true,
     customTools: true,
+    customToolTriggers: false,
     avatarDisplay: { mode: 'ALWAYS', style: 'CIRCULAR' },
     coreWhisper: {
       enabled: true,
@@ -733,6 +734,7 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     autoDetectRng: chatSettings?.autoDetectRng ?? true,
     customTools: chatSettings?.customTools ?? true,
+    customToolTriggers: chatSettings?.customToolTriggers ?? false,
     avatarDisplay: {
       mode: chatSettings?.avatarDisplayMode ?? 'ALWAYS',
       style: chatSettings?.avatarDisplayStyle ?? 'CIRCULAR',

@@ -82,6 +82,15 @@ export const MAX_CHIP_LABEL_LENGTH = 160;
 /** Cap on effects per tool. */
 export const MAX_EFFECTS = 16;
 
+/** Cap on trigger phrases per tool. */
+export const MAX_TRIGGERS = 8;
+
+/** Shortest trigger phrase, in characters — keeps `"a"` and `"ok"` out. A length, not a word count. */
+export const MIN_TRIGGER_PHRASE_LENGTH = 3;
+
+/** Longest trigger phrase, in characters. */
+export const MAX_TRIGGER_PHRASE_LENGTH = 80;
+
 /** Cap on an effect's `target` string, in characters. */
 export const MAX_EFFECT_TARGET_LENGTH = 200;
 
@@ -843,6 +852,16 @@ export const QtapCustomToolSchema = z
         'Templated label for the outcome chip and the announcement header. Same placeholders as an outcome message. ' +
           'Rendered after the outcome is chosen. Blank/absent = the title labels the chip.'
       ),
+    triggers: z
+      .array(z.string().min(MIN_TRIGGER_PHRASE_LENGTH).max(MAX_TRIGGER_PHRASE_LENGTH))
+      .min(1)
+      .max(MAX_TRIGGERS)
+      .optional()
+      .describe(
+        'Phrases that run this tool automatically, with every parameter at its default, when a message from anyone ' +
+          'in the chat contains one — exact substrings, case-insensitive, no wildcards. Only honoured when the chat ' +
+          'setting "Auto-Run Custom Tools on Trigger Phrases" is on (it is off by default).'
+      ),
     description: z
       .string()
       .min(1)
@@ -888,6 +907,7 @@ export const QtapCustomToolSchema = z
     validateReferences(tool, ctx);
     validateGates(tool, ctx);
     validateEffects(tool, ctx);
+    validateTriggers(tool, ctx);
   });
 
 export type QtapCustomTool = z.infer<typeof QtapCustomToolSchema>;
@@ -970,6 +990,37 @@ function validateGates(
       path: ['withheldWhen'],
     });
   }
+}
+
+/**
+ * Rule: a trigger phrase is stored as written, but must equal its own `trim()`
+ * — leading or trailing whitespace is a typo that would make "fire " miss
+ * "fire." — and no two phrases of one tool may be equal case-insensitively,
+ * since matching folds case and the second would never add anything.
+ */
+function validateTriggers(tool: { triggers?: string[] }, ctx: z.RefinementCtx): void {
+  if (!tool.triggers) return;
+  const seen = new Map<string, number>();
+  tool.triggers.forEach((phrase, index) => {
+    if (phrase !== phrase.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `trigger ${index + 1} has leading or trailing whitespace`,
+        path: ['triggers', index],
+      });
+    }
+    const folded = phrase.toLocaleLowerCase();
+    const earlier = seen.get(folded);
+    if (earlier !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `trigger ${index + 1} repeats trigger ${earlier + 1} (phrases match regardless of case)`,
+        path: ['triggers', index],
+      });
+    } else {
+      seen.set(folded, index);
+    }
+  });
 }
 
 /** The value types a subject or an operand can carry, with `integer` folded in. */

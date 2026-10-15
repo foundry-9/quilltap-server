@@ -46,6 +46,7 @@ import {
 } from '@/lib/pascal/tool-draft'
 import { GateSection } from './GateSection'
 import { NumberOrParamField } from './NumberOrParamField'
+import { TriggerPhrasesField } from './TriggerPhrasesField'
 
 interface BuilderFormProps {
   draft: ToolDraft
@@ -339,6 +340,13 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             </select>
           </label>
         </div>
+
+        <TriggerPhrasesField
+          triggers={draft.triggers}
+          issues={issues}
+          onChange={(triggers) => update({ triggers })}
+          disabled={disabled}
+        />
       </section>
 
       {/* Availability gate */}

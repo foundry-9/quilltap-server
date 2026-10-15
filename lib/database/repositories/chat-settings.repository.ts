@@ -191,6 +191,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             },
             autoDetectRng: true,
             customTools: true,
+            customToolTriggers: false,
             compositionModeDefault: false,
             composerSpellcheck: true,
             composerEmoji: true,

@@ -534,7 +534,7 @@ Update chat settings.
 }
 ```
 
-Further accepted fields (each optional, same shapes as in the `GET` response): `tokenDisplaySettings`, `customTools`, `agentModeSettings`, `storyBackgroundsSettings`, `contextCompressionSettings`, `autoLockSettings`, `compositionModeDefault`, `composerSpellcheck`, `composerEmoji`, `composerUnicode`, `impersonationVoiceMode` (`'off'` / `'ask'` / `'always'`), `textReplacementsEnabled`, `autonomousRoomSettings`, `thinkingDisplay`, `autoScrollOnResponseComplete`, `answerConfirmationSettings`, `smartTypographySettings`.
+Further accepted fields (each optional, same shapes as in the `GET` response): `tokenDisplaySettings`, `customTools`, `customToolTriggers` (boolean, default `false`: run a custom tool when anyone in a chat says one of its `triggers` phrases; ignored while `customTools` is off), `agentModeSettings`, `storyBackgroundsSettings`, `contextCompressionSettings`, `autoLockSettings`, `compositionModeDefault`, `composerSpellcheck`, `composerEmoji`, `composerUnicode`, `impersonationVoiceMode` (`'off'` / `'ask'` / `'always'`), `textReplacementsEnabled`, `autonomousRoomSettings`, `thinkingDisplay`, `autoScrollOnResponseComplete`, `answerConfirmationSettings`, `smartTypographySettings`.
 
 `conciergeSettings` is validated with `ConciergeSettingsSchema` (a malformed object is a `400`). The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
 
@@ -3161,7 +3161,7 @@ List the roster for the run dialog. Because a character-tier store shadows farth
 
 #### `POST /api/v1/chats/[id]/custom-tools?action=run`
 
-Run one tool at the operator's behest. Posts **one** message: Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`), identical to the one a character's own roll produces. The transcript does not record that the operator reached for the tool, nor what figures they set — a companion USER-role invocation line used to publish exactly that, and was removed.
+Run one tool at the operator's behest. This is one of three entrances to a custom tool — beside a model's `run_custom` and a trigger phrase said in the chat — and all three deal through the same run service (`lib/pascal/run-service.ts`), so the outcome, effects and `pascalMeta` are identical but for `invokedBy` (`'user'` here). Posts **one** message: Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`), identical to the one a character's own roll produces. The transcript does not record that the operator reached for the tool, nor what figures they set — a companion USER-role invocation line used to publish exactly that, and was removed.
 
 A failed run posts **no Pascal message** — the failure is announced by Prospero (`systemKind: 'custom-tool-error'`) and returns `400`.
 

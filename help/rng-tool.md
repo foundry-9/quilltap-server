@@ -30,6 +30,8 @@ By default, Quilltap automatically detects RNG patterns in both your messages an
 
 For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
 
+Pascal's own [custom tools](custom-tools.md#words-that-pull-the-lever--triggers) can listen for phrases in just the same way — say the word and the tool is dealt — once you turn on **Auto-Run Custom Tools on Trigger Phrases** in the same Automation settings.
+
 **Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat&section=automation) under "Automation" if you prefer to roll only when you press the button yourself, or to discuss dice without executing rolls.
 
 ### From the Composer's Dice Button

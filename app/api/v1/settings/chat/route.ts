@@ -51,6 +51,7 @@ async function updateChatSettings(
   llmLoggingSettings?: unknown,
   autoDetectRng?: boolean,
   customTools?: boolean,
+  customToolTriggers?: boolean,
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
@@ -171,6 +172,12 @@ async function updateChatSettings(
       throw new Error('Invalid customTools value (must be boolean)')
     }
     updateData.customTools = customTools
+  }
+  if (typeof customToolTriggers !== 'undefined') {
+    if (typeof customToolTriggers !== 'boolean') {
+      throw new Error('Invalid customToolTriggers value (must be boolean)')
+    }
+    updateData.customToolTriggers = customToolTriggers
   }
   if (typeof agentModeSettings !== 'undefined') {
     const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
@@ -389,6 +396,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       llmLoggingSettings,
       autoDetectRng,
       customTools,
+      customToolTriggers,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -424,6 +432,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       llmLoggingSettings,
       autoDetectRng,
       customTools,
+      customToolTriggers,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
