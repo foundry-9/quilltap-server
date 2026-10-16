@@ -66,6 +66,7 @@ interface UseChatSettingsReturn {
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleComposerUnicodeChange: (value: boolean) => Promise<void>
+  handleComposerSlashCommandsChange: (value: boolean) => Promise<void>
   handleImpersonationVoiceModeChange: (value: ImpersonationVoiceMode) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
@@ -448,6 +449,23 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update composer slash-commands setting (the `/` typeahead only — the
+   * gutter buttons and the sidebar's Run Tool are deliberately not gated)
+   */
+  const handleComposerSlashCommandsChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { composerSlashCommands: value },
+        'Failed to update composer slash-commands setting',
+        'Failed to update composer slash-commands setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
    * Update the impersonated-line voice mode — off / ask / always (the
    * Impersonate overlay only — a `controlledBy: 'user'` seat is never rehearsed)
    */
@@ -775,6 +793,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleComposerSlashCommandsChange,
     handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,

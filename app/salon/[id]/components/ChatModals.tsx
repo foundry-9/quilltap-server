@@ -12,6 +12,7 @@ import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceMod
 import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import RunToolModal from '@/components/chat/RunToolModal'
+import CustomToolRunDialog from '@/components/chat/CustomToolRunDialog'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
@@ -26,7 +27,12 @@ import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog
 import InformDialog from '@/components/chat/InformDialog'
 import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
 import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
-import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
+import type {
+  CustomToolRequest,
+  ReattributeDialogState,
+  RunToolRequest,
+  SelectLLMProfileDialogState,
+} from '../hooks/useModalState'
 
 interface ChatModalsProps {
   chatId: string
@@ -58,7 +64,13 @@ interface ChatModalsProps {
   toolSettingsModalOpen: boolean
   closeToolSettings: () => void
   runToolModalOpen: boolean
+  /** What the Run Tool dialog was asked to open onto (a `/` command's pre-selection). */
+  runToolRequest: RunToolRequest
   closeRunTool: () => void
+  /** Pascal's custom-tool dialog — shared by the gutter wand and the `/` commands. */
+  customToolDialogOpen: boolean
+  customToolRequest: CustomToolRequest
+  closeCustomTool: () => void
   stateEditorModalOpen: boolean
   closeStateEditor: () => void
   libraryFilePickerOpen: boolean
@@ -124,7 +136,8 @@ export function ChatModals({
   searchReplaceModalOpen, closeSearchReplace,
   bulkReplaceModalOpen, closeBulkReplace,
   toolSettingsModalOpen, closeToolSettings,
-  runToolModalOpen, closeRunTool,
+  runToolModalOpen, runToolRequest, closeRunTool,
+  customToolDialogOpen, customToolRequest, closeCustomTool,
   stateEditorModalOpen, closeStateEditor,
   libraryFilePickerOpen, closeLibraryFilePicker,
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
@@ -475,6 +488,20 @@ export function ChatModals({
         onToolExecuted={() => {
           fetchChat()
         }}
+        initialTool={runToolRequest.toolId ? { toolId: runToolRequest.toolId, nonce: runToolRequest.nonce } : null}
+      />
+
+      {/* Rendered unconditionally so it keeps its memory of what was last set
+          while closed (see CustomToolRunDialog). One instance serves the gutter
+          wand and the composer's `/` commands alike. */}
+      <CustomToolRunDialog
+        isOpen={customToolDialogOpen}
+        onClose={closeCustomTool}
+        chatId={chatId}
+        onRan={() => {
+          fetchChat()
+        }}
+        initialTool={customToolRequest.tool ? { ...customToolRequest.tool, nonce: customToolRequest.nonce } : null}
       />
 
       {chat && (

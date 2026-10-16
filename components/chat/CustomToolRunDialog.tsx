@@ -27,7 +27,7 @@
  * can see what the tool reads about their character. Vocabulary, not odds.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -150,6 +150,12 @@ interface CustomToolRunDialogProps {
   chatId: string
   /** Called after a successful run so the Salon can refetch the chat */
   onRan?: () => void
+  /**
+   * Open straight onto this tool's form (the composer's `/<name>` command).
+   * Applied once per nonce, after the fresh roster arrives; it lands on the
+   * remembered values for that tool like any other selection.
+   */
+  initialTool?: { name: string; asCharacterId: string | null; nonce: number } | null
 }
 
 /** Above this many tools, the picker earns a search box. */
@@ -173,6 +179,7 @@ export function CustomToolRunDialog({
   onClose,
   chatId,
   onRan,
+  initialTool = null,
 }: Readonly<CustomToolRunDialogProps>) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, ParameterFormValues>>({})
@@ -261,6 +268,28 @@ export function CustomToolRunDialog({
     )
     setSelectedKey(key)
   }
+
+  // A pre-selection waits for the roster this open fetched, not a cached one, so
+  // a tool added to a store mid-chat is found. One nonce, one application.
+  const appliedNonceRef = useRef<number | null>(null)
+  const rosterSettled = rosterQuery.isSuccess && !rosterQuery.isFetching
+  useEffect(() => {
+    if (!isOpen || !initialTool || !rosterSettled) return
+    if (appliedNonceRef.current === initialTool.nonce) return
+    appliedNonceRef.current = initialTool.nonce
+    const named = tools.filter((tool) => tool.name === initialTool.name)
+    const match =
+      named.find((tool) => (tool.asCharacterId ?? null) === initialTool.asCharacterId) ??
+      (initialTool.asCharacterId === null ? named[0] : undefined) ??
+      null
+    if (!match) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- falling back to the picker for a request that named nothing dealt
+      setSelectedKey(null)
+      showErrorToast(`No tool named "${initialTool.name}" is on Pascal's table in this chat`)
+      return
+    }
+    handleSelect(match)
+  }, [isOpen, initialTool, rosterSettled, tools])
 
   const handleRun = () => {
     if (!selectedTool || isRunning) return

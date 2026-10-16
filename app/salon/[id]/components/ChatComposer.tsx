@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
@@ -10,6 +10,12 @@ import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { LexicalComposerWrapper } from '@/components/chat/lexical'
 import type { ComposerEditorHandle } from '@/components/chat/lexical'
+import {
+  buildQuickRollActions,
+  type SlashCommandContext,
+  type SlashCustomToolRef,
+} from '@/components/chat/lexical/slash-commands/context'
+import { useSlashCommandRunner } from '@/components/chat/useSlashCommandRunner'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
@@ -101,8 +107,16 @@ interface ChatComposerProps {
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
   /** Whether this chat resolves a non-empty Pascal custom-tool roster */
   customToolsAvailable?: boolean
-  /** Callback after a custom tool runs, so the chat can refetch */
-  onCustomToolRan?: () => void
+  /** Open Pascal's custom-tool dialog (the gutter wand) */
+  onCustomToolsClick?: () => void
+  /** Open Run Tool — on a tool's form when given an id (the `/` commands) */
+  onOpenRunTool?: (toolId?: string) => void
+  /** Open Pascal's custom-tool dialog — on a tool's form when given one (the `/` commands) */
+  onOpenCustomTool?: (initial?: SlashCustomToolRef) => void
+  /** Called after a `/` command runs a tool at once, so the chat can refetch */
+  onSlashToolRan?: () => void
+  /** The character a `/` command's immediate built-in run acts as — Run Tool's default */
+  slashDefaultCharacterId?: string | null
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
   /** Callback to open a new terminal session */
@@ -174,7 +188,11 @@ export function ChatComposer({
   hideStopButton = false,
   onPendingToolResult,
   customToolsAvailable,
-  onCustomToolRan,
+  onCustomToolsClick,
+  onOpenRunTool,
+  onOpenCustomTool,
+  onSlashToolRan,
+  slashDefaultCharacterId = null,
   narrationDelimiters,
   onOpenTerminalClick,
   isTerminalModeActive,
@@ -209,6 +227,51 @@ export function ChatComposer({
     fileInputRef.current?.click()
     onAttachFileClick?.()
   }
+
+  // The `/` command menu runs the gutter's own handlers and the two shared tool
+  // dialogs; zero-parameter tools run at once through the same routes.
+  const { runBuiltInNow, runCustomNow } = useSlashCommandRunner({
+    chatId: id,
+    defaultCharacterId: slashDefaultCharacterId,
+    onRan: onSlashToolRan,
+  })
+  const slashCommands = useMemo<SlashCommandContext | null>(() => {
+    if (!onOpenRunTool || !onOpenCustomTool) return null
+    return {
+      chatId: id,
+      actions: {
+        attach: () => {
+          fileInputRef.current?.click()
+          onAttachFileClick?.()
+        },
+        library: onLibraryFileClick,
+        image: onStandaloneGenerateImageClick,
+        announce: onInsertAnnouncementClick,
+        mail: onComposeMailClick,
+        inform: onInformClick,
+        ...(onPendingToolResult ? buildQuickRollActions(id, onPendingToolResult) : {}),
+      },
+      openRunTool: onOpenRunTool,
+      openCustomTool: onOpenCustomTool,
+      runBuiltInNow,
+      runCustomNow,
+      customToolsAvailable: !!customToolsAvailable,
+    }
+  }, [
+    id,
+    onAttachFileClick,
+    onLibraryFileClick,
+    onStandaloneGenerateImageClick,
+    onInsertAnnouncementClick,
+    onComposeMailClick,
+    onInformClick,
+    onPendingToolResult,
+    onOpenRunTool,
+    onOpenCustomTool,
+    runBuiltInNow,
+    runCustomNow,
+    customToolsAvailable,
+  ])
 
   // Submit handler: the editor owns the live text, so we just dispatch the
   // form submit — the page's onSubmit reads markdown straight from the editor
@@ -441,7 +504,7 @@ export function ChatComposer({
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               customToolsAvailable={customToolsAvailable}
-              onCustomToolRan={onCustomToolRan}
+              onCustomToolsClick={onCustomToolsClick}
               disabled={composerLocked || !hasActiveCharacters}
             />
             </div>
@@ -521,6 +584,7 @@ export function ChatComposer({
               documentEditingMode={documentEditingMode}
               disabled={composerLocked || !hasActiveCharacters}
               mentionPriorityCharacterIds={mentionPriorityCharacterIds}
+              slashCommands={slashCommands}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>

@@ -61,6 +61,7 @@ async function updateChatSettings(
   composerSpellcheck?: boolean,
   composerEmoji?: boolean,
   composerUnicode?: boolean,
+  composerSlashCommands?: boolean,
   impersonationVoiceMode?: unknown,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
@@ -248,6 +249,12 @@ async function updateChatSettings(
     }
     updateData.composerUnicode = composerUnicode
   }
+  if (typeof composerSlashCommands !== 'undefined') {
+    if (typeof composerSlashCommands !== 'boolean') {
+      throw new Error('Invalid composerSlashCommands value (must be boolean)')
+    }
+    updateData.composerSlashCommands = composerSlashCommands
+  }
   if (typeof impersonationVoiceMode !== 'undefined') {
     const parsedMode = ImpersonationVoiceModeEnum.safeParse(impersonationVoiceMode)
     if (!parsedMode.success) {
@@ -406,6 +413,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      composerSlashCommands,
       impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,
@@ -442,6 +450,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      composerSlashCommands,
       impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,

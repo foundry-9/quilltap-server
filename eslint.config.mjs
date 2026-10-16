@@ -91,7 +91,10 @@ const eslintConfig = defineConfig([
     //
     // Adding an import here is not a lint failure to silence; it means the code
     // belongs in the adapter instead.
-    files: ['lib/char-insert/**/*.ts'],
+    //
+    // `lib/slash-commands/**` (composer-slash-commands.md) is under the same
+    // contract; it may import `lib/char-insert/` only by relative path.
+    files: ['lib/char-insert/**/*.ts', 'lib/slash-commands/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

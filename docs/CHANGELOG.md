@@ -4,6 +4,17 @@
 
 ### 4.11-dev
 
+#### Feature: slash commands in the Salon composer
+
+- Typing `/` at the start of a word in the Salon composer opens a command menu: composer actions (`/attach`, `/library`, `/image`, `/announce`, `/mail`, `/inform`, `/tool`, `/pascal`, `/roll`, `/d6`, `/d20`, `/coin`, `/bottle`), every available user-invocable built-in tool under its id, and every Pascal custom tool in the chat under its name. Unavailable built-ins are left out. Matching is exact, then command prefix, then word prefix of the command, label or keywords (`_` and `-` split words); never mid-word.
+- A tool that declares no parameters runs at once (public, or the custom tool's default visibility) with a toast; one with any parameter opens its existing dialog on its form. Picking a command removes the typed `/query` as one undo step. `/d6` and friends produce the same pending-result chip as the dice button.
+- The trigger uses `findTrigger`'s opener rule plus a letter-first query, so `and/or`, `10/15`, `http://`, paths and code never open it. No arguments; a space closes the menu. Not mounted in Document Mode.
+- New pure tier `lib/slash-commands/` (trigger, ranking, registry), under the same ESLint import restriction as `lib/char-insert/`. Adapter `SlashCommandPlugin`; immediate runs in `useSlashCommandRunner`; tool and custom-tool lists fetched only while the menu is open (`queryKeys.tools.byChat` added).
+- `RunToolModal` and `CustomToolRunDialog` take an `initialTool` pre-selection (re-applied per nonce). `CustomToolRunDialog` moved from `CustomToolsButton` into `ChatModals` so the gutter wand and the slash menu share one instance; `CustomToolsButton` is now a plain button. `useModalState.openRunTool(toolId?)` and new `openCustomTool(initial?)`.
+- The dice button's request moved to `components/chat/rng-request.ts`, shared with the slash quick rolls.
+- New chat setting `composerSlashCommands` (Settings → Chat → Slash Commands), default on; gutter buttons and the sidebar are not gated. Migration `add-composer-slash-commands-field-v1` adds the `chat_settings` column.
+- Help: `chat-settings-composer.md` (new Slash Commands section; page URL now `section=composer-slash-commands`), `run-tool.md`, `custom-tools.md`, `rng-tool.md`. Spec moved to `docs/developer/features/complete/composer-slash-commands.md` with an As-built section; Phase 4 of `composer-typeahead.md` marked superseded.
+
 #### Fix: one-character chat chained the character to the depth cap (bug 249)
 
 - In a Salon chat with one LLM character and no persona seat, every operator message made the character reply about 20 times in a row, until the chain hit `maxChainDepth`. Since `83f4368a8` the turn selector returns a lone character unconditionally, and `shouldChainNext` treated that as a reason to continue; the all-LLM pause did not apply because the operator was present.

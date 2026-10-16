@@ -580,6 +580,8 @@ It arrives in two acts. First the table: every tool available to this scene, wit
 
 It remembers. Close the dialog and reopen it, and you are back on the tool you last used, with the figures you last set still in their boxes. This is deliberate: the same roll is usually wanted twice, and re-typing it is a tax on the second one.
 
+The composer offers a shorter road. Type `/pascal` at the start of a word to open the same dialog, or `/` and a tool's name — `/unlock` — to land straight upon that tool's form with your remembered figures waiting. A tool that declares no parameters at all is rolled the moment you choose it, with its definition's own preference for public or private. To whisper a roll that would otherwise be public, use the dialog. See [Slash Commands](chat-settings-composer.md).
+
 ### Presets — hands set aside for later
 
 Memory of the last hand is all very well, but some tools are run the same three ways for a season at a stretch, and for those the dialog offers **presets**. Beneath a tool's parameters — provided it has any, and provided the roll runs as a character with a vault to keep things in — you will find a modest row of conveniences: a dropdown of hands set aside earlier, a box for naming a new one, **Save preset**, and **Reset to defaults**.

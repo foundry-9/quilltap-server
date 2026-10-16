@@ -250,6 +250,14 @@ export function SalonView({ chatId }: SalonViewProps) {
     return names
   }, [chat?.participants])
 
+  // A `/` command's immediate built-in run acts as Run Tool's default would:
+  // the first active character seat.
+  const slashDefaultCharacterId = useMemo(
+    () =>
+      (chat?.participants ?? []).find(p => p.type === 'CHARACTER' && p.isActive && !p.removedAt)?.character?.id ?? null,
+    [chat?.participants]
+  )
+
   // The `@` typeahead lists this chat's cast ahead of everyone else.
   const castCharacterIds = useMemo(
     () =>
@@ -1727,7 +1735,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           onDismissToolExecutionStatus={sseStreaming.dismissToolExecutionStatus}
           customToolsAvailable={customToolsAvailable}
-          onCustomToolRan={fetchChat}
+          onCustomToolsClick={() => modals.openCustomTool()}
+          onOpenRunTool={modals.openRunTool}
+          onOpenCustomTool={modals.openCustomTool}
+          onSlashToolRan={fetchChat}
+          slashDefaultCharacterId={slashDefaultCharacterId}
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
           roleplayTemplateId={chat?.roleplayTemplateId}
@@ -1932,7 +1944,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           toolSettingsModalOpen={modals.toolSettingsModalOpen}
           closeToolSettings={modals.closeToolSettings}
           runToolModalOpen={modals.runToolModalOpen}
+          runToolRequest={modals.runToolRequest}
           closeRunTool={modals.closeRunTool}
+          customToolDialogOpen={modals.customToolDialogOpen}
+          customToolRequest={modals.customToolRequest}
+          closeCustomTool={modals.closeCustomTool}
           stateEditorModalOpen={modals.stateEditorModalOpen}
           closeStateEditor={modals.closeStateEditor}
           libraryFilePickerOpen={modals.libraryFilePickerOpen}
@@ -2058,7 +2074,7 @@ export function SalonView({ chatId }: SalonViewProps) {
             refusalCount: chat?.conciergeRefusalCount,
           }}
           onToolSettingsClick={modals.openToolSettings}
-          onRunToolClick={modals.openRunTool}
+          onRunToolClick={() => modals.openRunTool()}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
           onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
           // Visibility section

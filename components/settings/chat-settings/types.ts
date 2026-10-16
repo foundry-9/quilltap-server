@@ -107,6 +107,8 @@ export interface ChatSettings {
   composerEmoji?: boolean
   /** Whether the `\` Unicode typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
   composerUnicode?: boolean
+  /** Whether `/` opens the slash-command menu in the Salon composer (the gutter buttons and sidebar are not gated by this) */
+  composerSlashCommands?: boolean
   /** What happens to a line typed while impersonating a character: posts as typed ('off'), opens the review dialog without a model call ('ask'), or opens it and restates at once ('always') */
   impersonationVoiceMode?: ImpersonationVoiceMode
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */

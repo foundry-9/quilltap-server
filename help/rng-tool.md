@@ -46,6 +46,10 @@ Pascal's own [custom tools](custom-tools.md#words-that-pull-the-lever--triggers)
    - **Spin the Bottle** - Randomly select a chat participant
    - **Custom Roll** - Choose any number of sides (2-1000) and rolls (1-100)
 
+### From the Composer's Slash Commands
+
+Type `/d6`, `/d20`, `/coin` or `/bottle` at the start of a word in the composer and press Enter: the roll is made and lands as the same pending result the dice button produces, ready to ride along with your next message. `/roll` opens [Run Tool](run-tool.md) on the random-number tool, where you may set the sides and the number of dice. See [Slash Commands](chat-settings-composer.md).
+
 ### Via AI Tool Use
 
 The AI can also roll dice and flip coins when asked. Just tell the character what you want:

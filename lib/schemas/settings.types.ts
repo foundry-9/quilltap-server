@@ -812,6 +812,8 @@ export const ChatSettingsSchema = z.object({
   composerEmoji: z.boolean().default(true),
   /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
   composerUnicode: z.boolean().default(true),
+  /** Whether `/` at the start of a word opens the slash-command menu in the Salon composer (default: true). Document Mode never has it. The gutter buttons and the sidebar's Run Tool are NOT gated by this — an explicit button press is never a surprise. */
+  composerSlashCommands: z.boolean().default(true),
   /** What happens to a line typed while impersonating a character — see `ImpersonationVoiceModeEnum` (default: 'off'). Replaced the 4.10-dev boolean `impersonationVoiceRewrite`. */
   impersonationVoiceMode: ImpersonationVoiceModeEnum.default('off'),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */

@@ -443,6 +443,8 @@ import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-versio
 import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
 // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
 import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-field';
+// Composer slash commands: composerSlashCommands toggle column on chat_settings
+import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-commands-field';
 
 /**
  * All available migrations.
@@ -905,6 +907,8 @@ export const migrations: Migration[] = [
   dropHousekeepingConsolidationJobsMigration,
   // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
   addCustomToolTriggersFieldMigration,
+  // Composer slash commands: composerSlashCommands toggle column on chat_settings
+  addComposerSlashCommandsFieldMigration,
 ];
 
 export {
@@ -1344,5 +1348,7 @@ export {
   dropHousekeepingConsolidationJobsMigration,
   // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
   addCustomToolTriggersFieldMigration,
+  // Composer slash commands: composerSlashCommands toggle column on chat_settings
+  addComposerSlashCommandsFieldMigration,
 };
 

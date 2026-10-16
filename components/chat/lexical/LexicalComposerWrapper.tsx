@@ -48,6 +48,8 @@ import { SmartTypographyPlugin } from './plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
 import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
 import { MentionTypeaheadPlugin } from './plugins/MentionTypeaheadPlugin'
+import { SlashCommandPlugin } from './plugins/SlashCommandPlugin'
+import type { SlashCommandContext } from './slash-commands/context'
 import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
 import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 
@@ -79,6 +81,11 @@ interface LexicalComposerWrapperProps {
   suspendSync?: boolean
   /** Character ids the `@` typeahead lists first — the current chat's cast. */
   mentionPriorityCharacterIds?: readonly string[]
+  /**
+   * What the `/` command menu runs. Omit (or null) and there is no menu — the
+   * plugin also stays unmounted while the `composerSlashCommands` setting is off.
+   */
+  slashCommands?: SlashCommandContext | null
 }
 
 /**
@@ -100,6 +107,7 @@ const ComposerPlugins = forwardRef<
     placeholder,
     suspendSync,
     mentionPriorityCharacterIds,
+    slashCommands,
   },
   ref,
 ) {
@@ -163,6 +171,7 @@ const ComposerPlugins = forwardRef<
       <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
       <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
       <MentionTypeaheadPlugin priorityCharacterIds={mentionPriorityCharacterIds} />
+      {slashCommands && <SlashCommandPlugin context={slashCommands} />}
       {/* Above TextReplacementPlugin: `.` is a trigger for both, and smart
           typography must resolve `...` before text replacement claims the word
           boundary. Registration order is load-bearing — see the interaction

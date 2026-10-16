@@ -396,6 +396,8 @@ The exact shape of `BuildableContext`, `whispers`, and `attachedFiles` is govern
 
 ## Phase 4 — `/` slash commands
 
+> **Superseded by [composer-slash-commands.md](complete/composer-slash-commands.md)** (implemented 4.11-dev). Nothing in this phase is binding; the slash entries in the file-touch summary below are struck for the same reason.
+
 ### Files
 
 **New:**
@@ -559,11 +561,11 @@ No schema changes. `targetParticipantIds` already exists on the message row. The
 - `components/chat/lexical/nodes/DocumentReferenceNode.tsx`
 - `components/chat/lexical/plugins/MentionsPlugin.tsx`
 - `components/chat/lexical/plugins/DocumentReferencesPlugin.tsx`
-- `components/chat/lexical/plugins/SlashCommandsPlugin.tsx`
+- ~~`components/chat/lexical/plugins/SlashCommandsPlugin.tsx`~~ (superseded)
 - `components/chat/lexical/transformers/mention-transformer.ts`
 - `components/chat/lexical/transformers/doc-reference-transformer.ts`
-- `components/chat/lexical/slash-commands/registry.ts`
-- `components/chat/lexical/slash-commands/types.ts`
+- ~~`components/chat/lexical/slash-commands/registry.ts`~~ (superseded)
+- ~~`components/chat/lexical/slash-commands/types.ts`~~ (superseded)
 
 **New files (server):**
 - `app/api/v1/mount-points/search/route.ts`
@@ -575,8 +577,8 @@ No schema changes. `targetParticipantIds` already exists on the message row. The
 - `components/chat/lexical/LexicalComposerWrapper.tsx` — register two new nodes, mount three new plugins.
 - `app/salon/[id]/components/DocumentPane.tsx` — same.
 - `components/chat/lexical/plugins/MarkdownBridgePlugin.tsx` — extend `COMPOSER_TRANSFORMERS` with two new transformers.
-- `components/chat/RunToolModal.tsx` — accept `initialToolId` prop.
-- `app/salon/[id]/components/ChatComposer.tsx` — thread `onOpenRunToolModal(toolId?)` into the plugin context.
+- ~~`components/chat/RunToolModal.tsx` — accept `initialToolId` prop.~~ (superseded: `initialTool`)
+- ~~`app/salon/[id]/components/ChatComposer.tsx` — thread `onOpenRunToolModal(toolId?)` into the plugin context.~~ (superseded)
 - `app/globals.css` (or equivalent) — new `qt-*` classes for chips and popover.
 - Chat-tab settings module — add `composerSuggestions` boolean (default `true`).
 

@@ -171,6 +171,12 @@ export const queryKeys = {
   },
   tools: {
     all: ['tools'] as const,
+    /**
+     * Prospero's tools as one chat sees them (`?chatId=…&includeSchemas=true`):
+     * availability and parameter schemas resolved for that chat. Read by the
+     * composer's `/` command menu while it is open.
+     */
+    byChat: (chatId: string) => ['tools', 'chat', chatId] as const,
   },
   customTools: {
     all: ['custom-tools'] as const,

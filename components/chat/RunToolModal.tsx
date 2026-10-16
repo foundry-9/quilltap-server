@@ -24,6 +24,12 @@ interface RunToolModalProps {
   participants: Participant[]
   /** Called after successful tool execution so the chat can refresh */
   onToolExecuted: () => void
+  /**
+   * Open straight onto this tool's form (the composer's `/<tool id>` command).
+   * Re-applied on every open — the nonce changes with each request, so picking
+   * the same command twice in a row re-selects.
+   */
+  initialTool?: { toolId: string; nonce: number } | null
 }
 
 /** Category display info */
@@ -45,6 +51,7 @@ export default function RunToolModal({
   chatId,
   participants,
   onToolExecuted,
+  initialTool = null,
 }: RunToolModalProps) {
   const [tools, setTools] = useState<AvailableTool[]>([])
   const [loading, setLoading] = useState(false)
@@ -66,33 +73,6 @@ export default function RunToolModal({
   // The enriched participant doesn't expose a top-level characterId, only `character.id`.
   const defaultCharacterId = activeCharacters[0]?.character?.id || null
 
-  // Fetch tools when modal opens and reset form state
-  useEffect(() => {
-    if (!isOpen) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open + data fetch; parent renders unconditionally
-    setLoading(true)
-    setSelectedTool(null)
-    setSearchQuery('')
-    setFormValues({})
-    setSelectedCharacterId(defaultCharacterId)
-    setIsPrivate(false)
-
-    fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.tools) {
-          // Filter to only user-invocable tools
-          const invocable = (data.tools as AvailableTool[]).filter(t => t.userInvocable !== false)
-          setTools(invocable)
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load tools:', err)
-        showErrorToast('Failed to load available tools')
-      })
-      .finally(() => setLoading(false))
-  }, [isOpen, chatId, defaultCharacterId])
-
   const handleSelectTool = useCallback((tool: AvailableTool) => {
     if (tool.available === false) return
     setSelectedTool(tool)
@@ -111,6 +91,46 @@ export default function RunToolModal({
     setFormValues(defaults)
     setFormValid(false)
   }, [])
+
+  const requestedToolId = initialTool?.toolId ?? null
+  const requestNonce = initialTool?.nonce ?? 0
+
+  // Fetch tools when modal opens and reset form state
+  useEffect(() => {
+    if (!isOpen) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open + data fetch; parent renders unconditionally
+    setLoading(true)
+    setSelectedTool(null)
+    setSearchQuery('')
+    setFormValues({})
+    setSelectedCharacterId(defaultCharacterId)
+    setIsPrivate(false)
+
+    fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.tools) {
+          // Filter to only user-invocable tools
+          const invocable = (data.tools as AvailableTool[]).filter(t => t.userInvocable !== false)
+          setTools(invocable)
+          if (requestedToolId) {
+            const requested = invocable.find(t => t.id === requestedToolId)
+            if (!requested) {
+              showErrorToast(`No tool named "${requestedToolId}" is available in this chat`)
+            } else if (requested.available === false) {
+              showErrorToast(requested.unavailableReason || `"${requested.name}" is not available in this chat`)
+            } else {
+              handleSelectTool(requested)
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load tools:', err)
+        showErrorToast('Failed to load available tools')
+      })
+      .finally(() => setLoading(false))
+  }, [isOpen, chatId, defaultCharacterId, requestedToolId, requestNonce, handleSelectTool])
 
   const handleBack = useCallback(() => {
     setSelectedTool(null)
