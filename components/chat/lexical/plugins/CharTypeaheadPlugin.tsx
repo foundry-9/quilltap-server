@@ -259,8 +259,7 @@ export function CharTypeaheadPlugin({
 
     return editor.registerCommand(
       KEY_DOWN_COMMAND,
-      (event: KeyboardEvent | null) => {
-        if (event === null) return false
+      (event: KeyboardEvent) => {
         if (event.key !== commitKey.key) return false
         if (!enabledRef.current) return false
         if (editor.isComposing()) return false

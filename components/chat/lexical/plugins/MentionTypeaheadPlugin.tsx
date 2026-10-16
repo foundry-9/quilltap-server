@@ -100,7 +100,7 @@ function $lineStartOf(node: LexicalNode): { paragraph: ParagraphNode; lineIndex:
   if (previous !== null && !$isLineBreakNode(previous)) return null
 
   let lineIndex = 0
-  for (let sibling = previous; sibling !== null; sibling = sibling.getPreviousSibling()) {
+  for (let sibling: LexicalNode | null = previous; sibling !== null; sibling = sibling.getPreviousSibling()) {
     if ($isLineBreakNode(sibling)) lineIndex += 1
   }
   return { paragraph: parent, lineIndex }
@@ -174,8 +174,8 @@ function MenuKeyBindings({ editor, onSpace, holdCommitKeys }: MenuKeyBindingsPro
     () =>
       editor.registerCommand(
         KEY_DOWN_COMMAND,
-        (event: KeyboardEvent | null) => {
-          if (event === null || event.key !== ' ') return false
+        (event: KeyboardEvent) => {
+          if (event.key !== ' ') return false
           if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
           if (editor.isComposing()) return false
           if (!onSpace()) return false

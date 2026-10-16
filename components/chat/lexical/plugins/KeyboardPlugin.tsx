@@ -8,8 +8,11 @@ import {
   $getSelection,
   $isRangeSelection,
   $createParagraphNode,
+  $isLineBreakNode,
+  $isTextNode,
+  type BaseSelection,
 } from 'lexical';
-import { $isCodeNode, $createCodeHighlightNode } from '@lexical/code';
+import { $isCodeNode, type CodeNode } from '@lexical/code';
 
 /**
  * KeyboardPlugin - Handles keyboard behavior for the chat composer
@@ -21,6 +24,37 @@ import { $isCodeNode, $createCodeHighlightNode } from '@lexical/code';
  * Also handles code block escape: pressing Enter on a blank trailing
  * line inside a code block exits the block and creates a new paragraph.
  */
+
+/**
+ * The code block the caret should escape from, or null.
+ *
+ * Escapes only for a collapsed caret at the very end of a code block whose
+ * last line is blank (empty or whitespace). The caret takes two shapes there:
+ * after typing on the line it is a text point at the end of the last child;
+ * straight after Shift+Enter Lexical leaves an ELEMENT point on the CodeNode
+ * itself, at offset == its child count. Missing the second shape is why the
+ * escape never fired and chat mode sent the message instead.
+ */
+function $codeBlockToEscape(selection: BaseSelection | null): CodeNode | null {
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null;
+
+  const anchor = selection.anchor;
+  const anchorNode = anchor.getNode();
+  let codeBlock: CodeNode;
+  if (anchor.type === 'element') {
+    if (!$isCodeNode(anchorNode) || anchor.offset !== anchorNode.getChildrenSize()) return null;
+    codeBlock = anchorNode;
+  } else {
+    const parent = anchorNode.getParent();
+    if (!$isCodeNode(parent) || parent.getLastChild()?.is(anchorNode) !== true) return null;
+    if (anchor.offset !== anchorNode.getTextContentSize()) return null;
+    codeBlock = parent;
+  }
+
+  const lines = codeBlock.getTextContent().split('\n');
+  if (lines.length < 2 || lines[lines.length - 1].trim() !== '') return null;
+  return codeBlock;
+}
 
 interface KeyboardPluginProps {
   /** Whether document editing mode is enabled */
@@ -45,64 +79,29 @@ export default function KeyboardPlugin({
         return false;
       }
 
-      // Check for code block escape: Enter on a blank trailing line exits
-      // the code block and creates a normal paragraph after it.
-      const codeEscaped = editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
-
-        const anchor = selection.anchor;
-        const anchorNode = anchor.getNode();
-        const codeBlock = anchorNode.getParent();
-        if (!codeBlock || !$isCodeNode(codeBlock)) return false;
-
-        // Get the full text and split into lines
-        const text = codeBlock.getTextContent();
-        const lines = text.split('\n');
-
-        // Only escape if the last line is blank and cursor is at the very end
-        if (lines.length < 2) return false;
-        const lastLine = lines[lines.length - 1];
-        if (lastLine.trim() !== '') return false;
-
-        // Cursor must be at the end of the code block's text
-        const totalLength = text.length;
-        const offsetInCode = anchor.offset;
-
-        // For CodeHighlightNode children, calculate offset from the end
-        // by checking if we're in the last child at its end
-        const lastChild = codeBlock.getLastChild();
-        if (lastChild === null) return false;
-        if (anchorNode.getKey() !== lastChild.getKey()) return false;
-        const lastChildTextLength = lastChild.getTextContentSize();
-        if (offsetInCode !== lastChildTextLength) return false;
-
-        return true;
-      });
+      // Code block escape: Enter on a blank trailing line exits the block
+      // and creates a normal paragraph after it.
+      const codeEscaped = editor.getEditorState().read(
+        () => $codeBlockToEscape($getSelection()) !== null,
+      );
 
       if (codeEscaped) {
         event.preventDefault();
         editor.update(() => {
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection)) return;
+          const codeBlock = $codeBlockToEscape($getSelection());
+          if (codeBlock === null) return;
 
-          const anchorNode = selection.anchor.getNode();
-          const codeBlock = anchorNode.getParent();
-          if (!codeBlock || !$isCodeNode(codeBlock)) return;
-
-          // Remove the trailing blank line from the code block.
-          // The blank line is represented by the last newline in the text.
-          const text = codeBlock.getTextContent();
-          const trimmedText = text.replace(/\n\s*$/, '');
-
-          // Clear and re-set code block content without trailing blank line
-          codeBlock.clear();
-          if (trimmedText) {
-            const newTextNode = $createCodeHighlightNode(trimmedText);
-            codeBlock.append(newTextNode);
+          // Drop the blank trailing line: any whitespace-only text after the
+          // last line break, then the line break itself. Earlier lines (and
+          // their highlight nodes) are left alone.
+          let last = codeBlock.getLastChild();
+          while ($isTextNode(last) && last.getTextContent().trim() === '') {
+            const previous = last.getPreviousSibling();
+            last.remove();
+            last = previous;
           }
+          if ($isLineBreakNode(last)) last.remove();
 
-          // Insert a new paragraph after the code block
           const paragraph = $createParagraphNode();
           codeBlock.insertAfter(paragraph);
           paragraph.selectStart();

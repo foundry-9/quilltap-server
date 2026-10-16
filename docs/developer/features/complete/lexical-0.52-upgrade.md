@@ -1,8 +1,8 @@
 # Lexical 0.43 → 0.52 Upgrade
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented 2026-10-15 (see As-built at the end)
 **Scope:** quilltap-server renderer (Salon composer, Document Mode pane, markdown editor) + Jest config; no server, `packages/` or shell impact
-**Prerequisite:** [dependency-upgrade-safe-batch.md](complete/dependency-upgrade-safe-batch.md) landed first, so a regression here is attributable to Lexical alone
+**Prerequisite:** [dependency-upgrade-safe-batch.md](dependency-upgrade-safe-batch.md) landed first, so a regression here is attributable to Lexical alone
 **Research date:** 2026-10-14 (release notes 0.44–0.52, `@lexical/markdown` source at v0.43.0 / v0.45.0 / v0.52.0, and all 33 importing files read; nothing installed or run)
 
 ## Summary
@@ -178,3 +178,18 @@ Run in the Salon composer, then Document Mode, then the markdown editor where ap
 - New `table-transformer.test.ts` passes (live typing yields no table; import does).
 - Smoke list §8 passes with no "endlessly enqueueing" guard trip anywhere.
 - CHANGELOG entry present; help docs updated only if user-visible editing behaviour changed.
+
+## As-built (2026-10-15)
+
+- **§1** All nine packages at 0.52.0; `npm ls lexical` shows one copy. `@lexical/internal`, `@lexical/code-core`, `@lexical/extension` and `@lexical/a11y` arrived as transitive deps. Done on `main`, not a branch.
+- **§2** `TABLE_TRANSFORMER.regExpEnd` is a bare RegExp. Re-verified on the installed 0.52 source: `MarkdownShortcuts.ts` ~L131-136 skips a multiline transformer whose `regExpEnd` has no `optional` key, and `MarkdownImport.ts` L127-139 returns from `handleImportAfterStartMatch` before reading `regExpEnd`. New `__tests__/unit/components/chat/lexical/transformers/table-transformer.test.tsx` (`.tsx`, not `.ts`, because it mounts the harness): the transformer shape, typed row + space + Enter stays a paragraph, and import builds a `TableNode`.
+- **§3** Option (b), not (a). Node 24.13's `require(esm)` did not help: every Lexical suite failed with "Must use import to load ES Module". A plain `transformIgnorePatterns` entry was not enough either, because next/jest's own node_modules pattern (a `transpilePackages` lookahead, not the bare `/node_modules/` the spec expected) still matched, and ignore patterns are OR'd. `jest.config.ts` now adds `lexical|@lexical/[^/]+|@preact/signals-core` to that pattern's exemption list after next/jest resolves it. `next.config.js` and the production build are untouched, so no `npm run build` check was needed.
+- **§4.1** `KeyboardPlugin` kept. No `CodeNode` deprecation warning appeared in the browser console. The "Enter on a blank trailing line exits the code block" path turned out to be broken, and was broken on 0.43 too (checked headless against both versions): after Shift+Enter the caret is an element point on the `CodeNode`, never inside its last child, so the check never matched and chat mode sent the message. Fixed separately as [bug 251](../../bugs/fixed/bug-251-code-block-enter-sends.md).
+- **§4.2** Both round-trip suites passed unchanged. No expectation moved.
+- **§4.3** `list-indentation.ts` kept. The 0.52 importer now resolves nesting by column, but `$listExport` still writes four-space indents, so `applyListIndentUnit` is still needed on export. The import normalisation is idempotent. `list-indentation.test.ts` passed unchanged.
+- **§4.4** Of the five `registerUpdateListener` sites, only `MentionTypeaheadPlugin.tsx` calls `editor.update` from inside one. It tags its update `HISTORY_MERGE_TAG`, bails on that tag, and clears its pending state first. No change needed.
+- **§4.5** Four `tsc` errors, fixed at the call sites: `KEY_DOWN_COMMAND` handlers in `CharTypeaheadPlugin` and `MentionTypeaheadPlugin` take a non-null `KeyboardEvent` (dead null checks removed); `ImagePastePlugin` takes the full `PasteCommandType` and reads `clipboardData` only when present; one narrowed loop variable in `MentionTypeaheadPlugin.$lineStartOf` got an explicit `LexicalNode | null`.
+- **Verification:** `npx tsc` clean; `npm run test:unit` 1,113 suites / 16,288 tests passing; `npm run lint` clean. `npm run test:integration` not run.
+- **§8 smoke on V4test (Salon composer):** passed: 1 (a table typed one key at a time stays text, no loop, no console errors; not sent), 3 (Backspace at the start of a quote or checklist item gives a paragraph; a non-empty first heading stays a heading, same as 0.43's `collapseAtStart`), 4 (select-all + Delete; the cleared block keeps the first block's type), 6 (`[X]` gives a checked item), 7 (mention and emoji menus open under the caret; Tab / Enter pick; undo restores the query), 12 (draft survives a full reload), 14 (`# ` heading, undo, redo). Not run: 2 (see §4.1), 5 (left to the real-editor round-trip suites), 8 (smart typography looked inactive on V4test and wasn't followed up), 9, 10 (IME), 11 (image paste), 13 (Document Mode), the markdown editor.
+- **Regression found:** [bug 250](../../bugs/bug-250-typeahead-menu-orphaned.md). Pick a mention, undo, then clear at once, and the mention menu stays open at the top-left until the next keystroke. Upstream (`LexicalTypeaheadMenuPlugin.closeTypeahead` returns early on a stale `resolution`); absent when 0.43 was reinstalled and the sequence repeated. Low severity, left open.
+- **Smoke-test gotcha:** the browser tool's multi-character `type` arrives as one input event, and the shortcut listener ignores jumps of more than one character. Type one character per action.

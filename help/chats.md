@@ -181,6 +181,8 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 **Tip:** Use **Shift+Enter** for line breaks without sending.
 
+**A word on code blocks.** Three backticks and a space open a code block in the composer. Within it, **Shift+Enter** begins each fresh line as usual. When your code is complete, strike **Shift+Enter** once more to leave a blank line at the foot of the block, then a plain **Enter**: the blank line is quietly tidied away and your pen sets down upon an ordinary paragraph beneath the block, the message as yet unsent. A plain **Enter** on any line that still holds code sends the message, block and all, in the customary fashion. In composition mode the same blank-line **Enter** steps out of the block, and Ctrl/Cmd+Enter remains the only sending key.
+
 **A word on line breaks.** The Salon honours your line breaks exactly as you strike them. A **single** press of Return begins your next words upon a fresh line, snug beneath the last — none of that classical-Markdown habit of sweeping the two together into one flowing line. A **double** press of Return (leaving a blank line betwixt) opens a wholly new paragraph. This courtesy extends to blockquotes, so that a passage entered thus —
 
 ```

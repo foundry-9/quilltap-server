@@ -2,7 +2,7 @@
 
 **Status:** Implemented 2026-10-15
 **Scope:** quilltap-server root `package.json` + lockfile; no `packages/`, `plugins/` or shell impact
-**Companion:** [lexical-0.52-upgrade.md](../lexical-0.52-upgrade.md) (separate, riskier; do this batch first)
+**Companion:** [lexical-0.52-upgrade.md](lexical-0.52-upgrade.md) (separate, riskier; do this batch first)
 **Research date:** 2026-10-14 (release notes and published tarballs read; nothing was installed or run)
 
 ## Summary

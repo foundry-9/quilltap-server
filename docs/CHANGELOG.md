@@ -4,6 +4,22 @@
 
 ### 4.11-dev
 
+#### Fix: Enter on a code block's blank trailing line sent the message (bug 251)
+
+- In the Salon composer, Shift+Enter then Enter at the end of a code block was meant to leave the block. In chat mode it sent the message; in composition mode it added another line. After Shift+Enter, Lexical leaves the caret as an element point on the `CodeNode`, and `KeyboardPlugin`'s check only looked for a caret inside the block's last child. Present on Lexical 0.43 as well.
+- New `$codeBlockToEscape` (`components/chat/lexical/plugins/KeyboardPlugin.tsx`) accepts both caret shapes. The exit now removes only the trailing blank line instead of rebuilding the block as one highlight node.
+- New test `__tests__/unit/components/chat/lexical/plugins/KeyboardPlugin.test.tsx` (real editor; the plugin had none). Help: code-block paragraph in `help/chats.md`. Filed and fixed as bug 251.
+
+#### Chore: Lexical 0.52
+
+- `lexical` and the eight `@lexical/*` packages moved from 0.43.0 to 0.52.0 in lockstep; one copy installed. This ends the 0.43 pin.
+- `TABLE_TRANSFORMER` (`components/chat/lexical/transformers/table-transformer.ts`) now has a bare, non-optional `regExpEnd`, which keeps it out of `@lexical/markdown`'s live shortcut runner. Tables are still built on import and paste through `handleImportAfterStartMatch`; typing a `|…|` line stays a paragraph. New test `__tests__/unit/components/chat/lexical/transformers/table-transformer.test.tsx` covers both paths.
+- Lexical is ESM-only from 0.51. `jest.config.ts` now exempts `lexical`, `@lexical/*` and `@preact/signals-core` from the transform ignore list, including in the node_modules pattern `next/jest` prepends. `next.config.js` is unchanged.
+- Type fixes for 0.52's stricter command typing: `KEY_DOWN_COMMAND` handlers in `CharTypeaheadPlugin` and `MentionTypeaheadPlugin` take a non-null `KeyboardEvent`; `ImagePastePlugin` accepts the full `PasteCommandType` and reads `clipboardData` only when present.
+- `list-indentation.ts` stays. The 0.52 importer resolves nesting by column, but export still writes four-space indents, so the document's own indent unit still has to be restored on export.
+- Known issue, filed as bug 250 (`docs/developer/bugs/bug-250-typeahead-menu-orphaned.md`): a composer typeahead menu reopened by undo and then cleared immediately stays open at the top-left until the next keystroke. Upstream `LexicalTypeaheadMenuPlugin` race, new in 0.52.
+- Spec moved to `docs/developer/features/complete/lexical-0.52-upgrade.md` with an As-built section.
+
 #### Chore: dependency safe batch
 
 - In-range updates: `next` / `eslint-config-next` 16.4.2, `react` / `react-dom` 19.3.1, `@tanstack/react-query` / `-devtools` / `eslint-plugin-query` 5.104.3, `@tanstack/react-virtual` 3.14.20, `@playwright/test` 1.64.1, `@testing-library/user-event` 14.6.8, `openai` 7.34.0, `zod` 4.6.7, `postcss` 8.5.30, `react-syntax-highlighter` 16.1.2, `@types/node` 24.19.2.
