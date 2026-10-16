@@ -1,8 +1,8 @@
 # Dependency Upgrade — Safe Batch
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented 2026-10-15
 **Scope:** quilltap-server root `package.json` + lockfile; no `packages/`, `plugins/` or shell impact
-**Companion:** [lexical-0.52-upgrade.md](lexical-0.52-upgrade.md) (separate, riskier; do this batch first)
+**Companion:** [lexical-0.52-upgrade.md](../lexical-0.52-upgrade.md) (separate, riskier; do this batch first)
 **Research date:** 2026-10-14 (release notes and published tarballs read; nothing was installed or run)
 
 ## Summary
@@ -133,3 +133,11 @@ Then a visual check of one Salon message containing `$\sqrt{x}$` and a display b
 - `npm ls katex` still shows the nested 0.16.47 under `rehype-katex` (unless the optional override was taken, in which case it shows one copy).
 - KaTeX renders in a Salon message on V4test.
 - `package.json` has no `@vitest/mocker`; `knip.json` has no ignore for it.
+
+## As built (2026-10-15)
+
+- Done as specified; the optional KaTeX `overrides` was **not** taken. `npm ls katex` shows top-level 0.19.0 with 0.16.47 nested under `rehype-katex` and `micromark-extension-math`.
+- In-range versions had moved a little since research: `next` / `eslint-config-next` 16.4.2, TanStack Query 5.104.3, `@tanstack/react-virtual` 3.14.20.
+- `npm outdated` now lists only the Holds rows plus Lexical (companion spec).
+- `npx tsc`, `npm run lint`, `npm run test:unit` (1112 suites, 16285 tests), `npm run test:integration` (24 suites, 267 tests) and `npx playwright test --list` (26 tests) all pass. `@testing-library/jest-dom` 7 needed no revert.
+- Visual check on V4test (:3005): no LLM call was made; instead the exact HTML `rehype-katex`'s KaTeX 0.16.47 produces for a display-mode `\sum_{i=1}^{n} \frac{a_i}{b^2}` was injected into the live app page under its bundled 0.19 CSS. It laid out correctly and `KaTeX_Main` / `KaTeX_Math` / `KaTeX_Size2` loaded.

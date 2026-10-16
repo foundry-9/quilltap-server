@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-search-serper",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "description": "Serper.dev web search provider for Quilltap",
   "main": "index.js",
   "scripts": {

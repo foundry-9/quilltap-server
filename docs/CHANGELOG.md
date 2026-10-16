@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Chore: dependency safe batch
+
+- In-range updates: `next` / `eslint-config-next` 16.4.2, `react` / `react-dom` 19.3.1, `@tanstack/react-query` / `-devtools` / `eslint-plugin-query` 5.104.3, `@tanstack/react-virtual` 3.14.20, `@playwright/test` 1.64.1, `@testing-library/user-event` 14.6.8, `openai` 7.34.0, `zod` 4.6.7, `postcss` 8.5.30, `react-syntax-highlighter` 16.1.2, `@types/node` 24.19.2.
+- Range bumps: `katex` ^0.19.0, `@types/better-sqlite3` ^9.6.0, `@types/yauzl` ^3.4.0, `@testing-library/jest-dom` ^7.0.1, `dotenv` ^18.0.8. The rendered KaTeX HTML still comes from the 0.16 copy nested under `rehype-katex`; only the CSS and symbol table moved to 0.19.
+- Removed the unused `@vitest/mocker` dev dependency and its `knip.json` ignore.
+- Rebuilt the eight plugins that bundle the `openai` SDK and bumped their patch versions: anthropic 1.0.62, curl 1.0.31, default-system-prompts 1.1.26, google 1.1.56, mcp 1.1.44, ollama 1.0.53, openrouter 1.0.67, search-serper 1.0.26.
+- Held (reasons in `docs/developer/features/complete/dependency-upgrade-safe-batch.md`): TypeScript 7, ESLint 10, `@types/node` 26, `pdfjs-dist` 6, `jest-fetch-mock` 4, `better-sqlite3-multiple-ciphers` 13, and Lexical 0.52 (own spec).
+
 #### Docs: dependency upgrade specs
 
 - Added `docs/developer/features/dependency-upgrade-safe-batch.md` (in-range updates, KaTeX 0.19, `@types/*` bumps, `@vitest/mocker` removal, and the recorded holds on TypeScript 7, ESLint 10, `pdfjs-dist` 6 and `better-sqlite3-multiple-ciphers` 13) and `docs/developer/features/lexical-0.52-upgrade.md` (lockstep bump, table-transformer `regExpEnd` fix, Jest ESM exemption, behaviour-change checklist, manual smoke test). No code changes.

@@ -2,7 +2,7 @@
 
 **Status:** Proposal / Not Implemented
 **Scope:** quilltap-server renderer (Salon composer, Document Mode pane, markdown editor) + Jest config; no server, `packages/` or shell impact
-**Prerequisite:** [dependency-upgrade-safe-batch.md](dependency-upgrade-safe-batch.md) landed first, so a regression here is attributable to Lexical alone
+**Prerequisite:** [dependency-upgrade-safe-batch.md](complete/dependency-upgrade-safe-batch.md) landed first, so a regression here is attributable to Lexical alone
 **Research date:** 2026-10-14 (release notes 0.44–0.52, `@lexical/markdown` source at v0.43.0 / v0.45.0 / v0.52.0, and all 33 importing files read; nothing installed or run)
 
 ## Summary
