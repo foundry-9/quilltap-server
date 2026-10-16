@@ -405,3 +405,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Tools](tools.md) - Overview of AI tools available in Quilltap
 - [Using Tools in Chat](tools-usage.md) - How tools work during conversation
 - [Characters](characters.md) - General character management
+- [Pascal's Workbench](pascals-workbench.md) - Pick garments and outfits from a wardrobe for a tool's *Change the outfit* side effect

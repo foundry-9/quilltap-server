@@ -8,7 +8,9 @@
  *                                 store is attached to.
  * - `POST ?action=preview`      — dry-run a definition through the one true
  *                                 execution core. Posts nothing, writes
- *                                 nothing.
+ *                                 nothing. With a character in the chair,
+ *                                 also says which garment each wardrobe
+ *                                 gesture would have found (a read).
  * - `POST ?action=audit`        — deal ten thousand hands and report where
  *                                 they landed.
  *
@@ -41,6 +43,7 @@ import { evaluateToolGate, hasToolGate } from '@/lib/pascal/tool-gate';
 import { flattenProgressions } from '@/lib/progressions/engine';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
+import { resolveBenchWardrobe } from '@/lib/pascal/bench-wardrobe';
 import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
 
 const HANDLER = 'api.v1.custom-tools';
@@ -150,14 +153,9 @@ async function resolveMetadata(
 ): Promise<Parsed<Record<string, unknown>>> {
   if (metadata === null || metadata === undefined) return { ok: true, value: {} };
 
-  const isCharacterRef =
-    typeof metadata === 'object' &&
-    Object.keys(metadata).length === 1 &&
-    typeof (metadata as { characterId?: unknown }).characterId === 'string';
+  const characterId = benchCharacterId(metadata);
+  if (!characterId) return { ok: true, value: metadata as Record<string, unknown> };
 
-  if (!isCharacterRef) return { ok: true, value: metadata as Record<string, unknown> };
-
-  const characterId = (metadata as { characterId: string }).characterId;
   try {
     const character = await ctx.repos.characters.findById(characterId);
     if (!character) return { ok: false, response: notFound('Character') };
@@ -170,6 +168,13 @@ async function resolveMetadata(
     }
     throw error;
   }
+}
+
+/** The character a bench request seats in the chair, if its fact sheet is the `{ characterId }` form. */
+function benchCharacterId(metadata: z.infer<typeof MetadataInputSchema> | null | undefined): string | null {
+  if (!metadata || typeof metadata !== 'object' || Object.keys(metadata).length !== 1) return null;
+  const characterId = (metadata as { characterId?: unknown }).characterId;
+  return typeof characterId === 'string' && characterId.length > 0 ? characterId : null;
 }
 
 /**
@@ -245,6 +250,13 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
       state: body.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
+    // With a character in the chair, say which garment each wardrobe gesture
+    // would have found — the applier's own lookup, and a read only. A
+    // hand-typed sheet names nobody, so it gets no resolution.
+    const chairCharacterId = benchCharacterId(body.metadata);
+    const wardrobeResolution = chairCharacterId
+      ? await resolveBenchWardrobe(ctx.repos, chairCharacterId, result.effects, definition.name)
+      : undefined;
     // The bench always deals — a gate decides whether a character is OFFERED a
     // tool, not whether the author may test one they are holding. The verdict
     // rides along so the bench can say "and this character would never have
@@ -256,6 +268,7 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
       // author `cannon.percent` beside the outcome rather than leaving them to
       // work it out from two ISO timestamps.
       ...(Object.keys(progress).length > 0 ? { progress } : {}),
+      ...(wardrobeResolution ? { wardrobeResolution } : {}),
     });
   } catch (error) {
     return benchRefusal(error, 'preview', definition.name);

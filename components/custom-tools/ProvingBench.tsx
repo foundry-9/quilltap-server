@@ -8,6 +8,10 @@
  * core a live chat uses (the preview/audit actions on `/api/v1/custom-tools`),
  * so the bench can never drift from what the table would actually deal. The
  * bench posts nothing and writes nothing.
+ *
+ * The fact sheet's *Pick a character* mode reads and writes the editor's
+ * shared wardrobe vantage: a character chosen here is the one the side-effects
+ * card browses, and a character vantage chosen there seats them here.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -25,7 +29,16 @@ import type { CustomToolAuditResult, CustomToolRunResult, ResolvedWardrobeGestur
 import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
 import { flattenProgressions } from '@/lib/progressions/engine'
-import { definitionFromDraft, gateFromConditions, type ToolDraft } from '@/lib/pascal/tool-draft'
+import {
+  definitionFromDraft,
+  gateFromConditions,
+  type ToolDraft,
+  type WardrobeVantage,
+} from '@/lib/pascal/tool-draft'
+import type { PreviewWardrobeResolution } from '@/lib/pascal/workbench'
+import { formatSlotLabels } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeItemThumbnail } from '@/components/wardrobe/wardrobe-item-thumbnail'
 import {
   CustomToolParamsForm,
   coerceParamValues,
@@ -40,6 +53,9 @@ interface ProvingBenchProps {
   valid: boolean
   /** Reports which outcome row a bench roll landed on, for the form's flash. */
   onMatched?: (outcomeId: string | null) => void
+  /** The editor's shared wardrobe vantage; the bench holds its own when absent. */
+  vantage?: WardrobeVantage
+  onVantageChange?: (next: WardrobeVantage) => void
 }
 
 /** A character eligible to lend the bench its fact sheet. */
@@ -48,10 +64,11 @@ interface BenchCharacter {
   name: string
 }
 
-/** The fact sheet, in one of its two modes (§4.5 card 2). */
-type FactSheet =
-  | { mode: 'character'; characterId: string }
-  | { mode: 'manual'; text: string }
+/**
+ * The fact sheet, in one of its two modes (§4.5 card 2). The character mode's
+ * character is the shared wardrobe vantage's, not the sheet's own.
+ */
+type FactSheet = { mode: 'character' } | { mode: 'manual'; text: string }
 
 /**
  * The bench's oracle: script an answer, script a silence, or — for single
@@ -66,14 +83,25 @@ type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { m
  * not whether its author may test one they are holding — so the verdict rides
  * beside the roll rather than replacing it.
  */
-type BenchRoll = CustomToolRunResult & { gate?: ToolGateVerdict }
+type BenchRoll = CustomToolRunResult & {
+  gate?: ToolGateVerdict
+  /** With a character in the chair: what each wardrobe gesture would have found. */
+  wardrobeResolution?: PreviewWardrobeResolution[]
+  /** The chair's name when the roll was dealt, for "not in Imogen's reach". */
+  chairName?: string | null
+}
 
 /** {@link apiErrorMessage} with the bench's own fallback. */
 function extractErrorMessage(err: unknown): string {
   return apiErrorMessage(err, 'The bench could not oblige.')
 }
 
-export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchProps>) {
+export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, onVantageChange }: Readonly<ProvingBenchProps>) {
+  const [localVantage, setLocalVantage] = useState<WardrobeVantage>({ kind: 'none' })
+  const vantage = sharedVantage ?? localVantage
+  const setVantage = onVantageChange ?? setLocalVantage
+  const chairCharacterId = vantage.kind === 'character' ? vantage.characterId : ''
+
   /** The document Save would write — what every roll, audit, and the preview send. */
   const definition = useMemo(() => definitionFromDraft(draft), [draft])
 
@@ -97,7 +125,17 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
   const [values, setValues] = useState<ParameterFormValues>({})
   const [isPrivate, setIsPrivate] = useState(false)
-  const [sheet, setSheet] = useState<FactSheet>({ mode: 'manual', text: '{}' })
+  const [sheet, setSheet] = useState<FactSheet>(() =>
+    chairCharacterId ? { mode: 'character' } : { mode: 'manual', text: '{}' }
+  )
+  // A character vantage chosen elsewhere (the side-effects card, or the
+  // editor's opening default) seats that character here. Derived during
+  // render, latched on the character id.
+  const [seatedCharacterId, setSeatedCharacterId] = useState(chairCharacterId)
+  if (chairCharacterId !== seatedCharacterId) {
+    setSeatedCharacterId(chairCharacterId)
+    if (chairCharacterId && sheet.mode !== 'character') setSheet({ mode: 'character' })
+  }
   const [mockStateText, setMockStateText] = useState('{}')
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
@@ -192,7 +230,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   })
 
   const benchMetadata = (): Record<string, unknown> | { characterId: string } | undefined => {
-    if (sheet.mode === 'character') return sheet.characterId ? { characterId: sheet.characterId } : undefined
+    if (sheet.mode === 'character') return chairCharacterId ? { characterId: chairCharacterId } : undefined
     try {
       const parsed = JSON.parse(sheet.text)
       return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
@@ -264,7 +302,11 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         }),
       }),
     onSuccess: (result) => {
-      setRolls((prev) => [result, ...prev].slice(0, 10))
+      const chairName =
+        sheet.mode === 'character'
+          ? (charactersQuery.data ?? []).find((c) => c.id === chairCharacterId)?.name ?? null
+          : null
+      setRolls((prev) => [{ ...result, chairName }, ...prev].slice(0, 10))
       onMatched?.(draft.outcomes[result.outcomeIndex]?.id ?? null)
     },
   })
@@ -345,7 +387,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
             role="radio"
             aria-checked={sheet.mode === 'character'}
             className={`px-2 py-1 text-xs ${sheet.mode === 'character' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'character', characterId: '' })}
+            onClick={() => setSheet({ mode: 'character' })}
           >
             Pick a character
           </button>
@@ -362,8 +404,12 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
         {sheet.mode === 'character' ? (
           <select
-            value={sheet.characterId}
-            onChange={(e) => setSheet({ mode: 'character', characterId: e.target.value })}
+            value={chairCharacterId}
+            onChange={(e) => {
+              const characterId = e.target.value
+              if (characterId) setVantage({ kind: 'character', characterId })
+              else if (vantage.kind === 'character') setVantage({ kind: 'none' })
+            }}
             className="qt-select qt-select-sm w-full"
             aria-label="Character whose fact sheet to use"
           >
@@ -390,7 +436,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
         {testsMetadata &&
           ((sheet.mode === 'manual' && sheet.text.trim().replace(/\s/g, '') === '{}') ||
-            (sheet.mode === 'character' && !sheet.characterId)) && (
+            (sheet.mode === 'character' && !chairCharacterId)) && (
             <p className="text-xs qt-text-secondary">
               No fact sheet supplied — metadata tests will all decline, exactly as for an unattributed manual roll.
             </p>
@@ -642,7 +688,7 @@ function MiniPascalBubble({
   roll,
   draft,
   faded,
-}: Readonly<{ roll: CustomToolRunResult; draft: ToolDraft; faded: boolean }>) {
+}: Readonly<{ roll: BenchRoll; draft: ToolDraft; faded: boolean }>) {
   const outcome = draft.outcomes[roll.outcomeIndex]
   const rowLabel = outcome?.catchAll ? 'the catch-all' : `row ${roll.outcomeIndex + 1}`
   const title = displayTitle({ name: draft.name || 'contrivance', title: draft.title || undefined })
@@ -681,9 +727,12 @@ function MiniPascalBubble({
                 → {effect.target.raw} = {JSON.stringify(effect.value)} <em>(would write)</em>
               </p>
             ) : 'wardrobe' in effect ? (
-              <p key={effect.index}>
-                → wardrobe: {describeBenchGesture(effect.wardrobe)} <em>(would attempt)</em>
-              </p>
+              <BenchWardrobeLines
+                key={effect.index}
+                gesture={effect.wardrobe}
+                resolution={roll.wardrobeResolution?.find((entry) => entry.index === effect.index)}
+                chairName={roll.chairName ?? null}
+              />
             ) : (
               <p key={effect.index}>
                 · effect {effect.index + 1} skipped: {effect.skipped}
@@ -697,22 +746,82 @@ function MiniPascalBubble({
   )
 }
 
+/** The gesture's verb and mode, in the bench's words: "wear (add to slot top)", "take off … from top". */
+function gestureVerb(gesture: ResolvedWardrobeGesture): { verb: string; suffix: string } {
+  switch (gesture.action) {
+    case 'wear':
+      return {
+        verb: 'wear',
+        suffix:
+          gesture.mode && gesture.mode !== 'wear'
+            ? ` (${gesture.mode.replace(/_/g, ' ')}${gesture.slot ? ` ${gesture.slot}` : ''})`
+            : '',
+      }
+    case 'take_off':
+      return { verb: 'take off', suffix: gesture.slot ? ` from ${gesture.slot}` : '' }
+    case 'clear_slot':
+      return { verb: 'clear', suffix: '' }
+  }
+}
+
 /**
- * A dry-run gesture, in the bench's words. "Would attempt", never "would
- * apply": the bench has no character, so it cannot know the garment exists.
+ * A dry-run gesture, in the bench's words. "Would attempt" when nobody sits in
+ * the chair — the bench cannot know a garment exists without a wardrobe to
+ * look in. With a character in the chair the server resolves each reference
+ * through the applier's own lookup, so each item says what it would have
+ * found ("would apply") or why it would be skipped ("would skip").
  */
 function describeBenchGesture(gesture: ResolvedWardrobeGesture): string {
   const items = gesture.items.map((item) => `“${item}”`).join(', ')
-  switch (gesture.action) {
-    case 'wear': {
-      const mode = gesture.mode && gesture.mode !== 'wear' ? ` (${gesture.mode.replace(/_/g, ' ')}${gesture.slot ? ` ${gesture.slot}` : ''})` : ''
-      return `wear ${items}${mode}`
-    }
-    case 'take_off':
-      return `take off ${items}${gesture.slot ? ` from ${gesture.slot}` : ''}`
-    case 'clear_slot':
-      return `clear ${gesture.slot ?? 'a slot'}`
+  const { verb, suffix } = gestureVerb(gesture)
+  if (gesture.action === 'clear_slot') return `clear ${gesture.slot ?? 'a slot'}`
+  return `${verb} ${items}${suffix}`
+}
+
+function BenchWardrobeLines({
+  gesture,
+  resolution,
+  chairName,
+}: Readonly<{ gesture: ResolvedWardrobeGesture; resolution: PreviewWardrobeResolution | undefined; chairName: string | null }>) {
+  if (!resolution || gesture.action === 'clear_slot') {
+    return (
+      <p>
+        → wardrobe: {describeBenchGesture(gesture)} <em>(would attempt)</em>
+      </p>
+    )
   }
+  const { verb, suffix } = gestureVerb(gesture)
+  return (
+    <>
+      {resolution.items.map((entry, i) => {
+        if (entry.found) {
+          const origin = wardrobeOriginLabel(entry.found.origin)
+          const slots = formatSlotLabels(entry.found.types)
+          const detail = [slots, origin].filter(Boolean).join(' · ')
+          return (
+            <p key={`${entry.ref}-${i}`}>
+              → wardrobe: {verb}{' '}
+              <WardrobeItemThumbnail
+                fileId={entry.found.imageFileId}
+                size={28}
+                className="inline-block align-middle mr-1"
+              />
+              {entry.found.title}
+              {detail ? ` (${detail})` : ''}
+              {suffix} <em>(would apply)</em>
+            </p>
+          )
+        }
+        const why =
+          entry.reason === 'not_found' ? `not in ${chairName ? `${chairName}’s` : 'the chair’s'} reach` : entry.message
+        return (
+          <p key={`${entry.ref}-${i}`}>
+            → wardrobe: {verb} “{entry.ref}”{suffix} — {why} <em>(would skip)</em>
+          </p>
+        )
+      })}
+    </>
+  )
 }
 
 export default ProvingBench

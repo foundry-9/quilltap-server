@@ -17,9 +17,29 @@
  * metadata, the oracle) is carried verbatim behind a read-only badge — the
  * `$state`-default precedent: the builder round-trips what it cannot author.
  * Everything else arrives as issues from `validateDraft` and renders inline.
+ *
+ * A wardrobe row's item references are read through a VANTAGE — whose
+ * wardrobe the author is browsing (editor state, never saved). Each
+ * reference resolves by the one rule (`resolveWearableRef`) against that
+ * pool and renders as a chip with the garment's picture, slots, origin and
+ * reach; a templated reference keeps its text box; an unresolved one keeps
+ * its text box under an advisory, never an error — the lens is partial and
+ * the applier fail-soft. The *Choose…* picker fills a reference by title (or
+ * by id, on request).
  */
 
+import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { SlotBadge } from '@/components/wardrobe/slot-ui'
+import { WardrobeItemThumbnail } from '@/components/wardrobe/wardrobe-item-thumbnail'
+import {
+  REFERENCE_FORM_HINT,
+  WardrobeReferencePicker,
+  type WardrobeReferenceForm,
+} from '@/components/wardrobe/wardrobe-reference-picker'
+import { useWardrobeVantageItems } from '@/lib/hooks/use-wardrobe-vantage-items'
+import type { TierItem } from '@/lib/hooks/use-wardrobe-tier'
+import type { CustomToolDestinations } from '@/lib/pascal/workbench'
 import {
   MAX_EFFECTS,
   MAX_EFFECT_TARGET_LENGTH,
@@ -35,14 +55,42 @@ import {
   type DraftIssue,
   type DraftWardrobeGesture,
   type ToolDraft,
+  type WardrobeVantage,
 } from '@/lib/pascal/tool-draft'
-import { WARDROBE_SLOT_META, WARDROBE_SLOT_TYPES, type WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import {
+  WARDROBE_SLOT_META,
+  WARDROBE_SLOT_TYPES,
+  formatSlotLabels,
+  isComposite,
+  type WardrobeItemType,
+} from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel, wardrobeReachLabel } from '@/lib/wardrobe/wardrobe-container'
+import { archivedWearMessage } from '@/lib/wardrobe/wearable'
+import { isTemplatedWearableRef, resolveWearableRef } from '@/lib/wardrobe/wearable-ref'
+import { WardrobeVantageSelect, wardrobeVantageName } from './WardrobeVantageSelect'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
   issues: DraftIssue[]
   onChange: (next: ToolDraft) => void
   disabled?: boolean
+  /** Whose wardrobe the item references are read against. Default: none. */
+  vantage?: WardrobeVantage
+  /** Change the vantage; without it the selector is not offered. */
+  onVantageChange?: (next: WardrobeVantage) => void
+  /** The destinations payload — names for characters, projects and groups. */
+  destinations?: CustomToolDestinations
+  /** The project whose store holds this file, if any (named in the vantage hint). */
+  homeProjectName?: string | null
+}
+
+const NO_VANTAGE: WardrobeVantage = { kind: 'none' }
+
+/** Which item row the picker is filling, and the item it currently names. */
+interface PickTarget {
+  effectId: string
+  index: number
+  highlightId: string | null
 }
 
 const OUTCOME_STATES: readonly OutcomeState[] = ['success', 'partial', 'failure', 'info'] as const
@@ -56,7 +104,26 @@ function whenChoiceOf(effect: DraftEffect): WhenChoice | 'verbatim' {
   return 'verbatim'
 }
 
-export function SideEffectsSection({ draft, issues, onChange, disabled = false }: Readonly<SideEffectsSectionProps>) {
+export function SideEffectsSection({
+  draft,
+  issues,
+  onChange,
+  disabled = false,
+  vantage = NO_VANTAGE,
+  onVantageChange,
+  destinations,
+  homeProjectName = null,
+}: Readonly<SideEffectsSectionProps>) {
+  const hasWardrobe = draft.effects.some((effect) => effect.kind === 'wardrobe')
+  // Read nothing until a wardrobe row exists: an author who never dresses
+  // anybody pays for no wardrobe reads.
+  const pool = useWardrobeVantageItems(hasWardrobe ? vantage : null)
+  const vantageName = wardrobeVantageName(vantage, destinations)
+  const characterName = vantage.kind === 'character' ? vantageName : null
+  const [referenceForm, setReferenceForm] = useState<WardrobeReferenceForm>('title')
+  const [picking, setPicking] = useState<PickTarget | null>(null)
+  const pickingEffect = picking ? draft.effects.find((effect) => effect.id === picking.effectId) : undefined
+
   const update = (partial: Partial<ToolDraft>) => onChange({ ...draft, ...partial })
 
   const updateEffect = (id: string, partial: Partial<DraftEffect>) =>
@@ -92,6 +159,16 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
           Add effect ({draft.effects.length}/{MAX_EFFECTS})
         </button>
       </div>
+
+      {hasWardrobe && onVantageChange && (
+        <WardrobeVantageSelect
+          vantage={vantage}
+          onChange={onVantageChange}
+          destinations={destinations}
+          homeProjectName={homeProjectName}
+          disabled={disabled}
+        />
+      )}
 
       {draft.effects.length === 0 && (
         <p className="text-xs qt-text-secondary">
@@ -171,6 +248,12 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
                 hasErrors={errors.length > 0}
                 disabled={disabled}
                 onChange={(wardrobe) => updateEffect(effect.id, { wardrobe })}
+                pool={pool.items}
+                poolFetched={pool.fetched}
+                vantage={vantage}
+                vantageName={vantageName}
+                characterName={characterName}
+                onChoose={(index, highlightId) => setPicking({ effectId: effect.id, index, highlightId })}
               />
             ) : (
             <>
@@ -281,6 +364,43 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
         dresses or undresses the rolling character and nobody else; an item it cannot find is skipped and the
         rest still go on.
       </p>
+
+      <WardrobeReferencePicker
+        isOpen={picking !== null && pickingEffect?.kind === 'wardrobe'}
+        onClose={() => setPicking(null)}
+        vantage={vantage}
+        characterName={characterName}
+        headerControl={
+          onVantageChange ? (
+            <WardrobeVantageSelect
+              vantage={vantage}
+              onChange={onVantageChange}
+              destinations={destinations}
+              homeProjectName={homeProjectName}
+            />
+          ) : undefined
+        }
+        action={
+          pickingEffect?.wardrobe.action === 'take_off'
+            ? 'take_off'
+            : pickingEffect?.wardrobe.action === 'wear'
+              ? 'wear'
+              : undefined
+        }
+        slot={pickingEffect && slotIsCoupled(pickingEffect.wardrobe) ? pickingEffect.wardrobe.slot || null : null}
+        highlightId={picking?.highlightId ?? null}
+        reference={referenceForm}
+        onReferenceChange={setReferenceForm}
+        onPick={(item, { reference }) => {
+          if (!picking || !pickingEffect) return
+          const gesture = pickingEffect.wardrobe
+          const items = gesture.items.length > 0 ? gesture.items : ['']
+          const value = reference === 'id' ? item.id : item.title
+          updateEffect(pickingEffect.id, {
+            wardrobe: { ...gesture, items: items.map((ref, i) => (i === picking.index ? value : ref)) },
+          })
+        }}
+      />
     </section>
   )
 }
@@ -297,15 +417,43 @@ const WARDROBE_MODES: ReadonlyArray<{ value: WardrobeEffectMode; label: string; 
   { value: 'add_to_slot', label: 'layer into one slot', title: 'Add the item to one named slot' },
 ]
 
+/**
+ * True when the gesture's slot and its items must agree: `add_to_slot` layers
+ * into the one slot, and a `take_off` may be restricted to one.
+ */
+function slotIsCoupled(gesture: DraftWardrobeGesture): boolean {
+  return (gesture.action === 'wear' && gesture.mode === 'add_to_slot') || gesture.action === 'take_off'
+}
+
 interface WardrobeFieldsProps {
   gesture: DraftWardrobeGesture
   hasErrors: boolean
   disabled: boolean
   onChange: (next: DraftWardrobeGesture) => void
+  /** The vantage's pool, nearest tier first, archived included. */
+  pool: TierItem[]
+  /** False until the pool's reads settle — no advisory before then. */
+  poolFetched: boolean
+  vantage: WardrobeVantage
+  vantageName: string | null
+  characterName: string | null
+  /** Open the picker for item row `index`, highlighting the item it names. */
+  onChoose: (index: number, highlightId: string | null) => void
 }
 
 /** A wardrobe row's fields: action, items, and the mode and slot when the action wants them. */
-function WardrobeFields({ gesture, hasErrors, disabled, onChange }: Readonly<WardrobeFieldsProps>) {
+function WardrobeFields({
+  gesture,
+  hasErrors,
+  disabled,
+  onChange,
+  pool,
+  poolFetched,
+  vantage,
+  vantageName,
+  characterName,
+  onChoose,
+}: Readonly<WardrobeFieldsProps>) {
   const set = (partial: Partial<DraftWardrobeGesture>) => onChange({ ...gesture, ...partial })
   const wantsItems = gesture.action !== 'clear_slot'
   const wantsSlot =
@@ -319,6 +467,137 @@ function WardrobeFields({ gesture, hasErrors, disabled, onChange }: Readonly<War
   const removeItem = (index: number) => {
     const next = items.filter((_, i) => i !== index)
     set({ items: next.length > 0 ? next : [''] })
+  }
+
+  // Each row's resolution, by the one rule the applier uses.
+  const resolved = items.map((ref) => (vantage.kind === 'none' ? undefined : resolveWearableRef(pool, ref)))
+
+  // Slot coupling (§3.2): only when every concrete (non-blank, non-templated)
+  // row resolved — a templated row may yet cover the slot.
+  const concrete = items
+    .map((ref, index) => ({ ref, item: resolved[index] }))
+    .filter(({ ref }) => ref.trim() !== '' && !isTemplatedWearableRef(ref))
+  const coupled =
+    wantsItems && slotIsCoupled(gesture) && concrete.length > 0 && concrete.every(({ item }) => item !== undefined)
+  const covered = new Set<WardrobeItemType>(
+    coupled ? concrete.flatMap(({ item }) => (item ? (item.types as WardrobeItemType[]) : [])) : []
+  )
+  const slotMismatches =
+    coupled && gesture.slot
+      ? concrete.filter(({ item }) => item && !item.types.includes(gesture.slot as WardrobeItemType))
+      : []
+
+  const unreachableNote =
+    vantage.kind === 'character'
+      ? `not in ${vantageName ?? 'this character'}\u2019s reach`
+      : `not in ${vantageName ?? 'this wardrobe'}`
+
+  const chooseButton = (index: number) => (
+    <button
+      type="button"
+      className="qt-button qt-button-secondary qt-button-sm"
+      onClick={() => onChoose(index, null)}
+      disabled={disabled}
+      title="Browse the wardrobe and pick a garment or outfit"
+    >
+      Choose…
+    </button>
+  )
+
+  const trashButton = (index: number) => (
+    <button
+      type="button"
+      className="qt-button qt-button-ghost qt-button-sm"
+      onClick={() => removeItem(index)}
+      disabled={disabled || items.length <= 1}
+      title="Remove this item"
+    >
+      <Icon name="trash" className="w-4 h-4" />
+    </button>
+  )
+
+  const textInput = (item: string, index: number) => (
+    <input
+      type="text"
+      value={item}
+      maxLength={MAX_WARDROBE_ITEM_REF_LENGTH}
+      onChange={(e) => setItem(index, e.target.value)}
+      placeholder={index === 0 ? 'Cloak of Night' : '{{params.garment}}'}
+      disabled={disabled}
+      className={`qt-input flex-1 min-w-48 ${hasErrors ? 'qt-input-error' : ''}`}
+      aria-label={`Item ${index + 1}`}
+    />
+  )
+
+  const renderItemRow = (ref: string, index: number) => {
+    const item = resolved[index]
+    if (item) {
+      const byId = ref.trim() === item.id
+      const originLabel = wardrobeOriginLabel(item.origin) ?? `${characterName ?? 'Their'}${characterName ? '\u2019s' : ''} own`
+      const reach = wardrobeReachLabel(item.origin, characterName)
+      return (
+        <div key={index} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex flex-1 min-w-48 items-start gap-2 rounded border qt-border-default px-2 py-1 text-left hover:opacity-80"
+              onClick={() => onChoose(index, item.id)}
+              disabled={disabled}
+              aria-label={`Item ${index + 1}: ${item.title} — choose another`}
+              data-testid="wardrobe-reference-chip"
+            >
+              <WardrobeItemThumbnail fileId={item.imageFileId} size={28} />
+              <span className="min-w-0 flex-1 space-y-0.5">
+                <span className="block break-words text-sm text-foreground">
+                  {item.title}
+                  {isComposite(item) && <span className="qt-text-secondary"> · outfit</span>}
+                </span>
+                <span className="flex flex-wrap items-center gap-1">
+                  {item.types.map((slot) => (
+                    <SlotBadge key={slot} slot={slot} />
+                  ))}
+                  <span className="qt-badge qt-badge-wardrobe-shared">{originLabel}</span>
+                  {reach && <span className="qt-text-xs qt-text-secondary">{reach}</span>}
+                  {item.archivedAt && <span className="qt-badge qt-badge-secondary">archived</span>}
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="qt-button qt-button-ghost qt-button-sm"
+              onClick={() => setItem(index, byId ? item.title : item.id)}
+              disabled={disabled}
+              title={`${byId ? 'Referenced by id' : 'Referenced by title'} — click to switch. ${REFERENCE_FORM_HINT}`}
+              aria-label={byId ? 'Reference by title instead' : 'Reference by id instead'}
+            >
+              {byId ? 'by id' : 'by title'}
+            </button>
+            {trashButton(index)}
+          </div>
+          {item.archivedAt && gesture.action === 'wear' && (
+            <p className="text-xs qt-text-secondary">⚠ {archivedWearMessage(item.title)}</p>
+          )}
+        </div>
+      )
+    }
+
+    const templated = isTemplatedWearableRef(ref)
+    const unresolved = !templated && vantage.kind !== 'none' && poolFetched && ref.trim() !== ''
+    return (
+      <div key={index} className="space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          {textInput(ref, index)}
+          {unresolved && (
+            <span className="qt-badge qt-badge-secondary" data-testid="wardrobe-reference-unresolved">
+              {unreachableNote}
+            </span>
+          )}
+          {chooseButton(index)}
+          {trashButton(index)}
+        </div>
+        {templated && <p className="qt-hint">chosen at run time</p>}
+      </div>
+    )
   }
 
   return (
@@ -372,6 +651,7 @@ function WardrobeFields({ gesture, hasErrors, disabled, onChange }: Readonly<War
               {WARDROBE_SLOT_TYPES.map((slot) => (
                 <option key={slot} value={slot}>
                   {WARDROBE_SLOT_META[slot].label}
+                  {coupled && !covered.has(slot) ? ' (not covered)' : ''}
                 </option>
               ))}
             </select>
@@ -379,31 +659,18 @@ function WardrobeFields({ gesture, hasErrors, disabled, onChange }: Readonly<War
         )}
       </div>
 
+      {slotMismatches.map(({ item }) =>
+        item && gesture.slot ? (
+          <p key={item.id} className="text-xs qt-text-secondary" data-testid="wardrobe-slot-advisory">
+            ⚠ &ldquo;{item.title}&rdquo; covers {formatSlotLabels(item.types)} — not{' '}
+            {WARDROBE_SLOT_META[gesture.slot].label}
+          </p>
+        ) : null
+      )}
+
       {wantsItems && (
         <div className="space-y-1">
-          {items.map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={item}
-                maxLength={MAX_WARDROBE_ITEM_REF_LENGTH}
-                onChange={(e) => setItem(index, e.target.value)}
-                placeholder={index === 0 ? 'Cloak of Night' : '{{params.garment}}'}
-                disabled={disabled}
-                className={`qt-input flex-1 min-w-48 ${hasErrors ? 'qt-input-error' : ''}`}
-                aria-label={`Item ${index + 1}`}
-              />
-              <button
-                type="button"
-                className="qt-button qt-button-ghost qt-button-sm"
-                onClick={() => removeItem(index)}
-                disabled={disabled || items.length <= 1}
-                title="Remove this item"
-              >
-                <Icon name="trash" className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+          {items.map((item, index) => renderItemRow(item, index))}
           <div className="flex items-center gap-2">
             <button
               type="button"

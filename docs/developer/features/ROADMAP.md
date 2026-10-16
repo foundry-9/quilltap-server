@@ -36,6 +36,7 @@ This document tracks planned features and improvements for Quilltap.
 ### Game and State (Pascal the Croupier)
 
 - [ ] Document the new incarnation of the game and state system
+- [x] Workbench wardrobe picker — choose garments and outfits for a `wardrobe` side effect from a browsable list showing where each lives, its slots and its picture (design: [complete/pascal-wardrobe-effect-picker.md](complete/pascal-wardrobe-effect-picker.md))
 
 ### Plugin architecture (The Foundry)
 

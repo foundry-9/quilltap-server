@@ -12,6 +12,8 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { displayTitle, type Visibility } from './custom-tool.types';
 import { listAllCustomTools } from './custom-tools';
 
@@ -295,4 +297,36 @@ export async function listCustomToolDestinations(): Promise<CustomToolDestinatio
     .sort((a, b) => a.mountName.localeCompare(b.mountName));
 
   return { general, projects, groups, characters, other };
+}
+
+/** One item reference of a dry-run wardrobe gesture, as the bench's chair would find it. */
+export type PreviewWardrobeItemResolution =
+  | {
+      ref: string;
+      found: {
+        id: string;
+        title: string;
+        types: WardrobeItemType[];
+        origin: WardrobeOrigin;
+        imageFileId: string | null;
+      };
+    }
+  | {
+      ref: string;
+      found: null;
+      /** Why the applier would skip it — `resolveWearable`'s reason code. */
+      reason: 'not_found' | 'archived' | 'slot';
+      /** The same reason in `resolveWearable`'s own words. */
+      message: string;
+    };
+
+/**
+ * What a bench roll's wardrobe gestures would have found, had the character in
+ * the chair rolled for real — returned beside a `?action=preview` result when
+ * the fact sheet names a character. A read; the bench never applies anything.
+ */
+export interface PreviewWardrobeResolution {
+  /** The definition effect's index (matches `ResolvedEffect.index`). */
+  index: number;
+  items: PreviewWardrobeItemResolution[];
 }

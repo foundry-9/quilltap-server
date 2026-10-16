@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Feature: wardrobe picker in Pascal's Workbench
+
+- A *Change the outfit* side effect's items now have a **Choose…** picker (`components/wardrobe/wardrobe-reference-picker.tsx`): outfits and garments by slot, with thumbnail, slot badges, origin chip, a reach note (`wardrobeReachLabel` in `lib/wardrobe/wardrobe-container.ts`), search, a slot filter and an archived filter (on by default for `take_off`, off for `wear`). It fills the reference by title, or by id on request.
+- A filled reference renders as a chip with the same particulars and a title/id toggle. A templated reference keeps its text box ("chosen at run time"). A reference the vantage cannot find shows an advisory, not a draft error. With `add_to_slot` or a slot-restricted `take_off`, slots none of the chosen items cover are marked "(not covered)", with a one-line advisory per mismatching item.
+- The Workbench browses from a `WardrobeVantage` (`lib/pascal/tool-draft.ts`): a character or a shared wardrobe, defaulted from the file's store by `defaultWardrobeVantage`, chosen with `WardrobeVantageSelect`, shared with the proving bench's *Pick a character* mode. Editor state only; never serialized. Reads go through `useWardrobeVantageItems` over the existing wardrobe hooks; no new route or query key.
+- New `lib/wardrobe/wearable-ref.ts` holds the reference lookup rule (`resolveWearableRef`, `matchWearableTitle`, `isTemplatedWearableRef`). `WearablePool.findByTitle` now delegates to `matchWearableTitle`, so the server and the Workbench resolve titles the same way.
+- `POST /api/v1/custom-tools?action=preview` returns `wardrobeResolution` when the fact sheet names a character: per wardrobe gesture, each item found (id, title, types, origin, image) or skipped with `resolveWearable`'s reason. A read through `loadWearablePool` / `findInPool` / `resolveWearable` (`lib/pascal/bench-wardrobe.ts`); nothing is worn. The bench's dry-run line now says "would apply" or "would skip" per item when a character is seated.
+- Tests: `wearable-ref.test.ts`, `wearable-ref-delegation.test.ts`, `wardrobe-vantage.test.ts`, `wardrobe-container.test.ts` (reach label), `route-preview-wardrobe.test.ts`, `wardrobe-reference-picker.test.tsx`. Help: `help/pascals-workbench.md`, `help/custom-tools.md`, `help/wardrobe.md`.
+
 #### Fix: a composer typeahead menu could be left open at the top-left (bug 250)
 
 - Undo that brought back a `@`, `:` or `/` trigger, followed at once by clearing the composer, could leave the menu rendered at the window's top-left until the next keystroke. Lexical 0.52's `LexicalTypeaheadMenuPlugin` opens its menu in a React transition, and its `closeTypeahead` skips the close while the captured resolution is still null, so a clear that lands before the open commits is lost.

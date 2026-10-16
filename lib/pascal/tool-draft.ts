@@ -69,6 +69,8 @@ import { foldTriggerText, triggersContainedIn } from './trigger-phrases';
 import { parseProgressKey } from '@/lib/progressions/schema';
 import { parseExpression } from './expressions';
 import { escapeRegex } from '@/lib/utils/regex';
+import { GENERAL_CONTAINER, type WardrobeContainer } from '@/lib/wardrobe/wardrobe-container';
+import type { CustomToolDestinations } from './workbench';
 
 export type { ComparatorKey };
 
@@ -248,6 +250,41 @@ export function newDraftEffect(kind: DraftEffect['kind'] = 'write'): DraftEffect
     value: '',
     wardrobe: emptyDraftWardrobeGesture(),
   };
+}
+
+/**
+ * Whose reach the Workbench shows when it displays or picks a wardrobe
+ * reference: a character, or one shared wardrobe. Editor state, like the
+ * roll form — never saved, never on {@link ToolDraft}, so `serializeDraft`
+ * cannot see it. A tool has no character until it is run; the vantage is a
+ * lens for the author, not a binding.
+ */
+export type WardrobeVantage =
+  | { kind: 'character'; characterId: string }
+  | { kind: 'container'; container: WardrobeContainer }
+  | { kind: 'none' };
+
+/**
+ * The opening vantage for a definition stored in `mountPointId`: the one
+ * character who can run a tool in their own vault, the shared wardrobe every
+ * member of a group or project store will certainly reach, Quilltap General
+ * for a General-store tool, and nothing for an unattached or unsaved file.
+ * A character's vault wins over any other attachment the same mount carries —
+ * it is the narrower, truer reach.
+ */
+export function defaultWardrobeVantage(
+  mountPointId: string | null,
+  destinations: CustomToolDestinations,
+): WardrobeVantage {
+  if (!mountPointId) return { kind: 'none' };
+  const character = destinations.characters.find((c) => c.mountPointId === mountPointId);
+  if (character) return { kind: 'character', characterId: character.characterId };
+  const group = destinations.groups.find((g) => g.stores.some((store) => store.mountPointId === mountPointId));
+  if (group) return { kind: 'container', container: { scope: 'group', id: group.groupId } };
+  const project = destinations.projects.find((p) => p.stores.some((store) => store.mountPointId === mountPointId));
+  if (project) return { kind: 'container', container: { scope: 'project', id: project.projectId } };
+  if (destinations.general?.mountPointId === mountPointId) return { kind: 'container', container: GENERAL_CONTAINER };
+  return { kind: 'none' };
 }
 
 export interface ToolDraft {

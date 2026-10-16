@@ -4,7 +4,9 @@
  * A wardrobe item's current picture, as a small square thumbnail.
  *
  * Shared by every list that names a garment — the dialog's wardrobe rows
- * (40 px) and the slot / outfit pickers (28 px) — so two same-named garments
+ * (40 px), the slot / outfit pickers (28 px), and Pascal's Workbench (the
+ * wardrobe reference picker's rows at 40 px, a resolved reference chip and the
+ * proving bench's dry-run line at 28 px) — so two same-named garments
  * with different pictures are told apart at a glance. Renders nothing when the
  * item has no current picture; callers need not guard.
  *

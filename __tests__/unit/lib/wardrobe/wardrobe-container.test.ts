@@ -18,6 +18,7 @@ import {
   sameWardrobeContainer,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
+  wardrobeReachLabel,
   withWardrobeArchivedParam,
 } from '@/lib/wardrobe/wardrobe-container'
 
@@ -124,5 +125,20 @@ describe('includeArchived', () => {
     expect(withWardrobeArchivedParam('/api/v1/wardrobe?tier=general', false)).toBe(
       '/api/v1/wardrobe?tier=general'
     )
+  })
+})
+
+describe('wardrobeReachLabel', () => {
+  it('names who can reach each scope', () => {
+    expect(wardrobeReachLabel({ scope: 'character', id: 'c', name: 'Imogen' })).toBe('Imogen only')
+    expect(wardrobeReachLabel({ scope: 'character', id: 'c', name: '' }, 'Bertie')).toBe('Bertie only')
+    expect(wardrobeReachLabel({ scope: 'character', id: 'c', name: '' })).toBe('this character only')
+    expect(wardrobeReachLabel({ scope: 'group', id: 'g', name: 'The Regulars' })).toBe('members of The Regulars')
+    expect(wardrobeReachLabel({ scope: 'project', id: 'p', name: 'Thornfield' })).toBe('chats in Thornfield')
+    expect(wardrobeReachLabel({ scope: 'general', id: null, name: 'Quilltap General' })).toBe('everyone')
+  })
+
+  it('is null without an origin', () => {
+    expect(wardrobeReachLabel(undefined)).toBeNull()
   })
 })

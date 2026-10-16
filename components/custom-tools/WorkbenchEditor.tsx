@@ -32,7 +32,9 @@ import {
   displayTitle,
   formatDefinitionIssues,
 } from '@/lib/pascal/custom-tool.types'
+import type { CustomToolDestinations } from '@/lib/pascal/workbench'
 import {
+  defaultWardrobeVantage,
   draftFromDefinition,
   draftIsValid,
   newDraft,
@@ -40,6 +42,7 @@ import {
   serializeDraft,
   validateDraft,
   type ToolDraft,
+  type WardrobeVantage,
 } from '@/lib/pascal/tool-draft'
 import { BuilderForm } from './BuilderForm'
 import { OutcomesSection } from './OutcomesSection'
@@ -159,6 +162,41 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       setLoadedName(null)
     }
   }
+
+  // -- Wardrobe vantage -----------------------------------------------------
+  //
+  // Whose wardrobe the side-effects card and the proving bench look through
+  // (pascal-wardrobe-effect-picker §1). Editor state only — never on the
+  // draft, never in the file. It opens on the store the file lives in, follows
+  // the file after a Save As…, and stops following the moment the author
+  // picks one by hand. Same destinations query (and cache) the save dialog
+  // and the bench already read.
+
+  const destinationsQuery = useQuery({
+    queryKey: queryKeys.customTools.destinations(),
+    queryFn: ({ signal }) => apiFetch<CustomToolDestinations>('/api/v1/custom-tools?action=destinations', { signal }),
+  })
+  const destinations = destinationsQuery.data
+  const [vantage, setVantage] = useState<WardrobeVantage>({ kind: 'none' })
+  const [vantageChosen, setVantageChosen] = useState(false)
+  const [vantageSeed, setVantageSeed] = useState<string | null>(null)
+  const seedKey = destinations ? `loaded|${location?.mountPointId ?? ''}` : null
+  // Derive-from-state during render, latched on the seed key (the same
+  // sanctioned pattern as the content initialisation above).
+  if (seedKey !== null && seedKey !== vantageSeed) {
+    setVantageSeed(seedKey)
+    if (!vantageChosen && destinations) {
+      setVantage(defaultWardrobeVantage(location?.mountPointId ?? null, destinations))
+    }
+  }
+  const chooseVantage = (next: WardrobeVantage) => {
+    setVantage(next)
+    setVantageChosen(true)
+  }
+  const homeProjectName =
+    (location && destinations?.projects.find((p) => p.stores.some((s) => s.mountPointId === location.mountPointId))
+      ?.projectName) ??
+    null
 
   // -- Derived validation ---------------------------------------------------
 
@@ -523,6 +561,10 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
                   issues={issues}
                   onChange={handleDraftChange}
                   disabled={saveMutation.isPending}
+                  vantage={vantage}
+                  onVantageChange={chooseVantage}
+                  destinations={destinations}
+                  homeProjectName={vantage.kind === 'character' ? homeProjectName : null}
                 />
                 <OutcomesSection
                   draft={draft}
@@ -572,7 +614,13 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
           {benchOpen && draft && editorMode === 'form' && (
             <div className="w-80 flex-shrink-0 sticky top-0">
-              <ProvingBench draft={draft} valid={formValid} onMatched={handleMatched} />
+              <ProvingBench
+                draft={draft}
+                valid={formValid}
+                onMatched={handleMatched}
+                vantage={vantage}
+                onVantageChange={chooseVantage}
+              />
             </div>
           )}
         </div>
