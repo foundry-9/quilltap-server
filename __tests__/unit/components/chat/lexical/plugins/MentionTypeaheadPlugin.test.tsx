@@ -150,6 +150,22 @@ describe('MentionTypeaheadPlugin', () => {
   }
 
   describe('the menu', () => {
+    it('does not stay open, orphaned, when the trigger is cleared before the open commits (bug 250)', async () => {
+      const editor = mount()
+      await settle()
+      // Both updates land before React commits the transition that opens the
+      // menu, so the clear runs against the listener whose resolution is still
+      // null — the undo-then-clear race seen live.
+      act(() => {
+        seed(editor, 'hello @ar')
+        seed(editor, '')
+      })
+      await settle()
+      expect(readText(editor)).toBe('')
+      expect(document.getElementById('qt-mention-typeahead-listbox')).toBeNull()
+      expect(screen.queryAllByRole('option')).toHaveLength(0)
+    })
+
     it('opens on a bare @ with every character', async () => {
       const editor = mount()
       await openMenu(editor, 'hello @')

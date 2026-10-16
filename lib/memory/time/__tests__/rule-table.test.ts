@@ -117,6 +117,13 @@ describe('write-only rules', () => {
     expect(resolveEventTime('', nowMs, clock)).toEqual({ occurredAt: null, window: null })
     expect(resolveEventTime('yesterday', Number.NaN, clock)).toEqual({ occurredAt: null, window: null })
   })
+
+  it.each(['constructor 5', '5 constructor', 'on constructor 5', 'constructor 5th', 'constructor 5, 2026', 'a constructor ago', 'two constructor ago'])(
+    'a word naming an inherited property is not a month or a number: %s (bug 247)',
+    phrase => {
+      expect(resolveEventTime(phrase, nowMs, clock)).toEqual({ occurredAt: null, window: null })
+    },
+  )
 })
 
 describe('normaliseTimeRange — the classifier\'s date-only ranges are local days', () => {

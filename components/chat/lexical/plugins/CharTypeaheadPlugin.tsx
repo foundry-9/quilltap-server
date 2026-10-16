@@ -34,7 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { LexicalTypeaheadMenuPlugin } from '@lexical/react/LexicalTypeaheadMenuPlugin'
+import { GuardedTypeaheadMenuPlugin } from '../typeahead/GuardedTypeaheadMenuPlugin'
 import type { MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
 import {
   $getSelection,
@@ -326,7 +326,7 @@ export function CharTypeaheadPlugin({
   if (!enabled) return null
 
   return (
-    <LexicalTypeaheadMenuPlugin<TypeaheadOption<CharEntry>>
+    <GuardedTypeaheadMenuPlugin<TypeaheadOption<CharEntry>>
       options={options}
       onQueryChange={setQuery}
       onSelectOption={onSelectOption}

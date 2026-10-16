@@ -4,6 +4,18 @@
 
 ### 4.11-dev
 
+#### Fix: a composer typeahead menu could be left open at the top-left (bug 250)
+
+- Undo that brought back a `@`, `:` or `/` trigger, followed at once by clearing the composer, could leave the menu rendered at the window's top-left until the next keystroke. Lexical 0.52's `LexicalTypeaheadMenuPlugin` opens its menu in a React transition, and its `closeTypeahead` skips the close while the captured resolution is still null, so a clear that lands before the open commits is lost.
+- New `GuardedTypeaheadMenuPlugin` (`components/chat/lexical/typeahead/GuardedTypeaheadMenuPlugin.tsx`) wraps the plugin. After each open commits it re-runs the consumer's `triggerFn` against the live editor and, when the trigger is gone, calls `onClose` and remounts the plugin. `MentionTypeaheadPlugin`, `CharTypeaheadPlugin` and `SlashCommandPlugin` now render through it.
+- New test in `__tests__/unit/components/chat/lexical/plugins/MentionTypeaheadPlugin.test.tsx` reproduces the race by seeding and clearing inside one `act()`.
+
+#### Fix: a `when` phrase naming "constructor" as its month failed the extraction job (bug 247)
+
+- `MONTH_NAMES`, `WORD_NUMBERS` and `UNIT_DAYS` in `lib/memory/time/clock.ts` are now read through `lookupWord`, which answers own keys only. `constructor 5` and similar phrases resolve to no event time instead of throwing `RangeError: Invalid time value`.
+- `resolveEpisodicAnchors` (`lib/memory/time/anchors.ts`) now catches a parser error and keeps the fallback `occurredAt`, so one bad `when` costs that draft its event time and never fails the job.
+- New test rows in `lib/memory/time/__tests__/rule-table.test.ts` and `anchors.test.ts`. The v5 harness pin `PROTOTYPE_KEY_MONTH_THROWS` can be retired.
+
 #### Fix: Enter on a code block's blank trailing line sent the message (bug 251)
 
 - In the Salon composer, Shift+Enter then Enter at the end of a code block was meant to leave the block. In chat mode it sent the message; in composition mode it added another line. After Shift+Enter, Lexical leaves the caret as an element point on the `CodeNode`, and `KeyboardPlugin`'s check only looked for a caret inside the block's last child. Present on Lexical 0.43 as well.

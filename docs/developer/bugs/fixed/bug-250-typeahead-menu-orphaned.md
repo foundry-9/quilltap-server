@@ -2,16 +2,28 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | FIXED |
 | **Found** | 2026-10-15, live on `V4test` during the Lexical 0.52 upgrade smoke test |
+| **Fixed** | 2026-10-16 |
 | **Severity** | Low. Cosmetic and transient: the menu closes on the next keystroke or editor update, and a Tab or Enter while it shows only closes it (nothing is inserted). Needs an undo that brings a trigger back, then a change that removes it before React commits the reopened menu |
 | **Who it bites** | the Salon composer's three `LexicalTypeaheadMenuPlugin` users: `MentionTypeaheadPlugin`, `CharTypeaheadPlugin` (emoji and Unicode) and `SlashCommandPlugin` |
 | **Provenance** | Upstream, new in our build with the Lexical 0.43 → 0.52 upgrade. Confirmed absent on 0.43 by reinstalling it and repeating the sequence twice |
+| **Fix site** | `components/chat/lexical/typeahead/GuardedTypeaheadMenuPlugin.tsx` (new wrapper; the three plugins render through it) |
 | **Defect site** | `node_modules/@lexical/react/src/LexicalTypeaheadMenuPlugin.tsx`, `closeTypeahead`: `if (resolution === null) return;` reads `resolution` from the render that registered the update listener. 0.43's `closeTypeahead` called `setResolution(null)` unconditionally |
 | **v5 status** | Not applicable (v5 does not use Lexical) |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-16).** Option 3 below. `GuardedTypeaheadMenuPlugin` wraps
+`LexicalTypeaheadMenuPlugin` and counts opens through `onOpen` (called inside the plugin's transition, so
+the count commits with the menu). After each open commits it re-runs the consumer's own `triggerFn` on the
+text before the caret; if nothing matches, it calls `onClose` and remounts the plugin by bumping its `key`,
+which drops the stale resolution. `MentionTypeaheadPlugin`, `CharTypeaheadPlugin` and `SlashCommandPlugin`
+render through it. Reproduced in Jest by seeding `hello @ar` and clearing inside one `act()`, so the clear
+lands before the transition commits: red before the wrapper, green after
+(`MentionTypeaheadPlugin.test.tsx`, "bug 250"). Not reported upstream yet; if Lexical restores the
+unconditional `setResolution(null)`, the wrapper becomes a no-op and can be removed.
 
 ## Symptom
 
@@ -43,7 +55,7 @@ the smoke test, and the smoke test found it.
 
 ## Fix
 
-Not fixed. Options, in order of preference:
+Options considered, in order of preference (3 was taken):
 
 1. Report upstream (restore the unconditional `setResolution(null)` in `closeTypeahead`, keeping the
    `onClose` call conditional) and take the fixed release.

@@ -46,7 +46,7 @@ export interface EpisodicAnchors<F extends string | null = string | null> {
  * Resolve a memory's episodic anchors.
  *
  *  - `occurredAt` — `when` resolved against `referenceIso`; `fallbackIso`
- *    when the phrase is absent or does not resolve.
+ *    when the phrase is absent, does not resolve, or makes the parser throw.
  *  - `narrativeTime` — in narrative mode the explicit stamp if given, else
  *    the raw `when` phrase (the in-story time IS the phrase); in realtime
  *    mode only the explicit stamp survives.
@@ -56,10 +56,16 @@ export function resolveEpisodicAnchors<F extends string | null>(
 ): EpisodicAnchors<F> {
   let occurredAt: string | F = input.fallbackIso
   if (input.when && input.referenceIso) {
-    const resolved = input.timeZone
-      ? resolveWhenPhrase(input.when, input.referenceIso, input.timeZone)
-      : resolveWhenPhrase(input.when, input.referenceIso)
-    if (resolved) occurredAt = resolved
+    // Never throws: a phrase the parser chokes on costs that memory its
+    // event time, not the extraction job around it (bug 247).
+    try {
+      const resolved = input.timeZone
+        ? resolveWhenPhrase(input.when, input.referenceIso, input.timeZone)
+        : resolveWhenPhrase(input.when, input.referenceIso)
+      if (resolved) occurredAt = resolved
+    } catch {
+      occurredAt = input.fallbackIso
+    }
   }
   const explicit = input.narrativeTime ?? null
   const narrativeTime =

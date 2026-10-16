@@ -2,16 +2,25 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | FIXED |
 | **Found** | 2026-10-13, the v5 port's differential harness (P4.D289, the `memory_time` family at the `83334b9a5` pin); reproduced 2026-10-14 at `8489d08b9` |
+| **Fixed** | 2026-10-16 |
 | **Severity** | Low — needs a model to emit a `when` of exactly the named-date shape with `constructor` as the month word (`"constructor 5"`, `"5 constructor"`, `"on constructor 5"`, `"constructor 5th"`, `"constructor 5, 2026"`). When it does, the job fails rather than the one draft |
 | **Who it bites** | memory extraction on any chat: a SELF/OTHER turn job, the fold passes, Carina, the dry run — every path that resolves a draft's `when` through `resolveEpisodicAnchors` |
 | **Provenance** | Original to v4. The named-date branch has looked month words up in a plain object literal since the episodic-spine `resolveWhenPhrase` (`8bf3cb5f`); the memory refactor moved it unchanged into `lib/memory/time/clock.ts` (`e0ac7493a`) |
+| **Fix site** | `lib/memory/time/clock.ts` (`lookupWord`, own keys only, for `MONTH_NAMES` / `WORD_NUMBERS` / `UNIT_DAYS`); `lib/memory/time/anchors.ts` (`resolveEpisodicAnchors` never throws) |
 | **Defect site** | `lib/memory/time/clock.ts:94-97` (`MONTH_NAMES` is a `Record<string, number>` object literal, so it inherits `Object.prototype`) and `:160-165` (`MONTH_NAMES[monthFirst[1]] !== undefined` / `MONTH_NAMES[dayFirst[2]] !== undefined` accept an inherited key); the throw escapes `lib/memory/extraction/run.ts:308` (`resolveEpisodicAnchors` sits outside `admitDraft`'s `try`, which guards only `admitCandidate`) |
-| **v5 status** | v5's port uses a closed month table, so the phrase resolves to no event time; the divergence is pinned both ways as `PROTOTYPE_KEY_MONTH_THROWS` in the `memory_time` family (P4.D289). It converges when v4 fixes this |
-| **Index** | [bugs.md](../bugs.md) |
+| **v5 status** | v5's port uses a closed month table, so the phrase resolves to no event time; the divergence is pinned both ways as `PROTOTYPE_KEY_MONTH_THROWS` in the `memory_time` family (P4.D289). Converged by this fix — the v5 pin can be retired |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-16).** The three word tables are read only through `lookupWord`, which answers
+`Object.hasOwn` keys, so `constructor 5` and its four sibling shapes resolve to
+`{ occurredAt: null, window: null }` like any other unknown phrase. Separately, `resolveEpisodicAnchors`
+now catches a parser throw and keeps the fallback, so one malformed `when` costs that draft its event time
+and never the job. Pinned by rows in `lib/memory/time/__tests__/rule-table.test.ts` and two cases in
+`anchors.test.ts` (one substitutes a throwing parser).
 
 ## Symptom
 

@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { LexicalTypeaheadMenuPlugin } from '@lexical/react/LexicalTypeaheadMenuPlugin'
+import { GuardedTypeaheadMenuPlugin } from '../typeahead/GuardedTypeaheadMenuPlugin'
 import type { MenuRenderFn, MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
 import {
   $getNodeByKey,
@@ -392,7 +392,7 @@ export function MentionTypeaheadPlugin({
   )
 
   return (
-    <LexicalTypeaheadMenuPlugin<TypeaheadOption<MentionCandidate>>
+    <GuardedTypeaheadMenuPlugin<TypeaheadOption<MentionCandidate>>
       options={options}
       onQueryChange={setQuery}
       onSelectOption={onSelectOption}

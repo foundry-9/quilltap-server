@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { LexicalTypeaheadMenuPlugin } from '@lexical/react/LexicalTypeaheadMenuPlugin'
+import { GuardedTypeaheadMenuPlugin } from '../typeahead/GuardedTypeaheadMenuPlugin'
 import type { MenuRenderFn, MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
 import {
   COMMAND_PRIORITY_CRITICAL,
@@ -274,7 +274,7 @@ function SlashCommandMenu({ context }: Readonly<SlashCommandPluginProps>): JSX.E
   )
 
   return (
-    <LexicalTypeaheadMenuPlugin<TypeaheadOption<SlashCommand>>
+    <GuardedTypeaheadMenuPlugin<TypeaheadOption<SlashCommand>>
       options={options}
       onQueryChange={setQuery}
       onSelectOption={onSelectOption}
