@@ -61,6 +61,28 @@ export function getSystemSenderDisplayName(sender: Message['systemSender']): str
 }
 
 /**
+ * The name on a Staff message's bar. A Staff row that also carries a
+ * `customAnnouncer` — a Pascal outcome whose tool sets `announceAsCharacter` —
+ * is spoken by that announcer, so the bar names them, as the bubble's avatar
+ * does. `announcerNames` is character id → name; an announcer it cannot name
+ * falls back to the Staff member rather than inventing one.
+ */
+export function getAnnouncementSenderName(
+  message: Pick<Message, 'systemSender' | 'customAnnouncer'>,
+  announcerNames?: Record<string, string>,
+): string {
+  const announcer = message.customAnnouncer
+  if (announcer?.kind === 'character' && announcer.characterId) {
+    const name = announcerNames?.[announcer.characterId]?.trim()
+    if (name) return name
+  } else if (announcer?.kind === 'custom') {
+    const name = announcer.displayName?.trim()
+    if (name) return name
+  }
+  return getSystemSenderDisplayName(message.systemSender)
+}
+
+/**
  * Best-effort kind inference for Staff messages persisted before the
  * `systemKind` column landed (or any future writer that forgets to set it).
  * Patterns track the persona-voiced phrasing each writer uses so display

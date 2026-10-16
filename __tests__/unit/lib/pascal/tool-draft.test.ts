@@ -36,6 +36,7 @@ function normalize(parsed: Record<string, unknown>): Record<string, unknown> {
   if (out.disabled === false) delete out.disabled
   if (out.revealOdds === true) delete out.revealOdds
   if (out.defaultVisibility === 'public') delete out.defaultVisibility
+  if (out.announceAsCharacter === false) delete out.announceAsCharacter
   if (out.parameters && Object.keys(out.parameters as object).length === 0) delete out.parameters
   if (typeof out.roll === 'object' && out.roll !== null) {
     const roll: Record<string, unknown> = { ...(out.roll as Record<string, unknown>) }
@@ -88,6 +89,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
       disabled: true,
       revealOdds: false,
       defaultVisibility: 'whisper',
+      announceAsCharacter: true,
       parameters: {
         baseline: { type: 'number', default: 0, description: 'Floor.', min: -10, max: 10 },
         scale: { type: 'integer', default: 2 },
@@ -141,6 +143,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
       disabled: false,
       revealOdds: true,
       defaultVisibility: 'public',
+      announceAsCharacter: false,
       roll: { min: 0, max: 1, multiplier: 1, offset: 0, round: false },
       outcomes: [{ when: true, message: 'Done.', state: 'info' }],
     })
@@ -148,6 +151,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
     expect(emitted.disabled).toBeUndefined()
     expect(emitted.revealOdds).toBeUndefined()
     expect(emitted.defaultVisibility).toBeUndefined()
+    expect(emitted.announceAsCharacter).toBeUndefined()
     expect(emitted.roll).toBeUndefined()
   })
 

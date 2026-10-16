@@ -26,6 +26,7 @@ export type PlaceholderRef =
   | { kind: 'dice' }
   | { kind: 'llm' }
   | { kind: 'now' }
+  | { kind: 'character' }
   | { kind: 'params'; name: string }
   | { kind: 'metadata'; key: string }
   | { kind: 'state'; path: string }
@@ -51,6 +52,10 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
   // what lets an effect express "ten minutes from now" as {{now}} + 600000
   // without the format growing a date grammar.
   if (key === 'now') return { kind: 'now' };
+  // `character` is the rolling character's name — the one whose metadata,
+  // progressions and wardrobe the run reads and writes. A run nobody made has
+  // none, and the placeholder then renders as written.
+  if (key === 'character') return { kind: 'character' };
   if (key.startsWith(PARAMS_PREFIX) && key.length > PARAMS_PREFIX.length) {
     return { kind: 'params', name: key.slice(PARAMS_PREFIX.length) };
   }

@@ -83,6 +83,8 @@ export interface ToolVocabulary {
   progressWrites: string[];
   /** True when some rendered string quotes `{{now}}`. */
   now: boolean;
+  /** True when some rendered string quotes `{{character}}`. */
+  character: boolean;
   /**
    * Item references this tool's wardrobe effects may PUT ON the rolling
    * character, verbatim (a `{{params.garment}}` stays as written — it is
@@ -110,6 +112,7 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     vocabulary.progress.length === 0 &&
     vocabulary.progressWrites.length === 0 &&
     !vocabulary.now &&
+    !vocabulary.character &&
     vocabulary.wears.length === 0 &&
     vocabulary.takesOff.length === 0 &&
     vocabulary.clearsSlots.length === 0
@@ -138,6 +141,7 @@ export function collectToolVocabulary(
     progress: new Set<string>(),
     progressWrites: new Set<string>(),
     now: false,
+    character: false,
     wears: new Set<string>(),
     takesOff: new Set<string>(),
     clearsSlots: new Set<string>(),
@@ -218,6 +222,7 @@ export function collectToolVocabulary(
     progress: sorted(found.progress),
     progressWrites: sorted(found.progressWrites),
     now: found.now,
+    character: found.character,
     wears: sorted(found.wears),
     takesOff: sorted(found.takesOff),
     clearsSlots: sorted(found.clearsSlots),
@@ -252,6 +257,7 @@ function collectPlaceholders(
     state: Set<string>;
     progress: Set<string>;
     now: boolean;
+    character: boolean;
   }
 ): void {
   for (const { ref } of scanPlaceholders(text)) {
@@ -282,6 +288,9 @@ function collectPlaceholders(
         break;
       case 'now':
         found.now = true;
+        break;
+      case 'character':
+        found.character = true;
         break;
       case 'unknown':
         break;

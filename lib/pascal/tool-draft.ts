@@ -302,6 +302,8 @@ export interface ToolDraft {
   gateConditions: DraftGateCondition[];
   revealOdds: boolean;
   defaultVisibility: Visibility;
+  /** The rolling character announces the outcome instead of Pascal. False = no key emitted. */
+  announceAsCharacter: boolean;
   parameters: DraftParameter[];
   rollForm: 'range' | 'dice';
   /** Dice-notation text. Kept even while `rollForm` is 'range' (§4.3). */
@@ -358,6 +360,7 @@ export function newDraft(): ToolDraft {
     gateConditions: [],
     revealOdds: true,
     defaultVisibility: 'public',
+    announceAsCharacter: false,
     parameters: [],
     rollForm: 'range',
     rollDice: '',
@@ -743,6 +746,7 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
     gateConditions: gate ? gateConditionsFromGate(gate) : [],
     revealOdds: definition.revealOdds ?? true,
     defaultVisibility: definition.defaultVisibility ?? 'public',
+    announceAsCharacter: definition.announceAsCharacter ?? false,
     parameters: Object.entries(definition.parameters ?? {}).map(([name, spec]) => parameterToDraft(name, spec)),
     rollForm: isDice ? 'dice' : 'range',
     rollDice: isDice ? (definition.roll as string) : '',
@@ -944,6 +948,7 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   }
   if (!draft.revealOdds) doc.revealOdds = false;
   if (draft.defaultVisibility !== 'public') doc.defaultVisibility = draft.defaultVisibility;
+  if (draft.announceAsCharacter) doc.announceAsCharacter = true;
 
   if (draft.parameters.length > 0) {
     const parameters: Record<string, CustomToolParameter> = {};
@@ -1089,6 +1094,9 @@ function auditPlaceholders(
       // warned about from the draft the way an undeclared parameter can.
       case 'progress':
       case 'now':
+      // `{{character}}` names whoever rolls; a run nobody made renders it as
+      // written, which is the runtime's convention rather than an authoring slip.
+      case 'character':
         break;
       case 'dice':
         if (draft.rollForm !== 'dice') {

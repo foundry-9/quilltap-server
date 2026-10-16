@@ -141,6 +141,60 @@ describe('runCustomTool', () => {
     expect(postMock.mock.calls[1][0].targetParticipantIds).toBeNull();
   });
 
+  describe('the rolling character', () => {
+    const NAMED = {
+      ...ENTRY,
+      definition: QtapCustomToolSchema.parse({
+        name: 'suit_up',
+        description: 'Suit up.',
+        outcomes: [{ when: true, message: '{{character}} is suited.', state: 'success' }],
+      }),
+    } as DiscoveredCustomTool;
+    const ANNOUNCED = {
+      ...NAMED,
+      definition: { ...NAMED.definition, announceAsCharacter: true },
+    } as DiscoveredCustomTool;
+
+    it("renders {{character}} with the name the entrance supplied, without a read", async () => {
+      const findByIdRaw = jest.fn();
+      getRepositoriesMock.mockReturnValue({ characters: { findByIdRaw } });
+      const outcome = await runCustomTool(params({ entry: NAMED, characterId: 'char-1', characterName: 'Charlie' }));
+      expect(outcome.ok && outcome.result.message).toBe('Charlie is suited.');
+      expect(findByIdRaw).not.toHaveBeenCalled();
+    });
+
+    it('reads the name when the entrance did not supply one', async () => {
+      const findByIdRaw = jest.fn().mockResolvedValue({ id: 'char-1', name: 'Charlie' });
+      getRepositoriesMock.mockReturnValue({ characters: { findByIdRaw } });
+      const outcome = await runCustomTool(params({ entry: NAMED, characterId: 'char-1' }));
+      expect(findByIdRaw).toHaveBeenCalledWith('char-1');
+      expect(outcome.ok && outcome.result.message).toBe('Charlie is suited.');
+    });
+
+    it('leaves {{character}} as written when the name cannot be read', async () => {
+      getRepositoriesMock.mockReturnValue({
+        characters: { findByIdRaw: jest.fn().mockRejectedValue(new Error('vault gone')) },
+      });
+      const outcome = await runCustomTool(params({ entry: NAMED, characterId: 'char-1' }));
+      expect(outcome.ok && outcome.result.message).toBe('{{character}} is suited.');
+    });
+
+    it('posts under Pascal unless the tool says the character announces it', async () => {
+      await runCustomTool(params({ entry: NAMED, characterId: 'char-1', characterName: 'Charlie' }));
+      expect(postMock.mock.calls[0][0].announcerCharacterId).toBeUndefined();
+    });
+
+    it('hands the post to the rolling character when announceAsCharacter is on', async () => {
+      await runCustomTool(params({ entry: ANNOUNCED, characterId: 'char-1', characterName: 'Charlie' }));
+      expect(postMock.mock.calls[0][0].announcerCharacterId).toBe('char-1');
+    });
+
+    it('leaves a run nobody made with Pascal, even when announceAsCharacter is on', async () => {
+      await runCustomTool(params({ entry: ANNOUNCED, characterId: null }));
+      expect(postMock.mock.calls[0][0].announcerCharacterId).toBeUndefined();
+    });
+  });
+
   it('returns a refusal, without posting, when the run is refused', async () => {
     const outcome = await runCustomTool(params({ parameters: { nonsense: 1 } }));
     expect(outcome.ok).toBe(false);

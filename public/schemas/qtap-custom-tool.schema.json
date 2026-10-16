@@ -30,7 +30,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 160,
-      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
+      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
     },
     "triggers": {
       "type": "array",
@@ -74,6 +74,11 @@
       ],
       "default": "public",
       "description": "Default visibility of the result. 'whisper' hides the outcome from other participants (a GM-style hidden roll); the human operator always sees it."
+    },
+    "announceAsCharacter": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the rolling character announces the outcome under their own name and avatar instead of Pascal, and the model reads it as that character's line. The roll record is unchanged. A run made by nobody in particular (the bare operator, with no character seat) is still announced by Pascal."
     },
     "parameters": {
       "type": "object",
@@ -178,7 +183,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 4000,
-          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
         },
         "errorMessage": {
           "type": "string",
@@ -300,7 +305,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, or {{llm}} on a tool with no llm block."
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{character}} (the rolling character's name), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, {{llm}} on a tool with no llm block, or {{character}} on a run nobody in particular made."
           },
           "state": {
             "enum": [

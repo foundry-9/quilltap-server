@@ -8,7 +8,7 @@ import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import {
-  getSystemSenderDisplayName,
+  getAnnouncementSenderName,
   getSystemKindDisplayLabel,
   getAnnouncementAccentClasses,
 } from './system-message-labels'
@@ -111,6 +111,8 @@ interface MessageRowProps {
   onReattribute?: (messageId: string) => void
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** Character id → name, for naming a Staff bar's `customAnnouncer` */
+  announcerNames?: Record<string, string>
   /** The operator's own userId — a private user-initiated run whispers to it,
    * so the whisper label resolves it to "you" rather than "unknown" (Bug 30). */
   currentUserId?: string | null
@@ -187,6 +189,7 @@ function MessageRowInner({
   onHandleContinue,
   onReattribute,
   participantNames,
+  announcerNames,
   currentUserId,
   isOverheardWhisper = false,
   isDangerousChat = false,
@@ -283,6 +286,7 @@ function MessageRowInner({
           message={message}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
+          announcerNames={announcerNames}
         />
       </div>
     )
@@ -305,7 +309,7 @@ function MessageRowInner({
       )}
       <div className="qt-chat-message-body group">
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
-          const senderName = getSystemSenderDisplayName(message.systemSender)
+          const senderName = getAnnouncementSenderName(message, announcerNames)
           const kindLabel = getSystemKindDisplayLabel(message)
           // A Pascal roll wears its outcome state on the bar's leading edge.
           const accent = getAnnouncementAccentClasses(message)
@@ -321,6 +325,7 @@ function MessageRowInner({
                 message={message}
                 expanded
                 participantNames={participantNames}
+                announcerNames={announcerNames}
               />
             </button>
           )
@@ -680,6 +685,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
   if (prev.participantNames !== next.participantNames) return false
+  if (prev.announcerNames !== next.announcerNames) return false
   if (prev.currentUserId !== next.currentUserId) return false
 
   // Danger state

@@ -711,7 +711,7 @@ export const CustomToolEffectSchema = z
       .describe(
         'What to write. A JSON number or boolean is a literal. A JSON string is ALWAYS an expression — quote literal ' +
           "prose inside it (\"'broken pick'\"). Expressions take arithmetic, +-concatenation, parentheses, and {{ref}} " +
-          'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{now}}, {{params.x}}, {{metadata.key}}, ' +
+          'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{now}}, {{character}}, {{params.x}}, {{metadata.key}}, ' +
           '{{state.path}}, {{progress.id.field}}).'
       ),
     wardrobe: CustomToolWardrobeGestureSchema.optional().describe(
@@ -1010,6 +1010,13 @@ export const QtapCustomToolSchema = z
       .optional()
       .describe('false hides the roll spec and outcome table from the model. Default true.'),
     defaultVisibility: VisibilitySchema.optional().describe('Default result visibility. Default "public".'),
+    announceAsCharacter: z
+      .boolean()
+      .optional()
+      .describe(
+        'true: the rolling character announces the outcome under their own name and face, in place of Pascal. ' +
+          'A run nobody made (the bare operator) is still announced by Pascal. Default false.'
+      ),
     parameters: z
       .record(IdentifierSchema, CustomToolParameterSchema)
       .refine((params) => Object.keys(params).length <= MAX_PARAMETERS, {

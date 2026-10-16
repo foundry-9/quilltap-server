@@ -800,6 +800,11 @@ export interface OutcomeSubjects {
   /** The resolved parameters, post-default and post-clamp. */
   params: ResolvedParams;
   /**
+   * The rolling character's name, for `{{character}}`. Absent when nobody in
+   * particular rolled — the placeholder then renders as written.
+   */
+  character?: string;
+  /**
    * The invoking character's metadata sheet, as hydrated from their vault's
    * `metadata.json`. Absent (or `{}`) when nobody in particular rolled — every
    * `metadata` test then fails and the catch-all answers.
@@ -1316,6 +1321,8 @@ export interface PlaceholderSubjects {
   roll: number;
   dice: string;
   params: ResolvedParams;
+  /** The rolling character's name, for `{{character}}`. */
+  character?: string;
   metadata?: Record<string, unknown>;
   /** The flattened progress sheet, for `{{progress.<id>.<field>}}`. */
   progress?: Record<string, ProgressPrimitive>;
@@ -1356,6 +1363,8 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
       return vars.progress?.[`${ref.id}.${ref.field}`];
     case 'now':
       return vars.now;
+    case 'character':
+      return vars.character;
     case 'state':
       // `state.` is stripped and the remainder is a full state path.
       return getAtPath(vars.state ?? {}, parsePath(ref.path));
@@ -1401,6 +1410,9 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
         break;
       case 'now':
         logger.debug('Custom tool message references {{now}} with no run clock to render', { context: CONTEXT });
+        break;
+      case 'character':
+        logger.debug('Custom tool message references {{character}} but nobody in particular rolled', { context: CONTEXT });
         break;
       case 'state':
         logger.debug('Custom tool message references state it cannot render', {
@@ -1536,6 +1548,8 @@ export async function executeCustomTool(
     progress?: Record<string, ProgressPrimitive>;
     /** Epoch milliseconds at run start, for `{{now}}`. Defaults to `Date.now()`. */
     now?: number;
+    /** The rolling character's name, for `{{character}}`. Absent for a run nobody made. */
+    character?: string;
     /** Merged persistent state for `$state` refs and `{{state.path}}`. Default {}. */
     state?: CustomToolState;
     llmInvoke?: LlmInvoker;
@@ -1556,27 +1570,37 @@ export async function executeCustomTool(
   // One clock reading for the whole run: two effects that both say {{now}}
   // must agree, and a run's start is the honest instant for both.
   const now = overrides?.now ?? Date.now();
+  const character = overrides?.character?.trim() || undefined;
 
   // The consult runs AFTER the roll — its prompt may quote the draw — and
   // BEFORE the table, which may test its answer.
   let llm: LlmConsultResult | undefined;
   if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, state });
+    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state });
     llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
   }
 
-  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, progress, state, ...(llm ? { llm } : {}) };
+  const subjects: OutcomeSubjects = {
+    value,
+    roll: raw,
+    params,
+    metadata,
+    progress,
+    state,
+    ...(character ? { character } : {}),
+    ...(llm ? { llm } : {}),
+  };
   const outcomeIndex = pickOutcome(definition, subjects);
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state })
+    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state })
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written

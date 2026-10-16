@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Feature: `{{character}}` placeholder and character-announced custom tools
+
+- New `{{character}}` placeholder: the rolling character's name. It works in outcome messages, the chip label, the consult prompt, effect expressions and wardrobe item references. A run with no character leaves it as written. `classifyPlaceholder` gains a `character` kind; `executeCustomTool` takes `character` in its overrides. `runCustomTool` takes an optional `characterName` (the trigger runner supplies it) and otherwise reads it with `characters.findByIdRaw`. The proving bench renders it when a character is seated.
+- New custom-tool field `announceAsCharacter` (boolean, default false). When true and the run has a rolling character, `postPascalResult` sets `customAnnouncer: { kind: 'character', characterId }` on the outcome message. The message keeps `systemSender: 'pascal'` and `pascalMeta`. The Salon, the LLM context's speaker tag, the Courier transcript and the Markdown export already honor `customAnnouncer`. A run with no character is still announced by Pascal.
+- Salon: the Staff bar and collapsed chip name a `customAnnouncer` in place of the Staff member (`getAnnouncementSenderName` in `system-message-labels.ts`, fed a character-id name map threaded from `SalonView` as `announcerNames`). Without it a character-announced outcome showed the character's avatar under a "Pascal" bar.
+- Workbench: "The character announces it" checkbox in the builder; "Character name" in the outcome message's Insert value menu; the run dialog's reference panel lists `{{character}}`; the tool vocabulary reports it.
+- JSON Schema (`public/schemas/qtap-custom-tool.schema.json`) documents both. Help: `help/custom-tools.md`, `help/pascals-workbench.md`.
+- Tests: `custom-tools-execution.test.ts`, `run-service.test.ts`, `tool-vocabulary.test.ts`, `tool-draft.test.ts`, `services/pascal/writer.test.ts`, `system-message-labels.test.ts`.
+
 #### Feature: wardrobe picker in Pascal's Workbench
 
 - A *Change the outfit* side effect's items now have a **Choose…** picker (`components/wardrobe/wardrobe-reference-picker.tsx`): outfits and garments by slot, with thumbnail, slot badges, origin chip, a reach note (`wardrobeReachLabel` in `lib/wardrobe/wardrobe-container.ts`), search, a slot filter and an archived filter (on by default for `take_off`, off for `wear`). It fills the reference by title, or by id on request.

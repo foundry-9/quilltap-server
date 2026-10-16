@@ -89,6 +89,8 @@ export interface CustomToolReferences {
   progressWrites?: string[]
   /** The tool quotes `{{now}}`. Absent on older servers. */
   now?: boolean
+  /** The tool quotes `{{character}}`. Absent on older servers. */
+  character?: boolean
   /** Item references this tool's wardrobe effects may put on, verbatim. Absent on older servers. */
   wears?: string[]
   /** Item references this tool's wardrobe effects may take off, verbatim. Absent on older servers. */
@@ -875,6 +877,9 @@ function referenceRows(tool: CustomTool): ReferenceRow[] {
   }
   if (refs.now) {
     rows.push({ placeholder: '{{now}}', meaning: 'the moment the run began, to the millisecond' })
+  }
+  if (refs.character) {
+    rows.push({ placeholder: '{{character}}', meaning: 'the name of the character the run is made for' })
   }
 
   for (const name of refs.params) {

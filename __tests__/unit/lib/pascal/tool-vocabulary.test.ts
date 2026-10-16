@@ -39,6 +39,7 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      character: false,
       wears: [],
       takesOff: [],
       clearsSlots: [],
@@ -183,10 +184,18 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      character: false,
       wears: [],
       takesOff: [],
       clearsSlots: [],
     })
+  })
+
+  it('reports a tool that quotes {{character}}', () => {
+    const tool = define({
+      outcomes: [{ when: true, message: '{{character}} is suited.', state: 'info' }],
+    })
+    expect(collectToolVocabulary(tool).character).toBe(true)
   })
 
   it('reads the chip label for placeholders like any other rendered string', () => {

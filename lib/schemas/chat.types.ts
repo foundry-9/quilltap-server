@@ -424,14 +424,16 @@ export const MessageEventSchema = z.object({
   }).nullable().optional(),
   /**
    * Ad-hoc announcer metadata for user-authored announcement bubbles
-   * (Insert Announcement composer button). Mutually exclusive with
-   * `systemSender`: when this is set, the message renders with the named
-   * character or custom display name in lieu of any Staff member.
+   * (Insert Announcement composer button), and for a Pascal outcome whose
+   * tool sets `announceAsCharacter` (then `systemSender` stays `'pascal'`).
+   * When this is set, the message renders with the named character or custom
+   * display name in lieu of any Staff member, and the LLM context tags the
+   * body with that speaker.
    *
-   * - `kind: 'character'` → `characterId` references a workspace character
-   *   who is not a participant in this chat. The renderer resolves the
-   *   character's avatar/name via the off-scene character lookup attached
-   *   to the chat payload.
+   * - `kind: 'character'` → `characterId` references a workspace character —
+   *   a participant, or one who is not in this chat. The renderer looks among
+   *   the participants first, then the off-scene character lookup attached to
+   *   the chat payload.
    * - `kind: 'custom'` → `displayName` is the free-text label shown next
    *   to a placeholder avatar.
    *

@@ -323,6 +323,32 @@ describe('renderTemplate', () => {
     expect(renderTemplate('{{ value }}', vars)).toBe('14')
   })
 
+  describe('{{character}}', () => {
+    it("substitutes the rolling character's name", () => {
+      expect(renderTemplate('{{character}} suits up.', { ...vars, character: 'Charlie' })).toBe('Charlie suits up.')
+    })
+
+    it('stays as written when nobody in particular rolled', () => {
+      expect(renderTemplate('{{character}} suits up.', vars)).toBe('{{character}} suits up.')
+    })
+
+    it('reaches the message, the chip label and a wardrobe reference through executeCustomTool', async () => {
+      const tool = define({
+        name: 'suit_up',
+        description: 'Suit up.',
+        chipLabel: 'Armour for {{character}}',
+        effects: [{ wardrobe: { action: 'wear', items: ["{{character}}'s armour"] } }],
+        outcomes: [{ when: true, message: '{{character}} is suited.', state: 'success' }],
+      })
+      const result = await executeCustomTool(tool, null, { character: 'Charlie' })
+      expect(result.message).toBe('Charlie is suited.')
+      expect(result.chipLabel).toBe('Armour for Charlie')
+      expect(result.effects).toEqual([
+        { index: 0, wardrobe: { action: 'wear', items: ["Charlie's armour"] } },
+      ])
+    })
+  })
+
   describe('the {{metadata.key}} family', () => {
     const sheet = {
       faction: 'Ordo Aurum',

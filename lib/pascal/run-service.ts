@@ -63,6 +63,11 @@ export interface RunCustomToolParams {
   characterId: string | null;
   /** The rolling character's hydrated fact sheet ({} for a run nobody made). */
   metadata: Record<string, unknown>;
+  /**
+   * The rolling character's name, for `{{character}}`, when the entrance
+   * already holds it. Absent with a `characterId` → read here.
+   */
+  characterName?: string | null;
   /** Who the whisper goes to when the run is private. null → the post is not targeted. */
   whisperTargetIds: string[] | null;
   /** Provenance for pascalMeta. */
@@ -99,6 +104,8 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
   // the one clock reading. Costs no reads: progressions live in the metadata.
   const progress = flattenProgressions(metadata, nowMs);
 
+  const characterName = await resolveCharacterName(characterId, params.characterName, chatId);
+
   // The group tier is scoped to the rolling character's own groups, or skipped
   // for a run nobody made rather than borrowing an arbitrary participant's.
   let cascade: StateCascadeResult | null = null;
@@ -127,6 +134,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
       metadata,
       progress,
       now: nowMs,
+      ...(characterName ? { character: characterName } : {}),
       state: cascade?.merged ?? {},
       // Only built when the definition wants one; the invoker resolves the
       // cheap-LLM selection fresh on each consult.
@@ -175,11 +183,18 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
     message: result.message,
   });
 
+  // `announceAsCharacter`: the rolling character speaks the outcome in Pascal's
+  // place. Still Pascal's record (systemSender, pascalMeta, the chip) — only the
+  // face and name on the bubble, and the speaker tag the model reads, change.
+  // A run nobody made has no one to speak it, so Pascal does.
+  const announcerCharacterId = entry.definition.announceAsCharacter === true ? characterId : null;
+
   const posted = await postPascalResult({
     chatId,
     content,
     opaqueContent,
     targetParticipantIds,
+    ...(announcerCharacterId ? { announcerCharacterId } : {}),
     pascalMeta: {
       tool: result.tool,
       toolTitle,
@@ -212,8 +227,35 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
     state: result.state,
     effects: appliedEffects.length,
     whispered,
+    announcedBy: announcerCharacterId ? 'character' : 'pascal',
     posted: posted !== null,
   });
 
   return { ok: true, result, posted, appliedEffects };
+}
+
+/**
+ * The rolling character's name for `{{character}}`: the entrance's copy when it
+ * has one, else a raw read (a broken vault costs the placeholder, never the
+ * run). null for a run nobody made.
+ */
+async function resolveCharacterName(
+  characterId: string | null,
+  supplied: string | null | undefined,
+  chatId: string
+): Promise<string | null> {
+  if (!characterId) return null;
+  if (supplied !== undefined) return supplied?.trim() || null;
+  try {
+    const character = await getRepositories().characters.findByIdRaw(characterId);
+    return character?.name?.trim() || null;
+  } catch (error) {
+    logger.debug('Custom tool run: rolling character name unavailable, {{character}} renders as written', {
+      context: CONTEXT,
+      chatId,
+      characterId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
 }

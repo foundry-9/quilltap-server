@@ -339,6 +339,19 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
               <option value="whisper">whispered</option>
             </select>
           </label>
+          <label
+            className="flex items-center gap-2"
+            title="On: the character who rolled announces the outcome under their own name and face. A roll nobody in particular made is still Pascal's to announce."
+          >
+            <input
+              type="checkbox"
+              className="qt-checkbox"
+              checked={draft.announceAsCharacter}
+              onChange={(e) => update({ announceAsCharacter: e.target.checked })}
+              disabled={disabled}
+            />
+            The character announces it
+          </label>
         </div>
 
         <TriggerPhrasesField

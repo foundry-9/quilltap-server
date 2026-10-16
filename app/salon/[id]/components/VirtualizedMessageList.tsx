@@ -109,6 +109,8 @@ interface VirtualizedMessageListProps {
   } | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** Character id → name, for naming a Staff bar's `customAnnouncer` */
+  announcerNames?: Record<string, string>
   /** The operator's own userId, for resolving a self-targeted whisper label to "you" (Bug 30). */
   currentUserId?: string | null
   /** Set of participant IDs controlled by the user */
@@ -178,6 +180,7 @@ export function VirtualizedMessageList({
   getFirstCharacter,
   getMessageAvatar,
   participantNames,
+  announcerNames,
   currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
@@ -240,6 +243,7 @@ export function VirtualizedMessageList({
                     members={item.members}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                     participantNames={participantNames}
+                    announcerNames={announcerNames}
                   />
                 </div>
               )
@@ -368,6 +372,7 @@ export function VirtualizedMessageList({
                   showThinking={showThinking}
                   thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
+                  announcerNames={announcerNames}
                   currentUserId={currentUserId}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&

@@ -44,6 +44,7 @@ Zod schema `QtapCustomToolSchema` in `lib/pascal/custom-tool.types.ts`, plus a p
   "withheldWhen": { … },                 // optional (4.8). The mirror. At most one of the two per file.
   "revealOdds": true,                    // optional, default true. false = model sees name/description/parameters only, never the roll spec or outcome table.
   "defaultVisibility": "public",         // optional: "public" | "whisper". Default "public".
+  "announceAsCharacter": false,          // optional: true = the rolling character announces the outcome (customAnnouncer), not Pascal.
   "parameters": {                        // optional. Keyed by param name (same identifier rules as `name`). Max 8 params.
     "bonus": {
       "type": "number",                  // "number" | "integer" | "string" | "boolean"
@@ -180,6 +181,7 @@ Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-
 - `{{value}}` — the final post-transform value (integers rendered without decimals; floats to 4 significant digits).
 - `{{roll}}` — the raw pre-transform value. For dice form, the total.
 - `{{dice}}` — dice form only: the breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14`. Empty string for Form A.
+- `{{character}}` — the rolling character's name (the caller, the trigger's speaker, or the popup's "as" character). Verbatim, with a debug log, for a run nobody made. `runCustomTool` takes it from the entrance (`characterName`) or reads it with `findByIdRaw`; a failed read leaves it verbatim, never fails the run.
 - `{{params.<name>}}` — the resolved (post-clamp, post-default) value of a declared parameter.
 - `{{metadata.<key>}}` — the invoking character's metadata value for that key. Primitives render like `{{params.<name>}}`; an absent key or non-primitive value leaves the placeholder verbatim (with a debug log), the same convention as unknown placeholders.
 - `{{state.<path>}}` — a path into merged persistent state (see below). Primitives render like `{{params.<name>}}`; an absent path or non-primitive value leaves the placeholder verbatim (with a debug log) — the `{{metadata.*}}` doctrine, applied to state.

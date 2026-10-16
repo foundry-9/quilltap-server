@@ -849,6 +849,7 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
                 .map((p) => (
                   <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
                 ))}
+              <MenuItem label="Character name" onClick={() => insertAtCursor('{{character}}')} />
               <MenuItem label="Metadata key…" onClick={insertMetadataKey} />
               <MenuItem label="Progress field…" onClick={insertProgressField} />
               <MenuItem

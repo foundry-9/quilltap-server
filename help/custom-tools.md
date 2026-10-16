@@ -253,13 +253,14 @@ Two practicalities. First, the consult costs one cheap-model call per run — re
 
 ### Putting things in the message
 
-Six things may be dropped into a `message`:
+These may be dropped into a `message`:
 
 | | |
 |---|---|
 | `{{value}}` | the final number, after the transformation |
 | `{{roll}}` | the raw number, before it |
 | `{{dice}}` | the dice breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14` (empty if you're not rolling dice) |
+| `{{character}}` | the name of the character who rolled |
 | `{{params.bonus}}` | a parameter, as it was actually used — after defaulting and clamping |
 | `{{metadata.faction}}` | a key from the roller's fact sheet |
 | `{{state.weather.wind}}` | a path into persistent state (the four-tier cascade) |
@@ -267,7 +268,9 @@ Six things may be dropped into a `message`:
 | `{{now}}` | the moment the run began, in milliseconds since the epoch |
 | `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
 
-Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying.
+Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying, or a `{{character}}` on a roll that nobody in particular made (you, from the run dialog, as no one).
+
+`{{character}}` is the roller and nobody else: the character who reached for the tool, who said the trigger phrase, or in whose name you ran it. It goes wherever a message's placeholders go — the chip label, the oracle's prompt, an effect's expression, and a wardrobe item's name, so `"{{character}}'s armour"` dresses each roller in their own.
 
 `{{now}}` is fixed for the whole run: two effects that both quote it agree to the millisecond, which is what makes `{{now}} + 600000` a sound way to say "ten minutes hence" without the format needing a date grammar of its own. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.
 
@@ -561,6 +564,12 @@ You need not write any of this by hand. Pascal's Workbench puts it at the top of
 Some rolls should not be public knowledge. Set `"defaultVisibility": "whisper"` and Pascal will whisper the outcome to the character who rolled, and to nobody else — the other characters' contexts simply do not contain it. A character may also whisper a single roll by asking privately, and you may tick **Roll privately** in the run dialog, which hides the outcome from every character at once.
 
 **You always see it.** Whoever the whisper is for, it renders for you. This establishment has one proprietor, and there is nothing to be gained by keeping you in the dark about your own dice.
+
+## Letting the character say it — `announceAsCharacter`
+
+Pascal announces every outcome by default, under his own name and his own face. Set `"announceAsCharacter": true` and he stands aside: the character who rolled delivers the outcome instead, their portrait and name on the bubble, and the other characters hear it as that character's line. It suits a tool whose result is something the roller *does* — suiting up, drawing a blade, reciting the incantation — and pairs naturally with `{{character}}` in the message.
+
+Nothing else changes. The outcome is still a genuine roll that Pascal keeps the books on — the chip, the coloured edge for success or failure, and the full record of the deal are all there — and a whispered tool still whispers. Should nobody in particular have rolled (you, from the run dialog, as no one), there is no character to speak, and Pascal announces it as usual.
 
 ## On keeping the odds to yourself
 

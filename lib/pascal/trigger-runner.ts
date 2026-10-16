@@ -97,6 +97,7 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
   // gates fail closed and effects that need a character skip.
   let metadata: Record<string, unknown> = {};
   let characterMountPointId: string | null = null;
+  let characterName: string | null = null;
   if (speaker.characterId) {
     try {
       const character = await getRepositories().characters.findById(speaker.characterId);
@@ -109,6 +110,7 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
         return [];
       }
       metadata = character.metadata ?? {};
+      characterName = character.name ?? null;
       characterMountPointId = character.characterDocumentMountPointId ?? null;
     } catch (error) {
       // A broken vault (CharacterVaultUnavailableError) or any other read
@@ -170,6 +172,7 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
         private: undefined,
         characterId: speaker.characterId,
         metadata,
+        characterName,
         whisperTargetIds,
         invokedBy: 'trigger',
         callerParticipantId: speaker.participantId,

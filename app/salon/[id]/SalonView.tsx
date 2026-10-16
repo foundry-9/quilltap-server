@@ -250,6 +250,19 @@ export function SalonView({ chatId }: SalonViewProps) {
     return names
   }, [chat?.participants])
 
+  // Character id → name, for the Staff bar of a message a character announces
+  // (`customAnnouncer`) — participants first, then the off-scene cards.
+  const announcerNames = useMemo(() => {
+    const names: Record<string, string> = {}
+    for (const c of chat?.offSceneCharacters ?? []) {
+      if (c.name) names[c.id] = c.name
+    }
+    for (const p of chat?.participants ?? []) {
+      if (p.character?.id && p.character.name) names[p.character.id] = p.character.name
+    }
+    return names
+  }, [chat?.participants, chat?.offSceneCharacters])
+
   // A `/` command's immediate built-in run acts as Run Tool's default would:
   // the first active character seat.
   const slashDefaultCharacterId = useMemo(
@@ -1306,9 +1319,10 @@ export function SalonView({ chatId }: SalonViewProps) {
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
-    // Ad-hoc announcement bubble (Insert Announcement composer button).
-    // customAnnouncer takes precedence over systemSender by construction:
-    // the writer only sets one or the other per message.
+    // Ad-hoc announcement bubble (Insert Announcement composer button), or a
+    // Pascal outcome its tool has the rolling character announce
+    // (`announceAsCharacter`). customAnnouncer takes precedence over
+    // systemSender: when both are set, the named speaker wears the bubble.
     if (message.customAnnouncer) {
       if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
         const charId = message.customAnnouncer.characterId
@@ -1593,6 +1607,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
+          announcerNames={announcerNames}
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={shouldShowDangerStyling(chat)}

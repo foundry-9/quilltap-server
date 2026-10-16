@@ -99,6 +99,15 @@ export interface PostPascalResultParams {
    * (a private run). null/undefined = the whole room sees it.
    */
   targetParticipantIds?: string[] | null;
+  /**
+   * The tool's `announceAsCharacter`: the rolling character whose name and face
+   * the bubble wears instead of Pascal's, through `customAnnouncer` — the one
+   * field the Salon, the LLM context's speaker tag, the Courier and the
+   * transcript export already read for "who is speaking this". The row stays
+   * Pascal's (`systemSender`, `pascalMeta`), so nothing that keys on a Pascal
+   * outcome — the chip, the trigger scan's blindness to it — changes.
+   */
+  announcerCharacterId?: string | null;
 }
 
 /**
@@ -109,7 +118,7 @@ export interface PostPascalResultParams {
 export async function postPascalResult(
   params: PostPascalResultParams,
 ): Promise<MessageEvent | null> {
-  const { chatId, content, opaqueContent, pascalMeta, targetParticipantIds } = params;
+  const { chatId, content, opaqueContent, pascalMeta, targetParticipantIds, announcerCharacterId } = params;
 
   try {
     const repos = getRepositories();
@@ -136,6 +145,9 @@ export async function postPascalResult(
       systemKind: 'custom-tool-result',
       targetParticipantIds: targetParticipantIds && targetParticipantIds.length ? targetParticipantIds : null,
       pascalMeta,
+      ...(announcerCharacterId
+        ? { customAnnouncer: { kind: 'character' as const, characterId: announcerCharacterId } }
+        : {}),
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -147,6 +159,7 @@ export async function postPascalResult(
       tool: pascalMeta.tool,
       state: pascalMeta.state,
       whispered: Boolean(message.targetParticipantIds),
+      announcerCharacterId: announcerCharacterId ?? null,
     });
 
     return message;

@@ -150,16 +150,21 @@ function parseDefinition(raw: unknown): Parsed<QtapCustomTool> {
 async function resolveMetadata(
   ctx: RequestContext,
   metadata: z.infer<typeof MetadataInputSchema> | null | undefined
-): Promise<Parsed<Record<string, unknown>>> {
-  if (metadata === null || metadata === undefined) return { ok: true, value: {} };
+): Promise<Parsed<{ metadata: Record<string, unknown>; characterName?: string }>> {
+  if (metadata === null || metadata === undefined) return { ok: true, value: { metadata: {} } };
 
   const characterId = benchCharacterId(metadata);
-  if (!characterId) return { ok: true, value: metadata as Record<string, unknown> };
+  if (!characterId) return { ok: true, value: { metadata: metadata as Record<string, unknown> } };
 
   try {
     const character = await ctx.repos.characters.findById(characterId);
     if (!character) return { ok: false, response: notFound('Character') };
-    return { ok: true, value: (character.metadata ?? {}) as Record<string, unknown> };
+    // The seated character's name answers `{{character}}`; a hand-typed sheet
+    // names nobody, so the placeholder renders as written, as for a run nobody made.
+    return {
+      ok: true,
+      value: { metadata: (character.metadata ?? {}) as Record<string, unknown>, characterName: character.name },
+    };
   } catch (error) {
     // A broken vault is surfaced honestly, never papered over with `{}` — the
     // bench would otherwise report metadata rows declining for the wrong reason.
@@ -187,7 +192,9 @@ async function parseBenchRequest<T extends { definition: unknown; metadata?: unk
   req: NextRequest,
   ctx: RequestContext,
   schema: z.ZodType<T>
-): Promise<Parsed<{ body: T; definition: QtapCustomTool; metadata: Record<string, unknown> }>> {
+): Promise<
+  Parsed<{ body: T; definition: QtapCustomTool; metadata: Record<string, unknown>; characterName?: string }>
+> {
   const body = await parseBody(req, schema);
   if (!body.ok) return body;
 
@@ -200,7 +207,15 @@ async function parseBenchRequest<T extends { definition: unknown; metadata?: unk
   );
   if (!metadata.ok) return metadata;
 
-  return { ok: true, value: { body: body.value, definition: definition.value, metadata: metadata.value } };
+  return {
+    ok: true,
+    value: {
+      body: body.value,
+      definition: definition.value,
+      metadata: metadata.value.metadata,
+      ...(metadata.value.characterName ? { characterName: metadata.value.characterName } : {}),
+    },
+  };
 }
 
 /**
@@ -218,7 +233,7 @@ function benchRefusal(error: unknown, action: string, toolName: string): NextRes
 async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<NextResponse> {
   const parsed = await parseBenchRequest(req, ctx, PreviewBodySchema);
   if (!parsed.ok) return parsed.response;
-  const { body, definition, metadata } = parsed.value;
+  const { body, definition, metadata, characterName } = parsed.value;
 
   // Which oracle answers the bench: the real one (live), a scripted one, or a
   // scripted failure. Absent input leaves the seam unwired, so the consult
@@ -247,6 +262,7 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
       metadata,
       progress,
       now: benchNowMs,
+      ...(characterName ? { character: characterName } : {}),
       state: body.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
