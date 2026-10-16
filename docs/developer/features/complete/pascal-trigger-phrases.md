@@ -2,7 +2,7 @@
 
 **Status:** Implemented (4.11-dev, 2026-10-15). Implementation notes at the end ([As built](#as-built)).
 **Owner subsystem:** Pascal the Croupier (`lib/pascal/`), with one chat-settings toggle beside the auto-RNG one.
-**Extends:** [pascal-custom-tools.md](pascal-custom-tools.md) (read first) and the auto-detect RNG precedent in `lib/services/chat-message/rng-pattern-detector.service.ts`. Independent of [pascal-wardrobe-effects.md](../pascal-wardrobe-effects.md), but the two compose: a trigger phrase that fires a tool with a wardrobe effect is "say the word and the cloak goes on".
+**Extends:** [pascal-custom-tools.md](pascal-custom-tools.md) (read first) and the auto-detect RNG precedent in `lib/services/chat-message/rng-pattern-detector.service.ts`. Independent of [pascal-wardrobe-effects.md](pascal-wardrobe-effects.md), but the two compose: a trigger phrase that fires a tool with a wardrobe effect is "say the word and the cloak goes on".
 **Implementation note:** Written to be executed by Claude Code (Opus) with no further design input. Where a choice existed it has been made — see [Design decisions](#design-decisions-resolved). Follow CLAUDE.md standing rules throughout (changelog, help docs, logging, migration pretty-labels and progress, no stubs, the Pascal chokepoints).
 
 ## Motivation
@@ -137,7 +137,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
 
 Both existing entrances become: resolve the roster their way → `runCustomTool` → report (Prospero bubble + model result / HTTP response) exactly as they do now. Their behaviour must be **byte-identical** before and after: the existing `custom-tools-*` tests, `run-custom-handler` tests and the route tests are the regression net; add a service test (`__tests__/unit/lib/pascal/run-service.test.ts`) covering the cascade-unavailable fallback, effects-before-post, post-failure-leaves-effects, and the three `invokedBy` values landing in `pascalMeta`.
 
-(If [pascal-wardrobe-effects.md](../pascal-wardrobe-effects.md) lands first, its `userId` / `pendingWardrobeAnnouncements` parameters to `applyCustomToolEffects` are simply forwarded from here. If it lands second, it adds them here instead of in two entrances.)
+(If [pascal-wardrobe-effects.md](pascal-wardrobe-effects.md) lands first, its `userId` / `pendingWardrobeAnnouncements` parameters to `applyCustomToolEffects` are simply forwarded from here. If it lands second, it adds them here instead of in two entrances.)
 
 ## 4. The runner — new `lib/pascal/trigger-runner.ts`
 
@@ -309,7 +309,7 @@ The Salon renders nothing new. `getSystemKindDisplayLabel` precedence is unchang
 Where implementation amended or settled something the spec left open:
 
 - **Run service.** `runCustomTool` (`lib/pascal/run-service.ts`) takes an optional `chat` so an entrance that already holds the chat (the manual route) does not read it twice. The LLM entrance still catches a non-`CustomToolRunError` throw from the service into its Prospero bubble, as it did before. One behaviour difference on the manual route, unreachable from the UI: a request that omits `private` now follows the definition's `defaultVisibility` (the popup always sends a boolean, so its runs are unchanged).
-- **No `pendingWardrobeAnnouncements`.** [pascal-wardrobe-effects.md](../pascal-wardrobe-effects.md) has not landed, so the parameter has nothing to forward to and was left out of `RunCustomToolParams` and the runner rather than stubbed. That spec adds it in one place now.
+- **No `pendingWardrobeAnnouncements`.** [pascal-wardrobe-effects.md](pascal-wardrobe-effects.md) has not landed, so the parameter has nothing to forward to and was left out of `RunCustomToolParams` and the runner rather than stubbed. That spec adds it in one place now.
 - **Call sites live in `lib/services/chat-message/trigger-phrase-sites.ts`.** `runUserMessageTriggers` (orchestrator, after `ledger.userMessagePersisted` and the attachment links, before Carina) and `runReplyTriggers` (finalizer, after the RNG-in-response block, before Carina) derive the speaker and room and call the runner; they exist so the derivations are testable without driving `processMessage`. A source-order test pins each site after its persist and asserts the swipe path reaches neither.
 - **Context order.** The context builder appends the new user message after `existingMessages`, so a Pascal post spliced in by the user-message site sits before the user's words in the model's context — the same position RNG TOOL rows and Carina's public answer already take. The transcript order is correct (post after message).
 - **`onPosted` in the job child.** Passed unconditionally, like the `run_custom` and Carina SSE hooks: in the child the stream is a sink, so the enqueue is a no-op and the post surfaces from the parent's commit.

@@ -414,6 +414,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 ## Security constraints
 
 - **Outcome tests are comparator objects, never expressions.** Indirection in tests and roll fields is limited to the two closed reference forms (`$param`, `$state`). The **one** place a string grammar exists is an effect's `value` (added by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)), evaluated by the closed, eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string concatenation, parentheses, literals, and `{{ref}}` substitution. There are no identifiers, no function calls, and no member access — the only names that grammar admits are the same `{{...}}` reference families `renderTemplate` already substitutes, so there is still nothing callable and nothing reachable beyond the run's own subjects. Reject on schema, don't sanitize.
+- **Wardrobe item references are templates, not expressions.** Since [pascal-wardrobe-effects.md](./pascal-wardrobe-effects.md) an effect may be a `wardrobe` gesture instead of a write; its `items` are rendered through `renderTemplate` and looked up by id or title in the rolling character's wearable pool — no arithmetic, nothing evaluated — and the change goes through the wardrobe's own chokepoints.
 - Roster caps: max 64 tools per resolved roster (excess dropped with a logged warning and UI notice — no silent truncation), max 8 parameters and 32 outcomes per tool, message ≤ 1000 chars, description ≤ 500 chars.
 - Parameter values from the model/UI are validated against declared types and clamped to declared ranges before any use.
 - Crypto-strength RNG (`node:crypto`), never `Math.random`.
@@ -421,7 +422,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 
 ## Deferred to v2 (schema room reserved)
 
-- ~~**`persist` block**~~ — **Shipped as `effects`** (a better fit: the array describes consequences, not storage) by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md): a tool-level list of conditional writes into tiered persistent state or the rolling character's metadata, applied server-side after the deal. Covers the ratcheting and counter use cases the reserved `persist` key was for.
+- ~~**`persist` block**~~ — **Shipped as `effects`** (a better fit: the array describes consequences, not storage) by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md): a tool-level list of conditional writes into tiered persistent state or the rolling character's metadata, applied server-side after the deal. Covers the ratcheting and counter use cases the reserved `persist` key was for. An effect may now also be a wardrobe gesture (wear, take off, clear a slot on the rolling character) — see [pascal-wardrobe-effects.md](./pascal-wardrobe-effects.md).
 - Parameterized dice notation (`"{{params.n}}d6"`).
 - ~~Group-tier authoring UI (definitions are hand-authored JSON in v1; a form-based editor could come later).~~ Shipped as [Pascal's Workbench](custom-tool-builder.md) — a full visual editor, library, and proving bench at `/custom-tools`.
 - Per-run seeds / deterministic replay.

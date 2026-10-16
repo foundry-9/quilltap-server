@@ -21,7 +21,7 @@ import {
   scanPlaceholders,
   type CustomToolParameter,
 } from '@/lib/pascal/custom-tool.types'
-import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
+import type { CustomToolAuditResult, CustomToolRunResult, ResolvedWardrobeGesture } from '@/lib/pascal/custom-tools'
 import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
 import { flattenProgressions } from '@/lib/progressions/engine'
@@ -680,6 +680,10 @@ function MiniPascalBubble({
               <p key={effect.index}>
                 → {effect.target.raw} = {JSON.stringify(effect.value)} <em>(would write)</em>
               </p>
+            ) : 'wardrobe' in effect ? (
+              <p key={effect.index}>
+                → wardrobe: {describeBenchGesture(effect.wardrobe)} <em>(would attempt)</em>
+              </p>
             ) : (
               <p key={effect.index}>
                 · effect {effect.index + 1} skipped: {effect.skipped}
@@ -691,6 +695,24 @@ function MiniPascalBubble({
       )}
     </div>
   )
+}
+
+/**
+ * A dry-run gesture, in the bench's words. "Would attempt", never "would
+ * apply": the bench has no character, so it cannot know the garment exists.
+ */
+function describeBenchGesture(gesture: ResolvedWardrobeGesture): string {
+  const items = gesture.items.map((item) => `“${item}”`).join(', ')
+  switch (gesture.action) {
+    case 'wear': {
+      const mode = gesture.mode && gesture.mode !== 'wear' ? ` (${gesture.mode.replace(/_/g, ' ')}${gesture.slot ? ` ${gesture.slot}` : ''})` : ''
+      return `wear ${items}${mode}`
+    }
+    case 'take_off':
+      return `take off ${items}${gesture.slot ? ` from ${gesture.slot}` : ''}`
+    case 'clear_slot':
+      return `clear ${gesture.slot ?? 'a slot'}`
+  }
 }
 
 export default ProvingBench

@@ -253,6 +253,8 @@ Throughout, a character sees not only the items in their **own** wardrobe but al
 - **wardrobe_update** --- Amend an item one already owns — its name, its description, its Portrait Cue, its appropriateness, its coverage, and so forth. Only the particulars you supply are changed; the rest stands. Shared garments, being communal property, are politely declined. With **Portraits from the Wardrobe Tools** ticked, an amendment that changes the item's look has it redrawn, and a character may ask for a fresh sitting outright (`generate_image`).
 - **wardrobe_archive** --- Retire an item one owns to the back of the closet: hidden from listings and no longer wearable, yet not destroyed. Retiring a garment twice changes nothing --- it keeps the date it was first put away. A human may restore it from the Aurora page at leisure. (No character may *permanently* discard a garment; that remains a human prerogative.) Shared garments are, again, declined.
 
+A [custom tool](custom-tools.md#dressing-and-undressing) may change an outfit too: its `wardrobe` effects put garments on the character who ran it, take them off, or clear a slot, all through the very same valet, as part of the roll. Aurora announces the result like any other change, and a tool with a single certain outcome makes a tidy one-click button for dressing a character for the occasion.
+
 For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
@@ -329,7 +331,7 @@ A Portrait Cue changes only what the *image* pipeline is told. The title still a
 
 ## Aurora's Wardrobe Announcements
 
-Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with every slot without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
+Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, the character themselves reaches for a `wardrobe_` tool, or a custom tool's wardrobe effect does it for them --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with every slot without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
 
 These announcements appear as ordinary chat messages attributed to Aurora and are visible to every character in the conversation, ensuring nobody is left guessing about who is now wearing what.
 

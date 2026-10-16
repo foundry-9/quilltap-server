@@ -10,6 +10,8 @@ import {
   executeCustomTool,
   matchesEffectWhen,
   isApplicableEffect,
+  isApplicableWardrobeEffect,
+  isApplicableWriteEffect,
   type DiscoveredCustomTool,
   type EffectSubjects,
   type ResolvedEffect,
@@ -48,7 +50,7 @@ function subjects(overrides: Partial<EffectSubjects> = {}): EffectSubjects {
 function applied(effects: ResolvedEffect[] | undefined): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const effect of effects ?? []) {
-    if (isApplicableEffect(effect)) out[effect.target.raw] = effect.value
+    if (isApplicableWriteEffect(effect)) out[effect.target.raw] = effect.value
   }
   return out
 }
@@ -199,6 +201,79 @@ describe('effects resolution in executeCustomTool', () => {
   })
 })
 
+describe('wardrobe gestures in executeCustomTool', () => {
+  it('renders item references with the message subjects, trimmed, in order', async () => {
+    const tool = define({
+      name: 'regalia',
+      description: 'x',
+      parameters: { garment: { type: 'string', default: 'Boots' } },
+      roll: FIXED_ROLL,
+      effects: [
+        { wardrobe: { action: 'wear', items: ['Cloak of Night', '  {{params.garment}} ', '{{metadata.hat}}'], mode: 'replace' } },
+        { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+      ],
+      outcomes: [CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, { garment: 'Velvet Slippers' }, { metadata: { hat: 'Crown' } })
+    expect(result.effects).toEqual([
+      { index: 0, wardrobe: { action: 'wear', items: ['Cloak of Night', 'Velvet Slippers', 'Crown'], mode: 'replace' } },
+      { index: 1, wardrobe: { action: 'clear_slot', items: [], slot: 'hair' } },
+    ])
+    expect(result.effects?.every(isApplicableWardrobeEffect)).toBe(true)
+    expect(result.effects?.some(isApplicableWriteEffect)).toBe(false)
+    expect(result.effects?.every(isApplicableEffect)).toBe(true)
+  })
+
+  it('leaves an unresolved placeholder as written — it simply will not be found', async () => {
+    const tool = define({
+      name: 'hat',
+      description: 'x',
+      roll: FIXED_ROLL,
+      effects: [{ wardrobe: { action: 'take_off', items: ['{{metadata.absent}}'] } }],
+      outcomes: [CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, null)
+    expect(result.effects).toEqual([{ index: 0, wardrobe: { action: 'take_off', items: ['{{metadata.absent}}'] } }])
+  })
+
+  it('skips a gesture whose every item renders empty, and drops the empty ones otherwise', async () => {
+    const tool = define({
+      name: 'blank',
+      description: 'x',
+      parameters: { garment: { type: 'string', default: '' } },
+      roll: FIXED_ROLL,
+      effects: [
+        { wardrobe: { action: 'wear', items: ['{{params.garment}}'] } },
+        { wardrobe: { action: 'take_off', items: ['{{params.garment}}', 'Gloves'] } },
+      ],
+      outcomes: [CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, null)
+    expect(result.effects).toEqual([
+      { index: 0, skipped: 'every item reference rendered empty' },
+      { index: 1, wardrobe: { action: 'take_off', items: ['Gloves'] } },
+    ])
+  })
+
+  it('gates a gesture on its when, like a write', async () => {
+    const tool = define({
+      name: 'tear',
+      description: 'x',
+      roll: FIXED_ROLL,
+      effects: [
+        { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'] } },
+        { when: { outcome: { eq: 'success' } }, wardrobe: { action: 'wear', items: ['Laurels'] } },
+      ],
+      outcomes: [{ when: { gte: 5 }, message: 'won', state: 'success' }, CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, null)
+    expect(result.effects).toEqual([
+      { index: 0, skipped: 'condition did not hold' },
+      { index: 1, wardrobe: { action: 'wear', items: ['Laurels'] } },
+    ])
+  })
+})
+
 describe('the roster description and effects', () => {
   function entry(definition: QtapCustomTool): DiscoveredCustomTool {
     return { definition, tier: 'global', mountPointId: 'm1', mountName: 'General', definitionPath: 'Tools/x.tool.json' }
@@ -219,6 +294,27 @@ describe('the roster description and effects', () => {
     // The whole line is targets and nothing else — no values, no conditions.
     expect(text).toMatch(/^\s*Side effects: writes state\.encounter\.count, metadata\.ansibleTool$/m)
     expect(text).not.toContain("'worn'")
+  })
+
+  it('names wardrobe gestures beside the writes, references verbatim', () => {
+    const text = buildRunCustomDescription([
+      entry(
+        define({
+          ...WITH_EFFECTS,
+          parameters: { garment: { type: 'string', default: 'Boots' } },
+          effects: [
+            ...WITH_EFFECTS.effects,
+            { wardrobe: { action: 'wear', items: ['Cloak of Night', 'Boots'] } },
+            { wardrobe: { action: 'take_off', items: ['{{params.garment}}'] } },
+            { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+          ],
+        })
+      ),
+    ])
+    expect(text).toMatch(
+      /^\s*Side effects: writes state\.encounter\.count, metadata\.ansibleTool; wears Cloak of Night, Boots; takes off \{\{params\.garment\}\}; clears hair$/m
+    )
+    expect(text).toContain('or what they are wearing')
   })
 
   it('hides the side-effects line entirely under revealOdds: false', () => {

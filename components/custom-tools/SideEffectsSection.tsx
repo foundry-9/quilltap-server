@@ -5,17 +5,38 @@
  * builder form and the outcome table: what a run writes back once the deal is
  * done.
  *
- * The form authors the common shapes only: a When of "Always" or "on a given
- * outcome state", a target, and a value that is a literal number, a literal
- * boolean, or an expression. A hand-written richer condition (comparators,
+ * Each row is one of two kinds. A WRITE has a target and a value that is a
+ * literal number, a literal boolean, or an expression. A WARDROBE row changes
+ * what the rolling character has on: an action (wear / take off / clear a
+ * slot), a short list of item references (title or id, templated), and the
+ * mode and slot where the action wants them. Switching kind keeps the other
+ * half on the draft until save, so nothing typed is lost.
+ *
+ * The When is the common shapes only: "Always" or "on a given outcome
+ * state". A hand-written richer condition (comparators,
  * metadata, the oracle) is carried verbatim behind a read-only badge — the
  * `$state`-default precedent: the builder round-trips what it cannot author.
  * Everything else arrives as issues from `validateDraft` and renders inline.
  */
 
 import { Icon } from '@/components/ui/icon'
-import { MAX_EFFECTS, MAX_EFFECT_TARGET_LENGTH, type OutcomeState } from '@/lib/pascal/custom-tool.types'
-import { nextDraftId, type DraftEffect, type DraftIssue, type ToolDraft } from '@/lib/pascal/tool-draft'
+import {
+  MAX_EFFECTS,
+  MAX_EFFECT_TARGET_LENGTH,
+  MAX_WARDROBE_EFFECT_ITEMS,
+  MAX_WARDROBE_ITEM_REF_LENGTH,
+  type OutcomeState,
+  type WardrobeEffectAction,
+  type WardrobeEffectMode,
+} from '@/lib/pascal/custom-tool.types'
+import {
+  newDraftEffect,
+  type DraftEffect,
+  type DraftIssue,
+  type DraftWardrobeGesture,
+  type ToolDraft,
+} from '@/lib/pascal/tool-draft'
+import { WARDROBE_SLOT_META, WARDROBE_SLOT_TYPES, type WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
@@ -42,18 +63,7 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
     update({ effects: draft.effects.map((effect) => (effect.id === id ? { ...effect, ...partial } : effect)) })
 
   const addEffect = () => {
-    update({
-      effects: [
-        ...draft.effects,
-        {
-          id: nextDraftId('new-effect'),
-          when: { kind: 'always' },
-          target: '',
-          valueKind: 'expression',
-          value: '',
-        },
-      ],
-    })
+    update({ effects: [...draft.effects, newDraftEffect()] })
   }
 
   const removeEffect = (id: string) => update({ effects: draft.effects.filter((effect) => effect.id !== id) })
@@ -86,7 +96,8 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
       {draft.effects.length === 0 && (
         <p className="text-xs qt-text-secondary">
           None declared. An effect lets a roll record its consequences — tick a counter in the story&rsquo;s
-          state, note a fact on the rolling character&rsquo;s sheet — applied server-side as part of the deal,
+          state, note a fact on the rolling character&rsquo;s sheet, put a garment on them or take one off —
+          applied server-side as part of the deal,
           beyond any model&rsquo;s power to fudge.
         </p>
       )}
@@ -99,6 +110,19 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
         return (
           <div key={effect.id} className="qt-card p-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap text-sm">
+              <label className="flex items-center gap-2">
+                Kind
+                <select
+                  value={effect.kind}
+                  onChange={(e) => updateEffect(effect.id, { kind: e.target.value as DraftEffect['kind'] })}
+                  disabled={disabled}
+                  className="qt-select qt-select-sm"
+                  aria-label="Effect kind"
+                >
+                  <option value="write">Write a value</option>
+                  <option value="wardrobe">Change the outfit</option>
+                </select>
+              </label>
               <label className="flex items-center gap-2">
                 When
                 {choice === 'verbatim' ? (
@@ -141,6 +165,15 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
               </button>
             </div>
 
+            {effect.kind === 'wardrobe' ? (
+              <WardrobeFields
+                gesture={effect.wardrobe}
+                hasErrors={errors.length > 0}
+                disabled={disabled}
+                onChange={(wardrobe) => updateEffect(effect.id, { wardrobe })}
+              />
+            ) : (
+            <>
             <div className="flex items-center gap-2 flex-wrap text-sm">
               <label className="flex items-center gap-2 flex-1 min-w-56">
                 Target
@@ -224,6 +257,8 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
                 />
               )}
             </div>
+            </>
+            )}
 
             {errors.map((message) => (
               <p key={message} className="text-xs qt-text-destructive">
@@ -242,9 +277,151 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
       <p className="qt-hint">
         Effects apply in order, after the outcome is chosen. A JSON string value is always an expression —
         quote literal prose: <code className="font-mono">&apos;broken pick&apos;</code>, never bare words.
-        Expressions take + − × ÷, parentheses, and the same {'{{…}}'} references as a message.
+        Expressions take + − × ÷, parentheses, and the same {'{{…}}'} references as a message. An outfit change
+        dresses or undresses the rolling character and nobody else; an item it cannot find is skipped and the
+        rest still go on.
       </p>
     </section>
+  )
+}
+
+const WARDROBE_ACTIONS: ReadonlyArray<{ value: WardrobeEffectAction; label: string }> = [
+  { value: 'wear', label: 'wear' },
+  { value: 'take_off', label: 'take off' },
+  { value: 'clear_slot', label: 'clear a slot' },
+]
+
+const WARDROBE_MODES: ReadonlyArray<{ value: WardrobeEffectMode; label: string; title: string }> = [
+  { value: 'wear', label: 'as the item says', title: "Honour each item's own replace flag" },
+  { value: 'replace', label: 'replace', title: 'Swap out whatever is in the slots the item covers' },
+  { value: 'add_to_slot', label: 'layer into one slot', title: 'Add the item to one named slot' },
+]
+
+interface WardrobeFieldsProps {
+  gesture: DraftWardrobeGesture
+  hasErrors: boolean
+  disabled: boolean
+  onChange: (next: DraftWardrobeGesture) => void
+}
+
+/** A wardrobe row's fields: action, items, and the mode and slot when the action wants them. */
+function WardrobeFields({ gesture, hasErrors, disabled, onChange }: Readonly<WardrobeFieldsProps>) {
+  const set = (partial: Partial<DraftWardrobeGesture>) => onChange({ ...gesture, ...partial })
+  const wantsItems = gesture.action !== 'clear_slot'
+  const wantsSlot =
+    gesture.action === 'clear_slot' ||
+    gesture.action === 'take_off' ||
+    (gesture.action === 'wear' && gesture.mode === 'add_to_slot')
+  const slotOptional = gesture.action === 'take_off'
+  const items = gesture.items.length > 0 ? gesture.items : ['']
+
+  const setItem = (index: number, value: string) => set({ items: items.map((item, i) => (i === index ? value : item)) })
+  const removeItem = (index: number) => {
+    const next = items.filter((_, i) => i !== index)
+    set({ items: next.length > 0 ? next : [''] })
+  }
+
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="flex items-center gap-2">
+          Action
+          <select
+            value={gesture.action}
+            onChange={(e) => set({ action: e.target.value as WardrobeEffectAction })}
+            disabled={disabled}
+            className="qt-select qt-select-sm"
+            aria-label="Wardrobe action"
+          >
+            {WARDROBE_ACTIONS.map((action) => (
+              <option key={action.value} value={action.value}>
+                {action.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {gesture.action === 'wear' && (
+          <label className="flex items-center gap-2">
+            Mode
+            <select
+              value={gesture.mode}
+              onChange={(e) => set({ mode: e.target.value as WardrobeEffectMode })}
+              disabled={disabled}
+              className="qt-select qt-select-sm"
+              aria-label="Wear mode"
+            >
+              {WARDROBE_MODES.map((mode) => (
+                <option key={mode.value} value={mode.value} title={mode.title}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {wantsSlot && (
+          <label className="flex items-center gap-2">
+            Slot
+            <select
+              value={gesture.slot}
+              onChange={(e) => set({ slot: e.target.value as WardrobeItemType | '' })}
+              disabled={disabled}
+              className="qt-select qt-select-sm"
+              aria-label="Wardrobe slot"
+            >
+              <option value="">{slotOptional ? 'every slot it covers' : 'choose a slot'}</option>
+              {WARDROBE_SLOT_TYPES.map((slot) => (
+                <option key={slot} value={slot}>
+                  {WARDROBE_SLOT_META[slot].label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {wantsItems && (
+        <div className="space-y-1">
+          {items.map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={item}
+                maxLength={MAX_WARDROBE_ITEM_REF_LENGTH}
+                onChange={(e) => setItem(index, e.target.value)}
+                placeholder={index === 0 ? 'Cloak of Night' : '{{params.garment}}'}
+                disabled={disabled}
+                className={`qt-input flex-1 min-w-48 ${hasErrors ? 'qt-input-error' : ''}`}
+                aria-label={`Item ${index + 1}`}
+              />
+              <button
+                type="button"
+                className="qt-button qt-button-ghost qt-button-sm"
+                onClick={() => removeItem(index)}
+                disabled={disabled || items.length <= 1}
+                title="Remove this item"
+              >
+                <Icon name="trash" className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="qt-button qt-button-ghost qt-button-sm"
+              onClick={() => set({ items: [...items, ''] })}
+              disabled={disabled || items.length >= MAX_WARDROBE_EFFECT_ITEMS}
+              title={items.length >= MAX_WARDROBE_EFFECT_ITEMS ? `At most ${MAX_WARDROBE_EFFECT_ITEMS} items` : undefined}
+            >
+              <Icon name="plus" className="w-3.5 h-3.5" />
+              Add item
+            </button>
+            <span className="qt-hint">
+              a title or id — <code className="font-mono">{'{{params.x}}'}</code> lets a parameter choose
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

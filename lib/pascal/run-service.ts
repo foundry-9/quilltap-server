@@ -73,6 +73,11 @@ export interface RunCustomToolParams {
   triggerPhrase?: string;
   /** One clock reading for the whole run. Defaults to Date.now(). */
   nowMs?: number;
+  /**
+   * The turn's wardrobe announcement set, when the run happens inside a model
+   * turn — a `wardrobe` effect then joins the turn's one Aurora announcement.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 export type RunCustomToolOutcome =
@@ -142,9 +147,11 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
     throw error;
   }
 
-  // The applier never throws. `characterId` null → metadata effects skip.
+  // The applier never throws. `characterId` null → metadata, progress and
+  // wardrobe effects skip.
   const appliedEffects = result.effects?.length
     ? await applyCustomToolEffects({
+        userId,
         chatId,
         toolName: result.tool,
         effects: result.effects,
@@ -152,6 +159,9 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
         characterId,
         metadataSnapshot: metadata,
         nowMs,
+        ...(params.pendingWardrobeAnnouncements
+          ? { pendingWardrobeAnnouncements: params.pendingWardrobeAnnouncements }
+          : {}),
       })
     : [];
 

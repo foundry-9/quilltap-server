@@ -49,6 +49,11 @@ export interface RunCustomToolContext {
    * over SSE the instant it lands rather than waiting for the post-turn refetch.
    */
   onPosted?: (message: MessageEvent) => void;
+  /**
+   * The turn's wardrobe announcement set, so a tool's `wardrobe` effect joins
+   * the turn's single Aurora announcement alongside any `wardrobe_wear` call.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 /** Shape the failure the same way whether it was a bad input or a bad roll. */
@@ -182,6 +187,9 @@ export async function executeRunCustomTool(
       invokedBy: 'llm',
       callerParticipantId: context.callerParticipantId ?? null,
       nowMs,
+      ...(context.pendingWardrobeAnnouncements
+        ? { pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements }
+        : {}),
     });
   } catch (error) {
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';

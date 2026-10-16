@@ -39,6 +39,9 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      wears: [],
+      takesOff: [],
+      clearsSlots: [],
     })
   })
 
@@ -180,6 +183,9 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      wears: [],
+      takesOff: [],
+      clearsSlots: [],
     })
   })
 
@@ -222,6 +228,29 @@ describe('collectToolVocabulary', () => {
     expect(vocabulary.metadata).toEqual(['hasKey'])
     expect(vocabulary.params).toEqual(['by'])
     expect(vocabulary.value).toBe(true)
+  })
+
+  it('reports wardrobe gestures on the dress/undress lists, references verbatim', () => {
+    const tool = define({
+      parameters: { garment: { type: 'string', default: 'Boots' } },
+      effects: [
+        { wardrobe: { action: 'wear', items: ['Cloak of Night', '{{params.garment}}'] } },
+        { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['{{metadata.favouriteHat}}'] } },
+        { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+
+    expect(vocabulary.wears).toEqual(['{{params.garment}}', 'Cloak of Night'])
+    expect(vocabulary.takesOff).toEqual(['{{metadata.favouriteHat}}'])
+    expect(vocabulary.clearsSlots).toEqual(['hair'])
+    // Item templates are scanned like any rendered string.
+    expect(vocabulary.params).toEqual(['garment'])
+    expect(vocabulary.metadata).toEqual(['favouriteHat'])
+    // A gesture is not a write.
+    expect(vocabulary.stateWrites).toEqual([])
+    expect(vocabulary.metadataWrites).toEqual([])
+    expect(isEmptyVocabulary(vocabulary)).toBe(false)
   })
 
   it('collects the metadata keys an availability gate reads', () => {

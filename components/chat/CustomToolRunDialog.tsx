@@ -89,6 +89,12 @@ export interface CustomToolReferences {
   progressWrites?: string[]
   /** The tool quotes `{{now}}`. Absent on older servers. */
   now?: boolean
+  /** Item references this tool's wardrobe effects may put on, verbatim. Absent on older servers. */
+  wears?: string[]
+  /** Item references this tool's wardrobe effects may take off, verbatim. Absent on older servers. */
+  takesOff?: string[]
+  /** Slots this tool's wardrobe effects may clear. Absent on older servers. */
+  clearsSlots?: string[]
 }
 
 /** A runnable tool in the resolved roster. */
@@ -888,10 +894,19 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   // interesting claim is WHICH timed condition the tool consults or adjusts,
   // not which of its dozen derived fields the author happened to quote.
   const readsProgress = tool.references?.progress ?? []
+  // The wardrobe, likewise, in its own sentences: dressing, undressing and
+  // clearing are three different promises about the running character.
+  const wardrobeLines: Array<{ key: string; lead: string; values: string[] }> = [
+    { key: 'wears', lead: 'It may dress the running character in', values: tool.references?.wears ?? [] },
+    { key: 'takesOff', lead: 'It may undress them of', values: tool.references?.takesOff ?? [] },
+    { key: 'clearsSlots', lead: 'It may clear their', values: tool.references?.clearsSlots ?? [] },
+  ].filter((line) => line.values.length > 0)
 
   // A tool that quotes nothing and writes nothing gets no panel. An empty list
   // under a heading promising a list is worse than the heading's absence.
-  if (rows.length === 0 && writes.length === 0 && readsProgress.length === 0) return null
+  if (rows.length === 0 && writes.length === 0 && readsProgress.length === 0 && wardrobeLines.length === 0) {
+    return null
+  }
 
   return (
     <details className="rounded-lg qt-border p-5" open>
@@ -953,6 +968,20 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
           . The record of what actually changed rides with the roll itself.
         </p>
       )}
+
+      {wardrobeLines.map((line) => (
+        <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          {line.lead}{' '}
+          {line.values.map((value, i) => (
+            <span key={value}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{value}</code>
+            </span>
+          ))}
+          {line.key === 'clearsSlots' ? (line.values.length > 1 ? ' slots' : ' slot') : ''}
+          . Only when you run it as a character — a run made as nobody dresses nobody.
+        </p>
+      ))}
     </details>
   )
 }

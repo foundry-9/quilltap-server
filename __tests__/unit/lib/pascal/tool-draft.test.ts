@@ -14,6 +14,7 @@ import {
   draftFromDefinition,
   findParameterReferences,
   newDraft,
+  newDraftEffect,
   renameParameterEverywhere,
   serializeDraft,
   slugFromTitle,
@@ -911,6 +912,84 @@ describe('effects in the draft', () => {
       value: '1',
     }))
     expect(validateDraft(draft).some((i) => i.message.includes('at most 16 effects'))).toBe(true)
+  })
+})
+
+describe('wardrobe effects in the draft', () => {
+  const BASE = {
+    name: 'regalia',
+    description: 'Be knighted.',
+    parameters: { garment: { type: 'string', default: 'Boots' } },
+    roll: { min: 1, max: 1 },
+    outcomes: [{ when: true, message: 'Arise.', state: 'success' }],
+  }
+
+  const effectIssues = (draft: ReturnType<typeof newDraft>) =>
+    validateDraft(draft).filter((i) => i.where.section === 'effect')
+
+  function wardrobeDraft(wardrobe: Partial<ReturnType<typeof newDraftEffect>['wardrobe']>) {
+    const draft = draftFromDefinition(BASE)!
+    const effect = newDraftEffect('wardrobe')
+    effect.wardrobe = { ...effect.wardrobe, ...wardrobe }
+    draft.effects = [effect]
+    return draft
+  }
+
+  it('round-trips each action, beside a write', () => {
+    expectRoundTrip({
+      ...BASE,
+      effects: [
+        { wardrobe: { action: 'wear', items: ['Cloak of Night', '{{params.garment}}'] } },
+        { wardrobe: { action: 'wear', items: ['Ribbon'], mode: 'add_to_slot', slot: 'hair' } },
+        { wardrobe: { action: 'wear', items: ['Regalia'], mode: 'replace' } },
+        { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } },
+        { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+        { target: 'state.knighted', value: true },
+      ],
+    })
+  })
+
+  it('keeps both halves on the draft, and emits only the active one', () => {
+    const draft = draftFromDefinition({ ...BASE, effects: [{ target: 'state.x', value: 1 }] })!
+    const effect = draft.effects[0]
+    expect(effect.kind).toBe('write')
+
+    effect.kind = 'wardrobe'
+    effect.wardrobe = { action: 'wear', items: ['Hat', '  '], mode: 'wear', slot: 'hair' }
+    expect(definitionFromDraft(draft).effects).toEqual([{ wardrobe: { action: 'wear', items: ['Hat'] } }])
+    // The write half survives the switch.
+    expect(effect.target).toBe('state.x')
+
+    effect.kind = 'write'
+    expect(definitionFromDraft(draft).effects).toEqual([{ target: 'state.x', value: 1 }])
+  })
+
+  it('says the per-action rules in the loader\'s own words', () => {
+    expect(effectIssues(wardrobeDraft({ action: 'wear', items: [''] })).map((i) => i.message)).toEqual([
+      'wear needs at least one item',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'wear', items: ['Hat'], mode: 'add_to_slot' })).map((i) => i.message)).toEqual([
+      'mode add_to_slot needs a slot',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'clear_slot' })).map((i) => i.message)).toEqual([
+      'clear_slot needs a slot',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'clear_slot', slot: 'hair', items: ['ignored'] }))).toEqual([])
+  })
+
+  it('errors on an undeclared parameter, warns on an unknown placeholder family', () => {
+    const issues = effectIssues(wardrobeDraft({ action: 'wear', items: ['{{params.ghost}}', '{{mystery}}'] }))
+    expect(issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([
+      '{{params.ghost}} names no declared parameter',
+    ])
+    expect(issues.filter((i) => i.severity === 'warning')).toHaveLength(1)
+  })
+
+  it('renames a parameter inside wardrobe items, and lists it as a reference', () => {
+    const draft = wardrobeDraft({ action: 'take_off', items: ['{{params.garment}}'] })
+    expect(findParameterReferences(draft, 'garment')).toContain('effect 1: a wardrobe item names it')
+    const renamed = renameParameterEverywhere(draft, 'garment', 'cloth')
+    expect(renamed.effects[0].wardrobe.items).toEqual(['{{params.cloth}}'])
   })
 })
 

@@ -536,9 +536,13 @@ export const MessageEventSchema = z.object({
      * definition's `effects` array. Each entry names the raw target
      * ("state.encounter.count" / "metadata.lockpick"), what the store held
      * before (absent when it held nothing), what was written, and — for state
-     * targets only — which tier the write landed in. The Salon body shows none
-     * of this; the bubble stays the author's message. Absent when the run
-     * declared or applied no effects.
+     * targets only — which tier the write landed in. A wardrobe effect records
+     * one entry per change that landed, targeted "wardrobe.wear" /
+     * "wardrobe.take_off" / "wardrobe.clear_slot": `previous` is the slots
+     * before, `next` is `{ item?, slot?, slotsAffected, effect, slots }`
+     * (`WardrobeEffectRecord`, lib/pascal/wardrobe-effects.ts). The Salon body
+     * shows none of this; the bubble stays the author's message. Absent when
+     * the run declared or applied no effects.
      */
     effects: z.array(z.object({
       target: z.string(),

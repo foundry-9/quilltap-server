@@ -622,6 +622,7 @@ export async function executeToolCallWithContext(
         projectId: context.projectId,
         callerParticipantId: context.callingParticipantId,
         onPosted: context.emitPascalResult,
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       });
 
       return {

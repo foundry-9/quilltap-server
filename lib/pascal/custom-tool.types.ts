@@ -34,6 +34,8 @@ import {
 import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
 import { parsePath } from '@/lib/state/state-paths';
 import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
+import { scanPlaceholders as scanPlaceholdersInText } from './placeholders';
+import { WardrobeItemTypeEnum, type WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 export { MAX_EFFECT_EXPRESSION_LENGTH };
 
@@ -93,6 +95,12 @@ export const MAX_TRIGGER_PHRASE_LENGTH = 80;
 
 /** Cap on an effect's `target` string, in characters. */
 export const MAX_EFFECT_TARGET_LENGTH = 200;
+
+/** Cap on the item references one wardrobe effect may list. */
+export const MAX_WARDROBE_EFFECT_ITEMS = 8;
+
+/** Cap on one wardrobe item reference (a title or id template), in characters. */
+export const MAX_WARDROBE_ITEM_REF_LENGTH = 200;
 
 /** Cap on an LLM consult prompt, in characters (measured before templating). */
 export const MAX_LLM_PROMPT_LENGTH = 4000;
@@ -625,8 +633,53 @@ export const EffectWhenSchema = z
 
 export type EffectWhen = z.infer<typeof EffectWhenSchema>;
 
+/** What a wardrobe effect does to the rolling character's outfit. */
+export const WardrobeEffectActionSchema = z.enum(['wear', 'take_off', 'clear_slot']);
+export type WardrobeEffectAction = z.infer<typeof WardrobeEffectActionSchema>;
+
+/** The put-on modes a `wear` gesture may name — the `wardrobe_wear` tool's own. */
+export const WardrobeEffectModeSchema = z.enum(['wear', 'replace', 'add_to_slot']);
+export type WardrobeEffectMode = z.infer<typeof WardrobeEffectModeSchema>;
+
 /**
- * One side effect: a write the run records after the table has dealt.
+ * A wardrobe gesture: wear the listed items, take them off, or empty one slot,
+ * on the ROLLING character and nobody else.
+ *
+ * Item references are TEMPLATES, not expressions: each is rendered through
+ * `renderTemplate` (so `{{params.garment}}` lets a parameter choose) and then
+ * looked up by id, then by case-insensitive title, in the character's wearable
+ * pool. The per-action cross-field rules (which action needs `items`, which
+ * needs `slot`) live in `validateEffects`, not here, so the issues they raise
+ * carry precise paths.
+ */
+export const CustomToolWardrobeGestureSchema = z.strictObject({
+  action: WardrobeEffectActionSchema.describe(
+    '"wear" puts the listed items on the rolling character; "take_off" takes them off; "clear_slot" empties one slot.'
+  ),
+  items: z
+    .array(z.string().min(1).max(MAX_WARDROBE_ITEM_REF_LENGTH))
+    .min(1)
+    .max(MAX_WARDROBE_EFFECT_ITEMS)
+    .optional()
+    .describe(
+      'The garments or outfits, each by title (case-insensitive) or id, in order. A template: {{params.x}}, ' +
+        '{{metadata.key}} and the other placeholder families are substituted before lookup. Required for wear and take_off.'
+    ),
+  mode: WardrobeEffectModeSchema.optional().describe(
+    "wear only. Same meaning as the wardrobe_wear tool: honour the item's replace flag (default), force a swap, or layer into one slot."
+  ),
+  slot: WardrobeItemTypeEnum.optional().describe(
+    'Required for clear_slot and for mode add_to_slot; optional on take_off to restrict the removal to one slot.'
+  ),
+});
+
+export type CustomToolWardrobeGesture = z.infer<typeof CustomToolWardrobeGestureSchema>;
+
+/**
+ * One side effect, recorded after the table has dealt. Either a WRITE
+ * (`target` + `value`) or a WARDROBE GESTURE (`wardrobe`) — never both, never
+ * neither. One strict object with a refine rather than a union, so a mistake
+ * produces one readable issue rather than a union's tree of them.
  *
  * `value` discrimination is the one ergonomic trap in the format: a JSON number
  * or boolean is a literal, stored as-is, but a JSON **string is always an
@@ -634,32 +687,110 @@ export type EffectWhen = z.infer<typeof EffectWhenSchema>;
  * (`"value": "'broken pick'"`, not `"value": "broken pick"`; the bare form is a
  * load-time parse error, and a loud one).
  */
-export const CustomToolEffectSchema = z.strictObject({
-  when: EffectWhenSchema.optional().describe('Condition for this effect. Omitted = fires on every run.'),
-  target: z
-    .string()
-    .min(1)
-    .max(MAX_EFFECT_TARGET_LENGTH)
-    .describe(
-      'Where to write: "state.<path>" (tiered persistent state, written at the tier where the key already lives), ' +
-        '"metadata.<key>" (the rolling character\'s fact sheet), or "progress.<id>.<field>" (one of their timed ' +
-        'progressions — writing an id nobody authored creates it; write true to "progress.<id>.remove" to delete it).'
+export const CustomToolEffectSchema = z
+  .strictObject({
+    when: EffectWhenSchema.optional().describe('Condition for this effect. Omitted = fires on every run.'),
+    target: z
+      .string()
+      .min(1)
+      .max(MAX_EFFECT_TARGET_LENGTH)
+      .optional()
+      .describe(
+        'Where to write: "state.<path>" (tiered persistent state, written at the tier where the key already lives), ' +
+          '"metadata.<key>" (the rolling character\'s fact sheet), or "progress.<id>.<field>" (one of their timed ' +
+          'progressions — writing an id nobody authored creates it; write true to "progress.<id>.remove" to delete it). ' +
+          'A write needs both target and value.'
+      ),
+    value: z
+      .union([
+        z.number().finite(),
+        z.boolean(),
+        z.string().min(1).max(MAX_EFFECT_EXPRESSION_LENGTH),
+      ])
+      .optional()
+      .describe(
+        'What to write. A JSON number or boolean is a literal. A JSON string is ALWAYS an expression — quote literal ' +
+          "prose inside it (\"'broken pick'\"). Expressions take arithmetic, +-concatenation, parentheses, and {{ref}} " +
+          'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{now}}, {{params.x}}, {{metadata.key}}, ' +
+          '{{state.path}}, {{progress.id.field}}).'
+      ),
+    wardrobe: CustomToolWardrobeGestureSchema.optional().describe(
+      'A wardrobe gesture on the rolling character instead of a write: wear items, take them off, or clear a slot.'
     ),
-  value: z
-    .union([
-      z.number().finite(),
-      z.boolean(),
-      z.string().min(1).max(MAX_EFFECT_EXPRESSION_LENGTH),
-    ])
-    .describe(
-      'What to write. A JSON number or boolean is a literal. A JSON string is ALWAYS an expression — quote literal ' +
-        "prose inside it (\"'broken pick'\"). Expressions take arithmetic, +-concatenation, parentheses, and {{ref}} " +
-        'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{now}}, {{params.x}}, {{metadata.key}}, ' +
-        '{{state.path}}, {{progress.id.field}}).'
-    ),
-});
+  })
+  .superRefine((effect, ctx) => {
+    const isWrite = effect.target !== undefined || effect.value !== undefined;
+    const isWardrobe = effect.wardrobe !== undefined;
+    if (isWrite && isWardrobe) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'an effect is either a write (target + value) or a wardrobe gesture, not both',
+      });
+    } else if (!isWrite && !isWardrobe) {
+      ctx.addIssue({ code: 'custom', message: 'an effect needs target + value, or wardrobe' });
+    } else if (isWrite && (effect.target === undefined || effect.value === undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'a write needs both target and value',
+        path: [effect.target === undefined ? 'target' : 'value'],
+      });
+    }
+  });
 
 export type CustomToolEffect = z.infer<typeof CustomToolEffectSchema>;
+
+/** An effect that writes one value. */
+export type CustomToolWriteEffect = CustomToolEffect & { target: string; value: number | boolean | string };
+
+/** An effect that changes the rolling character's outfit. */
+export type CustomToolWardrobeEffect = CustomToolEffect & { wardrobe: CustomToolWardrobeGesture };
+
+/** True for a write effect. Use this rather than re-testing keys. */
+export function isWriteEffect(effect: CustomToolEffect): effect is CustomToolWriteEffect {
+  return effect.wardrobe === undefined && effect.target !== undefined && effect.value !== undefined;
+}
+
+/** True for a wardrobe gesture. Use this rather than re-testing keys. */
+export function isWardrobeEffect(effect: CustomToolEffect): effect is CustomToolWardrobeEffect {
+  return effect.wardrobe !== undefined && effect.target === undefined && effect.value === undefined;
+}
+
+/**
+ * The per-action rules of a wardrobe gesture, as `[field, message]` pairs. The
+ * single statement of them: load-time validation and the Workbench's draft
+ * check both read this, so the two say the same words.
+ */
+export function wardrobeGestureProblems(
+  gesture: Pick<CustomToolWardrobeGesture, 'action' | 'mode' | 'slot'> & { items?: readonly string[] }
+): Array<{ field: 'items' | 'mode' | 'slot'; message: string }> {
+  const problems: Array<{ field: 'items' | 'mode' | 'slot'; message: string }> = [];
+  const hasItems = (gesture.items?.length ?? 0) > 0;
+  switch (gesture.action) {
+    case 'wear': {
+      if (!hasItems) problems.push({ field: 'items', message: 'wear needs at least one item' });
+      const mode = gesture.mode ?? 'wear';
+      if (mode === 'add_to_slot' && gesture.slot === undefined) {
+        problems.push({ field: 'slot', message: 'mode add_to_slot needs a slot' });
+      } else if (mode !== 'add_to_slot' && gesture.slot !== undefined) {
+        problems.push({ field: 'slot', message: 'slot is only used with mode add_to_slot' });
+      }
+      break;
+    }
+    case 'take_off':
+      if (!hasItems) problems.push({ field: 'items', message: 'take_off needs at least one item' });
+      if (gesture.mode !== undefined) problems.push({ field: 'mode', message: 'mode is only used with wear' });
+      break;
+    case 'clear_slot':
+      if (gesture.slot === undefined) problems.push({ field: 'slot', message: 'clear_slot needs a slot' });
+      if (gesture.items !== undefined) problems.push({ field: 'items', message: 'clear_slot takes no items' });
+      if (gesture.mode !== undefined) problems.push({ field: 'mode', message: 'mode is only used with wear' });
+      break;
+  }
+  return problems;
+}
+
+/** Re-exported for readers that type a gesture's slot without the wardrobe schema module. */
+export type { WardrobeItemType };
 
 /** A parsed effect target, with the raw text kept for records and messages. */
 export type EffectTarget =
@@ -894,7 +1025,8 @@ export const QtapCustomToolSchema = z
       .max(MAX_EFFECTS, `at most ${MAX_EFFECTS} effects`)
       .optional()
       .describe(
-        'Side effects applied after the run: writes into tiered persistent state or the rolling character\'s metadata.'
+        'Side effects applied after the run: writes into tiered persistent state or the rolling character\'s metadata, ' +
+          'or wardrobe gestures that change what the rolling character is wearing.'
       ),
     outcomes: z
       .array(CustomToolOutcomeSchema)
@@ -1147,6 +1279,19 @@ function validateEffects(
   (tool.effects ?? []).forEach((effect, i) => {
     const base = ['effects', i];
 
+    if (effect.when !== undefined) {
+      validateWhenSubjects(declared, effect.when, Boolean(tool.llm), ctx, [...base, 'when']);
+    }
+
+    if (effect.wardrobe !== undefined) {
+      validateWardrobeGesture(declared, Boolean(tool.llm), effect.wardrobe, ctx, [...base, 'wardrobe']);
+      return;
+    }
+
+    // Shape errors (a write missing its target or value) are the effect
+    // schema's own refine; nothing further to check without both halves.
+    if (effect.target === undefined || effect.value === undefined) return;
+
     const target = parseEffectTarget(effect.target);
     if (!target.ok) {
       ctx.addIssue({ code: 'custom', message: `target ${target.reason}`, path: [...base, 'target'] });
@@ -1183,9 +1328,43 @@ function validateEffects(
         }
       }
     }
+  });
+}
 
-    if (effect.when !== undefined) {
-      validateWhenSubjects(declared, effect.when, Boolean(tool.llm), ctx, [...base, 'when']);
+/**
+ * Rule: a wardrobe gesture carries exactly the fields its action uses
+ * ({@link wardrobeGestureProblems}), and every item reference's placeholders
+ * resolve the way an outcome message's must — a `{{params.x}}` names a
+ * declared parameter, a `{{llm}}` needs an `llm` block. Unknown placeholder
+ * families are NOT rejected: the `renderTemplate` doctrine leaves them as
+ * written, and the item simply fails to resolve at the table.
+ */
+function validateWardrobeGesture(
+  declared: Record<string, CustomToolParameter>,
+  hasLlmBlock: boolean,
+  gesture: CustomToolWardrobeGesture,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  for (const problem of wardrobeGestureProblems(gesture)) {
+    ctx.addIssue({ code: 'custom', message: problem.message, path: [...path, problem.field] });
+  }
+
+  (gesture.items ?? []).forEach((item, m) => {
+    for (const { ref } of scanPlaceholdersInText(item)) {
+      if (ref.kind === 'params' && !declared[ref.name]) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `item references undeclared parameter "${ref.name}"`,
+          path: [...path, 'items', m],
+        });
+      } else if (ref.kind === 'llm' && !hasLlmBlock) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'item references {{llm}}, but the tool declares no `llm` block',
+          path: [...path, 'items', m],
+        });
+      }
     }
   });
 }

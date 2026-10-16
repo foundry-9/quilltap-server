@@ -38,6 +38,11 @@
       "type": "boolean",
       "default": false,
       "description": "Whether you are past caring about the noise. Demonstrates: a boolean parameter. Booleans cannot be referenced by $param either."
+    },
+    "gloves": {
+      "type": "string",
+      "default": "Lockpicking Gloves",
+      "description": "Which gloves come off when the attempt fails. Demonstrates a wardrobe effect choosing its garment by parameter: the effects entry names {{params.gloves}}, rendered like a message and then looked up by id, then by title, in the ROLLING character's wardrobe. A run made as nobody undresses nobody, and a garment that cannot be found is skipped without sinking the roll."
     }
   },
   "roll": {
@@ -51,6 +56,9 @@
     "prompt": "A lockpicking attempt on {{params.label}} scored {{value}} against a ceiling of {{params.ceiling}} (raw draw {{roll}}). In one word, YES or NO: was it elegant? — Demonstrates the llm consult: this prompt is rendered with the same placeholders a message takes ({{llm}} excepted — the oracle cannot quote an answer it has not yet given) and posed to the instance's cheap utility model once per run, after the roll and before the outcome table.",
     "errorMessage": "The oracle of locks is not answering today. (Demonstrates errorMessage: the consult's output when the call fails — the author's words, never the provider's. The technical failure reason goes to the roll record and the logs, not the fiction.)"
   },
+  "effects": [
+    { "when": { "outcome": { "eq": "failure" } }, "wardrobe": { "action": "take_off", "items": ["{{params.gloves}}"] } }
+  ],
   "outcomes": [
     {
       "when": { "roll": { "lt": 0.02 } },

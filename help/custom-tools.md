@@ -351,7 +351,7 @@ Up to eight phrases per tool, each between three and eighty characters. When a m
 
 ## Recording consequences — side effects
 
-A roll can now leave a mark. A tool may carry an `effects` array — up to sixteen entries, applied in order after the table has dealt — each writing one value into the story's **persistent state** or onto the rolling character's own **fact sheet**. The third failed lockpick really can break the pick, and nobody has to *ask* the model to record it — the write happens on the server, as part of the roll, entirely beyond a model's power to fudge:
+A roll can now leave a mark. A tool may carry an `effects` array — up to sixteen entries, applied in order after the table has dealt — each writing one value into the story's **persistent state** or onto the rolling character's own **fact sheet**, or else changing what that character **has on** (see *[Dressing and undressing](#dressing-and-undressing)* below). The third failed lockpick really can break the pick, and nobody has to *ask* the model to record it — the write happens on the server, as part of the roll, entirely beyond a model's power to fudge:
 
 ```json
 "effects": [
@@ -436,7 +436,60 @@ The bare form is two words where the grammar expects an expression, and the file
 
 A few civilities, all in the fail-soft family you know from `metadata`: an expression that cannot be evaluated at run time (a division by zero, a `{{metadata.key}}` the roller hasn't got) skips *that one effect* and never sinks the roll; a run with no character attached skips the `metadata.` writes (a run nobody made writes to nobody's sheet — which includes an unattributed roll of your own from the composer); and everything that *was* written rides in the roll's permanent record, previous value and all. The oracle's answer may be written too — `"value": "{{llm}}"` files the consult's text — but it is never treated as a number; route numeric judgments through the outcome table instead.
 
-Your characters are told a tool records side effects and *where* it writes (the targets are vocabulary, like a parameter's name) — never the values or the conditions, and under `revealOdds: false` not even the targets. The run dialog names them too, under **What this tool can quote**. And on the Workbench, the proving bench shows every would-be write as a dry run — `→ state.lockpicking.failures = 3 (would write)` — while applying, as ever, nothing at all.
+### Dressing and undressing
+
+An effect need not write a value at all. Give it a `wardrobe` key in place of `target` and `value` — never both — and it changes the rolling character's outfit instead: the dress tears and comes off, the Cloak of Night is drawn from the chest and donned, the beast-form sweeps the slots clean. It all happens on the server, through precisely the same valet's hands the `wardrobe_wear` and `wardrobe_take_off` tools use, and so it cannot be forgotten, fudged, or applied to the wrong garment by an over-excited model.
+
+```json
+"effects": [
+  { "when": { "outcome": { "eq": "success" } },
+    "wardrobe": { "action": "wear", "items": ["Cloak of Night", "{{params.garment}}"] } },
+  { "when": { "outcome": { "eq": "failure" } },
+    "wardrobe": { "action": "take_off", "items": ["Sundress"] } },
+  { "wardrobe": { "action": "clear_slot", "slot": "hair" } }
+]
+```
+
+Three actions, each fussy about its own particulars:
+
+- **`wear`** puts the listed `items` on, in order. An optional **`mode`** means exactly what it means to `wardrobe_wear`: `wear` (the default — honour each item's own *replace* setting), `replace` (a decisive swap), or `add_to_slot` (tuck it into one named `slot`, which that mode then requires and no other mode accepts).
+- **`take_off`** takes the listed `items` off, leaving every other layer where it lies. Name a `slot` to take an item out of that slot alone; leave it off and the item comes off everywhere it covers. `mode` has no business here.
+- **`clear_slot`** empties one `slot` — `top`, `bottom`, `footwear`, `accessories` or `hair` — and takes neither `items` nor `mode`.
+
+A file that puts a field where its action has no use for it is refused when it loads, with the reason beside the offending line.
+
+**Items are named by title or id.** Each is looked up the way a character's own wardrobe tools look things up — the id first, then the title, without regard to case — across everything the rolling character may wear: their own wardrobe, their groups', the project's, and Quilltap General. An item is a *template*, not an expression: the `{{…}}` placeholders a message takes are filled in before the lookup, so `"{{params.garment}}"` lets the person rolling choose the garment, and `"{{metadata.favouriteHat}}"` lets the character's own fact sheet choose it. There is no arithmetic and no quoting trap here — the words you write are the words looked up.
+
+**Outfits wear and come off whole.** A composite outfit goes on like any garment, and comes off the same way: everything of it the character has on is taken off, whichever slots its pieces landed in.
+
+**The rolling character, and nobody else.** A wardrobe effect dresses whoever the tool was run *as* — the same person a `metadata.` write lands on. A tool one character runs cannot undress another, and a run nobody made (your own unattributed roll from the composer) dresses nobody at all.
+
+**One missing garment never spoils the evening.** An item that cannot be found, has been archived (for wearing — an archived garment may still be taken *off*), or does not cover the `add_to_slot` slot is skipped quietly, and the rest of the list goes on. The roll has happened; Pascal announces it regardless.
+
+Afterwards [Aurora](wardrobe.md#auroras-wardrobe-announcements) announces the new ensemble in the usual way — once per turn, even when a character's own `wardrobe_wear` call and a tool's wardrobe effect both landed in the same reply — and the character's per-chat portrait is redrawn if the chat has asked for that. The roll's permanent record notes what went on, what came off, and the outfit before and after.
+
+#### A tool that simply dresses someone
+
+There is no rule that a tool must be a gamble. A tool with one possible roll and one outcome is a button — and a button that dresses a character is a very handsome thing to have in the composer:
+
+```json
+{
+  "name": "wear_regalia",
+  "title": "Don the Regalia",
+  "description": "Put on the full ceremonial regalia, for an investiture or a very good dinner.",
+  "roll": { "min": 1, "max": 1 },
+  "effects": [
+    { "wardrobe": { "action": "wear", "items": ["Regalia"], "mode": "replace" } }
+  ],
+  "outcomes": [
+    { "when": true, "message": "The regalia goes on, and the room rises.", "state": "success" }
+  ]
+}
+```
+
+Run it from the composer **as** a character and on it goes; a character may equally run it themselves. A `take_off` twin makes the matching button for the end of the evening.
+
+Your characters are told a tool records side effects and *where* it writes (the targets are vocabulary, like a parameter's name) — never the values or the conditions, and under `revealOdds: false` not even the targets. A wardrobe effect is described the same way — *wears Cloak of Night, Boots*, *takes off {{params.garment}}*, *clears hair* — naming what may be worn, never which roll wears it. The run dialog names them too, under **What this tool can quote**. And on the Workbench, the proving bench shows every would-be write as a dry run — `→ state.lockpicking.failures = 3 (would write)` — while applying, as ever, nothing at all. A wardrobe effect shows as `→ wardrobe: wear “Cloak of Night” (would attempt)` — *attempt*, because the bench has no character in the chair and so cannot know whether the garment is in anyone's wardrobe.
 
 ## Which tool wins: the matter of tiers
 

@@ -273,6 +273,86 @@ describe('effects — load-time validation', () => {
   })
 })
 
+describe('effects — wardrobe gestures', () => {
+  const issuesOf = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('accepts each action in its own shape', () => {
+    expect(
+      accepts(
+        withEffects([
+          { wardrobe: { action: 'wear', items: ['Cloak of Night'] } },
+          { wardrobe: { action: 'wear', items: ['Ribbon'], mode: 'add_to_slot', slot: 'hair' } },
+          { wardrobe: { action: 'wear', items: ['Regalia'], mode: 'replace' } },
+          { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'] } },
+          { wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } },
+          { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('accepts a parameter choosing the garment', () => {
+    expect(
+      accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{params.material}} gloves'] } }], STR_PARAM))
+    ).toBe(true)
+  })
+
+  it('tolerates an unknown placeholder family — it simply fails to resolve at the table', () => {
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{mystery}}'] } }]))).toBe(true)
+  })
+
+  it('rejects an effect that is both a write and a gesture, or neither', () => {
+    expect(
+      rejection(withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }]))
+    ).toMatch(/not both/)
+    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, or wardrobe/)
+    expect(rejection(withEffects([{ target: 'state.x' }]))).toMatch(/needs both target and value/)
+  })
+
+  it('states the per-action rules at precise paths', () => {
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], mode: 'add_to_slot' } }]))).toMatch(
+      /effects\.0\.wardrobe\.slot.*mode add_to_slot needs a slot/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], slot: 'hair' } }]))).toMatch(
+      /effects\.0\.wardrobe\.slot.*only used with mode add_to_slot/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear' } }]))).toMatch(/effects\.0\.wardrobe\.items.*at least one item/)
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'take_off', items: ['Hat'], mode: 'replace' } }]))).toMatch(
+      /effects\.0\.wardrobe\.mode/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'clear_slot' } }]))).toMatch(/clear_slot needs a slot/)
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', items: ['Wig'] } }]))).toMatch(
+      /effects\.0\.wardrobe\.items.*takes no items/
+    )
+  })
+
+  it('rejects an item naming an undeclared parameter, or {{llm}} without a consult', () => {
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat', '{{params.ghost}}'] } }]))).toMatch(
+      /effects\.0\.wardrobe\.items\.1.*undeclared parameter "ghost"/
+    )
+    expect(rejection(withEffects([{ wardrobe: { action: 'wear', items: ['{{llm}}'] } }]))).toMatch(
+      /declares no `llm` block/
+    )
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{llm}}'] } }], LLM_BLOCK))).toBe(true)
+  })
+
+  it('rejects an over-long item list or reference', () => {
+    const nine = Array.from({ length: 9 }, (_, i) => `Item ${i}`)
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: nine } }]))).toBe(false)
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['x'.repeat(201)] } }]))).toBe(false)
+  })
+
+  it('counts gestures and writes together against the effects cap', () => {
+    const many = Array.from({ length: MAX_EFFECTS + 1 }, (_, i) =>
+      i % 2 ? { target: `state.k${i}`, value: 1 } : { wardrobe: { action: 'clear_slot', slot: 'hair' } }
+    )
+    expect(accepts(withEffects(many))).toBe(false)
+  })
+})
+
 describe('when — subjects', () => {
   it('still accepts a bare comparator, which tests the value', () => {
     // Every definition written before `roll`/`params` existed must still load.
@@ -642,6 +722,16 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an over-long trigger', { ...BASE, triggers: ['x'.repeat(81)] }],
     ['more triggers than the cap', { ...BASE, triggers: Array.from({ length: 9 }, (_, i) => `phrase ${i}`) }],
     ['an exact duplicate trigger', { ...BASE, triggers: ['abracadabra', 'abracadabra'] }],
+    ['a wardrobe wear effect', withEffects([{ wardrobe: { action: 'wear', items: ['Cloak of Night', 'Boots'] } }])],
+    ['a wardrobe take_off restricted to a slot', withEffects([{ when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } }])],
+    ['a wardrobe clear_slot effect', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair' } }])],
+    ['an effect with both a target and a wardrobe gesture', withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }])],
+    ['an empty effect', withEffects([{}])],
+    ['a write with no value', withEffects([{ target: 'state.x' }])],
+    ['a wardrobe gesture with an unknown action', withEffects([{ wardrobe: { action: 'dress', items: ['Hat'] } }])],
+    ['a wardrobe gesture with an unknown slot', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'gloves' } }])],
+    ['a wardrobe gesture with an empty item list', withEffects([{ wardrobe: { action: 'wear', items: [] } }])],
+    ['a wardrobe gesture with an unknown key', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', who: 'Bob' } }])],
     ['more effects than the cap', withEffects(Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 })))],
   ]
 
@@ -696,6 +786,18 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(badPrefix)).toBe(false)
     expect(validate(userOnly)).toBe(true)
     expect(accepts(userOnly)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on wardrobe per-action rules', () => {
+    // Which fields an action needs is stated in the WardrobeGesture
+    // description and enforced by the loader; the mirror checks shapes only.
+    const addToSlotNoSlot = withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], mode: 'add_to_slot' } }])
+    const clearSlotWithItems = withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', items: ['Wig'] } }])
+    const ghostGarment = withEffects([{ wardrobe: { action: 'wear', items: ['{{params.ghost}}'] } }])
+    for (const doc of [addToSlotNoSlot, clearSlotWithItems, ghostGarment]) {
+      expect(validate(doc)).toBe(true)
+      expect(accepts(doc)).toBe(false)
+    }
   })
 
   it('is deliberately weaker than Zod on trigger case-folding and whitespace', () => {

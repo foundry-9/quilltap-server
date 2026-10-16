@@ -655,5 +655,32 @@ describe('wardrobe tool handlers', () => {
       expect(mockApplyDisplacement).toHaveBeenCalledTimes(1)
       expect(mockApplyDisplacement.mock.calls[0][3]).toEqual({ mode: 'remove_from_slot', slot: 'top', itemId: 'item-1' })
     })
+
+    it('takes a worn outfit off by its leaves — worn composites are stored dissolved', async () => {
+      ownItems = [
+        makeWardrobeItem({ id: 'shirt', title: 'Shirt', types: ['top'] }),
+        makeWardrobeItem({ id: 'skirt', title: 'Skirt', types: ['bottom'] }),
+        makeWardrobeItem({ id: 'scarf', title: 'Scarf', types: ['accessories'] }),
+        makeWardrobeItem({ id: 'outfit', title: 'Picnic Outfit', types: ['top', 'bottom'], componentItemIds: ['shirt', 'skirt'] }),
+      ]
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        ...emptySlots(),
+        top: ['shirt'],
+        bottom: ['skirt'],
+        accessories: ['scarf'],
+      })
+
+      const result = await executeWardrobeTakeOffTool(
+        { operations: [{ item_title: 'Picnic Outfit', mode: 'remove' }] },
+        context
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.operations[0].slots_affected).toEqual(['top', 'bottom'])
+      expect(mockApplyDisplacement.mock.calls.map((c: any[]) => c[3])).toEqual([
+        { mode: 'remove_from_slot', slot: 'top', itemId: 'shirt' },
+        { mode: 'remove_from_slot', slot: 'bottom', itemId: 'skirt' },
+      ])
+    })
   })
 })

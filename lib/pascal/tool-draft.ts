@@ -43,6 +43,10 @@ import {
   parseEffectTarget,
   scanPlaceholders,
   valueTypeOf,
+  wardrobeGestureProblems,
+  type WardrobeEffectAction,
+  type WardrobeEffectMode,
+  type WardrobeItemType,
   type ComparatorKey,
   type CustomToolEffect,
   type CustomToolOutcome,
@@ -203,12 +207,47 @@ export interface DraftEffect {
     | { kind: 'always' }
     | { kind: 'outcome-state'; state: OutcomeState }
     | { kind: 'verbatim'; when: EffectWhen };
+  /**
+   * Which half is active: a value write, or a wardrobe gesture. Both halves
+   * are always present on the draft so switching kind in the form loses
+   * nothing until save; only the active half is emitted.
+   */
+  kind: 'write' | 'wardrobe';
   /** The target verbatim: `state.…` or `metadata.…`. */
   target: string;
   /** How `value` serializes: a JSON number, a JSON boolean, or an expression string. */
   valueKind: 'literal-number' | 'literal-boolean' | 'expression';
   /** Loose form text ('true'/'false' for booleans, numeric text, or expression source). */
   value: string;
+  /** The wardrobe gesture's fields. `mode` 'wear' and slot '' are the omitted forms. */
+  wardrobe: DraftWardrobeGesture;
+}
+
+/** A wardrobe gesture, form-shaped. */
+export interface DraftWardrobeGesture {
+  action: WardrobeEffectAction;
+  /** Item references (templates), as typed. Blank rows are dropped on save. */
+  items: string[];
+  mode: WardrobeEffectMode;
+  slot: WardrobeItemType | '';
+}
+
+/** The empty wardrobe half a fresh (or write-kind) draft effect carries. */
+export function emptyDraftWardrobeGesture(): DraftWardrobeGesture {
+  return { action: 'wear', items: [''], mode: 'wear', slot: '' };
+}
+
+/** A fresh effect row of either kind, for the Workbench's Add button. */
+export function newDraftEffect(kind: DraftEffect['kind'] = 'write'): DraftEffect {
+  return {
+    id: nextDraftId('effect'),
+    when: { kind: 'always' },
+    kind,
+    target: '',
+    valueKind: 'expression',
+    value: '',
+    wardrobe: emptyDraftWardrobeGesture(),
+  };
 }
 
 export interface ToolDraft {
@@ -492,18 +531,61 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
     when = { kind: 'verbatim', when: effect.when };
   }
 
+  if (effect.wardrobe) {
+    const { action, items, mode, slot } = effect.wardrobe;
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'wardrobe',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: {
+        action,
+        items: items && items.length > 0 ? [...items] : [''],
+        mode: mode ?? 'wear',
+        slot: slot ?? '',
+      },
+    };
+  }
+
   return {
     id: nextDraftId('effect'),
     when,
-    target: effect.target,
+    kind: 'write',
+    target: effect.target ?? '',
     valueKind:
       typeof effect.value === 'number'
         ? 'literal-number'
         : typeof effect.value === 'boolean'
           ? 'literal-boolean'
           : 'expression',
-    value: String(effect.value),
+    value: effect.value === undefined ? '' : String(effect.value),
+    wardrobe: emptyDraftWardrobeGesture(),
   };
+}
+
+/**
+ * The `wardrobe` object a draft gesture emits: only the fields its action
+ * uses, blank item rows dropped, the default mode omitted. Fields the action
+ * does not use are left out rather than emitted and rejected — the form hides
+ * them, so a stale value there is not the author's intent.
+ */
+function wardrobeFromDraft(gesture: DraftWardrobeGesture): Record<string, unknown> {
+  const items = gesture.items.map((item) => item.trim()).filter((item) => item.length > 0);
+  switch (gesture.action) {
+    case 'wear':
+      return {
+        action: 'wear',
+        items,
+        ...(gesture.mode !== 'wear' ? { mode: gesture.mode } : {}),
+        ...(gesture.mode === 'add_to_slot' && gesture.slot ? { slot: gesture.slot } : {}),
+      };
+    case 'take_off':
+      return { action: 'take_off', items, ...(gesture.slot ? { slot: gesture.slot } : {}) };
+    case 'clear_slot':
+      return { action: 'clear_slot', ...(gesture.slot ? { slot: gesture.slot } : {}) };
+  }
 }
 
 /** The `effects` entry a draft effect emits — the inverse of {@link effectToDraft}. */
@@ -513,6 +595,13 @@ function effectFromDraft(effect: DraftEffect): CustomToolEffect {
     when = { outcome: { eq: effect.when.state } } as EffectWhen;
   } else if (effect.when.kind === 'verbatim') {
     when = effect.when.when;
+  }
+
+  if (effect.kind === 'wardrobe') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      wardrobe: wardrobeFromDraft(effect.wardrobe),
+    } as CustomToolEffect;
   }
 
   let value: number | boolean | string;
@@ -1212,6 +1301,15 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
   for (const effect of draft.effects) {
     const where: DraftIssue['where'] = { section: 'effect', id: effect.id };
 
+    if (effect.when.kind === 'verbatim' && effect.when.when.llm !== undefined && !draft.llmEnabled) {
+      issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
+    }
+
+    if (effect.kind === 'wardrobe') {
+      validateDraftWardrobeGesture(effect, draft, where, issues);
+      continue;
+    }
+
     if (effect.target.trim() === '') {
       issues.push(err(where, 'an effect needs a target — state.<path> or metadata.<key>'));
     } else {
@@ -1243,9 +1341,48 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
         }
       }
     }
+  }
+}
 
-    if (effect.when.kind === 'verbatim' && effect.when.when.llm !== undefined && !draft.llmEnabled) {
-      issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
+/**
+ * A wardrobe row's audit: the per-action rules in the very words load-time
+ * validation uses (`wardrobeGestureProblems`), checked against what the row
+ * would EMIT, plus the item references' placeholders — an undeclared
+ * parameter or a disabled consult is an error, as at load; an unknown family
+ * is only a warning, since it simply fails to resolve at the table.
+ */
+function validateDraftWardrobeGesture(
+  effect: DraftEffect,
+  draft: ToolDraft,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): void {
+  const emitted = wardrobeFromDraft(effect.wardrobe) as {
+    action: WardrobeEffectAction;
+    items?: string[];
+    mode?: WardrobeEffectMode;
+    slot?: WardrobeItemType;
+  };
+  // The form drops what an action does not use, so a `wear` that forgot its
+  // `add_to_slot` slot is the one cross-field mistake left to catch — and
+  // an empty item list, which the emitter turns into `items: []`.
+  for (const problem of wardrobeGestureProblems({
+    ...emitted,
+    items: emitted.items && emitted.items.length > 0 ? emitted.items : undefined,
+  })) {
+    issues.push(err(where, problem.message));
+  }
+
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  for (const item of effect.wardrobe.items) {
+    for (const { key, ref } of scanPlaceholders(item)) {
+      if (ref.kind === 'params' && !declaredParams.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      } else if (ref.kind === 'llm' && !draft.llmEnabled) {
+        issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
+      } else if (ref.kind === 'unknown') {
+        issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — that item will not be found`));
+      }
     }
   }
 }
@@ -1599,6 +1736,13 @@ export function renameParameterEverywhere(draft: ToolDraft, from: string, to: st
       multiplier: renameValue(draft.rollRange.multiplier),
       offset: renameValue(draft.rollRange.offset),
     },
+    effects: draft.effects.map((effect) => ({
+      ...effect,
+      wardrobe: {
+        ...effect.wardrobe,
+        items: effect.wardrobe.items.map((item) => item.replace(placeholder, `{{params.${to}}}`)),
+      },
+    })),
     outcomes: draft.outcomes.map((outcome) => ({
       ...outcome,
       message: outcome.message.replace(placeholder, `{{params.${to}}}`),
@@ -1640,6 +1784,13 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
     }
     if (paramPlaceholderPattern(name).test(outcome.message)) {
       sites.push(`${label}: the message renders it`);
+    }
+  });
+
+  draft.effects.forEach((effect, index) => {
+    if (effect.kind !== 'wardrobe') return;
+    if (effect.wardrobe.items.some((item) => paramPlaceholderPattern(name).test(item))) {
+      sites.push(`effect ${index + 1}: a wardrobe item names it`);
     }
   });
 

@@ -18,6 +18,8 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import {
   isParamRef,
+  isWardrobeEffect,
+  isWriteEffect,
   type LlmComparator,
   type NumericComparator,
   type ParamComparator,
@@ -86,7 +88,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
-  'Some tools record side effects when they run — adjusting the scene\'s persistent state or the rolling character\'s own records, server-side, as part of the roll.',
+  'Some tools record side effects when they run — adjusting the scene\'s persistent state, the rolling character\'s own records, or what they are wearing, server-side, as part of the roll.',
   'Some tools consult, or adjust, the rolling character\'s timed progressions — recharges, gestations, countdowns — server-side; you cannot set one yourself.',
   '',
   'Available tools:',
@@ -220,8 +222,9 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
       // `revealOdds: false` this line is gone with the rest of the odds: the
       // consequences stay as hidden as the thresholds. (The human popup still
       // sees the targets via the vocabulary — the file is the user's own.)
-      const targets = [...new Set(definition.effects.map((effect) => effect.target))];
-      lines.push(`    Side effects: writes ${targets.join(', ')}`);
+      // Wardrobe gestures name their item references verbatim, placeholders
+      // and all — what may be worn, not which outcome wears it.
+      lines.push(`    Side effects: ${describeEffects(definition.effects)}`);
     }
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);
@@ -253,4 +256,26 @@ export const runCustomToolDefinition = {
 export function validateRunCustomInput(input: unknown): RunCustomToolInput | null {
   const parsed = runCustomToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * The `Side effects:` line's clauses: `writes a, b` for the value writes, then
+ * one clause per wardrobe gesture — `wears Cloak of Night, Boots`, `takes off
+ * {{params.garment}}`, `clears hair`. Duplicates collapse.
+ */
+function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): string {
+  const targets = [...new Set(effects.filter(isWriteEffect).map((effect) => effect.target))];
+  const clauses: string[] = targets.length > 0 ? [`writes ${targets.join(', ')}`] : [];
+  for (const effect of effects) {
+    if (!isWardrobeEffect(effect)) continue;
+    const { action, items = [], slot } = effect.wardrobe;
+    const clause =
+      action === 'wear'
+        ? `wears ${items.join(', ')}`
+        : action === 'take_off'
+          ? `takes off ${items.join(', ')}${slot ? ` (${slot} only)` : ''}`
+          : `clears ${slot}`;
+    if (!clauses.includes(clause)) clauses.push(clause);
+  }
+  return clauses.join('; ');
 }

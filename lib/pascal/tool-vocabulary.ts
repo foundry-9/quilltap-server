@@ -83,6 +83,16 @@ export interface ToolVocabulary {
   progressWrites: string[];
   /** True when some rendered string quotes `{{now}}`. */
   now: boolean;
+  /**
+   * Item references this tool's wardrobe effects may PUT ON the rolling
+   * character, verbatim (a `{{params.garment}}` stays as written — it is
+   * vocabulary, not a resolved garment). Sorted.
+   */
+  wears: string[];
+  /** Item references this tool's wardrobe effects may TAKE OFF, verbatim. Sorted. */
+  takesOff: string[];
+  /** Slots this tool's wardrobe effects may CLEAR. Sorted. */
+  clearsSlots: string[];
 }
 
 /** True when a tool quotes nothing at all, and so has no vocabulary to show. */
@@ -99,7 +109,10 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     vocabulary.metadataWrites.length === 0 &&
     vocabulary.progress.length === 0 &&
     vocabulary.progressWrites.length === 0 &&
-    !vocabulary.now
+    !vocabulary.now &&
+    vocabulary.wears.length === 0 &&
+    vocabulary.takesOff.length === 0 &&
+    vocabulary.clearsSlots.length === 0
   );
 }
 
@@ -125,6 +138,9 @@ export function collectToolVocabulary(
     progress: new Set<string>(),
     progressWrites: new Set<string>(),
     now: false,
+    wears: new Set<string>(),
+    takesOff: new Set<string>(),
+    clearsSlots: new Set<string>(),
   };
 
   for (const outcome of definition.outcomes ?? []) {
@@ -156,10 +172,22 @@ export function collectToolVocabulary(
   // verbatim, so the one placeholder scanner reads them too; a condition's
   // metadata keys are reads like an outcome row's; and each target is a WRITE,
   // reported on its own lists because it is a different claim than a read.
+  // A wardrobe gesture's item references are templates too, scanned the same
+  // way, and the gesture itself is reported on the dress/undress lists.
   for (const effect of definition.effects ?? []) {
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
     for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
     for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
+
+    if (effect.wardrobe) {
+      const { action, items = [], slot } = effect.wardrobe;
+      for (const item of items) collectPlaceholders(item, declared, found);
+      if (action === 'wear') for (const item of items) found.wears.add(item);
+      else if (action === 'take_off') for (const item of items) found.takesOff.add(item);
+      else if (slot) found.clearsSlots.add(slot);
+      continue;
+    }
+    if (effect.target === undefined) continue; // load-rejected; nothing honest to report
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) continue; // load-rejected; nothing honest to report
@@ -190,6 +218,9 @@ export function collectToolVocabulary(
     progress: sorted(found.progress),
     progressWrites: sorted(found.progressWrites),
     now: found.now,
+    wears: sorted(found.wears),
+    takesOff: sorted(found.takesOff),
+    clearsSlots: sorted(found.clearsSlots),
   };
 }
 

@@ -46,7 +46,12 @@ import {
   isParamRef,
   isStateRef,
   parseEffectTarget,
+  isWardrobeEffect,
   type PlaceholderRef,
+  type CustomToolWardrobeGesture,
+  type WardrobeEffectAction,
+  type WardrobeEffectMode,
+  type WardrobeItemType,
   MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
@@ -1131,19 +1136,44 @@ export function matchesEffectWhen(
 }
 
 /**
- * One effect, resolved by the pure core: either the value it would write, or
- * the reason it was skipped. The entrances (and only they) apply the former;
- * the Proving Bench shows both as a dry run.
+ * One effect, resolved by the pure core: the value it would write, the
+ * wardrobe gesture it would make, or the reason it was skipped. The entrances
+ * (and only they) apply the first two; the Proving Bench shows all three as a
+ * dry run.
  */
 export type ResolvedEffect =
   | { index: number; target: EffectTarget; value: ExprValue }
+  | { index: number; wardrobe: ResolvedWardrobeGesture }
   | { index: number; skipped: string };
 
-/** True for a resolved effect that would actually write. */
-export function isApplicableEffect(
+/** A wardrobe gesture with its item references rendered — ready for the applier. */
+export interface ResolvedWardrobeGesture {
+  action: WardrobeEffectAction;
+  /** Rendered, trimmed item references in file order. Empty strings are dropped here, with a debug log. */
+  items: string[];
+  mode?: WardrobeEffectMode;
+  slot?: WardrobeItemType;
+}
+
+/** True for a resolved effect that would actually write a value. */
+export function isApplicableWriteEffect(
   effect: ResolvedEffect
 ): effect is Extract<ResolvedEffect, { target: EffectTarget }> {
   return 'target' in effect;
+}
+
+/** True for a resolved effect that would actually change an outfit. */
+export function isApplicableWardrobeEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { wardrobe: ResolvedWardrobeGesture }> {
+  return 'wardrobe' in effect;
+}
+
+/** True for a resolved effect of either kind that would apply (the Proving Bench's count). */
+export function isApplicableEffect(
+  effect: ResolvedEffect
+): effect is Exclude<ResolvedEffect, { skipped: string }> {
+  return isApplicableWriteEffect(effect) || isApplicableWardrobeEffect(effect);
 }
 
 /**
@@ -1184,6 +1214,14 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
     }
     if (!holds) return skipped(index, 'condition did not hold');
 
+    if (isWardrobeEffect(effect)) {
+      return resolveWardrobeGesture(definition.name, index, effect.wardrobe, subjects, skipped);
+    }
+    if (effect.target === undefined || effect.value === undefined) {
+      // Load-time validation rejects this; reaching here is a regression.
+      return skipped(index, 'effect is neither a complete write nor a wardrobe gesture');
+    }
+
     const target = parseEffectTarget(effect.target);
     if (!target.ok) return skipped(index, `target ${target.reason}`);
 
@@ -1199,6 +1237,50 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
 
     return { index, target: target.target, value: evaluated.value };
   });
+}
+
+/**
+ * Render a wardrobe gesture's item references with the same subjects an
+ * outcome message gets. Templates, not expressions: a reference that renders
+ * empty is dropped (a `wear` or `take_off` left with none is skipped), and one
+ * that keeps an unresolved placeholder is passed on as written — it will
+ * simply fail to resolve in the wardrobe, fail-soft, at the applier.
+ */
+function resolveWardrobeGesture(
+  toolName: string,
+  index: number,
+  gesture: CustomToolWardrobeGesture,
+  subjects: EffectSubjects,
+  skipped: (index: number, reason: string) => ResolvedEffect
+): ResolvedEffect {
+  const items: string[] = [];
+  for (const raw of gesture.items ?? []) {
+    const rendered = renderTemplate(raw, subjects).trim();
+    if (rendered.length === 0) {
+      logger.debug('Custom tool wardrobe item reference rendered empty; dropped', {
+        context: CONTEXT,
+        tool: toolName,
+        effectIndex: index,
+        reference: raw,
+      });
+      continue;
+    }
+    items.push(rendered);
+  }
+
+  if (gesture.action !== 'clear_slot' && items.length === 0) {
+    return skipped(index, 'every item reference rendered empty');
+  }
+
+  return {
+    index,
+    wardrobe: {
+      action: gesture.action,
+      items,
+      ...(gesture.mode !== undefined ? { mode: gesture.mode } : {}),
+      ...(gesture.slot !== undefined ? { slot: gesture.slot } : {}),
+    },
+  };
 }
 
 /**

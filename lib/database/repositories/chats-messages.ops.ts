@@ -159,7 +159,9 @@ export const ChatMessageRowSchema = z.object({
     }).optional(),
     // The side effects this run applied (the audit of the definition's
     // `effects` array): raw target, prior value (absent when none), what was
-    // written, and — state targets only — the tier the write landed in.
+    // written, and — state targets only — the tier the write landed in. A
+    // wardrobe change is targeted 'wardrobe.wear' / 'wardrobe.take_off' /
+    // 'wardrobe.clear_slot', with the slots before and a WardrobeEffectRecord.
     effects: z.array(z.object({
       target: z.string(),
       previous: z.unknown().optional(),
