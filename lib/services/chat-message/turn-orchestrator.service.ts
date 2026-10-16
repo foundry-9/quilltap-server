@@ -186,6 +186,28 @@ export async function shouldChainNext(
 
     nextParticipantId = result.nextSpeakerId
     selectionReason = result.reason
+
+    // A lone character's monologue is the selector's answer for "who could
+    // speak next" (it has nobody else to alternate with), but it is not a
+    // reason to keep CHAINING when a human is in the room: the character has
+    // answered, and the floor goes back to the operator. Without this a
+    // persona-less one-on-one chat ran the character to the depth cap on every
+    // message (bug 249). A genuinely all-LLM chat keeps its monologue — the
+    // all-LLM pause above governs it — and so does an autonomous room.
+    if (
+      selectionReason === 'only_character' &&
+      nextParticipantId !== null &&
+      nextParticipantId === turnState.lastSpeakerId &&
+      !effectiveAllLLM &&
+      !guards.neverPauseForUser
+    ) {
+      logger.info('[TurnOrchestrator] Lone character has answered; floor returns to the operator', {
+        chatId,
+        chainDepth,
+        participantId: nextParticipantId,
+      })
+      return { chain: false, reason: 'user_turn' }
+    }
   }
 
   // No next speaker

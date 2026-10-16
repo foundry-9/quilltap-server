@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: one-character chat chained the character to the depth cap (bug 249)
+
+- In a Salon chat with one LLM character and no persona seat, every operator message made the character reply about 20 times in a row, until the chain hit `maxChainDepth`. Since `83f4368a8` the turn selector returns a lone character unconditionally, and `shouldChainNext` treated that as a reason to continue; the all-LLM pause did not apply because the operator was present.
+- `shouldChainNext` (`lib/services/chat-message/turn-orchestrator.service.ts`) now returns `user_turn` when the selector picks the only character, that character spoke last, and a human is present. Genuinely all-LLM chats and autonomous rooms keep the monologue; a queued or nudged turn still runs. The selector is unchanged.
+- Filed and fixed as bug 249 (`docs/developer/bugs/fixed/bug-249-lone-character-chain-runaway.md`).
+
 #### Feature: Pascal wardrobe effects
 
 - A custom-tool effect may now be a wardrobe gesture instead of a write: `{ "wardrobe": { "action": "wear" | "take_off" | "clear_slot", "items"?, "mode"?, "slot"? } }`. An effect is either `target` + `value` or `wardrobe`, never both. Per-action rules are checked at load (`wardrobeGestureProblems` in `lib/pascal/custom-tool.types.ts`); the published JSON Schema checks shapes only and states the per-action rules in prose.

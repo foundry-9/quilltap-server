@@ -227,6 +227,75 @@ describe('turn-orchestrator.service', () => {
     });
   });
 
+  describe('a lone character (bug 249)', () => {
+    const lastSpokeWas = (id: string | null) =>
+      (turnManager.calculateTurnStateFromHistory as jest.Mock).mockReturnValueOnce({
+        lastSpeakerId: id,
+        turnsSinceUser: 0,
+        participantTurnCounts: new Map(),
+      });
+
+    beforeEach(() => {
+      (turnManager.selectNextSpeaker as jest.Mock).mockReturnValue({ nextSpeakerId: 'llm-1', reason: 'only_character' });
+    });
+
+    it('hands the floor back to the operator once the only character has answered', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [llmParticipant] }));
+      (turnManager.isAllLLMChat as jest.Mock).mockReturnValue(true);
+      lastSpokeWas('llm-1');
+
+      // A persona-less operator chains as '__user__' — present, with no seat.
+      const result = await shouldChainNext(repos as any, 'chat-1', '__user__', 0, Date.now());
+      expect(result).toEqual({ chain: false, reason: 'user_turn' });
+    });
+
+    it('lets the only character speak when they did not speak last', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [llmParticipant] }));
+      lastSpokeWas(null);
+
+      const result = await shouldChainNext(repos as any, 'chat-1', '__user__', 0, Date.now());
+      expect(result.chain).toBe(true);
+      expect(result.participantId).toBe('llm-1');
+    });
+
+    it('keeps a genuinely all-LLM monologue going (no human present)', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [llmParticipant] }));
+      (turnManager.isAllLLMChat as jest.Mock).mockReturnValue(true);
+      lastSpokeWas('llm-1');
+
+      const result = await shouldChainNext(repos as any, 'chat-1', null, 0, Date.now());
+      expect(result.chain).toBe(true);
+      expect(result.participantId).toBe('llm-1');
+    });
+
+    it('keeps an autonomous room monologue going even with an operator interjection on file', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({ participants: [llmParticipant] }));
+      lastSpokeWas('llm-1');
+
+      const result = await shouldChainNext(repos as any, 'chat-1', '__user__', 0, Date.now(), DEFAULT_CHAIN_CONFIG, {
+        neverPauseForUser: true,
+      });
+      expect(result.chain).toBe(true);
+    });
+
+    it('still honours a queued (nudged) turn for the same character', async () => {
+      const repos = createMockRepos();
+      repos.chats.findById.mockResolvedValue(createMockChat({
+        participants: [llmParticipant],
+        turnQueue: JSON.stringify(['llm-1']),
+      }));
+      lastSpokeWas('someone-else');
+
+      const result = await shouldChainNext(repos as any, 'chat-1', '__user__', 0, Date.now());
+      expect(result.chain).toBe(true);
+      expect(result.selectionReason).toBe('queue');
+    });
+  });
+
   describe('executeTurnChain', () => {
     const encoder = new TextEncoder();
 
