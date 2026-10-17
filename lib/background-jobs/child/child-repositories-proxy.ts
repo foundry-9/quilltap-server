@@ -632,6 +632,15 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   // Character-delete cleanup: folds rows into the unattributed row. Not
   // reached from a job today; classified so it can never be mistaken for a read.
   'wardrobeWear.foldWearerIntoUnattributed': 'write',
+  // Outfit history. `settle` is the one runtime writer of
+  // `chat_wardrobe_history`: it reads the chat's live slots and appends an
+  // entry or moves the cursor. Buffered whole so the parent replays it on its
+  // RW connection *after* the turn's `commitEquippedOutfit` (buffered writes
+  // replay in order within the main partition), so its read of the live slots
+  // sees the turn's final state, never the child's stale snapshot. Callers
+  // discard the return. `findEntries` / `findCurrent` stay reads and answer
+  // from the job's snapshot.
+  'wardrobeHistory.settle': 'write',
   // background jobs
   'backgroundJobs.cancelByType': 'write',
   'backgroundJobs.createBatch': 'write',

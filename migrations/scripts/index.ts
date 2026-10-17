@@ -445,6 +445,8 @@ import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-
 import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-field';
 // Composer slash commands: composerSlashCommands toggle column on chat_settings
 import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-commands-field';
+import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-history-table-v1';
+import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v1';
 
 /**
  * All available migrations.
@@ -909,6 +911,9 @@ export const migrations: Migration[] = [
   addCustomToolTriggersFieldMigration,
   // Composer slash commands: composerSlashCommands toggle column on chat_settings
   addComposerSlashCommandsFieldMigration,
+  // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
+  addChatWardrobeHistoryTableMigration,
+  seedChatWardrobeHistoryMigration,
 ];
 
 export {
@@ -1350,5 +1355,8 @@ export {
   addCustomToolTriggersFieldMigration,
   // Composer slash commands: composerSlashCommands toggle column on chat_settings
   addComposerSlashCommandsFieldMigration,
+  // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
+  addChatWardrobeHistoryTableMigration,
+  seedChatWardrobeHistoryMigration,
 };
 

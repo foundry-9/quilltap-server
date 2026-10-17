@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Feature: wardrobe outfit history
+
+- New table `chat_wardrobe_history`: per (chat, character) a numbered timeline of outfits from 0 (what they arrived in), with an `isCurrent` cursor. Two unique indexes keep indices unique per timeline and allow one current row. DDL lives only in `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`; types in `lib/schemas/chat-wardrobe-history.types.ts`.
+- New `ChatWardrobeHistoryRepository` (`repos.wardrobeHistory`). `settle(chatId, characterId, intent)` is the only runtime writer: an `append` intent reads the chat's live slots and adds entry `max + 1` unless they hash equal to the current entry; a `cursor` intent moves the cursor without appending. A first touch with no rows records the arrival outfit as 0, or, for a seat that predates the history, an empty seeded 0 before the change. `settle` never throws. `upsertRows` is for restore and import; `deleteByCharacter` runs from character delete.
+- `wardrobeHistory.settle` is a buffered write in the job child (`METHOD_OVERRIDES`), replayed in the parent after the turn's `commitEquippedOutfit`.
+- Migrations `add-chat-wardrobe-history-table-v1` (the table) and `seed-chat-wardrobe-history-v1` (one current entry 0 per character in each chat's `equippedOutfit`, dated by the chat's `updatedAt`).
+- Tests: `chat-wardrobe-history.repository.test.ts`, `migrations/chat-wardrobe-history.test.ts`, `outfit-history-fence.test.ts`, `child-proxy-wardrobe-wear.test.ts`, `cascade-delete.test.ts`.
+
 #### Spec: wardrobe outfit history and rollback
 
 - New design doc `docs/developer/features/wardrobe-outfit-history.md`: a per-character, per-chat record of every outfit change (one entry per Aurora announcement), `wardrobe_rollback` and `wardrobe_history` tools, a cursor that moves back and forward without renumbering, and a History tab with "Wear again" in the Wardrobe dialog. Spec only; no code yet. Indexed in `ROADMAP.md` and `update-documentation.md`.

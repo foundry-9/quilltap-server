@@ -161,8 +161,10 @@ Registered as `repos.wardrobeHistory`. Method names follow the child proxy's pre
 | `upsertRows(rows)` | write | Restore and import; preserves ids and indices. |
 | `deleteByCharacter(characterId)` | write | Character-delete cleanup (§7). |
 
-Every method takes the chats store the way `WardrobeWearRepository` does, because `settle`
-must read the live slots.
+The repository takes the chats store in its constructor the way `WardrobeWearRepository`
+does, because `settle` must read the live slots. It is a plain class, not an
+`AbstractBaseRepository` (its rows have no `updatedAt`), and declares `dbTarget = 'main'` for
+the job applier's write partition.
 
 ## 3. The chokepoint: `settle`
 
@@ -175,10 +177,14 @@ records what the chat actually holds at the moment the announcement is scheduled
 ### 3.1 `{ kind: 'append', provenance }`
 
 1. Load the rows. Load the live slots (`null` → empty slots).
-2. **No rows yet** (§3.4): if the live slots are empty, insert entry `0` from them with source
-   `'seeded'`, current, and stop. Otherwise insert entry `0` as **empty slots**, source
-   `'seeded'`, then continue to step 4 as if the cursor were `0` — the prior state is
-   unknowable but was, by construction, nothing recorded.
+2. **No rows yet** (§3.4): with an arrival source (`'chat-start'`, `'participant-added'`,
+   `'merge'`) insert entry `0` from the live slots with that source, current, and stop — the
+   arrival outfit *is* entry 0. With any other source: if the live slots are empty, insert
+   entry `0` from them with source `'seeded'`, current, and stop. Otherwise insert entry `0`
+   as **empty slots**, source `'seeded'`, then continue to step 4 as if the cursor were `0` —
+   the prior state is unknowable but was, by construction, nothing recorded. (Corrected during
+   implementation: the first draft seeded an empty `0` for arrival sources too, which
+   contradicted §3.4.)
 3. Compare `hashEquippedSlots(live)` with the current row's `slotsHash`. **Equal → no-op**,
    debug log. A turn whose edits net to nothing (put the hat on, take it off) records
    nothing and leaves the cursor where it was.

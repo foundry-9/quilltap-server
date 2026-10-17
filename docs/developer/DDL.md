@@ -515,6 +515,54 @@ shared General coat worn by five characters is one file and five rows.
 - DDL single source: `lib/database/backends/sqlite/wardrobe-wear-stats-ddl.ts`.
   Design of record: `docs/developer/features/complete/wardrobe-wear-ledger.md`.
 
+### chat_wardrobe_history
+
+```sql
+CREATE TABLE "chat_wardrobe_history" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL REFERENCES "chats"("id") ON DELETE CASCADE,
+  "characterId" TEXT NOT NULL,             -- no FK: characters may be archived tombstones
+  "entryIndex" INTEGER NOT NULL,           -- 0-based, contiguous per (chatId, characterId); never renumbered
+  "slots" TEXT NOT NULL,                   -- JSON EquippedSlots, dissolved leaves (plain TEXT, not compressed)
+  "slotsHash" TEXT NOT NULL,               -- hashEquippedSlots(slots)
+  "source" TEXT NOT NULL,                  -- chat-start | participant-added | merge | operator | character | pascal | seeded
+  "actorCharacterId" TEXT,                 -- the character whose tool call / roll made the change
+  "isCurrent" INTEGER NOT NULL DEFAULT 0,  -- the cursor
+  "createdAt" TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX "idx_chat_wardrobe_history_entry"
+  ON "chat_wardrobe_history" ("chatId", "characterId", "entryIndex");
+CREATE UNIQUE INDEX "idx_chat_wardrobe_history_current"
+  ON "chat_wardrobe_history" ("chatId", "characterId") WHERE "isCurrent" = 1;
+```
+
+The wardrobe **outfit history** (added 4.11 by `add-chat-wardrobe-history-table-v1`,
+seeded once by `seed-chat-wardrobe-history-v1` with one current entry `0` per
+(chat, character) in every chat's `equippedOutfit`, dated by the chat's
+`updatedAt`). Per character per chat, a numbered timeline of outfits from `0`
+(what they arrived in), one entry per Aurora announcement, and a cursor
+(`isCurrent`) on the entry they are wearing now. A rollback moves the cursor; the
+next real change appends at `max + 1`. Unbounded; nothing prunes or renumbers.
+
+- The only runtime writer is `ChatWardrobeHistoryRepository.settle`
+  (`lib/database/repositories/chat-wardrobe-history.repository.ts`), reached from
+  `notifyWardrobeChanged` / `flushPendingWardrobeAnnouncements` and from
+  `applyOutfitSelections`. It reads the live slots itself; an append whose hash
+  equals the current entry's is a no-op. From the job child it is buffered whole
+  and replayed in the parent after the turn's `commitEquippedOutfit`.
+  `upsertRows` is for restore and import only.
+- Invariants: indices contiguous from `0`; exactly one current row per pair
+  whenever any row exists (the partial unique index); `slotsHash` matches `slots`.
+- The cursor lives on the row, not on `chats`, so no whole-row chat `update` can
+  carry a stale copy of it.
+- Chat deletion cascades. Character deletion calls `deleteByCharacter`. Item
+  deletion and archiving leave history alone: a stale id is skipped at rollback
+  and rendered "(archived)" / "(no longer exists)".
+- Exported in `.qtap` bundles as `wardrobe_history` records and included in backups.
+- DDL single source: `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`.
+  Design of record: `docs/developer/features/complete/wardrobe-outfit-history.md`.
+
 ### outfit_presets — REMOVED in 4.5
 
 The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.
