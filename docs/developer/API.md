@@ -2942,6 +2942,7 @@ items included); an id the pool no longer holds comes back `{ "title": null, "mi
       "source": "chat-start",
       "actorCharacterId": null,
       "actorName": null,
+      "actorToolName": null,
       "changedBy": "chat opened",
       "isCurrent": false,
       "summary": "Green Dress; Riding Boots",
@@ -2955,7 +2956,10 @@ items included); an id the pool no longer holds comes back `{ "title": null, "mi
 ```
 
 `source` is one of `chat-start`, `participant-added`, `merge`, `operator`, `character`, `pascal`,
-`seeded`. An empty record answers `{ "currentIndex": null, "entries": [] }`. `400` without
+`seeded`. `actorCharacterId` / `actorName` name the calling character (`character`), the rolling
+character (`pascal`), or the character the user was speaking as (`operator`; null when they drove
+none). `actorToolName` is the custom tool's name for `pascal` entries, null otherwise. `changedBy`
+is the ready-made label ("the operator, as Bertie", "Pascal's dress_for_dinner"). An empty record answers `{ "currentIndex": null, "entries": [] }`. `400` without
 `characterId`; `404` for an unknown chat.
 
 #### `POST /api/v1/chats/[id]?action=wardrobe-rollback`

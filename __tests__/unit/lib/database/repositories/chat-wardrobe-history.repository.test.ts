@@ -144,6 +144,31 @@ describe('ChatWardrobeHistoryRepository', () => {
     })
   })
 
+  it('records the custom tool behind a Pascal change, and no tool for anyone else', async () => {
+    await repo.settle(CHAT, CHAR_A, { kind: 'append', provenance: { source: 'chat-start' } })
+    chats.set(CHAR_A, slots({ top: [DRESS] }))
+    await repo.settle(CHAT, CHAR_A, {
+      kind: 'append',
+      provenance: { source: 'pascal', actorCharacterId: CHAR_A, toolName: 'dress_for_dinner' },
+    })
+    chats.set(CHAR_A, slots({}))
+    await repo.settle(CHAT, CHAR_A, {
+      kind: 'append',
+      provenance: { source: 'operator', actorCharacterId: CHAR_B, toolName: 'ignored' },
+    })
+
+    const [zero, one, two] = rows()
+    expect(zero.actorToolName).toBeNull()
+    expect(one.source).toBe('pascal')
+    expect(one.actorToolName).toBe('dress_for_dinner')
+    expect(two.source).toBe('operator')
+    expect(two.actorCharacterId).toBe(CHAR_B)
+    expect(two.actorToolName).toBeNull()
+    const [, readBack] = await repo.findEntries(CHAT, CHAR_A)
+    expect(readBack.actorToolName).toBe('dress_for_dinner')
+    assertInvariants()
+  })
+
   it('is a no-op when the live outfit equals the current entry', async () => {
     chats.set(CHAR_A, slots({ top: [DRESS] }))
     await repo.settle(CHAT, CHAR_A, { kind: 'append', provenance: { source: 'chat-start' } })

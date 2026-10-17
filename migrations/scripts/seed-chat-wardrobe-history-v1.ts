@@ -69,7 +69,8 @@ export const seedChatWardrobeHistoryMigration: Migration = {
   id: MIGRATION_ID,
   description: 'Seed the chat wardrobe history with what every character has on now',
   introducedInVersion: '4.11.0',
-  dependsOn: ['add-chat-wardrobe-history-table-v1'],
+  // The tool-name column first: the shared INSERT spells it.
+  dependsOn: ['add-chat-wardrobe-history-table-v1', 'add-chat-wardrobe-history-tool-name-v1'],
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) return false;
@@ -113,6 +114,7 @@ export const seedChatWardrobeHistoryMigration: Migration = {
               JSON.stringify(slots),
               hashEquippedSlots(slots),
               'seeded',
+              null,
               null,
               1,
               chat.updatedAt,

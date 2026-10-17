@@ -25,9 +25,9 @@ export const WardrobeHistorySourceSchema = z.enum([
   'chat-start',        // applyOutfitSelections for a new chat
   'participant-added', // applyOutfitSelections for an added / reactivated seat
   'merge',             // applyOutfitSelections from a merge
-  'operator',          // the Wardrobe dialog (?action=equip), or Wear again
+  'operator',          // the Wardrobe dialog (?action=equip), or Wear again (actorCharacterId = the user's live character)
   'character',         // a wardrobe_* tool call in a model turn (actorCharacterId = caller)
-  'pascal',            // a custom tool's wardrobe effects (actorCharacterId = rolling character)
+  'pascal',            // a custom tool's wardrobe effects (actorCharacterId = rolling character, actorToolName = the tool)
   'seeded',            // the backfill migration, or a first-touch seed
 ]);
 
@@ -46,8 +46,20 @@ export const ChatWardrobeHistoryRowSchema = z.object({
   /** `hashEquippedSlots(slots)`. */
   slotsHash: z.string().length(16),
   source: WardrobeHistorySourceSchema,
-  /** The character whose tool call or roll made the change; null otherwise. */
+  /**
+   * Who made the change, by source: `character` — the character whose tool
+   * call it was; `pascal` — the rolling character; `operator` — the character
+   * the user was speaking as when they dressed them (the "Speaking As"
+   * seat, impersonation included), or null when the user had none. Null for
+   * arrivals and seeds.
+   */
   actorCharacterId: z.string().nullable(),
+  /**
+   * `pascal` only: the name of the custom tool whose wardrobe effects made the
+   * change. Null for every other source. Defaults to null so bundles and
+   * backups from before the column still parse.
+   */
+  actorToolName: z.string().nullable().default(null),
   /** The cursor: exactly one row per (chatId, characterId) is current. */
   isCurrent: z.boolean(),
   createdAt: TimestampSchema,
@@ -58,7 +70,10 @@ export type ChatWardrobeHistoryRow = z.infer<typeof ChatWardrobeHistoryRowSchema
 /** Who is making an outfit change — carried on every OutfitChangeContext. */
 export interface WardrobeHistoryProvenance {
   source: Exclude<WardrobeHistorySource, 'seeded'>;
+  /** See {@link ChatWardrobeHistoryRowSchema}'s `actorCharacterId`. */
   actorCharacterId?: string;
+  /** `pascal` only: the custom tool's name. */
+  toolName?: string;
 }
 
 /** What a turn owes the ledger for one character; the last intent in a turn wins. */

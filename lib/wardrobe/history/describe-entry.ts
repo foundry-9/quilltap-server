@@ -75,19 +75,34 @@ export function summarizeHistorySlots(resolved: HistorySlots): string {
 /**
  * Who made an entry, for a reader. `selfLabel` is how the character the
  * timeline belongs to is named when they made it ("you" for the tool).
+ *
+ * An operator entry names the character the user was speaking as ("the
+ * operator, as Bertie"); a Pascal entry names the custom tool ("Pascal's
+ * dress_for_dinner"), and the roller when it was someone else. Entries from
+ * before either was recorded fall back to "the operator" / "Pascal".
  */
 export function changedByLabel(
-  entry: { source: WardrobeHistorySource; actorCharacterId: string | null; characterId: string },
+  entry: {
+    source: WardrobeHistorySource;
+    actorCharacterId: string | null;
+    actorToolName?: string | null;
+    characterId: string;
+  },
   actorName: string | null,
   selfLabel: string,
 ): string {
   switch (entry.source) {
-    case 'operator':
-      return 'the operator';
-    case 'pascal':
+    case 'operator': {
+      if (!entry.actorCharacterId) return 'the operator';
+      const as = actorName ?? (entry.actorCharacterId === entry.characterId ? selfLabel : null);
+      return as ? `the operator, as ${as}` : 'the operator';
+    }
+    case 'pascal': {
+      const pascal = entry.actorToolName ? `Pascal's ${entry.actorToolName}` : 'Pascal';
       return entry.actorCharacterId && entry.actorCharacterId !== entry.characterId && actorName
-        ? `Pascal (rolled by ${actorName})`
-        : 'Pascal';
+        ? `${pascal} (rolled by ${actorName})`
+        : pascal;
+    }
     case 'character':
       if (!entry.actorCharacterId || entry.actorCharacterId === entry.characterId) return selfLabel;
       return actorName ?? 'another character';

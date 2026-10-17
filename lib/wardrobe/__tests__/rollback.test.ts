@@ -51,6 +51,7 @@ function row(entryIndex: number, s: EquippedSlots, isCurrent = false): ChatWardr
     slotsHash: 'x'.repeat(16),
     source: 'operator',
     actorCharacterId: null,
+    actorToolName: null,
     isCurrent,
     createdAt: '2026-10-16T00:00:00.000Z',
   }

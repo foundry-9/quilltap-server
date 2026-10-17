@@ -5,7 +5,7 @@
  * Runs after characters, chats, document stores and the wear ledger, so every
  * id map it reads is final. Each row gets a fresh `id`; `chatId`,
  * `characterId` and `actorCharacterId` are remapped; `entryIndex`,
- * `isCurrent`, `slots` and `createdAt` are copied as they are, so the
+ * `isCurrent`, `slots`, `actorToolName` and `createdAt` are copied as they are, so the
  * timeline and its cursor survive the trip. An item id in `slots` is remapped
  * when its item imported with a new id and otherwise kept — one that resolves
  * to nothing here falls under the stale-item rule at rollback and render time.

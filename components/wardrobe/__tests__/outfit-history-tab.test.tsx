@@ -19,17 +19,17 @@ const HISTORY: OutfitHistoryResponse = {
   currentIndex: 2,
   entries: [
     {
-      index: 0, at: '2026-10-16T10:00:00.000Z', source: 'chat-start', actorCharacterId: null, actorName: null,
+      index: 0, at: '2026-10-16T10:00:00.000Z', source: 'chat-start', actorCharacterId: null, actorName: null, actorToolName: null,
       changedBy: 'chat opened', isCurrent: false, summary: 'Green Dress',
       slots: { ...EMPTY, top: [{ itemId: 'dress', title: 'Green Dress', archived: false, missing: false }] },
     },
     {
-      index: 1, at: '2026-10-16T11:00:00.000Z', source: 'character', actorCharacterId: 'char-1', actorName: 'Bertie',
+      index: 1, at: '2026-10-16T11:00:00.000Z', source: 'character', actorCharacterId: 'char-1', actorName: 'Bertie', actorToolName: null,
       changedBy: 'Bertie', isCurrent: false, summary: 'Greatcoat (archived)',
       slots: { ...EMPTY, top: [{ itemId: 'coat', title: 'Greatcoat', archived: true, missing: false }] },
     },
     {
-      index: 2, at: '2026-10-16T12:00:00.000Z', source: 'operator', actorCharacterId: null, actorName: null,
+      index: 2, at: '2026-10-16T12:00:00.000Z', source: 'operator', actorCharacterId: null, actorName: null, actorToolName: null,
       changedBy: 'the operator', isCurrent: true, summary: 'Nothing',
       slots: EMPTY,
     },

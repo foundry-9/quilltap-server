@@ -312,7 +312,7 @@ description (§6.2).
 | `app/api/v1/chats/[id]/actions/outfit.ts` (`?action=equip`, every mode) | `{ source: 'operator' }` |
 | `lib/chat/tool-executor.ts` building `WardrobeToolContext` for the seven `wardrobe_*` tools | `{ source: 'character', actorCharacterId: context.characterId }` |
 | `lib/tools/handlers/wardrobe-create-handler.ts` when `equip_now` dresses a *recipient* | `{ source: 'character', actorCharacterId: <caller> }` with `characterId` = recipient |
-| `lib/pascal/wardrobe-effects.ts` | `{ source: 'pascal', actorCharacterId: <rolling character> }` |
+| `lib/pascal/wardrobe-effects.ts` | `{ source: 'pascal', actorCharacterId: <rolling character>, toolName: <custom tool name> }` |
 | `lib/tools/handlers/run-custom-handler.ts` (a Pascal run inside a model turn) | passes the turn's containers through; the effects applier supplies `'pascal'` |
 | `applyOutfitSelections` callers (`app/api/v1/chats/route.ts`, `.../actions/participants.ts`, merge) | not via `notifyWardrobeChanged` — they call `settle` directly with `'chat-start'` / `'participant-added'` / `'merge'` (§3.4) |
 
@@ -714,3 +714,24 @@ entry-0 rows for its 32 (chat, character) pairs, each dated by its chat's `updat
 itself a `wardrobe_wear` call appended entry 1 (source `character`), `wardrobe_history` listed it,
 `wardrobe_rollback` returned to 0 with Aurora announcing and no new entry, and the History tab's
 **Wear again** moved the cursor back to 1, announced.
+
+### Addendum (2026-10-17): who dressed them
+
+- **Operator entries name the user's live character.** `operatorWardrobeProvenance(chat)`
+  (`lib/wardrobe/history/operator-provenance.ts`) resolves the seat the user is speaking as —
+  `findActiveUserParticipant` over `activeTypingParticipantId`, impersonation included, falling
+  back to the first user-owned seat — and records its character in `actorCharacterId`. Both
+  operator paths (`?action=equip`, `?action=wardrobe-rollback`) call it; a chat with no
+  user-driven character records `{ source: 'operator' }` alone.
+- **Pascal entries name the custom tool.** New nullable column `actorToolName`, written only for
+  `source = 'pascal'` (`settle` drops a `toolName` on any other source). Provenance gains
+  `toolName`; `applyWardrobeEffects` passes the run's tool name. Migration
+  `add-chat-wardrobe-history-tool-name-v1` adds the column to an existing table; the shared DDL
+  carries it last so fresh and migrated tables match, and the seed migration now depends on it
+  (the shared INSERT spells it).
+- **Labels.** `changedByLabel`: "the operator, as Bertie" (or "the operator" when no character
+  was recorded), "Pascal's dress_for_dinner", "Pascal's dress_for_dinner (rolled by Jeeves)".
+  The GET action returns `actorToolName` beside `actorName`.
+- **Export / backup.** `actorToolName` rides in `wardrobe_history` records and
+  `data/wardrobe-history.json` unchanged; the row schema defaults it to null, so older bundles
+  and backups still import.

@@ -526,9 +526,10 @@ CREATE TABLE "chat_wardrobe_history" (
   "slots" TEXT NOT NULL,                   -- JSON EquippedSlots, dissolved leaves (plain TEXT, not compressed)
   "slotsHash" TEXT NOT NULL,               -- hashEquippedSlots(slots)
   "source" TEXT NOT NULL,                  -- chat-start | participant-added | merge | operator | character | pascal | seeded
-  "actorCharacterId" TEXT,                 -- the character whose tool call / roll made the change
+  "actorCharacterId" TEXT,                 -- character: the caller; pascal: the roller; operator: the user's Speaking As character
   "isCurrent" INTEGER NOT NULL DEFAULT 0,  -- the cursor
-  "createdAt" TEXT NOT NULL
+  "createdAt" TEXT NOT NULL,
+  "actorToolName" TEXT                     -- pascal only: the custom tool's name (added by add-chat-wardrobe-history-tool-name-v1)
 );
 
 CREATE UNIQUE INDEX "idx_chat_wardrobe_history_entry"

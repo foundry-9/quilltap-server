@@ -73,7 +73,8 @@ export async function executeWardrobeHistoryTool(
     const actorNames = new Map<string, string | null>();
     for (const row of shown) {
       const actor = row.actorCharacterId;
-      if (!actor || actor === context.characterId || actorNames.has(actor)) continue;
+      // The character's own calls read "you"; an operator speaking as them is still named.
+      if (!actor || (actor === context.characterId && row.source !== 'operator') || actorNames.has(actor)) continue;
       try {
         actorNames.set(actor, (await repos.characters.findByIdRaw(actor))?.name ?? null);
       } catch {

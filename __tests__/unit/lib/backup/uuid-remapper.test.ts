@@ -1131,7 +1131,6 @@ describe('remapBackupData() - outfit history', () => {
   })
 
   it('round-trips a five-entry timeline with its indices, hashes and cursor under remapped ids', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { hashEquippedSlots } = require('@/lib/wardrobe/outfit-hash')
     const empty = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
     const rows = [0, 1, 2, 3, 4].map((entryIndex) => {

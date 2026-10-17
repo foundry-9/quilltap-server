@@ -74,6 +74,7 @@ interface RawRow {
   slotsHash: string;
   source: string;
   actorCharacterId: string | null;
+  actorToolName?: string | null;
   isCurrent: number | bigint;
   createdAt: string;
 }
@@ -97,6 +98,7 @@ function normalizeRow(row: RawRow): ChatWardrobeHistoryRow {
     slotsHash: row.slotsHash,
     source: source.success ? source.data : 'seeded',
     actorCharacterId: row.actorCharacterId ?? null,
+    actorToolName: row.actorToolName ?? null,
     isCurrent: Number(row.isCurrent) === 1,
     createdAt: row.createdAt,
   };
@@ -112,7 +114,8 @@ function insertParams(row: ChatWardrobeHistoryRow): unknown[] {
     JSON.stringify(row.slots),
     row.slotsHash,
     row.source,
-    row.actorCharacterId,
+    row.actorCharacterId ?? null,
+    row.actorToolName ?? null,
     row.isCurrent ? 1 : 0,
     row.createdAt,
   ];
@@ -125,6 +128,7 @@ function buildRow(input: {
   slots: EquippedSlots;
   source: WardrobeHistorySource;
   actorCharacterId: string | null;
+  actorToolName?: string | null;
   at: string;
 }): ChatWardrobeHistoryRow {
   const slots = cloneEquippedSlots(input.slots);
@@ -137,6 +141,7 @@ function buildRow(input: {
     slotsHash: hashEquippedSlots(slots),
     source: input.source,
     actorCharacterId: input.actorCharacterId,
+    actorToolName: input.actorToolName ?? null,
     isCurrent: true,
     createdAt: input.at,
   };
@@ -199,7 +204,8 @@ export class ChatWardrobeHistoryRepository {
     }
     const live = (await this.chats.getEquippedOutfitForCharacter(chatId, characterId)) ?? makeEmptyEquippedSlots();
     const liveHash = hashEquippedSlots(live);
-    const { source, actorCharacterId } = intent.provenance;
+    const { source, actorCharacterId, toolName } = intent.provenance;
+    const actorToolName = source === 'pascal' ? toolName ?? null : null;
     const at = new Date().toISOString();
 
     // Read, compare and write in one synchronous transaction, so two settles
@@ -241,7 +247,7 @@ export class ChatWardrobeHistoryRepository {
         });
         seed.isCurrent = false;
         insert.run(...insertParams(seed));
-        const next = buildRow({ chatId, characterId, entryIndex: 1, slots: live, source, actorCharacterId: actorCharacterId ?? null, at });
+        const next = buildRow({ chatId, characterId, entryIndex: 1, slots: live, source, actorCharacterId: actorCharacterId ?? null, actorToolName, at });
         insert.run(...insertParams(next));
         return { kind: 'appended', entryIndex: 1, seeded: true };
       }
@@ -254,7 +260,7 @@ export class ChatWardrobeHistoryRepository {
       const nextIndex = rows[rows.length - 1].entryIndex + 1;
       db.prepare(`UPDATE "${CHAT_WARDROBE_HISTORY_TABLE}" SET "isCurrent" = 0 WHERE "chatId" = ? AND "characterId" = ? AND "isCurrent" = 1`)
         .run(chatId, characterId);
-      const next = buildRow({ chatId, characterId, entryIndex: nextIndex, slots: live, source, actorCharacterId: actorCharacterId ?? null, at });
+      const next = buildRow({ chatId, characterId, entryIndex: nextIndex, slots: live, source, actorCharacterId: actorCharacterId ?? null, actorToolName, at });
       insert.run(...insertParams(next));
       return { kind: 'appended', entryIndex: nextIndex, seeded: false };
     });
@@ -272,6 +278,7 @@ export class ChatWardrobeHistoryRepository {
         characterId,
         source,
         actorCharacterId: actorCharacterId ?? null,
+        actorToolName,
         outcome,
         slotsHash: liveHash,
       });
@@ -333,6 +340,7 @@ export class ChatWardrobeHistoryRepository {
              "slotsHash" = excluded."slotsHash",
              "source" = excluded."source",
              "actorCharacterId" = excluded."actorCharacterId",
+             "actorToolName" = excluded."actorToolName",
              "isCurrent" = excluded."isCurrent",
              "createdAt" = excluded."createdAt"`,
           insertParams({ ...row, slots, slotsHash: hashEquippedSlots(slots) }),

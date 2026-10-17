@@ -26,7 +26,8 @@ export const CHAT_WARDROBE_HISTORY_DDL: readonly string[] = [
     "source" TEXT NOT NULL,
     "actorCharacterId" TEXT,
     "isCurrent" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TEXT NOT NULL
+    "createdAt" TEXT NOT NULL,
+    "actorToolName" TEXT
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_chat_wardrobe_history_entry"
     ON "chat_wardrobe_history" ("chatId", "characterId", "entryIndex")`,
@@ -34,9 +35,16 @@ export const CHAT_WARDROBE_HISTORY_DDL: readonly string[] = [
     ON "chat_wardrobe_history" ("chatId", "characterId") WHERE "isCurrent" = 1`,
 ];
 
-/** The one INSERT. Positional: id, chatId, characterId, entryIndex, slots, slotsHash, source, actorCharacterId, isCurrent, createdAt. */
+/**
+ * `actorToolName` was added after the table shipped; the column migration
+ * (`add-chat-wardrobe-history-tool-name-v1`) appends it to an existing table,
+ * which is why it sits last here too.
+ */
+export const CHAT_WARDROBE_HISTORY_TOOL_NAME_COLUMN = 'actorToolName';
+
+/** The one INSERT. Positional: id, chatId, characterId, entryIndex, slots, slotsHash, source, actorCharacterId, actorToolName, isCurrent, createdAt. */
 export const CHAT_WARDROBE_HISTORY_INSERT_SQL = `
   INSERT INTO "chat_wardrobe_history"
-    ("id", "chatId", "characterId", "entryIndex", "slots", "slotsHash", "source", "actorCharacterId", "isCurrent", "createdAt")
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ("id", "chatId", "characterId", "entryIndex", "slots", "slotsHash", "source", "actorCharacterId", "actorToolName", "isCurrent", "createdAt")
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;

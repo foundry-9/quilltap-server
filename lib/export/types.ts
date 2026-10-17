@@ -789,7 +789,7 @@ export interface QtapChatInformRecord {
  * character's numbered timeline, `isCurrent` marking the cursor. Ids are
  * source-instance ids; the importer mints a fresh `id`, remaps `chatId`,
  * `characterId` and `actorCharacterId`, and copies `entryIndex`, `isCurrent`,
- * `slots` and `createdAt` as they are.
+ * `slots`, `actorToolName` and `createdAt` as they are.
  */
 export interface QtapWardrobeHistoryRecord {
   kind: 'wardrobe_history';

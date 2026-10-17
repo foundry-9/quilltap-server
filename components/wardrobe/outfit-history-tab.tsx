@@ -40,6 +40,8 @@ export interface OutfitHistoryEntry {
   source: string
   actorCharacterId: string | null
   actorName: string | null
+  /** Pascal entries: the custom tool that made the change. */
+  actorToolName: string | null
   changedBy: string
   isCurrent: boolean
   summary: string

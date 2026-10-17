@@ -31,6 +31,7 @@ import { resolveWearable, wearItem, type PutOnMode } from '@/lib/wardrobe/wear-o
 import { newlyWornArchivedItems, wearRefusal } from '@/lib/wardrobe/wearable';
 import { rollbackWardrobe } from '@/lib/wardrobe/history/rollback';
 import { changedByLabel, resolveHistorySlots, summarizeHistorySlots } from '@/lib/wardrobe/history/describe-entry';
+import { operatorWardrobeProvenance } from '@/lib/wardrobe/history/operator-provenance';
 
 const equipBodySchema = z
   .object({
@@ -270,9 +271,15 @@ export async function handleEquipSlot(
       }
     }
 
+    const chat = await repos.chats.findById(chatId);
     await notifyWardrobeChanged(
       repos,
-      { userId: ctx.user.id, chatId, characterId, provenance: { source: 'operator' } },
+      {
+        userId: ctx.user.id,
+        chatId,
+        characterId,
+        provenance: chat ? operatorWardrobeProvenance(chat) : { source: 'operator' },
+      },
       '[Chats v1] outfit-equip',
     );
 
@@ -337,6 +344,7 @@ export async function handleGetWardrobeHistory(
         source: row.source,
         actorCharacterId: row.actorCharacterId,
         actorName,
+        actorToolName: row.actorToolName,
         changedBy: changedByLabel(row, actorName, selfName),
         isCurrent: row.isCurrent,
         summary: summarizeHistorySlots(slots),
@@ -378,7 +386,7 @@ export async function handleWardrobeRollback(
         chatId,
         pool,
         index,
-        context: { userId: ctx.user.id, chatId, characterId, provenance: { source: 'operator' } },
+        context: { userId: ctx.user.id, chatId, characterId, provenance: operatorWardrobeProvenance(chat) },
         source: 'ui',
       },
       '[Chats v1] wardrobe-rollback',

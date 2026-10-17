@@ -149,6 +149,32 @@ describe('chats [id] equip action — pool lookup', () => {
     })
   })
 
+  it('records the operator as the character the user is speaking as', async () => {
+    ctx.repos.chats.findById.mockResolvedValue({
+      id: 'chat-1',
+      projectId: null,
+      participants: [
+        { id: 'seat-gary', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        { id: 'seat-bertie', characterId: 'char-bertie', type: 'CHARACTER', controlledBy: 'user', status: 'active' },
+        { id: 'seat-madeline', characterId: 'char-madeline', type: 'CHARACTER', controlledBy: 'user', status: 'active' },
+      ],
+      activeTypingParticipantId: 'seat-madeline',
+      impersonatingParticipantIds: [],
+    })
+
+    const response = await handleEquipSlot(
+      makeRequest({ characterId: 'char-1', mode: 'equip', itemId: vaultItem.id }),
+      'chat-1',
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect(ctx.repos.wardrobeHistory.settle).toHaveBeenCalledWith('chat-1', 'char-1', {
+      kind: 'append',
+      provenance: { source: 'operator', actorCharacterId: 'char-madeline' },
+    })
+  })
+
   it('equips a shared (General) item the character can reach', async () => {
     const cravat = wardrobeItem('cravat-1', 'Cravat', ['accessories'], { characterId: null })
     mockLoadPool.mockImplementation(async (_repos, characterId) => poolOf(characterId, [], [cravat]))

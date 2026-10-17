@@ -1398,7 +1398,8 @@
         },
         "slotsHash": { "type": "string", "minLength": 16, "maxLength": 16, "description": "hashEquippedSlots(slots); recomputed on import." },
         "source": { "enum": ["chat-start", "participant-added", "merge", "operator", "character", "pascal", "seeded"] },
-        "actorCharacterId": { "type": ["string", "null"], "description": "The character whose tool call or roll made the change." },
+        "actorCharacterId": { "type": ["string", "null"], "description": "Who made the change: for `character`, the character whose tool call it was; for `pascal`, the rolling character; for `operator`, the character the user was speaking as at the time (null when the user drove no character). Null for arrivals and seeds." },
+        "actorToolName": { "type": ["string", "null"], "description": "For `pascal` entries: the name of the custom tool whose wardrobe effects made the change. Null otherwise. Absent in bundles from before the field; read as null." },
         "isCurrent": { "type": "boolean", "description": "The cursor: the entry the character is wearing now." },
         "createdAt": { "$ref": "#/$defs/Timestamp" }
       }

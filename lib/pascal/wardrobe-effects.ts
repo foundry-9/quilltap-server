@@ -223,7 +223,7 @@ export async function applyWardrobeEffects(params: ApplyWardrobeEffectsParams): 
         userId,
         chatId,
         characterId,
-        provenance: { source: 'pascal', actorCharacterId: characterId },
+        provenance: { source: 'pascal', actorCharacterId: characterId, toolName },
         ...turnContainersOf(params),
       },
       CONTEXT

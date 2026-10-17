@@ -43,6 +43,16 @@ jest.mock('../../../migrations/lib/database-utils', () => ({
     return db.prepare(`PRAGMA table_info("${table}")`).all();
   }),
   getSQLiteDatabase: jest.fn(() => (global as Record<string, unknown>).__testMainDb),
+  sqliteColumnExists: jest.fn((table: string, column: string) => {
+    const db = (global as Record<string, unknown>).__testMainDb as any;
+    return db.prepare(`PRAGMA table_info("${table}")`).all().some((col: any) => col.name === column);
+  }),
+  addColumnIfMissing: jest.fn((table: string, column: string, ddl: string) => {
+    const db = (global as Record<string, unknown>).__testMainDb as any;
+    if (db.prepare(`PRAGMA table_info("${table}")`).all().some((col: any) => col.name === column)) return false;
+    db.exec(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${ddl}`);
+    return true;
+  }),
 }));
 
 jest.mock('better-sqlite3', () =>
@@ -54,6 +64,7 @@ import {
   seedChatWardrobeHistoryMigration,
   outfitsFromEquippedOutfit,
 } from '../../../migrations/scripts/seed-chat-wardrobe-history-v1';
+import { addChatWardrobeHistoryToolNameMigration } from '../../../migrations/scripts/add-chat-wardrobe-history-tool-name-v1';
 import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
 
 const { reportProgress } = jest.requireMock('../../../migrations/lib/progress') as { reportProgress: jest.Mock };
@@ -86,7 +97,7 @@ describe('chat wardrobe history migrations', () => {
 
     db.prepare(`INSERT INTO "chats" VALUES ('chat-1', 'x', NULL)`).run();
     const insert = db.prepare(
-      `INSERT INTO "chat_wardrobe_history" VALUES (?, 'chat-1', 'char', ?, '{}', 'h', 'seeded', NULL, ?, 'x')`,
+      `INSERT INTO "chat_wardrobe_history" VALUES (?, 'chat-1', 'char', ?, '{}', 'h', 'seeded', NULL, ?, 'x', NULL)`,
     );
     insert.run('a', 0, 1);
     expect(() => insert.run('b', 0, 0)).toThrow(/UNIQUE/);
@@ -141,6 +152,27 @@ describe('chat wardrobe history migrations', () => {
     const again = await seedChatWardrobeHistoryMigration.run();
     expect(again.itemsAffected).toBe(0);
     expect(db.prepare(`SELECT COUNT(*) AS n FROM "chat_wardrobe_history"`).get().n).toBe(1);
+  });
+
+  it('adds actorToolName to a table created before it, keeping its rows', async () => {
+    // The table as it first shipped, without the column.
+    db.exec(`CREATE TABLE "chat_wardrobe_history" (
+      "id" TEXT PRIMARY KEY, "chatId" TEXT NOT NULL, "characterId" TEXT NOT NULL, "entryIndex" INTEGER NOT NULL,
+      "slots" TEXT NOT NULL, "slotsHash" TEXT NOT NULL, "source" TEXT NOT NULL, "actorCharacterId" TEXT,
+      "isCurrent" INTEGER NOT NULL DEFAULT 0, "createdAt" TEXT NOT NULL)`);
+    db.prepare(`INSERT INTO "chat_wardrobe_history" VALUES ('a', 'chat-1', 'char', 0, '{}', 'h', 'pascal', 'char', 1, 'x')`).run();
+
+    expect(await addChatWardrobeHistoryToolNameMigration.shouldRun()).toBe(true);
+    const result = await addChatWardrobeHistoryToolNameMigration.run();
+    expect(result.success).toBe(true);
+    expect(result.itemsAffected).toBe(1);
+    expect(await addChatWardrobeHistoryToolNameMigration.shouldRun()).toBe(false);
+    expect(db.prepare(`SELECT "actorToolName" FROM "chat_wardrobe_history" WHERE "id" = 'a'`).get().actorToolName).toBeNull();
+  });
+
+  it('has nothing to add to a fresh table', async () => {
+    await addChatWardrobeHistoryTableMigration.run();
+    expect(await addChatWardrobeHistoryToolNameMigration.shouldRun()).toBe(false);
   });
 
   it('reads legacy and malformed outfit maps', () => {

@@ -447,6 +447,7 @@ import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-
 import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-commands-field';
 import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-history-table-v1';
 import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v1';
+import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-history-tool-name-v1';
 
 /**
  * All available migrations.
@@ -913,6 +914,8 @@ export const migrations: Migration[] = [
   addComposerSlashCommandsFieldMigration,
   // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
   addChatWardrobeHistoryTableMigration,
+  // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
+  addChatWardrobeHistoryToolNameMigration,
   seedChatWardrobeHistoryMigration,
 ];
 
@@ -1357,6 +1360,8 @@ export {
   addComposerSlashCommandsFieldMigration,
   // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
   addChatWardrobeHistoryTableMigration,
+  // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
+  addChatWardrobeHistoryToolNameMigration,
   seedChatWardrobeHistoryMigration,
 };
 

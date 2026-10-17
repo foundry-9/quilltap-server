@@ -337,7 +337,7 @@ describe('fail-soft and the announcement', () => {
       expect.anything(),
       {
         userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID,
-        provenance: { source: 'pascal', actorCharacterId: CHAR_ID },
+        provenance: { source: 'pascal', actorCharacterId: CHAR_ID, toolName: 'regalia' },
         pendingWardrobeAnnouncements: pending,
         pendingWardrobeHistory: history,
       },
@@ -349,7 +349,7 @@ describe('fail-soft and the announcement', () => {
     await apply([gesture({ action: 'wear', items: ['Linen Shirt'] })])
     expect(mockNotify).toHaveBeenCalledWith(
       expect.anything(),
-      { userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID, provenance: { source: 'pascal', actorCharacterId: CHAR_ID } },
+      { userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID, provenance: { source: 'pascal', actorCharacterId: CHAR_ID, toolName: 'regalia' } },
       'pascal.wardrobe-effects',
     )
   })
