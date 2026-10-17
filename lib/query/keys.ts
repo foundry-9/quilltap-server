@@ -36,6 +36,8 @@ export const queryKeys = {
      * collection with a separate endpoint, not a filtered view of the album.
      */
     avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
+    /** Generated pictures of every wardrobe item the character can reach. */
+    wardrobeImages: (id: string) => ['characters', id, 'wardrobe-images'] as const,
   },
   chats: {
     all: ['chats'] as const,

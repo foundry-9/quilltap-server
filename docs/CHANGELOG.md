@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Feature: wardrobe pictures in the Aurora gallery
+
+- The character gallery tab has a third, collapsible section, **Wardrobe Pictures**, below Avatar Rolls: every GENERATED image of every wardrobe item in the character's wearable pool (own vault, group stores, Quilltap General; no project tier, since there is no chat). Archived items included. Each tile carries a caption overlay with the item title and its tier ("Own wardrobe", "Group · X", "Shared · Quilltap General"). Read-only: download on hover, detail modal on click.
+- New `GET /api/v1/characters/[id]/wardrobe-images`, backed by `listWardrobeGalleryImages` (`lib/wardrobe/gallery-images.ts`), which loads the pool through `loadWearablePool` and reads the items' files in one `FilesRepository.findByLinkedToAny` lookup (new). Archived characters return an empty list. Query key `characters.wardrobeImages(id)`.
+- `GalleryGrid` / `GalleryImage`: `onSetAvatar` and `onDeleteImage` are optional (buttons hidden when omitted); new `captionFor` / `caption` prop renders the overlay and moves hover actions to the top corner. New `qt-gallery-caption`, `qt-gallery-caption-title`, `qt-gallery-caption-detail` classes, mirrored into theme-storybook (1.0.74).
+- Tests: `lib/wardrobe/__tests__/gallery-images.test.ts`. Docs: `help/character-gallery.md`, `API.md`.
+
 #### Feature: wardrobe outfit history
 
 - New table `chat_wardrobe_history`: per (chat, character) a numbered timeline of outfits from 0 (what they arrived in), with an `isCurrent` cursor. Two unique indexes keep indices unique per timeline and allow one current row. DDL lives only in `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`; types in `lib/schemas/chat-wardrobe-history.types.ts`.

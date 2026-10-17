@@ -2221,6 +2221,14 @@ Discard a roll. Scrubs every pointer first — `chats.characterAvatars`, the cha
 
 ---
 
+### Character Wardrobe Pictures
+
+#### `GET /api/v1/characters/[id]/wardrobe-images`
+
+Every GENERATED image file linked to a wardrobe item in the character's wearable pool — own vault, group stores and Quilltap General (no project tier: there is no chat) — archived items included, newest first. Read-only; backed by `lib/wardrobe/gallery-images.ts`. Answers `{ entries, total }`; each entry carries `fileId`, `fileName`, `url`, `thumbnailUrl`, `mimeType`, `fileSizeBytes`, `width`, `height`, `createdAt`, `generationPrompt`, `generationModel`, `itemId`, `itemTitle`, `scope`, `locationLabel` (`Own wardrobe`, `Group · X`, `Shared · Quilltap General`), `itemArchived`, and `isCurrentItemImage`. An archived character answers an empty list; an unknown one 404s.
+
+---
+
 ### Chats
 
 #### `GET /api/v1/chats`

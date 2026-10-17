@@ -4493,3 +4493,25 @@
 .qt-rp-font-mono { font-family: var(--theme-font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace); }
 .qt-rp-font-display { font-family: var(--qt-rp-font-display, var(--theme-font-serif, Georgia, "Times New Roman", serif)); }
 .qt-rp-font-script { font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive); }
+
+/**
+ * Gallery tile source caption — a scrim and two lines of small text laid
+ * over the foot of a photo-gallery tile, saying where the picture comes from
+ * (the Aurora gallery's wardrobe pictures: item title, then tier).
+ * Light text on a dark scrim regardless of theme, since it sits on a photo.
+ */
+.qt-gallery-caption {
+  background: var(--qt-gallery-caption-bg, linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.45) 60%, transparent));
+  color: var(--qt-gallery-caption-fg, #fff);
+  line-height: 1.2;
+}
+
+.qt-gallery-caption-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.qt-gallery-caption-detail {
+  font-size: 0.625rem;
+  opacity: 0.85;
+}
