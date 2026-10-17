@@ -259,7 +259,8 @@ same way.
   `repos.wardrobeHistory.settle(chatId, characterId, intent)` — the announcement first, then
   the entry; neither waits on the other's success.
 
-`flushPendingWardrobeAnnouncements(context)` drains both: for each character in the Set,
+`flushPendingWardrobeAnnouncements(context, repos?)` drains both (`repos` defaults to the
+process's repositories — the child's proxy in the job child): for each character in the Set,
 `settle` with that character's intent from the Map (default `{ kind: 'append', provenance }`
 when the Map has none — it cannot, but the default keeps the drain total), then the
 announcement. Both containers are cleared, so a second drain is a no-op, as today.
@@ -278,11 +279,16 @@ export function newWardrobeTurnContainers(): Pick<OutfitChangeContext,
 }
 ```
 
-Sites to convert (every current `flushPendingWardrobeAnnouncements` caller that also creates
-the Set): `lib/services/chat-message/orchestrator.service.ts`,
+The factory and `turnContainersOf` (which threads whichever containers a context carries)
+live in the pure module `lib/wardrobe/turn-containers.ts`, re-exported from
+`outfit-change-effects.ts`, so call sites can thread them while tests mock the effects module.
+(Corrected during implementation: the Set is created in
+`lib/services/chat-message/tool-execution.service.ts` (`createToolContext`), not in the
+orchestrator, which only drains it; `lib/pascal/run-service.ts` threads containers but never
+creates them.) Sites converted: `tool-execution.service.ts`,
 `lib/services/brahma-console/orchestrator.service.ts`,
-`lib/services/brahma-console/one-shot.service.ts`, `lib/pascal/run-service.ts`. A grep-test
-(§11) forbids `pendingWardrobeAnnouncements: new Set` outside the factory.
+`lib/services/brahma-console/one-shot.service.ts`. A grep-test (§11) forbids
+`pendingWardrobeAnnouncements: new Set` outside the factory.
 
 ### 4.3 In the job child
 

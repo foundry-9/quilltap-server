@@ -324,17 +324,23 @@ describe('fail-soft and the announcement', () => {
 
   it('notifies once after the loop, joining the turn when there is a turn', async () => {
     const pending = new Set<string>()
+    const history = new Map()
     await apply(
       [
         gesture({ action: 'wear', items: ['Linen Shirt', 'Riding Boots'] }, 0),
         gesture({ action: 'clear_slot', items: [], slot: 'footwear' }, 1),
       ],
-      { pendingWardrobeAnnouncements: pending },
+      { pendingWardrobeAnnouncements: pending, pendingWardrobeHistory: history },
     )
     expect(mockNotify).toHaveBeenCalledTimes(1)
     expect(mockNotify).toHaveBeenCalledWith(
       expect.anything(),
-      { userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID, pendingWardrobeAnnouncements: pending },
+      {
+        userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID,
+        provenance: { source: 'pascal', actorCharacterId: CHAR_ID },
+        pendingWardrobeAnnouncements: pending,
+        pendingWardrobeHistory: history,
+      },
       'pascal.wardrobe-effects',
     )
   })
@@ -343,7 +349,7 @@ describe('fail-soft and the announcement', () => {
     await apply([gesture({ action: 'wear', items: ['Linen Shirt'] })])
     expect(mockNotify).toHaveBeenCalledWith(
       expect.anything(),
-      { userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID },
+      { userId: 'user-1', chatId: CHAT_ID, characterId: CHAR_ID, provenance: { source: 'pascal', actorCharacterId: CHAR_ID } },
       'pascal.wardrobe-effects',
     )
   })

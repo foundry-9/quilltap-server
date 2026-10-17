@@ -67,6 +67,7 @@
  * drop from the applied list.
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeGeneralState } from '@/lib/mount-index/general-state';
@@ -128,11 +129,12 @@ export interface ApplyCustomToolEffectsParams {
    */
   nowMs?: number;
   /**
-   * The turn's wardrobe announcement set, when the run happens inside a model
-   * turn, so a wardrobe effect joins the turn's single Aurora announcement.
-   * Absent → the announcement is enqueued at once.
+   * The turn's wardrobe containers (announcement set + history map), when the
+   * run happens inside a model turn, so a wardrobe effect joins the turn's
+   * single Aurora announcement and history entry. Absent → both happen at once.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
 }
 
 /** Every store an application may touch, for the ordered commit below. */
@@ -158,9 +160,7 @@ export async function applyCustomToolEffects(
         toolName,
         characterId,
         gestures,
-        ...(params.pendingWardrobeAnnouncements
-          ? { pendingWardrobeAnnouncements: params.pendingWardrobeAnnouncements }
-          : {}),
+        ...turnContainersOf(params),
       })
     : [];
 

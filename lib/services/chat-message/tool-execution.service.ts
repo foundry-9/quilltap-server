@@ -5,6 +5,7 @@
  * including processing results and saving tool messages.
  */
 
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext, type LoadedMemoriesContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -317,6 +318,6 @@ export function createToolContext(
     projectId: projectId || undefined,
     browserUserAgent,
     loadedMemories,
-    pendingWardrobeAnnouncements: new Set<string>(),
+    ...newWardrobeTurnContainers(),
   }
 }

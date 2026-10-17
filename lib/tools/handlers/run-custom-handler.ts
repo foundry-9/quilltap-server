@@ -15,6 +15,7 @@
  * here reads back what it just wrote.
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -50,10 +51,12 @@ export interface RunCustomToolContext {
    */
   onPosted?: (message: MessageEvent) => void;
   /**
-   * The turn's wardrobe announcement set, so a tool's `wardrobe` effect joins
-   * the turn's single Aurora announcement alongside any `wardrobe_wear` call.
+   * The turn's wardrobe containers, so a tool's `wardrobe` effect joins the
+   * turn's single Aurora announcement and history entry alongside any
+   * `wardrobe_wear` call. The effects applier supplies the `'pascal'` provenance.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
 }
 
 /** Shape the failure the same way whether it was a bad input or a bad roll. */
@@ -187,9 +190,7 @@ export async function executeRunCustomTool(
       invokedBy: 'llm',
       callerParticipantId: context.callerParticipantId ?? null,
       nowMs,
-      ...(context.pendingWardrobeAnnouncements
-        ? { pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements }
-        : {}),
+      ...turnContainersOf(context),
     });
   } catch (error) {
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';

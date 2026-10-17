@@ -19,6 +19,7 @@
  * chat with the new engine.
  */
 
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
@@ -486,7 +487,7 @@ async function processBrahmaResponse(
         chatId,
         userId,
         operatorSurface: true,
-        pendingWardrobeAnnouncements: new Set<string>(),
+        ...newWardrobeTurnContainers(),
       }
 
       const toolResult = await processToolCalls(

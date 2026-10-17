@@ -11,7 +11,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
-import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
+import { historyDouble, ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -70,8 +70,10 @@ const suit = item('suit', ['top', 'bottom'], { componentItemIds: ['shirt', 'slac
 function makeRepos(own: WardrobeItem[], previous: Record<string, string[]> | null = null) {
   const setEquippedOutfit = jest.fn().mockResolvedValue(undefined)
   const wardrobeWear = ledgerOver({ setEquippedOutfit })
+  const wardrobeHistory = historyDouble()
   return {
     wardrobeWear,
+    wardrobeHistory,
     repos: {
       characters: {
         findById: jest.fn().mockResolvedValue({ id: CHAR_ID, name: 'Bertie', description: 'd', personality: 'p', manifesto: 'm' }),
@@ -87,6 +89,7 @@ function makeRepos(own: WardrobeItem[], previous: Record<string, string[]> | nul
         findById: jest.fn().mockResolvedValue(null),
       },
       wardrobeWear,
+      wardrobeHistory,
     },
   }
 }
@@ -195,5 +198,26 @@ describe('applyOutfitSelections — wear ledger', () => {
       wornBundles: [{ id: 'suit', leafIds: ['shirt', 'slacks'] }],
     })
     expect(lastCommit(wardrobeWear)?.nextSlots).toMatchObject({ top: ['shirt'], bottom: ['slacks'] })
+  })
+
+  it('records each arrival in the outfit history with the same source, after the commit', async () => {
+    const { repos, wardrobeWear, wardrobeHistory } = makeRepos([shirt])
+    await applyOutfitSelections('chat-1', [{ characterId: CHAR_ID, mode: 'none' }], repos as never, {
+      ...CTX,
+      source: 'participant-added',
+    })
+    expect(wardrobeHistory.settle).toHaveBeenCalledWith('chat-1', CHAR_ID, {
+      kind: 'append',
+      provenance: { source: 'participant-added' },
+    })
+    expect(wardrobeHistory.settle.mock.invocationCallOrder[0])
+      .toBeGreaterThan(wardrobeWear.commitEquippedOutfit.mock.invocationCallOrder[0])
+  })
+
+  it('records nothing when the commit fails', async () => {
+    const { repos, wardrobeWear, wardrobeHistory } = makeRepos([shirt])
+    wardrobeWear.commitEquippedOutfit.mockRejectedValueOnce(new Error('disk full'))
+    await applyOutfitSelections('chat-1', [{ characterId: CHAR_ID, mode: 'none' }], repos as never, CTX)
+    expect(wardrobeHistory.settle).not.toHaveBeenCalled()
   })
 })

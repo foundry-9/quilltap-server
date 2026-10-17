@@ -2,7 +2,7 @@ import { WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty, makeEmptyEquippedSlots } 
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { notifyWardrobeChanged, type OutfitChangeContext } from '@/lib/wardrobe/outfit-change-effects';
 import { loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { getRepositories } from '@/lib/repositories/factory';
 
@@ -10,16 +10,11 @@ export { wardrobeItemNotFoundMessage } from '@/lib/wardrobe/wear-ops';
 
 /**
  * The context every `wardrobe_*` tool runs in. The executor builds it once
- * from the tool-execution context, so the turn's announcement set reaches
- * every tool that changes an outfit — none can be the one that forgets it.
+ * from the tool-execution context, so the turn's announcement set and history
+ * map reach every tool that changes an outfit — none can be the one that
+ * forgets them. `provenance` names the calling character.
  */
-export interface WardrobeToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-  /** Per-turn announcement queue the orchestrator threads through. */
-  pendingWardrobeAnnouncements?: Set<string>;
-}
+export type WardrobeToolContext = Omit<OutfitChangeContext, 'historyIntent'>;
 
 /** The full repository container the wardrobe tool handlers operate on. */
 export type WardrobeRepos = ReturnType<typeof getRepositories>;
@@ -190,12 +185,7 @@ export function buildWardrobeMutationFailure(error: string): {
  */
 export async function finalizeWardrobeMutation<TOpResult>(
   repos: WardrobeRepos,
-  context: {
-    userId: string;
-    chatId: string;
-    characterId: string;
-    pendingWardrobeAnnouncements?: Set<string>;
-  },
+  context: WardrobeToolContext,
   sourceContext: string,
   args: {
     appliedCount: number;

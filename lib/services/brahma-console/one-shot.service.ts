@@ -30,6 +30,7 @@
  * Builder; this module supplies the Brahma profile, slate, prompt and scope.
  */
 
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -147,7 +148,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     chatId,
     userId,
     operatorSurface: true,
-    pendingWardrobeAnnouncements: new Set<string>(),
+    ...newWardrobeTurnContainers(),
   }
 
   // ISOLATION: the loop's slate is system + the single question only — never

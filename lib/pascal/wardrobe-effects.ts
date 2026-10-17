@@ -38,6 +38,7 @@ import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.typ
 import type { WearablePool } from '@/lib/wardrobe/pool';
 import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import {
   findInPool,
   loadCurrentSlots,
@@ -73,15 +74,13 @@ export interface IndexedAppliedEffect {
   applied: AppliedEffect;
 }
 
-export interface ApplyWardrobeEffectsParams {
+export interface ApplyWardrobeEffectsParams extends WardrobeTurnContainers {
   userId: string;
   chatId: string;
   toolName: string;
   /** The rolling character. null → every gesture skips fail-soft. */
   characterId: string | null;
   gestures: Array<{ index: number; wardrobe: ResolvedWardrobeGesture }>;
-  /** The turn's announcement set, when inside a model turn (threaded from the executor). */
-  pendingWardrobeAnnouncements?: Set<string>;
 }
 
 /**
@@ -224,9 +223,8 @@ export async function applyWardrobeEffects(params: ApplyWardrobeEffectsParams): 
         userId,
         chatId,
         characterId,
-        ...(params.pendingWardrobeAnnouncements
-          ? { pendingWardrobeAnnouncements: params.pendingWardrobeAnnouncements }
-          : {}),
+        provenance: { source: 'pascal', actorCharacterId: characterId },
+        ...turnContainersOf(params),
       },
       CONTEXT
     );

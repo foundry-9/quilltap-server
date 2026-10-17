@@ -535,6 +535,12 @@ export async function applyOutfitSelections(
         characterId,
         error: getErrorMessage(error, 'Unknown error'),
       });
+      continue;
     }
+
+    // The outfit history: entry 0 for a first arrival (an empty outfit is an
+    // outfit), or max + 1 for a seat that returns. `settle` reads the slots
+    // just written and never throws.
+    await repos.wardrobeHistory.settle(chatId, characterId, { kind: 'append', provenance: { source } });
   }
 }

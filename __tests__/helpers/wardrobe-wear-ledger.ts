@@ -21,3 +21,10 @@ export function ledgerOver(chats: {
     }),
   }
 }
+
+/** Test double for `repos.wardrobeHistory`: records every `settle` intent. */
+export function historyDouble() {
+  return {
+    settle: jest.fn(async () => ({ kind: 'appended', entryIndex: 0, seeded: false })),
+  }
+}

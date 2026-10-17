@@ -67,6 +67,14 @@ describe('outfit history fences', () => {
     expect(offenders).toEqual([])
   })
 
+  it('no turn creates the announcement set by hand (newWardrobeTurnContainers makes both)', () => {
+    const offenders = files
+      .filter(({ rel }) => rel !== 'lib/wardrobe/turn-containers.ts')
+      .filter(({ text }) => /pendingWardrobeAnnouncements:\s*new Set/.test(text))
+      .map(({ rel }) => rel)
+    expect(offenders).toEqual([])
+  })
+
   it('settle is a buffered write in the job child', () => {
     const proxy = fs.readFileSync(path.join(ROOT, 'lib/background-jobs/child/child-repositories-proxy.ts'), 'utf8')
     expect(proxy).toMatch(/'wardrobeHistory\.settle':\s*'write'/)

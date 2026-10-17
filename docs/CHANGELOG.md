@@ -11,6 +11,9 @@
 - `wardrobeHistory.settle` is a buffered write in the job child (`METHOD_OVERRIDES`), replayed in the parent after the turn's `commitEquippedOutfit`.
 - Migrations `add-chat-wardrobe-history-table-v1` (the table) and `seed-chat-wardrobe-history-v1` (one current entry 0 per character in each chat's `equippedOutfit`, dated by the chat's `updatedAt`).
 - Tests: `chat-wardrobe-history.repository.test.ts`, `migrations/chat-wardrobe-history.test.ts`, `outfit-history-fence.test.ts`, `child-proxy-wardrobe-wear.test.ts`, `cascade-delete.test.ts`.
+- Recording: `OutfitChangeContext` gains a required `provenance` (`operator`, `character` with the calling character, `pascal` with the rolling character) and an optional `historyIntent` (rollback's cursor move). `notifyWardrobeChanged` settles the history beside each announcement: at once outside a model turn, or into the turn's new `pendingWardrobeHistory` map (last intent per character wins), drained with the announcement set by `flushPendingWardrobeAnnouncements`. So one tool call, dialog Done, Pascal run or model turn records one entry.
+- New `lib/wardrobe/turn-containers.ts`: `newWardrobeTurnContainers()` creates the announcement set and history map together; `turnContainersOf()` threads them. `createToolContext` and both Brahma surfaces use the factory; a grep-test forbids a hand-made set. `WardrobeToolContext` is now `OutfitChangeContext` minus `historyIntent`.
+- `applyOutfitSelections` settles each character after a successful commit with its `chat-start` / `participant-added` / `merge` source, so arrivals record entry 0 (or `max + 1` for a returning seat).
 
 #### Spec: wardrobe outfit history and rollback
 

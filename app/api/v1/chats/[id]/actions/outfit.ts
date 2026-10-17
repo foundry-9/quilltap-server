@@ -268,7 +268,7 @@ export async function handleEquipSlot(
 
     await notifyWardrobeChanged(
       repos,
-      { userId: ctx.user.id, chatId, characterId },
+      { userId: ctx.user.id, chatId, characterId, provenance: { source: 'operator' } },
       '[Chats v1] outfit-equip',
     );
 

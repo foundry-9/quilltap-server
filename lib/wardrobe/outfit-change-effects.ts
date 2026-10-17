@@ -14,6 +14,14 @@
  *     operator's `?action=equip`) the announcement is enqueued at once; the
  *     job itself is debounced.
  *
+ * Beside each announcement the outfit history is settled
+ * (`repos.wardrobeHistory.settle`): one entry per announcement, never per
+ * slot gesture. Inside a turn the intent waits in `pendingWardrobeHistory`
+ * (last intent per character wins) and is drained with the announcements;
+ * outside one it is settled at once. A rollback sets `historyIntent` to move
+ * the cursor instead of appending. Create both turn containers with
+ * {@link newWardrobeTurnContainers}.
+ *
  * The opening of a chat and a seat joining mid-chat refresh the avatar only
  * ({@link refreshAvatarForOutfit}) — the Host's opening whisper says what
  * everyone is wearing there.
@@ -27,14 +35,51 @@ import { logger } from '@/lib/logger';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import type {
+  WardrobeHistoryIntent,
+  WardrobeHistoryProvenance,
+} from '@/lib/schemas/chat-wardrobe-history.types';
+import type { WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 
-/** Who changed whose outfit, and the turn's announcement set if there is one. */
-export interface OutfitChangeContext {
+/** Who changed whose outfit, and the turn's containers if there are any. */
+export interface OutfitChangeContext extends WardrobeTurnContainers {
   userId: string;
   chatId: string;
   characterId: string;
-  /** Per-turn announcement queue the orchestrator threads through the tools. */
-  pendingWardrobeAnnouncements?: Set<string>;
+  /** Who is changing the outfit. Required: no caller may forget it. */
+  provenance: WardrobeHistoryProvenance;
+  /** Rollback only: move the cursor instead of appending. Everyone else leaves it unset. */
+  historyIntent?: WardrobeHistoryIntent;
+}
+
+export {
+  newWardrobeTurnContainers,
+  turnContainersOf,
+  type WardrobeTurnContainers,
+} from '@/lib/wardrobe/turn-containers';
+
+/** The slice of the repositories the history half of the effects needs. */
+type HistoryRepos = Pick<RepositoryContainer, 'wardrobeHistory'>;
+
+/** Settle one history intent. `settle` itself never throws; this guards a missing repo too. */
+async function settleHistory(
+  repos: HistoryRepos,
+  chatId: string,
+  characterId: string,
+  intent: WardrobeHistoryIntent,
+  sourceContext: string,
+): Promise<void> {
+  try {
+    await repos.wardrobeHistory.settle(chatId, characterId, intent);
+  } catch (error) {
+    logger.warn('Failed to settle wardrobe history', {
+      context: sourceContext,
+      chatId,
+      characterId,
+      intent,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /** Refresh the character's per-chat avatar if the chat auto-updates avatars. Never throws. */
@@ -77,18 +122,31 @@ export async function scheduleWardrobeAnnouncement(
 }
 
 /**
- * Note that a character's outfit changed. With a turn's announcement set the
- * character joins it; without one the announcement is enqueued now.
+ * Note that a character's outfit changed. With a turn's containers the
+ * character joins the announcement set and its history intent replaces any
+ * earlier one this turn; without them the announcement is enqueued and the
+ * history settled now — the announcement first, then the entry, neither
+ * waiting on the other's success.
  */
 export async function recordPendingWardrobeAnnouncement(
+  repos: HistoryRepos,
   context: OutfitChangeContext,
   sourceContext: string,
 ): Promise<void> {
+  const intent: WardrobeHistoryIntent = context.historyIntent ?? { kind: 'append', provenance: context.provenance };
   if (context.pendingWardrobeAnnouncements) {
     context.pendingWardrobeAnnouncements.add(context.characterId);
+    if (context.pendingWardrobeHistory) {
+      context.pendingWardrobeHistory.set(context.characterId, intent);
+    } else {
+      // A turn set without its history map (a caller that predates the
+      // factory): record now rather than lose the entry.
+      await settleHistory(repos, context.chatId, context.characterId, intent, sourceContext);
+    }
     return;
   }
   await scheduleWardrobeAnnouncement(sourceContext, context);
+  await settleHistory(repos, context.chatId, context.characterId, intent, sourceContext);
 }
 
 /**
@@ -101,21 +159,34 @@ export async function notifyWardrobeChanged(
   sourceContext: string,
 ): Promise<void> {
   await refreshAvatarForOutfit(repos, context, sourceContext);
-  await recordPendingWardrobeAnnouncement(context, sourceContext);
+  await recordPendingWardrobeAnnouncement(repos, context, sourceContext);
 }
 
 /**
- * Drain the turn's announcement set, one announcement per character.
- * Idempotent: the set is cleared, so a second drain in the same turn is a no-op.
+ * Drain the turn's containers: for each character, settle its history intent,
+ * then schedule its one announcement. Idempotent: both containers are
+ * cleared, so a second drain in the same turn is a no-op.
+ *
+ * @param repos Defaults to the process's repositories (the job child's proxy
+ *   in the child, where `settle` is buffered for the parent to replay).
  */
 export async function flushPendingWardrobeAnnouncements(
-  context: Pick<OutfitChangeContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'>,
+  context: Pick<OutfitChangeContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements' | 'pendingWardrobeHistory'>,
+  repos?: HistoryRepos,
 ): Promise<void> {
   const pending = context.pendingWardrobeAnnouncements;
   if (!pending || pending.size === 0) return;
   const characterIds = Array.from(pending);
+  const intents = new Map(context.pendingWardrobeHistory ?? []);
   pending.clear();
+  context.pendingWardrobeHistory?.clear();
+  const historyRepos = repos ?? (await import('@/lib/repositories/factory')).getRepositories();
   for (const characterId of characterIds) {
+    // Every character in the set has an intent; the default keeps the drain
+    // total if one somehow does not.
+    const intent: WardrobeHistoryIntent = intents.get(characterId)
+      ?? { kind: 'append', provenance: { source: 'character', actorCharacterId: characterId } };
+    await settleHistory(historyRepos, context.chatId, characterId, intent, 'orchestrator-turn-end');
     await scheduleWardrobeAnnouncement('orchestrator-turn-end', {
       userId: context.userId,
       chatId: context.chatId,

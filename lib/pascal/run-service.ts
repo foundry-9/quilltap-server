@@ -26,6 +26,7 @@
  * `getRepositories()` proxy, and nothing here reads back what it wrote.
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -79,10 +80,12 @@ export interface RunCustomToolParams {
   /** One clock reading for the whole run. Defaults to Date.now(). */
   nowMs?: number;
   /**
-   * The turn's wardrobe announcement set, when the run happens inside a model
-   * turn — a `wardrobe` effect then joins the turn's one Aurora announcement.
+   * The turn's wardrobe containers, when the run happens inside a model turn —
+   * a `wardrobe` effect then joins the turn's one Aurora announcement and its
+   * one history entry.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
 }
 
 export type RunCustomToolOutcome =
@@ -167,9 +170,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
         characterId,
         metadataSnapshot: metadata,
         nowMs,
-        ...(params.pendingWardrobeAnnouncements
-          ? { pendingWardrobeAnnouncements: params.pendingWardrobeAnnouncements }
-          : {}),
+        ...turnContainersOf(params),
       })
     : [];
 

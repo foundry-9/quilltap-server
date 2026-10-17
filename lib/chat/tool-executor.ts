@@ -3,6 +3,7 @@
  * Detects and executes LLM tool calls during message processing
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { logger } from '@/lib/logger'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
@@ -185,6 +186,11 @@ export interface ToolExecutionContext {
    * back to immediate enqueue.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  /**
+   * The turn's outfit-history intents, created beside the announcement set by
+   * `newWardrobeTurnContainers` and drained with it.
+   */
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
   /**
    * Surface a Carina (`ask_carina`) answer to the Salon the instant it posts,
    * via the turn's live SSE stream. Set by the orchestrator (which holds the
@@ -622,7 +628,7 @@ export async function executeToolCallWithContext(
         projectId: context.projectId,
         callerParticipantId: context.callingParticipantId,
         onPosted: context.emitPascalResult,
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+        ...turnContainersOf(context),
       });
 
       return {
@@ -716,15 +722,17 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // The seven wardrobe_* tools: one table, one context. Every tool gets the
-    // turn's announcement set, so none can be the one that drops it (bug 193).
+    // The wardrobe_* tools: one table, one context. Every tool gets the
+    // turn's containers, so none can be the one that drops them (bug 193),
+    // and every change is recorded as the calling character's.
     const wardrobeTool = WARDROBE_TOOL_TABLE[toolCall.name];
     if (wardrobeTool) {
       const { success, result, error } = await wardrobeTool(toolCall.arguments, {
         userId,
         chatId,
         characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+        provenance: { source: 'character', ...(characterId ? { actorCharacterId: characterId } : {}) },
+        ...turnContainersOf(context),
       });
       return { toolName: toolCall.name, success, result, error };
     }
