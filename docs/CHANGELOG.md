@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Spec: wardrobe outfit history and rollback
+
+- New design doc `docs/developer/features/wardrobe-outfit-history.md`: a per-character, per-chat record of every outfit change (one entry per Aurora announcement), `wardrobe_rollback` and `wardrobe_history` tools, a cursor that moves back and forward without renumbering, and a History tab with "Wear again" in the Wardrobe dialog. Spec only; no code yet. Indexed in `ROADMAP.md` and `update-documentation.md`.
+
 #### Feature: `{{character}}` placeholder and character-announced custom tools
 
 - New `{{character}}` placeholder: the rolling character's name. It works in outcome messages, the chip label, the consult prompt, effect expressions and wardrobe item references. A run with no character leaves it as written. `classifyPlaceholder` gains a `character` kind; `executeCustomTool` takes `character` in its overrides. `runCustomTool` takes an optional `characterName` (the trigger runner supplies it) and otherwise reads it with `characters.findByIdRaw`. The proving bench renders it when a character is seated.

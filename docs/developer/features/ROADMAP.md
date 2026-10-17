@@ -65,6 +65,7 @@ This document tracks planned features and improvements for Quilltap.
 - [X] Better selectable saved scenarios and prompts per chat
 - [x] Scenarios from anywhere — browse every character, project, group and General scenario from either picker; a chat keeps a source pointer; one `resolveScenarioLocation` (design: [complete/scenarios-from-anywhere.md](complete/scenarios-from-anywhere.md))
 - [X] Wardrobe folders — user-defined folders under each tier's `Wardrobe/`, breadcrumb browser, move-to-folder and bulk move; the path is the truth (design: [complete/wardrobe-folders.md](complete/wardrobe-folders.md))
+- [ ] Wardrobe outfit history — a per-character, per-chat numbered record of every change of clothes (one entry per Aurora announcement), `wardrobe_rollback` / `wardrobe_history` tools, a cursor that moves back and forward without renumbering, and a History tab with **Wear again** in the Wardrobe dialog (design: [wardrobe-outfit-history.md](wardrobe-outfit-history.md))
 - [X] Scenario Builder — The Host researches (web for a real place, the chat's visible stores for an in-world one) and drafts a cast-agnostic starting scene, editable and revisable, usable at once or saved to General, a project, a group, or a character's scenarios (design: [scenario-builder.md](complete/scenario-builder.md))
 
 ### LLM Integration (The Foundry)
