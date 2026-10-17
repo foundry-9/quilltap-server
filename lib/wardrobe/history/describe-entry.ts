@@ -53,7 +53,11 @@ export function staleItemsOf(resolved: HistorySlots): HistorySlotItem[] {
   return stale;
 }
 
-/** One line: `describeOutfit` over the titles, stale ones tagged. */
+/**
+ * One plain-text line: `describeOutfit` over the titles (stale ones tagged),
+ * its Markdown list flattened — the History tab and the tool both show it as
+ * prose.
+ */
 export function summarizeHistorySlots(resolved: HistorySlots): string {
   const values = bySlot((slot) =>
     resolved[slot].map((entry) => {
@@ -61,7 +65,11 @@ export function summarizeHistorySlots(resolved: HistorySlots): string {
       return entry.archived ? `${entry.title} (archived)` : (entry.title ?? entry.itemId);
     }),
   );
-  return describeOutfit(values).replace(/\s*\n+\s*/g, '; ').trim();
+  return describeOutfit(values)
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-*]\s+/, '').replace(/\*\*/g, '').trim())
+    .filter(Boolean)
+    .join('; ');
 }
 
 /**

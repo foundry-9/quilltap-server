@@ -1,7 +1,7 @@
 ---
 title: The Wardrobe
 url: /aurora
-tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders]
+tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders, history, rollback]
 ---
 
 # The Wardrobe
@@ -239,9 +239,32 @@ Every garment in the house keeps a ledger --- a discreet little tally, kept belo
 
 A garment's ledger follows it when moved to another wardrobe; a *copy* is a new garment and starts its ledger afresh. Deleting a garment closes its ledger. Should a character be deleted, the wears they ran up stay on the books, merely unattributed.
 
+## Looking Back --- the Outfit Record
+
+Beside the Ledger, which counts garments, each conversation keeps a second book that remembers *ensembles*: a numbered record, per character, of every outfit they have worn in it. Number **0** is what they arrived in --- the outfit the conversation opened with, or the one they were dressed in when they joined it partway. Each change of clothes after that is written down as the next number.
+
+**One entry per announcement.** The record is kept by the same hand that writes Aurora's announcements, and keeps exactly the same pace. A character who removes the hat, the gloves and the overcoat in a single reply has made *one* change of clothes, not three, and is entered once, in the state they ended in. So too one press of **Done** in the Wardrobe dialog, or one custom tool's wardrobe effects. Putting the hat on and taking it straight off again in the same breath changes nothing, and nothing is written down. Each entry notes when it happened and who was responsible: the character themselves, another character's gift, the operator, Pascal, or the conversation's opening.
+
+**The numbers never change.** Nothing is renumbered, pruned or tidied away; the record lasts as long as the conversation does. Conversations that began before the record was kept start it with what everyone had on when it was first opened.
+
+**Going back.** The record keeps a bookmark on the outfit the character is wearing now. Returning to an earlier outfit moves the bookmark there --- backwards or, indeed, forwards again --- without writing a new entry. The next *real* change of clothes, however, is written at the end of the record, whichever number the bookmark happened to be resting on. From outfit 6, stepping back lands on 5, and again on 4; put on a scarf there, and the scarf outfit becomes number 7.
+
+A return is a change of clothes like any other: Aurora announces the outfit now worn, the conversation's portrait is repainted if you have asked for that, and the Ledger credits a wear to anything that goes back on.
+
+**Garments that are no longer available.** An outfit from the record may name a garment that has since been archived or deleted. Returning to it restores everything else, leaves those pieces off, and says which ones could not be put back on. The one exception: an archived garment the character is *still wearing* in the same slot stays where it is --- leaving it be puts nothing on.
+
+**Characters may consult it.** Two tools serve a character who may dress themselves:
+
+- **wardrobe_history** --- List the outfits worn in this conversation, numbered from 0, with when each began, who made the change, and what it was; the one worn now is marked. A change made earlier in the very same reply may not appear yet.
+- **wardrobe_rollback** --- Return to an earlier outfit by its number, or, with no number, step back one.
+
+A character reaches only their own record. You reach everyone's, in the Wardrobe dialog.
+
+**The History tab.** In a conversation, the Wardrobe dialog shows a third tab beside **Live outfit** and **Outfit Builder** for the character selected: **History**. Each entry, newest first, shows its number, when it happened, who changed it, a summary and its garments by slot; the current one is marked *Wearing now*. **Wear again** returns the character to that outfit at once --- Aurora will say so. A garment that can no longer be put on is shown greyed with an *archived* or *gone* tag, and the button warns you before you press it. Should you have unsaved edits staged on the Live outfit tab for that character, you will be asked whether to discard them first, so that pressing **Done** afterwards can never undo the return.
+
 ## Characters and Their Wardrobe Tools
 
-During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
+During a chat, characters with the appropriate permissions may attend to their toilette by means of nine tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
 Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in their **groups'** stores, in the **project** stores, and in the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
@@ -249,13 +272,15 @@ Throughout, a character sees not only the items in their **own** wardrobe but al
 - **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, the slots it presently occupies, its wear history, and its picture's image file id. Where `wardrobe_list` offers a glance, this offers a proper appraisal. A character who wishes to *see* the picture passes that id to `describe_image`.
 - **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
 - **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
+- **wardrobe_history** --- Consult the outfit record for this conversation: every outfit worn, numbered from 0, with who changed it and when; the one worn now is marked (see *Looking Back* above).
+- **wardrobe_rollback** --- Return to an earlier outfit from the record by its number, or step back one. It is announced like any other change of clothes.
 - **wardrobe_create** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit from existing items via `component_item_ids` or `component_titles` (a composite). One may furnish a **Portrait Cue** (`image_prompt`) to steer the artist's hand, and one may **gift the item to another character** in the chat. If you have ticked **Portraits from the Wardrobe Tools** (see [Wardrobe Images](wardrobe-images.md)), the new item is drawn in the background.
 - **wardrobe_update** --- Amend an item one already owns — its name, its description, its Portrait Cue, its appropriateness, its coverage, and so forth. Only the particulars you supply are changed; the rest stands. Shared garments, being communal property, are politely declined. With **Portraits from the Wardrobe Tools** ticked, an amendment that changes the item's look has it redrawn, and a character may ask for a fresh sitting outright (`generate_image`).
 - **wardrobe_archive** --- Retire an item one owns to the back of the closet: hidden from listings and no longer wearable, yet not destroyed. Retiring a garment twice changes nothing --- it keeps the date it was first put away. A human may restore it from the Aurora page at leisure. (No character may *permanently* discard a garment; that remains a human prerogative.) Shared garments are, again, declined.
 
 A [custom tool](custom-tools.md#dressing-and-undressing) may change an outfit too: its `wardrobe` effects put garments on the character who ran it, take them off, or clear a slot, all through the very same valet, as part of the roll. Aurora announces the result like any other change, and a tool with a single certain outcome makes a tidy one-click button for dressing a character for the occasion.
 
-For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
+For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[OUTFIT_HISTORY]]`, `[[ROLLBACK_OUTFIT]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
 
@@ -269,7 +294,7 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 Three flags on each character govern their clothing:
 
-- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
+- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_history`, and `wardrobe_rollback` to browse and change their outfit during conversation, and to return to one they wore earlier. Disable this if you prefer to maintain strict authorial control over what they wear.
 - **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
 - **canChooseOutfit** --- Disabled by default. When enabled, a *new* chat with this character opens with its Starting Outfit already set to **Let Character Choose**, so a character with a wardrobe worth showing off arrives dressed for the occasion without your having to flip the switch each time. It changes only the default the new-chat dialog offers; you may still overrule it for any particular chat.
 

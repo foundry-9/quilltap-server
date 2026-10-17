@@ -24,6 +24,9 @@
 - Export: chat exports stream each chat's history as `wardrobe_history` records (count `wardrobeHistory`, `data.wardrobeHistory`; `QtapWardrobeHistoryRecord`; `WardrobeHistory` in `qtap-export.schema.json`). Import (`lib/import/quilltap-import/import-wardrobe-history.ts`, step 7f) mints new ids, remaps `chatId`, `characterId`, `actorCharacterId` and slot item ids that imported with new ids, keeps indices, cursor and dates, and never merges into a timeline already live on the instance. An older bundle's chats seed entry 0 on the first change.
 - Backup: `data/wardrobe-history.json` (whole table, manifest count `wardrobeHistory`); restore writes it back through `upsertRows` after the chats (step 22n-ter), with the same id and item remaps as the wear ledger in new-account mode. Replace mode clears `chat_wardrobe_history` first.
 - Tests: `export/wardrobe-history-roundtrip.test.ts` (five-entry timeline, cursor at 2), `backup/wardrobe-wear-backup.test.ts`, `backup/uuid-remapper.test.ts`.
+- The History tab's and `wardrobe_history`'s one-line summary is plain text now (`describeOutfit`'s Markdown list flattened); it showed raw `**` and `- ` in the dialog. Test: `lib/wardrobe/history/__tests__/describe-entry.test.ts`.
+- Docs: `help/wardrobe.md` gains "Looking Back --- the Outfit Record" and lists the two tools (nine `wardrobe_*` tools); `BACKGROUND_JOBS_CHILD.md` notes the `settle` write override; CLAUDE.md gains a chokepoint bullet. The spec moved to `docs/developer/features/complete/wardrobe-outfit-history.md` with an As-built section; ROADMAP ticked.
+- Verified live: both migrations on a copy of V4test seeded 32 current entry-0 rows for 32 (chat, character) pairs; on V4test a `wardrobe_wear` call appended entry 1, `wardrobe_history` listed it, `wardrobe_rollback` returned to 0 with Aurora announcing, and the History tab's Wear again moved the cursor back to 1.
 
 #### Spec: wardrobe outfit history and rollback
 

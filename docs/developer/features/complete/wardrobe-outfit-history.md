@@ -1,8 +1,9 @@
 # Wardrobe outfit history: a per-character ledger of what was worn in a chat, and rolling back to it
 
-**Status:** specified 2026-10-16, not started. Part 4 of the wardrobe programme. Builds on
-[wardrobe-wear-ledger.md](complete/wardrobe-wear-ledger.md) (the equip chokepoint,
-`commitEquippedOutfit`) and [wardrobe-refactor.md](complete/wardrobe-refactor.md) (the pool, the
+**Status:** Implemented (2026-10-16, 4.11-dev). Design of record; see [As built](#16-as-built).
+Part 4 of the wardrobe programme. Builds on
+[wardrobe-wear-ledger.md](wardrobe-wear-ledger.md) (the equip chokepoint,
+`commitEquippedOutfit`) and [wardrobe-refactor.md](wardrobe-refactor.md) (the pool, the
 gesture functions, `notifyWardrobeChanged`). Read §3 of the ledger spec before touching anything
 here: every write in this feature rides the same chokepoint, and the reasons it exists are the
 reasons this feature must not grow a second writer.
@@ -644,7 +645,7 @@ Each phase ends green on `npx tsc`, `npm run lint`, and the suites it touches.
 - CLAUDE.md "Code-path chokepoints", one bullet: history is written only by
   `wardrobeHistory.settle`, reached through `notifyWardrobeChanged` / the flush, and rollback
   is only `rollbackWardrobe`.
-- Move this file to `docs/developer/features/complete/` with a **Status** line when done.
+- Move this file to `docs/developer/features/complete/` with a **Status** line when done. (Done.)
 
 ## 14. Out of scope, deliberately
 
@@ -673,3 +674,43 @@ Each phase ends green on `npx tsc`, `npm run lint`, and the suites it touches.
 - **The History tab must not share the Live tab's staged state.** Stage → rollback → Done
   would flush the stale stage over the rollback. Confirm, discard, then roll.
 - **Spelling.** The project is Quilltap. The lint sweep reads this file too.
+
+## 16. As built
+
+Implemented on main in six commits (storage, recording, rollback and tools, API and dialog,
+export/backup, docs). Where the code and this brief disagreed, the code won and the text above
+was corrected in the same commit; the differences worth knowing:
+
+- **Arrival entries (§3.1 step 2).** `chat-start`, `participant-added` and `merge` with no rows
+  record the arrival outfit itself as entry `0` with their own source; the empty seeded `0`
+  happens only for other sources on a seat that predates the history.
+- **Repository shape (§2.4).** `ChatWardrobeHistoryRepository` is a plain class (its rows have
+  no `updatedAt`, so it is not an `AbstractBaseRepository`) and declares `dbTarget = 'main'` for
+  the job applier's write partition. `settle` returns a `SettleOutcome` for logs and tests;
+  callers discard it.
+- **Turn containers (§4.2).** `newWardrobeTurnContainers()` and `turnContainersOf()` live in the
+  pure module `lib/wardrobe/turn-containers.ts`, re-exported from `outfit-change-effects.ts`.
+  The Set was created in `createToolContext` (`tool-execution.service.ts`), not in the chat
+  orchestrator. `flushPendingWardrobeAnnouncements(context, repos?)` settles before it
+  announces. A turn Set that arrives without its Map settles at once rather than lose the entry.
+- **Rendering (§6.2, §8.1).** `lib/wardrobe/history/describe-entry.ts` holds the shared
+  rendering: `resolveHistorySlots`, `summarizeHistorySlots` (plain text — `describeOutfit`'s
+  Markdown list flattened to one line), `staleItemsOf`, `changedByLabel`. The GET action also
+  returns a `changedBy` label (the character's own changes are labelled with their name there,
+  "you" in the tool).
+- **History tab (§8.4).** Stale garments use the existing `qt-badge-secondary` with an
+  "· archived" / "· gone" suffix; no new `qt-*` utility. `useStagedLiveOutfits` gained
+  `isDirty(characterId)` and `discard(characterId, { reseed? })`: the tab discards the staging
+  before the rollback and re-seeds the Live tab after the refetch settles.
+- **Import (§10).** `lib/import/quilltap-import/import-wardrobe-history.ts` (step 7f, after the
+  wear ledger) also remaps slot item ids that imported with new ids, and never merges into a
+  timeline already live on the instance. Backup restore remaps slot ids through the same item
+  remap as the wear ledger, and replace mode clears the table first.
+- **Not done, deliberately:** the chats-repository delete test the brief mentions (§7) is
+  covered instead by the repository test's cascade case on a real SQLite connection.
+
+Verified live on 2026-10-16: both migrations on a copy of the V4test instance seeded 32 current
+entry-0 rows for its 32 (chat, character) pairs, each dated by its chat's `updatedAt`; on V4test
+itself a `wardrobe_wear` call appended entry 1 (source `character`), `wardrobe_history` listed it,
+`wardrobe_rollback` returned to 0 with Aurora announcing and no new entry, and the History tab's
+**Wear again** moved the cursor back to 1, announced.
