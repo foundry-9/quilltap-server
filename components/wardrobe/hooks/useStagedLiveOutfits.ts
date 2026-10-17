@@ -26,6 +26,7 @@ import { showErrorToast } from '@/lib/toast'
 import {
   EMPTY_EQUIPPED_SLOTS,
   cloneEquippedSlots,
+  equippedSlotsEqual,
   makeEmptyEquippedSlots,
   type EquippedSlots,
 } from '@/lib/schemas/wardrobe.types'
@@ -58,6 +59,15 @@ export interface UseStagedLiveOutfitsResult {
    * the dialog may close (all commits succeeded, or nothing to commit).
    */
   flush: () => Promise<boolean>
+  /** True when a character has staged edits Done would commit. */
+  isDirty: (characterId: string) => boolean
+  /**
+   * Throw away a character's staged edits — the History tab's rollback must
+   * never be flushed over on Done. The Live tab re-seeds from the next worn
+   * snapshot that arrives, or at once with `{ reseed: true }` (call that after
+   * the rollback's refetch has settled).
+   */
+  discard: (characterId: string, options?: { reseed?: boolean }) => void
 }
 
 export function useStagedLiveOutfits({
@@ -81,6 +91,9 @@ export function useStagedLiveOutfits({
   // click is either overwritten by the first seed (Bug 61's silent loss) or
   // committed against an empty base, undressing everything never touched.
   const pendingRef = useRef<Record<string, StagedGesture[]>>({})
+  // Bumped by `discard` so the seeding effect runs again for a character
+  // whose staging was thrown away, even if the snapshot has not changed yet.
+  const [reseedTick, setReseedTick] = useState(0)
 
   const seedKeyFor = useCallback(
     (cid: string): string => `${cid}|${chatId ?? 'no-chat'}`,
@@ -102,7 +115,7 @@ export function useStagedLiveOutfits({
     const seed = rebaseStagedGestures(wornSlots, pending)
     setStagedByChar((prev) => ({ ...prev, [characterId]: seed.slots }))
     setWornBundlesByChar((prev) => ({ ...prev, [characterId]: seed.wornBundleIds }))
-  }, [isInChat, characterId, wornSlots, seedKeyFor])
+  }, [isInChat, characterId, wornSlots, seedKeyFor, reseedTick])
 
   const apply = useCallback(
     (gesture: StagedGesture) => {
@@ -182,9 +195,44 @@ export function useStagedLiveOutfits({
     return allOk
   }, [chatId, stagedByChar, wornBundlesByChar, characterName, requestConfirmation, queryClient])
 
+  const isDirty = useCallback(
+    (cid: string): boolean => {
+      const staged = stagedByChar[cid]
+      if (!staged) return (pendingRef.current[cid]?.length ?? 0) > 0
+      const baseline = baselineByCharRef.current[cid]
+      if (!baseline) return true
+      return !equippedSlotsEqual(staged, baseline) || (wornBundlesByChar[cid]?.length ?? 0) > 0
+    },
+    [stagedByChar, wornBundlesByChar],
+  )
+
+  const discard = useCallback(
+    (cid: string, options?: { reseed?: boolean }) => {
+      if (options?.reseed) {
+        // Only if nothing has re-seeded it since the staging was dropped.
+        if (!seededRef.current.has(seedKeyFor(cid))) setReseedTick((t) => t + 1)
+        return
+      }
+      seededRef.current.delete(seedKeyFor(cid))
+      delete pendingRef.current[cid]
+      delete baselineByCharRef.current[cid]
+      setStagedByChar((prev) => {
+        const next = { ...prev }
+        delete next[cid]
+        return next
+      })
+      setWornBundlesByChar((prev) => {
+        const next = { ...prev }
+        delete next[cid]
+        return next
+      })
+    },
+    [seedKeyFor],
+  )
+
   const displaySlots: EquippedSlots = characterId
     ? stagedByChar[characterId] ?? wornSlots ?? EMPTY_EQUIPPED_SLOTS
     : EMPTY_EQUIPPED_SLOTS
 
-  return { displaySlots, apply, flush }
+  return { displaySlots, apply, flush, isDirty, discard }
 }

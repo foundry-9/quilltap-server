@@ -37,8 +37,20 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
+      queryKeys.wardrobe.histories('chat-1'),
       queryKeys.chats.scenarioSource('chat-1'),
     ]);
+  });
+
+  it('refreshes every outfit timeline in the chat on the chats topic', () => {
+    // A tool call, or the parent's replay of a turn's history settle, publishes
+    // `chats`; the prefix covers each character's History tab.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.wardrobe.histories('chat-1'),
+    );
+    expect(queryKeys.wardrobe.history('chat-1', 'char-1').slice(0, 3)).toEqual(
+      [...queryKeys.wardrobe.histories('chat-1')],
+    );
   });
 
   it('refreshes the pending informs on the chats topic', () => {

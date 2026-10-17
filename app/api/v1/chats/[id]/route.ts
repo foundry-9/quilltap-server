@@ -11,6 +11,7 @@
  * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
+ * GET /api/v1/chats/[id]?action=wardrobe-history&characterId=… - One character's outfit timeline
  * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  * DELETE /api/v1/chats/[id]?action=stop-impersonate - Stop impersonating
@@ -34,6 +35,7 @@
  * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
  * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
+ * POST /api/v1/chats/[id]?action=wardrobe-rollback - Return a character to a recorded outfit
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
  * POST /api/v1/chats/[id]?action=retry-image-uncensored - Redraw a picture (or the story background) on the Concierge's uncensored desk

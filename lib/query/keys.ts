@@ -297,6 +297,10 @@ export const queryKeys = {
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
      */
     outfit: (chatId: string) => ['wardrobe', 'outfit', chatId] as const,
+    /** Prefix of every history read for a chat — the `chats` realtime topic refetches it. */
+    histories: (chatId: string) => ['wardrobe', 'history', chatId] as const,
+    /** One character's outfit timeline in a chat (`?action=wardrobe-history`). */
+    history: (chatId: string, characterId: string) => ['wardrobe', 'history', chatId, characterId] as const,
     /**
      * One item's wear-ledger breakdown (`?action=wear-history`). Keyed by item
      * id first (the ledger's own key, so `wearHistory(id)` prefix-invalidates

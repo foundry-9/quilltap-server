@@ -14,7 +14,7 @@
  * production ones.
  */
 
-import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
+import { historyDouble, ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 import { buildWearablePool, loadCastPools, loadWearablePool } from '@/lib/wardrobe/pool'
 
 jest.mock('@/lib/logger', () => ({
@@ -102,6 +102,7 @@ function makeCtx() {
     },
   }
   ctx.repos.wardrobeWear = ledgerOver(ctx.repos.chats)
+  ctx.repos.wardrobeHistory = historyDouble()
   return ctx
 }
 
@@ -141,6 +142,11 @@ describe('chats [id] equip action — pool lookup', () => {
       'char-1',
       expect.objectContaining({ bottom: [vaultItem.id] }),
     )
+    // The operator's change is recorded in the outfit history at once.
+    expect(ctx.repos.wardrobeHistory.settle).toHaveBeenCalledWith('chat-1', 'char-1', {
+      kind: 'append',
+      provenance: { source: 'operator' },
+    })
   })
 
   it('equips a shared (General) item the character can reach', async () => {

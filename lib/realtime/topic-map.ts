@@ -74,6 +74,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // `chats` — without this a tool-driven outfit change left the
             // wardrobe dialog's cached snapshot stale (bug 198).
             queryKeys.wardrobe.outfit(id),
+            // Every character's outfit timeline in the chat. A tool call or a
+            // parent-side replay of the turn's history settle publishes
+            // `chats`, so the History tab stays honest under an open dialog.
+            queryKeys.wardrobe.histories(id),
             // Where the scene came from. A scenario change posts the Host's
             // revision announcement, which publishes `chats`.
             queryKeys.chats.scenarioSource(id),

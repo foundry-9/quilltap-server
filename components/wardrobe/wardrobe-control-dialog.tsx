@@ -53,6 +53,7 @@ import { WardrobeBrowser, WardrobeItemOverlays } from './WardrobeBrowser'
 import { useWardrobeListData } from './hooks/useWardrobeListData'
 import { useWardrobeItemActions } from './hooks/useWardrobeItemActions'
 import { useStagedLiveOutfits } from './hooks/useStagedLiveOutfits'
+import { OutfitHistoryTab } from './outfit-history-tab'
 import { useFittingRoom } from './hooks/useFittingRoom'
 import { useComposerHandlers } from './hooks/useComposerHandlers'
 
@@ -68,7 +69,7 @@ interface ContainerSummary {
   name: string
 }
 
-type RightTab = 'live' | 'builder'
+type RightTab = 'live' | 'builder' | 'history'
 
 const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name)
 
@@ -496,8 +497,8 @@ function WardrobeControlDialogInner({
             }
           />
 
-          {/* RIGHT: Live outfit / Outfit Builder — Builder always present;
-              Live outfit only when there's a chat to mutate against. */}
+          {/* RIGHT: Live outfit / Outfit Builder / History — Builder always present;
+              Live outfit and History only when there is a chat. */}
           {selectedCharacterId && (
             <section className="flex flex-col min-h-0">
               <div className="flex items-center gap-1 mb-2 qt-tab-group">
@@ -522,9 +523,27 @@ function WardrobeControlDialogInner({
                 >
                   Outfit Builder
                 </button>
+                {isInChat && (
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('history')}
+                    className={`qt-tab ${rightTab === 'history' ? 'qt-tab-active' : ''}`}
+                  >
+                    History
+                  </button>
+                )}
               </div>
 
-              {rightTab === 'live' && isInChat ? (
+              {rightTab === 'history' && isInChat && chatId ? (
+                <OutfitHistoryTab
+                  chatId={chatId}
+                  characterId={selectedCharacterId}
+                  characterName={selectedCharacter?.name ?? 'this character'}
+                  hasStagedEdits={live.isDirty(selectedCharacterId)}
+                  discardStagedEdits={(options) => live.discard(selectedCharacterId, options)}
+                  requestConfirmation={requestConfirmation}
+                />
+              ) : rightTab === 'live' && isInChat ? (
                 <div className="space-y-2 mb-3">
                   <p className="qt-text-xs qt-text-secondary px-1">
                     Edits stage here and apply when you click Done. Nothing happens until then.
