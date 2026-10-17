@@ -51,6 +51,7 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
@@ -150,6 +151,7 @@ export async function assembleExportFromStream(
   const chatDocuments: ChatDocument[] = [];
   const chatInforms: ChatInform[] = [];
   const wardrobeWear: WardrobeWearStatsRow[] = [];
+  const wardrobeHistory: ChatWardrobeHistoryRow[] = [];
 
   const folderRecords: ExportedFolder[] = [];
   const filesById = new Map<string, ExportedFileWithBytes>();
@@ -323,6 +325,12 @@ export async function assembleExportFromStream(
       // them once every item, character and chat has landed.
       case 'wardrobe_wear':
         wardrobeWear.push((record as { data: WardrobeWearStatsRow }).data);
+        break;
+
+      // Outfit-history rows. Source-instance ids; the executor remaps them
+      // once every chat and character has landed.
+      case 'wardrobe_history':
+        wardrobeHistory.push((record as { data: ChatWardrobeHistoryRow }).data);
         break;
 
       case 'doc_mount_point':
@@ -521,6 +529,7 @@ export async function assembleExportFromStream(
     chatDocuments,
     chatInforms,
     wardrobeWear,
+    wardrobeHistory,
     fileFolders: folderRecords,
     files: fileOrder.map((id) => filesById.get(id)!),
     promptTemplates,
@@ -561,6 +570,7 @@ interface CollectedArrays {
   chatDocuments: ChatDocument[];
   chatInforms: ChatInform[];
   wardrobeWear: WardrobeWearStatsRow[];
+  wardrobeHistory: ChatWardrobeHistoryRow[];
   /**
    * General file-library folders. Named `fileFolders` rather than `folders`
    * because `folders` is already taken by the document-store folder rows.
@@ -596,6 +606,7 @@ function buildExportDataForType(
         ...(c.conversationAnnotations.length > 0 && { conversationAnnotations: c.conversationAnnotations }),
         ...(c.chatDocuments.length > 0 && { chatDocuments: c.chatDocuments }),
         ...(c.chatInforms.length > 0 && { chatInforms: c.chatInforms }),
+        ...(c.wardrobeHistory.length > 0 && { wardrobeHistory: c.wardrobeHistory }),
       };
     case 'roleplay-templates':
       return { roleplayTemplates: c.roleplayTemplates };

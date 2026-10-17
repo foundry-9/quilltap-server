@@ -1170,6 +1170,25 @@ export async function restore(
       restored: wardrobeWearRestored,
     });
 
+    // 22n-ter. Outfit history. After the chats it cascades from. Rows go in
+    // whole (ids, indices, cursor); `upsertRows` logs and skips any row that
+    // would break a timeline (a hand-edited second current row) rather than
+    // failing the restore.
+    let wardrobeHistoryRestored = 0;
+    const wardrobeHistoryRows = data.wardrobeHistory || [];
+    if (wardrobeHistoryRows.length > 0) {
+      try {
+        wardrobeHistoryRestored = await globalRepos.wardrobeHistory.upsertRows(wardrobeHistoryRows);
+      } catch (error) {
+        warnings.push(`Failed to restore the outfit history: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore outfit history', { rowCount: wardrobeHistoryRows.length, error });
+      }
+    }
+    moduleLogger.debug('Restored outfit history', {
+      total: wardrobeHistoryRows.length,
+      restored: wardrobeHistoryRestored,
+    });
+
     // 22o. Instance settings — applied last because the mount-point keys
     // reference doc_mount_points that we just restored above. Upsert by key
     // so a fresh instance's auto-provisioned defaults get overwritten by the
@@ -1400,6 +1419,7 @@ export async function restore(
       groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
       wardrobeWear: wardrobeWearRestored,
+      wardrobeHistory: wardrobeHistoryRestored,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,

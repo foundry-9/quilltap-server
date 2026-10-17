@@ -110,6 +110,8 @@ export interface QuilltapExportCounts {
   conversationAnnotations?: number;
   chatDocuments?: number;
   chatInforms?: number;
+  /** Outfit-history rows (`chat_wardrobe_history`) for exported chats. */
+  wardrobeHistory?: number;
   /** Wear-ledger rows (`wardrobe_wear_stats`) for exported wardrobe items. */
   wardrobeWear?: number;
   files?: number;
@@ -267,6 +269,13 @@ export interface ChatsExportData {
    * reason as conversationAnnotations.
    */
   chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
+  /**
+   * Outfit-history rows (`chat_wardrobe_history`) for any exported chat: each
+   * character's numbered timeline and its cursor. Optional — bundles written
+   * before the history existed carry none, and those chats seed their entry 0
+   * on the first change of clothes.
+   */
+  wardrobeHistory?: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow[];
 }
 
 /**
@@ -775,6 +784,19 @@ export interface QtapChatInformRecord {
   data: import('@/lib/schemas/chat-inform.types').ChatInform;
 }
 
+/**
+ * One outfit-history row streamed alongside its parent chat: one entry of one
+ * character's numbered timeline, `isCurrent` marking the cursor. Ids are
+ * source-instance ids; the importer mints a fresh `id`, remaps `chatId`,
+ * `characterId` and `actorCharacterId`, and copies `entryIndex`, `isCurrent`,
+ * `slots` and `createdAt` as they are.
+ */
+export interface QtapWardrobeHistoryRecord {
+  kind: 'wardrobe_history';
+  chatId: string;
+  data: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow;
+}
+
 export interface QtapDocMountPointRecord {
   kind: 'doc_mount_point';
   data: ExportedDocumentStore;
@@ -910,6 +932,7 @@ export type QtapRecord =
   | QtapChatRecord
   | QtapChatMessageRecord
   | QtapChatInformRecord
+  | QtapWardrobeHistoryRecord
   | QtapConversationAnnotationRecord
   | QtapChatDocumentRecord
   | QtapMemoryRecord

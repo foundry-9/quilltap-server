@@ -99,6 +99,7 @@ jest.mock('@/lib/llm/connection-profile-names', () => ({
 // cleanup and leaving a file behind so the caller's `fs.stat` succeeds.
 const stagedFilesByRun: string[][] = [];
 const stagedLedgerByRun: unknown[][] = [];
+const stagedHistoryByRun: unknown[][] = [];
 jest.mock('child_process', () => ({
   execFile: (
     _cmd: string,
@@ -112,6 +113,10 @@ jest.mock('child_process', () => ({
     const ledgerPath = path.join(dataDir, 'wardrobe-wear.json');
     stagedLedgerByRun.push(
       fs.existsSync(ledgerPath) ? JSON.parse(fs.readFileSync(ledgerPath, 'utf8')) : []
+    );
+    const historyPath = path.join(dataDir, 'wardrobe-history.json');
+    stagedHistoryByRun.push(
+      fs.existsSync(historyPath) ? JSON.parse(fs.readFileSync(historyPath, 'utf8')) : []
     );
     fs.writeFileSync(zipPath, 'not really a zip');
     cb(null, { stdout: '', stderr: '' });
@@ -149,6 +154,19 @@ const LEDGER_ROWS = [
   },
 ];
 
+const HISTORY_ROWS = [0, 1, 2].map((entryIndex) => ({
+  id: `hist-${entryIndex}`,
+  chatId: 'chat-1',
+  characterId: 'char-ada',
+  entryIndex,
+  slots: { top: [`item-${entryIndex}`], bottom: [], footwear: [], accessories: [], hair: [] },
+  slotsHash: 'abcdef0123456789',
+  source: entryIndex === 0 ? 'chat-start' : 'operator',
+  actorCharacterId: null,
+  isCurrent: entryIndex === 1,
+  createdAt: `2026-10-16T0${entryIndex}:00:00.000Z`,
+}));
+
 function methodStub(overrides: Record<string, unknown> = {}) {
   const cache = new Map<string, unknown>();
   return new Proxy(overrides, {
@@ -174,13 +192,16 @@ function repoStub(overrides: Record<string, unknown> = {}) {
 describe('createBackup — wardrobe wear ledger', () => {
   const testUserId = 'user-wear-backup';
   let findAllLedger: jest.Mock;
+  let findAllHistory: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     stagedFilesByRun.length = 0;
     stagedLedgerByRun.length = 0;
+    stagedHistoryByRun.length = 0;
 
     findAllLedger = jest.fn().mockResolvedValue(LEDGER_ROWS);
+    findAllHistory = jest.fn().mockResolvedValue(HISTORY_ROWS);
 
     const userRepos = repoStub({
       characters: methodStub({ findAll: jest.fn().mockResolvedValue([]) }),
@@ -193,6 +214,7 @@ describe('createBackup — wardrobe wear ledger', () => {
     const globalRepos = repoStub({
       chatSettings: methodStub({ findByUserId: jest.fn().mockResolvedValue(null) }),
       wardrobeWear: methodStub({ findAll: findAllLedger }),
+      wardrobeHistory: methodStub({ findAll: findAllHistory }),
       textReplacementRules: methodStub({ list: jest.fn().mockResolvedValue([]) }),
     });
 
@@ -204,9 +226,18 @@ describe('createBackup — wardrobe wear ledger', () => {
     const { zipPath, manifest } = await createBackup(testUserId);
     const staged = stagedFilesByRun[stagedFilesByRun.length - 1];
     const ledger = stagedLedgerByRun[stagedLedgerByRun.length - 1] as Array<Record<string, unknown>>;
+    const history = stagedHistoryByRun[stagedHistoryByRun.length - 1] as Array<Record<string, unknown>>;
     await fs.promises.rm(path.dirname(zipPath), { recursive: true, force: true });
-    return { manifest, staged, ledger };
+    return { manifest, staged, ledger, history };
   }
+
+  it('writes data/wardrobe-history.json with every timeline, cursor included', async () => {
+    const { staged, history, manifest } = await runBackup();
+    expect(findAllHistory).toHaveBeenCalled();
+    expect(staged).toContain('wardrobe-history.json');
+    expect(history).toEqual(HISTORY_ROWS);
+    expect(manifest.counts.wardrobeHistory).toBe(3);
+  });
 
   it('writes data/wardrobe-wear.json with the whole table, unattributed rows included', async () => {
     const { staged, ledger } = await runBackup();
@@ -225,6 +256,7 @@ describe('createBackup — wardrobe wear ledger', () => {
 describe('restore — wardrobe wear ledger', () => {
   const testUserId = 'user-wear-restore';
   let upsertRows: jest.Mock;
+  let upsertHistoryRows: jest.Mock;
 
   const EMPTY_COLLECTIONS = [
     'characters', 'tags', 'connectionProfiles', 'imageProfiles', 'embeddingProfiles',
@@ -252,9 +284,13 @@ describe('restore — wardrobe wear ledger', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     upsertRows = jest.fn().mockResolvedValue(undefined);
+    upsertHistoryRows = jest.fn(async (rows: unknown[]) => rows.length);
     (getUserRepositories as jest.Mock).mockReturnValue(repoStub({}));
     (getRepositories as jest.Mock).mockReturnValue(
-      repoStub({ wardrobeWear: methodStub({ upsertRows }) })
+      repoStub({
+        wardrobeWear: methodStub({ upsertRows }),
+        wardrobeHistory: methodStub({ upsertRows: upsertHistoryRows }),
+      })
     );
   });
 
@@ -287,5 +323,26 @@ describe('restore — wardrobe wear ledger', () => {
 
     expect(upsertRows).not.toHaveBeenCalled();
     expect(result.wardrobeWear).toBe(0);
+  });
+
+  it('writes the outfit history back whole and counts it', async () => {
+    primeArchive(makeBackupData({ wardrobeHistory: HISTORY_ROWS }));
+    const result = await restore(testUserId, '/tmp/qt-wear-test.zip', {
+      mode: 'replace',
+      preserveIds: true,
+    } as never);
+
+    expect(upsertHistoryRows).toHaveBeenCalledWith(HISTORY_ROWS);
+    expect(result.wardrobeHistory).toBe(3);
+  });
+
+  it('writes no history for an archive that predates it', async () => {
+    primeArchive(makeBackupData({}));
+    const result = await restore(testUserId, '/tmp/qt-wear-test.zip', {
+      mode: 'replace',
+      preserveIds: true,
+    } as never);
+    expect(upsertHistoryRows).not.toHaveBeenCalled();
+    expect(result.wardrobeHistory).toBe(0);
   });
 });

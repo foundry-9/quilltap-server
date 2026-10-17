@@ -48,6 +48,7 @@ import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -271,6 +272,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const textReplacementRules = await readJsonArrayFileOptional<TextReplacementRule>(rootPath, 'data/text-replacement-rules.json', []);
     // Wear ledger (4.11) — optional, so an older archive just has none.
     const wardrobeWear = await readJsonArrayFileOptional<WardrobeWearStatsRow>(rootPath, 'data/wardrobe-wear.json', []);
+    // Outfit history (4.11) — optional, so an older archive just has none.
+    const wardrobeHistory = await readJsonArrayFileOptional<ChatWardrobeHistoryRow>(rootPath, 'data/wardrobe-history.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -319,6 +322,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       groupCharacterMembers,
       textReplacementRules,
       wardrobeWear,
+      wardrobeHistory,
     };
 
     return { data, extractDir, rootFolder };

@@ -287,6 +287,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const wardrobeWear = await globalRepos.wardrobeWear.findAll();
   moduleLogger.debug('Collected wardrobe wear ledger for backup', { rowCount: wardrobeWear.length });
 
+  // The outfit history: every timeline in every chat, cursor included.
+  const wardrobeHistory = await globalRepos.wardrobeHistory.findAll();
+  moduleLogger.debug('Collected outfit history for backup', { rowCount: wardrobeHistory.length });
+
   // Scriptorium / document store tables live in a separate mount-index
   // database. We dump them with raw SELECTs because most repositories don't
   // expose a "give me everything" helper, and bulk export wants the latter.
@@ -392,6 +396,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     groupCharacterMembers,
     textReplacementRules,
     wardrobeWear,
+    wardrobeHistory,
   };
 }
 
@@ -494,6 +499,7 @@ function createManifest(
       groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
       wardrobeWear: data.wardrobeWear?.length || 0,
+      wardrobeHistory: data.wardrobeHistory?.length || 0,
     },
   };
 }
@@ -700,6 +706,8 @@ export async function createBackup(
     // Wear ledger (4.11). Optional on the way back in, so an older restorer
     // simply does not see it.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-wear.json'), data.wardrobeWear || []);
+    // Outfit history (4.11). Optional on the way back in, like the wear ledger.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-history.json'), data.wardrobeHistory || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

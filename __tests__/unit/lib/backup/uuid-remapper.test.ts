@@ -1122,3 +1122,57 @@ describe('remapBackupData() - wardrobe items filed in subfolders', () => {
     expect(fixes[0].imageFileId).toBe(remapper.getMapping()['file-old'])
   })
 })
+
+describe('remapBackupData() - outfit history', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  it('round-trips a five-entry timeline with its indices, hashes and cursor under remapped ids', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { hashEquippedSlots } = require('@/lib/wardrobe/outfit-hash')
+    const empty = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
+    const rows = [0, 1, 2, 3, 4].map((entryIndex) => {
+      const slots = { ...empty, top: [`item-${entryIndex}`] }
+      return {
+        id: `hist-${entryIndex}`,
+        chatId: 'chat-old',
+        characterId: 'char-old',
+        entryIndex,
+        slots,
+        slotsHash: hashEquippedSlots(slots),
+        source: entryIndex === 0 ? 'chat-start' : 'character',
+        actorCharacterId: entryIndex === 0 ? null : 'char-old',
+        isCurrent: entryIndex === 2,
+        createdAt: `2026-10-16T0${entryIndex}:00:00.000Z`,
+      }
+    })
+    const remapper = new UuidRemapper()
+    const data = {
+      manifest: {},
+      characters: [{ id: 'char-old', name: 'Bertie' }],
+      chats: [{ id: 'chat-old', participants: [], messages: [] }],
+      tags: [], connectionProfiles: [], imageProfiles: [], embeddingProfiles: [], memories: [],
+      files: [], promptTemplates: [], roleplayTemplates: [], providerModels: [], projects: [], llmLogs: [],
+      wardrobeHistory: rows,
+    } as unknown as BackupData
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const out = result.wardrobeHistory ?? []
+
+    const newChatId = result.chats[0].id
+    const newCharId = result.characters[0].id
+    expect(newChatId).not.toBe('chat-old')
+    expect(out.map((r) => r.entryIndex)).toEqual([0, 1, 2, 3, 4])
+    expect(out.map((r) => r.isCurrent)).toEqual([false, false, true, false, false])
+    expect(out.every((r) => r.chatId === newChatId && r.characterId === newCharId)).toBe(true)
+    expect(out[0].actorCharacterId).toBeNull()
+    expect(out[1].actorCharacterId).toBe(newCharId)
+    expect(new Set(out.map((r) => r.id)).size).toBe(5)
+    expect(out.some((r) => r.id.startsWith('hist-'))).toBe(false)
+    for (const row of out) expect(row.slotsHash).toBe(hashEquippedSlots(row.slots))
+    expect(out.map((r) => r.slotsHash)).toEqual(rows.map((r) => r.slotsHash))
+  })
+})

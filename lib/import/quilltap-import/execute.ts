@@ -32,6 +32,7 @@ import {
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
 import { importWardrobeWear } from './import-wardrobe-wear';
+import { importWardrobeHistory } from './import-wardrobe-history';
 import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
 import {
@@ -916,6 +917,27 @@ async function executeImportStrict(
         warnings.push(`Failed to import the wardrobe wear ledger: ${msg}`);
         moduleLogger.warn('Failed to import wardrobe wear ledger', {
           rowCount: data.wardrobeWear.length,
+          error: msg,
+        });
+      }
+    }
+
+    // 7f. Outfit history. After the chats and characters (whose id maps it
+    //    reads) and the wardrobe phases (whose item-id map remaps the slots).
+    //    A timeline already live on this instance is never merged into.
+    if (data.wardrobeHistory && data.wardrobeHistory.length > 0) {
+      try {
+        imported.wardrobeHistory = await importWardrobeHistory(
+          data.wardrobeHistory,
+          data.documents ?? [],
+          idMaps,
+          warnings
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to import the outfit history: ${msg}`);
+        moduleLogger.warn('Failed to import outfit history', {
+          rowCount: data.wardrobeHistory.length,
           error: msg,
         });
       }

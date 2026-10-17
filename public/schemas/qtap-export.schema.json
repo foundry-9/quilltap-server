@@ -47,7 +47,8 @@
               "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
               "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
-              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } }
+              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } },
+              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } }
             },
             "additionalProperties": false
           }
@@ -378,6 +379,7 @@
         "conversationAnnotations": { "type": "integer", "minimum": 0 },
         "chatDocuments": { "type": "integer", "minimum": 0 },
         "chatInforms": { "type": "integer", "minimum": 0 },
+        "wardrobeHistory": { "type": "integer", "minimum": 0 },
         "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
@@ -1370,6 +1372,35 @@
         "lastWornChatId": { "type": ["string", "null"], "description": "The chat of the last wear. May name a chat since deleted." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "WardrobeHistory": {
+      "type": "object",
+      "description": "One outfit-history row (chat_wardrobe_history): one entry in one character's numbered outfit timeline in one chat. Entry 0 is what they arrived in; one entry is recorded per Aurora announcement; exactly one row per (chatId, characterId) is current. In an NDJSON stream each row is a `wardrobe_history` record emitted with its chat. Ids are source-instance ids: the importer mints a fresh id, remaps chatId, characterId and actorCharacterId, and copies entryIndex, isCurrent, slots and createdAt as they are. A slot id that no longer resolves is left off at rollback and shown as gone.",
+      "required": ["id", "chatId", "characterId", "entryIndex", "slots", "slotsHash", "source", "actorCharacterId", "isCurrent", "createdAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "characterId": { "type": "string", "minLength": 1 },
+        "entryIndex": { "type": "integer", "minimum": 0, "description": "0-based and contiguous per (chatId, characterId); never renumbered." },
+        "slots": {
+          "type": "object",
+          "description": "Equipped slots at this entry: wardrobe item ids per slot, dissolved to leaves.",
+          "properties": {
+            "top": { "type": "array", "items": { "type": "string" } },
+            "bottom": { "type": "array", "items": { "type": "string" } },
+            "footwear": { "type": "array", "items": { "type": "string" } },
+            "accessories": { "type": "array", "items": { "type": "string" } },
+            "hair": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "slotsHash": { "type": "string", "minLength": 16, "maxLength": 16, "description": "hashEquippedSlots(slots); recomputed on import." },
+        "source": { "enum": ["chat-start", "participant-added", "merge", "operator", "character", "pascal", "seeded"] },
+        "actorCharacterId": { "type": ["string", "null"], "description": "The character whose tool call or roll made the change." },
+        "isCurrent": { "type": "boolean", "description": "The cursor: the entry the character is wearing now." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" }
       }
     },
 

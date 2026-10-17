@@ -49,6 +49,9 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import { bySlot } from '@/lib/schemas/wardrobe.types';
+import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
 import {
   isWardrobeItemDocumentPath,
   wardrobeItemIdForDocument,
@@ -628,6 +631,19 @@ export function remapBackupData(
     itemId: wardrobeItemIdRemap.get(row.itemId) ?? row.itemId,
   })) as WardrobeWearStatsRow[];
 
+  // Outfit history. `id`, `chatId`, `characterId` and `actorCharacterId` go
+  // through the remapper; slot item ids follow the same item remap as the
+  // wear ledger (an id the backup carries no document for passes through and
+  // falls under the stale-item rule). Indices, cursor and dates are kept.
+  const remappedWardrobeHistory = (data.wardrobeHistory || []).map((row) => {
+    const slots = bySlot((slot) => (row.slots?.[slot] ?? []).map((id) => wardrobeItemIdRemap.get(id) ?? id));
+    return {
+      ...remapper.remapFields(row, ['id', 'chatId', 'characterId', 'actorCharacterId']),
+      slots,
+      slotsHash: hashEquippedSlots(slots),
+    };
+  }) as ChatWardrobeHistoryRow[];
+
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
@@ -684,5 +700,6 @@ export function remapBackupData(
     // entities, and nothing references rule IDs — pass through unchanged.
     textReplacementRules: data.textReplacementRules || [],
     wardrobeWear: remappedWardrobeWear,
+    wardrobeHistory: remappedWardrobeHistory,
   };
 }

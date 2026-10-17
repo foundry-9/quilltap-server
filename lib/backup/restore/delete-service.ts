@@ -56,6 +56,10 @@ async function clearFormat3Entities(): Promise<void> {
     // and its unique (itemId, wearer) index would otherwise make a
     // replace-mode restore merge into stale tallies rather than replace them.
     'wardrobe_wear_stats',
+    // The outfit history. The chat delete's cascade would remove it, but
+    // clearing it here keeps a restore from colliding on the timelines of
+    // chat ids it is about to recreate (the per-timeline unique indexes).
+    'chat_wardrobe_history',
   ];
   for (const table of mainTables) {
     try {

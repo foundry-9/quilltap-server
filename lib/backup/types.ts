@@ -36,6 +36,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -246,6 +247,8 @@ export interface BackupManifest {
     textReplacementRules?: number;
     /** Number of wardrobe wear-ledger rows (`wardrobe_wear_stats`) */
     wardrobeWear?: number;
+    /** Number of outfit-history rows (`chat_wardrobe_history`) */
+    wardrobeHistory?: number;
   };
 }
 
@@ -419,6 +422,13 @@ export interface BackupData {
    * with no FK, since items are vault files rather than rows.
    */
   wardrobeWear?: WardrobeWearStatsRow[];
+
+  /**
+   * The outfit history (`chat_wardrobe_history`): every character's numbered
+   * outfit timeline in every chat, cursor included. Restored after the chats
+   * it cascades from; optional, so an older archive simply has none.
+   */
+  wardrobeHistory?: ChatWardrobeHistoryRow[];
 }
 
 // ============================================================================
@@ -609,6 +619,9 @@ export interface RestoreSummary {
 
   /** Number of wardrobe wear-ledger rows restored */
   wardrobeWear?: number;
+
+  /** Number of outfit-history rows restored */
+  wardrobeHistory?: number;
 
   /**
    * Outcome of the post-restore embedding reconcile. A restore can land a
