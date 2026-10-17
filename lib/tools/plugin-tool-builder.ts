@@ -69,6 +69,8 @@ import {
 import {
   wardrobeTakeOffToolDefinition,
 } from '@/lib/tools/wardrobe-take-off-tool';
+import { wardrobeRollbackToolDefinition } from '@/lib/tools/wardrobe-rollback-tool';
+import { wardrobeHistoryToolDefinition } from '@/lib/tools/wardrobe-history-tool';
 import { docReadFileToolDefinition as docReadFileTool } from '@/lib/tools/doc-read-file-tool';
 import { docWriteFileToolDefinition as docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
 import { docStrReplaceToolDefinition as docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
@@ -248,6 +250,12 @@ export interface BuildToolsOptions {
   /** Whether to enable wardrobe_take_off tool (gated by canDressThemselves) */
   wardrobeTakeOff?: boolean;
 
+  /** Whether to enable wardrobe_rollback tool (gated by canDressThemselves) */
+  wardrobeRollback?: boolean;
+
+  /** Whether to enable wardrobe_history tool (gated by canDressThemselves) */
+  wardrobeHistory?: boolean;
+
   /** Whether to enable wardrobe_create tool (gated by canCreateOutfits) */
   wardrobeCreate?: boolean;
 
@@ -370,6 +378,8 @@ export async function buildToolsForProvider(
       wardrobeRead: options.wardrobeRead,
       wardrobeWear: options.wardrobeWear,
       wardrobeTakeOff: options.wardrobeTakeOff,
+      wardrobeRollback: options.wardrobeRollback,
+      wardrobeHistory: options.wardrobeHistory,
       wardrobeCreate: options.wardrobeCreate,
       wardrobeUpdate: options.wardrobeUpdate,
       wardrobeArchive: options.wardrobeArchive,
@@ -521,6 +531,12 @@ export async function buildToolsForProvider(
   }
   if (options.wardrobeTakeOff) {
     universalTools.push(wardrobeTakeOffToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeRollback) {
+    universalTools.push(wardrobeRollbackToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeHistory) {
+    universalTools.push(wardrobeHistoryToolDefinition as UniversalTool);
   }
   if (options.wardrobeCreate) {
     universalTools.push(wardrobeCreateToolDefinition as UniversalTool);

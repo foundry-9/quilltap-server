@@ -40,6 +40,8 @@ import {
   wardrobeArchiveToolDefinition,
   wardrobeWearToolDefinition,
   wardrobeTakeOffToolDefinition,
+  wardrobeRollbackToolDefinition,
+  wardrobeHistoryToolDefinition,
   sendMailToolDefinition,
   listMailToolDefinition,
   readMailToolDefinition,
@@ -94,6 +96,8 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   wardrobe_archive: wardrobeArchiveToolDefinition,
   wardrobe_wear: wardrobeWearToolDefinition,
   wardrobe_take_off: wardrobeTakeOffToolDefinition,
+  wardrobe_rollback: wardrobeRollbackToolDefinition,
+  wardrobe_history: wardrobeHistoryToolDefinition,
   doc_read_file: docReadFileTool,
   doc_write_file: docWriteFileTool,
   doc_str_replace: docStrReplaceTool,
@@ -280,6 +284,20 @@ const BUILT_IN_TOOLS = [
     id: 'wardrobe_take_off',
     name: 'Take Off Wardrobe Items',
     description: 'Take off worn wardrobe items or empty slots',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_rollback',
+    name: 'Return to an Earlier Outfit',
+    description: 'Return to an outfit worn earlier in this chat, by its number',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_history',
+    name: 'Outfit History',
+    description: 'List the numbered outfits worn in this chat',
     source: 'built-in' as const,
     category: 'wardrobe',
   },
@@ -702,6 +720,8 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
           case 'wardrobe_read':
           case 'wardrobe_wear':
           case 'wardrobe_take_off':
+          case 'wardrobe_rollback':
+          case 'wardrobe_history':
             if (!chatContext.canDressThemselves) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe self-dressing enabled';

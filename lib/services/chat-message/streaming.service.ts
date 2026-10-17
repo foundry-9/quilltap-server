@@ -170,7 +170,7 @@ export async function buildTools(
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
   helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, and wardrobe_take_off) */
+  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off, wardrobe_rollback, and wardrobe_history) */
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
@@ -297,6 +297,8 @@ export async function buildTools(
     wardrobeRead: canDressThemselves !== false,
     wardrobeWear: canDressThemselves !== false,
     wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeRollback: canDressThemselves !== false,
+    wardrobeHistory: canDressThemselves !== false,
     wardrobeCreate: canCreateOutfits !== false,
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,

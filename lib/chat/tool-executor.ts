@@ -264,6 +264,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'wardrobe_archive',
   'wardrobe_wear',
   'wardrobe_take_off',
+  'wardrobe_rollback',
+  'wardrobe_history',
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
   // Terminal tools — Prospero Phase 2

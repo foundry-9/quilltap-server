@@ -1909,6 +1909,21 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters wardrobeHistory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "description": "How many of the most recent outfits to list. Default 20.",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1944,6 +1959,21 @@ exports[`tool definitions: derived OpenAI parameters wardrobeRead: parameters sn
     "item_title": {
       "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeRollback: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "index": {
+      "description": "The outfit to return to, by its number in wardrobe_history. Omit to step back one outfit from the current one. Any recorded number is allowed, earlier or later than the current one.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer",
     },
   },
   "type": "object",

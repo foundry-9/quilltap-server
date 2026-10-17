@@ -90,6 +90,7 @@ interface ToolResult {
 const WARDROBE_ACTION_TOOLS = new Set([
   'wardrobe_wear',
   'wardrobe_take_off',
+  'wardrobe_rollback',
   'wardrobe_create',
   'wardrobe_update',
   'wardrobe_archive',
@@ -119,6 +120,20 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
     if (coverageSummary) lines.push(coverageSummary)
 
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_rollback') {
+    const restored = result.restored_index as number | undefined
+    if (typeof restored !== 'number') return null
+    lines.push(`Returned to outfit ${restored}.`)
+    const skipped = (result.skipped as Array<{ title?: string | null; item_id?: string; reason?: string }> | undefined) ?? []
+    for (const item of skipped) {
+      const name = item.title ?? item.item_id ?? 'An item'
+      lines.push(`${name} could not be put back on (${item.reason === 'archived' ? 'archived' : 'no longer exists'}).`)
+    }
+    const coverageSummary = result.coverage_summary as string | undefined
+    if (coverageSummary) lines.push(coverageSummary)
+    return { label: 'Wardrobe', lines }
   }
 
   if (toolData.toolName === 'wardrobe_create') {
@@ -316,6 +331,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     },
     wardrobe_take_off: {
       displayName: 'Take Off',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_rollback: {
+      displayName: 'Earlier Outfit',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_history: {
+      displayName: 'Outfit History',
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },

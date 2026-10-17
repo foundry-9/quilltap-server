@@ -44,6 +44,10 @@ export interface TextBlockPromptOptions {
   wardrobeWear?: boolean
   /** Enable wardrobe_take_off tool */
   wardrobeTakeOff?: boolean
+  /** Enable wardrobe_rollback tool */
+  wardrobeRollback?: boolean
+  /** Enable wardrobe_history tool */
+  wardrobeHistory?: boolean
   /** Enable wardrobe_create tool */
   wardrobeCreate?: boolean
   /** Enable wardrobe_update tool */
@@ -182,6 +186,21 @@ Take a worn item off, or empty a slot.
 To take off a worn item across every slot it covers: [[TAKE_OFF mode="remove" id="item-uuid" /]]
 By name: [[TAKE_OFF mode="remove" title="Charcoal Sweater" /]]
 To clear a slot entirely: [[TAKE_OFF mode="clear_slot" slot="top" /]]`)
+  }
+
+  if (options.wardrobeHistory) {
+    toolDocs.push(`
+### Outfit History
+List the outfits you have worn in this chat, numbered from 0 (what you arrived in). The one you wear now is marked.
+[[OUTFIT_HISTORY /]]
+Only the most recent few: [[OUTFIT_HISTORY limit="5" /]]`)
+  }
+
+  if (options.wardrobeRollback) {
+    toolDocs.push(`
+### Return to an Earlier Outfit
+Step back one outfit: [[ROLLBACK_OUTFIT /]]
+Return to a numbered outfit from the history: [[ROLLBACK_OUTFIT index="2" /]]`)
   }
 
   if (options.wardrobeCreate) {

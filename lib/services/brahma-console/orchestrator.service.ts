@@ -249,6 +249,8 @@ async function processBrahmaResponse(
       wardrobeRead: false,
       wardrobeWear: false,
       wardrobeTakeOff: false,
+      wardrobeRollback: false,
+      wardrobeHistory: false,
       wardrobeCreate: false,
       wardrobeUpdate: false,
       wardrobeArchive: false,

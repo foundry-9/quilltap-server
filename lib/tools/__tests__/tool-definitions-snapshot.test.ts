@@ -72,6 +72,8 @@ import { wardrobeUpdateToolDefinition } from '../wardrobe-update-tool'
 import { wardrobeArchiveToolDefinition } from '../wardrobe-archive-tool'
 import { wardrobeWearToolDefinition } from '../wardrobe-wear-tool'
 import { wardrobeTakeOffToolDefinition } from '../wardrobe-take-off-tool'
+import { wardrobeRollbackToolDefinition } from '../wardrobe-rollback-tool'
+import { wardrobeHistoryToolDefinition } from '../wardrobe-history-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 
@@ -135,6 +137,8 @@ const ALL_TOOLS = {
   wardrobeArchive: wardrobeArchiveToolDefinition,
   wardrobeWear: wardrobeWearToolDefinition,
   wardrobeTakeOff: wardrobeTakeOffToolDefinition,
+  wardrobeRollback: wardrobeRollbackToolDefinition,
+  wardrobeHistory: wardrobeHistoryToolDefinition,
   webSearch: webSearchToolDefinition,
   whisper: whisperToolDefinition,
 }

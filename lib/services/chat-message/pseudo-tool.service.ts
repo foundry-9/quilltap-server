@@ -92,6 +92,8 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   wardrobeRead: boolean
   wardrobeWear: boolean
   wardrobeTakeOff: boolean
+  wardrobeRollback: boolean
+  wardrobeHistory: boolean
   wardrobeCreate: boolean
   wardrobeUpdate: boolean
   wardrobeArchive: boolean
@@ -125,6 +127,8 @@ export function determineTextBlockToolOptions(
     wardrobeRead: canDressThemselves !== false,
     wardrobeWear: canDressThemselves !== false,
     wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeRollback: canDressThemselves !== false,
+    wardrobeHistory: canDressThemselves !== false,
     wardrobeCreate: canCreateOutfits !== false,
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
@@ -153,6 +157,8 @@ export function buildTextBlockSystemInstructions(
     wardrobeRead: enabledOptions.wardrobeRead,
     wardrobeWear: enabledOptions.wardrobeWear,
     wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeRollback: enabledOptions.wardrobeRollback,
+    wardrobeHistory: enabledOptions.wardrobeHistory,
     wardrobeCreate: enabledOptions.wardrobeCreate,
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,
@@ -241,6 +247,8 @@ export function buildSimpleJsonSystemInstructions(
     wardrobeRead: enabledOptions.wardrobeRead,
     wardrobeWear: enabledOptions.wardrobeWear,
     wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeRollback: enabledOptions.wardrobeRollback,
+    wardrobeHistory: enabledOptions.wardrobeHistory,
     wardrobeCreate: enabledOptions.wardrobeCreate,
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,

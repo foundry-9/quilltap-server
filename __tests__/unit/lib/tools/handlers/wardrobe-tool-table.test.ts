@@ -38,6 +38,14 @@ jest.mock('@/lib/tools/handlers/wardrobe-take-off-handler', () => ({
   executeWardrobeTakeOffTool: jest.fn(),
   formatWardrobeTakeOffResults: jest.fn(() => 'take-off'),
 }))
+jest.mock('@/lib/tools/handlers/wardrobe-rollback-handler', () => ({
+  executeWardrobeRollbackTool: jest.fn(),
+  formatWardrobeRollbackResults: jest.fn(() => 'rollback'),
+}))
+jest.mock('@/lib/tools/handlers/wardrobe-history-handler', () => ({
+  executeWardrobeHistoryTool: jest.fn(),
+  formatWardrobeHistoryResults: jest.fn(() => 'history'),
+}))
 
 const HANDLERS: Record<string, { module: string; fn: string }> = {
   wardrobe_list: { module: '@/lib/tools/handlers/wardrobe-list-handler', fn: 'executeWardrobeListTool' },
@@ -47,6 +55,8 @@ const HANDLERS: Record<string, { module: string; fn: string }> = {
   wardrobe_archive: { module: '@/lib/tools/handlers/wardrobe-archive-handler', fn: 'executeWardrobeArchiveTool' },
   wardrobe_wear: { module: '@/lib/tools/handlers/wardrobe-wear-handler', fn: 'executeWardrobeWearTool' },
   wardrobe_take_off: { module: '@/lib/tools/handlers/wardrobe-take-off-handler', fn: 'executeWardrobeTakeOffTool' },
+  wardrobe_rollback: { module: '@/lib/tools/handlers/wardrobe-rollback-handler', fn: 'executeWardrobeRollbackTool' },
+  wardrobe_history: { module: '@/lib/tools/handlers/wardrobe-history-handler', fn: 'executeWardrobeHistoryTool' },
 }
 
 describe('WARDROBE_TOOL_TABLE', () => {
@@ -54,7 +64,7 @@ describe('WARDROBE_TOOL_TABLE', () => {
     jest.clearAllMocks()
   })
 
-  it('covers exactly the seven wardrobe_* tools', () => {
+  it('covers exactly the nine wardrobe_* tools', () => {
     expect(Object.keys(WARDROBE_TOOL_TABLE).sort()).toEqual(Object.keys(HANDLERS).sort())
   })
 
@@ -71,7 +81,13 @@ describe('WARDROBE_TOOL_TABLE', () => {
     })
 
     const pending = new Set<string>()
-    const context = { userId: 'user-1', chatId: 'chat-1', characterId: 'char-1', pendingWardrobeAnnouncements: pending }
+    const history = new Map()
+    const context = {
+      userId: 'user-1', chatId: 'chat-1', characterId: 'char-1',
+      provenance: { source: 'character', actorCharacterId: 'char-1' },
+      pendingWardrobeAnnouncements: pending,
+      pendingWardrobeHistory: history,
+    }
     const input = { marker: name }
 
     const run = await WARDROBE_TOOL_TABLE[name](input, context)
@@ -80,6 +96,7 @@ describe('WARDROBE_TOOL_TABLE', () => {
     expect(handler.mock.calls[0][0]).toBe(input)
     expect(handler.mock.calls[0][1]).toEqual(context)
     expect(handler.mock.calls[0][1].pendingWardrobeAnnouncements).toBe(pending)
+    expect(handler.mock.calls[0][1].pendingWardrobeHistory).toBe(history)
     expect(run.success).toBe(true)
     expect(run.result.formattedText).toEqual(expect.any(String))
   })

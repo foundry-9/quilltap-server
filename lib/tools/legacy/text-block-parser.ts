@@ -106,6 +106,13 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'remove': 'wardrobe_take_off',
   'undress': 'wardrobe_take_off',
 
+  'wardrobe_rollback': 'wardrobe_rollback',
+  'rollback_outfit': 'wardrobe_rollback',
+  'undo_outfit': 'wardrobe_rollback',
+
+  'wardrobe_history': 'wardrobe_history',
+  'outfit_history': 'wardrobe_history',
+
   'wardrobe_create': 'wardrobe_create',
   'create_wardrobe_item': 'wardrobe_create',
 

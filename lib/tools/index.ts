@@ -401,6 +401,32 @@ export {
   type WardrobeTakeOffToolContext,
 } from './handlers/wardrobe-take-off-handler';
 
+export {
+  wardrobeRollbackToolDefinition,
+  validateWardrobeRollbackInput,
+  type WardrobeRollbackToolInput,
+  type WardrobeRollbackToolOutput,
+} from './wardrobe-rollback-tool';
+
+export {
+  executeWardrobeRollbackTool,
+  formatWardrobeRollbackResults,
+  type WardrobeRollbackToolContext,
+} from './handlers/wardrobe-rollback-handler';
+
+export {
+  wardrobeHistoryToolDefinition,
+  validateWardrobeHistoryInput,
+  type WardrobeHistoryToolInput,
+  type WardrobeHistoryToolOutput,
+} from './wardrobe-history-tool';
+
+export {
+  executeWardrobeHistoryTool,
+  formatWardrobeHistoryResults,
+  type WardrobeHistoryToolContext,
+} from './handlers/wardrobe-history-handler';
+
 // Scriptorium Tools (Conversation Rendering + Annotations)
 export {
   readConversationToolDefinition,
