@@ -6,12 +6,19 @@
 
 #### Feature: Inventory tools and Pascal inventory support
 
+- Review fixes:
+  - `inventory_give` moves the file first and clears the giver's carried sets only after the move succeeds. A refused transfer no longer leaves the giver unequipped everywhere.
+  - `ChatsRepository.removeEquippedInventoryId` now takes `(chatId, characterId, itemId)` and rewrites one chat. New `findChatIdsCarryingInventoryId` and `dropCarriedEverywhere` (`lib/inventory/equip.ts`) clear an id from every chat, each under `withChatInventoryLock`.
+  - `inventory_archive` clears the archived object from the character's carried set in every chat, so a restore does not re-equip it.
+  - Pending Inventory announcements: an unequip also removes the object from `pickedUp`, a give strikes its object from the giver's pending entry, and each entry records `provenances`, which the flush logs instead of a hard-coded `character`.
+  - Job child: `docMountDocuments.findManyByMountPointsInFolder` answers through a per-job overlay of buffered `linkDocumentContent` writes and `deleteWithGC` deletes, so later gestures in one job see instances it created.
+  - Text-block parser: `inventory_*` tools convert only `max_equipped` to a number and `archived` / `equip` to booleans; names, titles and descriptions stay strings.
+  - `refs.ts` builds a pool's id map once; `inventory_give` resolves a receiver id without loading the cast and loads names in parallel.
 - New `lib/inventory/refs.ts`: `resolveInventoryRef` (id → title → name, case-insensitive, own tier first), `stateOf` (`equipped` > `carried` > `reachable` > `absent`), `equippedKinCount`, `pickForGesture`, and the `InventoryContext` every reader shares. `lib/inventory/context.ts` loads one per tool call or run.
 - New character flag `canManageInventory` (migration `add-character-inventory-flag-v1`, null = on), with an Aurora toggle beside Self-Dressing, the export schema, DDL.md, the Almanack ledger and the tools API.
 - Nine new tools gated by it: `inventory_list`, `inventory_read`, `inventory_equip`, `inventory_unequip`, `inventory_pick_up`, `inventory_create`, `inventory_update`, `inventory_archive`, `inventory_give` (`lib/tools/inventory-*-tool.ts`, handlers and `inventory-tool-table.ts`). Registered in the plugin tool builder (nine per-tool flags via `lib/tools/inventory-tool-flags.ts`), the executor, the simple-JSON and text-block prompts and parsers, `/api/v1/tools`, and the Salon tool bubble. Off on the Brahma Console, the Scenario Builder, Carina and help chats.
 - `buildTools` and `determineTextBlockToolOptions` take a new positional `canManageInventory` after `canCreateOutfits`.
 - `lib/inventory/equip.ts`: `pickUpItems` instantiates archetypes into the character's vault root and equips them, checking the cap before any instance is written; `equipItems` takes `known` for objects written in the same call.
-- `ChatsRepository.removeEquippedInventoryId` drops one id from one character's carried set in every chat (used by `inventory_give`).
 - `lib/inventory/transfers.ts`: `transferInventoryItem`, extracted from the transfers route, which now calls it. Same-location and duplicate-id refusals now answer 400 with code `INVALID_SHAPE`.
 - `InventoryChangeContext.provenance` is `operator` / `character` / `pascal`. Inside a turn, `notifyInventoryChanged` records into a new `pendingInventoryAnnouncements` map (created by `newWardrobeTurnContainers()`) and `flushPendingInventoryAnnouncements` posts one netted Pascal line per character at turn end. Gives post their own line. `describeInventoryChange` gains "picks up" and "hands … to …".
 - Job child: `chats.findById` / `getEquippedInventory` answer through a per-job overlay of buffered `setEquippedInventory` and `removeEquippedInventoryId` writes.

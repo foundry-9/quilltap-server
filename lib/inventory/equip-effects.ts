@@ -108,7 +108,7 @@ export async function notifyInventoryChanged(
   if (change.equipped.length === 0 && change.unequipped.length === 0 && picked.length === 0 && !change.given) return;
   const pending = ctx.pendingInventoryAnnouncements;
   if (pending && ctx.announce && !change.given) {
-    recordPendingInventoryChange(pending, { userId: ctx.userId, chatId: chat.id, characterId }, change);
+    recordPendingInventoryChange(pending, { userId: ctx.userId, chatId: chat.id, characterId }, change, ctx.provenance);
     logger.debug('[InventoryEffects] Inventory change joined the turn', {
       chatId: chat.id,
       characterId,
@@ -116,6 +116,11 @@ export async function notifyInventoryChanged(
       context: 'inventory',
     });
     return;
+  }
+  if (pending && change.given) {
+    // The give posts now, so the object must not also be announced at turn
+    // end as taken up or picked up by the giver.
+    strikeFromPendingInventoryChange(pending, `${chat.id}:${characterId}`, change.given.item.id);
   }
   try {
     if (ctx.announce) {
@@ -156,9 +161,11 @@ export function recordPendingInventoryChange(
   pending: Map<string, PendingInventoryChange>,
   who: { userId: string; chatId: string; characterId: string },
   change: InventoryChange,
+  provenance: InventoryChangeProvenance,
 ): void {
   const key = `${who.chatId}:${who.characterId}`;
-  const entry = pending.get(key) ?? { ...who, equipped: [], unequipped: [], pickedUp: [] };
+  const entry = pending.get(key) ?? { ...who, equipped: [], unequipped: [], pickedUp: [], provenances: [] };
+  if (!entry.provenances.includes(provenance)) entry.provenances.push(provenance);
   for (const item of change.equipped) {
     const undone = entry.unequipped.findIndex((other) => other.id === item.id);
     if (undone >= 0) entry.unequipped.splice(undone, 1);
@@ -166,11 +173,32 @@ export function recordPendingInventoryChange(
   }
   for (const item of change.unequipped) {
     const undone = entry.equipped.findIndex((other) => other.id === item.id);
-    if (undone >= 0) entry.equipped.splice(undone, 1);
-    else pushUnique(entry.unequipped, item);
+    if (undone >= 0) {
+      entry.equipped.splice(undone, 1);
+      // Picked up and set down in one turn: no pick-up to announce either.
+      removeById(entry.pickedUp, item.id);
+    } else pushUnique(entry.unequipped, item);
   }
   for (const item of change.pickedUp ?? []) pushUnique(entry.pickedUp, item);
   pending.set(key, entry);
+}
+
+function removeById(list: ResolvedInventoryItem[], id: string): void {
+  const at = list.findIndex((item) => item.id === id);
+  if (at >= 0) list.splice(at, 1);
+}
+
+/** Take one object out of a character's pending entry altogether (it was given away this turn). */
+export function strikeFromPendingInventoryChange(
+  pending: Map<string, PendingInventoryChange>,
+  key: string,
+  itemId: string,
+): void {
+  const entry = pending.get(key);
+  if (!entry) return;
+  removeById(entry.equipped, itemId);
+  removeById(entry.unequipped, itemId);
+  removeById(entry.pickedUp, itemId);
 }
 
 /**
@@ -193,11 +221,12 @@ export async function flushPendingInventoryAnnouncements(
       { id: entry.chatId },
       entry.characterId,
       { equipped: entry.equipped, unequipped: entry.unequipped, pickedUp: entry.pickedUp },
-      { userId: entry.userId, provenance: 'character', announce: true },
+      { userId: entry.userId, provenance: entry.provenances[0] ?? 'character', announce: true },
     );
   }
   logger.debug('[InventoryEffects] Drained the turn\'s Inventory announcements', {
     characters: entries.length,
+    provenances: entries.map((entry) => ({ characterId: entry.characterId, provenances: entry.provenances })),
     context: 'inventory',
   });
 }

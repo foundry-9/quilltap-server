@@ -367,6 +367,10 @@ function resolveParamAliases(toolName: string, params: Record<string, string>): 
  * Maps tool name aliases, parameter aliases, and content to the appropriate
  * tool argument using per-tool mappings.
  */
+/** The only non-text parameters the `inventory_*` tools take. */
+const INVENTORY_BOOLEAN_PARAMS = new Set(['archived', 'equip'])
+const INVENTORY_NUMBER_PARAMS = new Set(['max_equipped'])
+
 export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): ToolCallRequest {
   const internalName = mapTextBlockToolName(parsed.toolName)
   const resolvedParams = resolveParamAliases(internalName, parsed.params)
@@ -383,8 +387,20 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
     }
   }
 
-  // Convert numeric-looking values
+  // Convert numeric-looking values. The inventory tools name their few
+  // non-text parameters, so their names, titles and descriptions stay text
+  // even when they look like "42" or "true".
+  const inventoryTool = internalName.startsWith('inventory_')
   for (const [key, value] of Object.entries(args)) {
+    if (inventoryTool) {
+      if (typeof value !== 'string') continue
+      if (INVENTORY_BOOLEAN_PARAMS.has(key) && (value === 'true' || value === 'false')) {
+        args[key] = value === 'true'
+      } else if (INVENTORY_NUMBER_PARAMS.has(key) && value.trim() !== '' && !isNaN(Number(value))) {
+        args[key] = Number(value)
+      }
+      continue
+    }
     if (typeof value === 'string') {
       if (value === 'true') {
         args[key] = true
@@ -392,7 +408,7 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
         args[key] = false
       } else {
         const num = Number(value)
-        if (!isNaN(num) && value.trim() !== '' && key !== 'query' && key !== 'message' && key !== 'prompt' && key !== 'content' && key !== 'target' && key !== 'ref' && key !== 'refs' && key !== 'to') {
+        if (!isNaN(num) && value.trim() !== '' && key !== 'query' && key !== 'message' && key !== 'prompt' && key !== 'content' && key !== 'target') {
           args[key] = num
         }
       }

@@ -143,6 +143,41 @@ export function withChatInventoryLock<T>(chatId: string, fn: () => Promise<T>): 
   return runSerialized(`inventory-equip:${chatId}`, fn);
 }
 
+/**
+ * Drop one object from one character's carried set in **every** chat that
+ * lists it — a give (the id is kept on the move, so a later give-back must not
+ * reappear as carried) or an archive (a later restore must not quietly
+ * re-equip it). Each chat is rewritten under its own carried-set lock.
+ * `alsoChatIds` names chats to check whatever the read finds: in the job
+ * child the read sees only the snapshot, not this job's own equips. Returns
+ * how many chats changed. Never takes the lock re-entrantly, so a caller must
+ * not hold one.
+ */
+export async function dropCarriedEverywhere(
+  repos: Repos,
+  characterId: string,
+  itemId: string,
+  alsoChatIds: readonly string[] = [],
+): Promise<number> {
+  const found = await repos.chats.findChatIdsCarryingInventoryId(characterId, itemId);
+  const chatIds = Array.from(new Set([...found, ...alsoChatIds]));
+  let changed = 0;
+  for (const chatId of chatIds) {
+    const wrote = await withChatInventoryLock(chatId, () =>
+      repos.chats.removeEquippedInventoryId(chatId, characterId, itemId),
+    );
+    if (wrote) changed++;
+  }
+  logger.debug('[InventoryEquip] Dropped an object from every carried set', {
+    characterId,
+    itemId,
+    checked: chatIds.length,
+    changed,
+    context: 'inventory',
+  });
+  return changed;
+}
+
 /** {@link equipItems} for a caller already inside {@link withChatInventoryLock}. */
 export function equipItemsHoldingLock(
   repos: Repos,

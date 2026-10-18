@@ -25,6 +25,10 @@ jest.mock('@/lib/inventory/item-images', () => ({
   commitMovedInventoryImages: jest.fn(async () => undefined),
 }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
+jest.mock('@/lib/inventory/transfers', () => {
+  const actual = jest.requireActual('@/lib/inventory/transfers')
+  return { ...actual, transferInventoryItem: jest.fn(actual.transferInventoryItem) }
+})
 jest.mock('@/lib/services/pascal/writer', () => ({ postPascalInventoryChange: jest.fn(async () => ({ id: 'm' })) }))
 jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({ refreshAvatarForAppearance: jest.fn(async () => undefined) }))
 
@@ -36,6 +40,7 @@ import { loadInventoryPool } from '@/lib/inventory/pool'
 import { flushPendingInventoryAnnouncements } from '@/lib/inventory/equip-effects'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { INVENTORY_TOOL_TABLE } from '@/lib/tools/handlers/inventory-tool-table'
+import { transferInventoryItem } from '@/lib/inventory/transfers'
 import type { InventoryCreateBody } from '@/lib/schemas/inventory.types'
 
 const repos = () => getFakeRepos() as never
@@ -107,6 +112,16 @@ describe('inventory_pick_up', () => {
     expect(posted()).toEqual(['*Vivienne takes up a compass and picks up a magic bow.*'])
   })
 
+  it('a pick-up set down again in the same turn announces nothing', async () => {
+    await createInventoryItem(repos(), await loc('project', 'project-1'), body({ name: 'torch', isArchetype: true }))
+    const containers = newWardrobeTurnContainers()
+    const turn = { pendingInventoryAnnouncements: containers.pendingInventoryAnnouncements }
+    expect((await run('inventory_pick_up', { ref: 'torch' }, turn)).success).toBe(true)
+    expect((await run('inventory_unequip', { refs: ['torch'] }, turn)).success).toBe(true)
+    await flushPendingInventoryAnnouncements(containers, repos())
+    expect(posted()).toEqual([])
+  })
+
   it('checks the cap before writing: a breach creates nothing', async () => {
     const project = await loc('project', 'project-1')
     const bow = await createInventoryItem(repos(), project, body({ name: 'bow', isArchetype: true }))
@@ -171,6 +186,24 @@ describe('own-only mutations', () => {
     expect(objectsIn('mp-c-viv')[0].archivedAt).toBeTruthy()
   })
 
+  it('archive drops a carried object from every chat, so a restore does not re-equip it', async () => {
+    await createInventoryItem(repos(), await loc('character', 'c-viv'), body({ name: 'compass' }))
+    addChat('chat-2', ['c-viv', 'c-marcus'])
+    await run('inventory_equip', { refs: ['compass'] })
+    await run('inventory_equip', { refs: ['compass'] }, { chatId: 'chat-2' })
+    expect(carried('chat-2', 'c-viv')).toHaveLength(1)
+
+    expect((await run('inventory_archive', { ref: 'compass', archived: true })).success).toBe(true)
+    expect(carried('chat-1', 'c-viv')).toEqual([])
+    expect(carried('chat-2', 'c-viv')).toEqual([])
+    expect(posted()).toContain('*Vivienne sets down the compass.*')
+
+    const restored = await run('inventory_archive', { ref: 'compass', archived: false })
+    expect(restored).toMatchObject({ success: true, result: { changed: true } })
+    expect(carried('chat-1', 'c-viv')).toEqual([])
+    expect(carried('chat-2', 'c-viv')).toEqual([])
+  })
+
   it('create makes a plain own object and can equip it', async () => {
     const r = await run('inventory_create', { name: 'compass', title: 'The Navigator', equip: true, metadata: { damage: '1d4' } })
     expect(r.success).toBe(true)
@@ -195,6 +228,37 @@ describe('inventory_give', () => {
     expect(carried('chat-1', 'c-viv')).toEqual([])
     expect(carried('chat-2', 'c-viv')).toEqual([])
     expect(carried('chat-1', 'c-marcus')).toEqual([])
+    expect(posted()).toEqual(['*Vivienne hands the lantern to Marcus.*'])
+  })
+
+  it('leaves the giver carrying it everywhere when the move is refused', async () => {
+    const lantern = await createInventoryItem(repos(), await loc('character', 'c-viv'), body({ name: 'lantern' }))
+    addChat('chat-2', ['c-viv', 'c-marcus'])
+    await run('inventory_equip', { refs: ['lantern'] })
+    await run('inventory_equip', { refs: ['lantern'] }, { chatId: 'chat-2' })
+    ;(postPascalInventoryChange as jest.Mock).mockClear()
+    ;(transferInventoryItem as jest.Mock).mockRejectedValueOnce(new Error('A kit names it and the receiver cannot reach it'))
+    const r = await run('inventory_give', { ref: 'lantern', to: 'Marcus' })
+    expect(r).toMatchObject({ success: false, error: 'A kit names it and the receiver cannot reach it' })
+    expect(objectsIn('mp-c-viv').map((o) => o.id)).toEqual([lantern.id])
+    expect(carried('chat-1', 'c-viv')).toEqual([lantern.id])
+    expect(carried('chat-2', 'c-viv')).toEqual([lantern.id])
+    expect(posted()).toEqual([])
+  })
+
+  it('names the receiver by participant id as well as by name', async () => {
+    await createInventoryItem(repos(), await loc('character', 'c-viv'), body({ name: 'lantern' }))
+    const r = await run('inventory_give', { ref: 'lantern', to: 'C-MARCUS' })
+    expect(r).toMatchObject({ success: true, result: { recipient: { id: 'c-marcus', name: 'Marcus' } } })
+  })
+
+  it('an object taken up and then given in one turn is announced only as given', async () => {
+    await createInventoryItem(repos(), await loc('character', 'c-viv'), body({ name: 'lantern' }))
+    const containers = newWardrobeTurnContainers()
+    const turn = { pendingInventoryAnnouncements: containers.pendingInventoryAnnouncements }
+    await run('inventory_equip', { refs: ['lantern'] }, turn)
+    await run('inventory_give', { ref: 'lantern', to: 'Marcus' }, turn)
+    await flushPendingInventoryAnnouncements(containers, repos())
     expect(posted()).toEqual(['*Vivienne hands the lantern to Marcus.*'])
   })
 

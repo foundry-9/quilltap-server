@@ -144,8 +144,8 @@ A character is not obliged to wait upon the operator's hand. Given the run of th
 | `inventory_pick_up` | Makes an instance of a reachable **archetype** in their own vault — a *magic bow* from the project shelf becomes their own magic bow — and equips it unless asked not to. The limit is checked first: a pick-up that would break it makes nothing at all. |
 | `inventory_create` | Makes a new object of their own, plainly: never an archetype, never a kit, never copyable. |
 | `inventory_update` | Amends one of their **own** objects — name, title, descriptions, emoji, limit, metadata. Shared objects are not theirs to amend. On an instance, a change is an override of the archetype. |
-| `inventory_archive` | Puts away (or restores) one of their own objects. |
-| `inventory_give` | Hands one of their own objects to another character in the chat. The object moves to the receiver's vault, keeping its identity; the giver stops carrying it in every chat; the receiver decides for themselves whether to take it up. Shared objects, kits, archived characters and anyone not seated at the table are refused, politely but firmly. |
+| `inventory_archive` | Puts away (or restores) one of their own objects. Putting one away also sets it down in every chat, so a later restore returns it to the pocket, not to the hand. |
+| `inventory_give` | Hands one of their own objects to another character in the chat. The object moves to the receiver's vault, keeping its identity; the giver stops carrying it in every chat; the receiver decides for themselves whether to take it up. Should the hand-over be refused, the giver keeps carrying it exactly as before. Shared objects, kits, archived characters and anyone not seated at the table are refused, politely but firmly. |
 
 Every reference may be an object's id, its title ("Excalibur") or its name ("sword"), without regard to case. A character-made or picked-up object lands at the root of their vault, where you may file it as you please.
 

@@ -1,15 +1,17 @@
 /**
  * Archive Inventory Object Tool Handler
  *
- * Own objects only; `setInventoryItemArchived`, idempotent. An archived
- * object leaves every chat's resolved set on read, so archiving one carried
- * here is also a setting-down, announced as one.
+ * Own objects only; `setInventoryItemArchived`, idempotent. Archiving also
+ * drops the id from the character's carried set in every chat
+ * (`dropCarriedEverywhere`), so a later restore does not quietly re-equip it;
+ * when it was carried here, that is a setting-down, announced as one.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { publishRealtime } from '@/lib/realtime/bus';
 import { setInventoryItemArchived } from '@/lib/inventory/item-mutations';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
+import { dropCarriedEverywhere } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import type { InventoryArchiveToolOutput } from '../inventory-archive-tool';
 import { validateInventoryArchiveInput } from '../inventory-archive-tool';
@@ -52,6 +54,9 @@ export async function executeInventoryArchiveTool(
     const { changed } = await setInventoryItemArchived(vault, record, parsed.archived);
     if (changed) {
       publishRealtime('inventory');
+      if (parsed.archived && (await dropCarriedEverywhere(repos, context.characterId, record.id, [context.chatId])) > 0) {
+        publishRealtime('chats', context.chatId);
+      }
       if (parsed.archived && match.equipped) {
         await notifyInventoryChanged(repos, { id: context.chatId }, context.characterId, { equipped: [], unequipped: [match.item] }, characterChangeContext(context));
       }

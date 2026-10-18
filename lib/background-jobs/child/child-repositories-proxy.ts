@@ -30,6 +30,7 @@ import { runWithJobFolderCache } from './job-folder-cache';
 import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { normalizeEquippedInventory } from '@/lib/database/repositories/chats.repository';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { DocMountDocumentWithLink } from '@/lib/database/repositories/doc-mount-documents.repository';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
@@ -71,14 +72,25 @@ interface JobScope {
    * `chats.setEquippedInventory` records the ids it leaves for one
    * (chat, character), keyed `chatId:characterId`; a buffered
    * `chats.removeEquippedInventoryId` records an id dropped from a character
-   * in every chat. Each carries a sequence number so a removal only strikes
+   * in one chat. Each carries a sequence number so a removal only strikes
    * sets written before it. `chats.findById` / `chats.getEquippedInventory`
    * answer through it, so two gestures in one job (a custom tool's two
    * `inventory` effects) see each other.
    */
   equippedInventory: Map<string, { seq: number; ids: string[] | null }>;
-  inventoryRemovals: Array<{ seq: number; characterId: string; itemId: string }>;
+  inventoryRemovals: Array<{ seq: number; chatId: string; characterId: string; itemId: string }>;
   inventorySeq: number;
+  /**
+   * Read-your-writes overlay for database-backed documents, keyed
+   * `mountPointId` + lower-cased path. A buffered
+   * `docMountFileLinks.linkDocumentContent` records the content it writes and
+   * a buffered `deleteWithGC` the link it removes, and
+   * `docMountDocuments.findManyByMountPointsInFolder` answers through them —
+   * so a folder read later in the job (the Inventory pool, after a pick-up or
+   * a create) sees the files the job itself wrote.
+   */
+  documents: Map<string, BufferedDocument>;
+  removedDocLinkIds: Set<string>;
   /**
    * Read-your-writes overlay for memory rows, keyed by memory id. A later step
    * of a job must see the job's own buffered inserts, links, footnotes, counts,
@@ -151,6 +163,8 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     equippedInventory: new Map(),
     inventoryRemovals: [],
     inventorySeq: 0,
+    documents: new Map(),
+    removedDocLinkIds: new Set(),
     memories: new Map(),
     memoryRelatedScrubs: new Set(),
     admissionOccurrences: new Map(),
@@ -310,6 +324,119 @@ function bufferedOutfitFor(scope: JobScope | undefined, args: unknown[]): Equipp
 }
 
 // ============================================================================
+// Database-backed document read-your-writes overlay
+// ============================================================================
+
+/** What a buffered `linkDocumentContent` wrote, as a folder read needs it. */
+interface BufferedDocument {
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  folderId: string | null;
+  fileType: DocMountDocumentWithLink['fileType'];
+  content: string;
+  contentSha256: string;
+  plainTextLength: number;
+  writtenAt: string;
+}
+
+function documentKey(mountPointId: string, relativePath: string): string {
+  return `${mountPointId}\u0000${relativePath.toLowerCase()}`;
+}
+
+/** The synthetic link id a buffered document carries until the parent writes it. */
+function bufferedLinkId(key: string): string {
+  return `buffered-link:${key}`;
+}
+
+/** Record a buffered document write or link delete (see {@link JobScope.documents}). */
+function recordBufferedDocumentWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn === 'docMountFileLinks.linkDocumentContent') {
+    const input = args[0] as Partial<BufferedDocument> | undefined;
+    if (!input || typeof input.mountPointId !== 'string' || typeof input.relativePath !== 'string'
+      || typeof input.content !== 'string') return;
+    const key = documentKey(input.mountPointId, input.relativePath);
+    scope.documents.set(key, {
+      mountPointId: input.mountPointId,
+      relativePath: input.relativePath,
+      fileName: input.fileName ?? input.relativePath.slice(input.relativePath.lastIndexOf('/') + 1),
+      folderId: input.folderId ?? null,
+      fileType: (input.fileType ?? 'txt') as BufferedDocument['fileType'],
+      content: input.content,
+      contentSha256: input.contentSha256 ?? '',
+      plainTextLength: input.plainTextLength ?? input.content.length,
+      writtenAt: new Date().toISOString(),
+    });
+    log.debug('Recorded buffered document write for in-job reads', { jobId: scope.jobId, relativePath: input.relativePath });
+  } else if (fqn === 'docMountFileLinks.deleteWithGC' && typeof args[0] === 'string') {
+    scope.removedDocLinkIds.add(args[0]);
+    for (const key of scope.documents.keys()) {
+      if (bufferedLinkId(key) === args[0]) scope.documents.delete(key);
+    }
+  }
+}
+
+function hasDocumentOverlay(scope: JobScope | undefined): scope is JobScope {
+  return !!scope && (scope.documents.size > 0 || scope.removedDocLinkIds.size > 0);
+}
+
+/**
+ * Patch a `findManyByMountPointsInFolder` answer with the job's own writes:
+ * deleted links dropped, rewritten documents carrying their new content, and
+ * documents created this job added when they fall in the folder asked for
+ * (the same prefix, depth and extension rules as the query).
+ */
+function applyDocumentOverlay(scope: JobScope, args: unknown[], rows: unknown): unknown {
+  if (!Array.isArray(rows)) return rows;
+  const [mountPointIds, folder, extension = '.md', options] = args as [string[], string, string?, { recursive?: boolean }?];
+  if (!Array.isArray(mountPointIds) || typeof folder !== 'string') return rows;
+  const prefixLower = `${folder}/`.toLowerCase();
+  const extensionLower = String(extension).toLowerCase();
+  const recursive = options?.recursive === true;
+  const byKey = new Map<string, DocMountDocumentWithLink>();
+  for (const row of rows as DocMountDocumentWithLink[]) {
+    if (scope.removedDocLinkIds.has(row.linkId)) continue;
+    byKey.set(documentKey(row.mountPointId, row.relativePath), row);
+  }
+  let added = 0;
+  for (const [key, doc] of scope.documents) {
+    if (!mountPointIds.includes(doc.mountPointId)) continue;
+    const pathLower = doc.relativePath.toLowerCase();
+    if (!pathLower.startsWith(prefixLower)) continue;
+    const rest = pathLower.slice(prefixLower.length);
+    if (rest.length === 0 || (!recursive && rest.includes('/')) || !rest.endsWith(extensionLower)) continue;
+    const existing = byKey.get(key);
+    const content = {
+      content: doc.content,
+      contentSha256: doc.contentSha256,
+      plainTextLength: doc.plainTextLength,
+      updatedAt: doc.writtenAt,
+      lastModified: doc.writtenAt,
+    };
+    if (existing) {
+      byKey.set(key, { ...existing, ...content });
+    } else {
+      added++;
+      byKey.set(key, {
+        id: `buffered-doc:${key}`,
+        fileId: `buffered-file:${key}`,
+        createdAt: doc.writtenAt,
+        linkId: bufferedLinkId(key),
+        mountPointId: doc.mountPointId,
+        relativePath: doc.relativePath,
+        fileName: doc.fileName,
+        folderId: doc.folderId,
+        fileType: doc.fileType,
+        linkGroupId: null,
+        ...content,
+      });
+    }
+  }
+  if (added > 0) log.debug('Folder read sees documents written this job', { jobId: scope.jobId, folder, added });
+  return Array.from(byKey.values());
+}
+
+// ============================================================================
 // Equipped-inventory read-your-writes overlay
 // ============================================================================
 
@@ -322,9 +449,10 @@ function recordBufferedInventoryWrite(scope: JobScope, fqn: string, args: unknow
     scope.equippedInventory.set(key, { seq: ++scope.inventorySeq, ids });
     log.debug('Recorded buffered equipped-inventory write for in-job reads', { jobId: scope.jobId, key });
   } else if (fqn === 'chats.removeEquippedInventoryId') {
-    if (typeof args[0] !== 'string' || typeof args[1] !== 'string') return;
-    scope.inventoryRemovals.push({ seq: ++scope.inventorySeq, characterId: args[0], itemId: args[1] });
-    log.debug('Recorded buffered equipped-inventory removal for in-job reads', { jobId: scope.jobId, characterId: args[0] });
+    const [chatId, characterId, itemId] = args;
+    if (typeof chatId !== 'string' || typeof characterId !== 'string' || typeof itemId !== 'string') return;
+    scope.inventoryRemovals.push({ seq: ++scope.inventorySeq, chatId, characterId, itemId });
+    log.debug('Recorded buffered equipped-inventory removal for in-job reads', { jobId: scope.jobId, chatId, characterId });
   }
 }
 
@@ -344,6 +472,7 @@ function overlayEquippedInventory(scope: JobScope, chatId: string, raw: unknown)
     else state[characterId] = [...entry.ids];
   }
   for (const removal of scope.inventoryRemovals) {
+    if (removal.chatId !== chatId) continue;
     if ((seqOf.get(removal.characterId) ?? 0) > removal.seq) continue;
     const ids = state[removal.characterId];
     if (ids) state[removal.characterId] = ids.filter((id) => id !== removal.itemId);
@@ -963,6 +1092,10 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
             }
           }
           const answered = (real as (...a: unknown[]) => unknown).apply(target, args);
+          if (repoKey === 'docMountDocuments' && key === 'findManyByMountPointsInFolder' && hasDocumentOverlay(scope)
+            && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
+            return (answered as Promise<unknown>).then((res) => applyDocumentOverlay(scope, args, res));
+          }
           if (repoKey === 'chats' && (key === 'findById' || key === 'getEquippedInventory') && hasInventoryOverlay(scope)
             && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
             return (answered as Promise<unknown>).then((res) => applyInventoryOverlay(scope, key, args, res));
@@ -986,6 +1119,7 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           const scope = jobScopeStore.getStore();
           if (scope) recordBufferedOutfitWrite(scope, `${repoKey}.${key}`, args);
           if (scope && repoKey === 'chats') recordBufferedInventoryWrite(scope, `${repoKey}.${key}`, args);
+          if (scope && repoKey === 'docMountFileLinks') recordBufferedDocumentWrite(scope, `${repoKey}.${key}`, args);
           if (scope && repoKey === 'memories') recordBufferedMemoryWrite(scope, key, args, result);
           // Real repository write methods are async; mirror that here so
           // callers that chain `.then` / `.catch` / `Promise.all` against

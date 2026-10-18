@@ -54,6 +54,18 @@ function norm(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
+/** A pool's objects by id, built once per pool (its `items` array) and reused. */
+const byIdCache = new WeakMap<readonly ResolvedInventoryItem[], Map<string, ResolvedInventoryItem>>();
+
+function byIdOf(pool: ResolvedInventoryPool): Map<string, ResolvedInventoryItem> {
+  let byId = byIdCache.get(pool.items);
+  if (!byId) {
+    byId = new Map(pool.items.map((candidate) => [candidate.id, candidate]));
+    byIdCache.set(pool.items, byId);
+  }
+  return byId;
+}
+
 /** Is this object carried? A kit is carried when every member is. */
 function isEquippedIn(
   item: ResolvedInventoryItem,
@@ -61,7 +73,7 @@ function isEquippedIn(
   equippedIds: ReadonlySet<string>,
 ): boolean {
   if (item.kind !== 'kit') return equippedIds.has(item.id);
-  const byId = new Map(pool.items.map((candidate) => [candidate.id, candidate]));
+  const byId = byIdOf(pool);
   const equipped = Array.from(equippedIds)
     .map((id) => byId.get(id))
     .filter((candidate): candidate is ResolvedInventoryItem => !!candidate);

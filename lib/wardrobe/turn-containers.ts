@@ -12,6 +12,7 @@
 
 import type { WardrobeHistoryIntent } from '@/lib/schemas/chat-wardrobe-history.types';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
+import type { InventoryChangeProvenance } from '@/lib/inventory/equip-effects';
 
 /**
  * One character's Inventory changes waiting for the turn's single Pascal
@@ -25,6 +26,8 @@ export interface PendingInventoryChange {
   equipped: ResolvedInventoryItem[];
   unequipped: ResolvedInventoryItem[];
   pickedUp: ResolvedInventoryItem[];
+  /** Who made the changes folded into this entry, in the order they first did. */
+  provenances: InventoryChangeProvenance[];
 }
 
 /** The per-turn wardrobe containers. */
