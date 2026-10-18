@@ -12,8 +12,8 @@
  * object tagged with its tier), `?action=folders`, `?action=archetypes` (the
  * archetypes reachable from this tier, for the instantiate picker; a
  * character takes `?projectId=` / `?chatId=` for the project tier). `POST`
- * creates; `?action=instantiate`, `create-folder`, `rename-folder`,
- * `delete-folder`, `move-items`, `copy-items`.
+ * creates; `?action=instantiate`, `duplicate`, `create-folder`,
+ * `rename-folder`, `delete-folder`, `move-items`, `copy-items`.
  *
  * Item: `GET` one resolved object, `?action=dependents`; `PUT` an edit
  * (`archived` archives), `?action=clear-override`, `?action=detach`;
@@ -48,6 +48,7 @@ import { assertInventoryImageChoice } from '@/lib/inventory/item-images';
 import {
   clearOverrides,
   copyInventoryItemsToFolder,
+  duplicateInventoryItem,
   createInventoryFolder,
   createInventoryItem,
   deleteInventoryFolder,
@@ -283,6 +284,24 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     }
   }
 
+  /** `{ itemId }`: a copy beside the original, titled "(copy)"; refused when not copyable. */
+  async function handleDuplicate(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = (await req.json()) as { itemId?: unknown };
+    if (typeof body.itemId !== 'string' || !body.itemId) return notFound('Inventory object');
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    const { location } = resolved;
+    const current = await location.findItem(body.itemId);
+    if (!current) return notFound('Inventory object');
+    try {
+      const record = await duplicateInventoryItem(ctx.repos, location, current);
+      logger.info(`${logTag} Duplicated inventory object`, { [logIdKey]: location.id, itemId: current.id, copyId: record.id, context: 'inventory' });
+      return created({ item: serialize(await loadPoolForLocation(ctx.repos, location), location, record) });
+    } catch (error) {
+      return inventoryErrorResponse(error);
+    }
+  }
+
   const GET = createContextParamsHandler<P>(
     withActionDispatch<P>({ folders: handleGetFolders, archetypes: handleGetArchetypes }, handleList),
   );
@@ -296,6 +315,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
         'delete-folder': handleDeleteFolder,
         'move-items': (req, ctx, params) => handleFileItems('move', req, ctx, params),
         'copy-items': (req, ctx, params) => handleFileItems('copy', req, ctx, params),
+        duplicate: handleDuplicate,
       },
       handleCreate,
     ),

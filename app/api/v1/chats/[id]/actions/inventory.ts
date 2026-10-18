@@ -1,7 +1,7 @@
 /**
  * Chats API v1 - Inventory Actions
  *
- * GET  /api/v1/chats/[id]?action=inventory                — what every cast member carries, resolved, with each reachable kit's state
+ * GET  /api/v1/chats/[id]?action=inventory                — what every cast member carries, resolved, with each reachable kit's state (and the chat's projectId)
  * POST /api/v1/chats/[id]?action=inventory-equip          — `{ characterId, ids }`: take up objects or kits
  * POST /api/v1/chats/[id]?action=inventory-unequip        — `{ characterId, ids }`: set them down
  * POST /api/v1/chats/[id]?action=inventory-reset-defaults — `{ characterId }`: back to the equipped-by-default set
@@ -58,7 +58,7 @@ export async function handleGetInventory(chatId: string, { repos }: RequestConte
     carried: Object.values(inventory).reduce((n, entry) => n + entry.equipped.length, 0),
     context: 'inventory',
   });
-  return successResponse({ inventory });
+  return successResponse({ inventory, projectId: chat.projectId ?? null });
 }
 
 /** POST ?action=inventory-equip / inventory-unequip */

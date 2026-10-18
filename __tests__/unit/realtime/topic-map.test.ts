@@ -38,8 +38,15 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.informs('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
       queryKeys.wardrobe.histories('chat-1'),
+      queryKeys.inventory.equipped('chat-1'),
       queryKeys.chats.scenarioSource('chat-1'),
     ]);
+  });
+
+  it('refreshes what the cast carries on the chats topic (the Inventory)', () => {
+    // An equip posts Pascal's line and publishes `chats`, so the Carrying-now
+    // pane stays honest without a poll of its own.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(queryKeys.inventory.equipped('chat-1'));
   });
 
   it('refreshes every outfit timeline in the chat on the chats topic', () => {

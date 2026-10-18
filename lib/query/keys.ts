@@ -322,6 +322,37 @@ export const queryKeys = {
         ? (['wardrobe', 'images', itemId] as const)
         : (['wardrobe', 'images', itemId, containerKey] as const),
   },
+  /**
+   * The Inventory (Pascal the Croupier): objects in four tiers, and what each
+   * character carries per chat. `tierKey` is `encodeWardrobeContainer`'s
+   * `scope:id` (plus `|shared` for a character's whole reachable pool).
+   */
+  inventory: {
+    all: ['inventory'] as const,
+    /** Prefix of every `list(...)` key — invalidate after any object write. */
+    lists: ['inventory', 'list'] as const,
+    list: (tierKey: string, filters: { includeArchived: boolean; projectId?: string | null }) =>
+      ['inventory', 'list', tierKey, filters] as const,
+    /** Prefix of every `folders(...)` key — invalidate after folder or object writes. */
+    folderLists: ['inventory', 'folders'] as const,
+    folders: (tierKey: string) => ['inventory', 'folders', tierKey] as const,
+    /** One object (`GET …/inventory/[itemId]`). */
+    item: (itemId: string) => ['inventory', 'item', itemId] as const,
+    /** Prefix of every `archetypes(...)` key. */
+    archetypeLists: ['inventory', 'archetypes'] as const,
+    /** The archetypes a tier can reach, for the instantiate picker. */
+    archetypes: (tierKey: string, projectId?: string | null) => ['inventory', 'archetypes', tierKey, projectId ?? null] as const,
+    /** Prefix of every `dependents(...)` key. */
+    dependentLists: ['inventory', 'dependents'] as const,
+    /** An archetype's instances, everywhere. */
+    dependents: (itemId: string) => ['inventory', 'dependents', itemId] as const,
+    /** One object's pictures. */
+    images: (itemId: string) => ['inventory', 'images', itemId] as const,
+    /** Prefix of every `equipped(...)` key. */
+    equippedLists: ['inventory', 'equipped'] as const,
+    /** What every cast member carries in one chat (`?action=inventory`). The `chats` topic refetches it. */
+    equipped: (chatId: string) => ['inventory', 'equipped', chatId] as const,
+  },
   mailbox: {
     all: ['mailbox'] as const,
     /** Letters in a chat-participant character's Mail/ folder (Compose Mail dialog). */

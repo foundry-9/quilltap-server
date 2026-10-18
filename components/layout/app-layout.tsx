@@ -21,6 +21,8 @@ import { BrahmaConsoleDialog } from '@/components/brahma-console/BrahmaConsoleDi
 import { QtapLinkProvider } from '@/components/providers/qtap-link-provider'
 import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
+import { InventoryDialogProvider } from '@/components/providers/inventory-dialog-provider'
+import { InventoryControlDialog } from '@/components/inventory/inventory-control-dialog'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
@@ -124,17 +126,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     <HelpChatProvider>
       <BrahmaConsoleProvider>
         <WardrobeDialogProvider>
-          <DictionaryFeedMount />
-          {isWorkspaceTabsEnabled() ? (
-            <WorkspaceProviders>
+          <InventoryDialogProvider>
+            <DictionaryFeedMount />
+            {isWorkspaceTabsEnabled() ? (
+              <WorkspaceProviders>
+                <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+              </WorkspaceProviders>
+            ) : (
               <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-            </WorkspaceProviders>
-          ) : (
-            <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-          )}
-          <HelpChatDialog />
-          <BrahmaConsoleDialog />
-          <WardrobeControlDialog />
+            )}
+            <HelpChatDialog />
+            <BrahmaConsoleDialog />
+            <WardrobeControlDialog />
+            <InventoryControlDialog />
+          </InventoryDialogProvider>
         </WardrobeDialogProvider>
       </BrahmaConsoleProvider>
     </HelpChatProvider>

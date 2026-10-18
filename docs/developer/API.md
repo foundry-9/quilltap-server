@@ -2240,6 +2240,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 - `GET ?action=archetypes` — `{ items }`, the archetypes reachable from this tier (a character's with `?projectId=` / `?chatId=`), for the instantiate picker.
 - `POST` — create a standalone object, archetype or kit (`createInventorySchema`: `name`, `title`, `description`, `imageDescription`, `equippedByDefault`, `maxEquipped`, `canCopy`, `isArchetype`, `kind`, `itemIds`, `emoji`, `svg`, `metadata`, `folder`). A kit's members must resolve from this tier, never a kit. `svg` is sanitised (≤ 16 KB). Answers `201 { item }`.
 - `POST ?action=instantiate` — `{ archetypeId, folder?, overrides?, projectId?, chatId? }`: a sparse instance of a reachable archetype. Answers `201 { item }`.
+- `POST ?action=duplicate` — `{ itemId }`: a copy beside the original, titled "(copy)", keeping its name (kin); `NOT_COPYABLE` when `canCopy` is false.
 - `POST ?action=create-folder` / `rename-folder` / `delete-folder` — the wardrobe's folder rules (`{ path }`, `{ path, name }`).
 - `POST ?action=move-items` / `copy-items` — `{ itemIds, folder }`; a copy refuses any object with `canCopy: false`.
 
@@ -2261,7 +2262,7 @@ The wardrobe item images route's shape over `Inventory/images/<itemId>/`: `GET` 
 
 #### Chat actions
 
-- `GET /api/v1/chats/[id]?action=inventory` — `{ inventory: { [characterId]: { equipped: ResolvedInventoryItem[], kits: { [kitId]: 'all' | 'some' | 'none' } } } }` for every seated character.
+- `GET /api/v1/chats/[id]?action=inventory` — `{ inventory: { [characterId]: { equipped: ResolvedInventoryItem[], kits: { [kitId]: 'all' | 'some' | 'none' } } }, projectId }` for every seated character.
 - `POST /api/v1/chats/[id]?action=inventory-equip` / `inventory-unequip` — `{ characterId, ids }` (objects or kits). Equip answers `{ equipped, created, skipped, alreadyEquipped }`; unequip `{ unequipped, notEquipped }`. One Pascal line per call.
 - `POST /api/v1/chats/[id]?action=inventory-reset-defaults` — `{ characterId }`: clear the character's entry and re-apply the equipped-by-default set. Answers `{ equipped }`.
 
