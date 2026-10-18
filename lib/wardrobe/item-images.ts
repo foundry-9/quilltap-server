@@ -322,10 +322,22 @@ export async function setCurrentWardrobeItemImage(
  * Remove one picture's mount link and `files` row. The blob goes only when no
  * sibling still links it (`deleteWithGC`). Never throws on a missing link.
  */
-async function removeImageFile(repos: RepositoryContainer, itemId: string, file: FileEntry): Promise<void> {
+/** Drop one picture link, in the wardrobe's images folder unless another is named. */
+function deleteImageLink(mountPointId: string, itemId: string, leafName: string, imagesFolder?: string): Promise<boolean> {
+  return imagesFolder
+    ? deleteWardrobeItemImageLink(mountPointId, itemId, leafName, imagesFolder)
+    : deleteWardrobeItemImageLink(mountPointId, itemId, leafName);
+}
+
+export async function removeImageFile(
+  repos: RepositoryContainer,
+  itemId: string,
+  file: FileEntry,
+  imagesFolder?: string,
+): Promise<void> {
   const parsed = parseMountBlobStorageKey(file.storageKey ?? '');
   if (parsed) {
-    await deleteWardrobeItemImageLink(parsed.mountPointId, itemId, file.originalFilename);
+    await deleteImageLink(parsed.mountPointId, itemId, file.originalFilename, imagesFolder);
   }
   await repos.files.delete(file.id);
 }
@@ -377,6 +389,7 @@ export async function cleanupItemImages(
   itemId: string,
   logTag: string,
   meta: Record<string, unknown>,
+  imagesFolder?: string,
 ): Promise<void> {
   let images: FileEntry[];
   try {
@@ -395,7 +408,7 @@ export async function cleanupItemImages(
   let removed = 0;
   for (const file of images) {
     try {
-      await removeImageFile(repos, itemId, file);
+      await removeImageFile(repos, itemId, file, imagesFolder);
       removed++;
     } catch (error) {
       logger.warn(`${logTag} Failed to remove a wardrobe item image; continuing`, {
@@ -438,6 +451,8 @@ export async function carryItemImages(
     destinationItemId: string;
     destinationMountPointId: string;
     userId: string;
+    /** The images folder (default the wardrobe's; the Inventory passes its own). */
+    imagesFolder?: string;
   },
 ): Promise<{ fileIdMap: Map<string, string>; pendingMove: PendingImageMove }> {
   const fileIdMap = new Map<string, string>();
@@ -464,6 +479,7 @@ export async function carryItemImages(
       contentType: file.mimeType,
       description: file.description ?? undefined,
       leafName: file.originalFilename,
+      ...(args.imagesFolder && { imagesFolder: args.imagesFolder }),
     });
     const storageKey = buildMountBlobStorageKey(args.destinationMountPointId, written.blobId);
 
@@ -525,6 +541,7 @@ export async function commitMovedImages(
   repos: Pick<RepositoryContainer, 'files'>,
   itemId: string,
   pending: PendingImageMove,
+  imagesFolder?: string,
 ): Promise<void> {
   const toDrop: Array<{ mountPointId: string; leafName: string }> = [];
   for (const { fileId, storageKey, sourceLink } of pending.repoints) {
@@ -540,18 +557,19 @@ export async function commitMovedImages(
       });
     }
   }
-  await dropSourceImageLinks(itemId, toDrop);
+  await dropSourceImageLinks(itemId, toDrop, imagesFolder);
 }
 
 /** After a move: drop the source mount's links (`deleteWithGC`; the blob survives via the new link). */
 export async function dropSourceImageLinks(
   itemId: string,
   sourceLinks: ReadonlyArray<{ mountPointId: string; leafName: string }>,
+  imagesFolder?: string,
 ): Promise<void> {
   let dropped = 0;
   for (const link of sourceLinks) {
     try {
-      if (await deleteWardrobeItemImageLink(link.mountPointId, itemId, link.leafName)) dropped++;
+      if (await deleteImageLink(link.mountPointId, itemId, link.leafName, imagesFolder)) dropped++;
     } catch (error) {
       logger.warn('[WardrobeImages] Failed to drop a source image link after move', {
         context: LOG_CONTEXT,

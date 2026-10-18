@@ -45,16 +45,28 @@ const LOG_CONTEXT = 'file-storage.wardrobe-image-bridge';
 /** Where an item's pictures live inside its mount. */
 export const WARDROBE_IMAGES_FOLDER = 'Wardrobe/images';
 
+/**
+ * Where an Inventory object's pictures live: the same shape under
+ * `Inventory/`. Every function here takes the images folder as an optional
+ * last argument (default the wardrobe's), so the Inventory's pictures go
+ * through the same bridge.
+ */
+export const INVENTORY_IMAGES_FOLDER = 'Inventory/images';
+
 export type WardrobeImageKind = 'generated' | 'uploaded' | 'imported';
 
 /** `Wardrobe/images/<itemId>` — the folder holding one item's pictures. */
-export function wardrobeItemImageFolder(itemId: string): string {
-  return `${WARDROBE_IMAGES_FOLDER}/${sanitizeLeafName(itemId)}`;
+export function wardrobeItemImageFolder(itemId: string, imagesFolder: string = WARDROBE_IMAGES_FOLDER): string {
+  return `${imagesFolder}/${sanitizeLeafName(itemId)}`;
 }
 
 /** The mount-relative path of one picture, from its item id and leaf name. */
-export function wardrobeItemImagePath(itemId: string, leafName: string): string {
-  return `${wardrobeItemImageFolder(itemId)}/${leafName}`;
+export function wardrobeItemImagePath(
+  itemId: string,
+  leafName: string,
+  imagesFolder: string = WARDROBE_IMAGES_FOLDER,
+): string {
+  return `${wardrobeItemImageFolder(itemId, imagesFolder)}/${leafName}`;
 }
 
 /** `20261007-142233` — UTC, sortable, filename-safe. */
@@ -84,6 +96,8 @@ export interface WriteWardrobeItemImageInput {
    * minted and bumped on collision.
    */
   leafName?: string;
+  /** The images folder (default `Wardrobe/images`; the Inventory passes its own). */
+  imagesFolder?: string;
 }
 
 export interface WriteWardrobeItemImageResult {
@@ -115,7 +129,7 @@ export async function writeWardrobeItemImage(
     return callHost<WriteWardrobeItemImageResult>('writeWardrobeItemImage', input);
   }
 
-  const folder = wardrobeItemImageFolder(input.itemId);
+  const folder = wardrobeItemImageFolder(input.itemId, input.imagesFolder);
   // A fresh picture gets a sortable `<timestamp>-<kind>.webp` leaf and lets
   // the pipeline bump it (` (2)`, ` (3)`…) if the second is already taken;
   // `storeMountFile` reserves the path it picks, so two writes in the same
@@ -179,11 +193,12 @@ export async function deleteWardrobeItemImageLink(
   mountPointId: string,
   itemId: string,
   leafName: string,
+  imagesFolder: string = WARDROBE_IMAGES_FOLDER,
 ): Promise<boolean> {
   refuseInJobChild('deleteWardrobeItemImageLink');
 
   const repos = getRepositories();
-  const relativePath = wardrobeItemImagePath(itemId, leafName);
+  const relativePath = wardrobeItemImagePath(itemId, leafName, imagesFolder);
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, relativePath);
   if (!link) {
     logger.debug('[WardrobeImageBridge] No link to delete', {

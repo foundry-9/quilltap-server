@@ -15,6 +15,10 @@
 - New column `chats.equippedInventory` (migration `add-chat-equipped-inventory-v1`), patch-only, written only by `ChatsRepository.setEquippedInventory` (deduplicated, sorted, buffered in the job child). Export schema and DDL.md updated.
 - Archiving a character keeps `Inventory/` in the pruned vault, beside `Wardrobe/`.
 - Tests: `inventory-files.test.ts`, `svg.test.ts`, `add-chat-equipped-inventory.test.ts`, patch-only and archive-prune cases.
+- `lib/inventory/location.ts` (`resolveInventoryLocation`, the four tiers as one surface), `pool.ts` (`loadInventoryPool`: character > group > project > general, archived dropped per tier before shadowing; an archetype outside the pool's tiers is fetched instance-wide so an instance always resolves), `resolve.ts` (sparse overrides over the archetype, `metadata` merged key by key, picture falls through; `parentMissing` only when the archetype exists nowhere), `equipped-set.ts`, `dependents.ts` (`findDependents` across every mount).
+- `lib/inventory/item-mutations.ts`: create, instantiate, update (an instance stores only what it overrides), `clearOverrides`, archive, detach / `detachAll` (bake resolved values), delete (archetype in use refused without `force`; forced deletes bake every instance first; refused while an archived character holds one), duplicate / copy-items (refused when `canCopy` is false), move-items. A deleted kit member is dropped from its tier's kits. Refusals carry codes (`lib/inventory/errors.ts`).
+- `lib/inventory/item-images.ts`: object pictures under `Inventory/images/<itemId>/`, reusing the wardrobe's picture steps; the wardrobe image bridge and its generic steps take an optional images folder (wardrobe default unchanged).
+- Tests: `resolve.test.ts`, `item-mutations.test.ts` over an in-memory store (`__tests__/helpers/inventory-fake-store.ts`).
 
 #### Docs: Inventory design spec
 
