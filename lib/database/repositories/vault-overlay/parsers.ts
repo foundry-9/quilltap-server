@@ -24,12 +24,12 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
-import { folderOfWardrobePath, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
+import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
+import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 import {
-  CHARACTER_WARDROBE_FOLDER,
   isWardrobeInstructionsFileName,
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
@@ -255,15 +255,7 @@ export function resolveWardrobeItemId(
  * the restore id remap all agree through it about which files are items.
  */
 export function isWardrobeItemDocumentPath(relativePath: string): boolean {
-  const prefix = `${CHARACTER_WARDROBE_FOLDER}/`.toLowerCase();
-  const pathLower = relativePath.toLowerCase();
-  if (!pathLower.startsWith(prefix)) return false;
-  const rest = pathLower.slice(prefix.length);
-  if (rest.length === 0 || !rest.endsWith('.md')) return false;
-  const segments = rest.split('/');
-  if (segments.some((segment) => segment.length === 0)) return false;
-  if (segments.length > 1 && WARDROBE_RESERVED_FOLDER_SEGMENTS.includes(segments[0])) return false;
-  return !isWardrobeInstructionsFileName(segments[segments.length - 1]);
+  return isItemDocumentPath(WARDROBE_FOLDER_RULES, relativePath, '.md', isWardrobeInstructionsFileName);
 }
 
 /**

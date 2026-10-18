@@ -1035,6 +1035,13 @@ export const ChatMetadataSchema = z.object({
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
+  /**
+   * Inventory objects carried per character in this chat: `{ [characterId]: string[] }`
+   * of object ids (`EquippedInventorySchema`). Patch-only — written solely by
+   * `ChatsRepository.setEquippedInventory`.
+   */
+  equippedInventory: JsonSchema.nullable().optional(),
+
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
   characterAvatars: JsonSchema.nullable().optional(),
 
@@ -1423,6 +1430,13 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
+
+  /**
+   * Inventory objects carried per character in this chat: `{ [characterId]: string[] }`
+   * of object ids (`EquippedInventorySchema`). Patch-only — written solely by
+   * `ChatsRepository.setEquippedInventory`.
+   */
+  equippedInventory: JsonSchema.nullable().optional(),
 
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
   characterAvatars: JsonSchema.nullable().optional(),

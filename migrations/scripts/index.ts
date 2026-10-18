@@ -448,6 +448,7 @@ import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-com
 import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-history-table-v1';
 import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v1';
 import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-history-tool-name-v1';
+import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory-v1';
 
 /**
  * All available migrations.
@@ -917,6 +918,8 @@ export const migrations: Migration[] = [
   // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
   addChatWardrobeHistoryToolNameMigration,
   seedChatWardrobeHistoryMigration,
+  // Inventory: chats.equippedInventory (the objects each character carries)
+  addChatEquippedInventoryMigration,
 ];
 
 export {
@@ -1363,5 +1366,7 @@ export {
   // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
   addChatWardrobeHistoryToolNameMigration,
   seedChatWardrobeHistoryMigration,
+  // Inventory: chats.equippedInventory (the objects each character carries)
+  addChatEquippedInventoryMigration,
 };
 

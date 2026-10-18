@@ -100,41 +100,46 @@ describe('AbstractBaseRepository._update — patch-only fields', () => {
   })
 })
 
-describe('ChatsRepository — the Concierge state columns are patch-only', () => {
-  it('declares conciergeMode, conciergeModeSetBy and conciergeModeReason', () => {
+describe('ChatsRepository — the Concierge state and the carried Inventory are patch-only', () => {
+  it('declares conciergeMode, conciergeModeSetBy, conciergeModeReason and equippedInventory', () => {
     const repo = new ChatsRepository() as unknown as { patchOnlyFields(): readonly string[] }
-    expect([...repo.patchOnlyFields()].sort()).toEqual(['conciergeMode', 'conciergeModeReason', 'conciergeModeSetBy'])
+    expect([...repo.patchOnlyFields()].sort()).toEqual([
+      'conciergeMode',
+      'conciergeModeReason',
+      'conciergeModeSetBy',
+      'equippedInventory',
+    ])
   })
 })
 
-describe('ChatsRepository.setConciergeMode — compare-and-set', () => {
-  function withFakeCollection(matched: boolean) {
-    const updateOne = jest.fn(async () => ({ matchedCount: matched ? 1 : 0, modifiedCount: matched ? 1 : 0 }))
+describe('ChatsRepository.setEquippedInventory — the one writer of the carried Inventory', () => {
+  function withFakeChat(stored: Record<string, unknown> | null) {
+    const updateOne = jest.fn(async () => ({ matchedCount: stored ? 1 : 0, modifiedCount: stored ? 1 : 0 }))
+    const findOne = jest.fn(async () => stored)
     const repo = new ChatsRepository()
     jest.spyOn(repo as unknown as { getCollection: () => Promise<unknown> }, 'getCollection')
-      .mockResolvedValue({ updateOne } as never)
+      .mockResolvedValue({ updateOne, findOne } as never)
     return { repo, updateOne }
   }
-  const COLS = { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'concierge' as const, conciergeModeReason: 'refusals' as const }
 
-  it('writes unconditionally without an expected state', async () => {
-    const { repo, updateOne } = withFakeCollection(true)
-    await expect(repo.setConciergeMode('chat-1', COLS)).resolves.toBe(true)
-    expect(updateOne).toHaveBeenCalledWith({ id: 'chat-1' }, { $set: COLS })
-  })
-
-  it('treats NULL as Moderated when Moderated is expected', async () => {
-    const { repo, updateOne } = withFakeCollection(true)
-    await repo.setConciergeMode('chat-1', COLS, 'moderated')
+  it("replaces one character's list (deduplicated, sorted) and patches the column alone", async () => {
+    const { repo, updateOne } = withFakeChat({ id: 'chat-1', title: 'T', equippedInventory: { other: ['x'] } })
+    await expect(repo.setEquippedInventory('chat-1', 'char-1', ['b', 'a', 'b'])).resolves.toBe(true)
     expect(updateOne).toHaveBeenCalledWith(
-      { id: 'chat-1', $or: [{ conciergeMode: 'moderated' }, { conciergeMode: null }] },
-      { $set: COLS },
+      { id: 'chat-1' },
+      { $set: { equippedInventory: { other: ['x'], 'char-1': ['a', 'b'] } } },
     )
   })
 
-  it('reports a miss when the stored state no longer matches', async () => {
-    const { repo, updateOne } = withFakeCollection(false)
-    await expect(repo.setConciergeMode('chat-1', COLS, 'locked')).resolves.toBe(false)
-    expect(updateOne).toHaveBeenCalledWith({ id: 'chat-1', $or: [{ conciergeMode: 'locked' }] }, { $set: COLS })
+  it('reads a raw JSON string and removes an entry on null', async () => {
+    const { repo, updateOne } = withFakeChat({ id: 'chat-1', equippedInventory: JSON.stringify({ 'char-1': ['a'], other: ['x'] }) })
+    await repo.setEquippedInventory('chat-1', 'char-1', null)
+    expect(updateOne).toHaveBeenCalledWith({ id: 'chat-1' }, { $set: { equippedInventory: { other: ['x'] } } })
+  })
+
+  it('writes nothing for a missing chat', async () => {
+    const { repo, updateOne } = withFakeChat(null)
+    await expect(repo.setEquippedInventory('nope', 'char-1', ['a'])).resolves.toBe(false)
+    expect(updateOne).not.toHaveBeenCalled()
   })
 })

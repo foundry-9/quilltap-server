@@ -4,6 +4,18 @@
 
 ### 4.11-dev
 
+#### Feature: the Inventory (in progress)
+
+- Shared folder rules: the pure folder-path helpers moved from `lib/wardrobe/folders.ts` into `lib/mount-index/item-folders.ts`, parameterised by `ItemFolderRules` (root, reserved segments, depth cap, noun). `lib/wardrobe/folders.ts` and the new `lib/inventory/folders.ts` are delegates; `isWardrobeItemDocumentPath` delegates to `isItemDocumentPath`. Wardrobe behaviour and messages are unchanged.
+- The wardrobe's folder operations (list, create, rename, delete-and-send-up) are now one implementation in `vault-overlay/item-folder-ops.ts` over an `ItemFolderTree` descriptor, with the per-folder write chain (`runSerialized`) and `resolveVaultFolderMount` (the tombstone-aware mount resolver; `resolveWardrobeMount` and `resolveInventoryMount` delegate to it).
+- `projectArrayIntoVaultFolder` takes an `ext` option (default `.md`, so existing callers are byte-identical).
+- New `lib/schemas/inventory.types.ts`: `InventoryItemSchema` (strict), the sparse `InventoryItemFileSchema` (no defaults, via `patchSchemaOf`), `inventoryShapeIssues` (archetype / kit / item / instance rules), request bodies, `EquippedInventorySchema`.
+- New `vault-overlay/inventory-readers.ts` / `inventory-writes.ts`: one `.json` file per object under `Inventory/` at any depth, identity from the `id` inside the file; `parseInventoryItemFile` (unknown keys dropped with a warn, bad files skipped with a warn), the predicate pair `isInventoryItemDocumentPath` / `isInventoryItemDocument` (a file that does not parse is never swept), JSON projection serialised per folder.
+- New `lib/inventory/svg.ts`: allowlist SVG sanitiser for object glyphs (drops scripts, `foreignObject`, styles, event attributes, external refs; 16 KB cap).
+- New column `chats.equippedInventory` (migration `add-chat-equipped-inventory-v1`), patch-only, written only by `ChatsRepository.setEquippedInventory` (deduplicated, sorted, buffered in the job child). Export schema and DDL.md updated.
+- Archiving a character keeps `Inventory/` in the pruned vault, beside `Wardrobe/`.
+- Tests: `inventory-files.test.ts`, `svg.test.ts`, `add-chat-equipped-inventory.test.ts`, patch-only and archive-prune cases.
+
 #### Docs: Inventory design spec
 
 - New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
