@@ -1337,6 +1337,16 @@ describe('remapBackupData() - other character-keyed chat columns (bug 252)', () 
     })
   })
 
+  it('drops an entry for a character the backup does not carry instead of minting an id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ equippedOutfit: { 'char-a': { top: ['x'] }, 'char-deleted': { top: ['y'] } } }),
+      'target-user',
+      remapper
+    )
+    expect(Object.keys(result.chats[0].equippedOutfit as object)).toEqual([result.characters[0].id])
+  })
+
   it('re-keys queued outfit notices', () => {
     const remapper = new UuidRemapper()
     const result = remapBackupData(

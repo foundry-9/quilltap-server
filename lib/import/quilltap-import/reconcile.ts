@@ -420,18 +420,24 @@ export async function reconcileRelationships(
       // carry keeps its id, as a participant does. Message ids were already
       // reminted at create time (remintChatMessageIds); a picture follows its
       // imported link, as a character's avatar does.
-      const keyedPatch = remapCharacterKeyedChatFields(chat, {
+      const keyed = remapCharacterKeyedChatFields(chat, {
         characterId: (id) => idMaps.characters.get(id) ?? id,
         wardrobeItemId: (id) => options.wardrobeItemIds?.get(id) ?? id,
         fileId: (id) => idMaps.docMountFileLinks.get(id) ?? id,
         messageId: (id) => id,
       });
-      if (Object.keys(keyedPatch).length > 0) {
-        Object.assign(updates, keyedPatch);
+      if (keyed.unreadable.length > 0) {
+        moduleLogger.warn('Chat character-keyed columns unreadable; left as imported', {
+          chatId: newId,
+          fields: keyed.unreadable,
+        });
+      }
+      if (Object.keys(keyed.patch).length > 0) {
+        Object.assign(updates, keyed.patch);
         hasUpdates = true;
         moduleLogger.debug('Remapped character-keyed chat fields', {
           chatId: newId,
-          fields: Object.keys(keyedPatch),
+          fields: Object.keys(keyed.patch),
         });
       }
 

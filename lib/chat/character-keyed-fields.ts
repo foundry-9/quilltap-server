@@ -20,8 +20,9 @@
  * (keyed by participant, rebuilt on a miss) and `commonplaceSceneCache`
  * (a miss only re-emits the scene block).
  *
- * Pure: the caller supplies the remaps. A character remap returning `null`
- * drops that character's entry.
+ * Pure: the caller supplies the remaps and does the logging. A character
+ * remap returning `null` drops that character's entry (restore uses it for a
+ * character the backup does not carry, rather than minting a phantom id).
  *
  * @module chat/character-keyed-fields
  */
@@ -47,26 +48,28 @@ export interface CharacterKeyedRemaps {
   messageId: (id: string) => string;
 }
 
+/** An object, or a JSON string holding one (a column read back raw). */
 function asObject(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
     : null;
 }
 
-/** Re-key one map by character, rewriting each value with `mapValue`. */
-function rekey(
-  value: unknown,
-  remaps: CharacterKeyedRemaps,
-  mapValue: (entry: unknown) => unknown
-): Record<string, unknown> | null {
-  const map = asObject(value);
-  if (!map) return null;
-  const next: Record<string, unknown> = {};
-  for (const [characterId, entry] of Object.entries(map)) {
-    const newId = remaps.characterId(characterId);
-    if (newId) next[newId] = mapValue(entry);
-  }
-  return next;
+export interface CharacterKeyedChatRemap {
+  /** The rewritten columns; a column absent here is left as it was. */
+  patch: CharacterKeyedChatPatch;
+  /** Columns that held a value but not an object (nor a JSON object string), so were left alone. */
+  unreadable: CharacterKeyedChatField[];
+  /** Character entries dropped because the character remap returned null. */
+  droppedEntries: number;
 }
 
 /** Replace one string field on an object entry; anything else is kept as given. */
@@ -77,31 +80,42 @@ function withMappedId(entry: unknown, field: string, map: (id: string) => string
 }
 
 /**
- * Remap every character-keyed column present (non-null, an object) on the
- * chat. The patch carries only the columns it rewrote; a column that is not
- * an object is left out and so left alone.
+ * Remap every character-keyed column present on the chat. A null or missing
+ * column is skipped; one that is not an object is reported in `unreadable`.
  */
 export function remapCharacterKeyedChatFields(
   chat: Partial<Record<CharacterKeyedChatField, unknown>>,
   remaps: CharacterKeyedRemaps
-): CharacterKeyedChatPatch {
+): CharacterKeyedChatRemap {
   const patch: Record<string, unknown> = {};
-  const set = (field: CharacterKeyedChatField, value: Record<string, unknown> | null) => {
-    if (value) patch[field] = value;
+  const unreadable: CharacterKeyedChatField[] = [];
+  let droppedEntries = 0;
+
+  const rekey = (field: CharacterKeyedChatField, mapValue: (entry: unknown) => unknown) => {
+    const value = chat[field];
+    if (value == null) return;
+    const map = asObject(value);
+    if (!map) {
+      unreadable.push(field);
+      return;
+    }
+    const next: Record<string, unknown> = {};
+    for (const [characterId, entry] of Object.entries(map)) {
+      const newId = remaps.characterId(characterId);
+      if (newId) next[newId] = mapValue(entry);
+      else droppedEntries++;
+    }
+    patch[field] = next;
   };
 
-  set('equippedOutfit', rekey(chat.equippedOutfit, remaps, (slots) => {
+  rekey('equippedOutfit', (slots) => {
     // Same shape as the outfit history's remap: a full five-slot bag.
     const normalized = normalizeEquippedSlots(slots);
     return bySlot((slot) => normalized[slot].map(remaps.wardrobeItemId));
-  }));
-  set('characterAvatars', rekey(chat.characterAvatars, remaps, (entry) =>
-    withMappedId(entry, 'imageId', remaps.fileId)
-  ));
-  set('courierCheckpoints', rekey(chat.courierCheckpoints, remaps, (entry) =>
-    withMappedId(entry, 'lastResolvedMessageId', remaps.messageId)
-  ));
-  set('pendingOutfitNotifications', rekey(chat.pendingOutfitNotifications, remaps, (entry) => entry));
+  });
+  rekey('characterAvatars', (entry) => withMappedId(entry, 'imageId', remaps.fileId));
+  rekey('courierCheckpoints', (entry) => withMappedId(entry, 'lastResolvedMessageId', remaps.messageId));
+  rekey('pendingOutfitNotifications', (entry) => entry);
 
-  return patch as CharacterKeyedChatPatch;
+  return { patch: patch as CharacterKeyedChatPatch, unreadable, droppedEntries };
 }

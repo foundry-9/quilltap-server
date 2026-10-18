@@ -73,11 +73,15 @@ remap. Same-account restores and `preserveIds` imports keep the ids, so the comm
 New `lib/chat/character-keyed-fields.ts`: `CHARACTER_KEYED_CHAT_FIELDS` names the four columns, and
 `remapCharacterKeyedChatFields(chat, remaps)` returns a patch for those present. The caller supplies four
 remaps (character, wardrobe item, file, message). A character remap returning `null` drops that entry.
+A column stored as a JSON string is parsed; one that still is not an object is left alone and reported
+in `unreadable`, which both callers log at `warn`. Both log the rewritten columns at `debug`.
 An outfit is normalised with `normalizeEquippedSlots` and rebuilt with `bySlot`, the same shape the
 outfit-history remap produces, so a pre-hair four-slot bag comes back with all five slots.
 
 - **Restore** (`remapBackupData`): characters, files and messages through `remapper.remap`, wardrobe
-  items through `wardrobeItemIdRemap.get(id) ?? id`.
+  items through `wardrobeItemIdRemap.get(id) ?? id`. An entry for a character the backup does not carry
+  (one deleted before the backup whose entry lingered) is dropped: `remapper.remap` would mint an id
+  that names nobody, and nothing would ever clean it up.
 - **Import** (`reconcileRelationships`): characters through `idMaps.characters.get(id) ?? id` (an
   unmapped character keeps its id, as a participant does), wardrobe items through
   `buildImportedWardrobeItemIdMap` (passed in from `execute.ts`), pictures through
