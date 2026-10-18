@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: restore and import keep chat outfits (bug 252)
+
+- New `lib/chat/character-keyed-fields.ts`: `remapCharacterKeyedChatFields` re-keys every chat column keyed by character id (`equippedOutfit`, `characterAvatars`, `courierCheckpoints`, `pendingOutfitNotifications`) and moves the ids inside them: outfit slot item ids through the wardrobe item remap, outfit-avatar `imageId` through the file remap, Courier `lastResolvedMessageId` through the message remap. Outfits come back as full five-slot bags, matching the outfit-history remap. A column stored as a JSON string is parsed; an unreadable one is left alone and logged at `warn`.
+- New-account restore (`remapBackupData`) and `.qtap` import (`reconcileRelationships`, which now takes the imported wardrobe item map) both call it. Restore drops an entry for a character the backup does not carry instead of minting an id for it. Before this, those columns kept the old character ids, so no character was wearing anything in a restored chat, outfit avatars were gone, and Courier checkpoints were lost.
+- Tests: `__tests__/unit/lib/chat/character-keyed-fields.test.ts`, `__tests__/unit/lib/backup/uuid-remapper.test.ts`, `__tests__/unit/lib/import/quilltap-import/reconcile-character-keyed-fields.test.ts`.
+
 #### Docs: Inventory design specs
 
 - New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.

@@ -31,7 +31,7 @@ import {
   importMemories,
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
-import { importWardrobeWear } from './import-wardrobe-wear';
+import { buildImportedWardrobeItemIdMap, importWardrobeWear } from './import-wardrobe-wear';
 import { importWardrobeHistory } from './import-wardrobe-history';
 import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
@@ -1002,7 +1002,9 @@ async function executeImportStrict(
     }
 
     // Post-import reconciliation
-    await reconcileRelationships(userId, repos, idMaps, warnings);
+    await reconcileRelationships(userId, repos, idMaps, warnings, {
+      wardrobeItemIds: buildImportedWardrobeItemIdMap(data.documents ?? [], idMaps),
+    });
 
     // Wardrobe pictures. After reconciliation: the character must already
     // point at the vault the bundle carried, whose blobs hold the bytes and

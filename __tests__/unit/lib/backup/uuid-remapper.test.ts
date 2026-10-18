@@ -1175,3 +1175,185 @@ describe('remapBackupData() - outfit history', () => {
     expect(out.map((r) => r.slotsHash)).toEqual(rows.map((r) => r.slotsHash))
   })
 })
+
+describe('remapBackupData() - chat equipped outfit (bug 252)', () => {
+  // Real UUID-shaped ids: the wardrobe parser only honours a frontmatter id of
+  // that shape. Mount-derived ids are recomputed against the remapped mount.
+  const FRONTMATTER_ITEM = '33333333-3333-4333-8333-333333333333'
+  const OLD_MOUNT = '44444444-4444-4444-8444-444444444444'
+
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const empty = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
+
+  function backup(equippedOutfit: unknown, extra: Partial<BackupData> = {}): BackupData {
+    return {
+      manifest: {},
+      characters: [{ id: 'char-a', name: 'Bertie' }, { id: 'char-b', name: 'Jeeves' }],
+      chats: [{ id: 'chat-old', participants: [], messages: [], equippedOutfit }],
+      tags: [], connectionProfiles: [], imageProfiles: [], embeddingProfiles: [], memories: [],
+      files: [], promptTemplates: [], roleplayTemplates: [], providerModels: [], projects: [], llmLogs: [],
+      ...extra,
+    } as unknown as BackupData
+  }
+
+  it('re-keys every character to its new id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({
+        'char-a': { ...empty, top: ['item-unknown'] },
+        'char-b': { ...empty, footwear: ['item-other'] },
+      }),
+      'target-user',
+      remapper
+    )
+
+    const [charA, charB] = result.characters.map((c) => c.id)
+    expect(charA).not.toBe('char-a')
+    const outfit = result.chats[0].equippedOutfit as Record<string, Record<string, string[]>>
+    expect(Object.keys(outfit).sort()).toEqual([charA, charB].sort())
+    expect(outfit['char-a']).toBeUndefined()
+    // An item id the backup carries no document for passes through.
+    expect(outfit[charA].top).toEqual(['item-unknown'])
+    expect(outfit[charB].footwear).toEqual(['item-other'])
+    expect(outfit[charA].bottom).toEqual([])
+  })
+
+  it('moves slot item ids with the wardrobe item remap', () => {
+    const remapper = new UuidRemapper()
+    const { wardrobeItemIdForDocument } = require('@/lib/database/repositories/vault-overlay/parsers')
+    const derivedContent = '---\ntitle: Spats\ntypes: [footwear]\n---\n'
+    const oldDerived = wardrobeItemIdForDocument({
+      mountPointId: OLD_MOUNT,
+      relativePath: 'Wardrobe/Spats.md',
+      content: derivedContent,
+    })
+    const data = backup(
+      { 'char-a': { ...empty, top: [FRONTMATTER_ITEM], footwear: [oldDerived] } },
+      {
+        docMountFileLinks: [
+          { id: 'link-1', fileId: 'file-1', mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Coat.md' },
+          { id: 'link-2', fileId: 'file-2', mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Spats.md' },
+        ] as unknown as BackupData['docMountFileLinks'],
+        docMountDocuments: [
+          { id: 'doc-1', fileId: 'file-1', content: `---\nid: ${FRONTMATTER_ITEM}\ntitle: Coat\ntypes: [top]\n---\n` },
+          { id: 'doc-2', fileId: 'file-2', content: derivedContent },
+        ] as unknown as BackupData['docMountDocuments'],
+      }
+    )
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const charA = result.characters[0].id
+    const outfit = result.chats[0].equippedOutfit as Record<string, Record<string, string[]>>
+    const newDerived = wardrobeItemIdForDocument({
+      mountPointId: remapper.remap(OLD_MOUNT),
+      relativePath: 'Wardrobe/Spats.md',
+      content: derivedContent,
+    })
+
+    expect(newDerived).not.toBe(oldDerived)
+    expect(outfit[charA].top).toEqual([FRONTMATTER_ITEM])
+    expect(outfit[charA].footwear).toEqual([newDerived])
+  })
+
+  it('agrees with the outfit history on the character and item ids', () => {
+    const { hashEquippedSlots } = require('@/lib/wardrobe/outfit-hash')
+    const slots = { ...empty, top: ['item-1'] }
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ 'char-a': slots }, {
+        wardrobeHistory: [{
+          id: 'hist-0', chatId: 'chat-old', characterId: 'char-a', entryIndex: 0, slots,
+          slotsHash: hashEquippedSlots(slots), source: 'chat-start', actorCharacterId: null,
+          isCurrent: true, createdAt: '2026-10-16T00:00:00.000Z',
+        }],
+      } as unknown as Partial<BackupData>),
+      'target-user',
+      remapper
+    )
+
+    const history = result.wardrobeHistory![0]
+    const outfit = result.chats[0].equippedOutfit as Record<string, unknown>
+    expect(outfit[history.characterId]).toEqual(history.slots)
+  })
+
+  it('leaves a chat with no outfit alone', () => {
+    const remapper = new UuidRemapper()
+    expect(remapBackupData(backup(null), 'target-user', remapper).chats[0].equippedOutfit).toBeNull()
+    expect(remapBackupData(backup(undefined), 'target-user', new UuidRemapper()).chats[0].equippedOutfit)
+      .toBeUndefined()
+  })
+})
+
+describe('remapBackupData() - other character-keyed chat columns (bug 252)', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  function backup(chat: Record<string, unknown>): BackupData {
+    return {
+      manifest: {},
+      characters: [{ id: 'char-a', name: 'Bertie' }],
+      chats: [{ id: 'chat-old', participants: [], messages: [{ id: 'msg-old', type: 'message' }], ...chat }],
+      tags: [], connectionProfiles: [], imageProfiles: [], embeddingProfiles: [], memories: [],
+      files: [{ id: 'file-old' }], promptTemplates: [], roleplayTemplates: [], providerModels: [], projects: [],
+      llmLogs: [],
+    } as unknown as BackupData
+  }
+
+  it('re-keys outfit avatars and follows the picture to its new file id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ characterAvatars: { 'char-a': { imageId: 'file-old', generatedAt: 't', afterMessageCount: 2 } } }),
+      'target-user',
+      remapper
+    )
+    const charA = result.characters[0].id
+    const fileId = result.files[0].id
+    expect(fileId).not.toBe('file-old')
+    expect(result.chats[0].characterAvatars).toEqual({
+      [charA]: { imageId: fileId, generatedAt: 't', afterMessageCount: 2 },
+    })
+  })
+
+  it('re-keys Courier checkpoints and follows the message to its new id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ courierCheckpoints: { 'char-a': { lastResolvedMessageId: 'msg-old', resolvedAt: 't' } } }),
+      'target-user',
+      remapper
+    )
+    const charA = result.characters[0].id
+    const messageId = result.chats[0].messages[0].id
+    expect(messageId).not.toBe('msg-old')
+    expect(result.chats[0].courierCheckpoints).toEqual({
+      [charA]: { lastResolvedMessageId: messageId, resolvedAt: 't' },
+    })
+  })
+
+  it('drops an entry for a character the backup does not carry instead of minting an id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ equippedOutfit: { 'char-a': { top: ['x'] }, 'char-deleted': { top: ['y'] } } }),
+      'target-user',
+      remapper
+    )
+    expect(Object.keys(result.chats[0].equippedOutfit as object)).toEqual([result.characters[0].id])
+  })
+
+  it('re-keys queued outfit notices', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ pendingOutfitNotifications: { 'char-a': { text: 'changed' } } }),
+      'target-user',
+      remapper
+    )
+    expect(result.chats[0].pendingOutfitNotifications).toEqual({ [result.characters[0].id]: { text: 'changed' } })
+  })
+})
