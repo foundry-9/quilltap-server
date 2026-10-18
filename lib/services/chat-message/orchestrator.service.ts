@@ -98,6 +98,7 @@ import {
   triggerConversationRender,
 } from './memory-trigger.service'
 import { flushPendingWardrobeAnnouncements } from '@/lib/wardrobe/outfit-change-effects'
+import { flushPendingInventoryAnnouncements } from '@/lib/inventory/equip-effects'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getCheapLLMProvider, profileParams, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -985,6 +986,8 @@ async function processMessage(
   // Resolve wardrobe capability flags from character (default: enabled when null)
   const canDressThemselves = character?.canDressThemselves !== false
   const canCreateOutfits = character?.canCreateOutfits !== false
+  // Inventory tools (default: enabled when null)
+  const canManageInventory = character?.canManageInventory !== false
 
   // Determine if document editing tools should be enabled (Scriptorium Phase 3.3)
   // Enabled when the project has linked document stores
@@ -1076,6 +1079,7 @@ async function processMessage(
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
       canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off, wardrobe_rollback, wardrobe_history
       canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
+      canManageInventory, // enables the nine inventory_* tools
       documentEditingEnabled ? 'full' : 'off', // docToolsMode - the full doc_* family when stores are linked
       askCarinaEnabled, // askCarinaEnabled - enables ask_carina tool when an answerer exists
       undefined, // includeWorkspaceTools - Salon turns keep the always-on set
@@ -1135,7 +1139,8 @@ async function processMessage(
       !!chat.projectId,
       helpToolsEnabled,
       canDressThemselves,
-      canCreateOutfits
+      canCreateOutfits,
+      canManageInventory
     )
     toolInstructions = buildSimpleJsonSystemInstructions(enabledOptions)
     logSimpleJsonToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, enabledOptions)
@@ -1147,7 +1152,8 @@ async function processMessage(
       !!chat.projectId,
       helpToolsEnabled,
       canDressThemselves,
-      canCreateOutfits
+      canCreateOutfits,
+      canManageInventory
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
     logTextBlockToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, textBlockOptions)
@@ -1719,6 +1725,8 @@ async function processMessage(
   // terminal branch we exit through. The handlers add to the Set instead of
   // enqueuing per-edit; here we fire one job each and clear.
   await flushPendingWardrobeAnnouncements(toolContext)
+  // Beside it, the turn's Inventory changes: one Pascal line per character.
+  await flushPendingInventoryAnnouncements(toolContext)
 
   // ============================================================================
   // "Nothing to add" turn-skipping — sentinel handling

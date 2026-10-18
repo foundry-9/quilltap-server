@@ -21,6 +21,7 @@ interface ProfilesTabProps {
   savingHelpTools?: boolean
   savingCanDressThemselves?: boolean
   savingCanCreateOutfits?: boolean
+  savingCanManageInventory?: boolean
   savingTimestampConfig?: boolean
   savingDefaultScenario?: boolean
   savingDefaultSystemPrompt?: boolean
@@ -31,6 +32,7 @@ interface ProfilesTabProps {
   onHelpToolsChange: (enabled: boolean | null) => void
   onCanDressThemselvesChange: (enabled: boolean | null) => void
   onCanCreateOutfitsChange: (enabled: boolean | null) => void
+  onCanManageInventoryChange: (enabled: boolean | null) => void
   onTimestampConfigChange: (config: TimestampConfig | null) => void
   onDefaultScenarioChange: (scenarioId: string | null) => void
   onDefaultSystemPromptChange: (promptId: string | null) => void
@@ -50,6 +52,7 @@ export function ProfilesTab({
   savingHelpTools,
   savingCanDressThemselves,
   savingCanCreateOutfits,
+  savingCanManageInventory,
   savingTimestampConfig,
   savingDefaultScenario,
   savingDefaultSystemPrompt,
@@ -60,6 +63,7 @@ export function ProfilesTab({
   onHelpToolsChange,
   onCanDressThemselvesChange,
   onCanCreateOutfitsChange,
+  onCanManageInventoryChange,
   onTimestampConfigChange,
   onDefaultScenarioChange,
   onDefaultSystemPromptChange,
@@ -364,6 +368,35 @@ export function ProfilesTab({
               <option value="disabled">Disabled</option>
             </select>
             {savingCanCreateOutfits && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Inventory Management */}
+        <div className="mt-6">
+          <h3 className="qt-text-label mb-1">Inventory Management</h3>
+          <p className="qt-text-small mb-3">
+            Control whether this character can see, pick up, equip, set down, make and give away the objects they carry, using the inventory tools. Requires tool use.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={character?.canManageInventory === null || character?.canManageInventory === undefined ? 'inherit' : character.canManageInventory ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onCanManageInventoryChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              disabled={savingCanManageInventory}
+              className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="inherit">Inherit from global settings (enabled)</option>
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            {savingCanManageInventory && (
               <div className="flex items-center gap-2 qt-text-small">
                 <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
                 Saving...

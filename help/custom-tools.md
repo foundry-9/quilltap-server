@@ -166,6 +166,38 @@ The same quiet non-match covers every way a sheet can decline to answer:
 
 One consequence worth stating plainly: because a row only wins when its metadata tests *held*, a metadata branch is silent in the failure direction. It cannot tell you *why* a character fell through. If a table isn't behaving, check the sheet, not the tool.
 
+#### Asking what the character has on them — `inventory`
+
+Where `metadata` asks what a character *is*, `inventory` asks what they *have* — the objects in [the Inventory](inventory.md) they carry or can reach in this very chat. It is keyed by the object, named by its id, its title or its name, without regard to case, and it asks one question: which of four states the object is in for the roller.
+
+| State | Meaning |
+|---|---|
+| `equipped` | on their person in this chat |
+| `carried` | in their own vault, but not equipped here |
+| `reachable` | on a shared shelf — a group's, the project's, Quilltap General — and not equipped |
+| `absent` | nowhere within their reach |
+
+```json
+{ "when": { "inventory": { "crowbar": { "eq": "equipped" } } },
+  "message": "{{inventory.crowbar.title}} makes short work of it.", "state": "success" }
+```
+
+Only `eq` and `neq` — a state has no order to it. When several objects answer to the same name, the best state wins: equipped over carried over reachable over absent.
+
+Its sibling **`inventoryCount`** counts how many objects of that *kind* (the same name) the roller has equipped, and takes the ordinary number comparisons: `{ "inventoryCount": { "lockpick": { "gte": 2 } } }`.
+
+The object's name is a **template**, as a wardrobe item's is: `{ "inventory": { "{{params.weapon}}": { "eq": "equipped" } } }` lets whoever reaches for the tool say which weapon they mean.
+
+**A run nobody made has no inventory at all** — and so every `inventory` and `inventoryCount` test declines, `{ "eq": "absent" }` and `{ "lt": 1 }` included. That is the same quiet non-match a missing metadata key gets, and for the same reason: we could not establish anything about a bag that does not exist. Only a real character's bag ever reads as `absent` or `0`.
+
+A roll, a comparison or a parameter's default may also draw a value *out* of an object's metadata, with a `$inventory` reference — the `$state` reference's twin, fallback and all:
+
+```json
+{ "roll": { "$inventory": "sword.metadata.damage", "fallback": "1d4" } }
+```
+
+The object comes first, then `.metadata.`, then the key. As the whole `roll`, the fallback must be dice: a sword whose metadata reads `"damage": "2d6"` rolls 2d6, and a character with no such sword — or a sword with no such key — rolls 1d4. Anywhere else the fallback's type types the reference, exactly as `$state`'s does. A `$inventory` reference may not appear in a gate.
+
 #### Asking how far along something is — `progress`
 
 A character may be carrying **[progressions](character-progressions.md)**: named
@@ -265,10 +297,11 @@ These may be dropped into a `message`:
 | `{{metadata.faction}}` | a key from the roller's fact sheet |
 | `{{state.weather.wind}}` | a path into persistent state (the four-tier cascade) |
 | `{{progress.cannon.percent}}` | a field of one of the roller's timed progressions |
+| `{{inventory.sword.title}}` | an object the roller carries or can reach: `.title` (its title, or its name when it has none), `.name`, `.description`, `.state`, or `.metadata.<key>` |
 | `{{now}}` | the moment the run began, in milliseconds since the epoch |
 | `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
 
-Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying, or a `{{character}}` on a roll that nobody in particular made (you, from the run dialog, as no one).
+Anything else in braces is left exactly as you typed it — as is an `{{inventory.…}}` naming an object the roller cannot reach (its `.state` alone still says `absent`), a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying, or a `{{character}}` on a roll that nobody in particular made (you, from the run dialog, as no one).
 
 `{{character}}` is the roller and nobody else: the character who reached for the tool, who said the trigger phrase, or in whose name you ran it. It goes wherever a message's placeholders go — the chip label, the oracle's prompt, an effect's expression, and a wardrobe item's name, so `"{{character}}'s armour"` dresses each roller in their own.
 
@@ -494,6 +527,27 @@ Run it from the composer **as** a character and on it goes; a character may equa
 
 Your characters are told a tool records side effects and *where* it writes (the targets are vocabulary, like a parameter's name) — never the values or the conditions, and under `revealOdds: false` not even the targets. A wardrobe effect is described the same way — *wears Cloak of Night, Boots*, *takes off {{params.garment}}*, *clears hair* — naming what may be worn, never which roll wears it. The run dialog names them too, under **What this tool can quote**. And on the Workbench, the proving bench shows every would-be write as a dry run — `→ state.lockpicking.failures = 3 (would write)` — while applying, as ever, nothing at all. A wardrobe effect shows as `→ wardrobe: wear “Cloak of Night” (would attempt)` — *attempt*, because the bench has no character in the chair and so cannot know whether the garment is in anyone's wardrobe.
 
+### Equipping, setting down and picking up
+
+An effect may change what the rolling character *carries*, too. Give it an `inventory` key in place of `target` and `value` (or `wardrobe` — one of the three, never two):
+
+```json
+"effects": [
+  { "when": { "outcome": { "eq": "success" } },
+    "inventory": { "action": "pick_up", "items": ["{{params.loot}}"] } },
+  { "when": { "outcome": { "eq": "failure" } },
+    "inventory": { "action": "unequip", "items": ["lantern"] } }
+]
+```
+
+- **`equip`** takes up the listed objects, or kits.
+- **`unequip`** sets them down; a kit sets down every member it holds.
+- **`pick_up`** names **archetypes**, and makes an instance of each in the rolling character's own vault, equipping it unless you add `"equip": false`. (`equip` means nothing to the other two actions, and a file that says it there is refused.)
+
+The objects are named, and found, exactly as the characters' own `inventory_*` tools find them — by id, then title, then name — and each is a template, so `"{{params.loot}}"` lets the roller choose. It all goes through the same machinery as the Carrying now pane, so the limits hold: should picking up a magic bow put one bow too many in the character's hands, *that* gesture is skipped whole — no bow is made — and the roll's other effects, and Pascal's announcement, carry on regardless. An object that cannot be found is skipped quietly. The character's own `inventory_*` calls and a tool's inventory effects in one reply all make **one** line from Pascal at the end of it.
+
+The roll's permanent record notes each object taken up, set down or picked up, and what the character carried before and after. A run nobody made carries nothing.
+
 ## Which tool wins: the matter of tiers
 
 The same tool name may reasonably exist in several stores, and Quilltap resolves the question by proximity. Nearest to the character wins:
@@ -531,7 +585,15 @@ Two optional keys settle it, and only one of them may appear in a file:
 - **`availableWhen`** — offer this tool *only* to a character whose fact sheet passes every test in it.
 - **`withheldWhen`** — the mirror: keep it *from* a character whose sheet passes every test in it.
 
-The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subjects can only ever be `metadata` and `progress` — a character's fact sheet, and the timed spans derived from it, are what they carry into the room — and why the values compared against must be plain literals rather than `{ "$param": … }` or `{ "$state": … }` references. There is nothing yet for those to refer to.
+The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subjects can only ever be `metadata`, `progress`, `inventory` and `inventoryCount` — a character's fact sheet, the timed spans derived from it, and what they carry in this chat are what they bring into the room — and why the values compared against must be plain literals rather than `{ "$param": … }`, `{ "$state": … }` or `{ "$inventory": … }` references. There is nothing yet for those to refer to. For the same reason an `inventory` key in a gate must name its object literally: a gate is asked before anyone has supplied a parameter, so `{{params.weapon}}` there would never mean anything but itself, and the loader refuses it.
+
+`inventory` in a gate is the sword-swinger's arrangement:
+
+```json
+{ "availableWhen": { "inventory": { "sword": { "eq": "equipped" } } } }
+```
+
+A character with a sword in hand is offered `swing_sword`; one without is not — and, since a gate with nothing to read declines, neither is a roll made as nobody from the composer.
 
 `progress` in a gate is the whole recharging-weapon arrangement in one line:
 
@@ -605,7 +667,7 @@ Choosing a preset from the dropdown deals it back into the form. The binding is 
 
 At the foot of the dialog is **What this tool can quote** — the placeholders *this particular tool* actually uses when Pascal writes the outcome.
 
-The emphasis is on *actually*. Nothing is listed because the format allows it: a tool that rolls dice but never writes `{{dice}}` is not offered `{{dice}}`, and a parameter you are filling in appears here only if some message or prompt quotes it back. What you get is one entry for each of `{{value}}`, `{{roll}}`, `{{dice}}`, and `{{llm}}` the tool genuinely writes, one per parameter it genuinely quotes, and — the useful part — one for every metadata key and state path the definition genuinely reads, named. If a table branches on `hasAnsibleAccess`, the dialog says so, and you need not go opening files to find out what the thing wants to know about your character. A tool that quotes nothing gets no panel at all.
+The emphasis is on *actually*. Nothing is listed because the format allows it: a tool that rolls dice but never writes `{{dice}}` is not offered `{{dice}}`, and a parameter you are filling in appears here only if some message or prompt quotes it back. What you get is one entry for each of `{{value}}`, `{{roll}}`, `{{dice}}`, and `{{llm}}` the tool genuinely writes, one per parameter it genuinely quotes, and — the useful part — one for every metadata key and state path the definition genuinely reads, named. The Inventory has sentences of its own: which objects the tool reads the inventory for, and which it may equip, unequip or pick up for the running character. If a table branches on `hasAnsibleAccess`, the dialog says so, and you need not go opening files to find out what the thing wants to know about your character. A tool that quotes nothing gets no panel at all.
 
 **These are the author's to place, not yours to type.** The placeholders belong to the tool's own outcome messages and oracle prompt, which are written on Pascal's Workbench. What you type into the form above is sent exactly as written — braces and all — so `{{metadata.rank}}` in a parameter box is the literal text `{{metadata.rank}}`, not a substitution waiting to happen.
 

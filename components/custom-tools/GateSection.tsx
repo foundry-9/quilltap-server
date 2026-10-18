@@ -11,8 +11,9 @@
  *
  * The chips are deliberately thinner than the outcome table's. A gate is
  * answered before the deal, so there are no parameters to compare against and
- * no roll to test — every subject is a metadata key and every operand is a
- * literal, and the widget offers exactly that and nothing more.
+ * no roll to test — every subject is a metadata key, a progress field, or an
+ * Inventory object named literally, and every operand is a literal, and the
+ * widget offers exactly that and nothing more.
  */
 
 import { useState } from 'react'
@@ -29,6 +30,7 @@ import {
 } from '@/lib/pascal/tool-draft'
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
+import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
 
 interface GateSectionProps {
   draft: ToolDraft
@@ -53,6 +55,30 @@ const MODE_OPTIONS: Array<{ mode: GateMode; label: string; title: string }> = [
 
 /** Every comparator is on offer: a metadata key's stored type is unknowable here. */
 const COMPARATORS: ComparatorKey[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
+
+/** What each subject may be asked: a state is = / ≠, a count is a number. */
+function comparatorsFor(subject: DraftGateCondition['subject']): ComparatorKey[] {
+  if (subject === 'inventory') return ['eq', 'neq']
+  if (subject === 'inventoryCount') return ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
+  return COMPARATORS
+}
+
+/** The same chip on a new subject, its comparator and operand made legal there. */
+function withSubject(condition: DraftGateCondition, subject: DraftGateCondition['subject']): DraftGateCondition {
+  if (subject === 'inventory') {
+    const comparator = condition.comparator === 'neq' ? 'neq' : 'eq'
+    const keep =
+      condition.operand.kind === 'string' &&
+      (INVENTORY_STATE_VALUES as readonly string[]).includes(condition.operand.text)
+    return { ...condition, subject, comparator, operand: keep ? condition.operand : { kind: 'string', text: 'equipped' } }
+  }
+  if (subject === 'inventoryCount') {
+    const comparator = CONTAINMENT_KEYS.has(condition.comparator) ? 'gte' : condition.comparator
+    const operand = condition.operand.kind === 'number' ? condition.operand : { kind: 'number' as const, text: '1' }
+    return { ...condition, subject, comparator, operand }
+  }
+  return { ...condition, subject }
+}
 
 export function GateSection({ draft, issues, onChange, disabled = false }: Readonly<GateSectionProps>) {
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
@@ -95,7 +121,9 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
     // One comparator object carries each key once, so a duplicate key+comparator
     // pair is blocked at the door rather than silently overwriting its twin.
     const slot = gateConditionSlotKey(next)
-    const collision = draft.gateConditions.some((c) => c.id !== id && gateConditionSlotKey(c) === slot)
+    const collision = draft.gateConditions.some(
+      (c) => c.id !== id && c.subject === next.subject && gateConditionSlotKey(c) === slot
+    )
     if (collision) {
       setDuplicateNotice(`The gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`)
       return
@@ -115,8 +143,8 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
         <div>
           <h2 className="qt-card-title text-sm">Who may reach for it</h2>
           <p className="qt-hint">
-            Tested before the deal, against the invoking character&rsquo;s <code>metadata.json</code> or their timed
-            progressions — the only things known before a roll exists.
+            Tested before the deal, against the invoking character&rsquo;s <code>metadata.json</code>, their timed
+            progressions, or what they carry in this chat — the only things known before a roll exists.
           </p>
         </div>
         <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Availability">
@@ -203,6 +231,7 @@ interface GateChipProps {
 function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonly<GateChipProps>) {
   const ordering = ORDERING_KEYS.has(condition.comparator)
   const containment = CONTAINMENT_KEYS.has(condition.comparator)
+  const inventorySubject = condition.subject === 'inventory' || condition.subject === 'inventoryCount'
 
   const handleComparatorChange = (comparator: ComparatorKey) =>
     onChange({ ...condition, comparator, operand: reseatOperandForComparator(condition.operand, comparator) })
@@ -211,28 +240,38 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
     <div className={`flex items-center gap-1 flex-wrap rounded border px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}>
       <select
         value={condition.subject}
-        onChange={(e) => onChange({ ...condition, subject: e.target.value as DraftGateCondition['subject'] })}
+        onChange={(e) => onChange(withSubject(condition, e.target.value as DraftGateCondition['subject']))}
         disabled={disabled}
         className="qt-select qt-select-sm w-28 shrink-0"
         aria-label="Gate subject"
-        title="Which sheet this test reads: the character's own metadata.json, or their derived progressions."
+        title="Which sheet this test reads: the character's own metadata.json, their derived progressions, or what they carry."
       >
         <option value="metadata">metadata</option>
         <option value="progress">progress</option>
+        <option value="inventory">inventory state</option>
+        <option value="inventoryCount">inventory count</option>
       </select>
 
       <input
         type="text"
         value={condition.key}
         onChange={(e) => onChange({ ...condition, key: e.target.value })}
-        placeholder={condition.subject === 'progress' ? 'cannon.complete' : "key on the character's fact sheet"}
+        placeholder={
+          condition.subject === 'progress'
+            ? 'cannon.complete'
+            : inventorySubject
+              ? 'Excalibur'
+              : "key on the character's fact sheet"
+        }
         disabled={disabled}
         className={`qt-input w-44 text-sm ${condition.key.trim() === '' ? 'qt-input-error' : ''}`}
-        aria-label={condition.subject === 'progress' ? 'Progress key' : 'Metadata key'}
+        aria-label={condition.subject === 'progress' ? 'Progress key' : inventorySubject ? 'Inventory object reference' : 'Metadata key'}
         title={
           condition.subject === 'progress'
             ? 'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry never matches.'
-            : "The invoking character's fact sheet — a key the character lacks never matches."
+            : inventorySubject
+              ? 'An object by id, title or name, written literally — a gate has no parameters to fill a placeholder. With no character or chat, the test never matches.'
+              : "The invoking character's fact sheet — a key the character lacks never matches."
         }
       />
 
@@ -246,7 +285,7 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
         className="qt-select qt-select-sm w-32 shrink-0"
         aria-label="Comparator"
       >
-        {COMPARATORS.map((key) => (
+        {comparatorsFor(condition.subject).map((key) => (
           <option key={key} value={key}>
             {COMPARATOR_LABELS[key]}
           </option>
@@ -259,12 +298,13 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
         operand={condition.operand}
         onChange={(operand) => onChange({ ...condition, operand })}
         disabled={disabled}
-        showTypePicker={!ordering && !containment}
+        showTypePicker={!ordering && !containment && !inventorySubject}
         pickerClassName="w-24 shrink-0"
         textClassName="w-32"
+        {...(condition.subject === 'inventory' ? { stateOptions: INVENTORY_STATE_VALUES } : {})}
       />
 
-      {(ordering || containment) && (
+      {(ordering || containment) && !inventorySubject && (
         <span
           className="text-xs qt-text-secondary"
           title={

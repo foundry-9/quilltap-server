@@ -597,3 +597,21 @@ export {
   formatTerminalListResults,
   TerminalToolError,
 } from './handlers/terminal-handler';
+
+// Inventory tools — the objects a character carries (gated by canManageInventory)
+export {
+  INVENTORY_TOOL_DEFINITIONS,
+  inventoryToolFlags,
+  type InventoryToolFlags,
+} from './inventory-tool-flags';
+export { inventoryListToolDefinition, validateInventoryListInput } from './inventory-list-tool';
+export { inventoryReadToolDefinition, validateInventoryReadInput } from './inventory-read-tool';
+export { inventoryEquipToolDefinition, validateInventoryEquipInput } from './inventory-equip-tool';
+export { inventoryUnequipToolDefinition, validateInventoryUnequipInput } from './inventory-unequip-tool';
+export { inventoryPickUpToolDefinition, validateInventoryPickUpInput } from './inventory-pick-up-tool';
+export { inventoryCreateToolDefinition, validateInventoryCreateInput } from './inventory-create-tool';
+export { inventoryUpdateToolDefinition, validateInventoryUpdateInput } from './inventory-update-tool';
+export { inventoryArchiveToolDefinition, validateInventoryArchiveInput } from './inventory-archive-tool';
+export { inventoryGiveToolDefinition, validateInventoryGiveInput } from './inventory-give-tool';
+export { INVENTORY_TOOL_TABLE, INVENTORY_TOOL_NAMES } from './handlers/inventory-tool-table';
+export type { InventoryToolContext, InventoryObjectSummary } from './handlers/inventory-handler-shared';

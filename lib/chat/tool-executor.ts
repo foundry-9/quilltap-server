@@ -78,6 +78,7 @@ import {
   type DocEditToolContext,
 } from '@/lib/tools/handlers/doc-edit-handler';
 import { WARDROBE_TOOL_TABLE } from '@/lib/tools/handlers/wardrobe-tool-table';
+import { INVENTORY_TOOL_NAMES, INVENTORY_TOOL_TABLE } from '@/lib/tools/handlers/inventory-tool-table';
 import {
   executeReadConversationTool,
   formatReadConversationResults,
@@ -192,6 +193,12 @@ export interface ToolExecutionContext {
    */
   pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
   /**
+   * The turn's pending Inventory changes, created beside the announcement set
+   * by `newWardrobeTurnContainers` and drained by
+   * `flushPendingInventoryAnnouncements` at turn end.
+   */
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
+  /**
    * Surface a Carina (`ask_carina`) answer to the Salon the instant it posts,
    * via the turn's live SSE stream. Set by the orchestrator (which holds the
    * stream controller); absent in the autonomous-room/forked-child path, where
@@ -266,6 +273,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'wardrobe_take_off',
   'wardrobe_rollback',
   'wardrobe_history',
+  // Inventory tools — the objects a character carries
+  ...INVENTORY_TOOL_NAMES,
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
   // Terminal tools — Prospero Phase 2
@@ -735,6 +744,23 @@ export async function executeToolCallWithContext(
         characterId: characterId || '',
         provenance: { source: 'character', ...(characterId ? { actorCharacterId: characterId } : {}) },
         ...turnContainersOf(context),
+      });
+      return { toolName: toolCall.name, success, result, error };
+    }
+
+    // The inventory_* tools: one table, one context, the calling character's
+    // bag. The turn's pending Inventory announcements ride along so every
+    // change in the turn collapses into one Pascal line.
+    const inventoryTool = INVENTORY_TOOL_TABLE[toolCall.name];
+    if (inventoryTool) {
+      if (!characterId) {
+        return { toolName: toolCall.name, success: false, result: null, error: 'The inventory tools need a character to act for.' };
+      }
+      const { success, result, error } = await inventoryTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+        ...(context.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: context.pendingInventoryAnnouncements } : {}),
       });
       return { toolName: toolCall.name, success, result, error };
     }

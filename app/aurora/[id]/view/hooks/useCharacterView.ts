@@ -48,6 +48,7 @@ interface UseCharacterViewReturn {
   savingHelpTools: boolean
   savingCanDressThemselves: boolean
   savingCanCreateOutfits: boolean
+  savingCanManageInventory: boolean
   savingCanChooseOutfit: boolean
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
@@ -72,6 +73,7 @@ interface UseCharacterViewReturn {
   handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
   handleSaveCanDressThemselves: (enabled: boolean | null) => Promise<void>
   handleSaveCanCreateOutfits: (enabled: boolean | null) => Promise<void>
+  handleSaveCanManageInventory: (enabled: boolean | null) => Promise<void>
   handleSaveCanChooseOutfit: (enabled: boolean) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
@@ -119,6 +121,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingHelpTools, setSavingHelpTools] = useState(false)
   const [savingCanDressThemselves, setSavingCanDressThemselves] = useState(false)
   const [savingCanCreateOutfits, setSavingCanCreateOutfits] = useState(false)
+  const [savingCanManageInventory, setSavingCanManageInventory] = useState(false)
   const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
@@ -514,6 +517,35 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveCanManageInventory = async (enabled: boolean | null) => {
+    setSavingCanManageInventory(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canManageInventory: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update inventory setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, canManageInventory: enabled })
+      }
+      const message = enabled === null
+        ? 'Inventory management set to inherit from global (enabled)'
+        : enabled
+          ? 'Inventory management enabled'
+          : 'Inventory management disabled'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update inventory setting')
+      console.error('Failed to save inventory setting', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingCanManageInventory(false)
+    }
+  }
+
   const handleSaveCanChooseOutfit = async (enabled: boolean) => {
     setSavingCanChooseOutfit(true)
     try {
@@ -775,6 +807,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingHelpTools,
     savingCanDressThemselves,
     savingCanCreateOutfits,
+    savingCanManageInventory,
     savingCanChooseOutfit,
     savingTimestampConfig,
     savingDefaultScenario,
@@ -799,6 +832,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveHelpTools,
     handleSaveCanDressThemselves,
     handleSaveCanCreateOutfits,
+    handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,

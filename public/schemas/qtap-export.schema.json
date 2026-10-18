@@ -476,6 +476,10 @@
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
         },
+        "canManageInventory": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character may see and change what they carry with the inventory_* tools (null = enabled by default)"
+        },
         "canChooseOutfit": {
           "type": "boolean",
           "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
@@ -967,7 +971,7 @@
             },
             "effects": {
               "type": "array",
-              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. A wardrobe change is targeted 'wardrobe.wear' / 'wardrobe.take_off' / 'wardrobe.clear_slot', with `previous` the character's equipped slots before it and `next` = { item?: { id, title }, slot?, slotsAffected, effect, slots }. Absent when the run declared or applied none.",
+              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. A wardrobe change is targeted 'wardrobe.wear' / 'wardrobe.take_off' / 'wardrobe.clear_slot', with `previous` the character's equipped slots before it and `next` = { item?: { id, title }, slot?, slotsAffected, effect, slots }. An Inventory change is targeted 'inventory.equip' / 'inventory.unequip' / 'inventory.pick_up', with `previous` the character's equipped object ids before it and `next` = { item: { id, title }, created?, equipped }. Absent when the run declared or applied none.",
               "items": {
                 "type": "object",
                 "required": ["target", "next"],

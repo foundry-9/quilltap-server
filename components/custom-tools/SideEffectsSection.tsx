@@ -5,12 +5,14 @@
  * builder form and the outcome table: what a run writes back once the deal is
  * done.
  *
- * Each row is one of two kinds. A WRITE has a target and a value that is a
+ * Each row is one of three kinds. A WRITE has a target and a value that is a
  * literal number, a literal boolean, or an expression. A WARDROBE row changes
  * what the rolling character has on: an action (wear / take off / clear a
  * slot), a short list of item references (title or id, templated), and the
- * mode and slot where the action wants them. Switching kind keeps the other
- * half on the draft until save, so nothing typed is lost.
+ * mode and slot where the action wants them. An INVENTORY row changes what
+ * they carry: equip, unequip or pick up a short list of object references
+ * (`InventoryEffectFields`). Switching kind keeps the other halves on the
+ * draft until save, so nothing typed is lost.
  *
  * The When is the common shapes only: "Always" or "on a given outcome
  * state". A hand-written richer condition (comparators,
@@ -68,6 +70,13 @@ import { wardrobeOriginLabel, wardrobeReachLabel } from '@/lib/wardrobe/wardrobe
 import { archivedWearMessage } from '@/lib/wardrobe/wearable'
 import { isTemplatedWearableRef, resolveWearableRef } from '@/lib/wardrobe/wearable-ref'
 import { WardrobeVantageSelect, wardrobeVantageName } from './WardrobeVantageSelect'
+import { InventoryEffectFields } from './InventoryEffectFields'
+import {
+  InventoryReferencePicker,
+  type InventoryReferenceForm,
+} from '@/components/inventory/inventory-reference-picker'
+import { useInventoryVantageItems } from '@/lib/hooks/use-inventory-vantage-items'
+import { inventoryLabel } from '@/lib/inventory/resolve'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
@@ -118,6 +127,10 @@ export function SideEffectsSection({
   // Read nothing until a wardrobe row exists: an author who never dresses
   // anybody pays for no wardrobe reads.
   const pool = useWardrobeVantageItems(hasWardrobe ? vantage : null)
+  const hasInventory = draft.effects.some((effect) => effect.kind === 'inventory')
+  // Likewise the Inventory: read only once an inventory row exists.
+  const bag = useInventoryVantageItems(hasInventory ? vantage : null)
+  const [inventoryReference, setInventoryReference] = useState<InventoryReferenceForm>('label')
   const vantageName = wardrobeVantageName(vantage, destinations)
   const characterName = vantage.kind === 'character' ? vantageName : null
   const [referenceForm, setReferenceForm] = useState<WardrobeReferenceForm>('title')
@@ -160,7 +173,7 @@ export function SideEffectsSection({
         </button>
       </div>
 
-      {hasWardrobe && onVantageChange && (
+      {(hasWardrobe || hasInventory) && onVantageChange && (
         <WardrobeVantageSelect
           vantage={vantage}
           onChange={onVantageChange}
@@ -173,7 +186,8 @@ export function SideEffectsSection({
       {draft.effects.length === 0 && (
         <p className="text-xs qt-text-secondary">
           None declared. An effect lets a roll record its consequences — tick a counter in the story&rsquo;s
-          state, note a fact on the rolling character&rsquo;s sheet, put a garment on them or take one off —
+          state, note a fact on the rolling character&rsquo;s sheet, put a garment on them or take one off, hand
+          them an object or take one away —
           applied server-side as part of the deal,
           beyond any model&rsquo;s power to fudge.
         </p>
@@ -198,6 +212,7 @@ export function SideEffectsSection({
                 >
                   <option value="write">Write a value</option>
                   <option value="wardrobe">Change the outfit</option>
+                  <option value="inventory">Change the inventory</option>
                 </select>
               </label>
               <label className="flex items-center gap-2">
@@ -242,7 +257,19 @@ export function SideEffectsSection({
               </button>
             </div>
 
-            {effect.kind === 'wardrobe' ? (
+            {effect.kind === 'inventory' ? (
+              <InventoryEffectFields
+                gesture={effect.inventory}
+                hasErrors={errors.length > 0}
+                disabled={disabled}
+                onChange={(inventory) => updateEffect(effect.id, { inventory })}
+                pool={bag.pool}
+                poolFetched={bag.fetched}
+                vantage={vantage}
+                vantageName={vantageName}
+                onChoose={(index, highlightId) => setPicking({ effectId: effect.id, index, highlightId })}
+              />
+            ) : effect.kind === 'wardrobe' ? (
               <WardrobeFields
                 gesture={effect.wardrobe}
                 hasErrors={errors.length > 0}
@@ -362,8 +389,39 @@ export function SideEffectsSection({
         quote literal prose: <code className="font-mono">&apos;broken pick&apos;</code>, never bare words.
         Expressions take + − × ÷, parentheses, and the same {'{{…}}'} references as a message. An outfit change
         dresses or undresses the rolling character and nobody else; an item it cannot find is skipped and the
-        rest still go on.
+        rest still go on. An inventory change equips, sets down or picks up objects for the rolling character
+        alone; an object it cannot find is skipped, and a gesture that would carry too many of a kind is skipped
+        whole, before anything is made.
       </p>
+
+      <InventoryReferencePicker
+        isOpen={picking !== null && pickingEffect?.kind === 'inventory'}
+        onClose={() => setPicking(null)}
+        vantage={vantage}
+        headerControl={
+          onVantageChange ? (
+            <WardrobeVantageSelect
+              vantage={vantage}
+              onChange={onVantageChange}
+              destinations={destinations}
+              homeProjectName={homeProjectName}
+            />
+          ) : undefined
+        }
+        action={pickingEffect?.inventory.action ?? 'equip'}
+        highlightId={picking?.highlightId ?? null}
+        reference={inventoryReference}
+        onReferenceChange={setInventoryReference}
+        onPick={(item, { reference }) => {
+          if (!picking || !pickingEffect) return
+          const gesture = pickingEffect.inventory
+          const rows = gesture.items.length > 0 ? gesture.items : ['']
+          const value = reference === 'id' ? item.id : inventoryLabel(item)
+          updateEffect(pickingEffect.id, {
+            inventory: { ...gesture, items: rows.map((ref, i) => (i === picking.index ? value : ref)) },
+          })
+        }}
+      />
 
       <WardrobeReferencePicker
         isOpen={picking !== null && pickingEffect?.kind === 'wardrobe'}

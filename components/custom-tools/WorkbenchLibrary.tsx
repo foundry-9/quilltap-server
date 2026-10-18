@@ -232,7 +232,7 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             whisper
           </span>
         )}
-        <span className="qt-badge qt-badge-outline">{tool.rollForm === 'dice' ? 'dice' : 'range'}</span>
+        <span className="qt-badge qt-badge-outline">{tool.rollForm === 'range' ? 'range' : tool.rollForm === 'dice' ? 'dice' : 'object dice'}</span>
         {tool.llm && (
           <span className="qt-badge qt-badge-outline" title="Consults an LLM mid-run; outcomes may test its answer">
             oracle

@@ -39,6 +39,7 @@ import {
 } from '@/lib/pascal/tool-draft'
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
+import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -73,6 +74,10 @@ function subjectSelectValue(subject: ConditionSubject): string {
       return 'llm'
     case 'llm-ok':
       return 'llm-ok'
+    case 'inventory':
+      return 'inventory'
+    case 'inventoryCount':
+      return 'inventoryCount'
   }
 }
 
@@ -428,6 +433,10 @@ function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>)
       return `A row can test ${label} on the consult's answer only once.`
     case 'llm-ok':
       return 'A row can test whether the consult succeeded only once.'
+    case 'inventory':
+      return `A row can test ${label} on the state of "${condition.subject.key}" only once.`
+    case 'inventoryCount':
+      return `A row can test ${label} on the equipped count of "${condition.subject.key}" only once.`
   }
 }
 
@@ -454,7 +463,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   // is unknowable at authoring time (§4.4.1). String subjects offer equality
   // and containment; boolean subjects only = and ≠; numbers cannot contain.
   const comparators: ComparatorKey[] =
-    subjectType === 'string'
+    subject.kind === 'inventory'
+      ? ['eq', 'neq']
+      : subjectType === 'string'
       ? ['eq', 'neq', 'contains', 'ncontains']
       : subjectType === 'boolean'
         ? ['eq', 'neq']
@@ -490,6 +501,10 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     else if (value === 'progress') nextSubject = { kind: 'progress', key: subject.kind === 'progress' ? subject.key : '' }
     else if (value === 'llm') nextSubject = { kind: 'llm' }
     else if (value === 'llm-ok') nextSubject = { kind: 'llm-ok' }
+    else if (value === 'inventory' || value === 'inventoryCount') {
+      const key = subject.kind === 'inventory' || subject.kind === 'inventoryCount' ? subject.key : ''
+      nextSubject = { kind: value, key }
+    }
     else nextSubject = { kind: 'param', name: value.slice('param:'.length) }
 
     // Re-legalize the comparator and operand for the new subject's type.
@@ -502,6 +517,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       nextComparator = 'eq'
     }
     let nextOperand: ConditionOperand = condition.operand
+    if (nextSubject.kind === 'inventory') {
+      // A state is tested with = or ≠ against one of the four states.
+      if (nextComparator !== 'eq' && nextComparator !== 'neq') nextComparator = 'eq'
+      const valid = nextOperand.kind === 'string' && (INVENTORY_STATE_VALUES as readonly string[]).includes(nextOperand.text)
+      if (!valid && nextOperand.kind !== 'param') nextOperand = { kind: 'string', text: 'equipped' }
+    }
     if (nextType === 'boolean' && nextOperand.kind !== 'param') nextOperand = { kind: 'boolean', value: true }
     else if (nextType === 'string' && nextOperand.kind === 'number') nextOperand = { kind: 'string', text: nextOperand.text }
     else if (nextType === 'number' && (nextOperand.kind === 'string' || nextOperand.kind === 'boolean')) {
@@ -538,6 +559,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         <option value="progress" title="A derived field of one of the character's timed progressions">
           Progress…
         </option>
+        <option value="inventory" title="An object's state for the rolling character: equipped, carried, reachable or absent">
+          Inventory state…
+        </option>
+        <option value="inventoryCount" title="How many of an object's kind the rolling character has equipped">
+          Inventory count…
+        </option>
         {draft.llmEnabled && (
           <>
             <option value="llm" title="What the consulted model answered">
@@ -573,6 +600,19 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
           className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
           aria-label="Progress key"
           title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry simply doesn\u2019t match.'}
+        />
+      )}
+
+      {(subject.kind === 'inventory' || subject.kind === 'inventoryCount') && (
+        <input
+          type="text"
+          value={subject.key}
+          onChange={(e) => onChange({ ...condition, subject: { kind: subject.kind, key: e.target.value } })}
+          placeholder="Excalibur, or {{params.weapon}}"
+          disabled={disabled}
+          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
+          aria-label="Inventory object reference"
+          title="The object, by id, title or name — a template, so {{params.weapon}} lets a parameter choose. A run nobody made declines the test."
         />
       )}
 
@@ -666,7 +706,12 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   // segmented literal-type picker chooses between number, text, and true/false
   // (§4.4.1). Containment needs no picker — the substring is always text.
   const showTypePicker =
-    typeUnknowable && !ordering && !containment && operand.kind !== 'param' && operand.kind !== 'state'
+    typeUnknowable &&
+    !ordering &&
+    !containment &&
+    operand.kind !== 'param' &&
+    operand.kind !== 'state' &&
+    operand.kind !== 'inventory'
 
   /**
    * The literal the shared widget renders. A string operand against a numeric
@@ -685,6 +730,13 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
           title="This operand draws from persistent state. Edit $state references in the raw JSON."
         >
           $state: {operand.path} → {String(operand.fallback)}
+        </span>
+      ) : operand.kind === 'inventory' ? (
+        <span
+          className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
+          title="This operand draws from an object the rolling character carries. Edit $inventory references in the raw JSON."
+        >
+          $inventory: {operand.path} → {String(operand.fallback)}
         </span>
       ) : operand.kind === 'param' ? (
         <select
@@ -707,6 +759,7 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
           onChange={setOperand}
           disabled={disabled}
           showTypePicker={showTypePicker}
+          {...(condition.subject.kind === 'inventory' ? { stateOptions: INVENTORY_STATE_VALUES } : {})}
         />
       )}
 

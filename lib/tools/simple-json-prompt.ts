@@ -35,12 +35,13 @@ import { wardrobeWearToolDefinition } from './wardrobe-wear-tool'
 import { wardrobeTakeOffToolDefinition } from './wardrobe-take-off-tool'
 import { wardrobeRollbackToolDefinition } from './wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from './wardrobe-history-tool'
+import { enabledInventoryToolDefinitions, type InventoryToolFlags } from './inventory-tool-flags'
 
 /**
  * Which tools to document in the prompt. Mirrors the shape of
  * `TextBlockPromptOptions` so the orchestrator can wire them in symmetrically.
  */
-export interface SimpleJsonPromptOptions {
+export interface SimpleJsonPromptOptions extends InventoryToolFlags {
   whisper?: boolean
   search?: boolean
   imageGeneration?: boolean
@@ -232,6 +233,9 @@ export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions
   }
   if (options.wardrobeArchive) {
     entries.push(renderToolEntry(wardrobeArchiveToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  for (const definition of enabledInventoryToolDefinitions(options)) {
+    entries.push(renderToolEntry(definition as unknown as OpenAIToolDefinition))
   }
 
   if (entries.length === 0) {

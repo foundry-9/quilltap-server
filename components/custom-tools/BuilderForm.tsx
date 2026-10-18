@@ -166,6 +166,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
 
   const parsedDice = parseDiceNotation(draft.rollDice.trim())
   const diceError = fieldError((i) => i.where.section === 'roll' && i.where.field === 'dice')
+  const inventoryRollError = fieldError((i) => i.where.section === 'roll' && i.where.field === 'inventory')
   const rollFieldError = (field: 'min' | 'max' | 'multiplier' | 'offset') =>
     fieldError((i) => i.where.section === 'roll' && i.where.field === field)
 
@@ -176,7 +177,9 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         ? `“${value.name}”`
         : value.kind === 'state'
           ? `state:${value.path}`
-          : value.text.trim() === ''
+          : value.kind === 'inventory'
+            ? `inventory:${value.path}`
+            : value.text.trim() === ''
             ? fallback
             : value.text.trim()
 
@@ -520,7 +523,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         <div className="flex items-center justify-between">
           <h2 className="qt-card-title text-sm">The roll</h2>
           <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Roll form">
-            {(['range', 'dice'] as const).map((form) => (
+            {(['range', 'dice', 'inventory'] as const).map((form) => (
               <button
                 key={form}
                 type="button"
@@ -530,13 +533,46 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
                 disabled={disabled}
                 className={`px-3 py-1 text-sm ${draft.rollForm === form ? 'qt-button-primary qt-button' : 'qt-button qt-button-ghost'}`}
               >
-                {form === 'range' ? 'Range' : 'Dice'}
+                {form === 'range' ? 'Range' : form === 'dice' ? 'Dice' : 'From an object'}
               </button>
             ))}
           </div>
         </div>
 
-        {draft.rollForm === 'dice' ? (
+        {draft.rollForm === 'inventory' ? (
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={draft.rollInventory.path}
+                onChange={(e) => update({ rollInventory: { ...draft.rollInventory, path: e.target.value } })}
+                placeholder="sword.metadata.damage"
+                disabled={disabled}
+                className={`qt-input w-64 font-mono ${inventoryRollError ? 'qt-input-error' : ''}`}
+                aria-label="Object and metadata key"
+              />
+              <span className="text-sm qt-text-secondary">else</span>
+              <input
+                type="text"
+                value={draft.rollInventory.fallback}
+                onChange={(e) => update({ rollInventory: { ...draft.rollInventory, fallback: e.target.value } })}
+                placeholder="1d4"
+                disabled={disabled}
+                className={`qt-input w-24 font-mono ${inventoryRollError ? 'qt-input-error' : ''}`}
+                aria-label="Fallback dice"
+              />
+            </div>
+            {inventoryRollError ? (
+              <p className="text-xs qt-text-destructive">{inventoryRollError}</p>
+            ) : (
+              <p className="qt-hint">
+                Rolls the dice an object the rolling character carries names in its metadata — a sword whose
+                metadata.damage reads &ldquo;2d6&rdquo; rolls 2d6. The object is found by id, title or name; when it is
+                absent, or its value is not dice notation, the fallback is rolled instead.
+              </p>
+            )}
+          </div>
+        ) : draft.rollForm === 'dice' ? (
           <div className="space-y-1">
             <input
               type="text"

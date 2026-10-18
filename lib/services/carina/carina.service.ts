@@ -640,6 +640,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       answerer.defaultHelpToolsEnabled === true, // helpToolsEnabled
       false, // canDressThemselves — Carina does not dress the answerer
       false, // canCreateOutfits
+      false,  // canManageInventory — no inventory_* tools here
       documentEditingEnabled ? 'full' : 'off',
     );
     const tools = built.tools.filter((t) => {

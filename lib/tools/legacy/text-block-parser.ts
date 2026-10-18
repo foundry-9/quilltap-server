@@ -124,6 +124,27 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'archive_wardrobe_item': 'wardrobe_archive',
   'discard': 'wardrobe_archive',
 
+  // Inventory tools (objects carried — not clothing)
+  'inventory_list': 'inventory_list',
+  'list_inventory': 'inventory_list',
+  'inventory': 'inventory_list',
+  'inventory_read': 'inventory_read',
+  'read_inventory': 'inventory_read',
+  'inventory_equip': 'inventory_equip',
+  'equip_item': 'inventory_equip',
+  'inventory_unequip': 'inventory_unequip',
+  'unequip_item': 'inventory_unequip',
+  'inventory_pick_up': 'inventory_pick_up',
+  'pick_up': 'inventory_pick_up',
+  'inventory_create': 'inventory_create',
+  'create_inventory_item': 'inventory_create',
+  'inventory_update': 'inventory_update',
+  'update_inventory_item': 'inventory_update',
+  'inventory_archive': 'inventory_archive',
+  'archive_inventory_item': 'inventory_archive',
+  'inventory_give': 'inventory_give',
+  'give_item': 'inventory_give',
+
   // Scriptorium search
   'search': 'search',
   'scriptorium': 'search',
@@ -206,6 +227,14 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'component_ids': 'component_item_ids',
     'component_names': 'component_titles',
   },
+  inventory_read: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref' },
+  inventory_equip: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'items': 'refs' },
+  inventory_unequip: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'items': 'refs' },
+  inventory_pick_up: { 'id': 'ref', 'name': 'ref', 'item': 'ref', 'archetype': 'ref' },
+  inventory_update: { 'id': 'ref', 'item': 'ref', 'image': 'image_description', 'looks': 'image_description', 'max': 'max_equipped' },
+  inventory_archive: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref' },
+  inventory_give: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'recipient': 'to', 'target': 'to' },
+  inventory_create: { 'image': 'image_description', 'looks': 'image_description', 'max': 'max_equipped' },
   search: {
     'search': 'query',
     'q': 'query',
@@ -219,6 +248,7 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
  * If a tool isn't listed here, content maps to 'content' by default.
  */
 const CONTENT_PARAM_MAP: Record<string, string> = {
+  inventory_create: 'description',
   whisper: 'message',
   generate_image: 'prompt',
   search_web: 'query',
@@ -362,7 +392,7 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
         args[key] = false
       } else {
         const num = Number(value)
-        if (!isNaN(num) && value.trim() !== '' && key !== 'query' && key !== 'message' && key !== 'prompt' && key !== 'content' && key !== 'target') {
+        if (!isNaN(num) && value.trim() !== '' && key !== 'query' && key !== 'message' && key !== 'prompt' && key !== 'content' && key !== 'target' && key !== 'ref' && key !== 'refs' && key !== 'to') {
           args[key] = num
         }
       }
@@ -383,6 +413,17 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
       name: internalName,
       arguments: { ...rest, operations: [op] },
     }
+  }
+
+  // inventory_equip / inventory_unequip take a `refs` array; the flat syntax
+  // names one `ref`, or several comma-separated in `refs`.
+  if (internalName === 'inventory_equip' || internalName === 'inventory_unequip') {
+    const { ref, refs, ...rest } = args
+    const list = [
+      ...(ref !== undefined ? [String(ref)] : []),
+      ...(typeof refs === 'string' ? refs.split(',') : Array.isArray(refs) ? refs.map(String) : []),
+    ].map((value) => value.trim()).filter(Boolean)
+    return { name: internalName, arguments: { ...rest, refs: list } }
   }
 
   return {

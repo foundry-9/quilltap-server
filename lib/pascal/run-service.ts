@@ -14,7 +14,11 @@
  *
  *   1. The state cascade is read ONCE, whole (the effect applier needs the
  *      per-tier objects). Fail-soft: every `$state` ref carries a fallback, so
- *      a run is always dealable; state effects then skip.
+ *      a run is always dealable; state effects then skip. Beside it, the
+ *      rolling character's Inventory context is loaded once — only when the
+ *      definition reads or changes the bag — and handed to the core and the
+ *      inventory applier; unreadable, it is null (inventory tests decline,
+ *      `$inventory` falls back, inventory effects skip).
  *   2. Effects apply BEFORE the Pascal post. If the post then fails, the
  *      effects stand — they happened — and the entrance reports the missing
  *      announcement. A throw inside `executeCustomTool` means no effects were
@@ -40,6 +44,8 @@ import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { applyCustomToolEffects, type AppliedEffect } from '@/lib/pascal/side-effects';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { flattenProgressions } from '@/lib/progressions/engine';
+import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
+import { loadInventoryContext, type LoadedInventoryContext } from '@/lib/inventory/context';
 import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/chat.types';
@@ -86,6 +92,8 @@ export interface RunCustomToolParams {
    */
   pendingWardrobeAnnouncements?: Set<string>;
   pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  /** The turn's pending Inventory changes — an `inventory` effect joins the turn's one Pascal line. */
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
 }
 
 export type RunCustomToolOutcome =
@@ -130,9 +138,12 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
     cascade = null;
   }
 
+  const inventory = await loadRunInventory(entry.definition, characterId, chatId);
+
   let result: CustomToolRunResult;
   try {
     result = await executeCustomTool(entry.definition, params.parameters ?? null, {
+      inventory,
       private: params.private,
       metadata,
       progress,
@@ -170,6 +181,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
         characterId,
         metadataSnapshot: metadata,
         nowMs,
+        inventory,
         ...turnContainersOf(params),
       })
     : [];
@@ -255,6 +267,36 @@ async function resolveCharacterName(
       context: CONTEXT,
       chatId,
       characterId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * The rolling character's Inventory for this run: loaded once, and only when
+ * the definition tests, quotes, draws from or changes it. Null for a run
+ * nobody made, a definition that never mentions the bag, or a vault that
+ * cannot be read (logged).
+ */
+async function loadRunInventory(
+  definition: DiscoveredCustomTool['definition'],
+  characterId: string | null,
+  chatId: string
+): Promise<LoadedInventoryContext | null> {
+  if (!characterId) return null;
+  const vocabulary = collectToolVocabulary(definition);
+  const needed =
+    vocabulary.inventoryReads.length + vocabulary.equips.length + vocabulary.unequips.length + vocabulary.picksUp.length > 0;
+  if (!needed) return null;
+  try {
+    return await loadInventoryContext(getRepositories(), characterId, chatId);
+  } catch (error) {
+    logger.warn('Custom tool run: the rolling character\'s inventory could not be read; inventory tests decline', {
+      context: CONTEXT,
+      chatId,
+      characterId,
+      tool: definition.name,
       error: getErrorMessage(error),
     });
     return null;

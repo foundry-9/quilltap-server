@@ -22,7 +22,14 @@
  * members) and keeps the instances.
  *
  * Writes for one chat are serialised, so two gestures cannot each read a
- * stale set. Plain async functions, so the tools spec can call them.
+ * stale set. Plain async functions, so the tools and Pascal's effects call
+ * them.
+ *
+ * {@link pickUpItems} is the third gesture (a character's `inventory_pick_up`
+ * and a Pascal `pick_up` effect): an instance of each named archetype is made
+ * in the character's vault root and, by default, equipped — the cap checked
+ * over the whole plan *before* any instance is written, so a breach creates
+ * nothing.
  *
  * Server-only.
  *
@@ -36,6 +43,7 @@ import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { runSerialized } from '@/lib/database/repositories/vault-overlay/item-folder-ops';
 import {
   InventoryCapExceededError,
+  InventoryInvalidParentError,
   InventoryNotEquippableError,
   InventoryRefusal,
 } from '@/lib/inventory/errors';
@@ -116,6 +124,12 @@ interface EquipOptions {
    * skipped.
    */
   lenient?: boolean;
+  /**
+   * Objects written by this same call that the pool may not see yet (a
+   * just-created object, in the job child where a buffered file write is not
+   * readable). Looked up after the pool.
+   */
+  known?: readonly ResolvedInventoryItem[];
 }
 
 /**
@@ -193,8 +207,9 @@ async function equipUnserialized(
       .filter((record) => record.parentId === archetypeId && !record.archivedAt && !currentIds.has(record.id) && !plannedIds.has(record.id))
       .map((record) => pool.resolve(record));
 
+  const known = new Map((opts.known ?? []).map((item) => [item.id, item]));
   for (const id of Array.from(new Set(ids))) {
-    const item = pool.resolveId(id);
+    const item = pool.resolveId(id) ?? known.get(id);
     if (!item || item.archivedAt || item.isArchetype) {
       const reason = !item ? 'missing' : item.archivedAt ? 'archived' : 'archetype';
       if (opts.lenient) {
@@ -344,5 +359,104 @@ export function unequipItems(
     });
     await notifyInventoryChanged(repos, fresh, characterId, { equipped: [], unequipped }, ctx);
     return { unequipped, notEquipped };
+  });
+}
+
+export interface PickUpResult {
+  /** The instances made, in archetype order. */
+  created: ResolvedInventoryItem[];
+  /** Whether they were equipped. */
+  equipped: boolean;
+}
+
+/**
+ * Pick up an instance of each archetype for one character in one chat: the
+ * instances land at the root of the character's vault (`title` overrides
+ * the archetype's, when given) and, unless `equip` is false, are equipped.
+ * When equipping, the cap is checked over the whole plan first —
+ * `count(equipped kin) + planned kin + 1 ≤ maxEquipped` — and a breach throws
+ * `CAP_EXCEEDED` with nothing written. A non-archetype is `INVALID_PARENT`.
+ */
+export function pickUpItems(
+  repos: Repos,
+  chat: EquipChat,
+  characterId: string,
+  archetypeIds: readonly string[],
+  ctx: InventoryChangeContext,
+  opts: { title?: string | null; equip?: boolean } = {},
+): Promise<PickUpResult> {
+  assertParticipant(chat, characterId);
+  const equip = opts.equip !== false;
+  return withChatInventoryLock(chat.id, async () => {
+    const fresh = await freshChat(repos, chat);
+    const pool = await poolFor(repos, fresh, characterId);
+    const current = readEquippedSet(fresh, characterId, pool);
+
+    const archetypes: ResolvedInventoryItem[] = [];
+    for (const id of archetypeIds) {
+      const archetype = pool.resolveId(id);
+      if (!archetype || !archetype.isArchetype || archetype.archivedAt) {
+        const error = new InventoryInvalidParentError(
+          archetype && !archetype.isArchetype
+            ? `"${archetype.title || archetype.name}" is not an archetype; equip it instead`
+            : 'The parent must be an archetype this character can reach',
+          { archetypeId: id },
+        );
+        logger.info('[InventoryEquip] Refused', { code: error.code, chatId: fresh.id, characterId, archetypeId: id, context: 'inventory' });
+        throw error;
+      }
+      archetypes.push(archetype);
+    }
+
+    if (equip) {
+      const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];
+      for (const archetype of archetypes) {
+        const kin = counted.filter((other) => isKin(other, archetype)).length;
+        if (kin + 1 > archetype.maxEquipped) {
+          const error = new InventoryCapExceededError(archetype.id, archetype.title || archetype.name, archetype.maxEquipped);
+          logger.info('[InventoryEquip] Refused', { code: error.code, op: 'pick-up', chatId: fresh.id, characterId, itemId: archetype.id, cap: archetype.maxEquipped, context: 'inventory' });
+          throw error;
+        }
+        counted.push(archetype);
+      }
+    }
+
+    const vault = await resolveInventoryLocation('character', characterId, repos, ctx.userId);
+    if (!vault) throw new Error(`Character ${characterId} has no vault to pick an object up into`);
+    const created: ResolvedInventoryItem[] = [];
+    const title = opts.title?.trim();
+    for (const archetype of archetypes) {
+      const { item } = await instantiate(repos, vault, archetype.id, {
+        pool,
+        ...(title ? { overrides: { title } } : {}),
+      });
+      created.push(item);
+    }
+    publishRealtime('inventory');
+
+    if (equip && created.length > 0) {
+      await repos.chats.setEquippedInventory(fresh.id, characterId, [
+        ...current.map((item) => item.id),
+        ...created.map((item) => item.id),
+      ]);
+      publishRealtime('chats', fresh.id);
+    }
+    logger.debug('[InventoryEquip] Picked up', {
+      op: 'pick-up',
+      chatId: fresh.id,
+      characterId,
+      archetypes: archetypes.map((item) => item.id),
+      created: created.map((item) => item.id),
+      equipped: equip,
+      context: 'inventory',
+    });
+    await notifyInventoryChanged(
+      repos,
+      fresh,
+      characterId,
+      { equipped: equip ? created : [], unequipped: [], pickedUp: created },
+      ctx,
+    );
+    return { created, equipped: equip };
   });
 }

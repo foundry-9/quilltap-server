@@ -27,7 +27,14 @@
  * `hasAnsibleAccess` is true".
  */
 
-import { isStateRef, parseEffectTarget, scanPlaceholders, type QtapCustomTool } from './custom-tool.types';
+import {
+  isInventoryRef,
+  isStateRef,
+  parseEffectTarget,
+  scanPlaceholders,
+  type QtapCustomTool,
+} from './custom-tool.types';
+import { parseInventoryOperand } from './inventory-subjects';
 
 const STATE_PREFIX = 'state.';
 
@@ -95,6 +102,19 @@ export interface ToolVocabulary {
   takesOff: string[];
   /** Slots this tool's wardrobe effects may CLEAR. Sorted. */
   clearsSlots: string[];
+  /**
+   * Inventory object references this tool READS — tested by an `inventory` /
+   * `inventoryCount` subject (outcomes, effect conditions, the gate), quoted
+   * by `{{inventory.<ref>.*}}`, or drawn from by a `$inventory` operand.
+   * Verbatim, sorted.
+   */
+  inventoryReads: string[];
+  /** References this tool's inventory effects may EQUIP, verbatim. Sorted. */
+  equips: string[];
+  /** References this tool's inventory effects may UNEQUIP, verbatim. Sorted. */
+  unequips: string[];
+  /** Archetype references this tool's inventory effects may PICK UP, verbatim. Sorted. */
+  picksUp: string[];
 }
 
 /** True when a tool quotes nothing at all, and so has no vocabulary to show. */
@@ -115,7 +135,11 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     !vocabulary.character &&
     vocabulary.wears.length === 0 &&
     vocabulary.takesOff.length === 0 &&
-    vocabulary.clearsSlots.length === 0
+    vocabulary.clearsSlots.length === 0 &&
+    vocabulary.inventoryReads.length === 0 &&
+    vocabulary.equips.length === 0 &&
+    vocabulary.unequips.length === 0 &&
+    vocabulary.picksUp.length === 0
   );
 }
 
@@ -145,7 +169,15 @@ export function collectToolVocabulary(
     wears: new Set<string>(),
     takesOff: new Set<string>(),
     clearsSlots: new Set<string>(),
+    inventory: new Set<string>(),
+    equips: new Set<string>(),
+    unequips: new Set<string>(),
+    picksUp: new Set<string>(),
   };
+  const inventoryKeysOf = (when: { inventory?: object; inventoryCount?: object } | undefined): string[] => [
+    ...Object.keys(when?.inventory ?? {}),
+    ...Object.keys(when?.inventoryCount ?? {}),
+  ];
 
   for (const outcome of definition.outcomes ?? []) {
     // A catch-all tests nothing, so it names nothing — but it still carries a
@@ -153,6 +185,7 @@ export function collectToolVocabulary(
     if (outcome.when !== true) {
       for (const key of Object.keys(outcome.when.metadata ?? {})) found.metadata.add(key);
       for (const key of Object.keys(outcome.when.progress ?? {})) found.progress.add(progressionId(key));
+      for (const key of inventoryKeysOf(outcome.when)) found.inventory.add(key);
     }
     collectPlaceholders(outcome.message, declared, found);
   }
@@ -165,6 +198,7 @@ export function collectToolVocabulary(
   for (const gate of [definition.availableWhen, definition.withheldWhen]) {
     for (const key of Object.keys(gate?.metadata ?? {})) found.metadata.add(key);
     for (const key of Object.keys(gate?.progress ?? {})) found.progress.add(progressionId(key));
+    for (const key of inventoryKeysOf(gate)) found.inventory.add(key);
   }
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);
@@ -182,6 +216,15 @@ export function collectToolVocabulary(
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
     for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
     for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
+    for (const key of inventoryKeysOf(effect.when)) found.inventory.add(key);
+
+    if (effect.inventory) {
+      const { action, items } = effect.inventory;
+      for (const item of items) collectPlaceholders(item, declared, found);
+      const list = action === 'equip' ? found.equips : action === 'unequip' ? found.unequips : found.picksUp;
+      for (const item of items) list.add(item);
+      continue;
+    }
 
     if (effect.wardrobe) {
       const { action, items = [], slot } = effect.wardrobe;
@@ -207,7 +250,7 @@ export function collectToolVocabulary(
   // Every `$state` reference, wherever it sits — a parameter default, a roll
   // field, a comparator operand. Walked rather than enumerated: the schema is
   // free to grow new sites, and a list of them here would silently fall behind.
-  collectStateRefs(definition, found.state);
+  collectStateRefs(definition, found.state, found.inventory);
 
   return {
     value: found.value,
@@ -226,6 +269,10 @@ export function collectToolVocabulary(
     wears: sorted(found.wears),
     takesOff: sorted(found.takesOff),
     clearsSlots: sorted(found.clearsSlots),
+    inventoryReads: sorted(found.inventory),
+    equips: sorted(found.equips),
+    unequips: sorted(found.unequips),
+    picksUp: sorted(found.picksUp),
   };
 }
 
@@ -258,6 +305,7 @@ function collectPlaceholders(
     progress: Set<string>;
     now: boolean;
     character: boolean;
+    inventory: Set<string>;
   }
 ): void {
   for (const { ref } of scanPlaceholders(text)) {
@@ -292,16 +340,23 @@ function collectPlaceholders(
       case 'character':
         found.character = true;
         break;
+      case 'inventory':
+        found.inventory.add(ref.ref);
+        break;
       case 'unknown':
         break;
     }
   }
 }
 
-/** Depth-first walk for `{ "$state": "..." }` objects anywhere in the tree. */
-function collectStateRefs(node: unknown, into: Set<string>): void {
+/**
+ * Depth-first walk for `{ "$state": "..." }` objects anywhere in the tree,
+ * and beside them `{ "$inventory": "<ref>.metadata.<key>" }` (whose ref is
+ * an Inventory read).
+ */
+function collectStateRefs(node: unknown, into: Set<string>, inventory: Set<string>): void {
   if (Array.isArray(node)) {
-    for (const item of node) collectStateRefs(item, into);
+    for (const item of node) collectStateRefs(item, into, inventory);
     return;
   }
   if (typeof node !== 'object' || node === null) return;
@@ -309,5 +364,10 @@ function collectStateRefs(node: unknown, into: Set<string>): void {
     into.add(node.$state);
     return;
   }
-  for (const value of Object.values(node)) collectStateRefs(value, into);
+  if (isInventoryRef(node)) {
+    const parsed = parseInventoryOperand(node.$inventory);
+    if (parsed) inventory.add(parsed.ref);
+    return;
+  }
+  for (const value of Object.values(node)) collectStateRefs(value, into, inventory);
 }

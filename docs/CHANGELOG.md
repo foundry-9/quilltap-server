@@ -4,6 +4,25 @@
 
 ### 4.11-dev
 
+#### Feature: Inventory tools and Pascal inventory support
+
+- New `lib/inventory/refs.ts`: `resolveInventoryRef` (id → title → name, case-insensitive, own tier first), `stateOf` (`equipped` > `carried` > `reachable` > `absent`), `equippedKinCount`, `pickForGesture`, and the `InventoryContext` every reader shares. `lib/inventory/context.ts` loads one per tool call or run.
+- New character flag `canManageInventory` (migration `add-character-inventory-flag-v1`, null = on), with an Aurora toggle beside Self-Dressing, the export schema, DDL.md, the Almanack ledger and the tools API.
+- Nine new tools gated by it: `inventory_list`, `inventory_read`, `inventory_equip`, `inventory_unequip`, `inventory_pick_up`, `inventory_create`, `inventory_update`, `inventory_archive`, `inventory_give` (`lib/tools/inventory-*-tool.ts`, handlers and `inventory-tool-table.ts`). Registered in the plugin tool builder (nine per-tool flags via `lib/tools/inventory-tool-flags.ts`), the executor, the simple-JSON and text-block prompts and parsers, `/api/v1/tools`, and the Salon tool bubble. Off on the Brahma Console, the Scenario Builder, Carina and help chats.
+- `buildTools` and `determineTextBlockToolOptions` take a new positional `canManageInventory` after `canCreateOutfits`.
+- `lib/inventory/equip.ts`: `pickUpItems` instantiates archetypes into the character's vault root and equips them, checking the cap before any instance is written; `equipItems` takes `known` for objects written in the same call.
+- `ChatsRepository.removeEquippedInventoryId` drops one id from one character's carried set in every chat (used by `inventory_give`).
+- `lib/inventory/transfers.ts`: `transferInventoryItem`, extracted from the transfers route, which now calls it. Same-location and duplicate-id refusals now answer 400 with code `INVALID_SHAPE`.
+- `InventoryChangeContext.provenance` is `operator` / `character` / `pascal`. Inside a turn, `notifyInventoryChanged` records into a new `pendingInventoryAnnouncements` map (created by `newWardrobeTurnContainers()`) and `flushPendingInventoryAnnouncements` posts one netted Pascal line per character at turn end. Gives post their own line. `describeInventoryChange` gains "picks up" and "hands … to …".
+- Job child: `chats.findById` / `getEquippedInventory` answer through a per-job overlay of buffered `setEquippedInventory` and `removeEquippedInventoryId` writes.
+- Pascal: new `inventory` (state, `eq`/`neq`) and `inventoryCount` (numeric) subjects in outcome and effect `when`s and in gates; gate keys must be literal. A null context declines every inventory comparator. New `{{inventory.<ref>.title|name|description|state|metadata.<key>}}` placeholders. New `$inventory` operand (`<ref>.metadata.<key>` + fallback) wherever `$state` is allowed, and as a whole roll with a dice fallback. Loaded lazily at roster time and once per run.
+- New `inventory` effect (`equip` / `unequip` / `pick_up`, `equip` on pick_up), applied by `lib/pascal/inventory-effects.ts` after wardrobe gestures, fail-soft per gesture. Audit targets `inventory.equip`, `inventory.unequip`, `inventory.pick_up`.
+- Roster description, vocabulary (`inventoryReads`, `equips`, `unequips`, `picksUp`) and the run dialog's reference panel name inventory reads and gestures.
+- Published schema `qtap-custom-tool.schema.json`, `CUSTOM_TOOL_SPEC.json` and the agreement corpus updated.
+- Workbench: "Change the inventory" effect kind with reference chips and an Inventory picker over the shared vantage; Inventory state / count condition and gate chips; a "From an object" roll form; the Proving Bench's Mock inventory (`lib/pascal/bench-inventory.ts`, sent as `inventory` on preview and audit).
+- Realtime: new `inventory` topic (lists and folders), published after object writes in the parent and inferred from job-child `Inventory/` file writes.
+- Tests: refs, handlers over the fake store, the Pascal read side, the applier, the partition order, the child overlay, the draft model and Workbench components.
+
 #### Feature: the Inventory
 
 - Review fixes:

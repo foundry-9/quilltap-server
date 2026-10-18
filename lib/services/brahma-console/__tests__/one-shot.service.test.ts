@@ -103,11 +103,12 @@ describe('runBrahmaQuery', () => {
     await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
     const args = jest.mocked(buildTools).mock.calls[0]
     expect(args[8]).toBe(true) // agentModeEnabled
-    expect(args[13]).toBe('full') // docToolsMode
-    expect(args[14]).toBe(false) // askCarinaEnabled — recursion guard
-    expect(args[15]).toBe(false) // includeWorkspaceTools
-    expect(args[16]).toBe(true) // excludeMemorySearch
-    expect(args[17]).toBe(true) // sqlAccess
+    expect(args[13]).toBe(false) // canManageInventory — no inventory_* tools
+    expect(args[14]).toBe('full') // docToolsMode
+    expect(args[15]).toBe(false) // askCarinaEnabled — recursion guard
+    expect(args[16]).toBe(false) // includeWorkspaceTools
+    expect(args[17]).toBe(true) // excludeMemorySearch
+    expect(args[18]).toBe(true) // sqlAccess
   })
 
   it('returns the accumulated answer when the model replies without tools', async () => {

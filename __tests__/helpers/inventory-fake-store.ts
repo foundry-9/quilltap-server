@@ -185,6 +185,16 @@ export function repositories() {
         chat.equippedInventory = next;
         return true;
       }),
+      removeEquippedInventoryId: jest.fn(async (characterId: string, itemId: string) => {
+        let count = 0;
+        for (const chat of state.chats.values()) {
+          const current = (chat.equippedInventory ?? {}) as Record<string, string[]>;
+          if (!current[characterId]?.includes(itemId)) continue;
+          chat.equippedInventory = { ...current, [characterId]: current[characterId].filter((id) => id !== itemId) };
+          count++;
+        }
+        return count;
+      }),
     },
     files: {
       findByLinkedTo: jest.fn(async (id: string) => state.files.filter((f) => f.linkedTo.includes(id))),

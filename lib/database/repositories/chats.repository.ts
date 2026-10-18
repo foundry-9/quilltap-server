@@ -831,6 +831,37 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return written;
   }
 
+  /**
+   * Drop one object id from one character's carried set in **every** chat
+   * (a give: the id is kept on the move, so a later give-back must not
+   * reappear as carried wherever the giver still listed it). Other
+   * characters' entries are untouched. Returns how many chats were written.
+   *
+   * In the forked job child this is a buffered write (`remove*` prefix),
+   * replayed in the parent.
+   */
+  async removeEquippedInventoryId(characterId: string, itemId: string): Promise<number> {
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const rows = await collection.find({ [EQUIPPED_INVENTORY_FIELD]: { $like: `%${itemId}%` } } as QueryFilter);
+      let count = 0;
+      for (const row of rows as Array<{ id: string; equippedInventory?: unknown }>) {
+        const state = normalizeEquippedInventory(row.equippedInventory);
+        const ids = state[characterId];
+        if (!ids || !ids.includes(itemId)) continue;
+        state[characterId] = ids.filter((id) => id !== itemId);
+        const result = await collection.updateOne(
+          { id: row.id } as QueryFilter,
+          { $set: { [EQUIPPED_INVENTORY_FIELD]: state } } as never,
+        );
+        if (result.matchedCount > 0) count++;
+      }
+      return count;
+    }, 'Failed to remove an id from equipped inventory', { characterId, itemId, context: 'inventory' }, 0);
+    logger.debug('Equipped inventory id removed everywhere', { characterId, itemId, chats: written, context: 'inventory' });
+    return written;
+  }
+
   // ============================================================================
   // EQUIPPED OUTFIT STATE
   // ============================================================================

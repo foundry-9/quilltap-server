@@ -124,6 +124,7 @@ describe('collectCharacterBreakdown — wardrobe permissions (Bug 21)', () => {
       "systemTransparency" INTEGER,
       "canDressThemselves" INTEGER DEFAULT NULL,
       "canCreateOutfits" INTEGER DEFAULT NULL,
+      "canManageInventory" INTEGER DEFAULT NULL,
       "coreWhisperEnabled" INTEGER DEFAULT NULL
     )`);
     const insert = db.prepare(
@@ -145,6 +146,8 @@ describe('collectCharacterBreakdown — wardrobe permissions (Bug 21)', () => {
     // Effective permission: NULL (default) + 1 (explicit) count; only 0 denies.
     expect(result.canDressThemselves).toBe(3);
     expect(result.canCreateOutfits).toBe(3);
+    // canManageInventory: all NULL here, so every row counts.
+    expect(result.canManageInventory).toBe(result.total);
   });
 });
 

@@ -97,6 +97,14 @@ export interface CustomToolReferences {
   takesOff?: string[]
   /** Slots this tool's wardrobe effects may clear. Absent on older servers. */
   clearsSlots?: string[]
+  /** Inventory object references this tool reads (tests, quotes, draws from). Absent on older servers. */
+  inventoryReads?: string[]
+  /** References this tool's inventory effects may equip, verbatim. Absent on older servers. */
+  equips?: string[]
+  /** References this tool's inventory effects may unequip, verbatim. Absent on older servers. */
+  unequips?: string[]
+  /** Archetype references this tool's inventory effects may pick up, verbatim. Absent on older servers. */
+  picksUp?: string[]
 }
 
 /** A runnable tool in the resolved roster. */
@@ -935,10 +943,24 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
     { key: 'takesOff', lead: 'It may undress them of', values: tool.references?.takesOff ?? [] },
     { key: 'clearsSlots', lead: 'It may clear their', values: tool.references?.clearsSlots ?? [] },
   ].filter((line) => line.values.length > 0)
+  // And the Inventory: what it reads, and what it may hand them or take away.
+  const readsInventory = tool.references?.inventoryReads ?? []
+  const inventoryLines: Array<{ key: string; lead: string; values: string[] }> = [
+    { key: 'equips', lead: 'It may equip the running character with', values: tool.references?.equips ?? [] },
+    { key: 'unequips', lead: 'It may unequip them of', values: tool.references?.unequips ?? [] },
+    { key: 'picksUp', lead: 'It may pick up for them', values: tool.references?.picksUp ?? [] },
+  ].filter((line) => line.values.length > 0)
 
   // A tool that quotes nothing and writes nothing gets no panel. An empty list
   // under a heading promising a list is worse than the heading's absence.
-  if (rows.length === 0 && writes.length === 0 && readsProgress.length === 0 && wardrobeLines.length === 0) {
+  if (
+    rows.length === 0 &&
+    writes.length === 0 &&
+    readsProgress.length === 0 &&
+    wardrobeLines.length === 0 &&
+    readsInventory.length === 0 &&
+    inventoryLines.length === 0
+  ) {
     return null
   }
 
@@ -1014,6 +1036,32 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
           ))}
           {line.key === 'clearsSlots' ? (line.values.length > 1 ? ' slots' : ' slot') : ''}
           . Only when you run it as a character — a run made as nobody dresses nobody.
+        </p>
+      ))}
+
+      {readsInventory.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          It reads the inventory for{' '}
+          {readsInventory.map((ref, i) => (
+            <span key={ref}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{ref}</code>
+            </span>
+          ))}
+          . Run as nobody, it finds no inventory at all.
+        </p>
+      )}
+
+      {inventoryLines.map((line) => (
+        <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          {line.lead}{' '}
+          {line.values.map((value, i) => (
+            <span key={value}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{value}</code>
+            </span>
+          ))}
+          . Only when you run it as a character — a run made as nobody carries nothing.
         </p>
       ))}
     </details>

@@ -307,8 +307,8 @@ describe('effects — wardrobe gestures', () => {
   it('rejects an effect that is both a write and a gesture, or neither', () => {
     expect(
       rejection(withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }]))
-    ).toMatch(/not both/)
-    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, or wardrobe/)
+    ).toMatch(/exactly one of/)
+    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, wardrobe, or inventory/)
     expect(rejection(withEffects([{ target: 'state.x' }]))).toMatch(/needs both target and value/)
   })
 
@@ -733,6 +733,29 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['a wardrobe gesture with an empty item list', withEffects([{ wardrobe: { action: 'wear', items: [] } }])],
     ['a wardrobe gesture with an unknown key', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', who: 'Bob' } }])],
     ['more effects than the cap', withEffects(Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 })))],
+    ['an inventory state test', withWhen({ inventory: { sword: { eq: 'equipped' } } })],
+    ['an inventory state test with gt', withWhen({ inventory: { sword: { gt: 1 } } })],
+    ['an inventory state test against an unknown state', withWhen({ inventory: { sword: { eq: 'worn' } } })],
+    ['an empty inventory comparator', withWhen({ inventory: { sword: {} } })],
+    ['an inventory count test', withWhen({ inventoryCount: { ring: { gte: 2 } } })],
+    ['an inventory count test with contains', withWhen({ inventoryCount: { ring: { contains: 'x' } } })],
+    ['an inventory state $param to a string parameter', withWhen({ inventory: { sword: { eq: { $param: 'material' } } } }, STR_PARAM)],
+    ['a templated inventory key', withWhen({ inventory: { '{{params.material}}': { neq: 'absent' } } }, STR_PARAM)],
+    ['an inventory gate', { ...BASE, availableWhen: { inventory: { sword: { eq: 'equipped' } } } }],
+    ['an inventory count gate', { ...BASE, withheldWhen: { inventoryCount: { ring: { gt: 0 } } } }],
+    ['a $param inside an inventory gate', { ...BASE, availableWhen: { inventory: { sword: { eq: { $param: 'material' } } } }, ...STR_PARAM }],
+    ['a roll drawn from $inventory', { ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' } }],
+    ['a range field drawn from $inventory', { ...BASE, roll: { min: 0, max: { $inventory: 'sword.metadata.reach', fallback: 1 } } }],
+    ['a $inventory with no metadata segment', { ...BASE, roll: { $inventory: 'sword.title', fallback: '1d4' } }],
+    ['a $inventory operand', withWhen({ gte: { $inventory: 'sword.metadata.bonus', fallback: 0 } })],
+    ['a $inventory in a gate', { ...BASE, availableWhen: { metadata: { level: { gte: { $inventory: 'sword.metadata.level', fallback: 1 } } } } }],
+    ['a $inventory parameter default', { ...BASE, parameters: { bonus: { type: 'number', default: { $inventory: 'sword.metadata.bonus', fallback: 0 } } } }],
+    ['an inventory equip effect', withEffects([{ inventory: { action: 'equip', items: ['Excalibur'] } }])],
+    ['an inventory pick_up effect with equip', withEffects([{ inventory: { action: 'pick_up', items: ['magic bow'], equip: false } }])],
+    ['an inventory effect with an unknown action', withEffects([{ inventory: { action: 'give', items: ['lantern'] } }])],
+    ['an inventory effect with no items', withEffects([{ inventory: { action: 'equip', items: [] } }])],
+    ['an effect with both a wardrobe and an inventory gesture', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair' }, inventory: { action: 'equip', items: ['x'] } }])],
+    ['an effect with both a target and an inventory gesture', withEffects([{ target: 'state.x', value: 1, inventory: { action: 'equip', items: ['x'] } }])],
   ]
 
   it.each(corpus)('on %s', (_label, doc) => {
@@ -820,6 +843,55 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(ghostParam)).toBe(false)
     expect(validate(orphanLlm)).toBe(true)
     expect(accepts(orphanLlm)).toBe(false)
+  })
+})
+
+describe('the Inventory subjects, operand and effect', () => {
+  const issues = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+  const NUMBER_ARG = { parameters: { scale: { type: 'number', default: 1 } } }
+
+  it('rejects an inventory state $param to a number parameter', () => {
+    expect(issues(withWhen({ inventory: { sword: { eq: { $param: 'scale' } } } }, NUMBER_ARG))).toMatch(
+      /outcomes\.0\.when\.inventory\.sword\.eq.*rather than a string/
+    )
+  })
+
+  it('rejects an ordering key on a state, and containment on a count', () => {
+    expect(issues(withWhen({ inventory: { sword: { gt: 1 } } }))).not.toBe('')
+    expect(issues(withWhen({ inventoryCount: { ring: { contains: 'x' } } }))).not.toBe('')
+  })
+
+  it('rejects a placeholder in a gate key, and accepts one in an outcome key', () => {
+    expect(issues({ ...BASE, ...NUMBER_ARG, availableWhen: { inventory: { '{{params.scale}}': { eq: 'equipped' } } } })).toMatch(
+      /availableWhen\.inventory.*must be a literal object reference/
+    )
+    expect(issues(withWhen({ inventory: { '{{params.scale}}': { eq: 'equipped' } } }, NUMBER_ARG))).toBe('')
+    expect(issues(withWhen({ inventory: { '{{params.ghost}}': { eq: 'equipped' } } }))).toMatch(/undeclared parameter "ghost"/)
+  })
+
+  it('types $inventory by its fallback, and demands dice for a whole roll', () => {
+    expect(issues({ ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' } })).toBe('')
+    expect(issues({ ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: 4 } })).toMatch(/dice-notation fallback/)
+    expect(issues({ ...BASE, roll: { max: { $inventory: 'sword.metadata.reach', fallback: 'far' } } })).toMatch(
+      /\$inventory reference whose fallback is string rather than a number/
+    )
+    expect(issues(withWhen({ gte: { $inventory: 'sword.metadata.bonus', fallback: 'x' } }))).toMatch(/only numbers can be ordered/)
+  })
+
+  it('rejects $inventory in a gate, as $state is', () => {
+    expect(issues({ ...BASE, availableWhen: { metadata: { level: { gte: { $inventory: 'sword.metadata.level', fallback: 1 } } } } })).not.toBe('')
+  })
+
+  it('states the gesture rules at precise paths', () => {
+    expect(issues(withEffects([{ inventory: { action: 'equip', items: ['x'], equip: true } }]))).toMatch(
+      /effects\.0\.inventory\.equip.*only used with pick_up/
+    )
+    expect(issues(withEffects([{ inventory: { action: 'equip', items: ['{{params.ghost}}'] } }]))).toMatch(
+      /effects\.0\.inventory\.items\.0.*undeclared parameter/
+    )
   })
 })
 

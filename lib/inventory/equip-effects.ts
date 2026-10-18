@@ -13,6 +13,14 @@
  * Arrival defaults pass `announce: false` (arrival is not a gesture), and a
  * mutation outside a chat never comes here.
  *
+ * Inside a model turn the context carries the turn's
+ * `pendingInventoryAnnouncements` (created by `newWardrobeTurnContainers`):
+ * the change is recorded there instead, netted with the turn's other changes
+ * for that character, and posted once — line and avatar refresh — by
+ * {@link flushPendingInventoryAnnouncements} at turn end, so a character's
+ * `inventory_*` calls and a Pascal inventory effect in one turn read as one
+ * line. A give (`change.given`) always posts a line of its own, at once.
+ *
  * Server-only.
  *
  * @module lib/inventory/equip-effects
@@ -23,12 +31,16 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { inventoryLabel } from '@/lib/inventory/resolve';
 import { refreshAvatarForAppearance } from '@/lib/wardrobe/outfit-change-effects';
+import type { PendingInventoryChange, WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { postPascalInventoryChange } from '@/lib/services/pascal/writer';
 
-/** Who is changing what a character carries. The tools spec adds `character` and `pascal`. */
-export interface InventoryChangeContext {
+/** Who is changing what a character carries: the operator, the character's own tool call, or a custom tool. */
+export type InventoryChangeProvenance = 'operator' | 'character' | 'pascal';
+
+/** Who is changing what a character carries, and the turn's pending set if there is one. */
+export interface InventoryChangeContext extends Pick<WardrobeTurnContainers, 'pendingInventoryAnnouncements'> {
   userId: string;
-  provenance: 'operator';
+  provenance: InventoryChangeProvenance;
   /** Post Pascal's line for this gesture. False at arrival. */
   announce: boolean;
 }
@@ -37,6 +49,10 @@ export interface InventoryChangeContext {
 export interface InventoryChange {
   equipped: readonly ResolvedInventoryItem[];
   unequipped: readonly ResolvedInventoryItem[];
+  /** Instances made from an archetype in this gesture (named "picks up"). */
+  pickedUp?: readonly ResolvedInventoryItem[];
+  /** A give: the object handed over and the receiver's name. */
+  given?: { item: ResolvedInventoryItem; toName: string };
 }
 
 function withArticle(item: ResolvedInventoryItem, article: 'a' | 'the'): string {
@@ -58,12 +74,20 @@ function joinList(parts: readonly string[]): string {
  * ones are named ("Excalibur").
  */
 export function describeInventoryChange(characterName: string, change: InventoryChange): string | null {
+  if (change.given) {
+    return `*${characterName} hands ${withArticle(change.given.item, 'the')} to ${change.given.toName}.*`;
+  }
   const clauses: string[] = [];
+  const pickedIds = new Set((change.pickedUp ?? []).map((item) => item.id));
   if (change.unequipped.length > 0) {
     clauses.push(`sets down ${joinList(change.unequipped.map((item) => withArticle(item, 'the')))}`);
   }
-  if (change.equipped.length > 0) {
-    clauses.push(`takes up ${joinList(change.equipped.map((item) => withArticle(item, 'a')))}`);
+  const takenUp = change.equipped.filter((item) => !pickedIds.has(item.id));
+  if (takenUp.length > 0) {
+    clauses.push(`takes up ${joinList(takenUp.map((item) => withArticle(item, 'a')))}`);
+  }
+  if (pickedIds.size > 0) {
+    clauses.push(`picks up ${joinList((change.pickedUp ?? []).map((item) => withArticle(item, 'a')))}`);
   }
   if (clauses.length === 0) return null;
   return `*${characterName} ${clauses.join(' and ')}.*`;
@@ -80,7 +104,19 @@ export async function notifyInventoryChanged(
   change: InventoryChange,
   ctx: InventoryChangeContext,
 ): Promise<void> {
-  if (change.equipped.length === 0 && change.unequipped.length === 0) return;
+  const picked = change.pickedUp ?? [];
+  if (change.equipped.length === 0 && change.unequipped.length === 0 && picked.length === 0 && !change.given) return;
+  const pending = ctx.pendingInventoryAnnouncements;
+  if (pending && ctx.announce && !change.given) {
+    recordPendingInventoryChange(pending, { userId: ctx.userId, chatId: chat.id, characterId }, change);
+    logger.debug('[InventoryEffects] Inventory change joined the turn', {
+      chatId: chat.id,
+      characterId,
+      provenance: ctx.provenance,
+      context: 'inventory',
+    });
+    return;
+  }
   try {
     if (ctx.announce) {
       const character = await repos.characters.findById(characterId);
@@ -96,6 +132,7 @@ export async function notifyInventoryChanged(
       chatId: chat.id,
       characterId,
       announced: ctx.announce,
+      provenance: ctx.provenance,
       equipped: change.equipped.map(inventoryLabel),
       unequipped: change.unequipped.map(inventoryLabel),
       context: 'inventory',
@@ -108,4 +145,59 @@ export async function notifyInventoryChanged(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+function pushUnique(list: ResolvedInventoryItem[], item: ResolvedInventoryItem): void {
+  if (!list.some((existing) => existing.id === item.id)) list.push(item);
+}
+
+/** Fold a change into the turn's pending entry for the character, netting opposites. */
+export function recordPendingInventoryChange(
+  pending: Map<string, PendingInventoryChange>,
+  who: { userId: string; chatId: string; characterId: string },
+  change: InventoryChange,
+): void {
+  const key = `${who.chatId}:${who.characterId}`;
+  const entry = pending.get(key) ?? { ...who, equipped: [], unequipped: [], pickedUp: [] };
+  for (const item of change.equipped) {
+    const undone = entry.unequipped.findIndex((other) => other.id === item.id);
+    if (undone >= 0) entry.unequipped.splice(undone, 1);
+    else pushUnique(entry.equipped, item);
+  }
+  for (const item of change.unequipped) {
+    const undone = entry.equipped.findIndex((other) => other.id === item.id);
+    if (undone >= 0) entry.equipped.splice(undone, 1);
+    else pushUnique(entry.unequipped, item);
+  }
+  for (const item of change.pickedUp ?? []) pushUnique(entry.pickedUp, item);
+  pending.set(key, entry);
+}
+
+/**
+ * Drain the turn's pending Inventory changes: one Pascal line and one avatar
+ * refresh per character that changed. Idempotent: the map is cleared. Never
+ * throws.
+ */
+export async function flushPendingInventoryAnnouncements(
+  context: Pick<WardrobeTurnContainers, 'pendingInventoryAnnouncements'>,
+  repos?: RepositoryContainer,
+): Promise<void> {
+  const pending = context.pendingInventoryAnnouncements;
+  if (!pending || pending.size === 0) return;
+  const entries = Array.from(pending.values());
+  pending.clear();
+  const effectiveRepos = repos ?? (await import('@/lib/repositories/factory')).getRepositories();
+  for (const entry of entries) {
+    await notifyInventoryChanged(
+      effectiveRepos,
+      { id: entry.chatId },
+      entry.characterId,
+      { equipped: entry.equipped, unequipped: entry.unequipped, pickedUp: entry.pickedUp },
+      { userId: entry.userId, provenance: 'character', announce: true },
+    );
+  }
+  logger.debug('[InventoryEffects] Drained the turn\'s Inventory announcements', {
+    characters: entries.length,
+    context: 'inventory',
+  });
 }

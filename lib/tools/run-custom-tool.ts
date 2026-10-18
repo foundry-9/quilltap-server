@@ -16,7 +16,10 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
+import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import {
+  isInventoryEffect,
+  isInventoryRef,
   isParamRef,
   isWardrobeEffect,
   isWriteEffect,
@@ -88,7 +91,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
-  'Some tools record side effects when they run — adjusting the scene\'s persistent state, the rolling character\'s own records, or what they are wearing, server-side, as part of the roll.',
+  'Some tools record side effects when they run — adjusting the scene\'s persistent state, the rolling character\'s own records, what they are wearing, or what they carry, server-side, as part of the roll.',
   'Some tools consult, or adjust, the rolling character\'s timed progressions — recharges, gestations, countdowns — server-side; you cannot set one yourself.',
   '',
   'Available tools:',
@@ -98,6 +101,7 @@ const RUN_CUSTOM_PREAMBLE = [
 function describeRoll(roll: QtapCustomTool['roll']): string {
   if (roll === undefined) return 'random value from 0 to 1';
   if (typeof roll === 'string') return `dice ${roll}`;
+  if (isInventoryRef(roll)) return `dice from ${roll.$inventory} (else ${roll.fallback})`;
 
   const part = (label: string, v: unknown, fallback: string): string =>
     v === undefined ? fallback : isParamRef(v) ? `${label} ${v.$param}` : `${label} ${v}`;
@@ -159,6 +163,13 @@ function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string 
       describeComparator(comparator, `your ${key}`)
     ),
     ...(when.llm !== undefined ? describeLlmComparator(when.llm) : []),
+    ...Object.entries(when.inventory ?? {}).flatMap(([ref, comparator]) => [
+      ...(comparator.eq !== undefined ? [`your ${ref} is ${describeOperand(comparator.eq)}`] : []),
+      ...(comparator.neq !== undefined ? [`your ${ref} is not ${describeOperand(comparator.neq)}`] : []),
+    ]),
+    ...Object.entries(when.inventoryCount ?? {}).flatMap(([ref, comparator]) =>
+      describeComparator(comparator, `your equipped ${ref} count`)
+    ),
   ];
 
   return parts.join(' and ');
@@ -226,6 +237,9 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
       // and all — what may be worn, not which outcome wears it.
       lines.push(`    Side effects: ${describeEffects(definition.effects)}`);
     }
+    // Which objects the tool consults — vocabulary, never the odds.
+    const reads = collectToolVocabulary(definition).inventoryReads;
+    if (reads.length > 0) lines.push(`    Reads: your inventory for ${reads.join(', ')}`);
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);
     }
@@ -261,7 +275,9 @@ export function validateRunCustomInput(input: unknown): RunCustomToolInput | nul
 /**
  * The `Side effects:` line's clauses: `writes a, b` for the value writes, then
  * one clause per wardrobe gesture — `wears Cloak of Night, Boots`, `takes off
- * {{params.garment}}`, `clears hair`. Duplicates collapse.
+ * {{params.garment}}`, `clears hair` — then one per inventory gesture —
+ * `equips Excalibur`, `unequips lantern`, `picks up magic bow`. Duplicates
+ * collapse.
  */
 function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): string {
   const targets = [...new Set(effects.filter(isWriteEffect).map((effect) => effect.target))];
@@ -275,6 +291,13 @@ function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): strin
         : action === 'take_off'
           ? `takes off ${items.join(', ')}${slot ? ` (${slot} only)` : ''}`
           : `clears ${slot}`;
+    if (!clauses.includes(clause)) clauses.push(clause);
+  }
+  for (const effect of effects) {
+    if (!isInventoryEffect(effect)) continue;
+    const { action, items } = effect.inventory;
+    const verb = action === 'equip' ? 'equips' : action === 'unequip' ? 'unequips' : 'picks up';
+    const clause = `${verb} ${items.join(', ')}`;
     if (!clauses.includes(clause)) clauses.push(clause);
   }
   return clauses.join('; ');

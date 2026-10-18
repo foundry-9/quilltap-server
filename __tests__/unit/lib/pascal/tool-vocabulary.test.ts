@@ -43,6 +43,10 @@ describe('collectToolVocabulary', () => {
       wears: [],
       takesOff: [],
       clearsSlots: [],
+      inventoryReads: [],
+      equips: [],
+      unequips: [],
+      picksUp: [],
     })
   })
 
@@ -188,7 +192,33 @@ describe('collectToolVocabulary', () => {
       wears: [],
       takesOff: [],
       clearsSlots: [],
+      inventoryReads: [],
+      equips: [],
+      unequips: [],
+      picksUp: [],
     })
+  })
+
+  it('reports inventory reads from tests, gates, placeholders and $inventory, and the three gestures', () => {
+    const tool = define({
+      availableWhen: { inventory: { lantern: { eq: 'equipped' } } },
+      roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' },
+      effects: [
+        { inventory: { action: 'equip', items: ['Excalibur'] } },
+        { inventory: { action: 'unequip', items: ['lantern'] } },
+        { inventory: { action: 'pick_up', items: ['magic bow'] } },
+      ],
+      outcomes: [
+        { when: { inventoryCount: { ring: { gte: 2 } } }, message: '{{inventory.compass.title}}', state: 'success' },
+        { when: true, message: '-', state: 'info' },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+    expect(vocabulary.inventoryReads).toEqual(['compass', 'lantern', 'ring', 'sword'])
+    expect(vocabulary.equips).toEqual(['Excalibur'])
+    expect(vocabulary.unequips).toEqual(['lantern'])
+    expect(vocabulary.picksUp).toEqual(['magic bow'])
+    expect(isEmptyVocabulary(vocabulary)).toBe(false)
   })
 
   it('reports a tool that quotes {{character}}', () => {

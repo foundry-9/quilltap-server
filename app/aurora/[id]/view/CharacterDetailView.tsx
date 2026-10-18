@@ -100,6 +100,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     handleSaveHelpTools,
     handleSaveCanDressThemselves,
     handleSaveCanCreateOutfits,
+    handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
@@ -119,6 +120,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     savingHelpTools,
     savingCanDressThemselves,
     savingCanCreateOutfits,
+    savingCanManageInventory,
     savingCanChooseOutfit,
     savingTimestampConfig,
     savingDefaultScenario,
@@ -312,6 +314,8 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
             onCanDressThemselvesChange={handleSaveCanDressThemselves}
             savingCanCreateOutfits={savingCanCreateOutfits}
             onCanCreateOutfitsChange={handleSaveCanCreateOutfits}
+            savingCanManageInventory={savingCanManageInventory}
+            onCanManageInventoryChange={handleSaveCanManageInventory}
             onTimestampConfigChange={handleSaveTimestampConfig}
             onDefaultScenarioChange={handleSaveDefaultScenario}
             onDefaultSystemPromptChange={handleSaveDefaultSystemPrompt}

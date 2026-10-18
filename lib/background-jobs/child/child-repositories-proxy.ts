@@ -28,6 +28,7 @@ import type { ChildWritePayload } from '../ipc-types';
 import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
 import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { normalizeEquippedInventory } from '@/lib/database/repositories/chats.repository';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
@@ -65,6 +66,19 @@ interface JobScope {
    * stale baseline and the parent's replay keeps only the last (bug 179).
    */
   equippedOutfits: Map<string, EquippedSlots>;
+  /**
+   * Read-your-writes overlay for carried Inventory objects. A buffered
+   * `chats.setEquippedInventory` records the ids it leaves for one
+   * (chat, character), keyed `chatId:characterId`; a buffered
+   * `chats.removeEquippedInventoryId` records an id dropped from a character
+   * in every chat. Each carries a sequence number so a removal only strikes
+   * sets written before it. `chats.findById` / `chats.getEquippedInventory`
+   * answer through it, so two gestures in one job (a custom tool's two
+   * `inventory` effects) see each other.
+   */
+  equippedInventory: Map<string, { seq: number; ids: string[] | null }>;
+  inventoryRemovals: Array<{ seq: number; characterId: string; itemId: string }>;
+  inventorySeq: number;
   /**
    * Read-your-writes overlay for memory rows, keyed by memory id. A later step
    * of a job must see the job's own buffered inserts, links, footnotes, counts,
@@ -134,6 +148,9 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     warnedReads: new Set(),
     sanitizedArgs: 0,
     equippedOutfits: new Map(),
+    equippedInventory: new Map(),
+    inventoryRemovals: [],
+    inventorySeq: 0,
     memories: new Map(),
     memoryRelatedScrubs: new Set(),
     admissionOccurrences: new Map(),
@@ -290,6 +307,60 @@ function bufferedOutfitFor(scope: JobScope | undefined, args: unknown[]): Equipp
   const key = equippedOutfitKey(args[0], args[1]);
   const slots = key ? scope.equippedOutfits.get(key) : undefined;
   return slots ? cloneEquippedSlots(slots) : undefined;
+}
+
+// ============================================================================
+// Equipped-inventory read-your-writes overlay
+// ============================================================================
+
+/** Record a buffered carried-set write (see {@link JobScope.equippedInventory}). */
+function recordBufferedInventoryWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn === 'chats.setEquippedInventory') {
+    const key = equippedOutfitKey(args[0], args[1]);
+    if (!key) return;
+    const ids = Array.isArray(args[2]) ? Array.from(new Set(args[2] as string[])).sort() : null;
+    scope.equippedInventory.set(key, { seq: ++scope.inventorySeq, ids });
+    log.debug('Recorded buffered equipped-inventory write for in-job reads', { jobId: scope.jobId, key });
+  } else if (fqn === 'chats.removeEquippedInventoryId') {
+    if (typeof args[0] !== 'string' || typeof args[1] !== 'string') return;
+    scope.inventoryRemovals.push({ seq: ++scope.inventorySeq, characterId: args[0], itemId: args[1] });
+    log.debug('Recorded buffered equipped-inventory removal for in-job reads', { jobId: scope.jobId, characterId: args[0] });
+  }
+}
+
+function hasInventoryOverlay(scope: JobScope | undefined): scope is JobScope {
+  return !!scope && (scope.equippedInventory.size > 0 || scope.inventoryRemovals.length > 0);
+}
+
+/** One chat's carried map with the job's own buffered writes applied. */
+function overlayEquippedInventory(scope: JobScope, chatId: string, raw: unknown): Record<string, string[]> {
+  const state = normalizeEquippedInventory(raw);
+  const seqOf = new Map<string, number>();
+  for (const [key, entry] of scope.equippedInventory) {
+    const [keyChat, characterId] = key.split(':');
+    if (keyChat !== chatId || !characterId) continue;
+    seqOf.set(characterId, entry.seq);
+    if (entry.ids === null) delete state[characterId];
+    else state[characterId] = [...entry.ids];
+  }
+  for (const removal of scope.inventoryRemovals) {
+    if ((seqOf.get(removal.characterId) ?? 0) > removal.seq) continue;
+    const ids = state[removal.characterId];
+    if (ids) state[removal.characterId] = ids.filter((id) => id !== removal.itemId);
+  }
+  return state;
+}
+
+/** Patch a chats read's answer with the overlay. */
+function applyInventoryOverlay(scope: JobScope, method: string, args: unknown[], result: unknown): unknown {
+  if (method === 'getEquippedInventory' && typeof args[0] === 'string') {
+    return overlayEquippedInventory(scope, args[0], result);
+  }
+  if (method === 'findById' && result && typeof result === 'object' && typeof (result as { id?: unknown }).id === 'string') {
+    const row = result as { id: string; equippedInventory?: unknown };
+    return { ...row, equippedInventory: overlayEquippedInventory(scope, row.id, row.equippedInventory) };
+  }
+  return result;
 }
 
 // ============================================================================
@@ -892,6 +963,10 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
             }
           }
           const answered = (real as (...a: unknown[]) => unknown).apply(target, args);
+          if (repoKey === 'chats' && (key === 'findById' || key === 'getEquippedInventory') && hasInventoryOverlay(scope)
+            && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
+            return (answered as Promise<unknown>).then((res) => applyInventoryOverlay(scope, key, args, res));
+          }
           // Async iterators (the batched corpus reads) pass through untouched.
           if (overlaid && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
             return (answered as Promise<unknown>).then((res) => applyMemoryOverlay(scope!, key, args, res));
@@ -910,6 +985,7 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           appendWrite(`${repoKey}.${key}`, args);
           const scope = jobScopeStore.getStore();
           if (scope) recordBufferedOutfitWrite(scope, `${repoKey}.${key}`, args);
+          if (scope && repoKey === 'chats') recordBufferedInventoryWrite(scope, `${repoKey}.${key}`, args);
           if (scope && repoKey === 'memories') recordBufferedMemoryWrite(scope, key, args, result);
           // Real repository write methods are async; mirror that here so
           // callers that chain `.then` / `.catch` / `Promise.all` against

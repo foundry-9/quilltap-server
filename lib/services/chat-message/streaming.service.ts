@@ -23,6 +23,7 @@ import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -174,6 +175,8 @@ export async function buildTools(
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
+  /** Whether this character can manage their inventory (enables the nine inventory_* tools; null/undefined = on) */
+  canManageInventory?: boolean,
   /**
    * Which `doc_*` tools to build: `'full'` (the whole family — chat surfaces
    * with linked stores, the Brahma Console), `'read'` (the read-only five — the
@@ -302,6 +305,7 @@ export async function buildTools(
     wardrobeCreate: canCreateOutfits !== false,
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
+    ...inventoryToolFlags(canManageInventory),
     whisper: !!isMultiCharacter,
     docToolsMode: docToolsMode ?? 'off',
     pluginToolAllowlist: extras?.pluginToolAllowlist,

@@ -228,6 +228,9 @@ export const CharacterSchema = z.object({
   /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
   canCreateOutfits: z.boolean().nullable().optional(),
 
+  /** Whether this character may use the inventory_* tools (null = enabled by default) */
+  canManageInventory: z.boolean().nullable().optional(),
+
   /**
    * When true, a new chat with this character defaults its Starting Outfit to
    * "Let character choose" — the character picks their opening outfit based on

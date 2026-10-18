@@ -236,6 +236,7 @@ export interface CharacterBreakdownInfo {
   systemTransparent: number;
   canDressThemselves: number;
   canCreateOutfits: number;
+  canManageInventory: number;
   coreWhisperOverrides: number;
 }
 

@@ -57,6 +57,7 @@ export interface RunCustomToolContext {
    */
   pendingWardrobeAnnouncements?: Set<string>;
   pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
 }
 
 /** Shape the failure the same way whether it was a bad input or a bad roll. */

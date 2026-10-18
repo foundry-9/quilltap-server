@@ -107,6 +107,7 @@ import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
 import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
 import { discardMailToolDefinition } from '@/lib/tools/discard-mail-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
+import { enabledInventoryToolDefinitions, pickInventoryToolFlags, type InventoryToolFlags } from '@/lib/tools/inventory-tool-flags';
 
 /**
  * Apply image provider constraints to the image generation tool
@@ -187,9 +188,11 @@ function applyImageConstraintsToTool(
 export type DocToolsMode = 'off' | 'read' | 'full';
 
 /**
- * Options for building tools for a provider
+ * Options for building tools for a provider ({@link buildToolsForProvider}). The nine `inventory_*` flags
+ * (`inventoryList` … `inventoryGive`, gated by `canManageInventory`) come from
+ * {@link InventoryToolFlags}.
  */
-export interface BuildToolsOptions {
+export interface BuildToolsOptions extends InventoryToolFlags {
   /** Whether to enable image generation tool */
   imageGeneration?: boolean;
 
@@ -383,6 +386,7 @@ export async function buildToolsForProvider(
       wardrobeCreate: options.wardrobeCreate,
       wardrobeUpdate: options.wardrobeUpdate,
       wardrobeArchive: options.wardrobeArchive,
+      ...pickInventoryToolFlags(options),
       docToolsMode: options.docToolsMode ?? 'off',
       pluginToolAllowlist: options.pluginToolAllowlist,
       documentsOnlySearch: options.documentsOnlySearch,
@@ -546,6 +550,11 @@ export async function buildToolsForProvider(
   }
   if (options.wardrobeArchive) {
     universalTools.push(wardrobeArchiveToolDefinition as UniversalTool);
+  }
+
+  // Inventory tools (gated by canManageInventory)
+  for (const definition of enabledInventoryToolDefinitions(options)) {
+    universalTools.push(definition as UniversalTool);
   }
 
   // Add submit_final_response tool if agent mode is enabled
