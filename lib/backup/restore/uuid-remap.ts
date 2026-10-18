@@ -201,6 +201,39 @@ function remapJsonIdList(value: unknown, remapper: UuidRemapper): unknown {
 }
 
 /**
+ * Remap a chat's `equippedOutfit` (`{ [characterId]: EquippedSlots }`). The
+ * keys are character ids and go through the remapper — left alone, every
+ * restored chat names characters that no longer exist and nobody is wearing
+ * anything (bug 252). Slot item ids follow the wardrobe item remap, as the
+ * wear ledger and outfit history do; an id the backup carries no document for
+ * passes through. A slot that is not an array is kept as given (the readers'
+ * `normalizeEquippedSlots` already repairs it), and a non-object outfit is
+ * returned untouched.
+ */
+function remapEquippedOutfit(
+  value: unknown,
+  remapper: UuidRemapper,
+  itemIdRemap: Map<string, string>
+): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const remapped: Record<string, unknown> = {};
+  for (const [characterId, slots] of Object.entries(value as Record<string, unknown>)) {
+    remapped[remapper.remap(characterId)] =
+      slots && typeof slots === 'object' && !Array.isArray(slots)
+        ? Object.fromEntries(
+            Object.entries(slots as Record<string, unknown>).map(([slot, ids]) => [
+              slot,
+              Array.isArray(ids)
+                ? ids.map((id) => (typeof id === 'string' ? itemIdRemap.get(id) ?? id : id))
+                : ids,
+            ])
+          )
+        : slots;
+  }
+  return remapped;
+}
+
+/**
  * Remaps all UUIDs in the backup data for new-account mode
  */
 export function remapBackupData(
@@ -350,6 +383,15 @@ export function remapBackupData(
     // remapper, so the pointer follows its store.
     if (chat.scenarioSource) {
       remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
+    }
+
+    // The outfit map is keyed by character id; see remapEquippedOutfit.
+    if (chat.equippedOutfit) {
+      remappedChat.equippedOutfit = remapEquippedOutfit(
+        chat.equippedOutfit,
+        remapper,
+        wardrobeItemIdRemap,
+      ) as typeof chat.equippedOutfit;
     }
 
     // Turn-manager state names participants inside JSON strings; left alone,

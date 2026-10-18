@@ -4,6 +4,11 @@
 
 ### 4.11-dev
 
+#### Fix: new-account restore keeps chat outfits (bug 252)
+
+- `remapBackupData` now remaps `chats.equippedOutfit`. Each entry is re-keyed by the character's new id, and slot item ids follow the wardrobe item remap used for the wear ledger and outfit history. Before this, a new-account restore left the map keyed by the old ids, so no character was wearing anything in any restored chat.
+- Tests: `__tests__/unit/lib/backup/uuid-remapper.test.ts`.
+
 #### Docs: Inventory design specs
 
 - New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
