@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Docs: Inventory design spec
+
+- New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
+
 #### Feature: wardrobe pictures in the Aurora gallery
 
 - The character gallery tab has a third, collapsible section, **Wardrobe Pictures**, below Avatar Rolls: every GENERATED image of every wardrobe item in the character's wearable pool (own vault, group stores, Quilltap General; no project tier, since there is no chat). Archived items included. Each tile carries a caption overlay with the item title and its tier ("Own wardrobe", "Group · X", "Shared · Quilltap General"). Read-only: download on hover, detail modal on click.
