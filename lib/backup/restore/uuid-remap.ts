@@ -10,6 +10,8 @@
 
 import { UuidRemapper } from '../uuid-remapper';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import { remapCharacterKeyedChatFields } from '@/lib/chat/character-keyed-fields';
+import { logger } from '@/lib/logger';
 import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import {
   withConciergeSettingsFromLegacy,
@@ -69,6 +71,8 @@ import type {
   GroupDocMountLink,
   GroupCharacterMember,
 } from '@/lib/schemas/mount-index.types';
+
+const moduleLogger = logger.child({ module: 'backup:uuid-remap' });
 
 /**
  * Settings keys whose values are mount-point UUIDs. These need remapping in
@@ -253,24 +257,6 @@ export function planInventoryImagePointerFixes(
 }
 
 /**
- * Remap the character-id keys of a chat's `equippedInventory`. The values
- * are Inventory object ids, which travel verbatim (see `inventoryItemIds`).
- */
-function remapEquippedInventory(
-  value: unknown,
-  remapper: UuidRemapper
-): Record<string, string[]> | null | undefined {
-  if (value === null || value === undefined) return value as null | undefined;
-  if (typeof value !== 'object' || Array.isArray(value)) return null;
-  const out: Record<string, string[]> = {};
-  for (const [characterId, ids] of Object.entries(value as Record<string, unknown>)) {
-    if (!Array.isArray(ids)) continue;
-    out[remapper.remap(characterId)] = ids.filter((id): id is string => typeof id === 'string');
-  }
-  return out;
-}
-
-/**
  * The chat columns that hold participant ids as a JSON-encoded string array
  * rather than a real array, so `remapArrayFields` cannot see them.
  */
@@ -423,6 +409,7 @@ export function remapBackupData(
   })) as EmbeddingProfile[];
 
   // Remap chats (complex due to participants and messages)
+  const backupCharacterIds = new Set(data.characters.map((character) => character.id));
   const remappedChats = data.chats.map((chat) => {
     const remappedChat = {
       ...remapper.remapArrayFields(
@@ -451,9 +438,30 @@ export function remapBackupData(
       remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
     }
 
-    // The carried Inventory is keyed by character; the object ids stay.
-    if ('equippedInventory' in chat) {
-      remappedChat.equippedInventory = remapEquippedInventory(chat.equippedInventory, remapper);
+    // Outfits, outfit avatars, Courier checkpoints, queued outfit notices and
+    // the carried Inventory are keyed by character id (bug 252); one pass
+    // carries them all. An
+    // entry for a character the backup does not carry is dropped rather than
+    // given a minted id that names nobody.
+    const keyed = remapCharacterKeyedChatFields(chat, {
+      characterId: (id) => (backupCharacterIds.has(id) ? remapper.remap(id) : null),
+      wardrobeItemId: (id) => wardrobeItemIdRemap.get(id) ?? id,
+      fileId: (id) => remapper.remap(id),
+      messageId: (id) => remapper.remap(id),
+    });
+    Object.assign(remappedChat, keyed.patch);
+    if (keyed.unreadable.length > 0) {
+      moduleLogger.warn('Chat character-keyed columns unreadable; left as given', {
+        chatId: chat.id,
+        fields: keyed.unreadable,
+      });
+    }
+    if (Object.keys(keyed.patch).length > 0) {
+      moduleLogger.debug('Remapped character-keyed chat fields', {
+        chatId: chat.id,
+        fields: Object.keys(keyed.patch),
+        droppedEntries: keyed.droppedEntries,
+      });
     }
 
     // Turn-manager state names participants inside JSON strings; left alone,

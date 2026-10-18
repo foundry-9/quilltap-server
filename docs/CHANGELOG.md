@@ -17,6 +17,7 @@
   - Transfers keep kits whole. A kit must reach its members from the destination (`INVALID_SHAPE`), and a move that would leave kits naming an unreachable object is refused with the new `KIT_STRANDED` (409).
   - A malformed JSON body on `?action=generate` for object pictures is a 400, not a 500.
   - The dialog detects a cap refusal by `code === 'CAP_EXCEEDED'`, not by message text.
+- `chats.equippedInventory` joins `CHARACTER_KEYED_CHAT_FIELDS` (`lib/chat/character-keyed-fields.ts`), so new-account restore and `.qtap` import re-key it in the same pass as the outfit (bug 252). The Inventory's own remap helper is removed.
 - Shared folder rules: the pure folder-path helpers moved from `lib/wardrobe/folders.ts` into `lib/mount-index/item-folders.ts`, parameterised by `ItemFolderRules` (root, reserved segments, depth cap, noun). `lib/wardrobe/folders.ts` and the new `lib/inventory/folders.ts` are delegates; `isWardrobeItemDocumentPath` delegates to `isItemDocumentPath`. Wardrobe behaviour and messages are unchanged.
 - The wardrobe's folder operations (list, create, rename, delete-and-send-up) are now one implementation in `vault-overlay/item-folder-ops.ts` over an `ItemFolderTree` descriptor, with the per-folder write chain (`runSerialized`) and `resolveVaultFolderMount` (the tombstone-aware mount resolver; `resolveWardrobeMount` and `resolveInventoryMount` delegate to it).
 - `projectArrayIntoVaultFolder` takes an `ext` option (default `.md`, so existing callers are byte-identical).
@@ -48,6 +49,12 @@
 - Backup and restore: a new-account restore re-keys each chat's `equippedInventory` to the remapped character ids and keeps the object ids (they live in the files and travel verbatim, as do `parentId` and kit `itemIds`); picture `files` rows keep their `linkedTo` / `tags` link to the object; `planInventoryImagePointerFixes` repoints each object's `imageFileId` at its picture's new file id after the vaults land (step 22f-quater, one batch per mount, tombstoned vaults skipped).
 - Tests: `__tests__/unit/lib/backup/inventory-backup.test.ts` (archetype, instance, kit and a carrying chat round-trip through the remap).
 - Docs: new `help/inventory.md` (`url: /salon`) and `help/project-inventory.md` (`url: /prospero/:id`); cross-links from the wardrobe, project wardrobe, projects and Pascal's Workbench pages; README and FEATURES.md mention the Inventory; CLAUDE.md glossary, `pascal` sender duties and a chokepoint bullet; the spec moved to `features/complete/inventory.md` with an As-built section; ROADMAP row checked.
+
+#### Fix: restore and import keep chat outfits (bug 252)
+
+- New `lib/chat/character-keyed-fields.ts`: `remapCharacterKeyedChatFields` re-keys every chat column keyed by character id (`equippedOutfit`, `characterAvatars`, `courierCheckpoints`, `pendingOutfitNotifications`) and moves the ids inside them: outfit slot item ids through the wardrobe item remap, outfit-avatar `imageId` through the file remap, Courier `lastResolvedMessageId` through the message remap. Outfits come back as full five-slot bags, matching the outfit-history remap. A column stored as a JSON string is parsed; an unreadable one is left alone and logged at `warn`.
+- New-account restore (`remapBackupData`) and `.qtap` import (`reconcileRelationships`, which now takes the imported wardrobe item map) both call it. Restore drops an entry for a character the backup does not carry instead of minting an id for it. Before this, those columns kept the old character ids, so no character was wearing anything in a restored chat, outfit avatars were gone, and Courier checkpoints were lost.
+- Tests: `__tests__/unit/lib/chat/character-keyed-fields.test.ts`, `__tests__/unit/lib/backup/uuid-remapper.test.ts`, `__tests__/unit/lib/import/quilltap-import/reconcile-character-keyed-fields.test.ts`.
 
 #### Docs: Inventory design specs
 
