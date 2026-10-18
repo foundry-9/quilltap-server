@@ -12,6 +12,7 @@
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  * GET /api/v1/chats/[id]?action=wardrobe-history&characterId=… - One character's outfit timeline
+ * GET /api/v1/chats/[id]?action=inventory - What every cast member carries (the Inventory)
  * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  * DELETE /api/v1/chats/[id]?action=stop-impersonate - Stop impersonating
@@ -36,6 +37,9 @@
  * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
  * POST /api/v1/chats/[id]?action=wardrobe-rollback - Return a character to a recorded outfit
+ * POST /api/v1/chats/[id]?action=inventory-equip - Take up Inventory objects or kits for a character
+ * POST /api/v1/chats/[id]?action=inventory-unequip - Set them down
+ * POST /api/v1/chats/[id]?action=inventory-reset-defaults - Back to the equipped-by-default set
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
  * POST /api/v1/chats/[id]?action=retry-image-uncensored - Redraw a picture (or the story background) on the Concierge's uncensored desk

@@ -45,7 +45,13 @@ import {
   type InventoryMount,
 } from '@/lib/database/repositories/vault-overlay/inventory-writes';
 import { resolveVaultFolderMount } from '@/lib/database/repositories/vault-overlay/item-folder-ops';
-import { InventoryItemNotInLocationError, isSameFolder } from '@/lib/inventory/folders';
+import {
+  InventoryFolderPathError,
+  InventoryItemNotInLocationError,
+  isSameFolder,
+  normalizeInventoryFolderName,
+  type InventoryFolder,
+} from '@/lib/inventory/folders';
 import { findDependents, findRecordsAnywhere, type InventoryDependent } from '@/lib/inventory/dependents';
 import {
   InventoryArchetypeInUseError,
@@ -499,4 +505,36 @@ export async function copyInventoryItemsToFolder(
   for (const source of sources) copies.push(await location.create(copyRecord(source, target)));
   logOp('Copied objects to folder', location, { folder: target, count: copies.length });
   return copies;
+}
+
+// ============================================================================
+// Folders — the operator's filing under `Inventory/`
+// ============================================================================
+
+/** Create a folder at a location (an existing one, in any casing, is answered). */
+export async function createInventoryFolder(location: InventoryLocation, path: string): Promise<InventoryFolder> {
+  const resolved = await location.resolveFolder(path);
+  if (!resolved) throw new InventoryFolderPathError('A folder needs a name');
+  const folder = await location.createFolder(resolved);
+  logOp('Created folder', location, { requested: path, folder: folder.path });
+  return folder;
+}
+
+/** Rename a folder in place; its objects follow because the path is the truth. */
+export async function renameInventoryFolder(location: InventoryLocation, path: string, name: string): Promise<InventoryFolder> {
+  const from = path.trim().replace(/^\/+|\/+$/g, '');
+  const folder = await location.renameFolder(from, normalizeInventoryFolderName(name));
+  logOp('Renamed folder', location, { from, to: folder.path });
+  return folder;
+}
+
+/** Delete a folder, sending its objects and subfolders up to its parent. */
+export async function deleteInventoryFolder(
+  location: InventoryLocation,
+  path: string,
+): Promise<{ movedItems: number; movedFolders: number }> {
+  const folder = path.trim().replace(/^\/+|\/+$/g, '');
+  const { movedItems, movedFolders, parent } = await location.deleteFolder(folder);
+  logOp('Deleted folder', location, { folder, parent, movedItems, movedFolders });
+  return { movedItems, movedFolders };
 }

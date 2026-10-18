@@ -41,7 +41,8 @@ import {
   type PendingImageMove,
   type WardrobeItemImageSummary,
 } from '@/lib/wardrobe/item-images';
-import type { InventoryLocation } from '@/lib/inventory/location';
+import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
+import { loadPoolForLocation } from '@/lib/inventory/pool';
 
 const LOG_CONTEXT = 'inventory.item-images';
 
@@ -213,4 +214,24 @@ export function commitMovedInventoryImages(
   pending: PendingImageMove,
 ): Promise<void> {
   return commitMovedImages(repos, itemId, pending, INVENTORY_IMAGES_FOLDER);
+}
+
+/**
+ * Find `itemId` in the named tier, resolved, or null when the tier does not
+ * resolve or does not hold it. A read: a store that does not exist yet is not
+ * provisioned.
+ */
+export async function resolveInventoryItemHome(
+  repos: RepositoryContainer,
+  userId: string,
+  scope: InventoryLocation['scope'],
+  containerId: string | null | undefined,
+  itemId: string,
+): Promise<InventoryItemHome | null> {
+  const location = await resolveInventoryLocation(scope, containerId, repos, userId);
+  if (!location) return null;
+  const record = await location.findItem(itemId);
+  if (!record) return null;
+  const pool = await loadPoolForLocation(repos, location);
+  return { location, record, item: pool.resolve(record) };
 }

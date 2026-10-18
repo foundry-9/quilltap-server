@@ -231,6 +231,10 @@ export const clearInventoryOverrideSchema = z.object({
 export const instantiateInventorySchema = z.object({
   archetypeId: UUIDSchema,
   folder: InventoryFolderInputSchema.optional(),
+  /** The project tier a character's archetype may come from (no chat). */
+  projectId: z.string().nullable().optional(),
+  /** Or the chat whose project tier it may come from. */
+  chatId: z.string().nullable().optional(),
   overrides: patchSchemaOf(InventoryItemSchema.pick({
     name: true,
     title: true,
@@ -264,13 +268,13 @@ export const fileInventoryItemsSchema = z.object({
 
 /** `POST /api/v1/chats/[id]?action=inventory-equip` / `inventory-unequip` body. */
 export const chatInventoryEquipSchema = z.object({
-  characterId: UUIDSchema,
+  characterId: z.string().min(1),
   ids: z.array(UUIDSchema).min(1).max(INVENTORY_KIT_MAX_MEMBERS),
 });
 
 /** `POST /api/v1/chats/[id]?action=inventory-reset-defaults` body. */
 export const chatInventoryResetSchema = z.object({
-  characterId: UUIDSchema,
+  characterId: z.string().min(1),
 });
 
 /** The four tiers, as a Zod enum for request bodies. */

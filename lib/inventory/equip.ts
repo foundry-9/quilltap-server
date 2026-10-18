@@ -53,7 +53,7 @@ export interface EquipChat {
   id: string;
   projectId?: string | null;
   equippedInventory?: unknown;
-  participants?: ReadonlyArray<{ characterId?: string | null; status?: string | null }>;
+  participants?: ReadonlyArray<{ type?: string | null; characterId?: string | null; status?: string | null }>;
 }
 
 export type SkipReason = 'missing' | 'archived' | 'is_kit';

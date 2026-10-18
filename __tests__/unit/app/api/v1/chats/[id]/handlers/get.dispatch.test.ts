@@ -88,6 +88,7 @@ const GET_ACTIONS = [
   'outfit',
   'outfit-summary',
   'wardrobe-history',
+  'inventory',
   'photo-albums',
   'informs',
   'group-stores',

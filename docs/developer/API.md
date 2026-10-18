@@ -2229,6 +2229,44 @@ Every GENERATED image file linked to a wardrobe item in the character's wearable
 
 ---
 
+### Inventory (Pascal the Croupier)
+
+One `.json` file per object under a tier's `Inventory/` folder; four tiers, one route factory (`lib/inventory/routes/inventory-route-factory.ts`). Every object on the wire is **resolved**: an instance carries its archetype's fields where it does not override them, plus `overriddenFields`, `parentMissing`, `parentName` and `origin`. Refusals answer `409` (or `400`) with `details.code`: `ARCHETYPE_IN_USE` (with `dependents` and `holders`), `ARCHIVED_DEPENDENTS` (with `characters`), `NOT_COPYABLE`, `CAP_EXCEEDED` (with `itemId`, `itemName`, `cap`), `INVALID_PARENT`, `KIT_NESTING`, `NOT_EQUIPPABLE`, `INVALID_SHAPE` (400), `NOT_A_PARTICIPANT` (400), `INVALID_SVG` (400). A write to an archived character's vault is `409`.
+
+#### Collection — `/api/v1/characters/[id]/inventory`, `/api/v1/groups/[id]/inventory`, `/api/v1/projects/[id]/inventory`, `/api/v1/inventory` (Quilltap General)
+
+- `GET` — `{ mountPointId, items }`, the tier's objects (`?includeArchived=true` adds archived ones). The character tier's `?shared=true` lists the character's whole reachable pool (own > group > project > General), each tagged with its `origin`; `?projectId=` / `?chatId=` name the project tier.
+- `GET ?action=folders` — `{ folders: [{ path, name, itemCount }] }`. A read probe; nothing is provisioned.
+- `GET ?action=archetypes` — `{ items }`, the archetypes reachable from this tier (a character's with `?projectId=` / `?chatId=`), for the instantiate picker.
+- `POST` — create a standalone object, archetype or kit (`createInventorySchema`: `name`, `title`, `description`, `imageDescription`, `equippedByDefault`, `maxEquipped`, `canCopy`, `isArchetype`, `kind`, `itemIds`, `emoji`, `svg`, `metadata`, `folder`). A kit's members must resolve from this tier, never a kit. `svg` is sanitised (≤ 16 KB). Answers `201 { item }`.
+- `POST ?action=instantiate` — `{ archetypeId, folder?, overrides?, projectId?, chatId? }`: a sparse instance of a reachable archetype. Answers `201 { item }`.
+- `POST ?action=create-folder` / `rename-folder` / `delete-folder` — the wardrobe's folder rules (`{ path }`, `{ path, name }`).
+- `POST ?action=move-items` / `copy-items` — `{ itemIds, folder }`; a copy refuses any object with `canCopy: false`.
+
+#### Item — `…/inventory/[itemId]`
+
+- `GET` — `{ item }`. `GET ?action=dependents` — `{ dependents }`, an archetype's instances in every mount (holder, scope, whether the holder is archived).
+- `PUT` — `updateInventorySchema` (any field, nothing defaulted; `archived` archives, `imageFileId` must be one of the object's own pictures). On an instance a field set to `null` overrides the archetype with "none".
+- `PUT ?action=clear-override` — `{ fields }`: remove an instance's overrides so they inherit again.
+- `PUT ?action=detach` — bake the resolved values into the instance and drop its `parentId`.
+- `DELETE` — an archetype with dependents is `ARCHETYPE_IN_USE` unless `?force=true`, which bakes every instance first (refused with `ARCHIVED_DEPENDENTS` while an archived character holds one). A deleted object leaves its tier's kits. Answers `{ success, detached }`.
+
+#### `POST /api/v1/inventory/transfers`
+
+`{ action: 'move' | 'copy', itemId, from: { scope, id }, to: { scope, id } }`. A move keeps the id (equipped sets and kits still name it); a copy mints one and is refused when the object's resolved `canCopy` is false. Folder path kept; pictures travel. Answers `{ item }`.
+
+#### `/api/v1/inventory/[itemId]/images?scope=<scope>&id=<containerId>`
+
+The wardrobe item images route's shape over `Inventory/images/<itemId>/`: `GET` (an instance with none of its own lists its archetype's, `inherited: true`), `POST ?action=generate` (subject `imageDescription ?? description ?? name`; log type `INVENTORY_ITEM_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`.
+
+#### Chat actions
+
+- `GET /api/v1/chats/[id]?action=inventory` — `{ inventory: { [characterId]: { equipped: ResolvedInventoryItem[], kits: { [kitId]: 'all' | 'some' | 'none' } } } }` for every seated character.
+- `POST /api/v1/chats/[id]?action=inventory-equip` / `inventory-unequip` — `{ characterId, ids }` (objects or kits). Equip answers `{ equipped, created, skipped, alreadyEquipped }`; unequip `{ unequipped, notEquipped }`. One Pascal line per call.
+- `POST /api/v1/chats/[id]?action=inventory-reset-defaults` — `{ characterId }`: clear the character's entry and re-apply the equipped-by-default set. Answers `{ equipped }`.
+
+---
+
 ### Chats
 
 #### `GET /api/v1/chats`
