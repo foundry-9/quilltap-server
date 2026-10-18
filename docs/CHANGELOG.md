@@ -4,9 +4,10 @@
 
 ### 4.11-dev
 
-#### Docs: Inventory design spec
+#### Docs: Inventory design specs
 
 - New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
+- New `docs/developer/features/inventory-tools-and-pascal.md`: the follow-up design for the `inventory_*` tool family (gated by a new `canManageInventory` flag), the `inventory` / `inventoryCount` `when` and gate subjects, `{{inventory.*}}` placeholders, the `$inventory` operand and the `inventory` effect, plus the Workbench and Proving Bench changes. Depends on the Inventory spec; nothing built yet.
 
 #### Feature: wardrobe pictures in the Aurora gallery
 
