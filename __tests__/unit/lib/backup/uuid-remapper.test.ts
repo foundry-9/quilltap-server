@@ -1288,3 +1288,62 @@ describe('remapBackupData() - chat equipped outfit (bug 252)', () => {
       .toBeUndefined()
   })
 })
+
+describe('remapBackupData() - other character-keyed chat columns (bug 252)', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  function backup(chat: Record<string, unknown>): BackupData {
+    return {
+      manifest: {},
+      characters: [{ id: 'char-a', name: 'Bertie' }],
+      chats: [{ id: 'chat-old', participants: [], messages: [{ id: 'msg-old', type: 'message' }], ...chat }],
+      tags: [], connectionProfiles: [], imageProfiles: [], embeddingProfiles: [], memories: [],
+      files: [{ id: 'file-old' }], promptTemplates: [], roleplayTemplates: [], providerModels: [], projects: [],
+      llmLogs: [],
+    } as unknown as BackupData
+  }
+
+  it('re-keys outfit avatars and follows the picture to its new file id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ characterAvatars: { 'char-a': { imageId: 'file-old', generatedAt: 't', afterMessageCount: 2 } } }),
+      'target-user',
+      remapper
+    )
+    const charA = result.characters[0].id
+    const fileId = result.files[0].id
+    expect(fileId).not.toBe('file-old')
+    expect(result.chats[0].characterAvatars).toEqual({
+      [charA]: { imageId: fileId, generatedAt: 't', afterMessageCount: 2 },
+    })
+  })
+
+  it('re-keys Courier checkpoints and follows the message to its new id', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ courierCheckpoints: { 'char-a': { lastResolvedMessageId: 'msg-old', resolvedAt: 't' } } }),
+      'target-user',
+      remapper
+    )
+    const charA = result.characters[0].id
+    const messageId = result.chats[0].messages[0].id
+    expect(messageId).not.toBe('msg-old')
+    expect(result.chats[0].courierCheckpoints).toEqual({
+      [charA]: { lastResolvedMessageId: messageId, resolvedAt: 't' },
+    })
+  })
+
+  it('re-keys queued outfit notices', () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(
+      backup({ pendingOutfitNotifications: { 'char-a': { text: 'changed' } } }),
+      'target-user',
+      remapper
+    )
+    expect(result.chats[0].pendingOutfitNotifications).toEqual({ [result.characters[0].id]: { text: 'changed' } })
+  })
+})

@@ -20,6 +20,7 @@ import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
 import { remapImportedMessageId } from './message-id-remap';
+import { remapCharacterKeyedChatFields } from '@/lib/chat/character-keyed-fields';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -176,7 +177,15 @@ export async function reconcileRelationships(
   userId: string,
   repos: ReturnType<typeof getUserRepositories>,
   idMaps: IdMappingState,
-  warnings: string[]
+  warnings: string[],
+  options: {
+    /**
+     * Source → imported wardrobe item id (`buildImportedWardrobeItemIdMap`),
+     * for the item ids inside a chat's `equippedOutfit`. An id it does not
+     * name is kept.
+     */
+    wardrobeItemIds?: ReadonlyMap<string, string>;
+  } = {}
 ): Promise<void> {
   moduleLogger.info('Starting post-import reconciliation', { userId });
 
@@ -404,6 +413,26 @@ export async function reconcileRelationships(
             return remapped;
           });
         hasUpdates = true;
+      }
+
+      // Outfits, outfit avatars, Courier checkpoints and queued outfit notices
+      // are keyed by character id (bug 252). A character the bundle did not
+      // carry keeps its id, as a participant does. Message ids were already
+      // reminted at create time (remintChatMessageIds); a picture follows its
+      // imported link, as a character's avatar does.
+      const keyedPatch = remapCharacterKeyedChatFields(chat, {
+        characterId: (id) => idMaps.characters.get(id) ?? id,
+        wardrobeItemId: (id) => options.wardrobeItemIds?.get(id) ?? id,
+        fileId: (id) => idMaps.docMountFileLinks.get(id) ?? id,
+        messageId: (id) => id,
+      });
+      if (Object.keys(keyedPatch).length > 0) {
+        Object.assign(updates, keyedPatch);
+        hasUpdates = true;
+        moduleLogger.debug('Remapped character-keyed chat fields', {
+          chatId: newId,
+          fields: Object.keys(keyedPatch),
+        });
       }
 
       // Remap tags
