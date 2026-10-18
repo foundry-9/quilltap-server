@@ -64,6 +64,10 @@ import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeImageViewer } from './wardrobe-image-viewer'
 import { WardrobeTransferDialog } from './WardrobeTransferDialog'
 import { WardrobeFolderPickerDialog } from './WardrobeFolderPickerDialog'
+import { ItemFolderBar, NewFolderInput } from '@/components/item-browser/ItemFolderBar'
+import { ItemFolderRow } from '@/components/item-browser/ItemFolderRow'
+import { ItemSelectBar } from '@/components/item-browser/ItemSelectBar'
+import { ItemTierRow } from '@/components/item-browser/ItemTierRow'
 import type { ComponentMode } from './WardrobeComponentModeFieldset'
 
 type SlotFilter = 'all' | WardrobeItemType
@@ -361,40 +365,32 @@ export function WardrobeBrowser({
   )
 
   const selectBar = selectMode && (
-    <div
-      className={`${scrollList ? 'sticky bottom-0' : ''} mt-2 flex items-center justify-between gap-2 rounded border qt-border-default qt-bg-default px-3 py-2 shadow-sm`}
-      data-testid="wardrobe-select-bar"
+    <ItemSelectBar
+      count={selectedIds.size}
+      sticky={scrollList}
+      testId="wardrobe-select-bar"
+      onCancel={() => {
+        setSelectMode(false)
+        clearSelection()
+      }}
     >
-      <span className="qt-text-xs qt-text-secondary">{selectedIds.size} selected</span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="qt-button-secondary qt-button-sm"
-          disabled={selectedItems.length === 0}
-          onClick={() => actions.openFolderPicker(selectedItems, 'move')}
-        >
-          Move to folder…
-        </button>
-        <button
-          type="button"
-          className="qt-button-secondary qt-button-sm"
-          disabled={selectedItems.length === 0}
-          onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
-        >
-          Copy to folder…
-        </button>
-        <button
-          type="button"
-          className="qt-button-ghost qt-button-sm"
-          onClick={() => {
-            setSelectMode(false)
-            clearSelection()
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+      <button
+        type="button"
+        className="qt-button-secondary qt-button-sm"
+        disabled={selectedItems.length === 0}
+        onClick={() => actions.openFolderPicker(selectedItems, 'move')}
+      >
+        Move to folder…
+      </button>
+      <button
+        type="button"
+        className="qt-button-secondary qt-button-sm"
+        disabled={selectedItems.length === 0}
+        onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
+      >
+        Copy to folder…
+      </button>
+    </ItemSelectBar>
   )
 
   return (
@@ -499,101 +495,33 @@ export function WardrobeBrowser({
 
         {/* Folder bar: where we are, and the filing controls. */}
         {container && (
-          <div className="flex flex-wrap items-center justify-between gap-2" data-testid="wardrobe-folder-bar">
-            <nav aria-label="Wardrobe folders" className="flex flex-wrap items-center gap-1 qt-text-xs min-w-0">
-              {searching ? (
-                <span className="qt-text-secondary">Searching everywhere</span>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="qt-text-secondary hover:text-foreground"
-                    onClick={() => navigate(OWN_TIER, '')}
-                    aria-current={inOwnTier && currentFolder === '' ? 'page' : undefined}
-                  >
-                    Wardrobe
-                  </button>
-                  {!inOwnTier && (
-                    <>
-                      <span className="qt-text-secondary" aria-hidden>›</span>
-                      <button
-                        type="button"
-                        className="qt-text-secondary hover:text-foreground"
-                        onClick={() => navigate(currentTier, '')}
-                        aria-current={currentFolder === '' ? 'page' : undefined}
-                      >
-                        {currentTierLabel}
-                      </button>
-                    </>
-                  )}
-                  {folderSegments(currentFolder).map((segment, idx, all) => {
-                    const path = all.slice(0, idx + 1).join('/')
-                    const last = idx === all.length - 1
-                    return (
-                      <span key={path} className="inline-flex items-center gap-1">
-                        <span className="qt-text-secondary" aria-hidden>›</span>
-                        <button
-                          type="button"
-                          className={last ? 'text-foreground font-medium' : 'qt-text-secondary hover:text-foreground'}
-                          onClick={() => navigate(currentTier, path)}
-                          aria-current={last ? 'page' : undefined}
-                        >
-                          {segment}
-                        </button>
-                      </span>
-                    )
-                  })}
-                </>
-              )}
-            </nav>
-            {managed && (
-              <div className="flex items-center gap-1">
-                {!searching && (
-                  <button
-                    type="button"
-                    className="qt-button-ghost qt-button-sm"
-                    onClick={() => setNewFolderName('')}
-                    disabled={newFolderOpen}
-                  >
-                    New folder
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={`qt-button-sm ${selectMode ? 'qt-button-secondary' : 'qt-button-ghost'}`}
-                  aria-pressed={selectMode}
-                  onClick={() => {
-                    setSelectMode(!selectMode)
-                    clearSelection()
-                  }}
-                >
-                  Select
-                </button>
-              </div>
-            )}
-          </div>
+          <ItemFolderBar
+            rootLabel="Wardrobe"
+            navLabel="Wardrobe folders"
+            searching={searching}
+            tierLabel={inOwnTier ? null : currentTierLabel}
+            currentFolder={currentFolder}
+            onNavigateRoot={() => navigate(OWN_TIER, '')}
+            onNavigateTier={() => navigate(currentTier, '')}
+            onNavigateFolder={(path) => navigate(currentTier, path)}
+            managed={managed}
+            newFolderOpen={newFolderOpen}
+            onNewFolder={() => setNewFolderName('')}
+            selectMode={selectMode}
+            onToggleSelect={() => {
+              setSelectMode(!selectMode)
+              clearSelection()
+            }}
+            testId="wardrobe-folder-bar"
+          />
         )}
         {newFolderOpen && managed && !searching && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              autoFocus
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void submitNewFolder()
-                } else if (e.key === 'Escape') {
-                  e.stopPropagation()
-                  closeNewFolder()
-                }
-              }}
-              placeholder="Folder name — Enter to make it, Esc to think better of it"
-              aria-label="New folder name"
-              className="qt-input qt-input-sm flex-1"
-            />
-          </div>
+          <NewFolderInput
+            name={newFolderName}
+            onChange={setNewFolderName}
+            onSubmit={() => void submitNewFolder()}
+            onCancel={closeNewFolder}
+          />
         )}
       </div>
 
@@ -605,30 +533,25 @@ export function WardrobeBrowser({
         ) : (
           <>
             {folderRows.map((row) => (
-              <WardrobeFolderRow
+              <ItemFolderRow
                 key={row.path}
                 row={row}
                 manageable={managed}
                 onOpen={() => navigate(currentTier, row.path)}
                 onRename={(name) => renameFolder(row.path, name)}
                 onDelete={() => void deleteFolder(row.path)}
+                testId="wardrobe-folder-row"
               />
             ))}
             {sharedTierRows.map((row) => (
-              <button
+              <ItemTierRow
                 key={row.key}
-                type="button"
-                className="qt-card-interactive w-full py-2 px-3 flex items-center gap-2 text-left"
-                onClick={() => navigate(row.key, '')}
-                data-testid="wardrobe-tier-row"
-              >
-                <Icon name="folder" className="w-4 h-4 qt-text-secondary" />
-                <span className="text-sm text-foreground flex-1 min-w-0 truncate">{row.label}</span>
-                <span className="qt-badge qt-badge-wardrobe-shared">
-                  {row.scope === 'general' ? 'Shared' : row.scope === 'project' ? 'Project' : 'Group'}
-                </span>
-                <span className="qt-text-xs qt-text-secondary">{plural(row.itemCount, 'item')}</span>
-              </button>
+                label={row.label}
+                scope={row.scope}
+                itemCount={row.itemCount}
+                onOpen={() => navigate(row.key, '')}
+                testId="wardrobe-tier-row"
+              />
             ))}
             {folderIsEmpty ? (
               <div className="text-sm qt-text-secondary px-3 py-4">Nothing hangs here yet.</div>
@@ -712,114 +635,6 @@ export function WardrobeBrowser({
         />
       )}
     </section>
-  )
-}
-
-interface WardrobeFolderRowProps {
-  row: FolderRowView
-  /** Rename / Delete are offered only in the wardrobe being browsed. */
-  manageable: boolean
-  onOpen: () => void
-  onRename: (name: string) => Promise<boolean>
-  onDelete: () => void
-}
-
-/** One subfolder in the browser: open it, or (managed) rename / delete it. */
-function WardrobeFolderRow({ row, manageable, onOpen, onRename, onDelete }: WardrobeFolderRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [renaming, setRenaming] = useState(false)
-  const [name, setName] = useState(row.name)
-
-  const submit = async (): Promise<void> => {
-    const next = name.trim()
-    if (!next || next === row.name) {
-      setRenaming(false)
-      return
-    }
-    if (await onRename(next)) setRenaming(false)
-  }
-
-  return (
-    <div className="qt-card-interactive py-2 px-3 flex items-center gap-2" data-testid="wardrobe-folder-row">
-      <Icon name="folder" className="w-4 h-4 qt-text-secondary flex-shrink-0" />
-      {renaming ? (
-        <input
-          type="text"
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              void submit()
-            } else if (e.key === 'Escape') {
-              e.stopPropagation()
-              setName(row.name)
-              setRenaming(false)
-            }
-          }}
-          onBlur={() => void submit()}
-          aria-label={`Rename folder ${row.name}`}
-          className="qt-input qt-input-sm flex-1"
-        />
-      ) : (
-        <button type="button" className="flex-1 min-w-0 text-left text-sm text-foreground truncate" onClick={onOpen}>
-          {row.name}
-        </button>
-      )}
-      <span className="qt-text-xs qt-text-secondary flex-shrink-0">{plural(row.itemCount, 'item')}</span>
-      {manageable && !renaming && (
-        <div className="relative">
-          <button
-            type="button"
-            className="qt-button-ghost qt-button-sm"
-            aria-label={`Folder actions for ${row.name}`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            ⋮
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] rounded border qt-border-default qt-bg-default shadow-md"
-              onMouseLeave={() => setMenuOpen(false)}
-            >
-              <ul className="divide-y qt-border-default">
-                <li>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setName(row.name)
-                      setRenaming(true)
-                    }}
-                  >
-                    Rename
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onDelete()
-                    }}
-                  >
-                    Delete
-                  </button>
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   )
 }
 

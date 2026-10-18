@@ -37,6 +37,7 @@ export const DEFAULT_TAB_META: Record<TabKind, TabMeta> = {
   scenarios: { title: 'Scenarios', icon: 'scenarios' },
   brahma: { title: 'Brahma Console', icon: 'brahma-console' },
   wardrobe: { title: 'The Wardrobe', icon: 'wardrobe' },
+  inventory: { title: 'The Inventory', icon: 'dice' },
   profile: { title: 'Profile', icon: 'profile' },
   about: { title: 'About', icon: 'info' },
   'generate-image': { title: 'Generate Image', icon: 'image' },

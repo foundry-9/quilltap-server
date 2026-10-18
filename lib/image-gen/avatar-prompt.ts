@@ -46,6 +46,13 @@ interface BuildPromptOptions {
    * (`depiction-guidelines.md`) does NOT apply to avatars.
    */
   characterAesthetic?: string | null;
+  /**
+   * What the character carries in the chat, as rendering hints ("carrying a
+   * longsword with a jewelled pommel") — the Inventory's phrase, built by the
+   * caller (`loadCarryingPhrase`). Joins the portrait beside the outfit;
+   * omitted when null.
+   */
+  carrying?: string | null;
 }
 
 /**
@@ -210,6 +217,9 @@ export async function buildCharacterAvatarPrompt(
     }
   }
 
+  const carryingText = options.carrying?.trim()
+    ? `${options.carrying.trim().charAt(0).toUpperCase()}${options.carrying.trim().slice(1).replace(/[.!?]+$/, '')}.`
+    : '';
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
   let prompt = '';
   if (hasAppearance) {
@@ -228,9 +238,11 @@ export async function buildCharacterAvatarPrompt(
     // need a blank line before the first list item, so the outfit block is
     // separated from neighboring paragraphs by `\n\n` on each side.
     const outfitBlock = outfitText ? `\n\n${outfitText}\n\n` : ' ';
+    // What they carry follows the outfit, as its own sentence.
+    const carryingBlock = carryingText ? (outfitText ? `${carryingText}\n\n` : `${carryingText} `) : '';
     prompt = physBlock
-      ? `${intro} ${physBlock}${outfitBlock}${outro}`
-      : `${intro}${outfitBlock}${outro}`;
+      ? `${intro} ${physBlock}${outfitBlock}${carryingBlock}${outro}`
+      : `${intro}${outfitBlock}${carryingBlock}${outro}`;
 
     prompt = withArtDirection(prompt, options.characterAesthetic);
   }

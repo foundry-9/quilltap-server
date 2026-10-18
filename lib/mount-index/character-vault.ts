@@ -30,6 +30,9 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
 
+/** Every tier's Inventory objects live under `Inventory/` (rules in `lib/inventory/folders.ts`). */
+export { INVENTORY_FOLDER as CHARACTER_INVENTORY_FOLDER } from '@/lib/inventory/folders';
+
 /**
  * Optional per-tier dressing-instructions file living at the root of a
  * `Wardrobe/` folder. Never a garment: every enumeration of Wardrobe items

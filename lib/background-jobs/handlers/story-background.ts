@@ -23,6 +23,7 @@ import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
+  sceneDescriptionParts,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
   type AppearanceResolutionResult,
@@ -471,10 +472,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const genderPrefix = genderPrefixFromPronouns(char!.pronouns);
 
     if (resolved) {
-      const descParts = [genderPrefix + resolved.physicalDescription];
-      if (resolved.clothingDescription) {
-        descParts.push(`Wearing: ${resolved.clothingDescription}`);
-      }
+      const descParts = sceneDescriptionParts(resolved, genderPrefix);
       if (resolved.needsConcealment) {
         descParts.push(CONCEALMENT_MARKER);
         logger.debug('[StoryBackground] Character flagged for cinematic concealment', {

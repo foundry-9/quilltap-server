@@ -39,6 +39,7 @@ import {
 import { TabToolbarProvider } from '@/components/workspace/tab-toolbar'
 import { BrahmaConsoleView } from '@/components/brahma-console/BrahmaConsoleView'
 import { WardrobeView } from '@/components/wardrobe/wardrobe-control-dialog'
+import { InventoryView } from '@/components/inventory/inventory-control-dialog'
 import { ProfileView } from '@/app/profile/ProfileView'
 import { AboutView } from '@/app/about/AboutView'
 import { GenerateImageView } from '@/app/generate-image/GenerateImageView'
@@ -57,6 +58,7 @@ import type {
   DocumentTabPayload,
   DocumentStandaloneTabPayload,
   WardrobeTabPayload,
+  InventoryTabPayload,
   CharacterEditTabPayload,
   CharacterViewTabPayload,
   CustomToolsTabPayload,
@@ -112,6 +114,10 @@ function renderView(tab: WorkspaceTab) {
       return <BrahmaConsoleView />
     case 'wardrobe':
       return <WardrobeView characterId={(tab.payload as WardrobeTabPayload | undefined)?.characterId} />
+    case 'inventory': {
+      const payload = tab.payload as InventoryTabPayload | undefined
+      return <InventoryView characterId={payload?.characterId} projectId={payload?.projectId} />
+    }
     case 'profile':
       return <ProfileView />
     case 'about':

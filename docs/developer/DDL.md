@@ -675,6 +675,7 @@ CREATE TABLE "chats" (
   "cycleOrderParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds still to speak this cycle, in order. Drawn once per cycle (talkativeness-weighted, sampled without replacement) by resolveCycleOrder; struck from as each seat speaks. Empty = cycle spent, next selection draws afresh. Added by add-cycle-order-column-v1.
   "sceneState" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { top: [], bottom: [], footwear: [], accessories: [], hair: [] } }, each slot an array of wardrobe item ids (layering order significant). Unconstrained JSON: rows written before a slot existed simply lack the key and parse with an empty array.
+  "equippedInventory" TEXT DEFAULT NULL,  -- JSON map { [characterId]: string[] } of Inventory object ids each character carries in this chat (sorted, deduplicated). Patch-only: written solely by ChatsRepository.setEquippedInventory, never by a whole-row update. Added by add-chat-equipped-inventory-v1.
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,

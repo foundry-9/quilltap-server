@@ -78,6 +78,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // parent-side replay of the turn's history settle publishes
             // `chats`, so the History tab stays honest under an open dialog.
             queryKeys.wardrobe.histories(id),
+            // What everyone in the chat carries (the Inventory). An equip
+            // posts Pascal's line, which publishes `chats`; a write from the
+            // equip chokepoint publishes it too.
+            queryKeys.inventory.equipped(id),
             // Where the scene came from. A scenario change posts the Host's
             // revision announcement, which publishes `chats`.
             queryKeys.chats.scenarioSource(id),

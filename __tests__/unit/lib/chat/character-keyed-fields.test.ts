@@ -24,10 +24,15 @@ const remap = (chat: Parameters<typeof remapCharacterKeyedChatFields>[0]) =>
   remapCharacterKeyedChatFields(chat, remaps).patch;
 
 describe('remapCharacterKeyedChatFields', () => {
-  it('lists the four keyed columns', () => {
+  it('lists the five keyed columns', () => {
     expect([...CHARACTER_KEYED_CHAT_FIELDS].sort()).toEqual(
-      ['characterAvatars', 'courierCheckpoints', 'equippedOutfit', 'pendingOutfitNotifications'].sort()
+      ['characterAvatars', 'courierCheckpoints', 'equippedInventory', 'equippedOutfit', 'pendingOutfitNotifications'].sort()
     );
+  });
+
+  it('re-keys the carried Inventory, keeping the object ids as they are', () => {
+    const patch = remap({ equippedInventory: { 'char-a': ['obj-1', 'obj-2'] } });
+    expect(patch.equippedInventory).toEqual({ 'char-A': ['obj-1', 'obj-2'] });
   });
 
   it('re-keys the outfit and moves slot item ids, keeping unknown ones', () => {

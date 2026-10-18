@@ -220,6 +220,50 @@ export class DocMountDocumentsRepository extends AbstractDedicatedDbRepository<D
   }
 
   /**
+   * Documents under a named folder (any depth, any mount point) with the
+   * given extension whose content contains at least one of `needles`
+   * (plain substring match). Lets a caller that wants a few records by an id
+   * kept inside the file — an Inventory archetype named by an instance —
+   * fetch the candidates instead of every file in the instance. Callers still
+   * parse and match exactly: a substring hit is only a candidate.
+   */
+  async findManyInFolderContaining(
+    folder: string,
+    extension: string,
+    needles: readonly string[],
+  ): Promise<DocMountDocumentWithLink[]> {
+    const wanted = needles.filter((needle) => needle.length > 0);
+    if (wanted.length === 0) return [];
+    const prefixLower = `${folder}/`.toLowerCase();
+    const extensionLower = extension.toLowerCase();
+    return this.withRawDb(
+      [],
+      async (db) => {
+        const contains = wanted.map(() => 'instr(d.content, ?) > 0').join(' OR ');
+        const rows = db.prepare(
+          `SELECT
+             d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
+             d.createdAt, d.updatedAt,
+             l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+             l.folderId, l.lastModified, l.linkGroupId,
+             f.fileType
+           FROM doc_mount_file_links l
+           JOIN doc_mount_documents d ON d.fileId = l.fileId
+           JOIN doc_mount_files f ON f.id = l.fileId
+           WHERE LOWER(l.relativePath) LIKE ?
+             AND (${contains})`
+        ).all(`${prefixLower}%`, ...wanted) as DocMountDocumentWithLink[];
+        return rows.filter((doc) => {
+          const pathLower = doc.relativePath.toLowerCase();
+          return pathLower.startsWith(prefixLower) && pathLower.endsWith(extensionLower);
+        });
+      },
+      'Error finding documents in a folder by content',
+      { folder, extension, needleCount: wanted.length }
+    );
+  }
+
+  /**
    * Joined-view list of every document at a mount point. Uses the link
    * table to drive enumeration so the returned rows carry mountPointId,
    * relativePath, fileName, etc.

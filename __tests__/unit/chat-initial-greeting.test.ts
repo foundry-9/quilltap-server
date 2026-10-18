@@ -296,6 +296,39 @@ describe('generateGreetingMessage', () => {
     })
   })
 
+  describe('trailing context sections', () => {
+    it('puts them after the instruction in the user turn, never in the system prompt', async () => {
+      await generateGreetingMessage({
+        systemPrompt: 'Base system prompt.',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+        trailingContextSections: ['## Carried and equipped\n\nExcalibur (sword): A broad blade.'],
+      })
+
+      const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
+      const payload = call[0] as { messages: Array<{ role: string; content: string }> }
+      expect(payload.messages[0].content).not.toContain('Carried and equipped')
+      expect(payload.messages[1].role).toBe('user')
+      expect(payload.messages[1].content).toMatch(/^The chat is beginning now\./)
+      expect(payload.messages[1].content).toContain('---\n\n## Carried and equipped')
+    })
+
+    it('leaves the user turn as the bare instruction when there are none', async () => {
+      await generateGreetingMessage({
+        systemPrompt: 'Base system prompt.',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+        trailingContextSections: ['  '],
+      })
+
+      const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
+      const payload = call[0] as { messages: Array<{ role: string; content: string }> }
+      expect(payload.messages[1].content).toBe('The chat is beginning now. Greet the user immediately in-character and invite them to engage.')
+    })
+  })
+
   describe('LLM logging', () => {
     it('writes to llm_logs as CHAT_MESSAGE when userId is provided', async () => {
       mockProvider.streamMessage.mockImplementationOnce(() =>

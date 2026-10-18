@@ -15,6 +15,8 @@
  * - `courierCheckpoints` — `{ lastResolvedMessageId, resolvedAt }`;
  *   the message id follows the message remap.
  * - `pendingOutfitNotifications` — legacy, keyed only; values are kept.
+ * - `equippedInventory` — the carried Inventory, a list of object ids per
+ *   character; the ids live in the objects' own files and travel verbatim.
  *
  * Two keyed caches are deliberately left out: `compiledIdentityStacks`
  * (keyed by participant, rebuilt on a miss) and `commonplaceSceneCache`
@@ -35,6 +37,7 @@ export const CHARACTER_KEYED_CHAT_FIELDS = [
   'characterAvatars',
   'courierCheckpoints',
   'pendingOutfitNotifications',
+  'equippedInventory',
 ] as const;
 
 export type CharacterKeyedChatField = (typeof CHARACTER_KEYED_CHAT_FIELDS)[number];
@@ -116,6 +119,7 @@ export function remapCharacterKeyedChatFields(
   rekey('characterAvatars', (entry) => withMappedId(entry, 'imageId', remaps.fileId));
   rekey('courierCheckpoints', (entry) => withMappedId(entry, 'lastResolvedMessageId', remaps.messageId));
   rekey('pendingOutfitNotifications', (entry) => entry);
+  rekey('equippedInventory', (ids) => (Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []));
 
   return { patch: patch as CharacterKeyedChatPatch, unreadable, droppedEntries };
 }

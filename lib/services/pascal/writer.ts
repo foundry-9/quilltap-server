@@ -30,6 +30,13 @@
  * Suparṇā and Carina are in. Both bodies are still populated, in lockstep, as
  * the `opaqueContent` contract asks (see `lib/schemas/chat.types.ts`).
  *
+ * Pascal also keeps the Inventory (the game's furniture): when the operator
+ * equips or unequips objects in a chat he posts one plain line per gesture
+ * (`systemKind: 'inventory-change'`, {@link postPascalInventoryChange}). That
+ * row carries **no** `pascalMeta` — it is not a roll, and nothing keyed on a
+ * roll record (the outcome accent, the full-row roll bubble) may treat it as
+ * one.
+ *
  * Errors never propagate — a failure to announce is logged and surfaced to the
  * caller as null rather than thrown.
  */
@@ -168,6 +175,52 @@ export async function postPascalResult(
       context: CONTEXT,
       chatId,
       tool: pascalMeta.tool,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}
+
+/** The `systemKind` of an Inventory change line. */
+export const PASCAL_INVENTORY_CHANGE_KIND = 'inventory-change';
+
+/**
+ * Persist Pascal's one-line note of an Inventory change ("Vivienne takes up
+ * Excalibur."). Public to the room, no roll record. Returns the posted
+ * message, or null on failure — logged, never thrown.
+ */
+export async function postPascalInventoryChange(params: {
+  chatId: string;
+  content: string;
+}): Promise<MessageEvent | null> {
+  const { chatId, content } = params;
+  try {
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('Pascal inventory line dropped — no such chat', { context: CONTEXT, chatId });
+      return null;
+    }
+    const message: MessageEvent = {
+      type: 'message',
+      id: randomUUID(),
+      role: 'ASSISTANT',
+      content,
+      opaqueContent: content,
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      participantId: null,
+      systemSender: 'pascal',
+      systemKind: PASCAL_INVENTORY_CHANGE_KIND,
+      targetParticipantIds: null,
+    };
+    await repos.chats.addMessage(chatId, message);
+    logger.info('[Pascal] Inventory change posted', { context: CONTEXT, chatId, messageId: message.id });
+    return message;
+  } catch (error) {
+    logger.error('[Pascal] Failed to post inventory change', {
+      context: CONTEXT,
+      chatId,
       error: getErrorMessage(error),
     }, error as Error);
     return null;

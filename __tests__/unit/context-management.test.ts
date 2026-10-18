@@ -47,6 +47,7 @@ import { buildSuparnaMailLLMContext, postSuparnaMailWhisper } from '@/lib/servic
 import * as coreWhisper from '@/lib/services/aurora-notifications/core-whisper'
 import * as coreWhisperTrigger from '@/lib/chat/context/core-whisper-trigger'
 import * as progressionsSection from '@/lib/progressions/prompt-section'
+import * as inventorySection from '@/lib/inventory/prompt-section'
 import * as narrationAnchor from '@/lib/chat/context/user-narration-anchor'
 
 // Pass-through by default; the bug-199 tests stand in a fixed recall text.
@@ -97,6 +98,10 @@ jest.mock('@/lib/chat/context/core-whisper-trigger', () => {
 jest.mock('@/lib/progressions/prompt-section', () => {
   const actual = jest.requireActual('@/lib/progressions/prompt-section')
   return { ...actual, buildProgressionsSection: jest.fn(actual.buildProgressionsSection) }
+})
+jest.mock('@/lib/inventory/prompt-section', () => {
+  const actual = jest.requireActual('@/lib/inventory/prompt-section')
+  return { ...actual, buildInventorySection: jest.fn(actual.buildInventorySection) }
 })
 jest.mock('@/lib/chat/context/user-narration-anchor', () => {
   const actual = jest.requireActual('@/lib/chat/context/user-narration-anchor')
@@ -1442,12 +1447,35 @@ describe('Context Manager', () => {
     })
 
     // ------------------------------------------------------------------
+    // The Inventory — what the character carries, a trailing section.
+    // ------------------------------------------------------------------
+
+    it('adds nothing when nothing carried has a description: the turn is byte-identical', async () => {
+      const baseline = await buildWithInforms([])
+      ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce(null)
+      const nothingCarried = await buildWithInforms([])
+      expect(nothingCarried.messages).toEqual(baseline.messages)
+    })
+
+    it('rides the new user message after the progressions and before the inform block', async () => {
+      const baseline = await buildWithInforms([informRow('row-1', 'The lamp gutters.')])
+      ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce('## Carried and equipped\n- Excalibur (sword): Never dulled.')
+      const carrying = await buildWithInforms([informRow('row-1', 'The lamp gutters.')])
+      expect(carrying.messages.filter(m => m.role === 'system')).toEqual(baseline.messages.filter(m => m.role === 'system'))
+      expect(carrying.messages.slice(0, -1)).toEqual(baseline.messages.slice(0, -1))
+      expect(carrying.messages[carrying.messages.length - 1].content).toBe(
+        `Ready for the next task?\n\n---\n\n## Carried and equipped\n- Excalibur (sword): Never dulled.\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`,
+      )
+    })
+
+    // ------------------------------------------------------------------
     // The trailing sections keep one order on both kinds of turn.
     // ------------------------------------------------------------------
 
     describe('trailing sections on a turn with and without a new user message', () => {
       const CORE = 'CORE-WHISPER-SECTION'
       const PROGRESSIONS = 'PROGRESSIONS-SECTION'
+      const INVENTORY = 'INVENTORY-SECTION'
       const ANCHOR = 'SCENE-NOTE-SECTION'
       const letter = {
         path: 'Mail/2026-10-12-from-iris.md',
@@ -1470,6 +1498,7 @@ describe('Context Manager', () => {
         ;(coreWhisper.postCoreWhisper as jest.Mock).mockResolvedValue(null)
         if (sections.everything) {
           ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+          ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValue(INVENTORY)
           ;(narrationAnchor.buildUserNarrationAnchor as jest.Mock).mockReturnValue(ANCHOR)
           mockedCollectUnalertedMail.mockResolvedValue([letter])
         }
@@ -1486,6 +1515,7 @@ describe('Context Manager', () => {
         ])
         restore('@/lib/chat/context/core-whisper-trigger', coreWhisperTrigger as any, ['shouldFireCoreWhisper'])
         restore('@/lib/progressions/prompt-section', progressionsSection as any, ['buildProgressionsSection'])
+        restore('@/lib/inventory/prompt-section', inventorySection as any, ['buildInventorySection'])
         restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
       })
 
@@ -1573,6 +1603,7 @@ describe('Context Manager', () => {
           at('You also recall about the others present'),
           at('Suparṇā of the Post Office has delivered new mail to you'),
           at(PROGRESSIONS),
+          at(INVENTORY),
           at(INFORM_BLOCK_HEADER),
           at('[NOTHING TO ADD]'),
         ]

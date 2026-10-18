@@ -64,6 +64,7 @@ import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
+import { buildInventorySection } from '@/lib/inventory/prompt-section';
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
@@ -588,9 +589,13 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       nowMs: Date.now(),
       force: true,
     });
-    const questionWithProgressions = progressionsSection
-      ? `${question}\n\n---\n\n${progressionsSection}`
-      : question;
+    // What the answerer carries in this chat (the Inventory), after the
+    // progressions and on the same uncached user message; absent when nothing
+    // carried has a description.
+    const inventorySection = await buildInventorySection({ chat, characterId: answerer.id, repos });
+    const questionWithProgressions = [question, progressionsSection, inventorySection]
+      .filter((part): part is string => !!part)
+      .join('\n\n---\n\n');
 
     const priorExchanges = await loadPriorCarinaExchanges(repos, chatId, answerer.id);
     let currentMessages: StreamOptions['messages'] = [

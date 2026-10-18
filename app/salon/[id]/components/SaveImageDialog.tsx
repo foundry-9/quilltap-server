@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { wardrobeItemImagesUrl } from '@/lib/wardrobe/item-images-client'
+import { inventoryImagesUrl } from '@/lib/inventory/container'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import type { MessageAttachment } from '../types'
 
@@ -51,12 +52,13 @@ export type SaveImageTarget =
   | { kind: 'message'; chatId: string; messageId: string; fileId: string }
   | { kind: 'chat'; chatId: string; fileId: string }
   | { kind: 'wardrobe'; itemId: string; container: WardrobeContainer; fileId: string }
+  | { kind: 'inventory'; itemId: string; container: WardrobeContainer; fileId: string }
 
 /** Where the album list for a door is read from. */
 function albumsUrlFor(target: SaveImageTarget): string {
-  return target.kind === 'wardrobe'
-    ? wardrobeItemImagesUrl(target.itemId, target.container, 'save-targets')
-    : `/api/v1/chats/${target.chatId}?action=photo-albums`
+  if (target.kind === 'wardrobe') return wardrobeItemImagesUrl(target.itemId, target.container, 'save-targets')
+  if (target.kind === 'inventory') return inventoryImagesUrl(target.container, target.itemId, 'save-targets')
+  return `/api/v1/chats/${target.chatId}?action=photo-albums`
 }
 
 /** Where a door posts the save. */
@@ -68,6 +70,8 @@ function saveUrlFor(target: SaveImageTarget): string {
       return `/api/v1/chats/${target.chatId}?action=save-image`
     case 'wardrobe':
       return wardrobeItemImagesUrl(target.itemId, target.container, 'save-to-store')
+    case 'inventory':
+      return inventoryImagesUrl(target.container, target.itemId, 'save-to-store')
   }
 }
 
@@ -297,7 +301,7 @@ export function SaveImageDialog({
           )}
           {!loadingAlbums && groupedAlbums && groupedAlbums.length === 0 && (
             <div className="text-sm opacity-70">
-              {target.kind === 'wardrobe'
+              {target.kind === 'wardrobe' || target.kind === 'inventory'
                 ? 'No document stores are available.'
                 : 'No photo albums are available for this chat.'}
             </div>

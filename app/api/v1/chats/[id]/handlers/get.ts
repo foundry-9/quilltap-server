@@ -11,6 +11,7 @@
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  * GET /api/v1/chats/[id]?action=outfit-summary - Equipped outfit with resolved item titles
  * GET /api/v1/chats/[id]?action=wardrobe-history&characterId=… - One character's outfit timeline
+ * GET /api/v1/chats/[id]?action=inventory - What every cast member carries (the Inventory)
  * GET /api/v1/chats/[id]?action=photo-albums - Candidate save targets for an image
  * GET /api/v1/chats/[id]?action=informs - List the pending Inform batches
  * GET /api/v1/chats/[id]?action=group-stores - Document stores of the persona's groups
@@ -41,6 +42,7 @@ import {
   handleGetOutfit,
   handleGetOutfitSummary,
   handleGetWardrobeHistory,
+  handleGetInventory,
   handleGetPhotoAlbums,
   handleGetGroupStores,
   handleAccessibleStores,
@@ -72,6 +74,7 @@ export async function handleGet(
       'outfit': () => handleGetOutfit(chatId, ctx),
       'outfit-summary': () => handleGetOutfitSummary(chatId, ctx),
       'wardrobe-history': () => handleGetWardrobeHistory(req, chatId, ctx),
+      'inventory': () => handleGetInventory(chatId, ctx),
       'photo-albums': () => handleGetPhotoAlbums(chatId, ctx),
       'informs': () => handleGetInforms(chatId, ctx),
       'group-stores': () => handleGetGroupStores(chatId, ctx),

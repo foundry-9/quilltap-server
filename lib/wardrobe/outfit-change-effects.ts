@@ -82,8 +82,12 @@ async function settleHistory(
   }
 }
 
-/** Refresh the character's per-chat avatar if the chat auto-updates avatars. Never throws. */
-export async function refreshAvatarForOutfit(
+/**
+ * Refresh the character's per-chat avatar if the chat auto-updates avatars:
+ * the character's appearance changed — their outfit, or what they carry (the
+ * Inventory calls this too). Never throws.
+ */
+export async function refreshAvatarForAppearance(
   repos: RepositoryContainer,
   context: Pick<OutfitChangeContext, 'userId' | 'chatId' | 'characterId'>,
   sourceContext: string,
@@ -95,6 +99,9 @@ export async function refreshAvatarForOutfit(
     callerContext: sourceContext,
   });
 }
+
+/** The outfit's name for {@link refreshAvatarForAppearance}. */
+export const refreshAvatarForOutfit = refreshAvatarForAppearance;
 
 /** Enqueue one Aurora announcement now. Never throws. */
 export async function scheduleWardrobeAnnouncement(

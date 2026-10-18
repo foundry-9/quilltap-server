@@ -56,7 +56,7 @@ import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-s
 import { retireMemories } from '@/lib/memory/retire';
 import { memoryIndex } from '@/lib/memory/index-store';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
+import { CHARACTER_INVENTORY_FOLDER, CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
 import {
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_METADATA_JSON_PATH,
@@ -121,9 +121,13 @@ export class ArchiveVerificationError extends Error {
 
 /**
  * The §4.2a keep-set: vault paths that survive the prune. The ten managed-field
- * documents, plus everything under `Wardrobe/` (checked by prefix, not listed
- * here). Avatar links are kept by id, not path — see the prune.
+ * documents, plus everything under `Wardrobe/` and `Inventory/` (checked by
+ * prefix, not listed here — an archived character's Inventory instances must
+ * stay countable as an archetype's dependents). Avatar links are kept by id, not path — see the prune.
  */
+/** Vault folders kept whole, with everything beneath them. */
+const KEPT_FOLDERS: readonly string[] = [CHARACTER_WARDROBE_FOLDER, CHARACTER_INVENTORY_FOLDER];
+
 const KEPT_MANAGED_PATHS = new Set(
   [
     CHARACTER_PROPERTIES_JSON_PATH,
@@ -783,7 +787,7 @@ async function deleteOwnMemories(userId: string, characterId: string): Promise<b
  * folder left with nothing kept beneath it.
  *
  * The keep-set (§4.2a): the ten managed-field documents, everything under
- * `Wardrobe/`, and the avatar links — `defaultImageId` plus every
+ * `Wardrobe/` and `Inventory/`, and the avatar links — `defaultImageId` plus every
  * `avatarOverrides[].imageId`. Those are ids old chat messages resolve through;
  * keeping the rows is what keeps their faces.
  *
@@ -817,11 +821,11 @@ async function pruneVault(characterId: string): Promise<boolean> {
       if (override.imageId) keptLinkIds.add(override.imageId);
     }
 
-    const wardrobePrefix = `${CHARACTER_WARDROBE_FOLDER.toLowerCase()}/`;
+    const keptPrefixes = KEPT_FOLDERS.map((folder) => `${folder.toLowerCase()}/`);
     const isKeptLink = (link: { id: string; relativePath: string }): boolean => {
       if (keptLinkIds.has(link.id)) return true;
       const path = link.relativePath.toLowerCase();
-      return KEPT_MANAGED_PATHS.has(path) || path.startsWith(wardrobePrefix);
+      return KEPT_MANAGED_PATHS.has(path) || keptPrefixes.some((prefix) => path.startsWith(prefix));
     };
 
     const links = await globalRepos.docMountFileLinks.findByMountPointId(mountPointId);
@@ -848,7 +852,7 @@ async function pruneVault(characterId: string): Promise<boolean> {
       return false;
     }
 
-    await pruneEmptyFolders(mountPointId, survivors, wardrobePrefix);
+    await pruneEmptyFolders(mountPointId, survivors, keptPrefixes);
 
     logger.debug('Pruned vault for archived character', {
       characterId,
@@ -868,23 +872,25 @@ async function pruneVault(characterId: string): Promise<boolean> {
 
 /**
  * Delete folder rows with no kept content beneath them (`Mail/`,
- * `Conversation Summaries/`, photo folders, …). The `Wardrobe/` folder is in
- * the keep-set explicitly — it survives even when empty — and so does any
- * folder that still shelters a surviving link.
+ * `Conversation Summaries/`, photo folders, …). The `Wardrobe/` and
+ * `Inventory/` folders are in the keep-set explicitly — they survive even when
+ * empty — and so does any folder that still shelters a surviving link.
  */
 async function pruneEmptyFolders(
   mountPointId: string,
   survivors: ReadonlyArray<{ relativePath: string }>,
-  wardrobePrefix: string
+  keptPrefixes: readonly string[]
 ): Promise<void> {
   const globalRepos = getRepositories();
   const keptPaths = survivors.map((link) => link.relativePath.toLowerCase());
-  const wardrobeFolder = wardrobePrefix.slice(0, -1);
 
   const folders = await globalRepos.docMountFolders.findByMountPointId(mountPointId);
   for (const folder of folders) {
     const folderPath = folder.path.toLowerCase();
-    if (folderPath === '' || folderPath === wardrobeFolder || folderPath.startsWith(wardrobePrefix)) {
+    if (
+      folderPath === '' ||
+      keptPrefixes.some((prefix) => folderPath === prefix.slice(0, -1) || folderPath.startsWith(prefix))
+    ) {
       continue;
     }
     const shelters = keptPaths.some((path) => path.startsWith(`${folderPath}/`));

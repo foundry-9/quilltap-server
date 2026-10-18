@@ -81,6 +81,8 @@ import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
+import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
+import { buildInventorySection } from '@/lib/inventory/prompt-section';
 
 type Repos = RepositoryContainer;
 
@@ -766,8 +768,24 @@ async function autoGenerateFirstMessage(
 
   const sampling = resolveSamplingParams(parameters);
 
+  // The chat's own Concierge state decides which desk this greeting goes to.
+  // `applyRequestedConciergeState` has already written the state by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
+  // asks the frank desk first instead of discovering it after a refusal.
+  const chatRow = await repos.chats.findById(chatId);
+
+  // What the opener carries on arrival (the Inventory). `buildChatContext`
+  // runs before the chat exists, so the section is built here, once arrival
+  // defaults have landed, and rides the greeting turn as a trailing section —
+  // never the system prompt — exactly as on every later turn. Absent when
+  // nothing carried has a description.
+  const openerInventory = chatRow
+    ? await buildInventorySection({ chat: chatRow, characterId: context.character.id, repos })
+    : null;
+
   const baseParams = {
     systemPrompt: context.systemPrompt,
+    ...(openerInventory ? { trailingContextSections: [openerInventory] } : {}),
     characterName: context.character.name,
     provider: connectionProfile.provider,
     modelName: connectionProfile.modelName,
@@ -779,11 +797,6 @@ async function autoGenerateFirstMessage(
     profileParameters: profileParams(connectionProfile),
   };
 
-  // The chat's own Concierge state decides which desk this greeting goes to.
-  // `applyRequestedConciergeState` has already written the state by the time the
-  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
-  // asks the frank desk first instead of discovering it after a refusal.
-  const chatRow = await repos.chats.findById(chatId);
 
   // The resolver is asked WITH the chat: an Unmoderated chat routes direct,
   // a Locked chat never fails over, and an off-duty Concierge does neither.
@@ -862,6 +875,7 @@ async function autoGenerateFirstMessage(
       participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
       projectContext,
       recentConversationsBlock: recentConversationsBlock || undefined,
+      ...(openerInventory ? { trailingContextSections: [openerInventory] } : {}),
     });
 
     if (!result.content) {
@@ -1423,6 +1437,18 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       error: getErrorMessage(error, 'Unknown outfit selection error'),
     });
   }
+
+  // What everyone carries on arrival: a continuation copies the source chat's
+  // Inventory; otherwise each character's equipped-by-default objects. Never
+  // throws — a failure is logged per character.
+  await applyInventoryDefaults(
+    repos,
+    chat.id,
+    participantsWithTimestamps
+      .filter((p) => p.type === 'CHARACTER' && p.characterId)
+      .map((p) => p.characterId as string),
+    { source: 'chat-start', userId: user.id, sourceChatId: validatedData.continuationFromChatId ?? null },
+  );
 
   // Phase H: precompile the per-participant identity stack for the new chat
   // so the per-turn buildSystemPrompt can hit the cache from the very first

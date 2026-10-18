@@ -321,12 +321,20 @@ export function buildExpansionContext(
           // prompt crafter uses it directly
           complete: resolved.physicalDescription,
         },
-        ...(resolved.clothingDescription ? {
-          clothing: [{
-            name: resolved.clothingSource === 'narrative' ? 'Current outfit (from story)' : 'Current outfit',
-            usageContext: null as string | null,
-            description: resolved.clothingDescription as string | null,
-          }],
+        ...(resolved.clothingDescription || resolved.carryingDescription ? {
+          clothing: [
+            ...(resolved.clothingDescription ? [{
+              name: resolved.clothingSource === 'narrative' ? 'Current outfit (from story)' : 'Current outfit',
+              usageContext: null as string | null,
+              description: resolved.clothingDescription as string | null,
+            }] : []),
+            // What the character carries (the Inventory), beside the outfit.
+            ...(resolved.carryingDescription ? [{
+              name: 'Carried',
+              usageContext: null as string | null,
+              description: resolved.carryingDescription as string | null,
+            }] : []),
+          ],
         } : {}),
       };
     }

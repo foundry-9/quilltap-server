@@ -19,6 +19,7 @@ import Avatar from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/icon'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
 import { SubpromptPicker } from '@/components/subprompts'
 
@@ -154,6 +155,7 @@ export function ParticipantCard({
   isDangerousChat = false,
 }: ParticipantCardProps) {
   const wardrobeDialog = useWardrobeDialogOptional()
+  const inventoryDialog = useInventoryDialogOptional()
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
@@ -351,6 +353,20 @@ export function ParticipantCard({
                   aria-label={`Open ${name}'s wardrobe`}
                 >
                   <Icon name="wardrobe" className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {isCharacter && participant.character?.id && inventoryDialog && (
+                <button
+                  type="button"
+                  onClick={() => inventoryDialog.open({
+                    characterId: participant.character!.id,
+                    ...(chatId ? { chatId } : {}),
+                  })}
+                  className="qt-participant-avatar-tool-button"
+                  title={`Open ${name}'s inventory`}
+                  aria-label={`Open ${name}'s inventory`}
+                >
+                  <Icon name="dice" className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

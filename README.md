@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.11.0--dev.26-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.11.0--dev.33-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -164,7 +164,7 @@ Quilltap's subsystems are personified as the Staff of an Estate, and they speak 
 
 **The Host** runs the room. Multi-character chats put several collaborators at one table, with a turn-order sidebar, four-state participation (active, silent, absent, removed), anti-chorus discipline so a group scene doesn't become a committee meeting, private whispers between characters, and **Inform** — a note passed from the wings to one or more characters, stated as fact and kept out of the transcript. The Host also builds scenes: ask him to research a real or in-world location through your stores (and the web) and draft an opening you can save to any shelf. **Autonomous rooms** are salons that run without you — budgeted by turns, tokens, time, or spend, optionally on a schedule, overnight if you like — with the whole apparatus present and every run bounded and inspectable. SillyTavern character and chat imports are fully supported.
 
-**Pascal the Croupier** settles chance. Cryptographically secure dice (d4 to d1000), coin flips, persistent chat state for inventories and scores, and **custom mechanics** — a named action, a roll, a table of outcomes — built in Pascal's Workbench and settled by Quilltap rather than the model, so a character can't narrate a failure into a win.
+**Pascal the Croupier** settles chance. Cryptographically secure dice (d4 to d1000), coin flips, persistent chat state for inventories and scores, and **custom mechanics** — a named action, a roll, a table of outcomes — built in Pascal's Workbench and settled by Quilltap rather than the model, so a character can't narrate a failure into a win. He also keeps the **Inventory**: the things characters carry, on four shelves, with archetypes, kits, pictures, and a per-chat record of what each character has in hand — told to the model while carried and drawn into their pictures.
 
 **The Lantern** makes pictures. Scene-aware background images for chats, per-conversation character portraits, wardrobe pictures, LoRA adapters on providers that take them, and `describe_image` so characters can look at pictures as well as make them.
 

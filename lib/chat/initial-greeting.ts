@@ -48,6 +48,12 @@ export type GreetingRequest = {
   projectContext?: ProjectContextForGreeting | null
   /** Pre-rendered "### Recent Conversations" block (from memory-recap) */
   recentConversationsBlock?: string
+  /**
+   * Per-turn sections that ride after the instruction in the user message,
+   * as every later turn's trailing sections do (e.g. the Inventory's
+   * "Carried and equipped"). Never folded into the system prompt.
+   */
+  trailingContextSections?: string[]
   /** For llm_logs */
   userId?: string
   chatId?: string
@@ -136,6 +142,7 @@ export async function generateGreetingMessage({
   participantMemories,
   projectContext,
   recentConversationsBlock,
+  trailingContextSections,
   userId,
   chatId,
   characterId,
@@ -150,11 +157,22 @@ export async function generateGreetingMessage({
 
   const augmentedSystemPrompt = `${basePromptWithContext}\n\nYou are starting a brand new conversation. Before the user says anything, open with a concise greeting that fits ${characterName}'s established voice. Keep it to one or two sentences.`
 
+  const greetingInstruction = 'The chat is beginning now. Greet the user immediately in-character and invite them to engage.'
+  const trailing = (trailingContextSections ?? []).filter((section) => section.trim().length > 0)
+  if (trailing.length > 0) {
+    logger.debug('[Greeting Generation] Appending trailing context sections to the greeting turn', {
+      chatId,
+      characterId,
+      sectionCount: trailing.length,
+    })
+  }
   const messages = [
     { role: 'system' as const, content: augmentedSystemPrompt },
     {
       role: 'user' as const,
-      content: 'The chat is beginning now. Greet the user immediately in-character and invite them to engage.',
+      content: trailing.length > 0
+        ? `${greetingInstruction}\n\n---\n\n${trailing.join('\n\n---\n\n')}`
+        : greetingInstruction,
     },
   ]
 

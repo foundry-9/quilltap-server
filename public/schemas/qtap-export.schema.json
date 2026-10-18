@@ -596,6 +596,14 @@
           "items": { "type": "string" },
           "description": "Informational: names of assigned tags at export time"
         },
+        "equippedInventory": {
+          "type": ["object", "null"],
+          "description": "Inventory objects each character carries in this chat, keyed by characterId: an array of Inventory object UUIDs (the `id` inside each `Inventory/**/*.json` file). Ids that no longer resolve are dropped on read.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/UUID" }
+          }
+        },
         "equippedOutfit": {
           "type": ["object", "null"],
           "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories, hair } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",

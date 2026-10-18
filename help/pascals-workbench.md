@@ -86,3 +86,4 @@ Characters with help tools enabled can navigate directly to the Workbench:
 - **[The character fact sheet](character-editing.md)** — the `metadata.json` that metadata conditions read.
 - **[Progressions](character-progressions.md)** — the timed spans a `progress` condition asks after, and a `progress.` effect adjusts.
 - **The Scriptorium** — the document stores your `Tools/` folders live in.
+- **[The Inventory](inventory.md)** — Pascal's other charge: the things characters carry.
