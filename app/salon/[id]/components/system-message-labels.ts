@@ -49,6 +49,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   inform: 'out of character',
   'custom-tool-result': 'roll outcome',
   'custom-tool-error': "the table couldn't deal",
+  'inventory-change': 'inventory',
   'turn-pass': 'nothing to add',
   nudge: 'invited to speak',
   timestamp: 'time',
@@ -344,7 +345,9 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   // and doubly so for the dot, which a roll record overrides with the outcome's
   // own state (see getAnnouncementOutcomeState): a success has no business
   // wearing the red dot that "high" would give it.
-  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', '*': 'high' },
+  // An Inventory change (who took up or set down what) is a plain line, not a
+  // roll: no outcome accent, and no more urgent than a wardrobe note.
+  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', 'inventory-change': 'medium', '*': 'high' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'

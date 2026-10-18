@@ -81,6 +81,7 @@ import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
+import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
 
 type Repos = RepositoryContainer;
 
@@ -1423,6 +1424,18 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       error: getErrorMessage(error, 'Unknown outfit selection error'),
     });
   }
+
+  // What everyone carries on arrival: a continuation copies the source chat's
+  // Inventory; otherwise each character's equipped-by-default objects. Never
+  // throws — a failure is logged per character.
+  await applyInventoryDefaults(
+    repos,
+    chat.id,
+    participantsWithTimestamps
+      .filter((p) => p.type === 'CHARACTER' && p.characterId)
+      .map((p) => p.characterId as string),
+    { source: 'chat-start', userId: user.id, sourceChatId: validatedData.continuationFromChatId ?? null },
+  );
 
   // Phase H: precompile the per-participant identity stack for the new chat
   // so the per-turn buildSystemPrompt can hit the cache from the very first

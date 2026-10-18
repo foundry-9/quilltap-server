@@ -5,6 +5,7 @@ const mockPostHostMergeFromAnnouncement = jest.fn()
 const mockPostHostMergeToAnnouncement = jest.fn()
 const mockCompileIdentityStackForParticipant = jest.fn()
 const mockApplyOutfitSelections = jest.fn()
+const mockApplyInventoryDefaults = jest.fn()
 const mockBuildCheapLLMConfig = jest.fn(() => ({}))
 
 jest.mock('@/lib/logger', () => ({
@@ -23,6 +24,10 @@ jest.mock('@/lib/services/system-prompt-compiler/compiler', () => ({
 
 jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
   applyOutfitSelections: (...args: unknown[]) => mockApplyOutfitSelections(...args),
+}))
+
+jest.mock('@/lib/inventory/apply-defaults', () => ({
+  applyInventoryDefaults: (...args: unknown[]) => mockApplyInventoryDefaults(...args),
 }))
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
@@ -146,6 +151,12 @@ describe('applyChatMerge', () => {
       const context = call[3] as any
       expect(selections[0].mode).toBe('previous_chat')
       expect(context.sourceChatId).toBe(SOURCE_ID)
+    }
+    // Each merged character brings what they carried in the merged chat.
+    expect(mockApplyInventoryDefaults).toHaveBeenCalledTimes(2)
+    for (const call of mockApplyInventoryDefaults.mock.calls) {
+      expect(call[1]).toBe(TARGET_ID)
+      expect(call[3]).toMatchObject({ source: 'merge', sourceChatId: SOURCE_ID })
     }
   })
 
