@@ -57,6 +57,7 @@ import {
   wardrobeItemIdForDocument,
 } from '@/lib/database/repositories/vault-overlay/parsers';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { isInventoryItemDocumentPath } from '@/lib/inventory/folders';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -175,6 +176,101 @@ export function planWardrobeImagePointerFixes(
 }
 
 /**
+ * The Inventory's documents in a backup: each object file under `Inventory/` (any depth)
+ * with its parsed JSON, skipping pictures and anything that does not
+ * parse into an object carrying an id.
+ */
+function inventoryDocuments(
+  data: BackupData
+): Array<{ link: DocMountFileLink; json: Record<string, unknown>; id: string }> {
+  const contentByFileId = new Map<string, unknown>(
+    (data.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
+  );
+  const out: Array<{ link: DocMountFileLink; json: Record<string, unknown>; id: string }> = [];
+  for (const link of data.docMountFileLinks || []) {
+    if (!isInventoryItemDocumentPath(link.relativePath)) continue;
+    const content = contentByFileId.get(link.fileId);
+    if (typeof content !== 'string') continue;
+    try {
+      const json: unknown = JSON.parse(content);
+      if (!json || typeof json !== 'object' || Array.isArray(json)) continue;
+      const id = (json as Record<string, unknown>).id;
+      if (typeof id !== 'string' || id.length === 0) continue;
+      out.push({ link, json: json as Record<string, unknown>, id });
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
+/**
+ * Inventory object ids in a backup. Like a wardrobe frontmatter id, an
+ * object's id lives in its file and travels verbatim (as do the `parentId`
+ * and kit `itemIds` that name other objects), so these ids are never remapper
+ * keys: a picture's `files.linkedTo` and a chat's `equippedInventory` keep
+ * naming them as they are.
+ */
+function inventoryItemIds(data: BackupData): Set<string> {
+  return new Set(inventoryDocuments(data).map((doc) => doc.id));
+}
+
+/** One Inventory object whose current-picture pointer must follow its file's new id. */
+export interface InventoryImagePointerFix {
+  /** The object's mount, already remapped. */
+  mountPointId: string;
+  /** The object's mount as the backup named it (before the remap). */
+  sourceMountPointId: string;
+  /** The object's id (unchanged by the remap). */
+  itemId: string;
+  /** The picture's remapped `files` id. */
+  imageFileId: string;
+}
+
+/**
+ * The Inventory analogue of {@link planWardrobeImagePointerFixes}: an
+ * object's `imageFileId` lives in its JSON file, which the remap never
+ * rewrites, so list the pointers the restore must repoint once the vaults
+ * have landed. Pass the ORIGINAL backup data and the same remapper.
+ */
+export function planInventoryImagePointerFixes(
+  original: BackupData,
+  remapper: UuidRemapper
+): InventoryImagePointerFix[] {
+  const fileIds = new Set((original.files || []).map((f) => f.id));
+  const fixes: InventoryImagePointerFix[] = [];
+  for (const { link, json, id } of inventoryDocuments(original)) {
+    const pointer = json.imageFileId;
+    if (typeof pointer !== 'string' || !fileIds.has(pointer)) continue;
+    fixes.push({
+      mountPointId: remapper.remap(link.mountPointId),
+      sourceMountPointId: link.mountPointId,
+      itemId: id,
+      imageFileId: remapper.remap(pointer),
+    });
+  }
+  return fixes;
+}
+
+/**
+ * Remap the character-id keys of a chat's `equippedInventory`. The values
+ * are Inventory object ids, which travel verbatim (see `inventoryItemIds`).
+ */
+function remapEquippedInventory(
+  value: unknown,
+  remapper: UuidRemapper
+): Record<string, string[]> | null | undefined {
+  if (value === null || value === undefined) return value as null | undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: Record<string, string[]> = {};
+  for (const [characterId, ids] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(ids)) continue;
+    out[remapper.remap(characterId)] = ids.filter((id): id is string => typeof id === 'string');
+  }
+  return out;
+}
+
+/**
  * The chat columns that hold participant ids as a JSON-encoded string array
  * rather than a real array, so `remapArrayFields` cannot see them.
  */
@@ -218,7 +314,10 @@ export function remapBackupData(
   // Built up front: a wardrobe picture's `files` row names its item in
   // `linkedTo` / `tags`, and those must follow the item, not mint a stranger.
   const wardrobeItemIdRemap = buildWardrobeItemIdRemap(data, remapper);
-  const remapLinkId = (id: string): string => wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
+  // Inventory object ids travel verbatim, so a picture naming one keeps it.
+  const inventoryIds = inventoryItemIds(data);
+  const remapLinkId = (id: string): string =>
+    inventoryIds.has(id) ? id : wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
 
   // Remap files
   // IMPORTANT: Chain remapFields → array remaps so array spread doesn't overwrite remapped scalar fields
@@ -350,6 +449,11 @@ export function remapBackupData(
     // remapper, so the pointer follows its store.
     if (chat.scenarioSource) {
       remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
+    }
+
+    // The carried Inventory is keyed by character; the object ids stay.
+    if ('equippedInventory' in chat) {
+      remappedChat.equippedInventory = remapEquippedInventory(chat.equippedInventory, remapper);
     }
 
     // Turn-manager state names participants inside JSON strings; left alone,

@@ -34,6 +34,8 @@
 - Shared browser pieces lifted from the wardrobe into `components/item-browser/` (`ItemFolderRow`, `ItemFolderBar`, `NewFolderInput`, `ItemSelectBar`, `ItemTierRow`, `ItemFolderPickerDialog`); `WardrobeBrowser` and `WardrobeFolderPickerDialog` now use them with unchanged markup. No new `qt-*` classes (existing badge and card classes cover the chips and glyph tile).
 - Query keys `queryKeys.inventory.*`; the `chats` realtime topic now refetches `inventory.equipped(chatId)`. `?action=inventory` also returns the chat's `projectId`. New collection action `?action=duplicate`. `SaveImageDialog` gains an `inventory` door.
 - Tests: `components/inventory/inventory-ui.test.tsx`, `topic-map.test.ts`.
+- Backup and restore: a new-account restore re-keys each chat's `equippedInventory` to the remapped character ids and keeps the object ids (they live in the files and travel verbatim, as do `parentId` and kit `itemIds`); picture `files` rows keep their `linkedTo` / `tags` link to the object; `planInventoryImagePointerFixes` repoints each object's `imageFileId` at its picture's new file id after the vaults land (step 22f-quater, one batch per mount, tombstoned vaults skipped).
+- Tests: `__tests__/unit/lib/backup/inventory-backup.test.ts` (archetype, instance, kit and a carrying chat round-trip through the remap).
 
 #### Docs: Inventory design spec
 
