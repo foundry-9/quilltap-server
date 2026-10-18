@@ -38,9 +38,10 @@
 - Tests: `__tests__/unit/lib/backup/inventory-backup.test.ts` (archetype, instance, kit and a carrying chat round-trip through the remap).
 - Docs: new `help/inventory.md` (`url: /salon`) and `help/project-inventory.md` (`url: /prospero/:id`); cross-links from the wardrobe, project wardrobe, projects and Pascal's Workbench pages; README and FEATURES.md mention the Inventory; CLAUDE.md glossary, `pascal` sender duties and a chokepoint bullet; the spec moved to `features/complete/inventory.md` with an As-built section; ROADMAP row checked.
 
-#### Docs: Inventory design spec
+#### Docs: Inventory design specs
 
 - New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
+- New `docs/developer/features/inventory-tools-and-pascal.md`: the follow-up design for the `inventory_*` tool family (gated by a new `canManageInventory` flag), the `inventory` / `inventoryCount` `when` and gate subjects, `{{inventory.*}}` placeholders, the `$inventory` operand and the `inventory` effect, plus the Workbench and Proving Bench changes. Depends on the Inventory spec; nothing built yet.
 
 #### Feature: wardrobe pictures in the Aurora gallery
 
