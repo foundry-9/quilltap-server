@@ -4,7 +4,7 @@
 
 ### 4.11-dev
 
-#### Feature: the Inventory (in progress)
+#### Feature: the Inventory
 
 - Shared folder rules: the pure folder-path helpers moved from `lib/wardrobe/folders.ts` into `lib/mount-index/item-folders.ts`, parameterised by `ItemFolderRules` (root, reserved segments, depth cap, noun). `lib/wardrobe/folders.ts` and the new `lib/inventory/folders.ts` are delegates; `isWardrobeItemDocumentPath` delegates to `isItemDocumentPath`. Wardrobe behaviour and messages are unchanged.
 - The wardrobe's folder operations (list, create, rename, delete-and-send-up) are now one implementation in `vault-overlay/item-folder-ops.ts` over an `ItemFolderTree` descriptor, with the per-folder write chain (`runSerialized`) and `resolveVaultFolderMount` (the tombstone-aware mount resolver; `resolveWardrobeMount` and `resolveInventoryMount` delegate to it).
@@ -36,6 +36,7 @@
 - Tests: `components/inventory/inventory-ui.test.tsx`, `topic-map.test.ts`.
 - Backup and restore: a new-account restore re-keys each chat's `equippedInventory` to the remapped character ids and keeps the object ids (they live in the files and travel verbatim, as do `parentId` and kit `itemIds`); picture `files` rows keep their `linkedTo` / `tags` link to the object; `planInventoryImagePointerFixes` repoints each object's `imageFileId` at its picture's new file id after the vaults land (step 22f-quater, one batch per mount, tombstoned vaults skipped).
 - Tests: `__tests__/unit/lib/backup/inventory-backup.test.ts` (archetype, instance, kit and a carrying chat round-trip through the remap).
+- Docs: new `help/inventory.md` (`url: /salon`) and `help/project-inventory.md` (`url: /prospero/:id`); cross-links from the wardrobe, project wardrobe, projects and Pascal's Workbench pages; README and FEATURES.md mention the Inventory; CLAUDE.md glossary, `pascal` sender duties and a chokepoint bullet; the spec moved to `features/complete/inventory.md` with an As-built section; ROADMAP row checked.
 
 #### Docs: Inventory design spec
 
