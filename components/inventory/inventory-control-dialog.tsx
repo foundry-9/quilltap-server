@@ -36,7 +36,7 @@ import {
   encodeInventoryContainer,
   type InventoryContainer,
 } from '@/lib/inventory/container'
-import { useChatInventory } from '@/lib/hooks/use-inventory'
+import { InventoryRequestError, useChatInventory } from '@/lib/hooks/use-inventory'
 import { InventoryBrowser } from './InventoryBrowser'
 import { CarryingNowPane } from './CarryingNowPane'
 import { InventoryItemEditor } from './inventory-item-editor'
@@ -196,7 +196,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
         }
       } catch (error) {
         const message = describeInventoryRefusal(error, `The object would not ${kind}`)
-        if (kind === 'equip' && message.includes('at most')) await requestAlert(message, ['Understood'])
+        if (error instanceof InventoryRequestError && error.code === 'CAP_EXCEEDED') await requestAlert(message, ['Understood'])
         else showErrorToast(message)
       }
     },
@@ -324,6 +324,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
           createMode={editor.kind === 'create' ? editor.mode : undefined}
           initialFolder={editor.kind === 'create' ? editor.folder : undefined}
           poolItems={data.items}
+          projectId={effectiveProjectId}
           actions={actions}
           onClose={actions.closeEditor}
           onSaved={actions.closeEditor}

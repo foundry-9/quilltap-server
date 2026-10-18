@@ -12,6 +12,10 @@
  * an instance keeps its `parentId`; moving an archetype leaves its
  * dependents alone (they name an id, not a path). Pictures travel with it,
  * through the wardrobe's carry steps over `Inventory/images/`.
+ *
+ * Kits stay whole: a kit sent anywhere must reach its members from there
+ * (`INVALID_SHAPE`, as on create), and a move that would leave kits naming
+ * an object they can no longer reach is refused (`KIT_STRANDED`).
  */
 
 import { randomUUID } from 'crypto';
@@ -20,7 +24,9 @@ import { badRequest, notFound, serverError, successResponse } from '@/lib/api/re
 import { logger } from '@/lib/logger';
 import { inventoryTransferSchema, type InventoryRecord } from '@/lib/schemas/inventory.types';
 import { normalizeInventoryFolderPathOrRoot } from '@/lib/inventory/folders';
-import { assertCopyable } from '@/lib/inventory/item-mutations';
+import { assertCopyable, assertKitMembers } from '@/lib/inventory/item-mutations';
+import { findKitsStrandedByMove, findRecordsAnywhere, isReachableFromKitTier, mountScopeOf } from '@/lib/inventory/dependents';
+import { InventoryKitStrandedError } from '@/lib/inventory/errors';
 import { carryInventoryItemImages, commitMovedInventoryImages } from '@/lib/inventory/item-images';
 import { locationKey, resolveInventoryLocation } from '@/lib/inventory/location';
 import { loadPoolForLocation } from '@/lib/inventory/pool';
@@ -44,6 +50,31 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       // A move writes the source too: an archived source character refuses
       // here, before anything lands at the destination.
       await source.writableMountPointId();
+    }
+
+    const meta = { op: `transfer-${body.action}`, itemId: record.id };
+    if (record.kind === 'kit' && (record.itemIds ?? []).length > 0) {
+      // Members the destination's own pool cannot see may still be in reach
+      // from its tier in context (a project object, for a character's kit).
+      const destinationPool = await loadPoolForLocation(repos, destination);
+      const unseen = (record.itemIds ?? []).filter((id) => !destinationPool.get(id));
+      const contextual = new Set<string>();
+      if (unseen.length > 0) {
+        const homes = await findRecordsAnywhere(unseen);
+        for (const [id, { mountPointId }] of homes) {
+          const home = await mountScopeOf(mountPointId);
+          if (home && (await isReachableFromKitTier(destination.mountPointId, { mountPointId, scope: home }))) contextual.add(id);
+        }
+      }
+      assertKitMembers(destinationPool, record.itemIds ?? [], meta, contextual);
+    }
+    if (body.action === 'move' && record.kind !== 'kit') {
+      const stranded = (await findKitsStrandedByMove(record.id, { mountPointId: destination.mountPointId, scope: destination.scope }))
+        .filter((kit) => kit.id !== record.id);
+      if (stranded.length > 0) {
+        logger.info('[InventoryTransfers v1] Move refused: it would strand kits', { ...meta, kits: stranded.map((k) => k.id) });
+        throw new InventoryKitStrandedError(record.id, stranded.map(({ id, name, ownerName }) => ({ id, name, ownerName })));
+      }
     }
 
     const now = new Date().toISOString();

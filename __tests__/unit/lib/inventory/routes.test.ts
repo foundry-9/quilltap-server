@@ -138,6 +138,53 @@ describe('transfers', () => {
   })
 })
 
+describe('transfers keep kits whole', () => {
+  const move = (itemId: string, from: unknown, to: unknown) =>
+    (transfer as unknown as Handler)(req('/x', 'POST', { action: 'move', itemId, from, to }), ctx(), {})
+
+  it("refuses a move that would strand a member from its kit, naming the kit (KIT_STRANDED)", async () => {
+    const lockpicks = await createIn(character, 'c-viv', { name: 'lockpicks' })
+    await createIn(character, 'c-viv', { name: "Burglar's kit", kind: 'kit', itemIds: [lockpicks.id] })
+    const res = await json(await move(lockpicks.id, { scope: 'character', id: 'c-viv' }, { scope: 'character', id: 'c-bertie' }))
+    expect(res).toMatchObject({ status: 409, body: { details: { code: 'KIT_STRANDED' } } })
+    expect(JSON.stringify(res.body)).toContain("Burglar's kit")
+    expect(objectsIn('mp-c-viv').map((o) => o.id)).toContain(lockpicks.id)
+  })
+
+  it('lets a member move where its kit can still reach it (Quilltap General)', async () => {
+    const lockpicks = await createIn(character, 'c-viv', { name: 'lockpicks' })
+    await createIn(character, 'c-viv', { name: "Burglar's kit", kind: 'kit', itemIds: [lockpicks.id] })
+    const res = await json(await move(lockpicks.id, { scope: 'character', id: 'c-viv' }, { scope: 'general', id: null }))
+    expect(res.status).toBe(200)
+  })
+
+  it("refuses sending a kit where its members are out of reach (INVALID_SHAPE)", async () => {
+    const lockpicks = await createIn(character, 'c-viv', { name: 'lockpicks' })
+    const kit = await createIn(character, 'c-viv', { name: "Burglar's kit", kind: 'kit', itemIds: [lockpicks.id] })
+    const res = await json(await move(kit.id, { scope: 'character', id: 'c-viv' }, { scope: 'general', id: null }))
+    expect(res).toMatchObject({ status: 400, body: { details: { code: 'INVALID_SHAPE' } } })
+    expect(objectsIn('mp-c-viv').map((o) => o.id)).toContain(kit.id)
+  })
+
+  it("lets a character's kit naming a project object move to another character", async () => {
+    const lantern = await createIn(project, 'project-1', { name: 'lantern' })
+    const made = await json(await character.POST(req('/x?projectId=project-1', 'POST', { name: 'night kit', kind: 'kit', itemIds: [lantern.id] }), ctx(), { id: 'c-viv' }))
+    expect(made.status).toBe(201)
+    const res = await json(await move(made.body.item.id, { scope: 'character', id: 'c-viv' }, { scope: 'character', id: 'c-bertie' }))
+    expect(res.status).toBe(200)
+  })
+
+  it("re-saving a character's kit with a project member checks it against the project shelf it was made with", async () => {
+    const lantern = await createIn(project, 'project-1', { name: 'lantern' })
+    const made = await json(await character.POST(req('/x?projectId=project-1', 'POST', { name: 'night kit', kind: 'kit', itemIds: [lantern.id] }), ctx(), { id: 'c-viv' }))
+    const vivItem = createInventoryItemHandlers<{ id: string; itemId: string }>({ scope: 'character', paramsToId: ({ id }) => id, logTag: '[t]', logIdKey: 'characterId' }) as unknown as Record<'PUT', Handler>
+    const resaved = await json(await vivItem.PUT(req('/x?projectId=project-1', 'PUT', { itemIds: [lantern.id] }), ctx(), { id: 'c-viv', itemId: made.body.item.id }))
+    expect(resaved.status).toBe(200)
+    const withoutContext = await json(await vivItem.PUT(req('/x', 'PUT', { itemIds: [lantern.id] }), ctx(), { id: 'c-viv', itemId: made.body.item.id }))
+    expect(withoutContext).toMatchObject({ status: 400, body: { details: { code: 'INVALID_SHAPE' } } })
+  })
+})
+
 describe('chat actions', () => {
   it('equips, reads, refuses a cap breach with CAP_EXCEEDED, and resets to defaults', async () => {
     state.chats.set('chat-1', { id: 'chat-1', projectId: null, participants: [{ id: 'p', type: 'CHARACTER', characterId: 'c-viv', status: 'active' }] })

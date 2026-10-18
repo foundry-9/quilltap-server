@@ -374,7 +374,7 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
     const body = updateInventorySchema.parse(await req.json());
     try {
       if (body.imageFileId !== undefined) await assertInventoryImageChoice(ctx.repos, found.record.id, body.imageFileId);
-      const record = await updateInventoryItem(ctx.repos, found.location, found.record, body);
+      const record = await updateInventoryItem(ctx.repos, found.location, found.record, body, projectContextOf(req));
       logger.info(`${logTag} Updated inventory object`, {
         [logIdKey]: found.location.id,
         userId: ctx.user.id,

@@ -25,7 +25,7 @@
 
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { equipItems, type EquipChat, type EquipResult } from '@/lib/inventory/equip';
+import { equipItemsHoldingLock, withChatInventoryLock, type EquipChat, type EquipResult } from '@/lib/inventory/equip';
 import { equippedIdsOf, hasEquippedEntry } from '@/lib/inventory/equipped-set';
 import { loadInventoryPool } from '@/lib/inventory/pool';
 
@@ -47,7 +47,7 @@ async function defaultIdsFor(repos: RepositoryContainer, chat: EquipChat, charac
     .map((item) => item.id);
 }
 
-/** Equip a character's defaults leniently and silently. */
+/** Equip a character's defaults leniently and silently. The caller holds the chat's lock. */
 async function equipDefaults(
   repos: RepositoryContainer,
   chat: EquipChat,
@@ -56,7 +56,7 @@ async function equipDefaults(
 ): Promise<EquipResult | null> {
   const ids = await defaultIdsFor(repos, chat, characterId);
   if (ids.length === 0) return null;
-  return equipItems(repos, chat, characterId, ids, { userId, provenance: 'operator', announce: false }, { lenient: true });
+  return equipItemsHoldingLock(repos, chat, characterId, ids, { userId, provenance: 'operator', announce: false }, { lenient: true });
 }
 
 /** Apply arrival defaults for each character. */
@@ -93,46 +93,9 @@ async function applyDefaultsUnguarded(
 
   for (const characterId of Array.from(new Set(characterIds))) {
     try {
-      if (sourceChat && hasEquippedEntry(sourceChat, characterId) && !hasEquippedEntry(chat, characterId)) {
-        const ids = equippedIdsOf(sourceChat, characterId);
-        await repos.chats.setEquippedInventory(chat.id, characterId, ids);
-        logger.debug('[InventoryArrival] Copied the source chat\'s carried objects', {
-          op: 'arrival',
-          chatId,
-          sourceChatId: sourceChat.id,
-          characterId,
-          source: opts.source,
-          equipped: ids,
-          context: 'inventory',
-        });
-        continue;
-      }
-      // A fresh chat object each time: the previous character's write changed it.
-      const current = ((await repos.chats.findById(chatId)) as EquipChat | null) ?? chat;
-      if (hasEquippedEntry(current, characterId)) {
-        logger.debug('[InventoryArrival] Character already has an entry; defaults not revisited', {
-          chatId,
-          characterId,
-          source: opts.source,
-          context: 'inventory',
-        });
-        continue;
-      }
-      const result = await equipDefaults(repos, current, characterId, opts.userId);
-      if (!result || result.equipped.length === 0) {
-        // Record the arrival, so a later re-seat does not apply defaults again.
-        await repos.chats.setEquippedInventory(chat.id, characterId, []);
-      }
-      logger.debug('[InventoryArrival] Applied arrival defaults', {
-        op: 'arrival',
-        chatId,
-        characterId,
-        source: opts.source,
-        equipped: result?.equipped.map((item) => item.id) ?? [],
-        created: result?.created.map((item) => item.id) ?? [],
-        skipped: result?.skipped ?? [],
-        context: 'inventory',
-      });
+      // One character's arrival is one critical section on the chat's carried
+      // set, so an equip landing mid-arrival is never rewound.
+      await withChatInventoryLock(chat.id, () => arriveUnderLock(repos, chat, sourceChat, characterId, opts));
     } catch (error) {
       logger.warn('[InventoryArrival] Failed to apply arrival defaults for a character', {
         chatId,
@@ -145,12 +108,73 @@ async function applyDefaultsUnguarded(
   }
 }
 
+async function arriveUnderLock(
+  repos: RepositoryContainer,
+  chat: EquipChat,
+  sourceChat: EquipChat | null,
+  characterId: string,
+  opts: ApplyInventoryDefaultsOptions,
+): Promise<void> {
+  const chatId = chat.id;
+  // Read inside the lock: an earlier character's write, or an equip, changed it.
+  const current = ((await repos.chats.findById(chatId)) as EquipChat | null) ?? chat;
+  if (hasEquippedEntry(current, characterId)) {
+    logger.debug('[InventoryArrival] Character already has an entry; defaults not revisited', {
+      chatId,
+      characterId,
+      source: opts.source,
+      context: 'inventory',
+    });
+    return;
+  }
+  if (sourceChat && hasEquippedEntry(sourceChat, characterId)) {
+    const ids = equippedIdsOf(sourceChat, characterId);
+    await repos.chats.setEquippedInventory(chatId, characterId, ids);
+    logger.debug('[InventoryArrival] Copied the source chat\'s carried objects', {
+      op: 'arrival',
+      chatId,
+      sourceChatId: sourceChat.id,
+      characterId,
+      source: opts.source,
+      equipped: ids,
+      context: 'inventory',
+    });
+    return;
+  }
+  const result = await equipDefaults(repos, current, characterId, opts.userId);
+  if (!result || result.equipped.length === 0) {
+    // Record the arrival, so a later re-seat does not apply defaults again.
+    await repos.chats.setEquippedInventory(chatId, characterId, []);
+  }
+  logger.debug('[InventoryArrival] Applied arrival defaults', {
+    op: 'arrival',
+    chatId,
+    characterId,
+    source: opts.source,
+    equipped: result?.equipped.map((item) => item.id) ?? [],
+    created: result?.created.map((item) => item.id) ?? [],
+    skipped: result?.skipped ?? [],
+    context: 'inventory',
+  });
+}
+
 /**
  * Clear a character's entry and apply the defaults again — the operator's
  * *Reset to defaults*. Silent, as arrival is: it restores the starting state
  * rather than making a gesture. Returns the ids now carried.
  */
 export async function resetInventoryToDefaults(
+  repos: RepositoryContainer,
+  chat: EquipChat,
+  characterId: string,
+  userId: string,
+): Promise<string[]> {
+  // The clear, the defaults and the trailing write are one critical section,
+  // so an equip cannot land between them and be rewound.
+  return withChatInventoryLock(chat.id, () => resetUnderLock(repos, chat, characterId, userId));
+}
+
+async function resetUnderLock(
   repos: RepositoryContainer,
   chat: EquipChat,
   characterId: string,

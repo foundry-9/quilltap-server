@@ -61,6 +61,26 @@ beforeEach(() => {
   addCharacter('c-bertie', 'Bertie')
 })
 
+describe('a second file claiming an id', () => {
+  it('is skipped on read and left in place by the next write', async () => {
+    const project = await loc('project', 'project-1')
+    const sword = await createInventoryItem(repos(), project, body({ name: 'sword' }))
+    // The operator duplicates Sword.json in the Scriptorium: same id inside.
+    const [original] = objectsIn(PROJECT_MP)
+    const { __path: _path, ...copy } = original
+    putDoc(PROJECT_MP, 'Inventory/sword copy.json', JSON.stringify(copy))
+
+    expect((await project.readItems(true)).map((r) => r.id)).toEqual([sword.id])
+    await createInventoryItem(repos(), project, body({ name: 'shield' }))
+
+    expect(objectsIn(PROJECT_MP).map((o) => o.__path).sort()).toEqual([
+      'Inventory/shield.json',
+      'Inventory/sword copy.json',
+      'Inventory/sword.json',
+    ])
+  })
+})
+
 describe('archetypes and instances', () => {
   it('an archetype edit reaches every instance that did not override the field; detach bakes', async () => {
     const project = await loc('project', 'project-1')

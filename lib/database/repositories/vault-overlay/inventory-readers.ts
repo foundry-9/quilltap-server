@@ -23,7 +23,9 @@ import {
   folderOfInventoryPath,
   INVENTORY_FOLDER,
   isInventoryItemDocumentPath,
+  joinFolder,
 } from '@/lib/inventory/folders';
+import { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
 import {
   INVENTORY_FILE_KEYS,
   InventoryItemFileSchema,
@@ -38,6 +40,12 @@ const FILE_KEYS = new Set(INVENTORY_FILE_KEYS);
 const FullFileSchema = InventoryItemSchema.omit({ folder: true });
 
 export { isInventoryItemDocumentPath };
+
+/** The file name (under `Inventory/`) a record is projected to. */
+export function inventoryFileNameFor(record: InventoryRecord): string {
+  const stem = record.title || record.name || record.fileStem || `object-${record.id.slice(0, 8)}`;
+  return joinFolder(record.folder ?? '', `${sanitizeFileName(stem)}.json`);
+}
 
 interface ParseOptions {
   /** No logging — the predicate asks quietly. */
@@ -158,9 +166,26 @@ export function hasStableInventoryItemId(content: string | null | undefined): bo
 /**
  * Every object record in a mount's `Inventory/`, at any depth, archived
  * included, sorted by path. A second file claiming an id already seen is
- * skipped with a `warn` (the first by path wins).
+ * skipped with a `warn` (the first by path wins) and never swept by a write
+ * (see {@link readDuplicateInventoryPaths}).
  */
 export async function readInventoryRecords(mountPointId: string): Promise<InventoryRecord[]> {
+  return (await scanInventoryFolder(mountPointId)).records;
+}
+
+/**
+ * The paths of the files in a mount's `Inventory/` that parse as objects but
+ * were skipped because an earlier file (by path) claims the same id. The
+ * projection must leave these alone: they are the operator's (a copy made in
+ * the Scriptorium, say), and sweeping them would delete them silently.
+ */
+export async function readDuplicateInventoryPaths(mountPointId: string): Promise<Set<string>> {
+  return (await scanInventoryFolder(mountPointId)).duplicatePaths;
+}
+
+async function scanInventoryFolder(
+  mountPointId: string,
+): Promise<{ records: InventoryRecord[]; duplicatePaths: Set<string> }> {
   const docs = await getRepositories().docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     INVENTORY_FOLDER,
@@ -170,29 +195,46 @@ export async function readInventoryRecords(mountPointId: string): Promise<Invent
   const objectDocs = docs
     .filter((doc) => isInventoryItemDocumentPath(doc.relativePath))
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-  const records: InventoryRecord[] = [];
-  const seen = new Set<string>();
+  // Two files may claim one id (a copy made in the Scriptorium). The one at
+  // the object's own name — the original — wins; failing that, the first by
+  // path. The rest are skipped, and the projection leaves them alone.
+  const parsed: Array<{ path: string; record: InventoryRecord }> = [];
   for (const doc of objectDocs) {
     const record = parseInventoryItemFile(doc);
-    if (!record) continue;
-    if (seen.has(record.id)) {
-      logger.warn('Two Inventory files claim one id; the later is skipped', {
-        mountPointId,
-        relativePath: doc.relativePath,
-        itemId: record.id,
-        context: 'inventory',
-      });
+    if (record) parsed.push({ path: doc.relativePath, record });
+  }
+  const atOwnName = ({ path, record }: { path: string; record: InventoryRecord }) =>
+    path.toLowerCase() === `${INVENTORY_FOLDER}/${inventoryFileNameFor(record)}`.toLowerCase();
+  const winnerPath = new Map<string, string>();
+  for (const entry of parsed) {
+    if (!winnerPath.has(entry.record.id) && atOwnName(entry)) winnerPath.set(entry.record.id, entry.path);
+  }
+  for (const { path, record } of parsed) {
+    if (!winnerPath.has(record.id)) winnerPath.set(record.id, path);
+  }
+  const records: InventoryRecord[] = [];
+  const duplicatePaths = new Set<string>();
+  for (const { path, record } of parsed) {
+    if (winnerPath.get(record.id) === path) {
+      records.push(record);
       continue;
     }
-    seen.add(record.id);
-    records.push(record);
+    logger.warn('Two Inventory files claim one id; this one is skipped and left alone', {
+      mountPointId,
+      relativePath: path,
+      keptPath: winnerPath.get(record.id),
+      itemId: record.id,
+      context: 'inventory',
+    });
+    duplicatePaths.add(path);
   }
   logger.debug('Inventory folder read', {
     mountPointId,
     documentCount: docs.length,
     objectCount: records.length,
+    duplicateCount: duplicatePaths.size,
     op: 'read',
     context: 'inventory',
   });
-  return records;
+  return { records, duplicatePaths };
 }

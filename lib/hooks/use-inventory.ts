@@ -205,6 +205,11 @@ export type InventoryItemBody = Partial<
   >
 > & { archived?: boolean }
 
+/** A collection or item URL with the project context a kit's pool reads. */
+function withProjectContext(url: string, projectId?: string | null): string {
+  return projectId ? `${url}?projectId=${encodeURIComponent(projectId)}` : url
+}
+
 /**
  * Every object and folder write, each against a container named per call
  * (an object seen in a character's merged view lives in its own tier).
@@ -231,10 +236,13 @@ export function useInventoryMutations() {
 
   return {
     pending: mutation.isPending,
-    create: async (container: InventoryContainer, body: InventoryItemBody) =>
-      (await run({ url: inventoryCollectionUrl(container), method: 'POST', body })).item as ResolvedInventoryItem,
-    update: async (container: InventoryContainer, itemId: string, body: InventoryItemBody) =>
-      (await run({ url: inventoryItemUrl(container, itemId), method: 'PUT', body })).item as ResolvedInventoryItem,
+    // `projectId` names the project a character's kit may borrow members from.
+    create: async (container: InventoryContainer, body: InventoryItemBody, projectId?: string | null) =>
+      (await run({ url: withProjectContext(inventoryCollectionUrl(container), projectId), method: 'POST', body }))
+        .item as ResolvedInventoryItem,
+    update: async (container: InventoryContainer, itemId: string, body: InventoryItemBody, projectId?: string | null) =>
+      (await run({ url: withProjectContext(inventoryItemUrl(container, itemId), projectId), method: 'PUT', body }))
+        .item as ResolvedInventoryItem,
     clearOverrides: async (container: InventoryContainer, itemId: string, fields: InventoryInheritableField[]) =>
       (await run({ url: `${inventoryItemUrl(container, itemId)}?action=clear-override`, method: 'PUT', body: { fields } }))
         .item as ResolvedInventoryItem,

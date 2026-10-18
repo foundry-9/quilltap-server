@@ -34,7 +34,9 @@ import { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
 import { INVENTORY_FILE_KEYS, type InventoryRecord } from '@/lib/schemas/inventory.types';
 import {
   hasStableInventoryItemId,
+  inventoryFileNameFor,
   isInventoryItemDocument,
+  readDuplicateInventoryPaths,
   readInventoryRecords,
 } from './inventory-readers';
 import {
@@ -82,11 +84,6 @@ export function serializeInventoryRecord(record: InventoryRecord): string {
   return `${JSON.stringify(out, null, 2)}\n`;
 }
 
-/** The file name (under its folder) a record is projected to. */
-function fileNameFor(record: InventoryRecord): string {
-  const stem = record.title || record.name || record.fileStem || `object-${record.id.slice(0, 8)}`;
-  return joinFolder(record.folder ?? '', `${sanitizeFileName(stem)}.json`);
-}
 
 /** The folder a record is written to (see the wardrobe's `safeFolder`). */
 function safeFolder(folder: string | null | undefined): string {
@@ -97,17 +94,30 @@ function safeFolder(folder: string | null | undefined): string {
   return normalised;
 }
 
-/** Re-project the folder from an authoritative record list. */
+/**
+ * Re-project the folder from an authoritative record list. A file the reader
+ * skipped as a duplicate id is not owned, so the sweep leaves it in place.
+ */
 async function projectMountInventory(mount: InventoryMount, records: readonly InventoryRecord[]): Promise<void> {
+  const duplicates = await readDuplicateInventoryPaths(mount.mountPointId);
+  if (duplicates.size > 0) {
+    logger.debug('Inventory projection leaving duplicate-id files alone', {
+      mountPointId: mount.mountPointId,
+      paths: Array.from(duplicates),
+      context: 'inventory',
+    });
+  }
   await projectArrayIntoVaultFolder(
     mount.mountPointId,
     INVENTORY_FOLDER,
     records,
-    (record) => ({ fileName: fileNameFor(record), content: serializeInventoryRecord(record) }),
+    (record) => ({ fileName: inventoryFileNameFor(record), content: serializeInventoryRecord(record) }),
     mount.characterId ?? mount.mountPointId,
     {
       recursive: { excludeSubfolders: INVENTORY_RESERVED_FOLDER_SEGMENTS },
-      ownsFile: isInventoryItemDocument,
+      ownsFile: (doc) => !duplicates.has(doc.relativePath) && isInventoryItemDocument(doc),
+      // Claimed so no projected object is written over one.
+      preserveFileNames: Array.from(duplicates, (path) => path.slice(path.lastIndexOf('/') + 1)),
       ext: '.json',
     },
   );

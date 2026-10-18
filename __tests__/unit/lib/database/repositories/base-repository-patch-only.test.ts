@@ -112,6 +112,38 @@ describe('ChatsRepository — the Concierge state and the carried Inventory are 
   })
 })
 
+describe('ChatsRepository.setConciergeMode — compare-and-set', () => {
+  function withFakeCollection(matched: boolean) {
+    const updateOne = jest.fn(async () => ({ matchedCount: matched ? 1 : 0, modifiedCount: matched ? 1 : 0 }))
+    const repo = new ChatsRepository()
+    jest.spyOn(repo as unknown as { getCollection: () => Promise<unknown> }, 'getCollection')
+      .mockResolvedValue({ updateOne } as never)
+    return { repo, updateOne }
+  }
+  const COLS = { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'concierge' as const, conciergeModeReason: 'refusals' as const }
+
+  it('writes unconditionally without an expected state', async () => {
+    const { repo, updateOne } = withFakeCollection(true)
+    await expect(repo.setConciergeMode('chat-1', COLS)).resolves.toBe(true)
+    expect(updateOne).toHaveBeenCalledWith({ id: 'chat-1' }, { $set: COLS })
+  })
+
+  it('treats NULL as Moderated when Moderated is expected', async () => {
+    const { repo, updateOne } = withFakeCollection(true)
+    await repo.setConciergeMode('chat-1', COLS, 'moderated')
+    expect(updateOne).toHaveBeenCalledWith(
+      { id: 'chat-1', $or: [{ conciergeMode: 'moderated' }, { conciergeMode: null }] },
+      { $set: COLS },
+    )
+  })
+
+  it('reports a miss when the stored state no longer matches', async () => {
+    const { repo, updateOne } = withFakeCollection(false)
+    await expect(repo.setConciergeMode('chat-1', COLS, 'locked')).resolves.toBe(false)
+    expect(updateOne).toHaveBeenCalledWith({ id: 'chat-1', $or: [{ conciergeMode: 'locked' }] }, { $set: COLS })
+  })
+})
+
 describe('ChatsRepository.setEquippedInventory — the one writer of the carried Inventory', () => {
   function withFakeChat(stored: Record<string, unknown> | null) {
     const updateOne = jest.fn(async () => ({ matchedCount: stored ? 1 : 0, modifiedCount: stored ? 1 : 0 }))

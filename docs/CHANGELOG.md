@@ -6,6 +6,17 @@
 
 #### Feature: the Inventory
 
+- Review fixes:
+  - A second file claiming an object's id is skipped on read and is no longer swept on the next write. The file at the object's own name wins, and the copy's name is reserved from the projection (`readDuplicateInventoryPaths`).
+  - The Concierge's appearance screen now classifies and sanitizes the carrying phrase along with the rest of the appearance. A sanitized appearance drops `carryingDescription`, so it is not appended again.
+  - Editing a character's kit checks its members against the same project shelf it was created with. The editor and `PUT` pass `?projectId=`, and `updateInventoryItem` takes the context.
+  - The greeting's Inventory section rides the greeting's user turn as a trailing section (`trailingContextSections` on `generateGreetingMessage`), including on the uncensored desk. It is no longer in the system prompt.
+  - Restored the `setConciergeMode` compare-and-set tests beside the `setEquippedInventory` ones.
+  - Reset to defaults and each character's arrival run under the chat's carried-set lock (`withChatInventoryLock`, `equipItemsHoldingLock`), so a concurrent equip is never rewound.
+  - The pool's archetype fallback queries only the `Inventory/` files that mention the wanted ids (`DocMountDocumentsRepository.findManyInFolderContaining`), instead of reading every object in the instance on each turn.
+  - Transfers keep kits whole. A kit must reach its members from the destination (`INVALID_SHAPE`), and a move that would leave kits naming an unreachable object is refused with the new `KIT_STRANDED` (409).
+  - A malformed JSON body on `?action=generate` for object pictures is a 400, not a 500.
+  - The dialog detects a cap refusal by `code === 'CAP_EXCEEDED'`, not by message text.
 - Shared folder rules: the pure folder-path helpers moved from `lib/wardrobe/folders.ts` into `lib/mount-index/item-folders.ts`, parameterised by `ItemFolderRules` (root, reserved segments, depth cap, noun). `lib/wardrobe/folders.ts` and the new `lib/inventory/folders.ts` are delegates; `isWardrobeItemDocumentPath` delegates to `isItemDocumentPath`. Wardrobe behaviour and messages are unchanged.
 - The wardrobe's folder operations (list, create, rename, delete-and-send-up) are now one implementation in `vault-overlay/item-folder-ops.ts` over an `ItemFolderTree` descriptor, with the per-folder write chain (`runSerialized`) and `resolveVaultFolderMount` (the tombstone-aware mount resolver; `resolveWardrobeMount` and `resolveInventoryMount` delegate to it).
 - `projectArrayIntoVaultFolder` takes an `ext` option (default `.md`, so existing callers are byte-identical).

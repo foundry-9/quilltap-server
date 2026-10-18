@@ -15,6 +15,7 @@ export type InventoryRefusalCode =
   | 'CAP_EXCEEDED'
   | 'INVALID_PARENT'
   | 'KIT_NESTING'
+  | 'KIT_STRANDED'
   | 'NOT_EQUIPPABLE'
   | 'INVALID_SHAPE'
   | 'NOT_A_PARTICIPANT';
@@ -101,6 +102,27 @@ export class InventoryKitNestingError extends InventoryRefusal {
   constructor(readonly memberIds: string[]) {
     super('KIT_NESTING', `A kit cannot contain another kit: ${memberIds.join(', ')}`, 409, { memberIds });
     this.name = 'InventoryKitNestingError';
+  }
+}
+
+/**
+ * A move would leave kits naming an object they could no longer reach from
+ * their own tier (a vault kit's member sent to another character, say).
+ */
+export class InventoryKitStrandedError extends InventoryRefusal {
+  constructor(
+    readonly itemId: string,
+    readonly kits: Array<{ id: string; name: string | null; ownerName: string | null }>,
+  ) {
+    super(
+      'KIT_STRANDED',
+      `Moving this would strand it from ${kits.length} kit${kits.length === 1 ? '' : 's'} that name it: ${kits
+        .map((k) => k.name ?? k.id)
+        .join(', ')}`,
+      409,
+      { itemId, kits },
+    );
+    this.name = 'InventoryKitStrandedError';
   }
 }
 

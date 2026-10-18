@@ -51,6 +51,8 @@ interface InventoryItemEditorProps {
   initialFolder?: string
   /** Everything the tier can reach (kit members, an instance's archetype). */
   poolItems: ResolvedInventoryItem[]
+  /** The project whose shelf the pool includes, so a kit's members check against it. */
+  projectId?: string | null
   actions: InventoryItemActions
   onClose: () => void
   onSaved: () => void
@@ -112,6 +114,7 @@ export function InventoryItemEditor({
   createMode = 'item',
   initialFolder = '',
   poolItems,
+  projectId = null,
   actions,
   onClose,
   onSaved,
@@ -236,10 +239,10 @@ export function InventoryItemEditor({
     setSaving(true)
     try {
       if (!item) {
-        await actions.mutations.create(container, body)
+        await actions.mutations.create(container, body, projectId)
         showSuccessToast(`"${draft.title || draft.name}" is laid on the table`)
       } else {
-        await actions.mutations.update(container, item.id, body)
+        await actions.mutations.update(container, item.id, body, projectId)
         if (isInstance) {
           const toClear = Array.from(inherit).filter((f) => (item.overriddenFields ?? []).includes(f))
           if (toClear.length > 0) await actions.mutations.clearOverrides(container, item.id, toClear)

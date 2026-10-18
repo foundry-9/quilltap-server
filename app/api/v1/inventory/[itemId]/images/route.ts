@@ -83,8 +83,19 @@ async function handleList(req: NextRequest, ctx: RequestContext, { itemId }: Par
 async function handleGenerate(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
   const found = await findHome(req, ctx, itemId);
   if (!found.ok) return found.response;
+  // An empty body means "the default profile"; a malformed one is the
+  // caller's error (400), never a 500.
   const text = await req.text();
-  const parsed = generateBodySchema.safeParse(text.trim() ? JSON.parse(text) : {});
+  let raw: unknown = {};
+  if (text.trim()) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      logger.debug(`${LOG_TAG} Generate body is not valid JSON`, { itemId, context: 'inventory' });
+      return badRequest('Request body is not valid JSON');
+    }
+  }
+  const parsed = generateBodySchema.safeParse(raw);
   if (!parsed.success) return badRequest(parsed.error.issues.map((i) => i.message).join('; '));
   try {
     const result = await trackActivity('image', () =>

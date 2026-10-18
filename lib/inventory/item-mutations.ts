@@ -89,13 +89,22 @@ function logOp(op: string, location: InventoryLocation, meta: Record<string, unk
 /**
  * Check a kit's members against the pool the kit is written in: each must
  * resolve to an item or an archetype. Missing ones are a 400, kits a 409.
+ * `allowMissing` excuses a member the pool cannot see but the kit may still
+ * reach in context (a project object named by a character's kit).
  */
-function assertKitMembers(pool: InventoryPool, itemIds: readonly string[], meta: Record<string, unknown>): void {
+export function assertKitMembers(
+  pool: InventoryPool,
+  itemIds: readonly string[],
+  meta: Record<string, unknown>,
+  allowMissing: ReadonlySet<string> = new Set(),
+): void {
   const missing: string[] = [];
   const kits: string[] = [];
   for (const id of itemIds) {
     const member = pool.get(id);
-    if (!member) missing.push(id);
+    if (!member) {
+      if (!allowMissing.has(id)) missing.push(id);
+    }
     else if (member.kind === 'kit') kits.push(id);
   }
   if (kits.length > 0) refuse(new InventoryKitNestingError(kits), meta);
@@ -216,13 +225,16 @@ export async function instantiate(
 /**
  * Patch a record at its location. An instance stores only the keys patched.
  * Turning an archetype with dependents into an item is `ARCHETYPE_IN_USE`;
- * making an instance or a kit an archetype is `INVALID_PARENT`.
+ * making an instance or a kit an archetype is `INVALID_PARENT`. A kit's
+ * members are checked against the same pool its creation was (`context` names
+ * the project a character's kit may borrow from).
  */
 export async function updateInventoryItem(
   repos: Repos,
   location: InventoryLocation,
   current: InventoryRecord,
   body: InventoryUpdateBody,
+  context: { projectId?: string | null; chatId?: string | null } = {},
 ): Promise<InventoryRecord | null> {
   const meta = { scope: location.scope, mountPointId: location.mountPointId, itemId: current.id, op: 'update' };
   const { archived, folder, ...fields } = body;
@@ -254,7 +266,7 @@ export async function updateInventoryItem(
     assertShape({ ...current, ...patch }, meta);
     if (nextKind === 'kit' && patch.itemIds !== undefined) {
       patch.itemIds = Array.from(new Set(patch.itemIds));
-      assertKitMembers(await loadPoolForLocation(repos, location), patch.itemIds, meta);
+      assertKitMembers(await loadPoolForLocation(repos, location, context), patch.itemIds, meta);
     }
   }
 

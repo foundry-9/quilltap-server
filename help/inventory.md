@@ -123,6 +123,10 @@ From an item's `⋮` menu, **Move to another inventory…** and **Copy to anothe
 
 An item moved out of a character's reach simply stops counting as carried; the next equip in that chat tidies the list.
 
+Kits are kept whole, and Pascal will not be talked out of it. A kit sent to another shelf must still be able to reach every one of its members from there, or it stays where it is and you are told which members it would lose. Likewise, moving an item that some kit names, to a shelf that kit cannot reach, is refused with the kit's name, so nobody opens the burglar's kit to find the lockpicks have wandered off to another character's vault. Move the kit first, or take the item out of it.
+
+Duplicate an item's file in the Scriptorium and the copy carries the original's identity. Quilltap keeps the original, the file at the item's own name, and leaves the copy where you put it, untouched by later changes, until you give it an identity of its own or delete it.
+
 ## Archiving
 
 **Archive** puts an item away without deleting it. Archived items are not carried in any chat and cannot be taken up; **Restore** brings them back. An archived archetype still answers for its instances.

@@ -123,6 +123,10 @@ export function repositories() {
       findManyByMountPointsInFolder: jest.fn(async (mps: string[], folder: string, ext = '.md', opts: { recursive?: boolean } = {}) =>
         docsIn(mps, folder, ext, opts.recursive === true),
       ),
+      findManyInFolderContaining: jest.fn(async (folder: string, ext: string, needles: string[]) => {
+        const mps = Array.from(new Set(Array.from(state.docs.keys()).map((k) => split(k).mp)))
+        return docsIn(mps, folder, ext, true).filter((doc) => needles.some((needle) => String(doc.content ?? '').includes(needle)))
+      }),
     },
     docMountFolders: {
       findByMountPointId: jest.fn(async (mp: string) =>

@@ -167,6 +167,34 @@ describe('arrival', () => {
     expect(carried('chat-1', 'c-viv')).toEqual([ring.id])
   })
 
+  it('Reset to defaults holds the chat lock: an equip sent at the same moment is never rewound', async () => {
+    const viv = await loc('character', 'c-viv')
+    const lantern = await createInventoryItem(repos(), viv, body({ name: 'lantern' }))
+    const chat = addChat('chat-1', ['c-viv'])
+    // No defaults, so the reset ends with its own empty write — the one that
+    // used to land after a concurrent equip and wipe it. The equip is sent the
+    // moment the reset clears the entry, and given time to finish if nothing
+    // holds it back.
+    const setEquipped = (getFakeRepos() as unknown as { chats: { setEquippedInventory: jest.Mock } }).chats.setEquippedInventory
+    const original = setEquipped.getMockImplementation() as (...args: unknown[]) => Promise<boolean>
+    let equipping: Promise<unknown> | null = null
+    setEquipped.mockImplementation(async (...args: unknown[]) => {
+      const result = await original(...args)
+      if (args[2] === null && !equipping) {
+        equipping = equipItems(repos(), chat, 'c-viv', [lantern.id], CTX)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      return result
+    })
+    try {
+      await resetInventoryToDefaults(repos(), chat, 'c-viv', 'user-1')
+      await equipping
+    } finally {
+      setEquipped.mockImplementation(original)
+    }
+    expect(carried('chat-1', 'c-viv')).toEqual([lantern.id])
+  })
+
   it('a cap breach at arrival drops the object with a warn and never fails the arrival', async () => {
     const viv = await loc('character', 'c-viv')
     await createInventoryItem(repos(), viv, body({ name: 'dagger', equippedByDefault: true }))

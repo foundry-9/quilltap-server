@@ -775,15 +775,17 @@ async function autoGenerateFirstMessage(
   const chatRow = await repos.chats.findById(chatId);
 
   // What the opener carries on arrival (the Inventory). `buildChatContext`
-  // runs before the chat exists, so the section joins the greeting's prompt
-  // here, once arrival defaults have landed. The stored system-prompt message
-  // is untouched; absent when nothing carried has a description.
+  // runs before the chat exists, so the section is built here, once arrival
+  // defaults have landed, and rides the greeting turn as a trailing section —
+  // never the system prompt — exactly as on every later turn. Absent when
+  // nothing carried has a description.
   const openerInventory = chatRow
     ? await buildInventorySection({ chat: chatRow, characterId: context.character.id, repos })
     : null;
 
   const baseParams = {
-    systemPrompt: openerInventory ? `${context.systemPrompt}\n\n${openerInventory}` : context.systemPrompt,
+    systemPrompt: context.systemPrompt,
+    ...(openerInventory ? { trailingContextSections: [openerInventory] } : {}),
     characterName: context.character.name,
     provider: connectionProfile.provider,
     modelName: connectionProfile.modelName,
@@ -873,6 +875,7 @@ async function autoGenerateFirstMessage(
       participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
       projectContext,
       recentConversationsBlock: recentConversationsBlock || undefined,
+      ...(openerInventory ? { trailingContextSections: [openerInventory] } : {}),
     });
 
     if (!result.content) {

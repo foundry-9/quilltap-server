@@ -455,9 +455,10 @@ export async function sanitizeAppearancesIfNeeded(
     return appearances
   }
 
-  // 3. Classify concatenated appearance text
+  // 3. Classify concatenated appearance text — what each character carries
+  // included, since it reaches the same moderated provider.
   const combinedText = appearances
-    .map(a => `${a.physicalDescription} ${a.clothingDescription}`)
+    .map(a => [a.physicalDescription, a.clothingDescription, a.carryingDescription].filter(Boolean).join(' '))
     .join(' | ')
 
   let classification
@@ -508,7 +509,7 @@ export async function sanitizeAppearancesIfNeeded(
 
   const toSanitize = appearances.map(a => ({
     characterId: a.characterId,
-    appearanceText: `${a.physicalDescription}. ${a.clothingDescription}`.trim(),
+    appearanceText: sanitizableAppearanceText(a),
   }))
 
   const sanitizeResult = await sanitizeAppearance(
@@ -534,21 +535,35 @@ export async function sanitizeAppearancesIfNeeded(
       s => s.characterId === appearance.characterId
     )
     if (!sanitized) return appearance
-    const textChanged = sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()
+    const textChanged = sanitized.appearanceText !== sanitizableAppearanceText(appearance)
     if (!textChanged && !sanitized.undressed) return appearance
     return {
       ...appearance,
       ...(textChanged
         ? {
-            // Use sanitized text as both physical + clothing combined
+            // Use sanitized text as physical + clothing + carrying combined;
+            // the carrying phrase is inside it now, so it is not appended again.
             physicalDescription: sanitized.appearanceText,
             clothingDescription: '',
+            carryingDescription: undefined,
             wasSanitized: true,
           }
         : {}),
       ...(sanitized.undressed ? { needsConcealment: true } : {}),
     }
   })
+}
+
+/**
+ * One character's appearance as the sanitizer sees it: physical, clothing and
+ * (when anything carried is described) the carrying phrase, as sentences.
+ */
+function sanitizableAppearanceText(
+  a: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription'>,
+): string {
+  const base = `${a.physicalDescription}. ${a.clothingDescription}`.trim()
+  const carrying = a.carryingDescription?.trim()
+  return carrying ? `${base}. ${carrying}`.trim() : base
 }
 
 /**

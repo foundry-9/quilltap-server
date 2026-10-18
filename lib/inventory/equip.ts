@@ -119,6 +119,30 @@ interface EquipOptions {
 }
 
 /**
+ * Run `fn` holding a chat's carried-set lock — the one every write of
+ * `chats.equippedInventory` takes, since `setEquippedInventory` is a
+ * read-modify-write of the whole map. Inside it, equip through
+ * {@link equipItemsHoldingLock}, never {@link equipItems} (the chain is not
+ * re-entrant).
+ */
+export function withChatInventoryLock<T>(chatId: string, fn: () => Promise<T>): Promise<T> {
+  return runSerialized(`inventory-equip:${chatId}`, fn);
+}
+
+/** {@link equipItems} for a caller already inside {@link withChatInventoryLock}. */
+export function equipItemsHoldingLock(
+  repos: Repos,
+  chat: EquipChat,
+  characterId: string,
+  ids: readonly string[],
+  ctx: InventoryChangeContext,
+  opts: EquipOptions = {},
+): Promise<EquipResult> {
+  assertParticipant(chat, characterId);
+  return equipUnserialized(repos, chat, characterId, ids, ctx, opts);
+}
+
+/**
  * Equip objects (and kits) for one character in one chat. See the module
  * header for the plan-then-write contract.
  */
@@ -131,7 +155,7 @@ export function equipItems(
   opts: EquipOptions = {},
 ): Promise<EquipResult> {
   assertParticipant(chat, characterId);
-  return runSerialized(`inventory-equip:${chat.id}`, () => equipUnserialized(repos, chat, characterId, ids, ctx, opts));
+  return withChatInventoryLock(chat.id, () => equipUnserialized(repos, chat, characterId, ids, ctx, opts));
 }
 
 async function equipUnserialized(
@@ -280,7 +304,7 @@ export function unequipItems(
   ctx: InventoryChangeContext,
 ): Promise<UnequipResult> {
   assertParticipant(chat, characterId);
-  return runSerialized(`inventory-equip:${chat.id}`, async () => {
+  return withChatInventoryLock(chat.id, async () => {
     const fresh = await freshChat(repos, chat);
     const pool = await poolFor(repos, fresh, characterId);
     const current = readEquippedSet(fresh, characterId, pool);

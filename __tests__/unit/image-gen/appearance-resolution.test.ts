@@ -39,6 +39,7 @@ import type {
 import {
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
+  sceneDescriptionParts,
   type ResolvedCharacterAppearance,
   type AppearanceResolutionInput,
   type AppearanceResolutionResult,
@@ -656,6 +657,36 @@ describe('Appearance Resolution Module', () => {
         expect(result[0].physicalDescription).toBe('A young woman with red hair wearing casual clothes')
         expect(result[0].clothingDescription).toBe('') // Cleared
         expect(result[0].needsConcealment).toBeUndefined()
+      })
+
+      it('classifies and sanitizes what a character carries with the rest of their appearance', async () => {
+        const carrying: ResolvedCharacterAppearance[] = [
+          { ...sampleAppearances[0], carryingDescription: 'carrying a severed head on a pike' },
+        ]
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'violence', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [{ characterId: 'char-1', appearanceText: 'A young woman with red hair, carrying a banner' }],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          carrying, dangerOnSettings, false, false, testSelection, testUserId, testChatId
+        )
+
+        expect(mockClassifyContent.mock.calls[0][0]).toContain('severed head')
+        expect(mockSanitizeAppearance.mock.calls[0][0]).toEqual([
+          {
+            characterId: 'char-1',
+            appearanceText: 'A young woman with red hair. Blue jeans and t-shirt. carrying a severed head on a pike',
+          },
+        ])
+        expect(result[0].wasSanitized).toBe(true)
+        expect(result[0].carryingDescription).toBeUndefined()
+        expect(sceneDescriptionParts(result[0]).join('. ')).not.toContain('severed')
       })
 
       it('should flag an undressed character for concealment in conceal mode', async () => {

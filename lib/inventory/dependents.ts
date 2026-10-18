@@ -66,14 +66,36 @@ export async function readAllInventoryRecords(): Promise<MountedInventoryRecord[
   return out;
 }
 
-/** Find archetypes by id anywhere in the instance (the pool's parent fallback). */
+/**
+ * Find records by id anywhere in the instance (the pool's parent fallback).
+ * Runs on the prompt and image paths, so it asks the index only for the
+ * files that mention a wanted id and parses those, never the whole instance.
+ */
 export async function findRecordsAnywhere(ids: readonly string[]): Promise<Map<string, MountedInventoryRecord>> {
   const wanted = new Set(ids);
   const found = new Map<string, MountedInventoryRecord>();
   if (wanted.size === 0) return found;
-  for (const entry of await readAllInventoryRecords()) {
-    if (wanted.has(entry.record.id) && !found.has(entry.record.id)) found.set(entry.record.id, entry);
+  const docs = await getRepositories().docMountDocuments.findManyInFolderContaining(
+    INVENTORY_FOLDER,
+    '.json',
+    Array.from(wanted),
+  );
+  const candidates = docs
+    .filter((doc) => isInventoryItemDocumentPath(doc.relativePath))
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  for (const doc of candidates) {
+    const record = parseInventoryItemFile(doc, { quiet: true });
+    if (record && wanted.has(record.id) && !found.has(record.id)) {
+      found.set(record.id, { record, mountPointId: doc.mountPointId });
+    }
   }
+  logger.debug('[InventoryDependents] Found records by id across the instance', {
+    wanted: wanted.size,
+    candidates: candidates.length,
+    found: found.size,
+    op: 'find-anywhere',
+    context: 'inventory',
+  });
   return found;
 }
 
@@ -96,6 +118,62 @@ async function describeMount(
   if (group) return { scope: 'group', ownerId: group.id, ownerName: group.name, ownerArchived: false };
   const mount = await repos.docMountPoints.findById(mountPointId);
   return { scope: 'unknown', ownerId: null, ownerName: mount?.name ?? null, ownerArchived: false };
+}
+
+/** Which tier a mount is, or null when it belongs to no Inventory owner. */
+export async function mountScopeOf(mountPointId: string): Promise<InventoryScope | null> {
+  const owner = await describeMount(mountPointId, await getGeneralMountPointId());
+  return owner.scope === 'unknown' ? null : owner.scope;
+}
+
+/**
+ * Whether an object living at `target` is within reach of a kit kept at
+ * `kitMount`: its own tier, Quilltap General, and for a character's vault
+ * the groups they belong to and any project (a project member is reached
+ * in that project's chats).
+ */
+export async function isReachableFromKitTier(
+  kitMountPointId: string,
+  target: { mountPointId: string; scope: InventoryScope },
+): Promise<boolean> {
+  if (target.mountPointId === kitMountPointId || target.scope === 'general') return true;
+  const owner = await describeMount(kitMountPointId, await getGeneralMountPointId());
+  if (owner.scope !== 'character' || !owner.ownerId) return false;
+  if (target.scope === 'project') return true;
+  if (target.scope !== 'group') return false;
+  const { groupLocationsForCharacter } = await import('@/lib/inventory/location');
+  return (await groupLocationsForCharacter(owner.ownerId)).some((loc) => loc.mountPointId === target.mountPointId);
+}
+
+/**
+ * The non-archived kits, anywhere, that name `itemId` and could not reach it
+ * once it lives at `target` — what a move would strand.
+ */
+export async function findKitsStrandedByMove(
+  itemId: string,
+  target: { mountPointId: string; scope: InventoryScope },
+): Promise<Array<{ id: string; name: string | null; ownerName: string | null; mountPointId: string }>> {
+  const docs = await getRepositories().docMountDocuments.findManyInFolderContaining(INVENTORY_FOLDER, '.json', [itemId]);
+  const generalMountPointId = await getGeneralMountPointId();
+  const out: Array<{ id: string; name: string | null; ownerName: string | null; mountPointId: string }> = [];
+  for (const doc of docs) {
+    if (!isInventoryItemDocumentPath(doc.relativePath)) continue;
+    const kit = parseInventoryItemFile(doc, { quiet: true });
+    if (!kit || kit.kind !== 'kit' || kit.archivedAt || !(kit.itemIds ?? []).includes(itemId)) continue;
+    if (await isReachableFromKitTier(doc.mountPointId, target)) continue;
+    const owner = await describeMount(doc.mountPointId, generalMountPointId);
+    out.push({ id: kit.id, name: kit.title || kit.name || null, ownerName: owner.ownerName, mountPointId: doc.mountPointId });
+  }
+  logger.debug('[InventoryDependents] Checked kits a move would strand', {
+    itemId,
+    targetMountPointId: target.mountPointId,
+    targetScope: target.scope,
+    candidates: docs.length,
+    stranded: out.length,
+    op: 'kits-stranded',
+    context: 'inventory',
+  });
+  return out;
 }
 
 /** Every instance of `archetypeId`, in every mount, tagged with its holder. */
