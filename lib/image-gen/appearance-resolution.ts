@@ -59,6 +59,13 @@ export interface ResolvedCharacterAppearance {
   clothingDescription: string
   /** How clothing was determined */
   clothingSource: 'narrative' | 'stored' | 'default'
+  /**
+   * What the character carries in the chat (the Inventory's equipped objects'
+   * `imageDescription`s, e.g. "carrying a longsword with a jewelled pommel"),
+   * or '' — set by {@link resolveCharacterAppearances} whatever path resolved
+   * the rest, and rendered beside the outfit.
+   */
+  carryingDescription?: string
   /** Whether the Concierge sanitized this appearance */
   wasSanitized: boolean
   /**
@@ -235,6 +242,51 @@ function mapResolutionResults(
  * @returns Resolution result with appearances and whether the LLM succeeded
  */
 export async function resolveCharacterAppearances(
+  characters: AppearanceResolutionInput[],
+  recentMessages: ChatMessage[],
+  imagePrompt: string,
+  cheapLLMSelection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+  sceneState?: { characters: Array<{ characterId: string; characterName: string; appearance: string | null; clothing: string | null }> } | null
+): Promise<AppearanceResolutionResult> {
+  const result = await resolveAppearancesWithoutInventory(
+    characters, recentMessages, imagePrompt, cheapLLMSelection, userId, chatId, sceneState,
+  )
+  if (!chatId || result.appearances.length === 0) return result
+  return { ...result, appearances: await withCarrying(result.appearances, chatId) }
+}
+
+/**
+ * Add what each character carries in the chat (the Inventory) to its
+ * resolved appearance. The one place the image pipelines learn of it; fails
+ * soft to the appearances as they were.
+ */
+async function withCarrying(
+  appearances: ResolvedCharacterAppearance[],
+  chatId: string,
+): Promise<ResolvedCharacterAppearance[]> {
+  try {
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const { loadCarryingPhrase } = await import('@/lib/inventory/image-description')
+    const repos = getRepositories()
+    const chat = await repos.chats.findById(chatId)
+    if (!chat) return appearances
+    return await Promise.all(appearances.map(async (appearance) => {
+      const carrying = await loadCarryingPhrase(repos, chat, appearance.characterId)
+      return carrying ? { ...appearance, carryingDescription: carrying } : appearance
+    }))
+  } catch (error) {
+    logger.warn('[AppearanceResolution] Could not add carried objects to appearances', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return appearances
+  }
+}
+
+async function resolveAppearancesWithoutInventory(
   characters: AppearanceResolutionInput[],
   recentMessages: ChatMessage[],
   imagePrompt: string,
@@ -497,4 +549,20 @@ export async function sanitizeAppearancesIfNeeded(
       ...(sanitized.undressed ? { needsConcealment: true } : {}),
     }
   })
+}
+
+/**
+ * The Lantern's description of one resolved character: the (gender-prefixed)
+ * physical description, what they wear, and what they carry — each a
+ * sentence-fragment the caller joins with `. `. Pure.
+ */
+export function sceneDescriptionParts(
+  resolved: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription'>,
+  genderPrefix = '',
+): string[] {
+  const parts = [genderPrefix + resolved.physicalDescription]
+  if (resolved.clothingDescription) parts.push(`Wearing: ${resolved.clothingDescription}`)
+  const carrying = resolved.carryingDescription?.trim()
+  if (carrying) parts.push(carrying.charAt(0).toUpperCase() + carrying.slice(1))
+  return parts
 }

@@ -82,6 +82,7 @@ import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
+import { buildInventorySection } from '@/lib/inventory/prompt-section';
 
 type Repos = RepositoryContainer;
 
@@ -767,8 +768,22 @@ async function autoGenerateFirstMessage(
 
   const sampling = resolveSamplingParams(parameters);
 
+  // The chat's own Concierge state decides which desk this greeting goes to.
+  // `applyRequestedConciergeState` has already written the state by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
+  // asks the frank desk first instead of discovering it after a refusal.
+  const chatRow = await repos.chats.findById(chatId);
+
+  // What the opener carries on arrival (the Inventory). `buildChatContext`
+  // runs before the chat exists, so the section joins the greeting's prompt
+  // here, once arrival defaults have landed. The stored system-prompt message
+  // is untouched; absent when nothing carried has a description.
+  const openerInventory = chatRow
+    ? await buildInventorySection({ chat: chatRow, characterId: context.character.id, repos })
+    : null;
+
   const baseParams = {
-    systemPrompt: context.systemPrompt,
+    systemPrompt: openerInventory ? `${context.systemPrompt}\n\n${openerInventory}` : context.systemPrompt,
     characterName: context.character.name,
     provider: connectionProfile.provider,
     modelName: connectionProfile.modelName,
@@ -780,11 +795,6 @@ async function autoGenerateFirstMessage(
     profileParameters: profileParams(connectionProfile),
   };
 
-  // The chat's own Concierge state decides which desk this greeting goes to.
-  // `applyRequestedConciergeState` has already written the state by the time the
-  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
-  // asks the frank desk first instead of discovering it after a refusal.
-  const chatRow = await repos.chats.findById(chatId);
 
   // The resolver is asked WITH the chat: an Unmoderated chat routes direct,
   // a Locked chat never fails over, and an off-duty Concierge does neither.

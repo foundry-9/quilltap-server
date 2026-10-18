@@ -154,6 +154,7 @@ import {
 } from '@/lib/services/aurora-notifications/core-whisper'
 import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
+import { buildInventorySection } from '@/lib/inventory/prompt-section'
 import { buildUserNarrationAnchor } from '@/lib/chat/context/user-narration-anchor'
 import {
   postHostTimestampAnnouncement,
@@ -2172,6 +2173,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // The Inventory: what this character carries in this chat, by the objects'
+  // `description`s (what the characters know about them). A trailing section
+  // after the progressions report and before the inform block; null — and so
+  // absent — when nothing carried has a description. Reads only. Skipped in
+  // continue mode with the progressions, for the same reason.
+  let inventoryLLMContext = ''
+  if (!isContinueMode) {
+    inventoryLLMContext = (await buildInventorySection({ chat, characterId: character.id, repos: getRepositories() })) ?? ''
+  }
+
   // "Nothing to add" turn-skipping: build the ephemeral Turn note when the
   // orchestrator has decided this character may pass. Injected as a trailing
   // context section on the new user message when there is one, or as its own
@@ -2220,8 +2231,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // The trailing sections, in their one order: who the character is (Core
   // whisper), what it remembers (recall), what arrived for it (mail), what it
-  // is carrying (progressions), what the operator says is so (inform), and
-  // the turn note last. Built ONCE and used by both branches below — two
+  // is carrying (progressions, then the Inventory), what the operator says is
+  // so (inform), and the turn note last. Built ONCE and used by both branches below — two
   // hand-kept copies of this list is how recall, mail and the Core whisper
   // went missing from turns with no new user message while their side effects
   // (whisper posted, rows stamped, cadence advanced) still ran (bug 199).
@@ -2230,6 +2241,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     llmRecallText,
     suparnaMailLLMContext,
     progressionsLLMContext,
+    inventoryLLMContext,
     informBlock,
     turnSkipInstruction,
   ].filter((section): section is string => !!section)
