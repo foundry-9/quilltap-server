@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Test: Inventory-gated custom tool end to end
+
+- New `__tests__/unit/lib/pascal/custom-tools-measure-twice.test.ts` runs a real inventory-gated tool ("Measure Twice") over the shared Inventory test store: a title-keyed `availableWhen` gate opens for the character carrying the titled instance, stays closed for a character carrying another instance of the same archetype, and stays closed with no inventory context (`eq: "equipped"` and `inventoryCount` `lt: 1`). It also checks that `{{inventory.<ref>.title}}` and `.metadata.<key>` render a title containing an apostrophe. Test only; no runtime change.
+
 #### Fix: Scenario lists sort by title
 
 - Every list of scenarios now sorts by title (frontmatter `name`, or the parser's fallback), then filename, case-insensitively, ignoring a leading "The" (also "the-" / "the_" in filenames). New `lib/scenarios/sort.ts` (`compareScenarios`, `sortScenarios`, `scenarioSortKey`).
