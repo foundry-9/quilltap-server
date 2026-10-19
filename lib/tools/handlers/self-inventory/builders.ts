@@ -21,7 +21,7 @@ import { getModelContextLimit, resolveContextWindow } from '@/lib/llm/model-cont
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
-import { formatSelfUri, formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
+import { formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@/lib/paths';
 import { isDevelopment } from '@/lib/env';
 import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
@@ -60,9 +60,10 @@ async function buildVaultCharacterSection(
   }
 
   const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
-  // The character's own vault → the stable, readable self form.
+  // Named, not `qtap://self/…`: this tool result is read by everyone in the
+  // chat, and another reader's `self` is their own vault (bug 256).
   const files = mapVaultFiles(rows, mountPoint.name, includeAutomaticImages, true, (rel) =>
-    formatSelfUri(rel)
+    formatDocStoreUri({ mountPointName: mountPoint.name, mountPointId: mountPoint.id, path: rel })
   );
 
   return {
@@ -977,8 +978,11 @@ async function buildContextCharacters(
 /**
  * Build the canonical qtap:// URI for a chat-context document from the triple
  * stored on the chat_documents row. The row carries only the mount-point
- * *name* (or the reserved 'self' literal, or null), so document-store URIs use
- * the name form; that is enough for a copy-pasteable hint.
+ * *name*, so document-store URIs use the name form; that is enough for a
+ * copy-pasteable hint. An older row may carry the reserved 'self' literal (or
+ * null): that named the OPENER's vault, and printed as `qtap://self/…` it
+ * would send every other reader into their own (bug 256), so such a row gets
+ * no URI at all.
  */
 function buildContextFileUri(
   scope: 'project' | 'document_store' | 'general',
@@ -988,13 +992,14 @@ function buildContextFileUri(
   if (scope === 'project' || scope === 'general') {
     return formatScopedUri(scope, filePath);
   }
-  if (!mountPoint || mountPoint.toLowerCase() === 'self') {
-    return formatSelfUri(filePath);
-  }
+  if (!mountPoint || mountPoint.toLowerCase() === 'self') return '';
   return formatDocStoreUri({ mountPointName: mountPoint, mountPointId: '', path: filePath });
 }
 
-function buildHowToReach(uri: string): string {
+function buildHowToReach(uri: string, filePath: string): string {
+  if (!uri) {
+    return `unknown store: "${filePath}" was opened from someone's own vault before stores were recorded by name; find it with doc_list_files in the vault you mean`;
+  }
   return `doc_read_file({ uri: "${uri}" })`;
 }
 
@@ -1010,7 +1015,7 @@ async function buildContextFiles(chatId: string): Promise<SelfInventoryContextFi
         filePath: d.filePath,
         displayTitle: d.displayTitle ?? null,
         uri,
-        howToReach: buildHowToReach(uri),
+        howToReach: buildHowToReach(uri, d.filePath),
       };
     })
     .sort((a, b) => a.filePath.localeCompare(b.filePath));

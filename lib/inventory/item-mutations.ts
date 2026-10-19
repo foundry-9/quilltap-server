@@ -16,7 +16,14 @@
  *   - an archetype with dependents is deleted only with `force` (bake first),
  *     and a deleted kit member is dropped from the kits of its tier;
  *   - `canCopy: false` refuses every copy (`NOT_COPYABLE`); move and
- *     instantiate stay allowed.
+ *     instantiate stay allowed;
+ *   - every create, edit, archive, restore, delete and copy goes through the
+ *     title lint (`title-lint.ts`) with the record before and after: no title
+ *     may enter that shadows a kind name or a live gate key (`TITLE_SHADOW`),
+ *     a lint that cannot read its pools refuses an entering title
+ *     (`TITLE_CHECK_UNAVAILABLE`), and a title that leaves while a gate keys
+ *     on it rings a row. A transfer (`preserve`) is a move, not a create, and
+ *     an instance with no title of its own inherits one already linted.
  *
  * Every mutation logs at `debug`; refusals at `info` with the code.
  *
@@ -27,7 +34,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
-import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
 import {
   INVENTORY_INHERITABLE_FIELDS,
   inventoryShapeIssues,
@@ -67,6 +74,7 @@ import { loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
 import { resolveItem, withInventoryDefaults } from '@/lib/inventory/resolve';
 import { sanitizeInventorySvg } from '@/lib/inventory/svg';
 import { cleanupInventoryItemImages } from '@/lib/inventory/item-images';
+import { lintInventoryTitle, writeTitleLintRows } from '@/lib/inventory/title-lint';
 
 type Repos = Pick<RepositoryContainer, 'characters' | 'chats'>;
 
@@ -142,9 +150,8 @@ export async function createInventoryItem(
   assertShape(fields, meta);
   if (fields.parentId) refuse(new InventoryInvalidParentError('Create an instance with instantiate'), meta);
   const itemIds = Array.from(new Set(fields.itemIds ?? []));
-  if (fields.kind === 'kit') {
-    assertKitMembers(opts.pool ?? (await loadPoolForLocation(repos, location)), itemIds, meta);
-  }
+  const pool = fields.kind === 'kit' ? (opts.pool ?? (await loadPoolForLocation(repos, location))) : opts.pool;
+  if (fields.kind === 'kit') assertKitMembers(pool as InventoryPool, itemIds, meta);
   const now = new Date().toISOString();
   const record: InventoryRecord = {
     ...withInventoryDefaults({
@@ -160,7 +167,11 @@ export async function createInventoryItem(
     imageFileId: opts.preserve?.imageFileId ?? null,
     folder: folder ? await location.resolveFolder(folder) : '',
   };
+  const verdict = opts.preserve
+    ? null
+    : await lintInventoryTitle(repos, location, { door: 'create', before: null, after: record }, { pool });
   const stored = await location.create(record);
+  if (verdict) writeTitleLintRows(verdict, stored.id, location);
   logOp('Created object', location, { itemId: stored.id, kind: stored.kind, isArchetype: stored.isArchetype, folder: stored.folder });
   return stored;
 }
@@ -212,7 +223,11 @@ export async function instantiate(
     // The file is named after the archetype until the instance has a title of its own.
     fileStem: archetype.title || archetype.name || undefined,
   };
+  // Only a title of the instance's own is new; an inherited one was linted on the archetype.
+  const ownTitle = typeof overrides.title === 'string' && overrides.title.trim() !== '';
+  const verdict = ownTitle ? await lintInventoryTitle(repos, location, { door: 'create', before: null, after: record }, { pool }) : null;
   const stored = await location.create(record);
+  if (verdict) writeTitleLintRows(verdict, stored.id, location);
   const item = resolveItem(stored, (id) => (id === archetypeId ? archetype : pool.get(id)));
   logOp('Instantiated archetype', location, { itemId: stored.id, archetypeId, overrides: Object.keys(overrides) });
   return { record: stored, item };
@@ -277,7 +292,14 @@ export async function updateInventoryItem(
     if (stamp) patch.archivedAt = stamp.archivedAt;
   }
 
+  const verdict = await lintInventoryTitle(
+    repos,
+    location,
+    { door: 'update', before: current, after: { ...current, ...patch } },
+    { context },
+  );
   const updated = await location.update(current.id, patch);
+  if (updated) writeTitleLintRows(verdict, current.id, location);
   logOp('Updated object', location, { itemId: current.id, fields: Object.keys(patch), found: updated !== null });
   return updated;
 }
@@ -290,7 +312,12 @@ export async function clearOverrides(
 ): Promise<InventoryRecord | null> {
   const meta = { scope: location.scope, mountPointId: location.mountPointId, itemId: current.id, op: 'clear-override' };
   if (!current.parentId) refuse(new InventoryInvalidParentError('Only an instance inherits; this object has no archetype'), meta);
+  // Clearing a title override hands the instance its archetype's title: an entering title like any other.
+  const after: Record<string, unknown> = { ...current };
+  for (const field of fields) delete after[field];
+  const verdict = await lintInventoryTitle(getRepositories(), location, { door: 'update', before: current, after: after as InventoryRecord });
   const updated = await location.update(current.id, {}, fields);
+  if (updated) writeTitleLintRows(verdict, current.id, location);
   logOp('Cleared overrides', location, { itemId: current.id, fields });
   return updated;
 }
@@ -303,7 +330,10 @@ export async function setInventoryItemArchived(
 ): Promise<{ item: InventoryRecord | null; changed: boolean }> {
   const stamp = archivedPatch(current.archivedAt, archived, new Date().toISOString());
   if (!stamp) return { item: current, changed: false };
+  // Archiving takes a title out of the pool (the bell); restoring brings it back (the lint).
+  const verdict = await lintInventoryTitle(getRepositories(), location, { door: 'archive', before: current, after: { ...current, ...stamp } });
   const item = await location.update(current.id, stamp);
+  if (item) writeTitleLintRows(verdict, current.id, location);
   logOp('Archive state changed', location, { itemId: current.id, archivedAt: stamp.archivedAt });
   return { item, changed: item !== null };
 }
@@ -432,12 +462,14 @@ export async function deleteInventoryItem(
     }
   }
 
+  const verdict = await lintInventoryTitle(repos, location, { door: 'delete', before: current, after: null });
   const deleted = await location.delete([current.id], (remaining) =>
     remaining
       .filter((record) => record.kind === 'kit' && (record.itemIds ?? []).includes(current.id) && (record.itemIds ?? []).length > 1)
       .map((kit) => ({ id: kit.id, patch: { itemIds: (kit.itemIds ?? []).filter((id) => id !== current.id) } })),
   );
   if (deleted.length > 0) {
+    writeTitleLintRows(verdict, current.id, location);
     await cleanupInventoryItemImages(repos, current.id, '[InventoryMutations]', meta);
   }
   logOp('Deleted object', location, { itemId: current.id, deleted: deleted.length > 0, forced: !!opts.force, detached });
@@ -480,7 +512,9 @@ export async function duplicateInventoryItem(
   assertCopyable([resolved], { itemId: current.id, op: 'duplicate' });
   const titles = (await location.readItems(true)).map((r) => r.title || r.name || '').filter(Boolean);
   const copy = copyRecord(current, current.folder ?? '', nextCopyTitle(resolved.title || resolved.name, titles));
+  const verdict = await lintInventoryTitle(repos, location, { door: 'create', before: null, after: copy }, { pool });
   const stored = await location.create(copy);
+  writeTitleLintRows(verdict, stored.id, location);
   logOp('Duplicated object', location, { itemId: current.id, copyId: stored.id });
   return stored;
 }
@@ -514,7 +548,13 @@ export async function copyInventoryItemsToFolder(
   const sources = uniqueIds.map((id) => records.get(id) as InventoryRecord);
   assertCopyable(sources.map((r) => pool.resolve(r)), { op: 'copy-items', folder: target });
   const copies: InventoryRecord[] = [];
-  for (const source of sources) copies.push(await location.create(copyRecord(source, target)));
+  for (const source of sources) {
+    // A copy keeps its source's title: a second object answering to it, linted as it enters.
+    const copy = copyRecord(source, target);
+    const verdict = await lintInventoryTitle(repos, location, { door: 'create', before: null, after: copy }, { pool });
+    copies.push(await location.create(copy));
+    writeTitleLintRows(verdict, copy.id, location);
+  }
   logOp('Copied objects to folder', location, { folder: target, count: copies.length });
   return copies;
 }

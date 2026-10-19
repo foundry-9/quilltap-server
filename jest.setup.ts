@@ -3,6 +3,12 @@ import fetchMock from 'jest-fetch-mock'
 
 fetchMock.enableMocks()
 
+// The memory calendar reads QUILLTAP_TIMEZONE before the system zone. A shell
+// opened from Quilltap exports it, and the day-reference suites compute their
+// expectations in the process's own zone, so an inherited value fails them.
+// Suites that test the variable set it themselves.
+delete process.env.QUILLTAP_TIMEZONE
+
 // Polyfill setImmediate for Node.js APIs used in archiver
 global.setImmediate = global.setImmediate || ((fn: (...args: any[]) => void, ...args: any[]) => global.setTimeout(fn, 0, ...args))
 

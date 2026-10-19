@@ -60,6 +60,7 @@ import {
   assertCharacterMayRead,
   assertCharacterMayWrite,
   getCharacterBlockedReadPaths,
+  publishedMountPoint,
 } from './shared';
 
 /**
@@ -88,7 +89,7 @@ export async function handleReadFile(
   const resolved = await resolveDocEditPath(scope, input.path, readContext);
   // character_read:false → not-found for characters (operator unaffected).
   await assertCharacterMayRead(resolved, context);
-  const uri = await uriForResolvedPath(resolved, context);
+  const uri = await uriForResolvedPath(resolved);
 
   // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
   // may still be readable if the blob has an extractedText representation.
@@ -292,7 +293,7 @@ export async function handleWriteFile(
 
   await triggerReindexIfNeeded(resolved);
 
-  const writtenUri = await uriForResolvedPath(resolved, context);
+  const writtenUri = await uriForResolvedPath(resolved);
 
   const announceScope = scope as 'project' | 'document_store' | 'general';
   const displayTitle = path.basename(input.path);
@@ -306,7 +307,7 @@ export async function handleWriteFile(
       displayTitle,
       uri: writtenUri,
       scope: announceScope,
-      mountPoint: input.mount_point,
+      mountPoint: publishedMountPoint(resolved, input.mount_point),
       origin,
       change: { kind: 'created', body: contentToWrite },
       hiddenFromCharacters,
@@ -317,7 +318,7 @@ export async function handleWriteFile(
       displayTitle,
       uri: writtenUri,
       scope: announceScope,
-      mountPoint: input.mount_point,
+      mountPoint: publishedMountPoint(resolved, input.mount_point),
       origin,
       change: { kind: 'edited', diff: generateUnifiedDiff(previousContent, contentToWrite, displayTitle) },
       hiddenFromCharacters,
@@ -430,14 +431,14 @@ export async function handleStrReplace(
 
   const lineNumber = getLineNumber(content, matchResult.index);
 
-  const editedUri = await uriForResolvedPath(resolved, context);
+  const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
   await postLibrarianWriteAnnouncement({
     chatId: context.chatId,
     displayTitle,
     uri: editedUri,
     scope: scope as 'project' | 'document_store' | 'general',
-    mountPoint: input.mount_point,
+    mountPoint: publishedMountPoint(resolved, input.mount_point),
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
     hiddenFromCharacters: contentHiddenFromCharacters(newContent),
@@ -555,14 +556,14 @@ export async function handleInsertText(
 
   const lineNumber = getLineNumber(newContent, insertOffset);
 
-  const editedUri = await uriForResolvedPath(resolved, context);
+  const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
   await postLibrarianWriteAnnouncement({
     chatId: context.chatId,
     displayTitle,
     uri: editedUri,
     scope: scope as 'project' | 'document_store' | 'general',
-    mountPoint: input.mount_point,
+    mountPoint: publishedMountPoint(resolved, input.mount_point),
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
     hiddenFromCharacters: contentHiddenFromCharacters(newContent),
@@ -595,7 +596,7 @@ export async function handleGrep(
     return { success: false, error: 'Grep requires a project context' };
   }
   const input = applyQtapUriToInput(rawInput);
-  const uriResolver = await buildDocStoreUriResolver(context.characterId);
+  const uriResolver = await buildDocStoreUriResolver();
 
   const maxResults = Math.min(input.max_results || 100, 500);
   const contextLines = input.context_lines || 0;
@@ -916,7 +917,7 @@ export async function handleListFiles(
       folder: parts.path !== '' ? parts.path : rawInput.folder,
     };
   }
-  const uriResolver = await buildDocStoreUriResolver(context.characterId);
+  const uriResolver = await buildDocStoreUriResolver();
 
   const files: DocFileInfo[] = [];
   const recursive = input.recursive !== false;

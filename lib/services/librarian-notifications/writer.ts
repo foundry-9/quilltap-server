@@ -31,7 +31,7 @@ import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { formatScopedUri, formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
+import { formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { policyFromContent } from '@/lib/doc-edit/document-policy';
 import type { MessageEvent } from '@/lib/schemas/types';
 
@@ -200,8 +200,15 @@ export interface LibrarianAttachAnnouncement {
 /**
  * Single canonical qtap:// URI for a Librarian-announced document, built from
  * the scope/mountPoint/path the announcement already carries — replacing the
- * old three-part `path/scope/mount_point` detail string. `mountPoint` may be
- * the reserved 'self' literal (a character acting on its own vault).
+ * old three-part `path/scope/mount_point` detail string.
+ *
+ * An announcement is read by everyone in the chat, so it never prints
+ * `qtap://self/…`: `self` means the vault of whoever follows it, and another
+ * character following one character's `self` address opens their own file
+ * with no error (bug 256). Callers pass the resolved store's name
+ * (`publishedMountPoint`); a `self` or missing store that still arrives (an
+ * old `chat_documents` row) is printed as a bare path, which names no store
+ * and so cannot open the wrong one.
  */
 function librarianUri(
   scope: 'project' | 'document_store' | 'general',
@@ -209,11 +216,19 @@ function librarianUri(
   path: string,
 ): string {
   if (scope === 'project' || scope === 'general') return formatScopedUri(scope, path);
-  if (!mountPoint || mountPoint.toLowerCase() === 'self') return formatSelfUri(path);
+  if (!mountPoint || mountPoint.toLowerCase() === 'self') {
+    logger.debug('[LibrarianNotification] No store name for an announced path; printing the bare path', {
+      context: 'librarian-notifications',
+      mountPoint: mountPoint ?? null,
+      path,
+    });
+    return `path "${path}" in a character's vault`;
+  }
   return formatDocStoreUri({ mountPointName: mountPoint, mountPointId: '', path });
 }
 
 function scopeLabel(scope: 'project' | 'document_store' | 'general', mountPoint?: string | null): string {
+  if (scope === 'document_store' && mountPoint?.toLowerCase() === 'self') return "a character's vault";
   if (scope === 'document_store' && mountPoint) {
     return `the document store "${mountPoint}"`;
   }

@@ -51,6 +51,10 @@ export function describeInventoryRefusal(error: unknown, fallback: string): stri
         ? 'That object is one of a kind and cannot be copied — tick "Can be copied" in its editor first, or move it instead.'
         : `${count} of those objects are one of a kind and cannot be copied — tick "Can be copied" in their editors first, or move them instead.`
     }
+    // The title lint's refusal is one line per collision; a toast shows it as one line.
+    if (error.code === 'TITLE_SHADOW' || error.code === 'TITLE_CHECK_UNAVAILABLE') {
+      return error.message.split('\n').map((line) => line.trim()).join('; ')
+    }
     return error.message
   }
   return error instanceof Error ? error.message : fallback

@@ -40,10 +40,20 @@ export interface InventoryTierMounts {
   projectMountPointIds: string[];
 }
 
+/** A tier mount the pool could not read, and why. Fail-soft readers skip it; the title lint refuses on it. */
+export interface UnreadInventoryMount {
+  mountPointId: string;
+  error: string;
+}
+
 export interface InventoryPool {
   /** The character whose reach this is; null for a shared tier's pool. */
   characterId: string | null;
   tiers: InventoryTierMounts;
+  /** Every mount this pool read (or tried to), so an empty pool still says where it looked. */
+  consultedMounts: readonly string[];
+  /** Mounts whose records are missing from this pool because the read failed. */
+  unreadMounts: readonly UnreadInventoryMount[];
   /** Every reachable record, archived included, shadowed by precedence. */
   byId: ReadonlyMap<string, InventoryRecordWithOrigin>;
   /** The holder's own tier's records (archived included). */
@@ -78,6 +88,8 @@ export function buildInventoryPool(
   tiers: InventoryTierMounts,
   layers: { own: Layer; group: Layer; project: Layer; general: Layer },
   externalParents: ReadonlyMap<string, InventoryRecordWithOrigin> = new Map(),
+  unreadMounts: readonly UnreadInventoryMount[] = [],
+  consultedMounts: readonly string[] = [],
 ): InventoryPool {
   const weakestFirst = [layers.general, layers.project, layers.group, layers.own];
   const byId = shadow(weakestFirst);
@@ -108,6 +120,8 @@ export function buildInventoryPool(
   return {
     characterId,
     tiers,
+    unreadMounts,
+    consultedMounts,
     byId,
     own: layers.own,
     reachable,
@@ -122,21 +136,30 @@ export function buildInventoryPool(
   };
 }
 
-/** Read a list of mounts weakest-first, tagging each record. Fails soft per mount. */
+/**
+ * Read a list of mounts weakest-first, tagging each record. Fails soft per
+ * mount, noting each failure in `unread` so a caller that must not guess can
+ * tell "this tier is empty" from "this tier was not read".
+ */
 async function readTier(
   mountPointIds: readonly string[],
   originOf: (mountPointId: string) => InventoryOrigin,
+  unread: UnreadInventoryMount[],
+  consulted: string[],
 ): Promise<InventoryRecordWithOrigin[]> {
   const out: InventoryRecordWithOrigin[] = [];
   for (const mountPointId of mountPointIds) {
+    consulted.push(mountPointId);
     try {
       const records = await readMountInventory({ mountPointId, scope: 'project', characterId: null });
       out.push(...records.map((record) => ({ ...record, origin: originOf(mountPointId), mountPointId })));
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      unread.push({ mountPointId, error: message });
       logger.warn('[InventoryPool] Failed to read an Inventory tier; skipping it', {
         mountPointId,
         context: 'inventory',
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       });
     }
   }
@@ -235,15 +258,17 @@ export async function loadInventoryPool(
   const ownOrigin: InventoryOrigin = { scope: 'character', id: characterId, name: character?.name ?? '' };
   const projectOrigin: InventoryOrigin = { scope: 'project', id: projectId, name: projectName };
 
+  const unread: UnreadInventoryMount[] = [];
+  const consulted: string[] = opts.ownRecords && ownMountPointId ? [ownMountPointId] : [];
   const [own, group, project, general] = await Promise.all([
     opts.ownRecords
       ? Promise.resolve(opts.ownRecords.map((record) => ({ ...record, origin: ownOrigin, mountPointId: ownMountPointId ?? undefined })))
       : ownMountPointId
-        ? readTier([ownMountPointId], () => ownOrigin)
+        ? readTier([ownMountPointId], () => ownOrigin, unread, consulted)
         : Promise.resolve([] as InventoryRecordWithOrigin[]),
-    readTier(Array.from(groupOriginByMount.keys()), (mp) => groupOriginByMount.get(mp) as InventoryOrigin),
-    readTier(projectMountPointIds.filter((mp) => mp !== ownMountPointId), () => projectOrigin),
-    readTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_INVENTORY_ORIGIN),
+    readTier(Array.from(groupOriginByMount.keys()), (mp) => groupOriginByMount.get(mp) as InventoryOrigin, unread, consulted),
+    readTier(projectMountPointIds.filter((mp) => mp !== ownMountPointId), () => projectOrigin, unread, consulted),
+    readTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_INVENTORY_ORIGIN, unread, consulted),
   ]);
   const layers = { own, group, project, general };
   const pool = buildInventoryPool(
@@ -251,6 +276,8 @@ export async function loadInventoryPool(
     { groupMountPointIds: Array.from(groupOriginByMount.keys()), projectMountPointIds },
     layers,
     await fetchExternalParents([own, group, project, general]),
+    unread,
+    consulted,
   );
   logger.debug('[InventoryPool] Loaded inventory pool', {
     characterId,
@@ -261,6 +288,7 @@ export async function loadInventoryPool(
     projectCount: project.length,
     generalCount: general.length,
     reachable: pool.byId.size,
+    unread: unread.length,
     op: 'pool',
     context: 'inventory',
   });
@@ -287,13 +315,19 @@ export async function loadPoolForLocation(
     mountPointId: location.mountPointId,
   }));
   const generalMountPointId = location.scope === 'general' ? null : await getGeneralMountPointId();
-  const general = generalMountPointId ? await readTier([generalMountPointId], () => GENERAL_INVENTORY_ORIGIN) : [];
+  const unread: UnreadInventoryMount[] = [];
+  const consulted: string[] = [location.mountPointId];
+  const general = generalMountPointId
+    ? await readTier([generalMountPointId], () => GENERAL_INVENTORY_ORIGIN, unread, consulted)
+    : [];
   const empty: InventoryRecordWithOrigin[] = [];
   return buildInventoryPool(
     null,
     { groupMountPointIds: [], projectMountPointIds: [] },
     { own, group: empty, project: empty, general },
     await fetchExternalParents([own, general]),
+    unread,
+    consulted,
   );
 }
 

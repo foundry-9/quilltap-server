@@ -25,7 +25,7 @@ function formatVaultCharacter(section: SelfInventoryVaultCharacterSection): stri
   }
 
   const lines = section.files.map(formatVaultFileLine);
-  const footer = `(To read one of these files: doc_read_file({ uri: "qtap://self/<relativePath>" }) — the reserved authority 'self' always addresses your own vault, whatever its name. The triple form doc_read_file(scope='document_store', mount_point='self', path='<relativePath>') still works, as do the name '${section.mountPointName}' and its ID.)`;
+  const footer = `(To read one of these files, use its uri, which names this vault and so reads the same whoever follows it. In your own calls the reserved authority 'self' is shorthand for YOUR vault — qtap://self/<relativePath> — but never hand a 'self' address to anyone else: it would open theirs.)`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
 }
 
