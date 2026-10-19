@@ -11,10 +11,11 @@
  * @module components/inventory/CarryingNowPane
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import type { CarriedEntry } from '@/lib/hooks/use-inventory'
+import { inventoryDisplayName } from '@/lib/inventory/resolve'
 import { InventoryGlyph, InventoryPicture } from './inventory-glyph'
 
 interface CarryingNowPaneProps {
@@ -26,10 +27,22 @@ interface CarryingNowPaneProps {
   onEquip: (ids: string[]) => void
   onUnequip: (ids: string[]) => void
   onReset: () => void
+  /** The *Take up…* picker's open state, held by the dialog so its own Escape and click-outside stand down while the picker is up. */
+  picking: boolean
+  onPickingChange: (open: boolean) => void
 }
 
-export function CarryingNowPane({ characterName, carried, pool, busy, onEquip, onUnequip, onReset }: CarryingNowPaneProps) {
-  const [picking, setPicking] = useState(false)
+export function CarryingNowPane({
+  characterName,
+  carried,
+  pool,
+  busy,
+  onEquip,
+  onUnequip,
+  onReset,
+  picking,
+  onPickingChange: setPicking,
+}: CarryingNowPaneProps) {
   const byId = useMemo(() => new Map(pool.map((i) => [i.id, i])), [pool])
   const carriedIds = useMemo(() => new Set(carried.equipped.map((i) => i.id)), [carried])
   const kits = useMemo(
@@ -61,7 +74,7 @@ export function CarryingNowPane({ characterName, carried, pool, busy, onEquip, o
           {carried.equipped.map((item) => (
             <li key={item.id} className="qt-card py-1.5 px-2 flex items-center gap-2">
               <InventoryGlyph item={item} size="sm" />
-              <span className="flex-1 min-w-0 text-sm truncate">{item.title || item.name}</span>
+              <span className="flex-1 min-w-0 text-sm truncate">{inventoryDisplayName(item)}</span>
               {!item.description && <span className="qt-text-xs qt-text-secondary" title="No description: the model is told nothing about it">silent</span>}
               <button type="button" className="qt-button-ghost qt-button-sm" disabled={busy} onClick={() => onUnequip([item.id])}>
                 Unequip
@@ -77,7 +90,7 @@ export function CarryingNowPane({ characterName, carried, pool, busy, onEquip, o
             {kits.map(({ kit, state }) => (
               <li key={kit!.id} className="qt-card py-1.5 px-2 flex items-center gap-2">
                 <InventoryGlyph item={kit!} size="sm" />
-                <span className="flex-1 min-w-0 text-sm truncate">{kit!.title || kit!.name}</span>
+                <span className="flex-1 min-w-0 text-sm truncate">{inventoryDisplayName(kit!)}</span>
                 <span className="qt-badge qt-badge-info">{state}</span>
                 {state !== 'all' && (
                   <button type="button" className="qt-button-secondary qt-button-sm" disabled={busy} onClick={() => onEquip([kit!.id])}>
@@ -95,7 +108,19 @@ export function CarryingNowPane({ characterName, carried, pool, busy, onEquip, o
         </div>
       )}
       {picking && (
-        <BaseModal isOpen onClose={() => setPicking(false)} title={`Take up — ${characterName}`} maxWidth="lg" overlayClassName="z-[70]">
+        <BaseModal
+          isOpen
+          onClose={() => setPicking(false)}
+          title={`Take up — ${characterName}`}
+          maxWidth="lg"
+          overlayClassName="z-[70]"
+          showCloseButton
+          footer={(
+            <div className="flex items-center justify-end w-full">
+              <button type="button" onClick={() => setPicking(false)} className="qt-button-secondary qt-button-sm">Cancel</button>
+            </div>
+          )}
+        >
           {choices.length === 0 ? (
             <p className="text-sm qt-text-secondary">Nothing within reach that is not already carried.</p>
           ) : (
@@ -114,7 +139,7 @@ export function CarryingNowPane({ characterName, carried, pool, busy, onEquip, o
                   >
                     <InventoryPicture item={item} />
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm text-foreground truncate">{item.title || item.name}</span>
+                      <span className="block text-sm text-foreground truncate">{inventoryDisplayName(item)}</span>
                       {item.description && <span className="block qt-text-xs qt-text-secondary truncate">{item.description}</span>}
                     </span>
                   </button>

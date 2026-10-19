@@ -2,14 +2,16 @@
  * Project Roster Access
  *
  * The one question the project roster answers: may this character reach the
- * project's files and shared wardrobe through their own tools?
+ * project's files, shared wardrobe and inventory shelf through their own tools?
  *
  * The roster deliberately gates nothing else. A character off the roster still
  * joins project chats, still receives the project's instructions, and still
  * benefits from automatic knowledge retrieval; what they lose is the ability to
  * open, list, search or edit project-store documents with `doc_*` /
- * `search_scriptorium`, and to pick garments from the project's `Wardrobe/`
- * folders with `wardrobe_*`.
+ * `search_scriptorium`, to pick garments from the project's `Wardrobe/`
+ * folders with `wardrobe_*`, and to see, take up or pick up objects from the
+ * project's `Inventory/` with `inventory_*` or a custom tool's effects
+ * (`lib/inventory/roster-gate.ts` — the roster closes the shelf, not the hand).
  *
  * The policy itself (`allowAnyCharacter` OR on the roster) lives in
  * `ProjectsRepository.canCharacterParticipate`; this module is the call-site

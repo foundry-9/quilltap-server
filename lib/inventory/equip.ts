@@ -45,6 +45,7 @@ import {
   InventoryCapExceededError,
   InventoryInvalidParentError,
   InventoryNotEquippableError,
+  InventoryOffRosterError,
   InventoryRefusal,
 } from '@/lib/inventory/errors';
 import { notifyInventoryChanged, type InventoryChangeContext } from '@/lib/inventory/equip-effects';
@@ -53,6 +54,7 @@ import { instantiate } from '@/lib/inventory/item-mutations';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
 import { isKin } from '@/lib/inventory/resolve';
+import { isCharacterGesture, isOnClosedShelf, projectShelfOpenTo } from '@/lib/inventory/roster-gate';
 
 export type { InventoryChangeContext } from '@/lib/inventory/equip-effects';
 
@@ -102,6 +104,35 @@ function assertParticipant(chat: EquipChat, characterId: string): void {
     throw new InventoryNotAParticipantError(characterId);
   }
 }
+
+/**
+ * Refuse a character's own gesture (never the operator's) that takes from the
+ * project's shelf while the roster does not admit them. `items` are the
+ * objects or archetypes about to be carried, none of them already carried.
+ */
+async function assertShelfReach(
+  chat: EquipChat,
+  characterId: string,
+  items: readonly ResolvedInventoryItem[],
+  ctx: InventoryChangeContext,
+): Promise<void> {
+  if (!isCharacterGesture(ctx.provenance)) return;
+  const fromShelf = items.filter((item) => isOnClosedShelf(item, NOTHING_CARRIED));
+  if (fromShelf.length === 0 || (await projectShelfOpenTo(chat.projectId, characterId))) return;
+  const error = new InventoryOffRosterError(fromShelf.map((item) => item.title || item.name));
+  logger.info('[InventoryEquip] Refused', {
+    code: error.code,
+    chatId: chat.id,
+    characterId,
+    projectId: chat.projectId ?? null,
+    itemIds: fromShelf.map((item) => item.id),
+    provenance: ctx.provenance,
+    context: 'inventory',
+  });
+  throw error;
+}
+
+const NOTHING_CARRIED: ReadonlySet<string> = new Set();
 
 /** Re-read the chat so a serialised write sees the set as it is now. */
 async function freshChat(repos: Repos, chat: EquipChat): Promise<EquipChat> {
@@ -282,6 +313,11 @@ async function equipUnserialized(
     }
   }
 
+  // A character's own gesture cannot take from the project's shelf when the
+  // roster does not admit them (`roster-gate.ts`); checked before the cap so
+  // nothing is written. What they already carry was never planned.
+  await assertShelfReach(chat, characterId, planned.map((plan) => (plan.kind === 'existing' ? plan.item : plan.archetype)), ctx);
+
   // The cap, checked over the whole plan before anything is written. An
   // instance-to-be has its archetype's name and cap.
   const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];
@@ -442,6 +478,7 @@ export function pickUpItems(
       }
       archetypes.push(archetype);
     }
+    await assertShelfReach(fresh, characterId, archetypes, ctx);
 
     if (equip) {
       const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];

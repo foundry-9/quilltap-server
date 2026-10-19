@@ -13,7 +13,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { InventoryRefusal } from '@/lib/inventory/errors';
+import { InventoryOffRosterError, InventoryRefusal } from '@/lib/inventory/errors';
 import { loadInventoryContext, type LoadedInventoryContext } from '@/lib/inventory/context';
 import type { EquipChat, InventoryChangeContext } from '@/lib/inventory/equip';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
@@ -116,6 +116,19 @@ export function resolveToolRef(
   opts: { includeArchetypes?: boolean; includeArchived?: boolean } = {},
 ): InventoryRefMatch[] {
   return resolveInventoryRef(ref, ctx.pool, ctx.equippedIds, opts);
+}
+
+/**
+ * When a ref names an object on a project shelf the roster has closed to this
+ * character (`roster-gate.ts`), Pascal's refusal saying so; null otherwise.
+ * `archetypesOnly` asks only after archetypes (a pick-up).
+ */
+export function closedShelfMessage(ctx: LoadedInventoryContext, ref: string, opts: { archetypesOnly?: boolean } = {}): string | null {
+  if (ctx.closedShelf.length === 0) return null;
+  const matches = resolveInventoryRef(ref, { items: ctx.closedShelf, owns: () => false }, ctx.equippedIds, { includeArchetypes: true })
+    .filter((m) => !opts.archetypesOnly || m.item.isArchetype);
+  if (matches.length === 0) return null;
+  return new InventoryOffRosterError([inventoryLabel(matches[0].item)]).message;
 }
 
 /** The refusal for an object that resolved to nothing. */

@@ -1,7 +1,8 @@
 'use client'
 
 /**
- * WardrobeVantageSelect — whose wardrobe the Workbench is looking at.
+ * WardrobeVantageSelect — whose wardrobe (or inventory) the Workbench is
+ * looking at; `browsing` picks the words, the vantage is the same.
  *
  * A tool has no character until it is run, so the Workbench browses garments
  * from a vantage: a character whose reach to show, or one shared wardrobe.
@@ -86,6 +87,16 @@ export function wardrobeVantageName(
   return origin.name || (origin.scope === 'character' ? 'this character' : null)
 }
 
+/** What the vantage is browsed for: garments, objects, or both (a tool with both kinds of effect). */
+export type VantageBrowsing = 'wardrobe' | 'inventory' | 'both'
+
+/** The nouns each kind of browsing is spoken of in. */
+const BROWSING_WORDS: Record<VantageBrowsing, { store: string; stores: string; things: string; shared: string }> = {
+  wardrobe: { store: 'wardrobe', stores: 'wardrobes', things: 'garments', shared: 'Shared wardrobes' },
+  inventory: { store: 'inventory', stores: 'inventories', things: 'objects', shared: 'Shared inventories' },
+  both: { store: 'wardrobe and inventory', stores: 'wardrobes and inventories', things: 'garments and objects', shared: 'Shared stores' },
+}
+
 interface WardrobeVantageSelectProps {
   vantage: WardrobeVantage
   onChange: (next: WardrobeVantage) => void
@@ -98,6 +109,8 @@ interface WardrobeVantageSelectProps {
   homeProjectName?: string | null
   /** Show the explanatory line beneath the select. Default true. */
   showHint?: boolean
+  /** What is being browsed, for the wording. Default `'wardrobe'`. */
+  browsing?: VantageBrowsing
   disabled?: boolean
 }
 
@@ -107,8 +120,10 @@ export function WardrobeVantageSelect({
   destinations,
   homeProjectName = null,
   showHint = true,
+  browsing = 'wardrobe',
   disabled = false,
 }: Readonly<WardrobeVantageSelectProps>) {
+  const words = BROWSING_WORDS[browsing]
   const name = wardrobeVantageName(vantage, destinations)
   const origin = wardrobeVantageOrigin(vantage, destinations)
 
@@ -122,14 +137,14 @@ export function WardrobeVantageSelect({
           ) : vantage.kind === 'container' && name ? (
             <strong>{name}</strong>
           ) : null}{' '}
-          wardrobe
+          {words.store}
         </span>
         <select
           value={encodeWardrobeVantage(vantage)}
           onChange={(e) => onChange(decodeWardrobeVantage(e.target.value))}
           disabled={disabled}
           className="qt-select qt-select-sm"
-          aria-label="Whose wardrobe to browse"
+          aria-label={`Whose ${words.store} to browse`}
         >
           <option value={NONE_VALUE}>— choose —</option>
           {(destinations?.characters.length ?? 0) > 0 && (
@@ -141,7 +156,7 @@ export function WardrobeVantageSelect({
               ))}
             </optgroup>
           )}
-          <optgroup label="Shared wardrobes">
+          <optgroup label={words.shared}>
             <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>{GENERAL_WARDROBE_NAME}</option>
             {destinations?.projects.map((p) => (
               <option key={p.projectId} value={encodeWardrobeContainer({ scope: 'project', id: p.projectId })}>
@@ -160,20 +175,20 @@ export function WardrobeVantageSelect({
         <p className="text-xs qt-text-secondary">
           {vantage.kind === 'character' ? (
             <>
-              What {name} can reach: {name}&rsquo;s own wardrobe, the wardrobes of {name}&rsquo;s groups, and{' '}
+              What {name} can reach: {name}&rsquo;s own {words.store}, the {words.stores} of {name}&rsquo;s groups, and{' '}
               {GENERAL_WARDROBE_NAME}. Another character rolling this tool sees their own.
               {homeProjectName && (
                 <>
                   {' '}
-                  This tool lives in {homeProjectName}&rsquo;s store; garments from {homeProjectName}&rsquo;s
-                  wardrobe will also be in reach when it runs there.
+                  This tool lives in {homeProjectName}&rsquo;s store; {words.things} from {homeProjectName}&rsquo;s
+                  {words.store} will also be in reach when it runs there.
                 </>
               )}
             </>
           ) : vantage.kind === 'container' ? (
-            <>Every garment in this wardrobe, and who can reach it: {wardrobeReachLabel(origin)}.</>
+            <>Every one of the {words.things} here, and who can reach them: {wardrobeReachLabel(origin)}.</>
           ) : (
-            <>Choose whose wardrobe to browse before picking garments.</>
+            <>Choose whose {words.store} to browse before picking {words.things}.</>
           )}
         </p>
       )}

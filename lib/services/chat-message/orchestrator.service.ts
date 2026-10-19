@@ -1725,183 +1725,188 @@ async function processMessage(
   // terminal branch we exit through. The handlers add to the Set instead of
   // enqueuing per-edit; here we fire one job each and clear.
   await flushPendingWardrobeAnnouncements(toolContext)
-  // Beside it, the turn's Inventory changes: one Pascal line per character.
-  await flushPendingInventoryAnnouncements(toolContext)
 
-  // ============================================================================
-  // "Nothing to add" turn-skipping — sentinel handling
-  // ============================================================================
-  // Detect the pass sentinel on the raw response before the finalizer. Only
-  // when eligibility was computed for this turn (multi-character, LLM responder).
-  if (turnSkip) {
-    const detection = detectSkipSentinel(
-      streamingState.fullResponse,
-      character.name,
-      character.aliases ?? undefined,
-    )
-    if (detection.skip) {
-      if (toolMessages.length > 0) {
-        // Tools ran this turn — the turn had real effects, so the tool-save
-        // branch must win. Clear the bare sentinel so that branch fires.
-        logger.warn('[TurnSkip] Sentinel emitted but tools ran; keeping tool results, ignoring the pass', {
-          chatId,
-          characterId: character.id,
-          participantId: characterParticipant.id,
-          toolCount: toolMessages.length,
-        })
-        streamingState.fullResponse = ''
-      } else if (turnSkip.offerSkip) {
-        return handleTurnSkip({
-          repos,
-          chatId,
-          character,
-          characterParticipant,
-          isMultiCharacter,
-          userParticipantId,
-          streaming: streamingState,
-          controller,
-          encoder,
-          mailAlertsOwed: builtContext.mailAlertsOwed,
-        })
-      } else {
-        // Sentinel when the skip option wasn't offered: route to the existing
-        // empty-response branch (bare pass with no effects → nothing persisted).
-        streamingState.fullResponse = ''
+  // The turn's Inventory changes — one Pascal line per character — are
+  // posted once whichever branch below has saved the turn, so the line
+  // follows the tool calls and the reply it sums up rather than preceding them.
+  try {
+    // ============================================================================
+    // "Nothing to add" turn-skipping — sentinel handling
+    // ============================================================================
+    // Detect the pass sentinel on the raw response before the finalizer. Only
+    // when eligibility was computed for this turn (multi-character, LLM responder).
+    if (turnSkip) {
+      const detection = detectSkipSentinel(
+        streamingState.fullResponse,
+        character.name,
+        character.aliases ?? undefined,
+      )
+      if (detection.skip) {
+        if (toolMessages.length > 0) {
+          // Tools ran this turn — the turn had real effects, so the tool-save
+          // branch must win. Clear the bare sentinel so that branch fires.
+          logger.warn('[TurnSkip] Sentinel emitted but tools ran; keeping tool results, ignoring the pass', {
+            chatId,
+            characterId: character.id,
+            participantId: characterParticipant.id,
+            toolCount: toolMessages.length,
+          })
+          streamingState.fullResponse = ''
+        } else if (turnSkip.offerSkip) {
+          return handleTurnSkip({
+            repos,
+            chatId,
+            character,
+            characterParticipant,
+            isMultiCharacter,
+            userParticipantId,
+            streaming: streamingState,
+            controller,
+            encoder,
+            mailAlertsOwed: builtContext.mailAlertsOwed,
+          })
+        } else {
+          // Sentinel when the skip option wasn't offered: route to the existing
+          // empty-response branch (bare pass with no effects → nothing persisted).
+          streamingState.fullResponse = ''
+        }
+      } else if (detection.cleaned !== undefined) {
+        // Sentinel line + trailing prose: strip the line, keep the prose, and
+        // fall through to the normal finalizer as a real reply.
+        streamingState.fullResponse = detection.cleaned
       }
-    } else if (detection.cleaned !== undefined) {
-      // Sentinel line + trailing prose: strip the line, keep the prose, and
-      // fall through to the normal finalizer as a real reply.
-      streamingState.fullResponse = detection.cleaned
     }
-  }
 
-  if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
-    return finalizeMessageResponse({
-      repos,
-      chatId,
-      userId,
-      chat,
-      character,
-      characterParticipant,
-      userParticipantId,
-      isMultiCharacter,
-      isContinueMode,
-      generatedImagePaths,
-      toolMessages,
-      preGeneratedAssistantMessageId,
-      connectionProfile,
-      controller,
-      encoder,
-      streaming: streamingState,
-      compression: {
-        existingMessages: existingMessages as MessageEvent[],
-        content,
-        builtContext,
-        compressionEnabled,
-        cheapLLMSelection,
-        contextCompressionSettings,
-        allProfiles,
-      },
-      triggers: {
-        conciergePolicy,
-        chatSettings,
-        participantCharacters,
-        resolvedIdentity,
-        userCharacterId,
-      },
-    })
-  } else if (toolMessages.length > 0) {
-    // Save tool messages even without text response
-    const toolWhisperContext: ToolWhisperContext = {
-      userParticipantId,
-      allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+    if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
+      return finalizeMessageResponse({
+        repos,
+        chatId,
+        userId,
+        chat,
+        character,
+        characterParticipant,
+        userParticipantId,
+        isMultiCharacter,
+        isContinueMode,
+        generatedImagePaths,
+        toolMessages,
+        preGeneratedAssistantMessageId,
+        connectionProfile,
+        controller,
+        encoder,
+        streaming: streamingState,
+        compression: {
+          existingMessages: existingMessages as MessageEvent[],
+          content,
+          builtContext,
+          compressionEnabled,
+          cheapLLMSelection,
+          contextCompressionSettings,
+          allProfiles,
+        },
+        triggers: {
+          conciergePolicy,
+          chatSettings,
+          participantCharacters,
+          resolvedIdentity,
+          userCharacterId,
+        },
+      })
+    } else if (toolMessages.length > 0) {
+      // Save tool messages even without text response
+      const toolWhisperContext: ToolWhisperContext = {
+        userParticipantId,
+        allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
+      }
+      const toolSaveResult = await saveToolMessages(
+        repos,
+        chatId,
+        userId,
+        toolMessages,
+        generatedImagePaths,
+        character.id,
+        characterParticipant.id,
+        toolWhisperContext
+      )
+
+      // The model read this turn's mail and acted (tools ran); the turn is kept.
+      await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'tool-only' })
+
+      await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
+
+      controller.enqueue(encodeDoneEvent(encoder, {
+        messageId: toolSaveResult.firstToolMessageId,
+        participantId: characterParticipant.id,
+        usage: streamingState.usage,
+        cacheUsage: streamingState.cacheUsage,
+        attachmentResults: streamingState.attachmentResults,
+        toolsExecuted: true,
+        provider: streamingState.effectiveProfile.provider,
+        modelName: streamingState.effectiveProfile.modelName,
+      }))
+
+      return {
+        isMultiCharacter,
+        hasContent: true,
+        messageId: toolSaveResult.firstToolMessageId || null,
+        userParticipantId,
+        isPaused: chat.isPaused,
+      }
+    } else {
+      // Empty response
+      // The provider may have said why it returned nothing. Z.AI reports
+      // `finish_reason: sensitive` on a moderation refusal, OpenAI
+      // `content_filter`, Google `SAFETY` — all of which make "try resending"
+      // actively wrong advice (bug 93).
+      const emptyFinishReason = extractFinishReason(streamingState.rawResponse)
+      const emptyReason = getEmptyResponseReason({
+        uncensoredRetryAttempted,
+        sameProviderRetryAttempted,
+        contentWasFlaggedDangerous,
+        chainAttempts,
+        finishReason: emptyFinishReason,
+        provider: streamingState.effectiveProfile.provider,
+        modelName: streamingState.effectiveProfile.modelName,
+      })
+      logger.warn(`Empty response for chat ${chatId}`, {
+        uncensoredRetryAttempted,
+        sameProviderRetryAttempted,
+        contentWasFlaggedDangerous,
+        chainAttempts: chainAttempts.map((a) => ({
+          profileName: a.profileName,
+          provider: a.provider,
+          trigger: a.trigger,
+        })),
+        finishReason: emptyFinishReason,
+        moderationRefusal: isModerationFinishReason(emptyFinishReason),
+        conciergeSource: conciergePolicy.source,
+        conciergeState: conciergePolicy.state,
+        provider: streamingState.effectiveProfile.provider,
+        model: streamingState.effectiveProfile.modelName,
+      })
+      controller.enqueue(encodeDoneEvent(encoder, {
+        messageId: null,
+        participantId: characterParticipant.id,
+        usage: streamingState.usage,
+        cacheUsage: streamingState.cacheUsage,
+        attachmentResults: streamingState.attachmentResults,
+        toolsExecuted: false,
+        emptyResponse: true,
+        emptyResponseReason: emptyReason,
+        provider: streamingState.effectiveProfile.provider,
+        modelName: streamingState.effectiveProfile.modelName,
+      }))
+
+      return {
+        isMultiCharacter,
+        hasContent: false,
+        messageId: null,
+        userParticipantId,
+        isPaused: chat.isPaused,
+      }
     }
-    const toolSaveResult = await saveToolMessages(
-      repos,
-      chatId,
-      userId,
-      toolMessages,
-      generatedImagePaths,
-      character.id,
-      characterParticipant.id,
-      toolWhisperContext
-    )
-
-    // The model read this turn's mail and acted (tools ran); the turn is kept.
-    await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'tool-only' })
-
-    await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
-
-    controller.enqueue(encodeDoneEvent(encoder, {
-      messageId: toolSaveResult.firstToolMessageId,
-      participantId: characterParticipant.id,
-      usage: streamingState.usage,
-      cacheUsage: streamingState.cacheUsage,
-      attachmentResults: streamingState.attachmentResults,
-      toolsExecuted: true,
-      provider: streamingState.effectiveProfile.provider,
-      modelName: streamingState.effectiveProfile.modelName,
-    }))
-
-    return {
-      isMultiCharacter,
-      hasContent: true,
-      messageId: toolSaveResult.firstToolMessageId || null,
-      userParticipantId,
-      isPaused: chat.isPaused,
-    }
-  } else {
-    // Empty response
-    // The provider may have said why it returned nothing. Z.AI reports
-    // `finish_reason: sensitive` on a moderation refusal, OpenAI
-    // `content_filter`, Google `SAFETY` — all of which make "try resending"
-    // actively wrong advice (bug 93).
-    const emptyFinishReason = extractFinishReason(streamingState.rawResponse)
-    const emptyReason = getEmptyResponseReason({
-      uncensoredRetryAttempted,
-      sameProviderRetryAttempted,
-      contentWasFlaggedDangerous,
-      chainAttempts,
-      finishReason: emptyFinishReason,
-      provider: streamingState.effectiveProfile.provider,
-      modelName: streamingState.effectiveProfile.modelName,
-    })
-    logger.warn(`Empty response for chat ${chatId}`, {
-      uncensoredRetryAttempted,
-      sameProviderRetryAttempted,
-      contentWasFlaggedDangerous,
-      chainAttempts: chainAttempts.map((a) => ({
-        profileName: a.profileName,
-        provider: a.provider,
-        trigger: a.trigger,
-      })),
-      finishReason: emptyFinishReason,
-      moderationRefusal: isModerationFinishReason(emptyFinishReason),
-      conciergeSource: conciergePolicy.source,
-      conciergeState: conciergePolicy.state,
-      provider: streamingState.effectiveProfile.provider,
-      model: streamingState.effectiveProfile.modelName,
-    })
-    controller.enqueue(encodeDoneEvent(encoder, {
-      messageId: null,
-      participantId: characterParticipant.id,
-      usage: streamingState.usage,
-      cacheUsage: streamingState.cacheUsage,
-      attachmentResults: streamingState.attachmentResults,
-      toolsExecuted: false,
-      emptyResponse: true,
-      emptyResponseReason: emptyReason,
-      provider: streamingState.effectiveProfile.provider,
-      modelName: streamingState.effectiveProfile.modelName,
-    }))
-
-    return {
-      isMultiCharacter,
-      hasContent: false,
-      messageId: null,
-      userParticipantId,
-      isPaused: chat.isPaused,
-    }
+  } finally {
+    await flushPendingInventoryAnnouncements(toolContext)
   }
 }
 

@@ -55,11 +55,24 @@ export interface InventoryChange {
   given?: { item: ResolvedInventoryItem; toName: string };
 }
 
+/** A plural-looking name ("lockpicks", "gloves") — not "compass", "abacus" or "iris". */
+function looksPlural(name: string): boolean {
+  const last = name.split(/\s+/).pop() ?? name;
+  return /s$/i.test(last) && !/(ss|us|is)$/i.test(last);
+}
+
+/** "an" before a vowel sound, by spelling: "an amulet", but "a unicorn horn", "a one-eyed idol". */
+function indefiniteArticle(name: string): 'a' | 'an' {
+  if (/^(uni|use|usu|uti|eu|one|once)/i.test(name)) return 'a';
+  return /^[aeiou]/i.test(name) ? 'an' : 'a';
+}
+
 function withArticle(item: ResolvedInventoryItem, article: 'a' | 'the'): string {
   if (item.title?.trim()) return item.title.trim();
   const name = item.name.trim();
   if (article === 'the') return `the ${name}`;
-  return /^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`;
+  if (looksPlural(name)) return `some ${name}`;
+  return `${indefiniteArticle(name)} ${name}`;
 }
 
 function joinList(parts: readonly string[]): string {
@@ -70,7 +83,8 @@ function joinList(parts: readonly string[]): string {
 
 /**
  * Pascal's line for a change, or null when nothing changed. Untitled objects
- * take an article ("a signet ring" taken up, "the lantern" set down); titled
+ * take an article ("a signet ring" or "some lockpicks" taken up, "the lantern"
+ * set down); titled
  * ones are named ("Excalibur").
  */
 export function describeInventoryChange(characterName: string, change: InventoryChange): string | null {

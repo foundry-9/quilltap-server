@@ -179,7 +179,7 @@ Three properties matter to this document:
 
 Cadence is derived from message history rather than stored — `findLastOwnTurnMs` in `core-whisper-trigger.ts`, beside the Core whisper's own cadence, which set that precedent. Zero writes on the prompt path, no participant-JSON race, and safe in the forked job child (no read-your-writes). The accepted approximation: a character prompted who does not speak leaves no new turn, so a period-cadence entry can be mentioned once more inside the same period.
 
-`isContinueMode` skips the section entirely — the model is finishing its own sentence, and the Core whisper skips there for the same reason.
+The section is built on every turn, `isContinueMode` included. Continue mode is not a model finishing its own sentence: it is every turn without a new user message — the Salon's Continue, a nudge, every chained speaker, every autonomous-room turn — so skipping it there (as the section once did, bug 254) withholds the report from most of a multi-character scene. On those turns the section rides the trailing-only user message. The Core whisper alone skips continue mode, by its own design.
 
 **Ordering constraint:** the Core whisper is computed and placed before the Commonplace Book whisper, on purpose. Identity grounds the speaker; memory then situates them. Reversed, recall floods identity and the character starts performing the person who had those experiences rather than being the person who grew from them. Do not reorder without reading the Core whisper design first.
 

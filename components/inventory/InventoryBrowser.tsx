@@ -130,8 +130,8 @@ export function InventoryBrowser({
     [searching, currentFolder, tierItems, managed, tree],
   )
   const sharedTierRows = useMemo(
-    () => (isCharacterScope && inOwnTier && !searching && currentFolder === '' && showShared ? tierRows(items, tierOf) : []),
-    [isCharacterScope, inOwnTier, searching, currentFolder, showShared, items, tierOf],
+    () => (isCharacterScope && inOwnTier && !searching && currentFolder === '' && showShared ? tierRows(filtered, tierOf) : []),
+    [isCharacterScope, inOwnTier, searching, currentFolder, showShared, filtered, tierOf],
   )
   const visible = useMemo(
     () => (searching ? filtered : filtered.filter((i) => tierOf(i) === currentTier && isSameFolder(i.folder ?? '', currentFolder))),

@@ -17,6 +17,7 @@ import {
   characterChangeContext,
   errorMessageOf,
   formatSummary,
+  closedShelfMessage,
   inventoryNotFoundMessage,
   loadToolChat,
   loadToolInventory,
@@ -50,7 +51,7 @@ export async function executeInventoryEquipTool(
     for (const ref of parsed.refs) {
       const matches = resolveToolRef(ctx, ref, { includeArchetypes: true });
       if (matches.length === 0) {
-        output.skipped.push({ ref, reason: inventoryNotFoundMessage(ref) });
+        output.skipped.push({ ref, reason: closedShelfMessage(ctx, ref) ?? inventoryNotFoundMessage(ref) });
         continue;
       }
       const pick = pickForGesture(matches, 'equip');

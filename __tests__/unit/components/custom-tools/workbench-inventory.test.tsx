@@ -54,6 +54,9 @@ describe('SideEffectsSection — Change the inventory', () => {
     expect(Array.from(kind.options).map((o) => o.textContent)).toContain('Change the inventory')
     const chip = await screen.findByTestId('inventory-reference-chip')
     expect(within(chip).getByText('Excalibur (sword)')).toBeInTheDocument()
+    // An inventory-only tool browses an inventory, not a wardrobe.
+    expect(screen.getByLabelText('Whose inventory to browse')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Whose wardrobe to browse')).not.toBeInTheDocument()
   })
 
   it('warns when equip names an archetype, and shows the equip switch on pick up', async () => {

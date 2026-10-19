@@ -11,7 +11,7 @@
  *  - the Carrying now pane.
  */
 
-import React from 'react'
+import React, { useState } from 'react'
 import { screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { renderHook } from '@testing-library/react'
 import { renderWithQuery, createQueryWrapper } from '../../../helpers/renderWithQuery'
@@ -237,6 +237,14 @@ describe('the warnings', () => {
     const error = new InventoryRequestError('x', 409, 'CAP_EXCEEDED', { itemName: 'ring', cap: 2 })
     expect(describeInventoryRefusal(error, '')).toBe('"ring" can be carried at most 2 at a time — set one down before taking up another.')
   })
+
+  it('a copy refusal says why in words, never in ids', () => {
+    const one = new InventoryRequestError('Cannot be copied: a1', 409, 'NOT_COPYABLE', { itemIds: ['a1'] })
+    expect(describeInventoryRefusal(one, '')).toContain('one of a kind')
+    expect(describeInventoryRefusal(one, '')).not.toContain('a1')
+    const two = new InventoryRequestError('Cannot be copied: a1, b2', 409, 'NOT_COPYABLE', { itemIds: ['a1', 'b2'] })
+    expect(describeInventoryRefusal(two, '')).toMatch(/^2 of those objects/)
+  })
 })
 
 describe('Carrying now', () => {
@@ -244,8 +252,10 @@ describe('Carrying now', () => {
     const onEquip = jest.fn()
     const onUnequip = jest.fn()
     const onReset = jest.fn()
-    renderWithQuery(
-      <CarryingNowPane
+    function Harness() {
+      const [picking, setPicking] = useState(false)
+      return (
+        <CarryingNowPane
         characterName="Vivienne"
         carried={{ equipped: [RING], kits: { kit: 'some' } }}
         pool={[SWORD, RING, LAMP, BOW, KIT]}
@@ -253,8 +263,12 @@ describe('Carrying now', () => {
         onEquip={onEquip}
         onUnequip={onUnequip}
         onReset={onReset}
-      />,
-    )
+          picking={picking}
+          onPickingChange={setPicking}
+        />
+      )
+    }
+    renderWithQuery(<Harness />)
     const carried = screen.getByRole('list', { name: 'Carried objects' })
     expect(within(carried).getByText('signet ring')).toBeInTheDocument()
     fireEvent.click(within(carried).getByRole('button', { name: 'Unequip' }))
@@ -268,8 +282,11 @@ describe('Carrying now', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Take up…' }))
     const picker = screen.getByRole('listbox', { name: 'Objects within reach' })
     // Pictures show in the picker; archetypes, kits and what is carried do not.
-    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Excalibur', 'lantern'])
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Excalibur (sword)', 'lantern'])
     expect(within(picker).getByTestId('inventory-picture')).toBeInTheDocument()
+    // The picker can be dismissed without choosing.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('listbox', { name: 'Objects within reach' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }))
     expect(onReset).toHaveBeenCalled()

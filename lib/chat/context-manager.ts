@@ -473,9 +473,12 @@ export interface BuildContextOptions {
   uncensoredFallbackOptions?: UncensoredFallbackOptions
 
   /**
-   * Continue mode (also covers nudges and chained autonomous turns) — a
-   * continuation of an existing response rather than a fresh turn. Used by
-   * the Aurora Core whisper to skip re-firing on a continuation.
+   * Continue mode: any turn built without a new user message — the Salon's
+   * Continue, a nudge, every chained speaker after the first, and every
+   * autonomous-room turn. Never a model finishing its own sentence. The Aurora
+   * Core whisper skips these turns by design; the other trailing sections
+   * (recall, mail, progressions, inventory, inform) are built on them as on
+   * any turn.
    */
   isContinueMode?: boolean
 
@@ -2157,31 +2160,30 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // reads on this path: no writes, so an autonomous turn in the forked job
   // child runs it exactly as the parent does.
   //
-  // Continue mode is skipped deliberately — the model is finishing its own
-  // sentence, and the Core whisper above skips there for the same reason.
-  let progressionsLLMContext = ''
-  if (!isContinueMode) {
-    progressionsLLMContext = await buildProgressionsSection({
-      character,
-      // A thunk, not a list: a character carrying no progressions — very
-      // nearly all of them — must not pay for a history read they will never
-      // consult.
-      ...(respondingParticipant ? { loadEvents: loadChatEventsForCadence } : {}),
-      respondingParticipantId: respondingParticipant?.id ?? null,
-      nowMs: Date.now(),
-      timezone: options.timezone,
-    })
-  }
+  // Built on every turn, continue mode included. That mode is every turn
+  // without a new user message — a chained speaker, a nudge, an autonomous
+  // room — and the design of record wants the report on all of them; each
+  // progression's own cadence decides whether this turn mentions it.
+  const progressionsLLMContext = await buildProgressionsSection({
+    character,
+    // A thunk, not a list: a character carrying no progressions — very
+    // nearly all of them — must not pay for a history read they will never
+    // consult.
+    ...(respondingParticipant ? { loadEvents: loadChatEventsForCadence } : {}),
+    respondingParticipantId: respondingParticipant?.id ?? null,
+    nowMs: Date.now(),
+    timezone: options.timezone,
+  })
 
   // The Inventory: what this character carries in this chat, by the objects'
   // `description`s (what the characters know about them). A trailing section
   // after the progressions report and before the inform block; null — and so
-  // absent — when nothing carried has a description. Reads only. Skipped in
-  // continue mode with the progressions, for the same reason.
-  let inventoryLLMContext = ''
-  if (!isContinueMode) {
-    inventoryLLMContext = (await buildInventorySection({ chat, characterId: character.id, repos: getRepositories() })) ?? ''
-  }
+  // absent — when nothing carried has a description. Reads only, and built on
+  // every turn, continue mode included: that mode is every turn without a new
+  // user message (a chained speaker, a nudge, an autonomous room), and what a
+  // character carries is no less true on those.
+  const inventoryLLMContext =
+    (await buildInventorySection({ chat, characterId: character.id, repos: getRepositories() })) ?? ''
 
   // "Nothing to add" turn-skipping: build the ephemeral Turn note when the
   // orchestrator has decided this character may pass. Injected as a trailing

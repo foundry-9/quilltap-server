@@ -36,6 +36,8 @@ export const state = {
   folders: new Set<string>(), // key `${mp}::${path}`
   characters: new Map<string, FakeCharacter>(),
   projects: [] as Array<{ id: string; name: string; officialMountPointId: string | null }>,
+  /** Characters a project's roster does NOT admit (default: every roster admits everyone). */
+  offRoster: new Map<string, Set<string>>(),
   groups: [] as Array<{ id: string; name: string; officialMountPointId: string | null }>,
   chats: new Map<string, FakeChat>(),
   groupMounts: new Map<string, Array<{ group: { id: string; name: string }; mountPointIds: string[] }>>(),
@@ -48,6 +50,7 @@ export function resetStore(): void {
   state.folders.clear();
   state.characters.clear();
   state.projects = [{ id: 'project-1', name: 'The Quest', officialMountPointId: PROJECT_MP }];
+  state.offRoster.clear();
   state.groups = [];
   state.chats.clear();
   state.groupMounts.clear();
@@ -161,6 +164,7 @@ export function repositories() {
     projects: {
       findAll: jest.fn(async () => state.projects),
       findById: jest.fn(async (id: string) => state.projects.find((p) => p.id === id) ?? null),
+      canCharacterParticipate: jest.fn(async (projectId: string, characterId: string) => !state.offRoster.get(projectId)?.has(characterId)),
     },
     groups: {
       findAll: jest.fn(async () => state.groups),
@@ -273,6 +277,13 @@ export function tieredPoolModule() {
 }
 
 /** Add a character with a vault mount `mp-<id>`. */
+/** Take a character off a project's roster (the roster no longer admits them). */
+export function putOffRoster(projectId: string, characterId: string): void {
+  const set = state.offRoster.get(projectId) ?? new Set<string>();
+  set.add(characterId);
+  state.offRoster.set(projectId, set);
+}
+
 export function addCharacter(id: string, name: string, opts: { archived?: boolean } = {}): FakeCharacter {
   const character: FakeCharacter = {
     id,

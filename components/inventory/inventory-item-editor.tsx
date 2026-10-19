@@ -354,8 +354,8 @@ export function InventoryItemEditor({
           {isInstance && !parent && ' · an instance whose archetype is out of view'}
         </p>
         <div className="grid md:grid-cols-2 gap-3">
-          {textField('name', 'Name', 'sword')}
-          {textField('title', 'Title', 'Excalibur')}
+          {textField('name', 'Name', isKit ? "burglar's kit" : 'sword')}
+          {textField('title', 'Title', isKit ? 'The Night Shift' : 'Excalibur')}
         </div>
         {areaField('description', 'What the characters know about it', 'Told to the model while the object is carried. Leave empty and the object is silent to the model.')}
         {areaField('imageDescription', 'How it should be drawn', 'Rendering hints joined to the character\'s appearance while carried, and the subject of the object\'s own picture.', 2)}
@@ -412,8 +412,8 @@ export function InventoryItemEditor({
           </div>
         )}
         <div className="grid md:grid-cols-2 gap-3">
-          {textField('emoji', 'Emoji glyph', '🗡️')}
-          {textField('folder', 'Folder', 'Weapons/Edged')}
+          {textField('emoji', 'Emoji glyph', isKit ? '🎒' : '🗡️')}
+          {textField('folder', 'Folder', isKit ? 'Loadouts' : 'Weapons/Edged')}
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between">

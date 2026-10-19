@@ -178,12 +178,30 @@ export interface LoadInventoryPoolOptions {
   ownRecords?: readonly InventoryRecord[];
 }
 
+/** The project's display name for its tier's origin; `'Project'` when it cannot be read. */
+async function projectNameOf(
+  repos: Partial<Pick<RepositoryContainer, 'projects'>>,
+  projectId: string | null,
+): Promise<string> {
+  if (!projectId || !repos.projects) return 'Project';
+  try {
+    return (await repos.projects.findById(projectId))?.name || 'Project';
+  } catch (error) {
+    logger.warn('[InventoryPool] Project name lookup failed', {
+      projectId,
+      context: 'inventory',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 'Project';
+  }
+}
+
 /**
  * Load a character's Inventory pool: own vault, groups, the project tier
  * (from `chatId` or `projectId`) and General. Each tier fails soft.
  */
 export async function loadInventoryPool(
-  repos: Pick<RepositoryContainer, 'characters' | 'chats'>,
+  repos: Pick<RepositoryContainer, 'characters' | 'chats'> & Partial<Pick<RepositoryContainer, 'projects'>>,
   opts: LoadInventoryPoolOptions,
 ): Promise<InventoryPool> {
   const { characterId } = opts;
@@ -202,10 +220,11 @@ export async function loadInventoryPool(
 
   const character = await repos.characters.findByIdRaw(characterId);
   const ownMountPointId = character?.characterDocumentMountPointId ?? null;
-  const [groups, projectMountPointIds, generalMountPointId] = await Promise.all([
+  const [groups, projectMountPointIds, generalMountPointId, projectName] = await Promise.all([
     resolveGroupMountsForCharacter(characterId),
     resolveProjectMountPointIds(projectId),
     getGeneralMountPointId(),
+    projectNameOf(repos, projectId),
   ]);
   const groupOriginByMount = new Map<string, InventoryOrigin>();
   for (const { group, mountPointIds } of groups) {
@@ -214,7 +233,7 @@ export async function loadInventoryPool(
     }
   }
   const ownOrigin: InventoryOrigin = { scope: 'character', id: characterId, name: character?.name ?? '' };
-  const projectOrigin: InventoryOrigin = { scope: 'project', id: projectId, name: 'Project' };
+  const projectOrigin: InventoryOrigin = { scope: 'project', id: projectId, name: projectName };
 
   const [own, group, project, general] = await Promise.all([
     opts.ownRecords

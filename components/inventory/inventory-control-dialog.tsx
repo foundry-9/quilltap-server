@@ -159,6 +159,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
   const data = useInventoryListData(container, { includeArchived: showArchived, projectId: effectiveProjectId })
 
   const [confirming, setConfirming] = useState(false)
+  const [picking, setPicking] = useState(false)
   const requestConfirmation = useCallback(async (message: string) => {
     setConfirming(true)
     try {
@@ -231,7 +232,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
   const editorContainer = (item: ResolvedInventoryItem | null) =>
     item && container ? containerOfOrigin(item.origin, container) : container
   const inChat = chatId !== null && characterId !== null
-  const overlayOpen = actions.overlayOpen
+  const overlayOpen = actions.overlayOpen || picking
 
   const body = (
     <>
@@ -307,6 +308,8 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
             onEquip={(ids) => void gesture('equip', ids)}
             onUnequip={(ids) => void gesture('unequip', ids)}
             onReset={() => void reset()}
+            picking={picking}
+            onPickingChange={setPicking}
           />
         )}
       </div>

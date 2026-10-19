@@ -179,6 +179,7 @@ export function SideEffectsSection({
           onChange={onVantageChange}
           destinations={destinations}
           homeProjectName={homeProjectName}
+          browsing={hasWardrobe && hasInventory ? 'both' : hasInventory ? 'inventory' : 'wardrobe'}
           disabled={disabled}
         />
       )}
@@ -405,6 +406,7 @@ export function SideEffectsSection({
               onChange={onVantageChange}
               destinations={destinations}
               homeProjectName={homeProjectName}
+              browsing="inventory"
             />
           ) : undefined
         }

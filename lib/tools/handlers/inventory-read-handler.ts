@@ -11,6 +11,7 @@ import type { InventoryReadToolOutput } from '../inventory-read-tool';
 import { validateInventoryReadInput } from '../inventory-read-tool';
 import {
   errorMessageOf,
+  closedShelfMessage,
   inventoryNotFoundMessage,
   kindOf,
   loadToolInventory,
@@ -36,7 +37,7 @@ export async function executeInventoryReadTool(
     const match = matches.find((m) => m.equipped) ?? matches.find((m) => m.own) ?? matches[0];
     if (!match) {
       logInventoryTool('inventory_read', context, { refs: [parsed.ref], resolved: [], outcome: 'not found' }, 'info');
-      return { success: false, error: inventoryNotFoundMessage(parsed.ref) };
+      return { success: false, error: closedShelfMessage(ctx, parsed.ref) ?? inventoryNotFoundMessage(parsed.ref) };
     }
     const { item } = match;
     const byId = new Map(ctx.pool.items.map((candidate) => [candidate.id, candidate]));

@@ -18,7 +18,8 @@ export type InventoryRefusalCode =
   | 'KIT_STRANDED'
   | 'NOT_EQUIPPABLE'
   | 'INVALID_SHAPE'
-  | 'NOT_A_PARTICIPANT';
+  | 'NOT_A_PARTICIPANT'
+  | 'OFF_ROSTER';
 
 /** The base of every Inventory refusal. */
 export class InventoryRefusal extends Error {
@@ -30,6 +31,23 @@ export class InventoryRefusal extends Error {
   ) {
     super(message);
     this.name = 'InventoryRefusal';
+  }
+}
+
+/**
+ * A character's own gesture (a tool call, a custom tool's effect) reached for
+ * an object on the project's shelf while the project's roster does not admit
+ * them (`lib/inventory/roster-gate.ts`).
+ */
+export class InventoryOffRosterError extends InventoryRefusal {
+  constructor(readonly itemNames: string[]) {
+    super(
+      'OFF_ROSTER',
+      `${itemNames.map((name) => `"${name}"`).join(', ')} ${itemNames.length === 1 ? 'is' : 'are'} on the project's shelf, and you are not on this project's character roster. Ask the user to add you to the roster in the project's Characters card.`,
+      409,
+      { itemNames },
+    );
+    this.name = 'InventoryOffRosterError';
   }
 }
 

@@ -33,7 +33,8 @@ jest.mock('@/lib/services/pascal/writer', () => ({ postPascalInventoryChange: je
 jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({ refreshAvatarForAppearance: jest.fn(async () => undefined) }))
 
 import { postPascalInventoryChange } from '@/lib/services/pascal/writer'
-import { addCharacter, getFakeRepos, objectsIn, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
+import { addCharacter, getFakeRepos, objectsIn, putOffRoster, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
+import { equipItems, pickUpItems } from '@/lib/inventory/equip'
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location'
 import { createInventoryItem, instantiate } from '@/lib/inventory/item-mutations'
 import { loadInventoryPool } from '@/lib/inventory/pool'
@@ -273,5 +274,70 @@ describe('inventory_give', () => {
     expect((await run('inventory_give', { ref: 'lantern', to: 'Nobody' })).error).toContain('No one named')
     expect((await run('inventory_give', { ref: 'lantern', to: 'Vivienne' })).error).toContain('yourself')
     expect(objectsIn('mp-c-viv')).toHaveLength(1)
+  })
+})
+
+describe('the project roster', () => {
+  it("names the closed shelf even when the character's own object shares the archetype's name", async () => {
+    const { bow } = await shelfWithBowAndLantern()
+    // Vivienne already picked up a bow of her own, then was taken off the roster.
+    await pickUpItems(repos(), state.chats.get('chat-1') as never, 'c-viv', [bow.id], { userId: 'user-1', provenance: 'operator', announce: false }, { equip: false })
+    putOffRoster('project-1', 'c-viv')
+    const pick = await run('inventory_pick_up', { ref: 'magic bow' })
+    expect(pick.error).toContain("not on this project's character roster")
+    expect(pick.error).not.toContain('not an archetype')
+  })
+
+  // The roster closes the shelf, not the hand (lib/inventory/roster-gate.ts).
+  async function shelfWithBowAndLantern() {
+    const project = await loc('project', 'project-1')
+    const bow = await createInventoryItem(repos(), project, body({ name: 'magic bow', isArchetype: true }))
+    const lantern = await createInventoryItem(repos(), project, body({ name: 'lantern' }))
+    return { bow, lantern }
+  }
+
+  it('hides the project shelf from an off-roster character, except what they carry', async () => {
+    const { lantern } = await shelfWithBowAndLantern()
+    // The operator hands Vivienne the lantern; then she is taken off the roster.
+    await equipItems(repos(), state.chats.get('chat-1') as never, 'c-viv', [lantern.id], { userId: 'user-1', provenance: 'operator', announce: false })
+    await createInventoryItem(repos(), await loc('project', 'project-1'), body({ name: 'rope' }))
+    putOffRoster('project-1', 'c-viv')
+
+    const r = await run('inventory_list', {})
+    const names = ((r.result as { items: Array<{ name: string; state: string | null }> }).items).map((i) => `${i.name}:${i.state}`)
+    expect(names).toContain('lantern:equipped')
+    expect(names.some((n) => n.startsWith('rope'))).toBe(false)
+    expect(names.some((n) => n.startsWith('magic bow'))).toBe(false)
+
+    // She can still set the lantern down.
+    expect((await run('inventory_unequip', { refs: ['lantern'] })).success).toBe(true)
+    expect(carried('chat-1', 'c-viv')).toEqual([])
+  })
+
+  it('refuses an off-roster pick-up or equip from the shelf, writing nothing', async () => {
+    const { bow, lantern } = await shelfWithBowAndLantern()
+    putOffRoster('project-1', 'c-viv')
+
+    const pick = await run('inventory_pick_up', { ref: 'magic bow' })
+    expect(pick.success).toBe(false)
+    expect(pick.error).toContain("not on this project's character roster")
+    expect(objectsIn('mp-c-viv')).toHaveLength(0)
+    const equip = await run('inventory_equip', { refs: ['lantern'] })
+    expect(equip.success).toBe(false)
+    expect(equip.error).toContain('roster')
+    expect((await run('inventory_read', { ref: 'lantern' })).error).toContain('roster')
+
+    // Even by id, past the reference resolver, the equip planner refuses.
+    const chat = state.chats.get('chat-1') as never
+    const ctx = { userId: 'user-1', provenance: 'character' as const, announce: true }
+    await expect(equipItems(repos(), chat, 'c-viv', [lantern.id], ctx)).rejects.toMatchObject({ code: 'OFF_ROSTER' })
+    await expect(pickUpItems(repos(), chat, 'c-viv', [bow.id], ctx)).rejects.toMatchObject({ code: 'OFF_ROSTER' })
+    expect(objectsIn('mp-c-viv')).toHaveLength(0)
+    expect(carried('chat-1', 'c-viv')).toEqual([])
+
+    // Marcus is still on the roster; the operator is never gated.
+    expect((await run('inventory_pick_up', { ref: 'magic bow' }, { characterId: 'c-marcus' })).success).toBe(true)
+    await equipItems(repos(), chat, 'c-viv', [lantern.id], { userId: 'user-1', provenance: 'operator', announce: false })
+    expect(carried('chat-1', 'c-viv')).toEqual([lantern.id])
   })
 })

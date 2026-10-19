@@ -28,7 +28,7 @@ jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({
 }))
 
 import { postPascalInventoryChange } from '@/lib/services/pascal/writer'
-import { addCharacter, getFakeRepos, objectsIn, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
+import { addCharacter, getFakeRepos, objectsIn, putOffRoster, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location'
 import { createInventoryItem } from '@/lib/inventory/item-mutations'
 import { flushPendingInventoryAnnouncements } from '@/lib/inventory/equip-effects'
@@ -65,6 +65,14 @@ describe('applyInventoryEffects', () => {
       previous: [],
       next: { item: { title: 'magic bow' }, created: true, equipped: carried('c-viv') },
     })
+  })
+
+  it('an off-roster roller cannot pick up from the project shelf: the gesture lands nothing', async () => {
+    await createInventoryItem(repos(), await loc('project', 'project-1'), body({ name: 'magic bow', isArchetype: true }))
+    putOffRoster('project-1', 'c-viv')
+    expect(await run([{ index: 0, inventory: { action: 'pick_up', items: ['magic bow'], equip: true } }])).toEqual([])
+    expect(objectsIn('mp-c-viv')).toHaveLength(0)
+    expect(carried('c-viv')).toHaveLength(0)
   })
 
   it('a reference naming nothing lands nothing', async () => {

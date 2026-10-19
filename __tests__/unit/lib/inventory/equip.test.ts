@@ -216,6 +216,14 @@ describe("Pascal's line", () => {
       .toBe('*Vivienne sets down the lantern.*')
     expect(describeInventoryChange('Vivienne', { equipped: [], unequipped: [] })).toBeNull()
   })
+
+  it('reads plural names as "some" and keeps "a" before a consonant sound', () => {
+    const item = (name: string) => ({ name, title: null }) as never
+    expect(describeInventoryChange('Vivienne', { equipped: [item('lockpicks'), item('compass')], unequipped: [] }))
+      .toBe('*Vivienne takes up some lockpicks and a compass.*')
+    expect(describeInventoryChange('Vivienne', { equipped: [item('amulet'), item('unicorn horn')], unequipped: [] }))
+      .toBe('*Vivienne takes up an amulet and a unicorn horn.*')
+  })
 })
 
 describe("the turn's pending changes", () => {

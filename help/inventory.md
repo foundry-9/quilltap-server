@@ -24,14 +24,14 @@ An item lives on one of four shelves. Each is an `Inventory/` folder in a docume
 
 1. **A character's own inventory** — in their character vault. Only they can carry it.
 2. **A group's inventory** — in the group's store. Every member of the group can reach it.
-3. **A project's inventory** — in the project's store. Every character in that project's chats can reach it.
+3. **A project's inventory** — in the project's store. Every character in that project's chats can reach it, unless the project keeps a [roster](project-characters.md) that leaves them off — then their own tools find the shelf closed, though you may still hand them its objects.
 4. **Quilltap General** — the household's shelf. Every character in every chat can reach it.
 
 Browsing a character shows everything within their reach, merged: their own shelf first, then their groups', the project's (when you are in a chat that has one), then General. An item that comes from a shared shelf is marked with where it is kept. When two shelves hold items with the same identity, the nearer one wins, exactly as it does for garments.
 
 ## Quilltap General
 
-Quilltap General is the household-wide shelf: the coins, torches and rope that every character in every chat may lay hands on without anyone keeping duplicates. Choose **Quilltap General** from the dropdown to curate it directly — every item there takes the full `⋮` menu, and **New object** creates straight onto the shelf. It is also the natural home for **archetypes** (below) that the whole house shares: put *Sword* in General once, and any character anywhere may have their own instance of it.
+Quilltap General is the household-wide shelf: the coins, torches and rope that every character in every chat may lay hands on without anyone keeping duplicates. Choose **Quilltap General** from the dropdown to curate it directly — every item there takes the full `⋮` menu, and **+ New Item** creates straight onto the shelf. It is also the natural home for **archetypes** (below) that the whole house shares: put *Sword* in General once, and any character anywhere may have their own instance of it.
 
 ## What an item is
 
@@ -53,9 +53,9 @@ The rest of the item's particulars:
 
 ## Archetypes and instances
 
-A shared shelf often holds not a particular sword but the *idea* of a sword. Tick **Archetype** when creating an item and it becomes a class of thing rather than a thing: it can be edited, browsed and instantiated, but never carried.
+A shared shelf often holds not a particular sword but the *idea* of a sword. Create one with **+ New Archetype** (or tick **Archetype** in any new item's editor) and it becomes a class of thing rather than a thing: it can be edited, browsed and instantiated, but never carried.
 
-**Instantiate…** (on an archetype's `⋮` menu, or the toolbar's button) makes an **instance**: an item of its own, kept on whichever shelf you choose, that *inherits* everything from its archetype except what it overrides. *Excalibur* is an instance of *Sword*: it takes the archetype's description and drawing hints, and overrides the title and perhaps a line or two of description.
+**Instantiate…** (on an archetype's `⋮` menu, or **+ From archetype** beneath the list) makes an **instance**: an item of its own, kept on whichever shelf you choose, that *inherits* everything from its archetype except what it overrides. *Excalibur* is an instance of *Sword*: it takes the archetype's description and drawing hints, and overrides the title and perhaps a line or two of description.
 
 - In the editor, every field an instance could inherit shows the archetype's value greyed, with an **Inherit** toggle. Turn it off to give the instance its own value; turn it back on to let the archetype speak for it again.
 - **Edit the archetype** and every instance that has not overridden the field changes with it.
@@ -65,7 +65,7 @@ A shared shelf often holds not a particular sword but the *idea* of a sword. Tic
 
 ## Kits
 
-A **kit** is a loadout: a named list of items picked up or set down in one gesture. *Burglar's kit*: lockpicks, a dark lantern, soft-soled shoes. Create one with **New kit** and choose its members.
+A **kit** is a loadout: a named list of items picked up or set down in one gesture. *Burglar's kit*: lockpicks, a dark lantern, soft-soled shoes. Create one with **+ New Kit** and choose its members.
 
 - A kit is never carried itself; in a chat it shows as **all**, **some** or **none** of its members carried.
 - **Equip** a kit and every member is taken up at once. If any member would break its *Carried at most* limit, nothing is taken up and Quilltap says which item and which limit.

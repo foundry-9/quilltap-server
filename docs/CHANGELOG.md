@@ -4,6 +4,23 @@
 
 ### 4.11-dev
 
+#### Fix: Inventory dogfood fixes
+
+- The project roster now gates the project's Inventory shelf as it does the project wardrobe. For a character the roster does not admit, `loadInventoryContext` (every `inventory_*` tool and every Pascal read, gate and effect) hides project-tier objects they are not carrying, and `equipItems` / `pickUpItems` refuse a `character` or `pascal` gesture that would take from the shelf with the new `OFF_ROSTER` refusal (`InventoryOffRosterError`). Objects already carried stay visible and can be set down. `inventory_pick_up`, `inventory_equip` and `inventory_read` answer a reference to a hidden shelf object with the roster refusal rather than "not found" (`closedShelfMessage`; `LoadedInventoryContext.closedShelf` keeps the hidden objects for this alone). Operator gestures, arrival defaults, the prompt section and the image pipelines are not gated. New `lib/inventory/roster-gate.ts`; the shared inventory test store gains a roster (`putOffRoster`).
+- The character progressions report is now built on every turn as well. It had the same continue-mode guard, so chained, nudged and autonomous-room turns never reported a progression (bug 254). The Core whisper keeps its deliberate continue-mode skip; `isContinueMode`'s doc comment and PROMPT_ARCHITECTURE.md now say what continue mode is.
+- The `## Carried and equipped` section is now built on every turn. It was skipped in continue mode, which covers every chained speaker, Nudge and autonomous-room turn, so characters knew what they carried only on turns answering a user message (bug 253).
+- Pascal's netted Inventory line for a turn is now posted after the turn is saved (a `finally` around the orchestrator's terminal branches) instead of before the tool messages and reply it summarizes.
+- Pascal's line uses "some" for plural-looking names ("takes up some lockpicks", not "a lockpicks") and "a" before `uni`/`eu`/`one` spellings.
+- A character's project tier is labelled with the project's name ("Project: Scenario Builder Test") instead of "Project: Project". `loadInventoryPool` reads the name through an optional `projects` repository and falls back to "Project".
+- The Inventory browser's shared-tier rows count only objects matching the Items / Kits / Archetypes filter.
+- The row `⋮` menu is positioned `fixed` beside its button, opening upward when there is no room below, so the list's scroll box no longer clips it. It closes on scroll or resize.
+- The Take up… picker has a close button and Cancel. Its open state lives in the dialog, so Escape or a click inside the picker no longer also closes the Inventory dialog.
+- The Carrying now pane and Take up… picker show titled objects as "Excalibur (sword)", like the list.
+- A copy refused because an object cannot be copied now says so in words instead of listing ids.
+- The kit editor's placeholders are a kit's ("burglar's kit", "Loadouts"), not a sword's.
+- Workbench: the side-effects vantage select says "inventory" (or "wardrobe and inventory") when the tool has inventory effects, and the Inventory picker's header says "inventory".
+- Help: `help/inventory.md` names the buttons as they appear (**+ New Item**, **+ New Kit**, **+ New Archetype**, **+ From archetype**).
+
 #### Feature: Inventory tools and Pascal inventory support
 
 - Review fixes:

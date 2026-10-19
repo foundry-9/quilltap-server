@@ -1519,7 +1519,7 @@ describe('Context Manager', () => {
         restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
       })
 
-      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean }) => {
+      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean; continueMode?: boolean }) => {
         mockedGetRepositories.mockReturnValue({
           memories: {
             findByCharacterAboutCharacters: jest.fn().mockResolvedValue(opts.recall ? [memory] : []),
@@ -1565,8 +1565,29 @@ describe('Context Manager', () => {
             { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
           ],
           turnSkip: opts.offerSkip ? { offerSkip: true, characterName: 'Lyra', recentlyAddressed: false } : undefined,
+          isContinueMode: opts.continueMode ?? false,
         } as any)
       }
+
+      it('carries the Inventory on a continue-mode turn (a chained speaker, a nudge, an autonomous room)', async () => {
+        ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValue(INVENTORY)
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true })
+
+        expect(inventorySection.buildInventorySection).toHaveBeenCalled()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content as string).toContain(INVENTORY)
+      })
+
+      it('reports progressions on a continue-mode turn (bug 254)', async () => {
+        ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true })
+
+        expect(progressionsSection.buildProgressionsSection).toHaveBeenCalled()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content as string).toContain(PROGRESSIONS)
+      })
 
       it('delivers the Core whisper on a turn with no new user message', async () => {
         enable({ core: true })

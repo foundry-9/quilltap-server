@@ -6,12 +6,13 @@ url: /prospero/:id
 
 > **[Open this page in Quilltap](/prospero)**
 
-Every project keeps a **character roster** — a guest list, if you like, kept by a butler of the old school who admits only those whose names he has been given. The roster does not decide who may *chat* in a project; any character may be invited into any project conversation, and every one of them hears the project's instructions and benefits from its knowledge as a matter of course. What the roster governs is the key to the study and the wardrobe:
+Every project keeps a **character roster** — a guest list, if you like, kept by a butler of the old school who admits only those whose names he has been given. The roster does not decide who may *chat* in a project; any character may be invited into any project conversation, and every one of them hears the project's instructions and benefits from its knowledge as a matter of course. What the roster governs is the key to the study, the wardrobe and the stores cupboard:
 
 - **Project files** — whether a character may open, list, search, write or edit the project's documents *with their own tools* (`doc_read_file`, `doc_list_files`, `doc_grep`, `doc_write_file`, `search_scriptorium`, and their cousins)
 - **The shared wardrobe** — whether a character may browse and put on the garments hanging in the project's `Wardrobe/` folders (`wardrobe_list`, `wardrobe_wear`, and the rest of the `wardrobe_*` set)
+- **The project's inventory** — whether a character may see, take up or pick up the objects on the project's [Inventory](project-inventory.md) shelf, by their own `inventory_*` tools or by a custom tool's inventory effects
 
-A character off the roster can still chat perfectly happily. They simply find the study door locked and the project's coat-rack out of reach, and are told so politely should they try the handle.
+A character off the roster can still chat perfectly happily. They simply find the study door locked and the project's coat-rack and stores cupboard out of reach, and are told so politely should they try the handle.
 
 ## The Two Modes
 
@@ -21,7 +22,7 @@ The **Allow Any Character** switch at the top of the project's **Characters** ca
 
 **Allow Any Character = ON**
 
-- Every character in a project chat may use the project files and shared wardrobe
+- Every character in a project chat may use the project files, shared wardrobe and project inventory
 - The roster is set aside, and the add/remove controls are tucked away
 - New projects begin this way
 
@@ -31,8 +32,8 @@ The **Allow Any Character** switch at the top of the project's **Characters** ca
 
 **Allow Any Character = OFF**
 
-- Only the characters on the roster may use the project files and shared wardrobe
-- Everyone else may still chat, but their file and wardrobe tools come up empty for this project
+- Only the characters on the roster may use the project files, shared wardrobe and project inventory
+- Everyone else may still chat, but their file, wardrobe and inventory tools come up empty for this project
 - The roster is curated entirely by hand — joining a project chat does **not** put a character on it
 
 **Best for:** campaigns where some characters should not be rummaging through the game-master's notes, stories with secrets kept from part of the cast, and collaborative projects with specific keyholders.
@@ -57,7 +58,7 @@ Characters already on the roster do not appear in the picker. Archived character
 1. Find the character's card in the roster
 2. Click the small **×** in its corner
 
-The character keeps their chats, their messages and their place in your library. They lose only the key: from their next tool call onward, the project's files and shared wardrobe are closed to them.
+The character keeps their chats, their messages and their place in your library. They lose only the key: from their next tool call onward, the project's files, shared wardrobe and inventory shelf are closed to them.
 
 ### Each Roster Card Shows
 
@@ -73,7 +74,8 @@ Quick-hide rules apply to the roster just as they do elsewhere, so a hidden char
 - **Project instructions** — delivered to every character in a project chat
 - **Automatic knowledge** — project knowledge is still offered to every character each turn; only *deliberate* file access by tool is gated
 - **What a character is already wearing** — garments already on stay on; a character off the roster simply cannot pick new ones from the project's wardrobe
-- **You** — when you dress a character yourself from the Salon's outfit dialog, the project's wardrobe is always at hand, whatever the roster says
+- **What a character is already carrying** — an object from the project's shelf that a character holds stays in their hands, and they may still see it and set it down; a character off the roster simply cannot take up anything new from the shelf, nor pick up an instance of one of its archetypes
+- **You** — when you dress a character yourself from the Salon's outfit dialog, the project's wardrobe is always at hand, whatever the roster says; so is the project's shelf when you hand them objects from the Inventory dialog, and the shelf's **Equipped by default** items still arrive with every character
 - **Group stores, the character's own vault, and Quilltap General** — those follow their own rules and are not project property
 
 ## Troubleshooting
@@ -90,9 +92,15 @@ Quick-hide rules apply to the roster just as they do elsewhere, so a hidden char
 
 **Solution:** Add the character to the roster, or dress them yourself from the Salon's outfit dialog.
 
+### A character cannot find an object on the project's shelf
+
+**Cause:** the same — the project inventory is roster-gated. Pascal tells the character so if they reach for it.
+
+**Solution:** Add the character to the roster, or hand them the object yourself from the Inventory dialog.
+
 ### I removed a character, but they still appear in project chats
 
-**Expected.** The roster governs file and wardrobe access, not chat membership. Remove them from the chat itself if you would rather they leave the room.
+**Expected.** The roster governs file, wardrobe and inventory access, not chat membership. Remove them from the chat itself if you would rather they leave the room.
 
 ### The roster is empty and nobody can reach the files
 

@@ -190,7 +190,7 @@ Emitted only when at least one progression reports this turn; otherwise **nothin
 
 - **Normal turn:** appended to the new user message with the `---` separator (`:2598`).
 - **No new user message** (chained autonomous turns, nudges): the `else if` at `:2603-2612` pushes trailing content as its own `role: 'user'` message; the progressions section joins the turn-skip note there. Whisper role must end `user` (§14 trap).
-- **Continue mode** (`isContinueMode`): **skip** — the model is finishing its own sentence; the Core whisper skips here too.
+- **Continue mode** (`isContinueMode`): **build it.** Continue mode *is* the two cases above — every turn without a new user message (Continue, nudges, chained and autonomous turns), never a model finishing its own sentence. As built, the section skipped it on that misreading, which cancelled both bullets above; fixed as bug 254.
 - **Autonomous rooms:** nothing extra — autonomous turns run the same `buildContext` (`lib/background-jobs/handlers/autonomous-room-turn.ts:25` → `handleSendMessage`). The engine is pure and the reads pass through the job-child proxy; there are no writes on this path.
 
 ### Inputs available at that point
@@ -304,7 +304,7 @@ Debug logs on every new backend path, via the built-in logger: per turn, the res
 
 - [x] `lib/chat/context/core-whisper-trigger.ts` — `findLastOwnTurnMs` (exported, tested).
 - [x] `lib/progressions/prompt-section.ts` — `buildProgressionsSection` (logs; the chokepoint).
-- [x] `lib/chat/context-manager.ts` — compute after Suparṇā mail, push before the turn-skip note (`:2592-2600`); the `else if` branch (`:2603`); skip on `isContinueMode`.
+- [x] `lib/chat/context-manager.ts` — compute after Suparṇā mail, push before the turn-skip note (`:2592-2600`); the `else if` branch (`:2603`); built on every turn, continue mode included (bug 254).
 - [x] `lib/chat/initialize.ts` greeting builder — forced report after subprompts.
 - [x] `lib/services/carina/carina.service.ts` — forced report appended to the user question.
 - [x] Tests: `__tests__/unit/cache-determinism/system-prompt.test.ts` — assert block 1 is byte-identical with progressions present (the negative guarantee); context-manager test for placement/order and the empty-is-identical case; greeting and Carina append tests; eval `cache-stability.test.ts` still green.

@@ -19,6 +19,7 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { readEquippedSet } from '@/lib/inventory/equipped-set';
 import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
 import { inventoryContextFrom, type InventoryContext, type ResolvedInventoryPool } from '@/lib/inventory/refs';
+import { isOnClosedShelf, projectShelfOpenTo } from '@/lib/inventory/roster-gate';
 
 export type { InventoryContext } from '@/lib/inventory/refs';
 
@@ -27,6 +28,12 @@ export interface LoadedInventoryContext extends InventoryContext {
   pool: ResolvedInventoryPool;
   equippedIds: ReadonlySet<string>;
   serverPool: InventoryPool;
+  /**
+   * What the project roster hides from this character (`roster-gate.ts`):
+   * project-shelf objects they do not carry. Never offered to them; kept only
+   * so a reference to one can be refused in words rather than as "not found".
+   */
+  closedShelf: ResolvedInventoryPool['items'];
 }
 
 /** The resolved form of a server pool: every reachable object plus the holder's own archived ones. */
@@ -46,20 +53,26 @@ export async function loadInventoryContext(
   chatId: string | null,
 ): Promise<LoadedInventoryContext> {
   const chat = chatId ? await repos.chats.findById(chatId) : null;
-  const serverPool = await loadInventoryPool(repos, {
-    characterId,
-    chatId,
-    projectId: (chat as { projectId?: string | null } | null)?.projectId ?? null,
-  });
+  const projectId = (chat as { projectId?: string | null } | null)?.projectId ?? null;
+  const serverPool = await loadInventoryPool(repos, { characterId, chatId, projectId });
   const equipped = chat ? readEquippedSet(chat, characterId, serverPool) : [];
   const equippedIds = new Set(equipped.map((item) => item.id));
-  const pool = resolvedPoolOf(serverPool);
+  // Every reader of this context is the character's own reach (a tool call,
+  // a custom tool), so the project roster applies: a closed shelf hides what
+  // they are not already carrying (`roster-gate.ts`).
+  const full = resolvedPoolOf(serverPool);
+  const shelfOpen = await projectShelfOpenTo(projectId, characterId);
+  const closedShelf = shelfOpen ? [] : full.items.filter((item) => isOnClosedShelf(item, equippedIds));
+  const pool: ResolvedInventoryPool = shelfOpen
+    ? full
+    : { items: full.items.filter((item) => !isOnClosedShelf(item, equippedIds)), owns: full.owns };
   logger.debug('[InventoryContext] Loaded', {
     characterId,
     chatId,
     reachable: pool.items.length,
     equipped: equippedIds.size,
+    projectShelf: projectId ? (shelfOpen ? 'open' : 'closed by roster') : 'none',
     context: 'inventory',
   });
-  return { ...inventoryContextFrom(characterId, chatId, pool, equippedIds), pool, equippedIds, serverPool };
+  return { ...inventoryContextFrom(characterId, chatId, pool, equippedIds), pool, equippedIds, serverPool, closedShelf };
 }

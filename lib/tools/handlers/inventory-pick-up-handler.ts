@@ -18,6 +18,7 @@ import {
   characterChangeContext,
   errorMessageOf,
   formatSummary,
+  closedShelfMessage,
   inventoryNotFoundMessage,
   loadToolChat,
   loadToolInventory,
@@ -43,9 +44,12 @@ export async function executeInventoryPickUpTool(
     const matches = resolveToolRef(ctx, parsed.ref, { includeArchetypes: true });
     const archetype = matches.find((m) => m.item.isArchetype)?.item;
     if (!archetype) {
-      const error = matches.length > 0
-        ? new InventoryInvalidParentError(`"${inventoryLabel(matches[0].item)}" is not an archetype; equip it with inventory_equip instead`).message
-        : inventoryNotFoundMessage(parsed.ref);
+      // An archetype the roster hides answers first: "magic bow" may also
+      // name the character's own bow, and "not an archetype" would mislead.
+      const error = closedShelfMessage(ctx, parsed.ref, { archetypesOnly: true })
+        ?? (matches.length > 0
+          ? new InventoryInvalidParentError(`"${inventoryLabel(matches[0].item)}" is not an archetype; equip it with inventory_equip instead`).message
+          : inventoryNotFoundMessage(parsed.ref));
       logInventoryTool('inventory_pick_up', context, { refs: [parsed.ref], resolved: matches.map((m) => m.item.id), outcome: 'refused', error }, 'info');
       return { success: false, error };
     }
