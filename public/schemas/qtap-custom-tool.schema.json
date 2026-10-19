@@ -101,7 +101,7 @@
             "description": "Value type of this parameter."
           },
           "default": {
-            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type.",
+            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type. A { \"$inventory\": \"<object>.metadata.<key>\", \"fallback\": ... } reference is allowed on the same terms.",
             "oneOf": [
               {
                 "type": "number"
@@ -114,6 +114,9 @@
               },
               {
                 "$ref": "#/$defs/StateRef"
+              },
+              {
+                "$ref": "#/$defs/InventoryRef"
               }
             ]
           },
@@ -134,7 +137,7 @@
       }
     },
     "roll": {
-      "description": "How chance is drawn. Either a numeric-range object (Form A) or a dice-notation string (Form B). Omit for a plain uniform 0–1 roll.",
+      "description": "How chance is drawn. A numeric-range object (Form A), a dice-notation string (Form B), or a $inventory reference naming dice an object carries (Form C). Omit for a plain uniform 0–1 roll.",
       "oneOf": [
         {
           "type": "string",
@@ -167,6 +170,10 @@
               "description": "Round the final value to a whole number. Applied last. Default false."
             }
           }
+        },
+        {
+          "$ref": "#/$defs/InventoryRef",
+          "description": "Form C — the dice an Inventory object names: { \"$inventory\": \"sword.metadata.damage\", \"fallback\": \"1d4\" }. The object's value is rolled when it is dice notation; otherwise the fallback, which must be dice notation (enforced when the file loads)."
         }
       ]
     },
@@ -296,6 +303,30 @@
                   "llm": {
                     "$ref": "#/$defs/LlmComparator",
                     "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
+                  },
+                  "inventory": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/InventoryStateComparator"
+                    },
+                    "propertyNames": {
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "inventoryCount": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
+                    "additionalProperties": {
+                      "$ref": "#/$defs/NumericComparator"
+                    },
+                    "propertyNames": {
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
                   }
                 }
               }
@@ -324,7 +355,7 @@
     "Effect": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One side effect, recorded after the outcome table has dealt: EITHER a write (target + value) OR a wardrobe gesture (wardrobe), never both and never neither. Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
+      "description": "One side effect, recorded after the outcome table has dealt: exactly one of a write (target + value), a wardrobe gesture (wardrobe) or an inventory gesture (inventory). Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures, then inventory gestures); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
       "properties": {
         "when": {
           "$ref": "#/$defs/EffectWhen",
@@ -355,6 +386,10 @@
         "wardrobe": {
           "$ref": "#/$defs/WardrobeGesture",
           "description": "A wardrobe gesture on the rolling character (and nobody else) instead of a write: wear items, take them off, or clear a slot. A run made as nobody dresses nobody."
+        },
+        "inventory": {
+          "$ref": "#/$defs/InventoryGesture",
+          "description": "An Inventory gesture on the rolling character (and nobody else) instead of a write: equip, unequip or pick up objects. A run made as nobody carries nothing."
         }
       },
       "oneOf": [
@@ -364,8 +399,17 @@
             "value"
           ],
           "not": {
-            "required": [
-              "wardrobe"
+            "anyOf": [
+              {
+                "required": [
+                  "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
+                ]
+              }
             ]
           }
         },
@@ -383,6 +427,35 @@
               {
                 "required": [
                   "value"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "inventory"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "wardrobe"
                 ]
               }
             ]
@@ -536,13 +609,37 @@
               "description": "The winning outcome does not carry this state."
             }
           }
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
+          "additionalProperties": {
+            "$ref": "#/$defs/InventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
+          "additionalProperties": {
+            "$ref": "#/$defs/NumericComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
         }
       }
     },
     "ToolGate": {
       "type": "object",
       "additionalProperties": false,
-      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json and their derived timed progressions: there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
+      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json, their derived timed progressions, and what they carry in this chat (inventory, inventoryCount): there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
       "properties": {
         "metadata": {
           "type": "object",
@@ -564,6 +661,30 @@
           },
           "propertyNames": {
             "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
+          }
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the invoking character in this chat, keyed by a LITERAL object reference — a gate has no parameters, so a key carrying {{…}} is rejected when the file loads. Loaded lazily at roster time, only when a gate names it. With no character or chat (the Workbench library), every test declines: availableWhen stays closed, withheldWhen unsatisfied.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateInventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin of an object the invoking character has equipped in this chat, keyed by a literal object reference.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateInventoryCountComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
           }
         }
       },
@@ -636,7 +757,7 @@
       "$ref": "#/$defs/NumberOrParamRef"
     },
     "AnyOperand": {
-      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback.",
+      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback. Or a { \"$inventory\": ..., \"fallback\": ... } reference, typed by its fallback.",
       "oneOf": [
         {
           "type": "number"
@@ -652,11 +773,14 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
     },
     "StringOperand": {
-      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here. Or a { \"$inventory\": ..., \"fallback\": ... } reference whose fallback is a string.",
       "oneOf": [
         {
           "type": "string",
@@ -667,6 +791,9 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
     },
@@ -871,7 +998,7 @@
       }
     },
     "NumberOrParamRef": {
-      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here. A { \"$inventory\": \"<object>.metadata.<key>\", \"fallback\": <number> } reference is allowed too.",
       "oneOf": [
         {
           "type": "number"
@@ -881,8 +1008,176 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
+    },
+    "InventoryRef": {
+      "type": "object",
+      "required": [
+        "$inventory",
+        "fallback"
+      ],
+      "additionalProperties": false,
+      "description": "A reference into one metadata key of one Inventory object the rolling character carries or can reach — the $state reference's twin, accepted wherever a $state reference is and typed the same way, by its required fallback. Resolution returns the object's metadata value only when it exists and has the fallback's type; otherwise the fallback, so a run never fails on it. As the whole `roll`, its fallback must be dice notation (\"1d4\") and the object's value is rolled when it is notation too (a sword's metadata.damage of \"2d6\"). Not allowed in a gate.",
+      "properties": {
+        "$inventory": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320,
+          "pattern": "^.+\\.metadata\\..+$",
+          "description": "\"<object>.metadata.<key>\": the object by id, title or name (case-insensitive), then one of its metadata keys. Split at the FIRST \".metadata.\", so an object reference may not contain \".metadata.\"."
+        },
+        "fallback": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "description": "Used whenever the object or key is absent or holds a value of a different type."
+        }
+      }
+    },
+    "InventoryStateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A test of one Inventory object's state for the rolling character in this chat: equipped (in their equipped set), carried (in their own vault, not equipped), reachable (in a group, project or General store, not equipped) or absent. eq/neq only — a state has no order, so an ordering key is a rejection. Several matches read as the best state (equipped > carried > reachable > absent). A run nobody made declines every test, eq: \"absent\" included.",
+      "properties": {
+        "eq": {
+          "oneOf": [
+            {
+              "enum": [
+                "equipped",
+                "carried",
+                "reachable",
+                "absent"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "description": "The object is in this state. A $param must name a declared string parameter (enforced when the file loads)."
+        },
+        "neq": {
+          "oneOf": [
+            {
+              "enum": [
+                "equipped",
+                "carried",
+                "reachable",
+                "absent"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "description": "The object is not in this state."
+        }
+      }
+    },
+    "GateInventoryStateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A gate's test of one Inventory object's state: literal states only.",
+      "properties": {
+        "eq": {
+          "enum": [
+            "equipped",
+            "carried",
+            "reachable",
+            "absent"
+          ],
+          "description": "The object is in this state."
+        },
+        "neq": {
+          "enum": [
+            "equipped",
+            "carried",
+            "reachable",
+            "absent"
+          ],
+          "description": "The object is not in this state."
+        }
+      }
+    },
+    "GateInventoryCountComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A gate's test of how many kin (same name) of an object the invoking character has equipped: literal numbers only, no containment.",
+      "properties": {
+        "gt": {
+          "type": "number",
+          "description": "Greater than."
+        },
+        "gte": {
+          "type": "number",
+          "description": "Greater than or equal to."
+        },
+        "lt": {
+          "type": "number",
+          "description": "Less than."
+        },
+        "lte": {
+          "type": "number",
+          "description": "Less than or equal to."
+        },
+        "eq": {
+          "type": "number",
+          "description": "Equal to."
+        },
+        "neq": {
+          "type": "number",
+          "description": "Not equal to."
+        }
+      }
+    },
+    "InventoryGesture": {
+      "type": "object",
+      "required": [
+        "action",
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "An Inventory gesture on the rolling character in this chat, through the same chokepoints the operator's dialog uses. Per-action rule (checked by the loader): equip is only used with pick_up. Each reference that resolves to nothing is skipped; a cap breach skips the whole gesture before anything is written (a pick_up creates no instance); the rest of the run proceeds.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "equip",
+            "unequip",
+            "pick_up"
+          ],
+          "description": "\"equip\" takes up the listed objects or kits; \"unequip\" sets them down; \"pick_up\" makes an instance of each listed archetype at the root of the rolling character's vault."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": "The objects, each by id, title or name (case-insensitive). Each is a TEMPLATE: {{params.loot}} and the other placeholder families are substituted before lookup. pick_up names archetypes."
+        },
+        "equip": {
+          "type": "boolean",
+          "description": "pick_up only. Equip the new instances. Default true."
+        }
+      }
     }
   }
 }

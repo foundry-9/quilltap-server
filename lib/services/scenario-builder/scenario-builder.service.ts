@@ -17,6 +17,7 @@
  * @module services/scenario-builder/scenario-builder.service
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { randomUUID } from 'crypto'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -170,6 +171,7 @@ export async function runScenarioBuilder(
       false,  // helpToolsEnabled
       false,  // canDressThemselves
       false,  // canCreateOutfits
+      false,  // canManageInventory — no inventory_* tools here
       'read', // docToolsMode — reads only
       false,  // askCarinaEnabled
       false,  // includeWorkspaceTools
@@ -208,6 +210,7 @@ export async function runScenarioBuilder(
         wardrobeCreate: false,
         wardrobeUpdate: false,
         wardrobeArchive: false,
+        ...inventoryToolFlags(false),
       },
     })
 

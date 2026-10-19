@@ -154,12 +154,13 @@ describe('runScenarioBuilder — tool-slate gating', () => {
     expect(toolOptions.pluginToolAllowlist).toEqual([])
   })
 
-  test('docToolsMode passed to buildTools is "read" (positional index 13)', async () => {
+  test('docToolsMode passed to buildTools is "read" (positional index 14)', async () => {
     const controller = makeController()
     await runScenarioBuilder(baseOptions(), controller)
 
     const callArgs = jest.mocked(buildTools).mock.calls[0]
-    expect(callArgs[13]).toBe('read')
+    expect(callArgs[13]).toBe(false) // canManageInventory — the builder carries nothing
+    expect(callArgs[14]).toBe('read')
   })
 
   test('documentsOnlySearch: true is passed to buildTools options', async () => {

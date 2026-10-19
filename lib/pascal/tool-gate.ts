@@ -24,6 +24,15 @@
  * a gate rather than a branch in every outcome table. The roster already holds
  * the invoker's metadata, so deriving the sheet from it adds no reads.
  *
+ * ## Inventory
+ *
+ * `inventory` and `inventoryCount` ask about what the invoker carries in this
+ * chat — keyed by a LITERAL object reference (a gate has no parameters to
+ * fill a template). The roster loads the context lazily, only when a gate
+ * names either subject; with none (no character, no chat, an unreadable
+ * vault) every inventory comparator declines, the same reading a missing
+ * metadata key gets.
+ *
  * ## Fail-soft, and therefore fail-CLOSED for `availableWhen`
  *
  * Metadata tests never throw: an absent key, a list, a value of the wrong type
@@ -40,6 +49,7 @@
 import type { QtapCustomTool, ToolGate } from './custom-tool.types';
 import { metadataComparatorHolds, type Primitive } from './metadata-match';
 import type { ProgressPrimitive } from '@/lib/progressions/engine';
+import { inventoryCountHolds, inventoryStateHolds, type InventoryContext } from './inventory-subjects';
 
 /** What a gate decided, and which clause decided it. */
 export interface ToolGateVerdict {
@@ -67,16 +77,22 @@ export function evaluateToolGate(
    * `"<id>.<field>"`. Omitted → `{}`, so every `progress` test fails and the
    * fail-closed / fail-open reading below applies to it unchanged.
    */
-  progress?: Record<string, ProgressPrimitive> | null
+  progress?: Record<string, ProgressPrimitive> | null,
+  /**
+   * The invoker's Inventory context for this chat. Omitted or null → every
+   * `inventory` / `inventoryCount` test declines.
+   */
+  inventory?: InventoryContext | null
 ): ToolGateVerdict {
   const sheet = metadata ?? {};
   const progressSheet = progress ?? {};
+  const bag = inventory ?? null;
 
-  if (definition.availableWhen && !gateHolds(definition.availableWhen, sheet, progressSheet)) {
+  if (definition.availableWhen && !gateHolds(definition.availableWhen, sheet, progressSheet, bag)) {
     return { available: false, withheldBy: 'availableWhen' };
   }
 
-  if (definition.withheldWhen && gateHolds(definition.withheldWhen, sheet, progressSheet)) {
+  if (definition.withheldWhen && gateHolds(definition.withheldWhen, sheet, progressSheet, bag)) {
     return { available: false, withheldBy: 'withheldWhen' };
   }
 
@@ -87,7 +103,8 @@ export function evaluateToolGate(
 function gateHolds(
   gate: ToolGate,
   metadata: Record<string, unknown>,
-  progress: Record<string, ProgressPrimitive>
+  progress: Record<string, ProgressPrimitive>,
+  inventory: InventoryContext | null
 ): boolean {
   // Both subjects go through the SAME comparison table — one semantics, no
   // second implementation to drift — differing only in which sheet they read.
@@ -105,6 +122,15 @@ function gateHolds(
       resolveOperand: (comparatorKey) => comparator[comparatorKey] as Primitive,
     });
     if (!holds) return false;
+  }
+
+  // Literal operands, literal keys: the comparison table in
+  // `inventory-subjects.ts`, against the invoker's bag.
+  for (const [ref, comparator] of Object.entries(gate.inventory ?? {})) {
+    if (!inventoryStateHolds(comparator, ref, inventory)) return false;
+  }
+  for (const [ref, comparator] of Object.entries(gate.inventoryCount ?? {})) {
+    if (!inventoryCountHolds(comparator, ref, inventory)) return false;
   }
 
   return true;

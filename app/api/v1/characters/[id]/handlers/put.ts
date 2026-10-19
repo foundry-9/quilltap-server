@@ -74,6 +74,7 @@ const updateCharacterSchema = z.object({
   // it reaches update(), so the editor toggles would silently never persist.
   canDressThemselves: z.boolean().nullable().optional(),
   canCreateOutfits: z.boolean().nullable().optional(),
+  canManageInventory: z.boolean().nullable().optional(),
   // The freeform fact sheet (vault `metadata.json`). This schema strips unknown
   // keys, so the field has to be named here or a PUT carrying it would be
   // silently dropped before the write overlay ever saw it. Sending `metadata`

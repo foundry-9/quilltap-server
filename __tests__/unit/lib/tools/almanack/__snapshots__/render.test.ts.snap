@@ -264,6 +264,7 @@ Cast sizes:
 - **Permitted to see the Staff**: 4
 - **May dress themselves**: 30
 - **May create outfits**: 12
+- **May manage their inventory**: 28
 - **With a Core-whisper override**: 5
 
 ### Feature Configuration

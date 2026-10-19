@@ -30,6 +30,7 @@
  * Builder; this module supplies the Brahma profile, slate, prompt and scope.
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
@@ -99,6 +100,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     false,  // helpToolsEnabled
     false,  // canDressThemselves
     false,  // canCreateOutfits
+    false,  // canManageInventory — no inventory_* tools here
     'full', // docToolsMode
     false,  // askCarinaEnabled — recursion guard
     false,  // includeWorkspaceTools — stripped for the console
@@ -134,6 +136,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
       wardrobeCreate: false,
       wardrobeUpdate: false,
       wardrobeArchive: false,
+      ...inventoryToolFlags(false),
     },
   })
 

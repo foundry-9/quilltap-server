@@ -19,6 +19,7 @@
  * second write path into stores.
  */
 
+import { MockInventorySchema, mockInventoryContext } from '@/lib/pascal/bench-inventory';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -101,6 +102,8 @@ const PreviewBodySchema = z.object({
   metadata: MetadataInputSchema.nullish(),
   /** Mock merged state for `$state` refs and `{{state.path}}`. Default {}. */
   state: z.record(z.string(), z.unknown()).nullish(),
+  /** Mock inventory rows `{ ref, state, count? }`; absent → no inventory (inventory tests decline). */
+  inventory: MockInventorySchema.nullish(),
   llm: z.union([z.strictObject({ live: z.literal(true) }), LlmSimulationSchema]).nullish(),
 });
 
@@ -110,6 +113,8 @@ const AuditBodySchema = z.object({
   metadata: MetadataInputSchema.nullish(),
   /** Mock merged state for `$state` refs, held fixed across every draw. Default {}. */
   state: z.record(z.string(), z.unknown()).nullish(),
+  /** Mock inventory rows `{ ref, state, count? }`; absent → no inventory (inventory tests decline). */
+  inventory: MockInventorySchema.nullish(),
   // No `live` here: an audit is ten thousand hands, and the point of the bench
   // is that it never spends ten thousand LLM calls. The simulated answer is
   // held fixed across every draw.
@@ -257,8 +262,10 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
   const progress = flattenProgressions(metadata, benchNowMs);
 
   try {
+    const inventory = body.inventory ? mockInventoryContext(body.inventory) : null;
     const result = await executeCustomTool(definition, body.params ?? undefined, {
       private: body.private,
+      inventory,
       metadata,
       progress,
       now: benchNowMs,
@@ -279,7 +286,7 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
     // been dealt it", which a roll alone could never reveal.
     return successResponse({
       ...result,
-      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata, progress) } : {}),
+      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata, progress, inventory) } : {}),
       // The derived sheet the roll actually saw, so the bench can show the
       // author `cannon.percent` beside the outcome rather than leaving them to
       // work it out from two ISO timestamps.
@@ -321,7 +328,9 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
       body.state ?? {},
       // Held fixed across every draw, like the pretend consult: an audit that
       // advanced the clock ten thousand times would not be an audit.
-      flattenProgressions(metadata, Date.now())
+      flattenProgressions(metadata, Date.now()),
+      // The mock bag, held fixed across every draw.
+      body.inventory ? mockInventoryContext(body.inventory) : null
     );
     return successResponse(result);
   } catch (error) {

@@ -314,7 +314,7 @@ describe('the roster description and effects', () => {
     expect(text).toMatch(
       /^\s*Side effects: writes state\.encounter\.count, metadata\.ansibleTool; wears Cloak of Night, Boots; takes off \{\{params\.garment\}\}; clears hair$/m
     )
-    expect(text).toContain('or what they are wearing')
+    expect(text).toContain('what they are wearing, or what they carry')
   })
 
   it('hides the side-effects line entirely under revealOdds: false', () => {

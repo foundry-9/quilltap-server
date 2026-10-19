@@ -31,7 +31,41 @@ export type PlaceholderRef =
   | { kind: 'metadata'; key: string }
   | { kind: 'state'; path: string }
   | { kind: 'progress'; id: string; field: string }
+  | { kind: 'inventory'; ref: string; field: InventoryPlaceholderField; key?: string }
   | { kind: 'unknown'; key: string };
+
+/** The fields an `{{inventory.<ref>.<field>}}` placeholder may name. */
+export type InventoryPlaceholderField = 'title' | 'name' | 'description' | 'state' | 'metadata';
+
+const INVENTORY_PREFIX = 'inventory.';
+const INVENTORY_METADATA_INFIX = '.metadata.';
+const INVENTORY_TRAILING_FIELDS = ['title', 'name', 'description', 'state'] as const;
+
+/**
+ * Split an inventory remainder (`<ref>.<field>` or `<ref>.metadata.<key>`)
+ * into its parts — the one rule the placeholder and the `$inventory` operand
+ * share. (1) The FIRST `.metadata.` splits it: everything before is the ref,
+ * everything after the metadata key, so a ref may not contain `.metadata.`.
+ * (2) Otherwise it must end in `.title` / `.name` / `.description` /
+ * `.state`, and the rest (dots and all) is the ref. Anything else is null.
+ */
+export function splitInventoryReference(
+  rest: string
+): { ref: string; field: InventoryPlaceholderField; key?: string } | null {
+  const infix = rest.indexOf(INVENTORY_METADATA_INFIX);
+  if (infix >= 0) {
+    const ref = rest.slice(0, infix);
+    const key = rest.slice(infix + INVENTORY_METADATA_INFIX.length);
+    return ref.length > 0 && key.length > 0 ? { ref, field: 'metadata', key } : null;
+  }
+  for (const field of INVENTORY_TRAILING_FIELDS) {
+    const suffix = `.${field}`;
+    if (rest.endsWith(suffix) && rest.length > suffix.length) {
+      return { ref: rest.slice(0, -suffix.length), field };
+    }
+  }
+  return null;
+}
 
 const PARAMS_PREFIX = 'params.';
 const METADATA_PREFIX = 'metadata.';
@@ -77,6 +111,12 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
     if (dot > 0 && dot < rest.length - 1) {
       return { kind: 'progress', id: rest.slice(0, dot), field: rest.slice(dot + 1) };
     }
+  }
+  // `inventory.<ref>.<field>` — one object the rolling character carries or
+  // can reach, read through the one reference rule (`lib/inventory/refs.ts`).
+  if (key.startsWith(INVENTORY_PREFIX)) {
+    const parts = splitInventoryReference(key.slice(INVENTORY_PREFIX.length));
+    if (parts) return { kind: 'inventory', ...parts };
   }
   return { kind: 'unknown', key };
 }

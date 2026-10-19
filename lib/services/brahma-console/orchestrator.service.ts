@@ -19,6 +19,7 @@
  * chat with the new engine.
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
@@ -214,6 +215,7 @@ async function processBrahmaResponse(
     false,  // helpToolsEnabled
     false,  // canDressThemselves
     false,  // canCreateOutfits
+    false,  // canManageInventory — no inventory_* tools here
     'full', // docToolsMode
     false,  // askCarinaEnabled
     false,  // includeWorkspaceTools — stripped for the console
@@ -254,6 +256,7 @@ async function processBrahmaResponse(
       wardrobeCreate: false,
       wardrobeUpdate: false,
       wardrobeArchive: false,
+      ...inventoryToolFlags(false),
     }
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {

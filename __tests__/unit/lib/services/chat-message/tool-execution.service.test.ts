@@ -250,6 +250,7 @@ describe('tool-execution.service', () => {
         projectId: undefined,
         pendingWardrobeAnnouncements: expect.any(Set),
         pendingWardrobeHistory: expect.any(Map),
+        pendingInventoryAnnouncements: expect.any(Map),
       })
       expect(context.pendingWardrobeAnnouncements?.size).toBe(0)
     })
@@ -340,6 +341,7 @@ describe('tool-execution.service', () => {
         projectId: 'project-123',
         pendingWardrobeAnnouncements: expect.any(Set),
         pendingWardrobeHistory: expect.any(Map),
+        pendingInventoryAnnouncements: expect.any(Map),
       })
     })
 

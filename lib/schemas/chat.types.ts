@@ -542,7 +542,11 @@ export const MessageEventSchema = z.object({
      * one entry per change that landed, targeted "wardrobe.wear" /
      * "wardrobe.take_off" / "wardrobe.clear_slot": `previous` is the slots
      * before, `next` is `{ item?, slot?, slotsAffected, effect, slots }`
-     * (`WardrobeEffectRecord`, lib/pascal/wardrobe-effects.ts). The Salon body
+     * (`WardrobeEffectRecord`, lib/pascal/wardrobe-effects.ts). An Inventory
+     * effect records one entry per object that landed, targeted
+     * "inventory.equip" / "inventory.unequip" / "inventory.pick_up": `previous`
+     * is the equipped ids before, `next` is `{ item, created?, equipped }`
+     * (`InventoryEffectRecord`, lib/pascal/inventory-effects.ts). The Salon body
      * shows none of this; the bubble stays the author's message. Absent when
      * the run declared or applied no effects.
      */

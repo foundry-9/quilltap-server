@@ -43,10 +43,14 @@ import {
   classifyPlaceholder,
   collectUnknownKeys,
   formatDefinitionIssues,
+  isInventoryRef,
   isParamRef,
   isStateRef,
   parseEffectTarget,
   isWardrobeEffect,
+  isInventoryEffect,
+  type CustomToolInventoryGesture,
+  type InventoryEffectAction,
   type PlaceholderRef,
   type CustomToolWardrobeGesture,
   type WardrobeEffectAction,
@@ -58,6 +62,7 @@ import {
   TOOL_FILE_SUFFIX,
   type CustomToolLlm,
   type CustomToolParameter,
+  type InventoryRef,
   type EffectTarget,
   type EffectWhen,
   type LlmComparator,
@@ -80,6 +85,14 @@ export { formatValue };
 import { compareOrdered, isPrimitive, metadataComparatorHolds } from './metadata-match';
 import { flattenProgressions, type ProgressPrimitive } from '@/lib/progressions/engine';
 import { evaluateToolGate, hasToolGate } from './tool-gate';
+import {
+  gateNamesInventory,
+  inventoryCountHolds,
+  inventoryStateHolds,
+  resolveInventoryValue,
+  type InventoryContext,
+} from './inventory-subjects';
+import { loadInventoryContext } from '@/lib/inventory/context';
 
 /**
  * The persistent-state view a run resolves `$state` references against — the
@@ -159,6 +172,15 @@ export interface RosterContext {
    * roster to fetch it, but only if some definition turns out to be gated.
    */
   metadata?: Record<string, unknown> | null;
+  /**
+   * The invoking character's Inventory context for this chat, which gates on
+   * `inventory` / `inventoryCount` are answered against. Omitted → loaded
+   * lazily, once, and only when a gated definition names either subject; a
+   * context without a chat or character (the Workbench library), or a vault
+   * that cannot be read, degrades to null — and a null context declines every
+   * inventory comparator.
+   */
+  inventory?: InventoryContext | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +401,41 @@ async function loadInvokerMetadata(ctx: RosterContext): Promise<Record<string, u
 }
 
 /**
+ * The invoking character's Inventory, for the availability gates. Null when
+ * there is no character or chat to read it for, or it cannot be read.
+ */
+async function loadInvokerInventory(ctx: RosterContext): Promise<InventoryContext | null> {
+  if (ctx.inventory !== undefined) return ctx.inventory;
+  if (!ctx.characterId || !ctx.chatId) {
+    logger.debug('Custom-tool gates: no character or chat to read an inventory for; inventory tests decline', {
+      context: CONTEXT,
+      chatId: ctx.chatId || null,
+      characterId: ctx.characterId ?? null,
+    });
+    return null;
+  }
+  try {
+    const loaded = await loadInventoryContext(getRepositories(), ctx.characterId, ctx.chatId);
+    logger.debug('Custom-tool gates: loaded the invoker’s inventory', {
+      context: CONTEXT,
+      chatId: ctx.chatId,
+      characterId: ctx.characterId,
+      reachable: loaded.pool.items.length,
+      equipped: loaded.equippedIds.size,
+    });
+    return loaded;
+  } catch (error) {
+    logger.debug('Custom-tool gates: the invoker’s inventory could not be read; inventory tests decline', {
+      context: CONTEXT,
+      chatId: ctx.chatId,
+      characterId: ctx.characterId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+/**
  * Resolve the roster for one invoker.
  *
  * Iterates tier buckets explicitly rather than flattening the pool: flattening
@@ -418,6 +475,14 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
   const invokerProgress = async (): Promise<Record<string, ProgressPrimitive>> =>
     flattenProgressions(await invokerMetadata(), rosterNowMs);
 
+  // Likewise the invoker's Inventory: read at most once, and only when a gate
+  // names `inventory` or `inventoryCount`.
+  let bag: Promise<InventoryContext | null> | null = null;
+  const invokerInventory = (): Promise<InventoryContext | null> => {
+    bag ??= loadInvokerInventory(ctx);
+    return bag;
+  };
+
   for (const { tier, mountPointId } of orderedMounts(pool)) {
     const { found, errors: mountErrors } = await loadToolsFromMount(mountPointId, tier);
     errors.push(...mountErrors);
@@ -443,6 +508,9 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
           await invokerMetadata(),
           entry.definition.availableWhen?.progress || entry.definition.withheldWhen?.progress
             ? await invokerProgress()
+            : undefined,
+          gateNamesInventory(entry.definition.availableWhen) || gateNamesInventory(entry.definition.withheldWhen)
+            ? await invokerInventory()
             : undefined
         );
         if (!verdict.available) {
@@ -638,7 +706,8 @@ export interface CustomToolRunResult {
 export function resolveParams(
   definition: QtapCustomTool,
   supplied: Record<string, unknown> | null | undefined,
-  state: CustomToolState = {}
+  state: CustomToolState = {},
+  inventory?: InventoryContext | null
 ): ResolvedParams {
   const declared = definition.parameters ?? {};
   const given = supplied ?? {};
@@ -654,7 +723,7 @@ export function resolveParams(
 
   const resolved: ResolvedParams = {};
   for (const [name, spec] of Object.entries(declared)) {
-    resolved[name] = coerceParam(definition.name, name, spec, given[name], state);
+    resolved[name] = coerceParam(definition.name, name, spec, given[name], state, inventory);
   }
   return resolved;
 }
@@ -664,13 +733,17 @@ function coerceParam(
   name: string,
   spec: CustomToolParameter,
   value: unknown,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number | string | boolean {
   // An omitted parameter falls to its default, which may itself be a `$state`
-  // reference resolved against the merged state (its fallback is type-checked
-  // against this parameter's type at load time, so it always fits).
+  // reference resolved against the merged state, or a `$inventory` reference
+  // into an object the rolling character carries (each fallback is
+  // type-checked against this parameter's type at load time, so it always fits).
   if (value === undefined || value === null) {
-    return isStateRef(spec.default) ? resolveStateValue(spec.default, state) : spec.default;
+    if (isStateRef(spec.default)) return resolveStateValue(spec.default, state);
+    if (isInventoryRef(spec.default)) return resolveInventoryValue(spec.default, inventory);
+    return spec.default;
   }
 
   switch (spec.type) {
@@ -711,9 +784,22 @@ function resolveRollField(
   spec: NumberOrParamRef | undefined,
   params: ResolvedParams,
   fallback: number,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number {
   if (spec === undefined) return fallback;
+
+  // A `$inventory` roll field resolves to the object's (numeric) metadata or
+  // its numeric fallback — never a failure, exactly as `$state` does.
+  if (isInventoryRef(spec)) {
+    const value = resolveInventoryValue(spec, inventory);
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new CustomToolRunError(
+        `${toolName}: roll.${field} $inventory reference resolved to ${JSON.stringify(value)} rather than a finite number`
+      );
+    }
+    return value;
+  }
 
   if (isParamRef(spec)) {
     const value = params[spec.$param];
@@ -763,12 +849,13 @@ function rollRange(
   definition: QtapCustomTool,
   range: RollRange,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): { raw: number; value: number } {
-  const min = resolveRollField(definition.name, 'min', range.min, params, 0, state);
-  const max = resolveRollField(definition.name, 'max', range.max, params, 1, state);
-  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state);
-  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0, state);
+  const min = resolveRollField(definition.name, 'min', range.min, params, 0, state, inventory);
+  const max = resolveRollField(definition.name, 'max', range.max, params, 1, state, inventory);
+  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state, inventory);
+  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0, state, inventory);
 
   if (min > max) {
     throw new CustomToolRunError(
@@ -830,6 +917,13 @@ export interface OutcomeSubjects {
    * so every `$state` operand falls to its own fallback.
    */
   state?: CustomToolState;
+  /**
+   * The rolling character's Inventory for this chat (`lib/inventory/refs.ts`),
+   * loaded once per run. null or absent for a run nobody made, or a vault that
+   * could not be read: every `inventory` / `inventoryCount` test then
+   * declines, and every `$inventory` operand falls back.
+   */
+  inventory?: InventoryContext | null;
 }
 
 /** The metadata keys a run actually consulted, and what they held at the time. */
@@ -845,14 +939,17 @@ export type MetadataTested = Record<string, number | string | boolean>;
  */
 function resolveOperand(
   toolName: string,
-  operand: number | string | boolean | ParamRef | StateRef,
+  operand: number | string | boolean | ParamRef | StateRef | InventoryRef,
   params: ResolvedParams,
   label: string,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number | string | boolean {
   // A `$state` operand resolves against the merged state, falling back to its
   // own (load-typed) fallback — it never throws, matching the metadata doctrine.
   if (isStateRef(operand)) return resolveStateValue(operand, state);
+  // So does a `$inventory` operand, against the rolling character's bag.
+  if (isInventoryRef(operand)) return resolveInventoryValue(operand, inventory);
 
   if (!isParamRef(operand)) return operand;
 
@@ -895,15 +992,17 @@ function matchesComparator(
   subject: number | string | boolean,
   subjectLabel: string,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): boolean {
   const operandFor = (key: keyof ParamComparator): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef | StateRef,
+      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef | StateRef | InventoryRef,
       params,
       `${subjectLabel} ${key}`,
-      state
+      state,
+      inventory
     );
 
   for (const key of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -950,16 +1049,18 @@ function matchesMetadataComparator(
   params: ResolvedParams,
   state: CustomToolState,
   /** Which sheet is being read, for the operand label and the debug log. */
-  subject: 'metadata' | 'progress' = 'metadata'
+  subject: 'metadata' | 'progress' = 'metadata',
+  inventory?: InventoryContext | null
 ): boolean {
   return metadataComparatorHolds(comparator, key, sheet, {
     resolveOperand: (comparatorKey) =>
       resolveOperand(
         toolName,
-        comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
+        comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
         params,
         `${subject} "${key}" ${comparatorKey}`,
-        state
+        state,
+        inventory
       ),
     onDecline: (reason) =>
       logger.debug(`Custom tool ${subject} test did not match`, {
@@ -998,7 +1099,8 @@ function matchesLlmComparator(
   comparator: LlmComparator,
   llm: LlmSubject,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): boolean {
   const decline = (reason: string): false => {
     logger.debug('Custom tool llm test did not match', { context: CONTEXT, tool: toolName, reason });
@@ -1013,10 +1115,11 @@ function matchesLlmComparator(
   const operandFor = (comparatorKey: Exclude<keyof LlmComparator, 'ok'>): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef | StateRef,
+      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
       params,
       `the llm answer ${comparatorKey}`,
-      state
+      state,
+      inventory
     );
 
   for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -1062,10 +1165,11 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
   const metadata = subjects.metadata ?? {};
   const progress = subjects.progress ?? {};
   const state = subjects.state ?? {};
+  const inventory = subjects.inventory ?? null;
 
-  if (!matchesComparator(toolName, when, value, 'the rolled value', params, state)) return false;
+  if (!matchesComparator(toolName, when, value, 'the rolled value', params, state, inventory)) return false;
 
-  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params, state)) {
+  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params, state, inventory)) {
     return false;
   }
 
@@ -1075,19 +1179,73 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       // Load-time validation rejects a test of an undeclared parameter.
       throw new CustomToolRunError(`${toolName}: an outcome tests "${name}", which is not a declared parameter`);
     }
-    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params, state)) return false;
+    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params, state, inventory)) return false;
   }
 
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
-    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state)) return false;
+    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state, 'metadata', inventory)) return false;
   }
 
   // The derived progress sheet reads through the SAME fail-soft table as
   // metadata — one semantics, no second comparison code — differing only in
   // which sheet it looks in and what it calls the subject in the log.
   for (const [key, comparator] of Object.entries(when.progress ?? {})) {
-    if (!matchesMetadataComparator(toolName, comparator, key, progress, params, state, 'progress')) {
+    if (!matchesMetadataComparator(toolName, comparator, key, progress, params, state, 'progress', inventory)) {
       return false;
+    }
+  }
+
+  // The Inventory subjects. Each key is a TEMPLATE, rendered against the
+  // run's subjects first (`{{params.weapon}}`), then resolved through the one
+  // reference rule. Fail-soft like `metadata`: with no context every
+  // comparator declines.
+  const inventoryKeys = [...Object.keys(when.inventory ?? {}), ...Object.keys(when.inventoryCount ?? {})];
+  if (inventoryKeys.length > 0) {
+    const renderVars: PlaceholderSubjects = { ...subjects, dice: (subjects as Partial<EffectSubjects>).dice ?? '' };
+    const decline = (key: string) => (reason: string) =>
+      logger.debug('Custom tool inventory test did not match', { context: CONTEXT, tool: toolName, key, reason });
+
+    for (const [rawKey, comparator] of Object.entries(when.inventory ?? {})) {
+      const ref = renderTemplate(rawKey, renderVars).trim();
+      const operandFor = (op: 'eq' | 'neq'): string | undefined => {
+        const operand = comparator[op];
+        if (operand === undefined) return undefined;
+        return String(resolveOperand(toolName, operand, params, `inventory "${rawKey}" ${op}`, state, inventory));
+      };
+      const holds = inventoryStateHolds({ eq: operandFor('eq'), neq: operandFor('neq') }, ref, inventory, decline(rawKey));
+      logger.debug('Custom tool inventory state test', {
+        context: CONTEXT,
+        tool: toolName,
+        key: rawKey,
+        ref,
+        state: inventory ? inventory.state(ref) : null,
+        holds,
+      });
+      if (!holds) return false;
+    }
+
+    for (const [rawKey, comparator] of Object.entries(when.inventoryCount ?? {})) {
+      const ref = renderTemplate(rawKey, renderVars).trim();
+      const test: Record<string, number> = {};
+      for (const op of ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const) {
+        const operand = comparator[op];
+        if (operand === undefined) continue;
+        test[op] = requireNumber(
+          toolName,
+          resolveOperand(toolName, operand, params, `inventoryCount "${rawKey}" ${op}`, state, inventory),
+          `inventoryCount "${rawKey}" ${op}`
+        );
+      }
+      const holds = inventoryCountHolds(test, ref, inventory, decline(rawKey));
+      logger.debug('Custom tool inventory count test', {
+        context: CONTEXT,
+        tool: toolName,
+        key: rawKey,
+        ref,
+        count: inventory ? inventory.equippedKinCount(ref) : null,
+        holds,
+      });
+      if (!holds) return false;
     }
   }
 
@@ -1099,7 +1257,7 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       logger.debug('Custom tool llm test did not match — no consult ran', { context: CONTEXT, tool: toolName });
       return false;
     }
-    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params, state)) return false;
+    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params, state, inventory)) return false;
   }
 
   return true;
@@ -1149,7 +1307,17 @@ export function matchesEffectWhen(
 export type ResolvedEffect =
   | { index: number; target: EffectTarget; value: ExprValue }
   | { index: number; wardrobe: ResolvedWardrobeGesture }
+  | { index: number; inventory: ResolvedInventoryGesture }
   | { index: number; skipped: string };
+
+/** An Inventory gesture with its object references rendered — ready for the applier. */
+export interface ResolvedInventoryGesture {
+  action: InventoryEffectAction;
+  /** Rendered, trimmed references in file order; empty ones dropped with a debug log. */
+  items: string[];
+  /** pick_up only: equip the new instances (default true). */
+  equip?: boolean;
+}
 
 /** A wardrobe gesture with its item references rendered — ready for the applier. */
 export interface ResolvedWardrobeGesture {
@@ -1174,11 +1342,18 @@ export function isApplicableWardrobeEffect(
   return 'wardrobe' in effect;
 }
 
-/** True for a resolved effect of either kind that would apply (the Proving Bench's count). */
+/** True for a resolved effect that would change what the rolling character carries. */
+export function isApplicableInventoryEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { inventory: ResolvedInventoryGesture }> {
+  return 'inventory' in effect;
+}
+
+/** True for a resolved effect of any kind that would apply (the Proving Bench's count). */
 export function isApplicableEffect(
   effect: ResolvedEffect
 ): effect is Exclude<ResolvedEffect, { skipped: string }> {
-  return isApplicableWriteEffect(effect) || isApplicableWardrobeEffect(effect);
+  return isApplicableWriteEffect(effect) || isApplicableWardrobeEffect(effect) || isApplicableInventoryEffect(effect);
 }
 
 /**
@@ -1222,9 +1397,12 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
     if (isWardrobeEffect(effect)) {
       return resolveWardrobeGesture(definition.name, index, effect.wardrobe, subjects, skipped);
     }
+    if (isInventoryEffect(effect)) {
+      return resolveInventoryGesture(definition.name, index, effect.inventory, subjects, skipped);
+    }
     if (effect.target === undefined || effect.value === undefined) {
       // Load-time validation rejects this; reaching here is a regression.
-      return skipped(index, 'effect is neither a complete write nor a wardrobe gesture');
+      return skipped(index, 'effect is neither a complete write nor a wardrobe or inventory gesture');
     }
 
     const target = parseEffectTarget(effect.target);
@@ -1289,6 +1467,43 @@ function resolveWardrobeGesture(
 }
 
 /**
+ * Render an Inventory gesture's object references with the same subjects an
+ * outcome message gets — templates, not expressions. A reference that renders
+ * empty is dropped; a gesture left with none is skipped with that reason.
+ */
+function resolveInventoryGesture(
+  toolName: string,
+  index: number,
+  gesture: CustomToolInventoryGesture,
+  subjects: EffectSubjects,
+  skipped: (index: number, reason: string) => ResolvedEffect
+): ResolvedEffect {
+  const items: string[] = [];
+  for (const raw of gesture.items) {
+    const rendered = renderTemplate(raw, subjects).trim();
+    if (rendered.length === 0) {
+      logger.debug('Custom tool inventory reference rendered empty; dropped', {
+        context: CONTEXT,
+        tool: toolName,
+        effectIndex: index,
+        reference: raw,
+      });
+      continue;
+    }
+    items.push(rendered);
+  }
+  if (items.length === 0) return skipped(index, 'every object reference rendered empty');
+  return {
+    index,
+    inventory: {
+      action: gesture.action,
+      items,
+      ...(gesture.action === 'pick_up' ? { equip: gesture.equip !== false } : {}),
+    },
+  };
+}
+
+/**
  * The metadata a winning outcome consulted, for the roll record.
  *
  * Only the keys that row actually tested, and only their primitive values —
@@ -1335,6 +1550,8 @@ export interface PlaceholderSubjects {
   llm?: LlmSubject;
   /** The merged persistent state, for `{{state.path}}` placeholders. */
   state?: CustomToolState;
+  /** The rolling character's Inventory, for `{{inventory.<ref>.<field>}}`. */
+  inventory?: InventoryContext | null;
 }
 
 /**
@@ -1368,6 +1585,25 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
     case 'state':
       // `state.` is stripped and the remainder is a full state path.
       return getAtPath(vars.state ?? {}, parsePath(ref.path));
+    case 'inventory': {
+      // No context (a run nobody made): nothing renders, not even `state`.
+      if (!vars.inventory) return undefined;
+      if (ref.field === 'state') return vars.inventory.state(ref.ref);
+      const item = vars.inventory.item(ref.ref);
+      if (!item) return undefined;
+      switch (ref.field) {
+        case 'title':
+          // A title, or the name — so a message can always say *the sword*.
+          return item.title?.trim() || item.name;
+        case 'name':
+          return item.name;
+        case 'description':
+          return item.description ?? undefined;
+        case 'metadata':
+          return ref.key !== undefined ? item.metadata?.[ref.key] : undefined;
+      }
+      return undefined;
+    }
     case 'unknown':
       return undefined;
   }
@@ -1413,6 +1649,17 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
         break;
       case 'character':
         logger.debug('Custom tool message references {{character}} but nobody in particular rolled', { context: CONTEXT });
+        break;
+      case 'inventory':
+        logger.debug('Custom tool message references an inventory object it cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: !vars.inventory
+            ? 'no inventory to read (nobody in particular rolled)'
+            : v === undefined
+              ? 'the object is absent, or has no such field or metadata key'
+              : 'the metadata key does not hold a primitive',
+        });
         break;
       case 'state':
         logger.debug('Custom tool message references state it cannot render', {
@@ -1483,13 +1730,34 @@ type PreparedRoll = { form: 'dice'; notation: string; parsed: DiceNotation } | {
  * a dice string that no longer parses is a regression and must still fail
  * loudly rather than invent a number.
  */
-function prepareRoll(definition: QtapCustomTool): PreparedRoll {
+function prepareRoll(definition: QtapCustomTool, inventory?: InventoryContext | null): PreparedRoll {
   if (typeof definition.roll === 'string') {
     const parsed = parseDiceNotation(definition.roll);
     if (!parsed) {
       throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
     }
     return { form: 'dice', notation: definition.roll, parsed };
+  }
+  // A whole roll drawn from an object's metadata ("sword.metadata.damage"):
+  // the notation it holds, or the (load-checked) dice fallback when it holds
+  // none, or none this build can roll.
+  if (isInventoryRef(definition.roll)) {
+    const ref = definition.roll;
+    const resolved = resolveInventoryValue(ref, inventory);
+    const parsed = typeof resolved === 'string' ? parseDiceNotation(resolved) : null;
+    if (parsed) return { form: 'dice', notation: resolved as string, parsed };
+    logger.debug('Custom tool $inventory roll fell back', {
+      context: CONTEXT,
+      tool: definition.name,
+      reference: ref.$inventory,
+      resolved,
+      fallback: ref.fallback,
+    });
+    const fallback = typeof ref.fallback === 'string' ? parseDiceNotation(ref.fallback) : null;
+    if (!fallback) {
+      throw new CustomToolRunError(`${definition.name}: the $inventory roll's fallback is not dice notation this build can roll`);
+    }
+    return { form: 'dice', notation: ref.fallback as string, parsed: fallback };
   }
   return { form: 'range', range: definition.roll ?? {} };
 }
@@ -1503,13 +1771,14 @@ function drawRoll(
   definition: QtapCustomTool,
   roll: PreparedRoll,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): { raw: number; value: number; dice?: DiceRollResult } {
   if (roll.form === 'dice') {
     const rolled = rollNotation(roll.parsed);
     return { raw: rolled.total, value: rolled.total, dice: rolled };
   }
-  return rollRange(definition, roll.range, params, state);
+  return rollRange(definition, roll.range, params, state, inventory);
 }
 
 /**
@@ -1552,14 +1821,21 @@ export async function executeCustomTool(
     character?: string;
     /** Merged persistent state for `$state` refs and `{{state.path}}`. Default {}. */
     state?: CustomToolState;
+    /**
+     * The rolling character's Inventory for this chat, loaded once by the
+     * entrance. Absent/null for a run nobody made — inventory tests decline,
+     * `$inventory` operands fall back, `{{inventory.*}}` renders as written.
+     */
+    inventory?: InventoryContext | null;
     llmInvoke?: LlmInvoker;
   }
 ): Promise<CustomToolRunResult> {
   const state = overrides?.state ?? {};
-  const params = resolveParams(definition, suppliedParams, state);
+  const inventory = overrides?.inventory ?? null;
+  const params = resolveParams(definition, suppliedParams, state, inventory);
 
-  const roll = prepareRoll(definition);
-  const { raw, value, dice } = drawRoll(definition, roll, params, state);
+  const roll = prepareRoll(definition, inventory);
+  const { raw, value, dice } = drawRoll(definition, roll, params, state, inventory);
   const rollForm = roll.form;
   const notation = roll.form === 'dice' ? roll.notation : undefined;
   const diceRolls = dice?.results;
@@ -1576,7 +1852,7 @@ export async function executeCustomTool(
   // BEFORE the table, which may test its answer.
   let llm: LlmConsultResult | undefined;
   if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state });
+    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state, inventory });
     llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
   }
 
@@ -1587,20 +1863,21 @@ export async function executeCustomTool(
     metadata,
     progress,
     state,
+    inventory,
     ...(character ? { character } : {}),
     ...(llm ? { llm } : {}),
   };
   const outcomeIndex = pickOutcome(definition, subjects);
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state, inventory });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state })
+    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state, inventory })
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written
@@ -1686,10 +1963,12 @@ export function simulateOutcomes(
    * branches on `cannon.complete` is conditional on that one clock reading —
    * the same caveat the bench already states for a pretend consult.
    */
-  progress: Record<string, ProgressPrimitive> = {}
+  progress: Record<string, ProgressPrimitive> = {},
+  /** The mock Inventory (the bench's), held fixed across every draw. */
+  inventory: InventoryContext | null = null
 ): CustomToolAuditResult {
-  const params = resolveParams(definition, suppliedParams, state);
-  const roll = prepareRoll(definition);
+  const params = resolveParams(definition, suppliedParams, state, inventory);
+  const roll = prepareRoll(definition, inventory);
 
   const hits = new Array<number>(definition.outcomes.length).fill(0);
   let valueMin = Infinity;
@@ -1697,7 +1976,7 @@ export function simulateOutcomes(
   let valueSum = 0;
 
   for (let i = 0; i < runs; i++) {
-    const { raw, value } = drawRoll(definition, roll, params, state);
+    const { raw, value } = drawRoll(definition, roll, params, state, inventory);
 
     const subjects: OutcomeSubjects = {
       value,
@@ -1706,6 +1985,7 @@ export function simulateOutcomes(
       metadata: metadata ?? {},
       progress,
       state,
+      inventory,
       ...(llm ? { llm } : {}),
     };
     hits[pickOutcome(definition, subjects)] += 1;

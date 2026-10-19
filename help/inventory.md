@@ -131,9 +131,35 @@ Duplicate an item's file in the Scriptorium and the copy carries the original's 
 
 **Archive** puts an item away without deleting it. Archived items are not carried in any chat and cannot be taken up; **Restore** brings them back. An archived archetype still answers for its instances.
 
-## Not yet
+## What the characters may do for themselves
 
-Characters cannot yet pick things up or set them down by themselves, and Pascal does not yet roll against what is carried. Both are planned. Meanwhile the [`self_inventory`](character-system-transparency.md) tool — a character's look at their own settings — is a different thing with an unfortunately similar name.
+A character is not obliged to wait upon the operator's hand. Given the run of their own pockets, they may rummage through them with nine tools of their own, all of which Pascal keeps an eye on:
+
+| Tool | What it does |
+|---|---|
+| `inventory_list` | Lists what they carry and can reach, each object marked **equipped** (on their person in this chat), **carried** (in their own vault but not equipped) or **reachable** (on a shared shelf). Archetypes are listed as things one may pick up. Shared objects are marked read-only. |
+| `inventory_read` | Reads one object in full: both descriptions, its metadata, the archetype it derives from, how many may be carried, and a kit's members. |
+| `inventory_equip` | Takes up one to eight objects or kits, through the very same machinery as the Carrying now pane. If carrying one more would break an object's limit, nothing changes and they are told why. |
+| `inventory_unequip` | Sets objects down. A kit sets down every member it holds. |
+| `inventory_pick_up` | Makes an instance of a reachable **archetype** in their own vault — a *magic bow* from the project shelf becomes their own magic bow — and equips it unless asked not to. The limit is checked first: a pick-up that would break it makes nothing at all. |
+| `inventory_create` | Makes a new object of their own, plainly: never an archetype, never a kit, never copyable. |
+| `inventory_update` | Amends one of their **own** objects — name, title, descriptions, emoji, limit, metadata. Shared objects are not theirs to amend. On an instance, a change is an override of the archetype. |
+| `inventory_archive` | Puts away (or restores) one of their own objects. Putting one away also sets it down in every chat, so a later restore returns it to the pocket, not to the hand. |
+| `inventory_give` | Hands one of their own objects to another character in the chat. The object moves to the receiver's vault, keeping its identity; the giver stops carrying it in every chat; the receiver decides for themselves whether to take it up. Should the hand-over be refused, the giver keeps carrying it exactly as before. Shared objects, kits, archived characters and anyone not seated at the table are refused, politely but firmly. |
+
+Every reference may be an object's id, its title ("Excalibur") or its name ("sword"), without regard to case. A character-made or picked-up object lands at the root of their vault, where you may file it as you please.
+
+However many of these a character uses in one reply, Pascal posts **one** line at the end of it — *"Vivienne takes up a compass and picks up a magic bow."* A gift gets a line of its own: *"Vivienne hands the lantern to Marcus."*
+
+### Inventory management
+
+Whether a character may use any of these tools is the **Inventory Management** setting on the character's page in Aurora, beside *Self-Dressing* and *Outfit Creation*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
+
+The [`self_inventory`](character-system-transparency.md) tool, despite the name, has nothing to do with any of this: it is a character's look at their own settings, not their pockets.
+
+## Pascal's custom tools and the Inventory
+
+[Custom tools](custom-tools.md) reach the bag too. A tool's outcome table — or its *who may reach for it* gate — may ask whether the rolling character has an object **equipped**, **carried**, **reachable** or **absent**, or how many of its kind they have equipped; a message may quote `{{inventory.sword.title}}`; a roll may be drawn from the dice a sword names in its metadata; and a side effect may equip, unequip or pick up objects for the roller. All of it is the rolling character's alone, and a run nobody made finds no inventory at all. [Pascal's Workbench](pascals-workbench.md) builds and proves such tools, with a mock inventory on the Proving Bench.
 
 ## In-Chat Navigation
 
@@ -146,4 +172,5 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Inventory](project-inventory.md) — a project's shared shelf
 - [The Wardrobe](wardrobe.md) — what characters wear, as opposed to what they carry
 - [Pascal's Workbench](pascals-workbench.md) — Pascal's other occupation: the custom tools
+- [Custom Tools](custom-tools.md) — tools that read and change what a character carries
 - [The Scriptorium](scriptorium.md) — where the `Inventory/` folders live as files

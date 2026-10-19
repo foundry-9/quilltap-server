@@ -38,12 +38,16 @@ import {
   ORDERING_KEYS,
   QtapCustomToolSchema,
   collectUnknownKeys,
+  isInventoryRef,
   isParamRef,
   isStateRef,
+  inventoryGestureProblems,
   parseEffectTarget,
   scanPlaceholders,
   valueTypeOf,
   wardrobeGestureProblems,
+  type InventoryEffectAction,
+  type InventoryRef,
   type WardrobeEffectAction,
   type WardrobeEffectMode,
   type WardrobeItemType,
@@ -65,6 +69,7 @@ import {
   type WhenObject,
 } from './custom-tool.types';
 import { parseDiceNotation } from './dice-notation';
+import { INVENTORY_STATE_VALUES, parseInventoryOperand } from './inventory-subjects';
 import { foldTriggerText, triggersContainedIn } from './trigger-phrases';
 import { parseProgressKey } from '@/lib/progressions/schema';
 import { parseExpression } from './expressions';
@@ -101,7 +106,7 @@ export interface DraftParameter {
    * `$state` reference object carried verbatim (the visual builder does not
    * author `$state` defaults, but round-trips them without loss).
    */
-  defaultValue: string | boolean | StateRef;
+  defaultValue: string | boolean | StateRef | InventoryRef;
   description: string;
   /** Loose numeric text; '' means unset. Numeric types only. */
   min: string;
@@ -117,7 +122,9 @@ export interface DraftParameter {
 export type NumberOrParamValue =
   | { kind: 'literal'; text: string }
   | { kind: 'param'; name: string }
-  | { kind: 'state'; path: string; fallback: string };
+  | { kind: 'state'; path: string; fallback: string }
+  /** A `$inventory` reference, carried verbatim like `$state`. */
+  | { kind: 'inventory'; path: string; fallback: string };
 
 export interface DraftRollRange {
   min: NumberOrParamValue;
@@ -138,7 +145,11 @@ export type ConditionSubject =
   /** The LLM consult's answer. */
   | { kind: 'llm' }
   /** Whether the LLM consult succeeded — serializes to the comparator's `ok` key. */
-  | { kind: 'llm-ok' };
+  | { kind: 'llm-ok' }
+  /** An Inventory object's state for the rolling character, keyed by reference (a template). */
+  | { kind: 'inventory'; key: string }
+  /** How many kin of an object the rolling character has equipped, keyed by reference. */
+  | { kind: 'inventoryCount'; key: string };
 
 /** A literal operand — the three kinds an author types straight into a chip. */
 export type LiteralOperand =
@@ -151,7 +162,9 @@ export type ConditionOperand =
   | LiteralOperand
   | { kind: 'param'; name: string }
   /** A `$state` reference, carried verbatim (builder does not author it). */
-  | { kind: 'state'; path: string; fallback: number | string | boolean };
+  | { kind: 'state'; path: string; fallback: number | string | boolean }
+  /** A `$inventory` reference, carried verbatim (builder does not author it). */
+  | { kind: 'inventory'; path: string; fallback: number | string | boolean };
 
 export interface DraftCondition {
   id: string;
@@ -186,9 +199,11 @@ export interface DraftGateCondition {
   id: string;
   /**
    * Which sheet this test reads. `metadata` is the character's own fact
-   * sheet; `progress` is the derived progression sheet, keyed `<id>.<field>`.
+   * sheet; `progress` is the derived progression sheet, keyed `<id>.<field>`;
+   * `inventory` an object's state and `inventoryCount` its equipped kin, keyed
+   * by a literal object reference.
    */
-  subject: 'metadata' | 'progress';
+  subject: 'metadata' | 'progress' | 'inventory' | 'inventoryCount';
   /** The key this test reads, in that subject's own vocabulary. */
   key: string;
   comparator: ComparatorKey;
@@ -214,7 +229,7 @@ export interface DraftEffect {
    * are always present on the draft so switching kind in the form loses
    * nothing until save; only the active half is emitted.
    */
-  kind: 'write' | 'wardrobe';
+  kind: 'write' | 'wardrobe' | 'inventory';
   /** The target verbatim: `state.…` or `metadata.…`. */
   target: string;
   /** How `value` serializes: a JSON number, a JSON boolean, or an expression string. */
@@ -223,6 +238,21 @@ export interface DraftEffect {
   value: string;
   /** The wardrobe gesture's fields. `mode` 'wear' and slot '' are the omitted forms. */
   wardrobe: DraftWardrobeGesture;
+  /** The inventory gesture's fields. */
+  inventory: DraftInventoryGesture;
+}
+
+/** An Inventory gesture, form-shaped. `equip` is emitted only on pick_up, and only when false. */
+export interface DraftInventoryGesture {
+  action: InventoryEffectAction;
+  /** Object references (templates), as typed. Blank rows are dropped on save. */
+  items: string[];
+  equip: boolean;
+}
+
+/** The empty inventory half every draft effect carries. */
+export function emptyDraftInventoryGesture(): DraftInventoryGesture {
+  return { action: 'equip', items: [''], equip: true };
 }
 
 /** A wardrobe gesture, form-shaped. */
@@ -249,6 +279,7 @@ export function newDraftEffect(kind: DraftEffect['kind'] = 'write'): DraftEffect
     valueKind: 'expression',
     value: '',
     wardrobe: emptyDraftWardrobeGesture(),
+    inventory: emptyDraftInventoryGesture(),
   };
 }
 
@@ -305,7 +336,10 @@ export interface ToolDraft {
   /** The rolling character announces the outcome instead of Pascal. False = no key emitted. */
   announceAsCharacter: boolean;
   parameters: DraftParameter[];
-  rollForm: 'range' | 'dice';
+  /** `inventory`: the dice an object names (`{ "$inventory": …, "fallback": "1d4" }`). */
+  rollForm: 'range' | 'dice' | 'inventory';
+  /** The `$inventory` roll's path and dice fallback. Kept while another form is chosen. */
+  rollInventory: { path: string; fallback: string };
   /** Dice-notation text. Kept even while `rollForm` is 'range' (§4.3). */
   rollDice: string;
   /** Range fields. Kept even while `rollForm` is 'dice' (§4.3). */
@@ -364,6 +398,7 @@ export function newDraft(): ToolDraft {
     parameters: [],
     rollForm: 'range',
     rollDice: '',
+    rollInventory: { path: '', fallback: '' },
     rollRange: defaultRollRange(),
     llmEnabled: false,
     llmPrompt: '',
@@ -398,11 +433,15 @@ function rollFieldToValue(field: NumberOrParamRef | undefined): NumberOrParamVal
   if (field === undefined) return { kind: 'literal', text: '' };
   if (isParamRef(field)) return { kind: 'param', name: field.$param };
   if (isStateRef(field)) return { kind: 'state', path: field.$state, fallback: String(field.fallback) };
+  if (isInventoryRef(field)) return { kind: 'inventory', path: field.$inventory, fallback: String(field.fallback) };
   return { kind: 'literal', text: numberText(field) };
 }
 
-function operandToDraft(operand: number | string | boolean | { $param: string } | StateRef): ConditionOperand {
+function operandToDraft(
+  operand: number | string | boolean | { $param: string } | StateRef | InventoryRef
+): ConditionOperand {
   if (isStateRef(operand)) return { kind: 'state', path: operand.$state, fallback: operand.fallback };
+  if (isInventoryRef(operand)) return { kind: 'inventory', path: operand.$inventory, fallback: operand.fallback };
   if (isParamRef(operand)) return { kind: 'param', name: operand.$param };
   if (typeof operand === 'number') return { kind: 'number', text: numberText(operand) };
   if (typeof operand === 'boolean') return { kind: 'boolean', value: operand };
@@ -418,7 +457,7 @@ function comparatorToConditions(subject: ConditionSubject, comparator: ParamComp
       id: nextDraftId('cond'),
       subject,
       comparator: key,
-      operand: operandToDraft(operand as number | string | boolean | { $param: string } | StateRef),
+      operand: operandToDraft(operand as number | string | boolean | { $param: string } | StateRef | InventoryRef),
     });
   }
   return conditions;
@@ -464,6 +503,14 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
     conditions.push(...comparatorToConditions({ kind: 'llm' }, when.llm as ParamComparator));
   }
 
+  for (const [key, comparator] of Object.entries(when.inventory ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventory', key }, comparator as ParamComparator));
+  }
+
+  for (const [key, comparator] of Object.entries(when.inventoryCount ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventoryCount', key }, comparator as ParamComparator));
+  }
+
   return conditions;
 }
 
@@ -475,9 +522,11 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
 export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
   const conditions: DraftGateCondition[] = [];
 
-  const subjects: Array<['metadata' | 'progress', Record<string, unknown> | undefined]> = [
+  const subjects: Array<[DraftGateCondition['subject'], Record<string, unknown> | undefined]> = [
     ['metadata', gate.metadata],
     ['progress', gate.progress],
+    ['inventory', gate.inventory],
+    ['inventoryCount', gate.inventoryCount],
   ];
 
   for (const [subject, tests] of subjects) {
@@ -512,8 +561,12 @@ export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
  * exist.
  */
 export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate | undefined {
-  const metadata: Record<string, Record<string, unknown>> = {};
-  const progress: Record<string, Record<string, unknown>> = {};
+  const sheets: Record<DraftGateCondition['subject'], Record<string, Record<string, unknown>>> = {
+    metadata: {},
+    progress: {},
+    inventory: {},
+    inventoryCount: {},
+  };
 
   for (const condition of conditions) {
     const key = condition.key.trim();
@@ -533,14 +586,15 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
 
     // A chip saved before the progress subject existed carries no `subject`;
     // metadata is what it always meant.
-    const sheet = condition.subject === 'progress' ? progress : metadata;
+    const sheet = sheets[condition.subject ?? 'metadata'] ?? sheets.metadata;
     sheet[key] = sheet[key] ?? {};
     sheet[key][condition.comparator] = operand;
   }
 
   const gate: Record<string, unknown> = {};
-  if (Object.keys(metadata).length > 0) gate.metadata = metadata;
-  if (Object.keys(progress).length > 0) gate.progress = progress;
+  for (const subject of ['metadata', 'progress', 'inventory', 'inventoryCount'] as const) {
+    if (Object.keys(sheets[subject]).length > 0) gate[subject] = sheets[subject];
+  }
 
   return Object.keys(gate).length > 0 ? (gate as ToolGate) : undefined;
 }
@@ -586,6 +640,21 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
         mode: mode ?? 'wear',
         slot: slot ?? '',
       },
+      inventory: emptyDraftInventoryGesture(),
+    };
+  }
+
+  if (effect.inventory) {
+    const { action, items, equip } = effect.inventory;
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'inventory',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: emptyDraftWardrobeGesture(),
+      inventory: { action, items: items.length > 0 ? [...items] : [''], equip: equip !== false },
     };
   }
 
@@ -602,6 +671,20 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
           : 'expression',
     value: effect.value === undefined ? '' : String(effect.value),
     wardrobe: emptyDraftWardrobeGesture(),
+    inventory: emptyDraftInventoryGesture(),
+  };
+}
+
+/**
+ * The `inventory` object a draft gesture emits: blank rows dropped, `equip`
+ * only on pick_up and only when it is the non-default `false`.
+ */
+function inventoryFromDraft(gesture: DraftInventoryGesture): Record<string, unknown> {
+  const items = gesture.items.map((item) => item.trim()).filter((item) => item.length > 0);
+  return {
+    action: gesture.action,
+    items,
+    ...(gesture.action === 'pick_up' && !gesture.equip ? { equip: false } : {}),
   };
 }
 
@@ -644,6 +727,13 @@ function effectFromDraft(effect: DraftEffect): CustomToolEffect {
     } as CustomToolEffect;
   }
 
+  if (effect.kind === 'inventory') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      inventory: inventoryFromDraft(effect.inventory),
+    } as CustomToolEffect;
+  }
+
   let value: number | boolean | string;
   if (effect.valueKind === 'literal-number') {
     value = parseNumberText(effect.value);
@@ -675,8 +765,8 @@ function parameterToDraft(name: string, spec: CustomToolParameter): DraftParamet
     id: nextDraftId('param'),
     name,
     type: spec.type,
-    // A `$state` default is carried verbatim; otherwise it is loose form text.
-    defaultValue: isStateRef(spec.default)
+    // A `$state` or `$inventory` default is carried verbatim; otherwise it is loose form text.
+    defaultValue: isStateRef(spec.default) || isInventoryRef(spec.default)
       ? spec.default
       : spec.type === 'boolean'
         ? Boolean(spec.default)
@@ -729,7 +819,11 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
   const unknownKeys: Array<[string, unknown]> = Object.entries(rawRecord).filter(([key]) => unknown.has(key));
 
   const isDice = typeof definition.roll === 'string';
-  const range = typeof definition.roll === 'object' && definition.roll !== null ? definition.roll : undefined;
+  const inventoryRoll = isInventoryRef(definition.roll) ? definition.roll : undefined;
+  const range =
+    typeof definition.roll === 'object' && definition.roll !== null && !isInventoryRef(definition.roll)
+      ? definition.roll
+      : undefined;
 
   // At most one clause can be present — the schema rejects a file carrying both
   // — so the mode is simply whichever one is.
@@ -748,8 +842,11 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
     defaultVisibility: definition.defaultVisibility ?? 'public',
     announceAsCharacter: definition.announceAsCharacter ?? false,
     parameters: Object.entries(definition.parameters ?? {}).map(([name, spec]) => parameterToDraft(name, spec)),
-    rollForm: isDice ? 'dice' : 'range',
+    rollForm: isDice ? 'dice' : inventoryRoll ? 'inventory' : 'range',
     rollDice: isDice ? (definition.roll as string) : '',
+    rollInventory: inventoryRoll
+      ? { path: inventoryRoll.$inventory, fallback: String(inventoryRoll.fallback) }
+      : { path: '', fallback: '' },
     rollRange: range
       ? {
           min: rollFieldToValue(range.min),
@@ -789,16 +886,24 @@ function valueToRollField(value: NumberOrParamValue): NumberOrParamRef | undefin
     const fallback = parseNumberText(value.fallback);
     return Number.isFinite(fallback) ? { $state: value.path, fallback } : undefined;
   }
+  if (value.kind === 'inventory') {
+    const fallback = parseNumberText(value.fallback);
+    return Number.isFinite(fallback) ? { $inventory: value.path, fallback } : undefined;
+  }
   const n = parseNumberText(value.text);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function operandFromDraft(operand: ConditionOperand): number | string | boolean | { $param: string } | StateRef | undefined {
+function operandFromDraft(
+  operand: ConditionOperand
+): number | string | boolean | { $param: string } | StateRef | InventoryRef | undefined {
   switch (operand.kind) {
     case 'param':
       return operand.name ? { $param: operand.name } : undefined;
     case 'state':
       return { $state: operand.path, fallback: operand.fallback };
+    case 'inventory':
+      return { $inventory: operand.path, fallback: operand.fallback };
     case 'number': {
       const n = parseNumberText(operand.text);
       return Number.isFinite(n) ? n : undefined;
@@ -823,6 +928,8 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   const params: Record<string, Record<string, unknown>> = {};
   const metadata: Record<string, Record<string, unknown>> = {};
   const progress: Record<string, Record<string, unknown>> = {};
+  const inventory: Record<string, Record<string, unknown>> = {};
+  const inventoryCount: Record<string, Record<string, unknown>> = {};
   const llm: Record<string, unknown> = {};
 
   for (const condition of conditions) {
@@ -867,6 +974,15 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
         progress[key][condition.comparator] = operand;
         break;
       }
+      case 'inventory':
+      case 'inventoryCount': {
+        const key = condition.subject.key;
+        if (!key) continue;
+        const sheet = condition.subject.kind === 'inventory' ? inventory : inventoryCount;
+        sheet[key] = sheet[key] ?? {};
+        sheet[key][condition.comparator] = operand;
+        break;
+      }
     }
   }
 
@@ -875,6 +991,8 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   if (Object.keys(metadata).length > 0) when.metadata = metadata;
   if (Object.keys(progress).length > 0) when.progress = progress;
   if (Object.keys(llm).length > 0) when.llm = llm;
+  if (Object.keys(inventory).length > 0) when.inventory = inventory;
+  if (Object.keys(inventoryCount).length > 0) when.inventoryCount = inventoryCount;
 
   return Object.keys(when).length > 0 ? (when as WhenObject) : undefined;
 }
@@ -882,8 +1000,8 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
 function parameterFromDraft(param: DraftParameter): CustomToolParameter {
   const numeric = param.type === 'number' || param.type === 'integer';
 
-  let defaultValue: number | string | boolean | StateRef;
-  if (isStateRef(param.defaultValue)) {
+  let defaultValue: number | string | boolean | StateRef | InventoryRef;
+  if (isStateRef(param.defaultValue) || isInventoryRef(param.defaultValue)) {
     // Carried verbatim — the builder never authored it, and must not lose it.
     defaultValue = param.defaultValue;
   } else if (param.type === 'boolean') {
@@ -909,6 +1027,10 @@ function parameterFromDraft(param: DraftParameter): CustomToolParameter {
 function rollFromDraft(draft: ToolDraft): QtapCustomTool['roll'] | undefined {
   if (draft.rollForm === 'dice') {
     return draft.rollDice.trim() === '' ? undefined : draft.rollDice.trim();
+  }
+  if (draft.rollForm === 'inventory') {
+    const path = draft.rollInventory.path.trim();
+    return path === '' ? undefined : { $inventory: path, fallback: draft.rollInventory.fallback.trim() };
   }
 
   const range: Record<string, unknown> = {};
@@ -1011,7 +1133,7 @@ export interface DraftIssue {
     | { section: 'gate'; conditionId?: string }
     | { section: 'options' }
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
-    | { section: 'roll'; field?: 'dice' | 'min' | 'max' | 'multiplier' | 'offset' }
+    | { section: 'roll'; field?: 'dice' | 'inventory' | 'min' | 'max' | 'multiplier' | 'offset' }
     | { section: 'llm'; field: 'prompt' | 'errorMessage' | 'maxOutput' }
     | { section: 'effect'; id: string }
     | { section: 'outcome'; id: string; conditionId?: string }
@@ -1044,11 +1166,11 @@ function validateNumberOrParam(
     }
     return;
   }
-  if (value.kind === 'state') {
-    // A `$state` roll field is valid iff its fallback is a finite number — the
-    // same load-time rule `validateRollRefs` enforces on the definition.
+  if (value.kind === 'state' || value.kind === 'inventory') {
+    // A `$state` or `$inventory` roll field is valid iff its fallback is a
+    // finite number — the same load-time rule `validateRollRefs` enforces.
     if (!Number.isFinite(parseNumberText(value.fallback))) {
-      issues.push(err({ section: 'roll', field }, `${field} $state fallback must be a number`));
+      issues.push(err({ section: 'roll', field }, `${field} $${value.kind} fallback must be a number`));
     }
     return;
   }
@@ -1097,9 +1219,12 @@ function auditPlaceholders(
       // `{{character}}` names whoever rolls; a run nobody made renders it as
       // written, which is the runtime's convention rather than an authoring slip.
       case 'character':
+      // `{{inventory.<ref>.<field>}}` reads the rolling character's bag at run
+      // time; an absent object renders as written, the metadata convention.
+      case 'inventory':
         break;
       case 'dice':
-        if (draft.rollForm !== 'dice') {
+        if (draft.rollForm === 'range') {
           issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
         }
         break;
@@ -1181,6 +1306,41 @@ function validateCondition(
       issues.push(err(where, `a progress condition ${parsed.reason}`));
       return;
     }
+  }
+  if (condition.subject.kind === 'inventory' || condition.subject.kind === 'inventoryCount') {
+    if (condition.subject.key.trim() === '') {
+      issues.push(err(where, 'an inventory condition needs an object reference'));
+      return;
+    }
+    for (const { key, ref } of scanPlaceholders(condition.subject.key)) {
+      if (ref.kind === 'params' && !paramByName.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      }
+    }
+  }
+  if (condition.subject.kind === 'inventory') {
+    // A state has no order and holds no substring: = or ≠, against one of the
+    // four states (or a string parameter).
+    if (ORDERING_KEYS.has(condition.comparator) || CONTAINMENT_KEYS.has(condition.comparator)) {
+      issues.push(err(where, 'an inventory state can only be tested with = or ≠'));
+      return;
+    }
+    const operand = condition.operand;
+    if (operand.kind === 'param') {
+      const target = paramByName.get(operand.name);
+      if (!operand.name || !target) {
+        issues.push(err(where, `compares against "${operand.name || '(no parameter)'}", which is not declared`));
+      } else if (valueTypeOf(target.type) !== 'string') {
+        issues.push(err(where, `an inventory state compares with a string; "${operand.name}" is ${target.type}`));
+      }
+    } else if (operand.kind !== 'string' || !(INVENTORY_STATE_VALUES as readonly string[]).includes(operand.text)) {
+      issues.push(err(where, 'pick a state: equipped, carried, reachable or absent'));
+    }
+    return;
+  }
+  if (condition.subject.kind === 'inventoryCount' && CONTAINMENT_KEYS.has(condition.comparator)) {
+    issues.push(err(where, 'an equipped count is a number, and a number holds no text'));
+    return;
   }
   if ((condition.subject.kind === 'llm' || condition.subject.kind === 'llm-ok') && !draft.llmEnabled) {
     issues.push(err(where, 'tests the LLM consult, but the consult is not enabled'));
@@ -1305,11 +1465,40 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
     const where: DraftIssue['where'] = { section: 'gate', conditionId: condition.id };
 
     if (condition.key.trim() === '') {
-      issues.push(err(where, 'a gate condition needs a metadata key'));
+      issues.push(
+        err(where, condition.subject === 'inventory' || condition.subject === 'inventoryCount'
+          ? 'a gate condition needs an object reference'
+          : 'a gate condition needs a metadata key')
+      );
       continue;
     }
 
-    const slot = gateConditionSlotKey(condition);
+    if (condition.subject === 'inventory' || condition.subject === 'inventoryCount') {
+      if (condition.key.includes('{{')) {
+        issues.push(err(where, 'a gate is answered before any parameter exists — name the object literally'));
+        continue;
+      }
+      if (condition.subject === 'inventory') {
+        if (condition.comparator !== 'eq' && condition.comparator !== 'neq') {
+          issues.push(err(where, 'an inventory state can only be tested with = or ≠'));
+        } else if (
+          condition.operand.kind !== 'string' ||
+          !(INVENTORY_STATE_VALUES as readonly string[]).includes(condition.operand.text)
+        ) {
+          issues.push(err(where, 'pick a state: equipped, carried, reachable or absent'));
+        }
+        const slot = `${condition.subject}:${gateConditionSlotKey(condition)}`;
+        if (seenSlots.has(slot)) issues.push(err(where, 'the gate can test this object with this comparator only once'));
+        seenSlots.add(slot);
+        continue;
+      }
+      if (CONTAINMENT_KEYS.has(condition.comparator) || condition.operand.kind !== 'number') {
+        issues.push(err(where, 'an equipped count compares with a number'));
+        continue;
+      }
+    }
+
+    const slot = `${condition.subject ?? 'metadata'}:${gateConditionSlotKey(condition)}`;
     if (seenSlots.has(slot)) {
       issues.push(err(where, 'the gate can test this key with this comparator only once'));
     }
@@ -1355,6 +1544,11 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
       continue;
     }
 
+    if (effect.kind === 'inventory') {
+      validateDraftInventoryGesture(effect, draft, where, issues);
+      continue;
+    }
+
     if (effect.target.trim() === '') {
       issues.push(err(where, 'an effect needs a target — state.<path> or metadata.<key>'));
     } else {
@@ -1379,7 +1573,7 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
               issues.push(err(where, `{{${ref}}} names no declared parameter`));
             } else if (ref === 'llm' && !draft.llmEnabled) {
               issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
-            } else if (ref === 'dice' && draft.rollForm !== 'dice') {
+            } else if (ref === 'dice' && draft.rollForm === 'range') {
               issues.push(warn(where, '{{dice}} is an empty string outside the dice form'));
             }
           }
@@ -1433,6 +1627,41 @@ function validateDraftWardrobeGesture(
 }
 
 /**
+ * An inventory row's audit: the per-action rules in load-time validation's own
+ * words (`inventoryGestureProblems`), checked against what the row would
+ * EMIT, plus the references' placeholders — an undeclared parameter or a
+ * disabled consult is an error, an unknown family a warning (that object
+ * simply will not be found), and a reference carrying `.metadata.` a warning
+ * (it cannot be quoted by `{{inventory.*}}`).
+ */
+function validateDraftInventoryGesture(
+  effect: DraftEffect,
+  draft: ToolDraft,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): void {
+  const emitted = inventoryFromDraft(effect.inventory) as { action: InventoryEffectAction; items: string[]; equip?: boolean };
+  for (const problem of inventoryGestureProblems(emitted)) {
+    issues.push(err(where, problem.message));
+  }
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  for (const item of effect.inventory.items) {
+    if (item.includes('.metadata.')) {
+      issues.push(warn(where, `"${item}" contains ".metadata.", which no {{inventory.*}} placeholder can name`));
+    }
+    for (const { key, ref } of scanPlaceholders(item)) {
+      if (ref.kind === 'params' && !declaredParams.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      } else if (ref.kind === 'llm' && !draft.llmEnabled) {
+        issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
+      } else if (ref.kind === 'unknown') {
+        issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — that object will not be found`));
+      }
+    }
+  }
+}
+
+/**
  * The value type a subject carries, or null where it is unknowable at
  * authoring time — a metadata key's stored value, or whatever the consulted
  * model chooses to answer.
@@ -1461,6 +1690,11 @@ export function subjectValueType(
       return null;
     case 'llm-ok':
       return 'boolean';
+    case 'inventory':
+      // A state is one of four strings.
+      return 'string';
+    case 'inventoryCount':
+      return 'number';
   }
 }
 
@@ -1503,6 +1737,10 @@ export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'co
       return `metadata:${subject.key}:${condition.comparator}`;
     case 'progress':
       return `progress:${subject.key}:${condition.comparator}`;
+    case 'inventory':
+      return `inventory:${subject.key}:${condition.comparator}`;
+    case 'inventoryCount':
+      return `inventoryCount:${subject.key}:${condition.comparator}`;
     case 'llm':
       return `llm:${condition.comparator}`;
     case 'llm-ok':
@@ -1582,6 +1820,14 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
   if (draft.rollForm === 'dice') {
     if (draft.rollDice.trim() === '' || parseDiceNotation(draft.rollDice.trim()) === null) {
       issues.push(err({ section: 'roll', field: 'dice' }, 'must be dice notation like "3d6+2" or "1d20"'));
+    }
+  } else if (draft.rollForm === 'inventory') {
+    // The same two rules the loader holds a `$inventory` roll to.
+    if (!parseInventoryOperand(draft.rollInventory.path.trim())) {
+      issues.push(err({ section: 'roll', field: 'inventory' }, 'name "<object>.metadata.<key>", e.g. "sword.metadata.damage"'));
+    }
+    if (parseDiceNotation(draft.rollInventory.fallback.trim()) === null) {
+      issues.push(err({ section: 'roll', field: 'inventory' }, 'the fallback must be dice notation like "1d4"'));
     }
   } else {
     validateNumberOrParam(draft.rollRange.min, 'min', draft, issues);

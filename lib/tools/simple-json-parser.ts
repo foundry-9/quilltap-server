@@ -110,6 +110,14 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   edit_wardrobe: 'wardrobe_update',
   archive_wardrobe_item: 'wardrobe_archive',
   discard: 'wardrobe_archive',
+  // inventory (objects carried — not clothing)
+  list_inventory: 'inventory_list',
+  inventory: 'inventory_list',
+  read_inventory: 'inventory_read',
+  equip_item: 'inventory_equip',
+  unequip_item: 'inventory_unequip',
+  pick_up: 'inventory_pick_up',
+  give_item: 'inventory_give',
   // memory / scriptorium
   scriptorium: 'search',
   memory: 'search',

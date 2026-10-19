@@ -56,6 +56,13 @@ export function NumberOrParamField({
         >
           $state: {value.path} → {value.fallback}
         </span>
+      ) : value.kind === 'inventory' ? (
+        <span
+          className={`qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}
+          title="This field draws from an object the rolling character carries. Edit $inventory references in the raw JSON, or swap to a literal."
+        >
+          $inventory: {value.path} → {value.fallback}
+        </span>
       ) : (
         <select
           value={value.name}
@@ -88,8 +95,8 @@ export function NumberOrParamField({
             ? noParams
               ? 'Declare a numeric parameter first'
               : 'Use a parameter instead of a number'
-            : value.kind === 'state'
-              ? 'Replace this $state reference with a literal number'
+            : value.kind === 'state' || value.kind === 'inventory'
+              ? `Replace this $${value.kind} reference with a literal number`
               : 'Use a literal number instead'
         }
         aria-label={`Toggle ${label} between a literal and a parameter reference`}

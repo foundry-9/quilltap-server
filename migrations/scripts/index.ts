@@ -449,6 +449,7 @@ import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-histor
 import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v1';
 import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-history-tool-name-v1';
 import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory-v1';
+import { addCharacterInventoryFlagMigration } from './add-character-inventory-flag-v1';
 
 /**
  * All available migrations.
@@ -920,6 +921,8 @@ export const migrations: Migration[] = [
   seedChatWardrobeHistoryMigration,
   // Inventory: chats.equippedInventory (the objects each character carries)
   addChatEquippedInventoryMigration,
+  // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
+  addCharacterInventoryFlagMigration,
 ];
 
 export {
@@ -1368,5 +1371,7 @@ export {
   seedChatWardrobeHistoryMigration,
   // Inventory: chats.equippedInventory (the objects each character carries)
   addChatEquippedInventoryMigration,
+  // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
+  addCharacterInventoryFlagMigration,
 };
 

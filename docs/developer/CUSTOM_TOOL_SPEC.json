@@ -76,6 +76,16 @@
       "state": "success"
     },
     {
+      "when": { "gte": 30, "inventory": { "crowbar": { "eq": "equipped" } } },
+      "message": "{{inventory.crowbar.title}} makes short work of {{params.label}} at a score of {{value}}. Demonstrates the `inventory` subject: this tests the ROLLING character's Inventory in this chat — the object named crowbar (by id, title or name, case-insensitive) is equipped. The four states are equipped, carried (in their own vault, not equipped), reachable (in a shared store) and absent; eq/neq only. A run nobody made declines the test and the roll falls through. {{inventory.crowbar.title}} renders the object's title, or its name when it has none.",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 50, "inventoryCount": { "lockpick": { "gte": 2 } } },
+      "message": "With two picks in hand, {{params.label}} gives at {{value}}. Demonstrates `inventoryCount`: how many kin (same resolved name) of lockpick the rolling character has equipped in this chat — ordering comparators and eq/neq, no containment.",
+      "state": "success"
+    },
+    {
       "when": { "llm": { "ok": false } },
       "message": "{{llm}} — Demonstrates the consult's failure path, and where {{llm}} gets its words when the oracle is silent: the answer BECOMES the llm block's errorMessage, ok goes false, and the run itself never errors. A table that keeps an oracle should decide what silence means; an ok:false row like this is one way, trusting the catch-all is the other.",
       "state": "info"

@@ -9,11 +9,12 @@
  */
 
 import { logger } from '@/lib/logger'
+import type { InventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 
 /**
  * Options for which tools to document in the text-block instructions
  */
-export interface TextBlockPromptOptions {
+export interface TextBlockPromptOptions extends InventoryToolFlags {
   /** Enable whisper (private messaging) tool */
   whisper?: boolean
   /** Enable search tool */
@@ -226,6 +227,70 @@ By name: [[UPDATE_WARDROBE_ITEM name="Rain Outfit" context="formal" /]]`)
 Retire an item you own — hidden from listings and no longer wearable, but a human can restore it. Only your own items can be archived.
 By id: [[ARCHIVE_WARDROBE_ITEM id="item-uuid" /]]
 By name: [[ARCHIVE_WARDROBE_ITEM title="Red Scarf" /]]`)
+  }
+
+  if (options.inventoryList) {
+    toolDocs.push(`
+### List Inventory
+See the objects you carry and can reach (not clothing). Each shows whether it is equipped, carried in your vault, or reachable in a shared store; archetypes can be picked up.
+[[LIST_INVENTORY /]]
+Only what you have equipped: [[LIST_INVENTORY equipped="true" /]]`)
+  }
+
+  if (options.inventoryRead) {
+    toolDocs.push(`
+### Read an Object
+[[READ_INVENTORY ref="Excalibur" /]]`)
+  }
+
+  if (options.inventoryEquip) {
+    toolDocs.push(`
+### Equip an Object
+Take up an object (or kit) by id, title or name; several separated by commas.
+[[EQUIP_ITEM ref="Excalibur" /]]
+[[EQUIP_ITEM refs="lantern,signet ring" /]]`)
+  }
+
+  if (options.inventoryUnequip) {
+    toolDocs.push(`
+### Unequip an Object
+Set down an object you carry.
+[[UNEQUIP_ITEM ref="lantern" /]]`)
+  }
+
+  if (options.inventoryPickUp) {
+    toolDocs.push(`
+### Pick Up an Object
+Make an instance of an archetype in your own vault, equipped unless equip="false".
+[[PICK_UP ref="magic bow" /]]
+With a title of its own: [[PICK_UP ref="magic bow" title="Whisperwind" /]]`)
+  }
+
+  if (options.inventoryCreate) {
+    toolDocs.push(`
+### Create an Object
+[[CREATE_INVENTORY_ITEM name="compass" title="The Navigator" equip="true"]]A brass compass that points toward home[[/CREATE_INVENTORY_ITEM]]`)
+  }
+
+  if (options.inventoryUpdate) {
+    toolDocs.push(`
+### Update an Object
+Change one of your own objects. Only your own can be changed.
+[[UPDATE_INVENTORY_ITEM ref="compass" description="A dented brass compass" /]]`)
+  }
+
+  if (options.inventoryArchive) {
+    toolDocs.push(`
+### Archive an Object
+Put away one of your own objects (archived="false" restores it).
+[[ARCHIVE_INVENTORY_ITEM ref="compass" archived="true" /]]`)
+  }
+
+  if (options.inventoryGive) {
+    toolDocs.push(`
+### Give an Object
+Hand one of your own objects to another character in this chat.
+[[GIVE_ITEM ref="lantern" to="Marcus" /]]`)
   }
 
   if (toolDocs.length === 0) {

@@ -42,6 +42,7 @@ const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
   documents: 'Document Editing',
   photos: 'Photo Albums',
   wardrobe: 'Wardrobe',
+  inventory: 'Inventory',
   shell: 'Workspace',
   help: 'Quilltap Help',
 }

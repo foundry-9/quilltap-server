@@ -33,6 +33,8 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.characters.all,
   queryKeys.mountPoints.all,
   queryKeys.memories.all,
+  queryKeys.inventory.lists,
+  queryKeys.inventory.folderLists,
 ]
 
 /**
@@ -112,6 +114,11 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
       // topic sweeps the namespace, which is what a batch delete spanning
       // several chats has to fall back to.
       return id ? [queryKeys.memories.chatCount(id)] : [queryKeys.memories.all]
+
+    case 'inventory':
+      // A character's inventory_* tool or a Pascal pick-up wrote an object
+      // file; an open Inventory dialog's lists and folders re-read.
+      return [queryKeys.inventory.lists, queryKeys.inventory.folderLists]
 
     case 'mountPoints':
       // No per-store detail key exists yet; the namespace prefix is the

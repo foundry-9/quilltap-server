@@ -3379,11 +3379,13 @@ Dry-run a definition through the same `executeCustomTool` core live chats use. *
 
 `metadata` may instead be `{ "characterId": "uuid" }`, in which case the server hydrates that character and uses their real `metadata.json` (404 for an unknown id; a broken vault returns 422 with the reason).
 
+An optional `inventory` array mocks the rolling character's bag: `[{ "ref": "sword", "state": "equipped", "count": 1 }]` (`state` one of `equipped` / `carried` / `reachable` / `absent`; `count` defaults to 1 when equipped, else 0; at most 64 rows). `inventory` / `inventoryCount` tests, inventory gates (the `gate` verdict) and the audit read it; a reference no row names reads `absent`. Absent or empty → no bag at all, and every inventory test declines. `{{inventory.*}}` fields render as written and `$inventory` falls back, since the mock names states, not objects.
+
 **Response**: `200 OK` — the full run result (`tool`, `params`, `rollForm`, `raw`, `value`, `state`, `outcomeIndex`, rendered `message`, `diceBreakdown`, `visibility`, and `metadataTested` when the winning row consulted the sheet). An invalid definition returns 400 with the loader's rejection sentence; a run-time refusal (e.g. an inverted range after `$param` substitution) returns 422.
 
 #### `POST /api/v1/custom-tools?action=audit`
 
-Monte Carlo table audit: 10,000 draws with roll + outcome matching only (no template rendering). Body is the preview body without `private`; `metadata` resolves the same way and is threaded into the match subjects so metadata-gated rows can fire.
+Monte Carlo table audit: 10,000 draws with roll + outcome matching only (no template rendering). Body is the preview body without `private` (`inventory` included, held fixed across every draw); `metadata` resolves the same way and is threaded into the match subjects so metadata-gated rows can fire.
 
 **Response**: `200 OK`
 
@@ -6656,6 +6658,7 @@ The full list lives in `lib/tools/*-tool.ts`. Highlights:
 | `upsert_annotation` / `delete_annotation` | Manage conversation annotations | Always available |
 | `wardrobe_list` / `wardrobe_read` / `wardrobe_wear` / `wardrobe_take_off` | Browse/inspect/wear/remove wardrobe items (own + project + Quilltap General) | `canDressThemselves` |
 | `wardrobe_create` / `wardrobe_update` / `wardrobe_archive` | Author/edit/retire wardrobe items (own items only for edit/archive) | `canCreateOutfits` |
+| `inventory_list` / `inventory_read` / `inventory_equip` / `inventory_unequip` / `inventory_pick_up` / `inventory_create` / `inventory_update` / `inventory_archive` / `inventory_give` | The objects a character carries (category `inventory`): list with states, read one, equip / unequip, pick up an instance of a reachable archetype, make / amend / archive their own, give one of their own to another participant | `canManageInventory` (null = on); never on the Brahma Console or the Scenario Builder |
 | `submit_final_response` | Agent-mode wrap-up | Agent mode only |
 | `request_full_context` | Request full context expansion | Context compression enabled |
 

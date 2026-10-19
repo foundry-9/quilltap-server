@@ -268,6 +268,7 @@ async function processHelpResponse(
       true, // helpToolsEnabled
       false, // canDressThemselves - not applicable for help chats
       false, // canCreateOutfits - not applicable for help chats
+      false,  // canManageInventory — no inventory_* tools here
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {

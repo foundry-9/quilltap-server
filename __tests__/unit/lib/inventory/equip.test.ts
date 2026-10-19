@@ -31,7 +31,8 @@ import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventor
 import { createInventoryItem, instantiate } from '@/lib/inventory/item-mutations'
 import { equipItems, unequipItems } from '@/lib/inventory/equip'
 import { applyInventoryDefaults, resetInventoryToDefaults } from '@/lib/inventory/apply-defaults'
-import { describeInventoryChange } from '@/lib/inventory/equip-effects'
+import { describeInventoryChange, flushPendingInventoryAnnouncements, recordPendingInventoryChange } from '@/lib/inventory/equip-effects'
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { kitState } from '@/lib/inventory/resolve'
 import { loadInventoryPool } from '@/lib/inventory/pool'
 import { readEquippedSet } from '@/lib/inventory/equipped-set'
@@ -214,5 +215,36 @@ describe("Pascal's line", () => {
     expect(describeInventoryChange('Vivienne', { equipped: [], unequipped: [item('lantern')] }))
       .toBe('*Vivienne sets down the lantern.*')
     expect(describeInventoryChange('Vivienne', { equipped: [], unequipped: [] })).toBeNull()
+  })
+})
+
+describe("the turn's pending changes", () => {
+  const item = (id: string, name: string) => ({ id, name, title: null }) as never
+  const who = { userId: 'user-1', chatId: 'chat-1', characterId: 'c-viv' }
+
+  it('keeps every provenance folded into an entry, and the flush reports them', async () => {
+    addCharacter('c-viv', 'Vivienne')
+    const { pendingInventoryAnnouncements: pending } = newWardrobeTurnContainers()
+    recordPendingInventoryChange(pending, who, { equipped: [item('a', 'rope')], unequipped: [] }, 'pascal')
+    recordPendingInventoryChange(pending, who, { equipped: [item('b', 'torch')], unequipped: [] }, 'character')
+    recordPendingInventoryChange(pending, who, { equipped: [item('c', 'map')], unequipped: [] }, 'pascal')
+    expect(pending.get('chat-1:c-viv')?.provenances).toEqual(['pascal', 'character'])
+
+    await flushPendingInventoryAnnouncements({ pendingInventoryAnnouncements: pending }, getFakeRepos() as never)
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Inventory change effects fired'),
+      expect.objectContaining({ provenance: 'pascal' }),
+    )
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('Drained'),
+      expect.objectContaining({ provenances: [{ characterId: 'c-viv', provenances: ['pascal', 'character'] }] }),
+    )
+  })
+
+  it('nets a pick-up that is set down again out of the pick-ups too', () => {
+    const { pendingInventoryAnnouncements: pending } = newWardrobeTurnContainers()
+    recordPendingInventoryChange(pending, who, { equipped: [item('t', 'torch')], unequipped: [], pickedUp: [item('t', 'torch')] }, 'character')
+    recordPendingInventoryChange(pending, who, { equipped: [], unequipped: [item('t', 'torch')] }, 'character')
+    expect(pending.get('chat-1:c-viv')).toMatchObject({ equipped: [], unequipped: [], pickedUp: [] })
   })
 })

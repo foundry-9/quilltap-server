@@ -160,6 +160,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'seed-chat-wardrobe-history-v1': 'Noting down what everyone has on at the moment',
   'add-chat-wardrobe-history-tool-name-v1': 'Ruling a column for the contraption that did the dressing',
   'add-chat-equipped-inventory-v1': "Fitting each chat with a croupier's ledger of what everyone is carrying",
+  'add-character-inventory-flag-v1': 'Granting characters leave to rummage through their own bags',
   'add-wardrobe-image-settings-field-v1': 'Engaging a portraitist for the wardrobe',
   'add-memory-tiers-v1': 'Fitting the Commonplace Book with a cellar…',
   'add-memory-superseded-at-v1': 'Chalking a date on every bottle laid down in the cellar…',

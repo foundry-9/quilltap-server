@@ -11,8 +11,9 @@
  *
  * Design constraint that shapes everything below: outcome tests are
  * AND-composed comparator objects, and indirection is limited to two closed
- * forms — a `{ "$param": "name" }` reference and a
- * `{ "$state": "path", "fallback": <literal> }` reference. The **one** place a
+ * forms — a `{ "$param": "name" }` reference, a
+ * `{ "$state": "path", "fallback": <literal> }` reference and its Inventory
+ * twin `{ "$inventory": "<ref>.metadata.<key>", "fallback": <literal> }`. The **one** place a
  * string grammar exists is an effect's `value`, evaluated by the closed,
  * eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string
  * concatenation, parentheses, literals, and `{{ref}}` substitution. There are
@@ -34,7 +35,7 @@ import {
 import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
 import { parsePath } from '@/lib/state/state-paths';
 import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
-import { scanPlaceholders as scanPlaceholdersInText } from './placeholders';
+import { scanPlaceholders as scanPlaceholdersInText, splitInventoryReference } from './placeholders';
 import { WardrobeItemTypeEnum, type WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 export { MAX_EFFECT_EXPRESSION_LENGTH };
@@ -162,8 +163,43 @@ export const StateRefSchema = z.strictObject({
 
 export type StateRef = z.infer<typeof StateRefSchema>;
 
-/** A roll field: a literal number, a `$param`, or a `$state` reference. */
-const NumberOrParamRefSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema]);
+/** The longest Inventory reference (an object id, title or name, or a `when` key). */
+export const MAX_INVENTORY_REF_LENGTH = 200;
+
+/**
+ * A reference into one `metadata` key of one Inventory object the rolling
+ * character carries or can reach — `"<ref>.metadata.<key>"`, split at the
+ * FIRST `.metadata.` (the `{{inventory.*}}` placeholder's rule). Accepted
+ * wherever a `$state` reference is, and typed the same way: by its required
+ * fallback, which run-time resolution falls back to whenever the object, the
+ * key, or a value of the fallback's type is missing. Only `metadata` is
+ * addressable here — a title is never a number to roll against. A top-level
+ * `roll` may be one with a dice-notation fallback ("1d4"), so a sword's
+ * `metadata.damage` of "2d6" can be the roll itself.
+ */
+export const InventoryRefSchema = z.strictObject({
+  $inventory: z
+    .string()
+    .min(1)
+    .max(MAX_INVENTORY_REF_LENGTH + 120)
+    .refine((path) => splitInventoryReference(path)?.field === 'metadata', {
+      message: 'must be "<object>.metadata.<key>", e.g. "sword.metadata.damage"',
+    })
+    .describe('"<object>.metadata.<key>": the object by id, title or name, then one of its metadata keys.'),
+  fallback: z
+    .union([z.number().finite(), z.string(), z.boolean()])
+    .describe('Required. Used whenever the object or key is absent or holds a value of a different type.'),
+});
+
+export type InventoryRef = z.infer<typeof InventoryRefSchema>;
+
+/** True when a value is a `$inventory` reference. */
+export function isInventoryRef(value: unknown): value is InventoryRef {
+  return typeof value === 'object' && value !== null && '$inventory' in value;
+}
+
+/** A roll field: a literal number, a `$param`, a `$state` or a `$inventory` reference. */
+const NumberOrParamRefSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema, InventoryRefSchema]);
 
 export type NumberOrParamRef = z.infer<typeof NumberOrParamRefSchema>;
 
@@ -191,8 +227,8 @@ export const CustomToolParameterSchema = z
   .object({
     type: ParameterTypeSchema.describe('Value type of this parameter.'),
     default: z
-      .union([z.number(), z.string(), z.boolean(), StateRefSchema])
-      .describe('Required. Used whenever a run omits this parameter. May be a $state reference whose fallback matches this type.'),
+      .union([z.number(), z.string(), z.boolean(), StateRefSchema, InventoryRefSchema])
+      .describe('Required. Used whenever a run omits this parameter. May be a $state or $inventory reference whose fallback matches this type.'),
     description: z
       .string()
       .max(MAX_DESCRIPTION_LENGTH)
@@ -220,7 +256,8 @@ export const CustomToolParameterSchema = z
     // The declared default must satisfy the parameter's own declared type. A
     // `$state` default is typed by its fallback (which run-time resolution is
     // guaranteed to fall back to), so the fallback is what must match the type.
-    const defaultValue = isStateRef(param.default) ? param.default.fallback : param.default;
+    const defaultValue =
+      isStateRef(param.default) || isInventoryRef(param.default) ? param.default.fallback : param.default;
     const defaultType = typeof defaultValue;
     if (numeric && defaultType !== 'number') {
       ctx.addIssue({ code: 'custom', message: `default must be a number for type ${param.type}`, path: ['default'] });
@@ -266,8 +303,11 @@ export const RollDiceSchema = z
     message: `must be dice notation like "3d6+2" or "1d20" (${MIN_DIE_SIDES}–${MAX_DIE_SIDES} sides, 1–100 dice)`,
   });
 
-/** Either form of roll. */
-export const RollSchema = z.union([RollDiceSchema, RollRangeSchema]);
+/**
+ * Either form of roll, or a `$inventory` reference whose (dice-notation)
+ * fallback stands in when the object's metadata holds no rollable notation.
+ */
+export const RollSchema = z.union([RollDiceSchema, RollRangeSchema, InventoryRefSchema]);
 
 export type Roll = z.infer<typeof RollSchema>;
 
@@ -289,14 +329,21 @@ export const CONTAINMENT_KEYS: ReadonlySet<ComparatorKey> = new Set<ComparatorKe
  * `{ "gte": { "$param": "difficulty" } }` tests against a number the caller
  * supplied rather than one the author fixed at authoring time.
  */
-const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema]);
+const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema, InventoryRefSchema]);
 
 /**
  * A comparator operand for eq/neq, which may address a parameter of any
  * declared type — `{ "eq": "brass" }` is a legitimate test of a string — or a
  * `$state` reference typed by its fallback.
  */
-const AnyOperandSchema = z.union([z.number().finite(), z.string(), z.boolean(), ParamRefSchema, StateRefSchema]);
+const AnyOperandSchema = z.union([
+  z.number().finite(),
+  z.string(),
+  z.boolean(),
+  ParamRefSchema,
+  StateRefSchema,
+  InventoryRefSchema,
+]);
 
 /**
  * A comparator operand for contains/ncontains: the substring to look for — a
@@ -309,6 +356,7 @@ const StringOperandSchema = z.union([
   z.string().min(1, 'the substring to look for must not be empty'),
   ParamRefSchema,
   StateRefSchema,
+  InventoryRefSchema,
 ]);
 
 /** Shape shared by every comparator. Ordering keys are numeric on both sides. */
@@ -436,6 +484,55 @@ const ProgressKeySchema = z.string().superRefine((key, ctx) => {
   if (!parsed.ok) ctx.addIssue({ code: 'custom', message: parsed.reason });
 });
 
+/** The four states an `inventory` test compares against. */
+export const InventoryStateValueSchema = z.enum(['equipped', 'carried', 'reachable', 'absent']);
+export type InventoryStateValue = z.infer<typeof InventoryStateValueSchema>;
+
+/**
+ * An `inventory` key: an object reference (id, title or name). In an outcome
+ * or effect `when` it is a TEMPLATE (`{{params.weapon}}` lets a parameter
+ * choose); in a gate it must be literal (see `validateGates`).
+ */
+const InventoryKeySchema = z.string().min(1).max(MAX_INVENTORY_REF_LENGTH);
+
+/**
+ * A test of one object's state: `eq` / `neq` only (an ordering key is a
+ * rejection — a state has no order). The operand is one of the four states
+ * or a `$param` naming a string parameter.
+ */
+export const InventoryStateComparatorSchema = z
+  .strictObject({
+    eq: z.union([InventoryStateValueSchema, ParamRefSchema]).optional(),
+    neq: z.union([InventoryStateValueSchema, ParamRefSchema]).optional(),
+  })
+  .refine((c) => c.eq !== undefined || c.neq !== undefined, {
+    message: 'must test something: `eq` or `neq` against equipped, carried, reachable or absent',
+  });
+
+export type InventoryStateComparator = z.infer<typeof InventoryStateComparatorSchema>;
+
+/** The state test a gate may pose: literal states only. */
+export const GateInventoryStateComparatorSchema = z
+  .strictObject({
+    eq: InventoryStateValueSchema.optional(),
+    neq: InventoryStateValueSchema.optional(),
+  })
+  .refine((c) => c.eq !== undefined || c.neq !== undefined, {
+    message: 'must test something: `eq` or `neq` against equipped, carried, reachable or absent',
+  });
+
+/** The count test a gate may pose: literal numbers only, no containment. */
+export const GateInventoryCountComparatorSchema = z
+  .strictObject({
+    gt: z.number().finite().optional(),
+    gte: z.number().finite().optional(),
+    lt: z.number().finite().optional(),
+    lte: z.number().finite().optional(),
+    eq: z.number().finite().optional(),
+    neq: z.number().finite().optional(),
+  })
+  .refine(hasComparator, AT_LEAST_ONE);
+
 /**
  * A comparator in an availability gate. The same eight keys as everywhere else,
  * but every operand is a LITERAL.
@@ -489,10 +586,26 @@ export const ToolGateSchema = z
           '{ "eq": true } }. Derived fresh from the wall clock at roster time. A progression the character does ' +
           'not carry does not match.'
       ),
+    inventory: z
+      .record(InventoryKeySchema, GateInventoryStateComparatorSchema)
+      .optional()
+      .describe(
+        "Test an object's state for the invoking character in this chat, keyed by a LITERAL object reference " +
+          '(id, title or name) — e.g. { "sword": { "eq": "equipped" } }. With no character or chat, every test declines.'
+      ),
+    inventoryCount: z
+      .record(InventoryKeySchema, GateInventoryCountComparatorSchema)
+      .optional()
+      .describe('Test how many kin (same name) of an object the invoking character has equipped in this chat.'),
   })
   .refine(
-    (gate) => Object.keys(gate.metadata ?? {}).length + Object.keys(gate.progress ?? {}).length > 0,
-    { message: 'must test at least one metadata key or progress field' }
+    (gate) =>
+      Object.keys(gate.metadata ?? {}).length +
+        Object.keys(gate.progress ?? {}).length +
+        Object.keys(gate.inventory ?? {}).length +
+        Object.keys(gate.inventoryCount ?? {}).length >
+      0,
+    { message: 'must test at least one metadata key, progress field, or inventory object' }
   );
 
 export type ToolGate = z.infer<typeof ToolGateSchema>;
@@ -525,6 +638,17 @@ const WHEN_SUBJECTS_SHAPE = {
   llm: LlmComparatorSchema.optional().describe(
     "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
   ),
+  inventory: z
+    .record(InventoryKeySchema, InventoryStateComparatorSchema)
+    .optional()
+    .describe(
+      "Test an object's state for the rolling character in this chat — equipped, carried (own vault), reachable " +
+        '(a shared store) or absent — keyed by object reference (a template). A run nobody made declines every test.'
+    ),
+  inventoryCount: z
+    .record(InventoryKeySchema, NumericComparatorSchema)
+    .optional()
+    .describe('Test how many kin (same name) of an object the rolling character has equipped in this chat.'),
 };
 
 /** True when a `when` object tests at least one of the shared subjects. */
@@ -534,8 +658,12 @@ function testsSomething(when: {
   params?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   progress?: Record<string, unknown>;
+  inventory?: Record<string, unknown>;
+  inventoryCount?: Record<string, unknown>;
 }): boolean {
   return (
+    (when.inventory !== undefined && Object.keys(when.inventory).length > 0) ||
+    (when.inventoryCount !== undefined && Object.keys(when.inventoryCount).length > 0) ||
     hasComparator(when as Record<string, unknown>) ||
     when.roll !== undefined ||
     when.llm !== undefined ||
@@ -573,7 +701,7 @@ export const WhenObjectSchema = z
   .strictObject(WHEN_SUBJECTS_SHAPE)
   .refine(testsSomething, {
     message:
-      'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, `metadata`, or `progress`',
+      'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, `metadata`, `progress`, `inventory`, or `inventoryCount`',
   });
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
@@ -628,7 +756,7 @@ export const EffectWhenSchema = z
   })
   .refine((when) => testsSomething(when) || when.outcome !== undefined, {
     message:
-      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, `metadata`, or `progress`',
+      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, `metadata`, `progress`, `inventory`, or `inventoryCount`',
   });
 
 export type EffectWhen = z.infer<typeof EffectWhenSchema>;
@@ -675,10 +803,42 @@ export const CustomToolWardrobeGestureSchema = z.strictObject({
 
 export type CustomToolWardrobeGesture = z.infer<typeof CustomToolWardrobeGestureSchema>;
 
+/** The most object references one `inventory` gesture may name. */
+export const MAX_INVENTORY_EFFECT_ITEMS = 8;
+
+/** What an `inventory` effect does for the rolling character. */
+export const InventoryEffectActionSchema = z.enum(['equip', 'unequip', 'pick_up']);
+export type InventoryEffectAction = z.infer<typeof InventoryEffectActionSchema>;
+
+/**
+ * An Inventory gesture: equip, unequip or pick up objects for the ROLLING
+ * character in this chat, through the chokepoints the operator's dialog uses.
+ * Item references are TEMPLATES, rendered and then resolved through the one
+ * reference rule (id → title → name). Kits are allowed for equip and unequip;
+ * `pick_up` names archetypes and instantiates into the character's vault
+ * root, equipping unless `equip` is false.
+ */
+export const CustomToolInventoryGestureSchema = z.strictObject({
+  action: InventoryEffectActionSchema.describe(
+    '"equip" takes up the listed objects (or kits); "unequip" sets them down; "pick_up" makes an instance of each listed archetype in the rolling character\'s vault.'
+  ),
+  items: z
+    .array(z.string().min(1).max(MAX_INVENTORY_REF_LENGTH))
+    .min(1)
+    .max(MAX_INVENTORY_EFFECT_ITEMS)
+    .describe(
+      'The objects, each by id, title or name (case-insensitive). A template: {{params.x}} and the other placeholder ' +
+        'families are substituted before lookup. pick_up names archetypes.'
+    ),
+  equip: z.boolean().optional().describe('pick_up only. Equip the new instances. Default true.'),
+});
+
+export type CustomToolInventoryGesture = z.infer<typeof CustomToolInventoryGestureSchema>;
+
 /**
  * One side effect, recorded after the table has dealt. Either a WRITE
- * (`target` + `value`) or a WARDROBE GESTURE (`wardrobe`) — never both, never
- * neither. One strict object with a refine rather than a union, so a mistake
+ * (`target` + `value`), a WARDROBE GESTURE (`wardrobe`) or an INVENTORY
+ * GESTURE (`inventory`) — exactly one. One strict object with a refine rather than a union, so a mistake
  * produces one readable issue rather than a union's tree of them.
  *
  * `value` discrimination is the one ergonomic trap in the format: a JSON number
@@ -717,17 +877,22 @@ export const CustomToolEffectSchema = z
     wardrobe: CustomToolWardrobeGestureSchema.optional().describe(
       'A wardrobe gesture on the rolling character instead of a write: wear items, take them off, or clear a slot.'
     ),
+    inventory: CustomToolInventoryGestureSchema.optional().describe(
+      'An Inventory gesture on the rolling character instead of a write: equip, unequip or pick up objects.'
+    ),
   })
   .superRefine((effect, ctx) => {
     const isWrite = effect.target !== undefined || effect.value !== undefined;
     const isWardrobe = effect.wardrobe !== undefined;
-    if (isWrite && isWardrobe) {
+    const isInventory = effect.inventory !== undefined;
+    const kinds = [isWrite, isWardrobe, isInventory].filter(Boolean).length;
+    if (kinds > 1) {
       ctx.addIssue({
         code: 'custom',
-        message: 'an effect is either a write (target + value) or a wardrobe gesture, not both',
+        message: 'an effect is exactly one of a write (target + value), a wardrobe gesture, or an inventory gesture',
       });
-    } else if (!isWrite && !isWardrobe) {
-      ctx.addIssue({ code: 'custom', message: 'an effect needs target + value, or wardrobe' });
+    } else if (kinds === 0) {
+      ctx.addIssue({ code: 'custom', message: 'an effect needs target + value, wardrobe, or inventory' });
     } else if (isWrite && (effect.target === undefined || effect.value === undefined)) {
       ctx.addIssue({
         code: 'custom',
@@ -745,14 +910,52 @@ export type CustomToolWriteEffect = CustomToolEffect & { target: string; value: 
 /** An effect that changes the rolling character's outfit. */
 export type CustomToolWardrobeEffect = CustomToolEffect & { wardrobe: CustomToolWardrobeGesture };
 
+/** An effect that changes what the rolling character carries. */
+export type CustomToolInventoryEffect = CustomToolEffect & { inventory: CustomToolInventoryGesture };
+
 /** True for a write effect. Use this rather than re-testing keys. */
 export function isWriteEffect(effect: CustomToolEffect): effect is CustomToolWriteEffect {
-  return effect.wardrobe === undefined && effect.target !== undefined && effect.value !== undefined;
+  return (
+    effect.wardrobe === undefined &&
+    effect.inventory === undefined &&
+    effect.target !== undefined &&
+    effect.value !== undefined
+  );
 }
 
 /** True for a wardrobe gesture. Use this rather than re-testing keys. */
 export function isWardrobeEffect(effect: CustomToolEffect): effect is CustomToolWardrobeEffect {
-  return effect.wardrobe !== undefined && effect.target === undefined && effect.value === undefined;
+  return (
+    effect.wardrobe !== undefined &&
+    effect.inventory === undefined &&
+    effect.target === undefined &&
+    effect.value === undefined
+  );
+}
+
+/** True for an Inventory gesture. Use this rather than re-testing keys. */
+export function isInventoryEffect(effect: CustomToolEffect): effect is CustomToolInventoryEffect {
+  return (
+    effect.inventory !== undefined &&
+    effect.wardrobe === undefined &&
+    effect.target === undefined &&
+    effect.value === undefined
+  );
+}
+
+/**
+ * The per-action rules of an Inventory gesture — the one statement of them,
+ * read by load-time validation and the Workbench's draft check.
+ */
+export function inventoryGestureProblems(
+  gesture: Pick<CustomToolInventoryGesture, 'action' | 'equip'> & { items?: readonly string[] }
+): Array<{ field: 'items' | 'equip'; message: string }> {
+  const problems: Array<{ field: 'items' | 'equip'; message: string }> = [];
+  if ((gesture.items?.length ?? 0) === 0) problems.push({ field: 'items', message: `${gesture.action} needs at least one object` });
+  if (gesture.equip !== undefined && gesture.action !== 'pick_up') {
+    problems.push({ field: 'equip', message: 'equip is only used with pick_up' });
+  }
+  return problems;
 }
 
 /**
@@ -1033,7 +1236,7 @@ export const QtapCustomToolSchema = z
       .optional()
       .describe(
         'Side effects applied after the run: writes into tiered persistent state or the rolling character\'s metadata, ' +
-          'or wardrobe gestures that change what the rolling character is wearing.'
+          'wardrobe gestures that change what the rolling character is wearing, or inventory gestures that change what they carry.'
       ),
     outcomes: z
       .array(CustomToolOutcomeSchema)
@@ -1128,6 +1331,25 @@ function validateGates(
         'Fold the second test into the first, remembering that a key the character lacks never matches.',
       path: ['withheldWhen'],
     });
+  }
+
+  // A gate is answered at roster time, before any parameter exists, so a
+  // templated key would be its literal text for ever — and resolve to
+  // `absent` for ever. Outcome and effect `when` keys stay templates.
+  for (const clause of ['availableWhen', 'withheldWhen'] as const) {
+    const gate = tool[clause];
+    if (!gate) continue;
+    for (const subject of ['inventory', 'inventoryCount'] as const) {
+      for (const key of Object.keys(gate[subject] ?? {})) {
+        if (key.includes('{{')) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `a gate's ${subject} key must be a literal object reference; "${key}" carries a placeholder, and a gate has no parameters to fill it`,
+            path: [clause, subject, key],
+          });
+        }
+      }
+    }
   }
 }
 
@@ -1261,6 +1483,57 @@ function validateWhenSubjects(
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
     validateMetadataOperands(declared, comparator, ctx, [...path, 'metadata', key]);
   }
+
+  // `inventory` and `inventoryCount` keys are TEMPLATES: their placeholders
+  // must resolve the way an item reference's do. The state operand is a
+  // literal state or a `$param` to a string parameter; the count's operands
+  // are numbers.
+  for (const [key, comparator] of Object.entries(when.inventory ?? {})) {
+    validateInventoryKey(declared, hasLlmBlock, key, ctx, [...path, 'inventory', key]);
+    for (const op of ['eq', 'neq'] as const) {
+      const operand = comparator[op];
+      if (operand === undefined || !isParamRef(operand)) continue;
+      const target = declared[operand.$param];
+      if (!target) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `references undeclared parameter "${operand.$param}"`,
+          path: [...path, 'inventory', key, op],
+        });
+      } else if (valueTypeOf(target.type) !== 'string') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${op} compares an inventory state with parameter "${operand.$param}", which is ${target.type} rather than a string`,
+          path: [...path, 'inventory', key, op],
+        });
+      }
+    }
+  }
+  for (const [key, comparator] of Object.entries(when.inventoryCount ?? {})) {
+    validateInventoryKey(declared, hasLlmBlock, key, ctx, [...path, 'inventoryCount', key]);
+    validateComparator(declared, comparator, 'number', `the equipped count of "${key}"`, ctx, [
+      ...path,
+      'inventoryCount',
+      key,
+    ]);
+  }
+}
+
+/** An inventory key's placeholders resolve as an item reference's must. */
+function validateInventoryKey(
+  declared: Record<string, CustomToolParameter>,
+  hasLlmBlock: boolean,
+  key: string,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  for (const { ref } of scanPlaceholdersInText(key)) {
+    if (ref.kind === 'params' && !declared[ref.name]) {
+      ctx.addIssue({ code: 'custom', message: `references undeclared parameter "${ref.name}"`, path });
+    } else if (ref.kind === 'llm' && !hasLlmBlock) {
+      ctx.addIssue({ code: 'custom', message: 'references {{llm}}, but the tool declares no `llm` block', path });
+    }
+  }
 }
 
 /**
@@ -1292,6 +1565,16 @@ function validateEffects(
 
     if (effect.wardrobe !== undefined) {
       validateWardrobeGesture(declared, Boolean(tool.llm), effect.wardrobe, ctx, [...base, 'wardrobe']);
+      return;
+    }
+
+    if (effect.inventory !== undefined) {
+      for (const problem of inventoryGestureProblems(effect.inventory)) {
+        ctx.addIssue({ code: 'custom', message: problem.message, path: [...base, 'inventory', problem.field] });
+      }
+      effect.inventory.items.forEach((item, m) => {
+        validateInventoryKey(declared, Boolean(tool.llm), item, ctx, [...base, 'inventory', 'items', m]);
+      });
       return;
     }
 
@@ -1406,12 +1689,26 @@ function validateRollRefs(
 ): void {
   if (!roll || typeof roll === 'string') return;
 
+  // A whole-roll `$inventory`: the object's metadata names the dice, and the
+  // fallback must be dice notation this build can roll.
+  if (isInventoryRef(roll)) {
+    if (typeof roll.fallback !== 'string' || parseDiceNotation(roll.fallback) === null) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'a roll drawn from $inventory needs a dice-notation fallback, like "1d4"',
+        path: ['roll', 'fallback'],
+      });
+    }
+    return;
+  }
+
   for (const [field, value] of Object.entries(roll)) {
-    if (isStateRef(value)) {
+    if (isStateRef(value) || isInventoryRef(value)) {
+      const kind = isStateRef(value) ? '$state' : '$inventory';
       if (typeof value.fallback !== 'number') {
         ctx.addIssue({
           code: 'custom',
-          message: `roll.${field} uses a $state reference whose fallback is ${typeof value.fallback} rather than a number`,
+          message: `roll.${field} uses a ${kind} reference whose fallback is ${typeof value.fallback} rather than a number`,
           path: ['roll', field],
         });
       }
@@ -1522,7 +1819,7 @@ function resolveOperandType(
 
   // A `$state` operand carries the type of its (required) fallback — that is
   // what run-time resolution is guaranteed to produce when the path misses.
-  if (isStateRef(operand)) {
+  if (isStateRef(operand) || isInventoryRef(operand)) {
     const fallbackType = typeof operand.fallback;
     if (fallbackType === 'number' || fallbackType === 'string' || fallbackType === 'boolean') {
       return fallbackType;

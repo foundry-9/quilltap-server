@@ -12,6 +12,13 @@
  * The fact sheet's *Pick a character* mode reads and writes the editor's
  * shared wardrobe vantage: a character chosen here is the one the side-effects
  * card browses, and a character vantage chosen there seats them here.
+ *
+ * The *Mock inventory* card is a list of `{ ref, state, count? }` rows the
+ * roll, the audit and the gate verdict read as the rolling character's bag
+ * (`mockInventoryContext`), so `inventory` / `inventoryCount` tests can be
+ * proved without a character. The bench cannot tell whether an object exists:
+ * `{{inventory.*}}` fields render as written and `$inventory` falls back. No
+ * rows means no bag at all — every inventory test declines.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -21,11 +28,20 @@ import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import {
   displayTitle,
+  isInventoryRef,
   isStateRef,
   scanPlaceholders,
   type CustomToolParameter,
 } from '@/lib/pascal/custom-tool.types'
-import type { CustomToolAuditResult, CustomToolRunResult, ResolvedWardrobeGesture } from '@/lib/pascal/custom-tools'
+import type {
+  CustomToolAuditResult,
+  CustomToolRunResult,
+  ResolvedInventoryGesture,
+  ResolvedWardrobeGesture,
+} from '@/lib/pascal/custom-tools'
+import { mockInventoryContext, type MockInventoryRow } from '@/lib/pascal/bench-inventory'
+import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
+import type { InventoryState } from '@/lib/inventory/refs'
 import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
 import { flattenProgressions } from '@/lib/progressions/engine'
@@ -77,6 +93,28 @@ type FactSheet = { mode: 'character' } | { mode: 'manual'; text: string }
  */
 type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { mode: 'live' }
 
+/** One mock-inventory row as the bench edits it; `count` is loose text ('' = the default). */
+interface MockInventoryDraftRow {
+  id: number
+  ref: string
+  state: InventoryState
+  count: string
+}
+
+/** The rows a request sends: blank refs dropped, counts parsed. Empty = no bag at all. */
+function mockRowsOf(rows: readonly MockInventoryDraftRow[]): MockInventoryRow[] {
+  return rows
+    .filter((row) => row.ref.trim() !== '')
+    .map((row) => {
+      const count = Number(row.count)
+      return {
+        ref: row.ref.trim(),
+        state: row.state,
+        ...(row.count.trim() !== '' && Number.isInteger(count) && count >= 0 ? { count } : {}),
+      }
+    })
+}
+
 /**
  * A bench roll, plus the gate verdict the server computed alongside it. The
  * bench always deals — a gate decides whether a character is OFFERED a tool,
@@ -114,7 +152,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
     const specs: Record<string, CustomToolParameterSpec> = {}
     const declared = (definition.parameters ?? {}) as Record<string, CustomToolParameter>
     for (const [name, spec] of Object.entries(declared)) {
-      if (isStateRef(spec.default)) continue
+      if (isStateRef(spec.default) || isInventoryRef(spec.default)) continue
       // A half-typed numeric default serializes as NaN (the form is already
       // flagging it); the bench field shows 0 rather than "NaN".
       const fallback = typeof spec.default === 'number' && !Number.isFinite(spec.default) ? 0 : spec.default
@@ -137,6 +175,9 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
     if (chairCharacterId && sheet.mode !== 'character') setSheet({ mode: 'character' })
   }
   const [mockStateText, setMockStateText] = useState('{}')
+  const [mockInventory, setMockInventory] = useState<MockInventoryDraftRow[]>([])
+  const mockRows = useMemo(() => mockRowsOf(mockInventory), [mockInventory])
+  const benchInventory = mockRows.length > 0 ? mockRows : undefined
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
@@ -149,6 +190,10 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   )
 
   const testsMetadata = draft.outcomes.some((o) => o.conditions.some((c) => c.subject.kind === 'metadata'))
+  const testsInventory =
+    draft.outcomes.some((o) =>
+      o.conditions.some((c) => c.subject.kind === 'inventory' || c.subject.kind === 'inventoryCount')
+    ) || draft.gateConditions.some((c) => c.subject === 'inventory' || c.subject === 'inventoryCount')
 
   /**
    * The clock the derived-progressions panel reads.
@@ -298,6 +343,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           private: isPrivate,
           metadata: benchMetadata(),
           state: benchState(),
+          inventory: benchInventory,
           llm: previewOracle(),
         }),
       }),
@@ -321,6 +367,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
           params: coerceParamValues(paramSpecs, effectiveValues),
           metadata: benchMetadata(),
           state: benchState(),
+          inventory: benchInventory,
           llm: auditOracle(),
         }),
       }),
@@ -466,7 +513,12 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
                back with a roll — the bench never guesses at a vault. */
             verdict={
               sheet.mode === 'manual' && manualSheetError === null
-                ? evaluateToolGate(draftGate, benchMetadata() as Record<string, unknown>, derivedProgress)
+                ? evaluateToolGate(
+                    draftGate,
+                    benchMetadata() as Record<string, unknown>,
+                    derivedProgress,
+                    mockRows.length > 0 ? mockInventoryContext(mockRows) : null
+                  )
                 : (rolls[0]?.gate ?? null)
             }
           />
@@ -492,6 +544,85 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
         {testsState && mockStateText.trim().replace(/\s/g, '') === '{}' && (
           <p className="text-xs qt-text-secondary">
             No mock state supplied — every <code>$state</code> reference will use its fallback.
+          </p>
+        )}
+      </section>
+
+      {/* Card 2⅞ — Mock inventory, for inventory / inventoryCount tests */}
+      <section className="qt-card p-3 space-y-2">
+        <h3 className="qt-card-title text-sm">Mock inventory</h3>
+        <p className="qt-hint">
+          What the rolling character carries, as the bench pretends it: a reference, its state, and — optionally —
+          how many of its kind are equipped. A reference no row names reads as absent. The bench cannot tell whether
+          an object exists, so its fields render as written and <code>$inventory</code> falls back.
+        </p>
+        {mockInventory.map((row) => (
+          <div key={row.id} className="flex items-center gap-1 flex-wrap">
+            <input
+              type="text"
+              value={row.ref}
+              onChange={(e) =>
+                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, ref: e.target.value } : r)))
+              }
+              placeholder="Excalibur"
+              className="qt-input flex-1 min-w-24 text-xs"
+              aria-label="Mock object reference"
+            />
+            <select
+              value={row.state}
+              onChange={(e) =>
+                setMockInventory((prev) =>
+                  prev.map((r) => (r.id === row.id ? { ...r, state: e.target.value as InventoryState } : r))
+                )
+              }
+              className="qt-select qt-select-sm w-28"
+              aria-label="Mock object state"
+            >
+              {INVENTORY_STATE_VALUES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={row.count}
+              onChange={(e) =>
+                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, count: e.target.value } : r)))
+              }
+              placeholder={row.state === 'equipped' ? '1' : '0'}
+              className="qt-input w-16 text-xs"
+              aria-label="Mock equipped count"
+              title="How many of its kind are equipped (default: 1 when equipped, else 0)"
+            />
+            <button
+              type="button"
+              className="qt-button qt-button-ghost qt-button-sm"
+              onClick={() => setMockInventory((prev) => prev.filter((r) => r.id !== row.id))}
+              aria-label="Remove this mock object"
+            >
+              <Icon name="close" className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="qt-button qt-button-ghost qt-button-sm"
+          onClick={() =>
+            setMockInventory((prev) => [
+              ...prev,
+              { id: (prev[prev.length - 1]?.id ?? 0) + 1, ref: '', state: 'equipped', count: '' },
+            ])
+          }
+        >
+          <Icon name="plus" className="w-3 h-3" />
+          add object
+        </button>
+        {testsInventory && mockRows.length === 0 && (
+          <p className="text-xs qt-text-secondary">
+            No mock inventory — every inventory test declines, exactly as for a run nobody made.
           </p>
         )}
       </section>
@@ -726,6 +857,10 @@ function MiniPascalBubble({
               <p key={effect.index}>
                 → {effect.target.raw} = {JSON.stringify(effect.value)} <em>(would write)</em>
               </p>
+            ) : 'inventory' in effect ? (
+              <p key={effect.index}>
+                → inventory: {describeBenchInventoryGesture(effect.inventory)} <em>(would attempt)</em>
+              </p>
             ) : 'wardrobe' in effect ? (
               <BenchWardrobeLines
                 key={effect.index}
@@ -744,6 +879,13 @@ function MiniPascalBubble({
       )}
     </div>
   )
+}
+
+/** An inventory gesture in the bench's words: `equip "Excalibur"`, `pick up "magic bow" (unequipped)`. */
+function describeBenchInventoryGesture(gesture: ResolvedInventoryGesture): string {
+  const items = gesture.items.map((item) => `“${item}”`).join(', ')
+  const verb = gesture.action === 'pick_up' ? 'pick up' : gesture.action
+  return `${verb} ${items}${gesture.action === 'pick_up' && gesture.equip === false ? ' (unequipped)' : ''}`
 }
 
 /** The gesture's verb and mode, in the bench's words: "wear (add to slot top)", "take off … from top". */

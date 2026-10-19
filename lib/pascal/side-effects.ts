@@ -50,14 +50,18 @@
  * accepted risk from state-cascade.md, and re-reading just before the write is
  * deliberately rejected because the job child forbids it.
  *
- * ## Wardrobe gestures go after the writes
+ * ## Wardrobe gestures go after the writes, inventory gestures after those
  *
  * A `wardrobe` effect is not a write into any of these stores; it is a
  * sequence of outfit changes through the wardrobe chokepoint, applied by
  * `applyWardrobeEffects` (`wardrobe-effects.ts`) AFTER every write here has
- * committed, so a `metadata.` write and a gesture in one tool never
- * interleave their store reads. The two applied lists are merged back into
- * effect order for the record.
+ * committed, and an `inventory` effect is a sequence of equip gestures
+ * through the Inventory's chokepoints, applied by `applyInventoryEffects`
+ * (`inventory-effects.ts`) after the wardrobe's. The order exists so the
+ * three appliers' store reads never interleave; it is NOT visibility — every
+ * effect's `when` was decided by the pure core before any applier ran, so no
+ * write is visible to a later effect's `when` in the same run. The applied
+ * lists are merged back into effect order for the record.
  *
  * ## Never throws
  *
@@ -74,8 +78,15 @@ import { writeGeneralState } from '@/lib/mount-index/general-state';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getAtPath, setAtPath } from '@/lib/state/state-paths';
 import type { StateCascadeResult } from '@/lib/state/state-cascade';
-import { isApplicableWardrobeEffect, isApplicableWriteEffect, type ResolvedEffect } from './custom-tools';
+import {
+  isApplicableInventoryEffect,
+  isApplicableWardrobeEffect,
+  isApplicableWriteEffect,
+  type ResolvedEffect,
+} from './custom-tools';
 import { applyWardrobeEffects } from './wardrobe-effects';
+import { applyInventoryEffects } from './inventory-effects';
+import type { InventoryContext } from '@/lib/inventory/refs';
 import { inferIncrement, UNIT_MS } from '@/lib/progressions/engine';
 import {
   PROGRESSIONS_METADATA_KEY,
@@ -95,7 +106,9 @@ export interface AppliedEffect {
    * The effect's raw target ("state.encounter.count", "metadata.lockpick"), or
    * for a wardrobe change one of "wardrobe.wear" / "wardrobe.take_off" /
    * "wardrobe.clear_slot" (its `previous` / `next` are then the slots before
-   * and a `WardrobeEffectRecord`).
+   * and a `WardrobeEffectRecord`), or for an Inventory change one of
+   * "inventory.equip" / "inventory.unequip" / "inventory.pick_up" (the
+   * equipped ids before, and an `InventoryEffectRecord`).
    */
   target: string;
   /** What the store held before, when it held anything. */
@@ -135,6 +148,10 @@ export interface ApplyCustomToolEffectsParams {
    */
   pendingWardrobeAnnouncements?: Set<string>;
   pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  /** The turn's pending Inventory changes — an inventory effect joins the turn's one Pascal line. */
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
+  /** The run's Inventory context, when the entrance loaded one. */
+  inventory?: InventoryContext | null;
 }
 
 /** Every store an application may touch, for the ordered commit below. */
@@ -164,9 +181,25 @@ export async function applyCustomToolEffects(
       })
     : [];
 
-  if (changes.length === 0) return writes.map((w) => w.applied);
+  // Inventory gestures after the wardrobe's — see the module header.
+  const inventoryGestures = effects.filter(isApplicableInventoryEffect);
+  const carried = inventoryGestures.length
+    ? await applyInventoryEffects({
+        userId: params.userId,
+        chatId,
+        toolName,
+        characterId,
+        gestures: inventoryGestures,
+        inventory: params.inventory,
+        ...(params.pendingInventoryAnnouncements
+          ? { pendingInventoryAnnouncements: params.pendingInventoryAnnouncements }
+          : {}),
+      })
+    : [];
+
+  if (changes.length === 0 && carried.length === 0) return writes.map((w) => w.applied);
   // Stable sort: entries of one effect keep their own order.
-  return [...writes, ...changes].sort((a, b) => a.index - b.index).map((w) => w.applied);
+  return [...writes, ...changes, ...carried].sort((a, b) => a.index - b.index).map((w) => w.applied);
 }
 
 /**

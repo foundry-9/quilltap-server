@@ -42,6 +42,12 @@ export const REALTIME_TOPICS = [
    * and a memory's own id would mean nothing to it.
    */
   'memories',
+  /**
+   * Inventory objects: a file created, instantiated, edited, archived or
+   * moved. Collection-wide (lists and folders). What a chat carries is the
+   * `chats` topic's.
+   */
+  'inventory',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

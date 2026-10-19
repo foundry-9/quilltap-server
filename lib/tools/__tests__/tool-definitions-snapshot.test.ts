@@ -74,6 +74,15 @@ import { wardrobeWearToolDefinition } from '../wardrobe-wear-tool'
 import { wardrobeTakeOffToolDefinition } from '../wardrobe-take-off-tool'
 import { wardrobeRollbackToolDefinition } from '../wardrobe-rollback-tool'
 import { wardrobeHistoryToolDefinition } from '../wardrobe-history-tool'
+import { inventoryListToolDefinition } from '../inventory-list-tool'
+import { inventoryReadToolDefinition } from '../inventory-read-tool'
+import { inventoryEquipToolDefinition } from '../inventory-equip-tool'
+import { inventoryUnequipToolDefinition } from '../inventory-unequip-tool'
+import { inventoryPickUpToolDefinition } from '../inventory-pick-up-tool'
+import { inventoryCreateToolDefinition } from '../inventory-create-tool'
+import { inventoryUpdateToolDefinition } from '../inventory-update-tool'
+import { inventoryArchiveToolDefinition } from '../inventory-archive-tool'
+import { inventoryGiveToolDefinition } from '../inventory-give-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 
@@ -109,6 +118,15 @@ const ALL_TOOLS = {
   helpSearch: helpSearchToolDefinition,
   helpSettings: helpSettingsToolDefinition,
   imageGeneration: imageGenerationToolDefinition,
+  inventoryList: inventoryListToolDefinition,
+  inventoryRead: inventoryReadToolDefinition,
+  inventoryEquip: inventoryEquipToolDefinition,
+  inventoryUnequip: inventoryUnequipToolDefinition,
+  inventoryPickUp: inventoryPickUpToolDefinition,
+  inventoryCreate: inventoryCreateToolDefinition,
+  inventoryUpdate: inventoryUpdateToolDefinition,
+  inventoryArchive: inventoryArchiveToolDefinition,
+  inventoryGive: inventoryGiveToolDefinition,
   keepImage: keepImageToolDefinition,
   listMail: listMailToolDefinition,
   readMail: readMailToolDefinition,

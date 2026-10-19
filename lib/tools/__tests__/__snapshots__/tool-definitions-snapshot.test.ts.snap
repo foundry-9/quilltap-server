@@ -1179,6 +1179,316 @@ Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters inventoryArchive: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "archived": {
+      "description": "true to archive it, false to restore it.",
+      "type": "boolean",
+    },
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+    "archived",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryCreate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "description": "What the object is, as you and others know it while it is carried.",
+      "maxLength": 4000,
+      "type": "string",
+    },
+    "emoji": {
+      "description": "A single emoji glyph for it.",
+      "maxLength": 16,
+      "type": "string",
+    },
+    "equip": {
+      "description": "Equip the new object at once. Defaults to false.",
+      "type": "boolean",
+    },
+    "image_description": {
+      "description": "How the object looks, for pictures (rendering hints only).",
+      "maxLength": 2000,
+      "type": "string",
+    },
+    "max_equipped": {
+      "description": "At most this many of its kind (same name) may be carried at once. Defaults to 1.",
+      "maximum": 999,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null",
+        ],
+      },
+      "description": "Free-form facts about it, e.g. {"damage": "2d6", "charges": 3}.",
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+    "name": {
+      "description": "The plain name of the object ("sword"). Objects of a kind share it.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title ("Excalibur"), shown first when set.",
+      "maxLength": 200,
+      "type": "string",
+    },
+  },
+  "required": [
+    "name",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryEquip: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "refs": {
+      "description": "One to eight objects (or kits), each by id, title or name.",
+      "items": {
+        "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "refs",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryGive: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ref": {
+      "description": "The object to give: one of your own, by id, title or name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "to": {
+      "description": "Who receives it: another character in this chat, by name or id.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+    "to",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryList: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "equipped": {
+      "description": "true lists only what you have equipped in this chat; false only what you do not. Omit for both.",
+      "type": "boolean",
+    },
+    "folder": {
+      "description": "Only objects filed in this folder (or beneath it), e.g. "Weapons".",
+      "type": "string",
+    },
+    "include_archived": {
+      "description": "Also list your own archived objects. Defaults to false.",
+      "type": "boolean",
+    },
+    "kind": {
+      "description": ""item" for single objects, "kit" for bundles equipped as one, "archetype" for classes of object you can pick up an instance of.",
+      "enum": [
+        "item",
+        "kit",
+        "archetype",
+      ],
+      "type": "string",
+    },
+    "tier": {
+      "description": ""own" for your own vault, or one of the shared stores: "group", "project", "general".",
+      "enum": [
+        "own",
+        "group",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryPickUp: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "equip": {
+      "description": "Equip the new instance at once. Defaults to true.",
+      "type": "boolean",
+    },
+    "ref": {
+      "description": "The archetype to pick up an instance of: its id, title or name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title for your instance ("Old Faithful"). Omit to keep the archetype's.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryRead: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryUnequip: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "refs": {
+      "description": "One to eight objects (or kits), each by id, title or name.",
+      "items": {
+        "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "refs",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryUpdate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "description": "What the object is, as you and others know it while it is carried.",
+      "maxLength": 4000,
+      "type": "string",
+    },
+    "emoji": {
+      "description": "A single emoji glyph for it.",
+      "maxLength": 16,
+      "type": "string",
+    },
+    "image_description": {
+      "description": "How the object looks, for pictures (rendering hints only).",
+      "maxLength": 2000,
+      "type": "string",
+    },
+    "max_equipped": {
+      "description": "At most this many of its kind (same name) may be carried at once. Defaults to 1.",
+      "maximum": 999,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null",
+        ],
+      },
+      "description": "Free-form facts about it, e.g. {"damage": "2d6", "charges": 3}.",
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+    "name": {
+      "description": "A new plain name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title ("Excalibur"), shown first when set.",
+      "maxLength": 200,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters keepImage: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

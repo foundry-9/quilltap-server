@@ -136,7 +136,26 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // positional character id. Every chat-scoped subscriber would then filter that hint out —
   // coverage that reaches nobody, which is worse than none.
   memories: [],
+  // Collection-wide: an Inventory file write is announced as the bare topic
+  // (see INVENTORY_PATH_PATTERN below).
+  inventory: [],
 };
+
+/**
+ * A document-store write naming a path under a tier's `Inventory/` folder —
+ * an object file a job child's `inventory_*` call or Pascal pick-up wrote.
+ * Such a write implies the `inventory` topic beside `mountPoints`.
+ */
+const INVENTORY_PATH_PATTERN = /(^|[\\/"])Inventory\//;
+
+function writesInventoryFile(write: { method: string; args?: readonly unknown[] }): boolean {
+  if (!write.method.startsWith('docMount')) return false;
+  try {
+    return INVENTORY_PATH_PATTERN.test(JSON.stringify(write.args ?? []));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Read an entity id off a repository call's first argument. Handles the two
@@ -179,6 +198,10 @@ export function topicsForWriteBatch(
   const hints: TopicHint[] = [];
 
   for (const write of writes) {
+    if (!seen.has('inventory') && writesInventoryFile(write)) {
+      seen.add('inventory');
+      hints.push({ topic: 'inventory' });
+    }
     const namespace = write.method.split('.')[0];
     const topic = REPOSITORY_TOPICS[namespace];
     if (!topic) continue;

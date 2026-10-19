@@ -831,6 +831,51 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return written;
   }
 
+  /**
+   * The chats whose carried set for `characterId` lists `itemId`. A read; the
+   * caller rewrites each one under its chat's carried-set lock
+   * (`dropCarriedEverywhere`, `lib/inventory/equip.ts`).
+   */
+  async findChatIdsCarryingInventoryId(characterId: string, itemId: string): Promise<string[]> {
+    const ids = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const rows = await collection.find({ [EQUIPPED_INVENTORY_FIELD]: { $like: `%${itemId}%` } } as QueryFilter);
+      return (rows as Array<{ id: string; equippedInventory?: unknown }>)
+        .filter((row) => normalizeEquippedInventory(row.equippedInventory)[characterId]?.includes(itemId))
+        .map((row) => row.id);
+    }, 'Failed to find chats carrying an inventory id', { characterId, itemId, context: 'inventory' }, [] as string[]);
+    logger.debug('Chats carrying an inventory id', { characterId, itemId, chats: ids.length, context: 'inventory' });
+    return ids;
+  }
+
+  /**
+   * Drop one object id from one character's carried set in one chat — a
+   * read-modify-write of the whole map, so the caller holds that chat's
+   * carried-set lock, as every `setEquippedInventory` caller does. Other
+   * characters' entries are untouched. Returns whether the row changed.
+   *
+   * In the forked job child this is a buffered write (`remove*` prefix),
+   * replayed in the parent.
+   */
+  async removeEquippedInventoryId(chatId: string, characterId: string, itemId: string): Promise<boolean> {
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter);
+      if (!row) return false;
+      const state = normalizeEquippedInventory((row as { equippedInventory?: unknown }).equippedInventory);
+      const ids = state[characterId];
+      if (!ids || !ids.includes(itemId)) return false;
+      state[characterId] = ids.filter((id) => id !== itemId);
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { [EQUIPPED_INVENTORY_FIELD]: state } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to remove an id from equipped inventory', { chatId, characterId, itemId, context: 'inventory' }, false);
+    logger.debug('Equipped inventory id removed', { chatId, characterId, itemId, written, context: 'inventory' });
+    return written;
+  }
+
   // ============================================================================
   // EQUIPPED OUTFIT STATE
   // ============================================================================

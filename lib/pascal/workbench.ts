@@ -38,7 +38,7 @@ export interface CustomToolLibraryEntry {
   /** Which availability clause this tool declares, if any. */
   gate: 'available' | 'withheld' | null;
   defaultVisibility: Visibility;
-  rollForm: 'range' | 'dice';
+  rollForm: 'range' | 'dice' | 'inventory';
   /** Whether the tool consults an LLM mid-run. */
   llm: boolean;
   /** How many trigger phrases the tool listens for (0 = none). */
@@ -191,7 +191,12 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     disabled: entry.definition.disabled ?? false,
     gate: entry.definition.availableWhen ? 'available' : entry.definition.withheldWhen ? 'withheld' : null,
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
-    rollForm: typeof entry.definition.roll === 'string' ? 'dice' : 'range',
+    rollForm:
+      typeof entry.definition.roll === 'string'
+        ? 'dice'
+        : entry.definition.roll && '$inventory' in entry.definition.roll
+          ? 'inventory'
+          : 'range',
     llm: entry.definition.llm !== undefined,
     triggerCount: entry.definition.triggers?.length ?? 0,
     parameterCount: Object.keys(entry.definition.parameters ?? {}).length,
