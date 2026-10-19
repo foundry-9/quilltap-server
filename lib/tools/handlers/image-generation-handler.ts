@@ -47,6 +47,7 @@ import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
+import { isUncensoredImageProfile } from '@/lib/services/dangerous-content/understudy';
 import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
@@ -829,6 +830,7 @@ async function resolveAppearances(
   chatSettings: ChatSettings | undefined,
   conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
+  effectiveImageProfile: ImageProfile,
   context: ImageToolExecutionContext
 ): Promise<{
   recentChatMessages: ChatMessage[];
@@ -939,20 +941,16 @@ async function resolveAppearances(
           );
           resolvedAppearances = resolutionResult.appearances;
 
-          // Only an Unmoderated chat with an uncensored image profile goes
-          // straight to the uncensored desk (step 5a); anywhere else a
-          // dangerous appearance may stay on the moderated provider and must
-          // be sanitized (bug 133).
-          const routesDangerousToUncensored =
-            conciergePolicy.routeDirect &&
-            Boolean(conciergePolicy.desk.imageProfileId);
+          // Ask about the profile this image will actually be painted on —
+          // the chat's own, or the one steps 5a/5b rerouted to — never about
+          // whether an uncensored profile exists somewhere (bug 133).
+          const imageTargetUncensored = isUncensoredImageProfile(effectiveImageProfile, conciergePolicy);
 
           // Sanitize appearances through the Concierge
           resolvedAppearances = await sanitizeAppearancesIfNeeded(
             resolvedAppearances,
             conciergePolicy,
-            isDangerousChat,
-            routesDangerousToUncensored,
+            imageTargetUncensored,
             appearanceLLMSelection,
             context.userId,
             context.chatId
@@ -1190,6 +1188,7 @@ async function runImageGenerationTool(
       chatSettings,
       conciergePolicy,
       cheapLLMSelection,
+      profileAfterClassification,
       context
     );
 

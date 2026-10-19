@@ -12,8 +12,12 @@
  * gate that barred a Moderated chat is gone — but the prompt is never
  * re-crafted: a moderated chat's concealed prompt is resent concealed, and an
  * Unmoderated chat's candid prompt is resent as-is. With the Concierge off
- * duty nothing reroutes and the prompt stays concealed even for an
- * Unmoderated chat, and the Concierge says why.
+ * duty nothing reroutes, and the Lantern says the painter refused.
+ *
+ * The scene is cleaned only for a Moderated chat bound for a moderated
+ * painter. A chat whose own image profile is uncensored is crafted candidly
+ * and left unsanitized in any state; an Unmoderated chat is crafted candidly
+ * whatever painter it has.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -65,6 +69,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  isUncensoredImageProfile: jest.requireActual('@/lib/services/dangerous-content/understudy').isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy: jest.fn(),
   resolveUncensoredTextUnderstudy: jest.fn(),
 }))
@@ -173,9 +178,19 @@ const APPEARANCE = {
   wasSanitized: false,
 }
 
-/** The `routesDangerousToUncensored` argument of the sanitization call. */
+/** The `imageTargetUncensored` argument of the sanitization call. */
 function sanitizeRoutesFlag(): boolean {
-  return mockSanitizeAppearances.mock.calls[0][3] as boolean
+  return mockSanitizeAppearances.mock.calls[0][2] as boolean
+}
+
+/** Make the chat's own image profile uncensored-compatible. */
+function ownProfileUncensored() {
+  const repos = mockGetRepositories() as never as { imageProfiles: { findById: jest.Mock } }
+  repos.imageProfiles.findById.mockResolvedValue({
+    id: 'profile-1', apiKeyId: 'key-1', modelName: 'image-model',
+    provider: 'openai', name: 'Default Image Profile', parameters: {},
+    isDangerousCompatible: true,
+  })
 }
 
 /** The `uncensoredImageTarget` flag on the nth craft call. */
@@ -272,8 +287,39 @@ describe('story-background handler — uncensoredImageTarget', () => {
     expect(craftTargetFlag()).toBe(false)
   })
 
-  it('conceals for a dangerous chat with NO uncensored image profile configured', async () => {
+  // An Unmoderated chat is not cleaned, whatever painter it has: a refusal is
+  // the failover's to answer, not the crafter's to pre-empt.
+  it('crafts candidly for a dangerous chat with NO uncensored image profile configured', async () => {
     markDangerous(false)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(true)
+  })
+
+  it('crafts candidly for a Moderated chat whose own image profile is uncensored', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    ownProfileUncensored()
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(true)
+    // It paints on its own profile: no understudy is looked up.
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    const [, key] = imageProviderMock().generateImage.mock.calls[0] as [unknown, string]
+    expect(key).toBe('sk-test')
+  })
+
+  it('crafts candidly for a Moderated chat whose own image profile IS the configured desk', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated', { uncensoredImageProfileId: 'profile-1' }))
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(true)
+  })
+
+  it('still conceals for a Locked chat on a moderated painter', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('locked'))
 
     await handleStoryBackgroundGeneration(makeJob())
 
@@ -324,7 +370,7 @@ describe('story-background handler — uncensoredImageTarget', () => {
     expect(resolved.preScreen.scanImagePrompts).toBe(false)
   })
 
-  it('conceals even an Unmoderated chat while the Concierge is off duty (real predicate + resolver)', async () => {
+  it('crafts candidly for an Unmoderated chat even while the Concierge is off duty (real predicate + resolver)', async () => {
     const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
     mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
     mockResolveDanger.mockImplementation(actualResolver.resolveConciergeSettings)
@@ -348,9 +394,11 @@ describe('story-background handler — uncensoredImageTarget', () => {
 
     await handleStoryBackgroundGeneration(makeJob())
 
-    expect(craftTargetFlag()).toBe(false)
+    expect(craftTargetFlag()).toBe(true)
     const resolved = mockResolveDanger.mock.results[0].value as ReturnType<typeof resolveConciergeSettings>
     expect(resolved.source).toBe('off-duty')
+    // Off duty: no up-front route to the desk, so the ordinary painter has it.
+    expect(mockResolveReroute).not.toHaveBeenCalled()
   })
 })
 
@@ -391,6 +439,16 @@ describe('story-background handler — appearance sanitization gate', () => {
     expect(sanitizeRoutesFlag()).toBe(true)
   })
 
+  it('tells the sanitizer a Moderated chat on its own uncensored profile is bound uncensored', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    withCharacter()
+    ownProfileUncensored()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(sanitizeRoutesFlag()).toBe(true)
+  })
+
   // The re-dressing sanitizer ("wearing nothing" → "casual clothes") used to
   // run here, handing the concealment-trained crafter a different scene.
   it('asks the sanitizer to flag undressed characters rather than re-dress them', async () => {
@@ -400,7 +458,7 @@ describe('story-background handler — appearance sanitization gate', () => {
 
     await handleStoryBackgroundGeneration(makeJob(['char-1']))
 
-    expect(mockSanitizeAppearances.mock.calls[0][7]).toBe('conceal')
+    expect(mockSanitizeAppearances.mock.calls[0][6]).toBe('conceal')
   })
 
   it('marks a flagged character for concealment in the crafter input', async () => {
@@ -481,7 +539,7 @@ describe('story-background handler — moderation reroute', () => {
     expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
   })
 
-  it('does not reroute while the Concierge is off duty, keeps even an Unmoderated chat\'s prompt concealed, and the Lantern says so', async () => {
+  it('does not reroute while the Concierge is off duty, sends an Unmoderated chat\'s prompt candid, and the Lantern says so', async () => {
     mockShouldUseUncensoredRoute.mockReturnValue(true)
     mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
       enabled: false,
@@ -492,7 +550,7 @@ describe('story-background handler — moderation reroute', () => {
     // A refusal is an outcome: the job completes and the backdrop stays.
     await handleStoryBackgroundGeneration(makeJob())
 
-    expect(craftTargetFlag(0)).toBe(false)
+    expect(craftTargetFlag(0)).toBe(true)
     expect(mockResolveReroute).not.toHaveBeenCalled()
     expect(mockAnnounceRefusal).not.toHaveBeenCalled()
     expect(mockPostLanternRefusal).toHaveBeenCalledTimes(1)

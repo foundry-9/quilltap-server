@@ -60,7 +60,7 @@ The Concierge never moves a chat *out* of Unmoderated, so your hand will not be 
 
 ### Locked
 
-The usual providers only, ever. Nothing is classified, and if a provider refuses, the refusal stands: the Concierge will not carry the matter elsewhere and will never move the chat of his own accord. He does post a note when a refusal stands, so you know it happened and why. Image prompts go out with their customary concealment. This is the posture for the chat that must never reach an uncensored model — a shared or family conversation, say.
+The usual providers only, ever. Nothing is classified, and if a provider refuses, the refusal stands: the Concierge will not carry the matter elsewhere and will never move the chat of his own accord. He does post a note when a refusal stands, so you know it happened and why. Image prompts go out with their customary concealment, unless the chat's own image profile is uncensored, in which case there is nobody to conceal anything from. This is the posture for the chat that must never reach an uncensored model — a shared or family conversation, say.
 
 ### Former names
 
@@ -186,21 +186,29 @@ When he moves a chat this way, his announcement names *what drew his eye*: the c
 
 If you disagree, set the chat back to **Moderated** from the sidebar: that clears his verdict and his ledger, and the chat is read afresh. The API also offers `POST /api/v1/chats/[id]?action=reclassify-danger`, which clears the classifier's own record and re-queues it without moving the chat's posture.
 
+## What Gets Cleaned Up
+
+A picture's description is tidied for polite company in exactly one circumstance: the chat is **Moderated** and the picture is bound for an **ordinary** painter. Everywhere else it goes out as written.
+
+- **An uncensored painter gets the scene as written, in every posture.** If the image profile a picture will actually be painted on is uncensored — ticked **Uncensored-compatible**, or the one named on the desk — nothing is softened and nothing is draped, whether the chat is Moderated, Unmoderated or Locked. That includes a picture the pre-screen has just carried across the street to the desk.
+- **An Unmoderated chat gets the scene as written, whatever its painter.** If an Unmoderated chat has only an ordinary painter to hand, the description is not tidied on its behalf. Should the painter refuse, the Concierge carries the picture to an uncensored one if he is on duty and has someone to ask; failing that, the refusal stands and he says so. You asked for the scene as written, and that is what is sent.
+- **An uncensored painter is never traded for another.** A chat whose own image profile is already uncensored keeps it; the desk is asked only if that profile refuses anyway.
+
 ## Story Background Prompts
 
-The Lantern's story backgrounds hold a courtesy of their own. By default the prompt crafter translates any undressed or intimate moment into cinematic concealment — drapery, silhouette, foreground occlusion — because ordinary image providers reject the alternative. The concealment is dropped, and the scene described plainly, only when **all** of these hold:
+The Lantern's story backgrounds hold a courtesy of their own. By default the prompt crafter translates any undressed or intimate moment into cinematic concealment — drapery, silhouette, foreground occlusion — because ordinary image providers reject the alternative. The concealment is dropped, and the scene described plainly, when **any** of these holds:
 
-- the Concierge is **on duty**;
-- the chat is **Unmoderated**;
-- you have **named** an uncensored image profile on the desk.
+- the chat's own image profile is **uncensored** (ticked Uncensored-compatible, or named on the desk);
+- the chat is **Unmoderated** — sent straight to the desk's image profile when the Concierge is on duty and one is named, or otherwise to the chat's usual painter, candidly all the same;
+- you pressed **Try uncensored** on a refused backdrop.
 
-Where the Concierge vets a character's appearance on the way in (the pre-screen, or any Unmoderated chat bound for an ordinary painter), a backdrop gets the gentler treatment: he removes the frank wording but leaves the character as undressed as the story has them, and marks them for the sheet. It is only the `generate_image` tool, whose drafting has no drapery of its own to offer, that still receives a change of clothes.
+Where the Concierge vets a character's appearance on the way in (a Moderated chat with the pre-screen on, bound for an ordinary painter), a backdrop gets the gentler treatment: he removes the frank wording but leaves the character as undressed as the story has them, and marks them for the sheet. It is only the `generate_image` tool, whose drafting has no drapery of its own to offer, that still receives a change of clothes.
 
 A refused backdrop in a Moderated chat is carried across the street like any other picture, but it is never *redrafted*: the concealed draft is what goes, merely painted by a less squeamish hand. A refusal buys a second painter, never a franker commission.
 
 A picture that comes back unexpectedly demure has almost always lost one of two things:
 
-- **The chat is Moderated, not Unmoderated.** A scene can be thoroughly undressed without the refusals or the classifier ever moving it. If a chat ought to be candid, set it **Unmoderated** yourself.
+- **The chat is Moderated and its painter is an ordinary one.** A scene can be thoroughly undressed without the refusals or the classifier ever moving it. If a chat ought to be candid, set it **Unmoderated** yourself, or give it an image profile ticked **Uncensored-compatible**.
 - **The adapter sits on a different profile from the one the desk names.** Configure a LoRA on one image profile while the desk points at another and a reroute will hand your scene to the other — obediently, and without the adapter. When you retire an uncensored profile, move the desk's setting across with it.
 
 Read the prompt on the finished image to tell them apart: if it drapes the scene ("modestly concealed", "a sheet arranged just so"), the first condition failed; if it says plainly what the scene is and the picture is still demure, a provider or adapter declined it — see *The adapter seems to have made no difference* in [Image Generation Profiles](image-generation-profiles.md).
@@ -208,7 +216,7 @@ Read the prompt on the finished image to tell them apart: if it drapes the scene
 ## What Changes in an Unmoderated Chat
 
 - **No per-message classification, and no per-message badges.** The whole chat is already on the uncensored road, so the Concierge no longer pins a badge to every message saying so; the chat's own mark and the trail beneath each reply tell the story.
-- **An uncensored provider you chose is left alone.** If a character already uses an uncensored-compatible profile, the Concierge does not swap it for the desk's; he steps in only if that profile refuses anyway.
+- **An uncensored provider you chose is left alone.** If a character already uses an uncensored-compatible profile, the Concierge does not swap it for the desk's; he steps in only if that profile refuses anyway. The same holds for an uncensored image profile in any posture.
 - **Background errands go to the desk too.** Memory extraction, titles, summaries, scene tracking, story backgrounds and inter-character memory all use the uncensored text profile, so a squeamish cheap LLM cannot silently fail them.
 
 ## Badges Without the Uncensored Desk
