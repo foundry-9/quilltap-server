@@ -138,6 +138,11 @@ export interface ArielTerminalOutputAnnouncement {
   chatId: string;
   sessionId: string;
   cleanedOutput: string;
+  /**
+   * `output` (default): lines a shell wrote since the last summary.
+   * `screen`: a snapshot of a full-screen program's current screen.
+   */
+  kind?: 'output' | 'screen';
   reason: 'idle' | 'max-age' | 'session-closed';
 }
 
@@ -187,8 +192,13 @@ export async function postArielTerminalOutputAnnouncement(
         ? ' (long-running, periodic flush)'
         : '';
 
+  const heading =
+    params.kind === 'screen'
+      ? `Screen of session \`${sessionLabel}\` (a full-screen program has the terminal)${reasonNote}:`
+      : `Terminal output from session \`${sessionLabel}\`${reasonNote}:`;
+
   const content = [
-    `Terminal output from session \`${sessionLabel}\`${reasonNote}:`,
+    heading,
     '',
     `${fence}`,
     elided,
@@ -200,6 +210,7 @@ export async function postArielTerminalOutputAnnouncement(
     chatId: params.chatId,
     sessionId: params.sessionId,
     reason: params.reason,
+    kind: params.kind ?? 'output',
     cleanedChars: params.cleanedOutput.length,
     postedChars: elided.length,
     elided: elided.length !== params.cleanedOutput.length,

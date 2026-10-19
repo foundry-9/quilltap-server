@@ -450,6 +450,7 @@ import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v
 import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-history-tool-name-v1';
 import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory-v1';
 import { addCharacterInventoryFlagMigration } from './add-character-inventory-flag-v1';
+import { addTerminalSessionGeometryMigration } from './add-terminal-session-geometry-v1';
 
 /**
  * All available migrations.
@@ -923,6 +924,8 @@ export const migrations: Migration[] = [
   addChatEquippedInventoryMigration,
   // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
   addCharacterInventoryFlagMigration,
+  // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
+  addTerminalSessionGeometryMigration,
 ];
 
 export {
@@ -1373,5 +1376,7 @@ export {
   addChatEquippedInventoryMigration,
   // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
   addCharacterInventoryFlagMigration,
+  // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
+  addTerminalSessionGeometryMigration,
 };
 

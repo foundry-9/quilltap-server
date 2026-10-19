@@ -864,6 +864,8 @@ CREATE TABLE "terminal_sessions" (
   "exitedAt" TEXT,
   "exitCode" INTEGER,
   "transcriptPath" TEXT,
+  "cols" INTEGER DEFAULT NULL,
+  "rows" INTEGER DEFAULT NULL,
   FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
 );
 
@@ -882,6 +884,8 @@ CREATE INDEX "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedA
 | exitedAt | TEXT (ISO 8601, nullable) | Session exit timestamp; `null` if session is still active |
 | exitCode | INTEGER (nullable) | Process exit code; `null` if session is still active |
 | transcriptPath | TEXT (nullable) | Relative path to transcript file if recorded; `null` if not recorded |
+| cols | INTEGER (nullable) | Terminal width at spawn, updated to its final value on exit; `terminal_read` replays an exited session's transcript at this size. `null` for sessions before 4.11 (read back at 80) |
+| rows | INTEGER (nullable) | Terminal height, as `cols` (`null` reads back at 24) |
 
 ### conversation_annotations
 

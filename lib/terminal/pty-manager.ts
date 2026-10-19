@@ -19,7 +19,7 @@ import {
   postArielSessionClosedAnnouncement,
   postArielTerminalOutputAnnouncement,
 } from '@/lib/services/ariel-notifications';
-import { cleanTerminalOutput } from './clean-output';
+import { TerminalScreen, type ScreenRendering } from './screen';
 import { prepareShellInit } from './shell-init';
 import type { PtySession, PtySessionMeta, WsServerMsg } from './types';
 import type { TerminalSession } from '@/lib/schemas/terminal.types';
@@ -40,16 +40,19 @@ class PtyManager {
   private sessions = new Map<string, PtySession>();
 
   /**
-   * Flush the per-session Ariel buffer to the chat.
+   * Flush a summary of the session's recent output to the chat.
    *
-   * Clears both timers, drains the buffer, cleans it (ANSI/backspace/CR), and
-   * posts a single Ariel message with the cleaned text. Empty buffers are a
-   * no-op; the writer also short-circuits whitespace-only payloads.
+   * Clears both timers and, when output has arrived since the last flush,
+   * asks the session's screen model what to post (`TerminalScreen.takeSummary`):
+   * a snapshot of the screen while a full-screen program owns the terminal,
+   * otherwise the lines written since the last summary. Flushes are chained
+   * per session, so they post in order and the returned promise settles after
+   * this one has landed.
    *
    * Errors are swallowed — terminal I/O must not fail because chat persistence
    * had a hiccup.
    */
-  private flushArielBuffer(session: PtySession, reason: 'idle' | 'max-age' | 'session-closed'): void {
+  private flushArielBuffer(session: PtySession, reason: 'idle' | 'max-age' | 'session-closed'): Promise<void> {
     if (session.arielIdleTimer) {
       clearTimeout(session.arielIdleTimer);
       session.arielIdleTimer = null;
@@ -59,16 +62,38 @@ class PtyManager {
       session.arielMaxAgeTimer = null;
     }
 
-    const raw = session.arielFlushBuffer;
-    if (raw.length === 0) return;
-    session.arielFlushBuffer = '';
+    if (!session.arielPending) return session.arielFlush;
+    session.arielPending = false;
 
-    const cleaned = cleanTerminalOutput(raw);
+    session.arielFlush = session.arielFlush.then(() => this.postArielSummary(session, reason));
+    return session.arielFlush;
+  }
 
-    postArielTerminalOutputAnnouncement({
+  private async postArielSummary(session: PtySession, reason: 'idle' | 'max-age' | 'session-closed'): Promise<void> {
+    let summary;
+    try {
+      summary = await session.screen.takeSummary();
+    } catch (err) {
+      ptyLogger.warn('[PTY] Failed to render terminal summary', {
+        sessionId: session.meta.id,
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+    ptyLogger.debug('[PTY] Ariel summary taken', {
+      sessionId: session.meta.id,
+      reason,
+      kind: summary?.kind ?? null,
+      chars: summary?.text.length ?? 0,
+    });
+    if (!summary) return;
+
+    await postArielTerminalOutputAnnouncement({
       chatId: session.meta.chatId,
       sessionId: session.meta.id,
-      cleanedOutput: cleaned,
+      cleanedOutput: summary.text,
+      kind: summary.kind,
       reason,
     })
       .then((posted) => {
@@ -230,6 +255,8 @@ class PtyManager {
         exitedAt: null,
         exitCode: null,
         transcriptPath: transcriptStream ? transcriptPath : null,
+        cols,
+        rows,
       };
 
       const session: PtySession = {
@@ -238,7 +265,9 @@ class PtyManager {
         ringBuffer,
         subscribers: new Set(),
         transcriptStream,
-        arielFlushBuffer: '',
+        screen: new TerminalScreen(cols, rows),
+        arielPending: false,
+        arielFlush: Promise.resolve(),
         arielIdleTimer: null,
         arielMaxAgeTimer: null,
         cleanupInit: shellInit.cleanup ?? null,
@@ -252,7 +281,8 @@ class PtyManager {
           );
           session.ringBuffer = ringBuffer;
 
-          session.arielFlushBuffer += data;
+          session.screen.write(data);
+          session.arielPending = true;
           this.scheduleArielFlush(session);
 
           if (transcriptStream && (transcriptStream as any).writable !== false) {
@@ -293,10 +323,10 @@ class PtyManager {
           session.meta.exitedAt = new Date().toISOString();
           session.meta.exitCode = exitCode;
 
-          // Drain any remaining buffered output so trailing bytes (and the
-          // final prompt right before exit) make it into the chat before the
-          // session-closed announcement lands.
-          this.flushArielBuffer(session, 'session-closed');
+          // Drain any remaining output so trailing bytes (and the final
+          // prompt right before exit) make it into the chat before the
+          // session-closed announcement lands; the screen model goes after.
+          const finalFlush = this.flushArielBuffer(session, 'session-closed');
 
           const msg: WsServerMsg = {
             type: 'exit',
@@ -344,9 +374,15 @@ class PtyManager {
           }
 
           const repos = getRepositories() as any;
+          // Geometry is stored at spawn and again here, at its final value, so
+          // `terminal_read` can replay the transcript of an exited session at
+          // the size it was drawn for. (A session orphaned by a restart keeps
+          // its spawn-time geometry.)
           repos.terminalSessions.update(id, {
             exitedAt: session.meta.exitedAt,
             exitCode: session.meta.exitCode,
+            cols: session.meta.cols,
+            rows: session.meta.rows,
           })
             .catch((err: Error) => {
               ptyLogger.error('[PTY] Failed to persist exit state', {
@@ -355,16 +391,21 @@ class PtyManager {
               });
             });
 
-          postArielSessionClosedAnnouncement({
-            chatId: session.meta.chatId,
-            sessionId: id,
-            exitCode,
-          }).catch((err: Error) => {
-            ptyLogger.warn('[PTY] Failed to post close announcement', {
-              sessionId: id,
-              error: err.message,
-            });
-          });
+          finalFlush
+            .then(() =>
+              postArielSessionClosedAnnouncement({
+                chatId: session.meta.chatId,
+                sessionId: id,
+                exitCode,
+              }),
+            )
+            .catch((err: Error) => {
+              ptyLogger.warn('[PTY] Failed to post close announcement', {
+                sessionId: id,
+                error: err.message,
+              });
+            })
+            .finally(() => session.screen.dispose());
 
           ptyLogger.info('[PTY] Session exited', {
             sessionId: id,
@@ -550,6 +591,9 @@ class PtyManager {
 
     try {
       session.pty.resize(cols, rows);
+      session.screen.resize(cols, rows);
+      session.meta.cols = cols;
+      session.meta.rows = rows;
       ptyLogger.debug('[PTY] Resized', { sessionId: id, cols, rows });
     } catch (err) {
       ptyLogger.warn('[PTY] Failed to resize PTY', {
@@ -559,6 +603,17 @@ class PtyManager {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  /**
+   * Render a live session's screen through its emulator: the full-screen
+   * program's current screen, or the shell's scrollback. Null for an unknown
+   * session.
+   */
+  async renderScreen(id: string): Promise<ScreenRendering | null> {
+    const session = this.sessions.get(id);
+    if (!session) return null;
+    return session.screen.render();
   }
 
   getRingBuffer(id: string): string | null {
@@ -575,10 +630,10 @@ class PtyManager {
     for (const id of sessionIds) {
       const session = this.sessions.get(id);
       if (session) {
-        // Drain pending Ariel buffer before the map entry disappears — onExit
-        // still has the closure but we want the flush to land synchronously
-        // with the kick, not whenever the OS reaps the process.
-        this.flushArielBuffer(session, 'session-closed');
+        // Drain pending Ariel output before the map entry disappears — onExit
+        // still has the closure but we want the flush to land with the kick,
+        // not whenever the OS reaps the process.
+        await this.flushArielBuffer(session, 'session-closed');
       }
       this.kill(id, 'SIGTERM');
       this.sessions.delete(id);

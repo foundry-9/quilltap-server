@@ -2081,7 +2081,7 @@ exports[`tool definitions: derived OpenAI parameters terminalRead: parameters sn
     },
     "raw": {
       "default": false,
-      "description": "When true, the response also includes a rawScrollback field with ANSI escape codes preserved. The default scrollback field is always cleaned.",
+      "description": "When true, the response also includes a rawScrollback field: the last 64 KB of the raw byte stream, ANSI escape codes preserved. The default scrollback field is always rendered text.",
       "type": "boolean",
     },
     "sessionId": {

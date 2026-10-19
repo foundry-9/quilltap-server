@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: Ariel reads full-screen programs (bug 255)
+
+- `terminal_read` and Ariel's periodic summaries now render terminal output through a server-side terminal emulator (`@xterm/headless`, new `lib/terminal/screen.ts`) instead of stripping escape codes. Full-screen programs (Claude Code, vim, less) draw with cursor addressing on the alternate screen, and stripping reduced them to fragments: 422 KB of Claude Code output read back as 526 characters.
+- Each live PTY session keeps an emulator sized at spawn and resized with the pane. `terminal_read` returns its lines: a shell's scrollback (soft-wrapped rows joined), or a full-screen program's current screen, flagged with the new `buffer: 'alternate'` output field. `raw: true` now returns the last 64 KB of the raw stream.
+- An exited session's transcript (last 4 MB) is replayed through an emulator at the session's stored size. Migration `add-terminal-session-geometry-v1` adds `terminal_sessions.cols` / `rows`, set at spawn and on exit; older sessions replay at 80×24.
+- Ariel's summaries post a snapshot of the screen ("Screen of session …") while a full-screen program has the terminal, skipping an unchanged screen, and otherwise the shell lines written since the last summary. Flushes are chained per session, so the session-closed announcement lands after the final output.
+
 #### Test: Inventory-gated custom tool end to end
 
 - New `__tests__/unit/lib/pascal/custom-tools-measure-twice.test.ts` runs a real inventory-gated tool ("Measure Twice") over the shared Inventory test store: a title-keyed `availableWhen` gate opens for the character carrying the titled instance, stays closed for a character carrying another instance of the same archetype, and stays closed with no inventory context (`eq: "equipped"` and `inventoryCount` `lt: 1`). It also checks that `{{inventory.<ref>.title}}` and `.metadata.<key>` render a title containing an apostrophe. Test only; no runtime change.

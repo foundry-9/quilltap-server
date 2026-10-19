@@ -27,6 +27,9 @@ export const TerminalSessionSchema = z.object({
   exitedAt: TimestampSchema.nullable().optional(),
   exitCode: z.number().int().nullable().optional(),
   transcriptPath: z.string().nullable().optional(),
+  /** Terminal geometry at spawn, updated to its final value on exit. Used to replay a transcript. */
+  cols: z.number().int().nullable().optional(),
+  rows: z.number().int().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -60,6 +63,8 @@ export const TerminalSessionCreateSchema = z.object({
   exitedAt: TimestampSchema.nullable().optional(),
   exitCode: z.number().int().nullable().optional(),
   transcriptPath: z.string().nullable().optional(),
+  cols: z.number().int().nullable().optional(),
+  rows: z.number().int().nullable().optional(),
 });
 
 export type TerminalSessionCreate = z.infer<typeof TerminalSessionCreateSchema>;

@@ -24,6 +24,10 @@ Should you enable terminal-reading capabilities (the `terminal_read` and `termin
 
 Think of them as spectators in the control room, able to read the instruments but not touch the switches.
 
+What they read is the screen itself, not a heap of control characters. Ariel keeps a faithful second copy of the terminal behind the scenes, so a character sees the text laid out exactly as your pane shows it. This matters most when a *full-screen* contraption has the terminal — an editor such as vim, a pager such as `less`, or Claude Code itself. Such programs do not scroll; they paint. While one is running, a character reading the terminal sees the picture currently on the screen (and is told as much) rather than the shell's scrollback, which returns the moment the program exits.
+
+Ariel's periodic dispatches to the chat follow the same rule. Every so often, once the terminal has gone quiet or been busy a good while, Ariel posts what has happened: for an ordinary shell, the commands and output since the last dispatch; for a full-screen program, a snapshot of the screen as it then stands — sent only if the picture has actually changed.
+
 ## Caveats
 
 Ariel operates under Quilltap's own user account and working directory. When you open a terminal, you inherit whatever shell environment the server runs under. Treat this as you would any terminal on your own machine: it can execute any command your user can execute, access any file your user can access, and alter any data your user can alter. An errant `rm -rf` here is as catastrophic as it would be anywhere else.
