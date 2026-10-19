@@ -23,6 +23,7 @@ export { FilesRepository } from './files.repository';
 export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
 export { LLMLogsRepository } from './llm-logs.repository';
+export { LogEntriesRepository, type LogEntryFilter } from './log-entries.repository';
 export type {
   LLMLogTypeStatsRow,
   LLMLogProfileStatsRow,
@@ -74,6 +75,7 @@ import { FilesRepository } from './files.repository';
 import { FoldersRepository } from './folders.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
 import { LLMLogsRepository } from './llm-logs.repository';
+import { LogEntriesRepository } from './log-entries.repository';
 import { MemoriesRepository } from './memories.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
 import { ProjectsRepository } from './projects.repository';
@@ -125,6 +127,7 @@ export interface RepositoryContainer {
   imageProfiles: ImageProfilesRepository;
   images: FilesRepository; // Alias for backwards compatibility
   llmLogs: LLMLogsRepository;
+  logEntries: LogEntriesRepository;
   memories: MemoriesRepository;
   pluginConfigs: PluginConfigRepository;
   projects: ProjectsRepository;
@@ -189,6 +192,7 @@ export function createRepositories(): RepositoryContainer {
       imageProfiles: new ImageProfilesRepository(),
       images: filesRepo, // Alias for backwards compatibility
       llmLogs: new LLMLogsRepository(),
+      logEntries: new LogEntriesRepository(),
       memories: new MemoriesRepository(),
       pluginConfigs: new PluginConfigRepository(),
       projects: new ProjectsRepository(),

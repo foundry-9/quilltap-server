@@ -4,6 +4,16 @@
 
 ### 4.11-dev
 
+#### Feature: the Log
+
+- New table `log_entries` in the LLM logs database (`id`, `message` 1-4000 chars written once, `chatId`, `characterId` nullable, `createdAt`, `updatedAt`), created from the Zod schema in `lib/schemas/log-entry.types.ts` by `LogEntriesRepository` (no migration). Indexes on `createdAt`, `(chatId, createdAt)` and `(characterId, createdAt)`. Repo key `logEntries` joins `LLM_LOGS_REPO_KEYS`; in the job child its writes are buffered, so a `log_create_entry` then `log_grep` in the same autonomous turn does not see the entry.
+- New SQL function `regexp(pattern, value[, flags])` (`lib/database/backends/sqlite/regexp-function.ts`, JavaScript `RegExp`, flags `i m s u`) registered on the LLM logs connection, so `REGEXP` works there.
+- Three built-in tools, on by default in the Salon and switchable in chat/project tool settings under a new group "The Log"; not on the Brahma Console. `log_create_entry({ message })` stamps the current chat and calling character. `log_grep({ pattern, ignore_case?, limit? })` runs a JavaScript regex over every entry, newest first (default limit 50, max 200). `log_read({ conversationId?, character?, from?, to?, limit? })` filters by chat (`"current"` allowed), character (name or id) and inclusive ISO-8601 range. Both readers return `{ entries, count, limit }` over the whole instance.
+- Pascal custom tools gain a fourth effect kind, `{ "log": "<template>" }` (optional `when`; max 1000 chars; applied after all other effects; empty renders skipped). The run_custom description says "writes to the log". `qtap-custom-tool.schema.json` updated. Pascal's Workbench offers it as "Enter a log line", with the same placeholder checks as an outcome message.
+- Retention: `LLM_LOG_CLEANUP` also prunes `log_entries` older than the LLM logging retention days, even when LLM logging is off. Not included in `.qtap` exports or logical backups.
+- The Brahma SQL tool and prompt, and `quilltap db` (`logs` group), know the new table.
+- Docs: `DDL.md`, `BACKGROUND_JOBS_CHILD.md`, `API.md` tools table. Help: new `help/the-log.md`; `help/custom-tools.md`, `help/pascals-workbench.md`, `help/tools-settings.md`, `help/system-llm-logs.md`.
+
 #### Change: custom tools in a character's vault are that character's only
 
 - A character's vault `Tools/` folder is no longer read for other characters in the same chat. Before, the roster had a `participant` tier: every co-participant's vault tools were dealt to every character, and a `disabled` definition in one character's vault suppressed that name for everyone else in the room.

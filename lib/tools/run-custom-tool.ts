@@ -19,6 +19,7 @@ import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import {
   isInventoryEffect,
+  isLogEffect,
   isInventoryRef,
   isParamRef,
   isWardrobeEffect,
@@ -276,8 +277,8 @@ export function validateRunCustomInput(input: unknown): RunCustomToolInput | nul
  * The `Side effects:` line's clauses: `writes a, b` for the value writes, then
  * one clause per wardrobe gesture — `wears Cloak of Night, Boots`, `takes off
  * {{params.garment}}`, `clears hair` — then one per inventory gesture —
- * `equips Excalibur`, `unequips lantern`, `picks up magic bow`. Duplicates
- * collapse.
+ * `equips Excalibur`, `unequips lantern`, `picks up magic bow` — then
+ * `writes to the log` when any effect is a log line. Duplicates collapse.
  */
 function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): string {
   const targets = [...new Set(effects.filter(isWriteEffect).map((effect) => effect.target))];
@@ -300,5 +301,6 @@ function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): strin
     const clause = `${verb} ${items.join(', ')}`;
     if (!clauses.includes(clause)) clauses.push(clause);
   }
+  if (effects.some(isLogEffect)) clauses.push('writes to the log');
   return clauses.join('; ');
 }

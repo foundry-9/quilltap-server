@@ -63,6 +63,13 @@
  * write is visible to a later effect's `when` in the same run. The applied
  * lists are merged back into effect order for the record.
  *
+ * ## Log lines go last
+ *
+ * A `log` effect writes one entry to the log (`lib/log-entries/write.ts`)
+ * after every other applier has run, so a line describing the run is recorded
+ * after the run's changes. Like the gestures, its `when` was decided by the pure
+ * core, and its text rendered there.
+ *
  * ## Never throws
  *
  * The roll already happened and Pascal still announces. Each store's write is
@@ -78,8 +85,10 @@ import { writeGeneralState } from '@/lib/mount-index/general-state';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getAtPath, setAtPath } from '@/lib/state/state-paths';
 import type { StateCascadeResult } from '@/lib/state/state-cascade';
+import { writeLogEntry } from '@/lib/log-entries/write';
 import {
   isApplicableInventoryEffect,
+  isApplicableLogEffect,
   isApplicableWardrobeEffect,
   isApplicableWriteEffect,
   type ResolvedEffect,
@@ -108,7 +117,8 @@ export interface AppliedEffect {
    * "wardrobe.clear_slot" (its `previous` / `next` are then the slots before
    * and a `WardrobeEffectRecord`), or for an Inventory change one of
    * "inventory.equip" / "inventory.unequip" / "inventory.pick_up" (the
-   * equipped ids before, and an `InventoryEffectRecord`).
+   * equipped ids before, and an `InventoryEffectRecord`), or for a log line
+   * "log" (its `next` is the entry's `{ id, message }`).
    */
   target: string;
   /** What the store held before, when it held anything. */
@@ -197,9 +207,40 @@ export async function applyCustomToolEffects(
       })
     : [];
 
-  if (changes.length === 0 && carried.length === 0) return writes.map((w) => w.applied);
+  // Log lines last of all — see the module header.
+  const logged = await applyLogEffects(params, effects.filter(isApplicableLogEffect));
+
+  if (changes.length === 0 && carried.length === 0 && logged.length === 0) return writes.map((w) => w.applied);
   // Stable sort: entries of one effect keep their own order.
-  return [...writes, ...changes, ...carried].sort((a, b) => a.index - b.index).map((w) => w.applied);
+  return [...writes, ...changes, ...carried, ...logged].sort((a, b) => a.index - b.index).map((w) => w.applied);
+}
+
+/**
+ * The log lines: one entry each, against this chat and the rolling character
+ * (null when nobody rolled — the line is still the operator's to keep). Each
+ * write is its own try/catch; a failed one logs a warning and drops from the
+ * applied list.
+ */
+async function applyLogEffects(
+  params: ApplyCustomToolEffectsParams,
+  applicable: Array<Extract<ResolvedEffect, { log: string }>>
+): Promise<Array<{ index: number; applied: AppliedEffect }>> {
+  const applied: Array<{ index: number; applied: AppliedEffect }> = [];
+  for (const effect of applicable) {
+    try {
+      const entry = await writeLogEntry({ message: effect.log, chatId: params.chatId, characterId: params.characterId });
+      applied.push({ index: effect.index, applied: { target: 'log', next: { id: entry.id, message: entry.message } } });
+    } catch (error) {
+      logger.warn('Custom tool log effect failed; skipped', {
+        context: CONTEXT,
+        chatId: params.chatId,
+        tool: params.toolName,
+        effectIndex: effect.index,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+  return applied;
 }
 
 /**

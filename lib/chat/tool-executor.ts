@@ -80,6 +80,12 @@ import {
 import { WARDROBE_TOOL_TABLE } from '@/lib/tools/handlers/wardrobe-tool-table';
 import { INVENTORY_TOOL_NAMES, INVENTORY_TOOL_TABLE } from '@/lib/tools/handlers/inventory-tool-table';
 import {
+  executeLogCreateEntryTool,
+  executeLogGrepTool,
+  executeLogReadTool,
+  type LogToolContext,
+} from '@/lib/tools/handlers/log-handler';
+import {
   executeReadConversationTool,
   formatReadConversationResults,
   type ReadConversationToolContext,
@@ -257,6 +263,10 @@ const BUILT_IN_TOOLS = new Set<string>([
   'self_inventory',
   'submit_final_response',
   'whisper',
+  // The log
+  'log_create_entry',
+  'log_grep',
+  'log_read',
   // Scriptorium tools
   'read_conversation',
   'upsert_annotation',
@@ -792,6 +802,25 @@ export async function executeToolCallWithContext(
         ...(context.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: context.pendingInventoryAnnouncements } : {}),
       });
       return { toolName: toolCall.name, success, result, error };
+    }
+
+    // Handle the log tools. The answer is the handler's output itself, so the
+    // model reads the entries as JSON.
+    if (toolCall.name === 'log_create_entry' || toolCall.name === 'log_grep' || toolCall.name === 'log_read') {
+      const logContext: LogToolContext = { userId, chatId, ...(characterId ? { characterId } : {}) };
+      const execute =
+        toolCall.name === 'log_create_entry'
+          ? executeLogCreateEntryTool
+          : toolCall.name === 'log_grep'
+            ? executeLogGrepTool
+            : executeLogReadTool;
+      const { success, error, ...result } = await execute(toolCall.arguments, logContext);
+      return {
+        toolName: toolCall.name,
+        success,
+        result: success ? result : null,
+        error: success ? undefined : error,
+      };
     }
 
     // Handle read_conversation (Scriptorium)

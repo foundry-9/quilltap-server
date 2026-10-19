@@ -128,6 +128,8 @@ If a tool you need is unavailable, the dialog shows the reason. Take the suggest
 
 ## Tool Groups and Subgroups
 
+**The Log** is a built-in group of three tools (`log_create_entry`, `log_grep`, `log_read`) that let characters write to, and search, a shared book of short notes. On by default; untick the group to withdraw all three. See [The Log](the-log.md).
+
 **Plugin Tools** are often organized in groups:
 
 **Plugin Groups**

@@ -837,8 +837,8 @@ export type CustomToolInventoryGesture = z.infer<typeof CustomToolInventoryGestu
 
 /**
  * One side effect, recorded after the table has dealt. Either a WRITE
- * (`target` + `value`), a WARDROBE GESTURE (`wardrobe`) or an INVENTORY
- * GESTURE (`inventory`) — exactly one. One strict object with a refine rather than a union, so a mistake
+ * (`target` + `value`), a WARDROBE GESTURE (`wardrobe`), an INVENTORY
+ * GESTURE (`inventory`) or a LOG LINE (`log`) — exactly one. One strict object with a refine rather than a union, so a mistake
  * produces one readable issue rather than a union's tree of them.
  *
  * `value` discrimination is the one ergonomic trap in the format: a JSON number
@@ -880,19 +880,31 @@ export const CustomToolEffectSchema = z
     inventory: CustomToolInventoryGestureSchema.optional().describe(
       'An Inventory gesture on the rolling character instead of a write: equip, unequip or pick up objects.'
     ),
+    log: z
+      .string()
+      .min(1)
+      .max(MAX_MESSAGE_LENGTH)
+      .optional()
+      .describe(
+        'A line for the log (the one log_read and log_grep search) instead of a write. A template, like an outcome ' +
+          'message: plain prose, with {{value}}, {{roll}}, {{character}}, {{params.x}}, {{state.path}} and the other ' +
+          'placeholder families substituted. Recorded against this chat and the rolling character.'
+      ),
   })
   .superRefine((effect, ctx) => {
     const isWrite = effect.target !== undefined || effect.value !== undefined;
     const isWardrobe = effect.wardrobe !== undefined;
     const isInventory = effect.inventory !== undefined;
-    const kinds = [isWrite, isWardrobe, isInventory].filter(Boolean).length;
+    const isLog = effect.log !== undefined;
+    const kinds = [isWrite, isWardrobe, isInventory, isLog].filter(Boolean).length;
     if (kinds > 1) {
       ctx.addIssue({
         code: 'custom',
-        message: 'an effect is exactly one of a write (target + value), a wardrobe gesture, or an inventory gesture',
+        message:
+          'an effect is exactly one of a write (target + value), a wardrobe gesture, an inventory gesture, or a log line',
       });
     } else if (kinds === 0) {
-      ctx.addIssue({ code: 'custom', message: 'an effect needs target + value, wardrobe, or inventory' });
+      ctx.addIssue({ code: 'custom', message: 'an effect needs target + value, wardrobe, inventory, or log' });
     } else if (isWrite && (effect.target === undefined || effect.value === undefined)) {
       ctx.addIssue({
         code: 'custom',
@@ -913,11 +925,15 @@ export type CustomToolWardrobeEffect = CustomToolEffect & { wardrobe: CustomTool
 /** An effect that changes what the rolling character carries. */
 export type CustomToolInventoryEffect = CustomToolEffect & { inventory: CustomToolInventoryGesture };
 
+/** An effect that writes a line to the log. */
+export type CustomToolLogEffect = CustomToolEffect & { log: string };
+
 /** True for a write effect. Use this rather than re-testing keys. */
 export function isWriteEffect(effect: CustomToolEffect): effect is CustomToolWriteEffect {
   return (
     effect.wardrobe === undefined &&
     effect.inventory === undefined &&
+    effect.log === undefined &&
     effect.target !== undefined &&
     effect.value !== undefined
   );
@@ -928,6 +944,7 @@ export function isWardrobeEffect(effect: CustomToolEffect): effect is CustomTool
   return (
     effect.wardrobe !== undefined &&
     effect.inventory === undefined &&
+    effect.log === undefined &&
     effect.target === undefined &&
     effect.value === undefined
   );
@@ -938,6 +955,18 @@ export function isInventoryEffect(effect: CustomToolEffect): effect is CustomToo
   return (
     effect.inventory !== undefined &&
     effect.wardrobe === undefined &&
+    effect.log === undefined &&
+    effect.target === undefined &&
+    effect.value === undefined
+  );
+}
+
+/** True for a log line. Use this rather than re-testing keys. */
+export function isLogEffect(effect: CustomToolEffect): effect is CustomToolLogEffect {
+  return (
+    effect.log !== undefined &&
+    effect.wardrobe === undefined &&
+    effect.inventory === undefined &&
     effect.target === undefined &&
     effect.value === undefined
   );
@@ -1489,7 +1518,7 @@ function validateWhenSubjects(
   // literal state or a `$param` to a string parameter; the count's operands
   // are numbers.
   for (const [key, comparator] of Object.entries(when.inventory ?? {})) {
-    validateInventoryKey(declared, hasLlmBlock, key, ctx, [...path, 'inventory', key]);
+    validateTemplatePlaceholders(declared, hasLlmBlock, key, ctx, [...path, 'inventory', key]);
     for (const op of ['eq', 'neq'] as const) {
       const operand = comparator[op];
       if (operand === undefined || !isParamRef(operand)) continue;
@@ -1510,7 +1539,7 @@ function validateWhenSubjects(
     }
   }
   for (const [key, comparator] of Object.entries(when.inventoryCount ?? {})) {
-    validateInventoryKey(declared, hasLlmBlock, key, ctx, [...path, 'inventoryCount', key]);
+    validateTemplatePlaceholders(declared, hasLlmBlock, key, ctx, [...path, 'inventoryCount', key]);
     validateComparator(declared, comparator, 'number', `the equipped count of "${key}"`, ctx, [
       ...path,
       'inventoryCount',
@@ -1519,8 +1548,12 @@ function validateWhenSubjects(
   }
 }
 
-/** An inventory key's placeholders resolve as an item reference's must. */
-function validateInventoryKey(
+/**
+ * A template's placeholders resolve as an outcome message's must: a
+ * `{{params.x}}` names a declared parameter, a `{{llm}}` needs an `llm` block.
+ * Used for inventory keys and references and for log lines.
+ */
+function validateTemplatePlaceholders(
   declared: Record<string, CustomToolParameter>,
   hasLlmBlock: boolean,
   key: string,
@@ -1568,12 +1601,17 @@ function validateEffects(
       return;
     }
 
+    if (effect.log !== undefined) {
+      validateTemplatePlaceholders(declared, Boolean(tool.llm), effect.log, ctx, [...base, 'log']);
+      return;
+    }
+
     if (effect.inventory !== undefined) {
       for (const problem of inventoryGestureProblems(effect.inventory)) {
         ctx.addIssue({ code: 'custom', message: problem.message, path: [...base, 'inventory', problem.field] });
       }
       effect.inventory.items.forEach((item, m) => {
-        validateInventoryKey(declared, Boolean(tool.llm), item, ctx, [...base, 'inventory', 'items', m]);
+        validateTemplatePlaceholders(declared, Boolean(tool.llm), item, ctx, [...base, 'inventory', 'items', m]);
       });
       return;
     }

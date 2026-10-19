@@ -5,14 +5,16 @@
  * builder form and the outcome table: what a run writes back once the deal is
  * done.
  *
- * Each row is one of three kinds. A WRITE has a target and a value that is a
+ * Each row is one of four kinds. A WRITE has a target and a value that is a
  * literal number, a literal boolean, or an expression. A WARDROBE row changes
  * what the rolling character has on: an action (wear / take off / clear a
  * slot), a short list of item references (title or id, templated), and the
  * mode and slot where the action wants them. An INVENTORY row changes what
  * they carry: equip, unequip or pick up a short list of object references
- * (`InventoryEffectFields`). Switching kind keeps the other halves on the
- * draft until save, so nothing typed is lost.
+ * (`InventoryEffectFields`). A LOG row writes one templated line (like an
+ * outcome message) to the instance's log, recorded against this chat and the
+ * rolling character, where log_grep and log_read find it. Switching kind
+ * keeps the other halves on the draft until save, so nothing typed is lost.
  *
  * The When is the common shapes only: "Always" or "on a given outcome
  * state". A hand-written richer condition (comparators,
@@ -45,6 +47,7 @@ import type { CustomToolDestinations } from '@/lib/pascal/workbench'
 import {
   MAX_EFFECTS,
   MAX_EFFECT_TARGET_LENGTH,
+  MAX_MESSAGE_LENGTH,
   MAX_WARDROBE_EFFECT_ITEMS,
   MAX_WARDROBE_ITEM_REF_LENGTH,
   type OutcomeState,
@@ -214,6 +217,7 @@ export function SideEffectsSection({
                   <option value="write">Write a value</option>
                   <option value="wardrobe">Change the outfit</option>
                   <option value="inventory">Change the inventory</option>
+                  <option value="log">Enter a log line</option>
                 </select>
               </label>
               <label className="flex items-center gap-2">
@@ -258,7 +262,29 @@ export function SideEffectsSection({
               </button>
             </div>
 
-            {effect.kind === 'inventory' ? (
+            {effect.kind === 'log' ? (
+              <div className="space-y-1 text-sm">
+                <label className="flex flex-col gap-1">
+                  Log line
+                  <textarea
+                    value={effect.log}
+                    maxLength={MAX_MESSAGE_LENGTH}
+                    rows={2}
+                    onChange={(e) => updateEffect(effect.id, { log: e.target.value })}
+                    placeholder="{{character}} rolled {{roll}} against the lock."
+                    disabled={disabled}
+                    className={`qt-textarea w-full ${errors.length > 0 ? 'qt-input-error' : ''}`}
+                    aria-label="Log line"
+                  />
+                </label>
+                <p className="qt-hint">
+                  Plain prose, a template like an outcome message: {'{{value}}'}, {'{{roll}}'}, {'{{params.x}}'},
+                  {' {{state.path}}'} and friends are filled in when the deal is done. The line is entered in the
+                  ledger against this chat and the rolling character, where the log_grep and log_read tools may
+                  find it again.
+                </p>
+              </div>
+            ) : effect.kind === 'inventory' ? (
               <InventoryEffectFields
                 gesture={effect.inventory}
                 hasErrors={errors.length > 0}

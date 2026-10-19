@@ -235,7 +235,7 @@ The card shows:
 **How long logs are kept:**
 
 - Configurable in Chat Settings (default: 30 days)
-- Older logs are automatically cleaned up
+- Older logs are automatically cleaned up, and so are lines in [the Log](the-log.md) (the characters' shared book, kept in the same database), even when LLM logging is switched off
 - Set retention to 0 for indefinite storage
 
 **Log storage:**

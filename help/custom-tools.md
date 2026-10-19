@@ -548,6 +548,19 @@ The objects are named, and found, exactly as the characters' own `inventory_*` t
 
 The roll's permanent record notes each object taken up, set down or picked up, and what the character carried before and after. A run nobody made carries nothing.
 
+### Writing to the log
+
+An effect may also write a line to [the Log](the-log.md), the instance-wide book that every character can search. Give it a `log` key in place of `target` and `value` (or `wardrobe`, or `inventory`: one of the four, never two):
+
+```json
+"effects": [
+  { "when": { "outcome": { "eq": "failure" } },
+    "log": "{{character}} failed the lock at {{params.door}} (rolled {{roll}})." }
+]
+```
+
+The value is a **template**, like an outcome's message: plain prose with `{{value}}`, `{{roll}}`, `{{dice}}`, `{{character}}`, `{{params.x}}`, `{{metadata.key}}`, `{{state.path}}`, `{{llm}}` and the rest, and no inner quoting. It may run to 1,000 characters. Log effects are applied after all the others, and the line is recorded against the chat and the rolling character. A line that renders empty is skipped. Your characters are told only that the tool *writes to the log*, never what it writes.
+
 ## Which tool wins: the matter of tiers
 
 The same tool name may reasonably exist in several stores, and Quilltap resolves the question by proximity. Nearest to the character wins:

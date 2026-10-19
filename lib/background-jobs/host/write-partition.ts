@@ -67,7 +67,7 @@ export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
  * Repository keys whose rows live in the dedicated llm-logs database
  * (`getRawLLMLogsDatabase()`).
  */
-export const LLM_LOGS_REPO_KEYS: ReadonlySet<string> = new Set(['llmLogs']);
+export const LLM_LOGS_REPO_KEYS: ReadonlySet<string> = new Set(['llmLogs', 'logEntries']);
 
 /**
  * The dotted method that creates a `doc_mount_folders` row. Singled out by the

@@ -7,7 +7,7 @@ This document describes the three SQLite databases used by Quilltap, how to acce
 | Database | Filename | Purpose |
 |----------|----------|---------|
 | **Main** | `quilltap.db` | All application data: users, characters, chats, messages, projects, files, memories, settings, etc. |
-| **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data. Isolated so high-churn logging can't corrupt main data. |
+| **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data (`llm_logs`) and the characters' log (`log_entries`). Isolated so high-churn logging can't corrupt main data. |
 | **Mount Index** | `quilltap-mount-index.db` | Document mount point tracking: file inventory, checksums, text chunks, and embeddings for external document directories. |
 
 All three databases live in `<data-dir>/data/`. Alongside them:
@@ -1803,6 +1803,31 @@ CREATE TABLE "migrations_metadata" (
   "value" TEXT NOT NULL
 );
 ```
+
+### log_entries
+
+```sql
+CREATE TABLE "log_entries" (
+  "id" TEXT PRIMARY KEY,
+  "message" TEXT NOT NULL,
+  "chatId" TEXT NOT NULL,
+  "characterId" TEXT,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_log_entries_createdAt" ON "log_entries" ("createdAt" DESC);
+CREATE INDEX "idx_log_entries_chatId" ON "log_entries" ("chatId", "createdAt" DESC);
+CREATE INDEX "idx_log_entries_characterId" ON "log_entries" ("characterId", "createdAt" DESC);
+```
+
+The log: short lines written by characters (`log_create_entry`) and by Pascal custom tools (the `log` side effect), readable by characters through `log_grep` and `log_read`. Created by `LogEntriesRepository` from the Zod schema in `lib/schemas/log-entry.types.ts`; there is no migration. The table is instance-wide: every chat and every character reads and writes the same one.
+
+`message` is 1 to 4000 characters, written once and never edited (`updatedAt` equals `createdAt`). It is plain text, not compressed. `chatId` is the chat the line was written from. `characterId` is the calling character, or NULL when the operator ran a tool with no character seat. `createdAt` / `updatedAt` are ISO-8601 text.
+
+The LLM logs connection registers a SQL function `regexp(pattern, value[, flags])` (`lib/database/backends/sqlite/regexp-function.ts`), so `message REGEXP 'pat'` works in this database. It uses JavaScript `RegExp`; flags are `i`, `m`, `s`, `u`. `log_grep` and `searchMessages` use it.
+
+Pruning: the `LLM_LOG_CLEANUP` job deletes rows older than the LLM logging retention days (`chatSettings.llmLoggingSettings.retentionDays`, default 30, 0 keeps forever), even when LLM logging itself is off. The table is not part of `.qtap` exports or logical backups (treated like `llm_logs`); a physical backup of the llm-logs database includes it. In the job child, writes are buffered and land when the job commits.
 
 ### SQLite statistics tables (auto-managed)
 

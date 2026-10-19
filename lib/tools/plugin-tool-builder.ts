@@ -37,6 +37,9 @@ import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import {
   readConversationToolDefinition,
 } from '@/lib/tools/read-conversation-tool';
+import { logCreateEntryToolDefinition } from '@/lib/tools/log-create-entry-tool';
+import { logGrepToolDefinition } from '@/lib/tools/log-grep-tool';
+import { logReadToolDefinition } from '@/lib/tools/log-read-tool';
 import {
   upsertAnnotationToolDefinition,
 } from '@/lib/tools/upsert-annotation-tool';
@@ -500,6 +503,12 @@ export async function buildToolsForProvider(
     universalTools.push(readConversationToolDefinition as UniversalTool);
     universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
     universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+
+    // The log — always offered to characters; the per-chat tool settings can
+    // switch each one off.
+    universalTools.push(logCreateEntryToolDefinition as UniversalTool);
+    universalTools.push(logGrepToolDefinition as UniversalTool);
+    universalTools.push(logReadToolDefinition as UniversalTool);
   }
 
   // Unified search — available on every surface. The Brahma variant drops the

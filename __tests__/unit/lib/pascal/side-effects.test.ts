@@ -300,3 +300,37 @@ describe('wardrobe gestures beside the writes', () => {
     expect(mockApplyWardrobeEffects).not.toHaveBeenCalled()
   })
 })
+
+describe('log effects', () => {
+  beforeEach(() => {
+    ;(db as unknown as { logEntries: { create: jest.Mock } }).logEntries = {
+      create: jest.fn(async (data: Record<string, unknown>) => ({ id: 'entry-1', ...data })),
+    }
+  })
+
+  const logs = () => (db as unknown as { logEntries: { create: jest.Mock } }).logEntries
+
+  it('writes each line against the chat and rolling character, in effect order after the writes', async () => {
+    const applied = await apply([
+      { index: 0, log: 'Picked the lock' },
+      stateEffect(1, ['opened'], true),
+    ])
+
+    expect(logs().create).toHaveBeenCalledWith({ message: 'Picked the lock', chatId: 'chat-1', characterId: 'char-1' })
+    expect(applied).toEqual([
+      { target: 'log', next: { id: 'entry-1', message: 'Picked the lock' } },
+      { target: 'state.opened', next: true, tier: 'chat' },
+    ])
+  })
+
+  it('writes a line for a run nobody made, with no author', async () => {
+    await apply([{ index: 0, log: 'The hour struck' }], { characterId: null })
+    expect(logs().create).toHaveBeenCalledWith(expect.objectContaining({ characterId: null }))
+  })
+
+  it('drops a failed line from the record without sinking the run', async () => {
+    logs().create.mockRejectedValueOnce(new Error('degraded'))
+    const applied = await apply([{ index: 0, log: 'Lost' }, stateEffect(1, ['kept'], 1)])
+    expect(applied).toEqual([{ target: 'state.kept', next: 1, tier: 'chat' }])
+  })
+})

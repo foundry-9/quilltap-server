@@ -44,6 +44,7 @@ const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
   wardrobe: 'Wardrobe',
   inventory: 'Inventory',
   pascal: "Pascal's Custom Tools",
+  log: 'The Log',
   shell: 'Workspace',
   help: 'Quilltap Help',
 }

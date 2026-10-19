@@ -49,6 +49,7 @@ import {
   parseEffectTarget,
   isWardrobeEffect,
   isInventoryEffect,
+  isLogEffect,
   type CustomToolInventoryGesture,
   type InventoryEffectAction,
   type PlaceholderRef,
@@ -1384,6 +1385,7 @@ export type ResolvedEffect =
   | { index: number; target: EffectTarget; value: ExprValue }
   | { index: number; wardrobe: ResolvedWardrobeGesture }
   | { index: number; inventory: ResolvedInventoryGesture }
+  | { index: number; log: string }
   | { index: number; skipped: string };
 
 /** An Inventory gesture with its object references rendered — ready for the applier. */
@@ -1425,11 +1427,23 @@ export function isApplicableInventoryEffect(
   return 'inventory' in effect;
 }
 
+/** True for a resolved effect that would write a line to the log. */
+export function isApplicableLogEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { log: string }> {
+  return 'log' in effect;
+}
+
 /** True for a resolved effect of any kind that would apply (the Proving Bench's count). */
 export function isApplicableEffect(
   effect: ResolvedEffect
 ): effect is Exclude<ResolvedEffect, { skipped: string }> {
-  return isApplicableWriteEffect(effect) || isApplicableWardrobeEffect(effect) || isApplicableInventoryEffect(effect);
+  return (
+    isApplicableWriteEffect(effect) ||
+    isApplicableWardrobeEffect(effect) ||
+    isApplicableInventoryEffect(effect) ||
+    isApplicableLogEffect(effect)
+  );
 }
 
 /**
@@ -1476,9 +1490,14 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
     if (isInventoryEffect(effect)) {
       return resolveInventoryGesture(definition.name, index, effect.inventory, subjects, skipped);
     }
+    if (isLogEffect(effect)) {
+      // A template, like an outcome message — not an expression.
+      const line = renderTemplate(effect.log, subjects).trim();
+      return line.length > 0 ? { index, log: line } : skipped(index, 'log line rendered empty');
+    }
     if (effect.target === undefined || effect.value === undefined) {
       // Load-time validation rejects this; reaching here is a regression.
-      return skipped(index, 'effect is neither a complete write nor a wardrobe or inventory gesture');
+      return skipped(index, 'effect is neither a complete write, a wardrobe or inventory gesture, nor a log line');
     }
 
     const target = parseEffectTarget(effect.target);

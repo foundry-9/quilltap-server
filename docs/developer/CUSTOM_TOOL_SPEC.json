@@ -57,7 +57,8 @@
     "errorMessage": "The oracle of locks is not answering today. (Demonstrates errorMessage: the consult's output when the call fails — the author's words, never the provider's. The technical failure reason goes to the roll record and the logs, not the fiction.)"
   },
   "effects": [
-    { "when": { "outcome": { "eq": "failure" } }, "wardrobe": { "action": "take_off", "items": ["{{params.gloves}}"] } }
+    { "when": { "outcome": { "eq": "failure" } }, "wardrobe": { "action": "take_off", "items": ["{{params.gloves}}"] } },
+    { "when": { "outcome": { "eq": "failure" } }, "log": "{{character}} failed to force the lock on {{params.label}} (rolled {{value}})." }
   ],
   "outcomes": [
     {

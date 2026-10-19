@@ -36,7 +36,8 @@ export const runSqlToolInputSchema = z.object({
       'Which Quilltap database to query. "main" (quilltap.db): characters, chats, ' +
       'chat_messages, memories, connection_profiles, projects, groups, settings. ' +
       '"llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, ' +
-      'token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores ' +
+      'token usage, cost, duration) and the log_entries table (id, message, chatId, characterId, createdAt, updatedAt; ' +
+      'the characters\' log; `X REGEXP \'pattern\'` works here). "mount-index" (quilltap-mount-index.db): document stores ' +
       'and ALL character/project/group vault content. Databases are physically separate — ' +
       'you cannot JOIN across them in one query.'
     )

@@ -355,7 +355,7 @@
     "Effect": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One side effect, recorded after the outcome table has dealt: exactly one of a write (target + value), a wardrobe gesture (wardrobe) or an inventory gesture (inventory). Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures, then inventory gestures); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
+      "description": "One side effect, recorded after the outcome table has dealt: exactly one of a write (target + value), a wardrobe gesture (wardrobe), an inventory gesture (inventory) or a log line (log). Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures, then inventory gestures, then log lines); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
       "properties": {
         "when": {
           "$ref": "#/$defs/EffectWhen",
@@ -390,6 +390,12 @@
         "inventory": {
           "$ref": "#/$defs/InventoryGesture",
           "description": "An Inventory gesture on the rolling character (and nobody else) instead of a write: equip, unequip or pick up objects. A run made as nobody carries nothing."
+        },
+        "log": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "A line for the log (the one the log_read and log_grep tools search) instead of a write. A TEMPLATE, like an outcome message — plain prose, not an expression, so no inner quoting: {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}} and the other placeholder families are substituted, and unknown ones are left as written. Recorded against this chat and the rolling character (none on a run nobody in particular made). A line that renders empty is skipped."
         }
       },
       "oneOf": [
@@ -408,6 +414,11 @@
               {
                 "required": [
                   "inventory"
+                ]
+              },
+              {
+                "required": [
+                  "log"
                 ]
               }
             ]
@@ -433,6 +444,11 @@
                 "required": [
                   "inventory"
                 ]
+              },
+              {
+                "required": [
+                  "log"
+                ]
               }
             ]
           }
@@ -456,6 +472,40 @@
               {
                 "required": [
                   "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "log"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "log"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
                 ]
               }
             ]

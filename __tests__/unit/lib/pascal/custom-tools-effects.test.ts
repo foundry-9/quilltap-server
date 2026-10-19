@@ -325,3 +325,49 @@ describe('the roster description and effects', () => {
     expect(text).toContain('Some tools record side effects')
   })
 })
+
+describe('log lines in executeCustomTool', () => {
+  it('renders the line as a template, with the run subjects', async () => {
+    const tool = define({
+      name: 'ledger',
+      description: 'x',
+      parameters: { door: { type: 'string', default: 'north door' } },
+      roll: FIXED_ROLL,
+      effects: [{ log: "Tried the {{params.door}}: rolled {{value}} — it's {{state.weather}}" }],
+      outcomes: [CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, null, { state: { weather: 'raining' } })
+    expect(result.effects).toEqual([{ index: 0, log: "Tried the north door: rolled 5 — it's raining" }])
+    expect(result.effects?.every(isApplicableEffect)).toBe(true)
+  })
+
+  it('honours the condition, and skips a line that renders empty', async () => {
+    const tool = define({
+      name: 'quiet',
+      description: 'x',
+      parameters: { note: { type: 'string', default: ' ' } },
+      roll: FIXED_ROLL,
+      effects: [
+        { when: { outcome: { eq: 'failure' } }, log: 'Failed' },
+        { log: '{{params.note}}' },
+      ],
+      outcomes: [CATCH_ALL],
+    })
+    const result = await executeCustomTool(tool, null)
+    expect(result.effects).toEqual([
+      { index: 0, skipped: 'condition did not hold' },
+      { index: 1, skipped: 'log line rendered empty' },
+    ])
+  })
+
+  it('says so in the roster description', () => {
+    const tool = define({
+      name: 'ledger',
+      description: 'Keep the books.',
+      roll: FIXED_ROLL,
+      effects: [{ log: 'Entry' }],
+      outcomes: [CATCH_ALL],
+    })
+    expect(buildRunCustomDescription([{ definition: tool } as DiscoveredCustomTool])).toMatch(/writes to the log/)
+  })
+})

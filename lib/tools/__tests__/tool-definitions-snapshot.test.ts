@@ -50,6 +50,9 @@ import { listImagesToolDefinition } from '../list-images-tool'
 import { sendMailToolDefinition } from '../send-mail-tool'
 import { projectInfoToolDefinition } from '../project-info-tool'
 import { readConversationToolDefinition } from '../read-conversation-tool'
+import { logCreateEntryToolDefinition } from '../log-create-entry-tool'
+import { logGrepToolDefinition } from '../log-grep-tool'
+import { logReadToolDefinition } from '../log-read-tool'
 import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
 import { runCustomToolDefinition } from '../run-custom-tool'
@@ -136,6 +139,9 @@ const ALL_TOOLS = {
   sendMail: sendMailToolDefinition,
   projectInfo: projectInfoToolDefinition,
   readConversation: readConversationToolDefinition,
+  logCreateEntry: logCreateEntryToolDefinition,
+  logGrep: logGrepToolDefinition,
+  logRead: logReadToolDefinition,
   requestFullContext: requestFullContextToolDefinition,
   rng: rngToolDefinition,
   runCustom: runCustomToolDefinition,

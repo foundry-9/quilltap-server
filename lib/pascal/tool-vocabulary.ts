@@ -211,9 +211,11 @@ export function collectToolVocabulary(
   // metadata keys are reads like an outcome row's; and each target is a WRITE,
   // reported on its own lists because it is a different claim than a read.
   // A wardrobe gesture's item references are templates too, scanned the same
-  // way, and the gesture itself is reported on the dress/undress lists.
+  // way, and the gesture itself is reported on the dress/undress lists. A log
+  // line is a template whose placeholders are reads and nothing more.
   for (const effect of definition.effects ?? []) {
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
+    if (effect.log !== undefined) collectPlaceholders(effect.log, declared, found);
     for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
     for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
     for (const key of inventoryKeysOf(effect.when)) found.inventory.add(key);
@@ -234,7 +236,7 @@ export function collectToolVocabulary(
       else if (slot) found.clearsSlots.add(slot);
       continue;
     }
-    if (effect.target === undefined) continue; // load-rejected; nothing honest to report
+    if (effect.target === undefined) continue; // a log line, or load-rejected; no write to report
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) continue; // load-rejected; nothing honest to report

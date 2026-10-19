@@ -308,7 +308,7 @@ describe('effects — wardrobe gestures', () => {
     expect(
       rejection(withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }]))
     ).toMatch(/exactly one of/)
-    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, wardrobe, or inventory/)
+    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, wardrobe, inventory, or log/)
     expect(rejection(withEffects([{ target: 'state.x' }]))).toMatch(/needs both target and value/)
   })
 
@@ -918,5 +918,37 @@ describe('triggers', () => {
 
   it('is a known top-level key', () => {
     expect(KNOWN_TOP_LEVEL_KEYS).toContain('triggers')
+  })
+})
+
+describe('effects — log lines', () => {
+  const issuesOf = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('accepts a log line, with or without a condition', () => {
+    expect(accepts(withEffects([{ log: 'Rolled {{value}} on the lock' }]))).toBe(true)
+    expect(accepts(withEffects([{ when: { outcome: { eq: 'success' } }, log: 'Opened' }]))).toBe(true)
+  })
+
+  it('rejects a log line beside any other kind', () => {
+    expect(rejection(withEffects([{ log: 'x', target: 'state.x', value: 1 }]))).toMatch(/exactly one of/)
+    expect(rejection(withEffects([{ log: 'x', inventory: { action: 'equip', items: ['Lamp'] } }]))).toMatch(
+      /exactly one of/
+    )
+  })
+
+  it('rejects an empty or over-long line', () => {
+    expect(accepts(withEffects([{ log: '' }]))).toBe(false)
+    expect(accepts(withEffects([{ log: 'x'.repeat(1001) }]))).toBe(false)
+  })
+
+  it('checks its placeholders as an outcome message’s are checked', () => {
+    expect(issuesOf(withEffects([{ log: 'Opened {{params.ghost}}' }]))).toMatch(
+      /effects\.0\.log.*undeclared parameter "ghost"/
+    )
+    expect(rejection(withEffects([{ log: 'Oracle: {{llm}}' }]))).toMatch(/declares no `llm` block/)
+    expect(accepts(withEffects([{ log: 'Oracle: {{llm}}' }], LLM_BLOCK))).toBe(true)
   })
 })

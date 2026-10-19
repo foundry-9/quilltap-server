@@ -1583,6 +1583,87 @@ exports[`tool definitions: derived OpenAI parameters listMail: parameters snapsh
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters logCreateEntry: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "description": "The line to record, verbatim.",
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "message",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters logGrep: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ignore_case": {
+      "description": "Match without regard to case. Default false.",
+      "type": "boolean",
+    },
+    "limit": {
+      "description": "Most entries to return, newest first. Default 50.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "pattern": {
+      "description": "A JavaScript regular expression matched against each entry's message, e.g. "lock(pick|smith)" or "^Day \\\\d+". A plain word matches anywhere in the message.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "pattern",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters logRead: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "Only entries written by this character, by name (case-insensitive) or id.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "conversationId": {
+      "description": "Only entries written from this conversation. Use "current" for this one.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "from": {
+      "description": "Only entries written at or after this moment (ISO-8601, e.g. "2026-10-01" or "2026-10-01T18:00:00Z").",
+      "minLength": 1,
+      "type": "string",
+    },
+    "limit": {
+      "description": "Most entries to return, newest first. Default 50.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "to": {
+      "description": "Only entries written at or before this moment (ISO-8601). A bare date means the start of that day.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters projectInfo: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1744,7 +1825,7 @@ exports[`tool definitions: derived OpenAI parameters runSql: parameters snapshot
   "properties": {
     "database": {
       "default": "main",
-      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
+      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration) and the log_entries table (id, message, chatId, characterId, createdAt, updatedAt; the characters' log; \`X REGEXP 'pattern'\` works here). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
       "enum": [
         "main",
         "llm-logs",

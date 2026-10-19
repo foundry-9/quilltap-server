@@ -1063,3 +1063,29 @@ describe('trigger phrases in the draft', () => {
     expect(issues.some((i) => i.severity === 'warning' && i.where.section === 'llm' && i.message.includes('trigger'))).toBe(true)
   })
 })
+
+describe('log effects', () => {
+  const base = { name: 'x', description: 'x', outcomes: [{ when: true, message: '-', state: 'info' }] }
+
+  it('round-trips a log line with and without a when', () => {
+    const effects = [{ log: 'rolled {{roll}}' }, { when: { outcome: { eq: 'failure' } }, log: 'the lock held' }]
+    const draft = draftFromDefinition({ ...base, effects })!
+    expect(draft.effects.map((e) => e.kind)).toEqual(['log', 'log'])
+    expect(definitionFromDraft(draft).effects).toEqual(effects)
+  })
+
+  it('trims the line on save and flags an empty one', () => {
+    const draft = draftFromDefinition(base)!
+    draft.effects = [{ ...newDraftEffect('log'), log: '  hello  ' }]
+    expect(definitionFromDraft(draft).effects).toEqual([{ log: 'hello' }])
+    draft.effects = [newDraftEffect('log')]
+    const issue = validateDraft(draft).find((i) => i.where.section === 'effect' && i.where.field === 'log')
+    expect(issue?.severity).toBe('error')
+  })
+
+  it('warns about an undeclared parameter in the line', () => {
+    const draft = draftFromDefinition(base)!
+    draft.effects = [{ ...newDraftEffect('log'), log: 'saw {{params.ghost}}' }]
+    expect(validateDraft(draft).some((i) => i.severity === 'warning' && i.message.includes('params.ghost'))).toBe(true)
+  })
+})

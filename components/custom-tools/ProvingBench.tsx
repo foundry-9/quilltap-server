@@ -868,6 +868,10 @@ function MiniPascalBubble({
                 resolution={roll.wardrobeResolution?.find((entry) => entry.index === effect.index)}
                 chairName={roll.chairName ?? null}
               />
+            ) : 'log' in effect ? (
+              <p key={effect.index}>
+                → log: {JSON.stringify(effect.log)} <em>(would write)</em>
+              </p>
             ) : (
               <p key={effect.index}>
                 · effect {effect.index + 1} skipped: {effect.skipped}

@@ -440,6 +440,35 @@ export {
   type WardrobeHistoryToolContext,
 } from './handlers/wardrobe-history-handler';
 
+// The Log — entries written by characters and custom tools
+export {
+  logCreateEntryToolDefinition,
+  logCreateEntryToolInputSchema,
+  validateLogCreateEntryInput,
+  type LogCreateEntryToolInput,
+  type LogCreateEntryToolOutput,
+} from './log-create-entry-tool';
+export {
+  logGrepToolDefinition,
+  logGrepToolInputSchema,
+  validateLogGrepInput,
+  type LogGrepToolInput,
+} from './log-grep-tool';
+export {
+  logReadToolDefinition,
+  logReadToolInputSchema,
+  validateLogReadInput,
+  type LogReadToolInput,
+} from './log-read-tool';
+export {
+  executeLogCreateEntryTool,
+  executeLogGrepTool,
+  executeLogReadTool,
+  type LogToolContext,
+  type LogQueryToolOutput,
+  type LogEntryView,
+} from './handlers/log-handler';
+
 // Scriptorium Tools (Conversation Rendering + Annotations)
 export {
   readConversationToolDefinition,

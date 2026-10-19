@@ -225,11 +225,12 @@ export interface DraftEffect {
     | { kind: 'outcome-state'; state: OutcomeState }
     | { kind: 'verbatim'; when: EffectWhen };
   /**
-   * Which half is active: a value write, or a wardrobe gesture. Both halves
-   * are always present on the draft so switching kind in the form loses
-   * nothing until save; only the active half is emitted.
+   * Which half is active: a value write, a wardrobe gesture, an inventory
+   * gesture, or a log line. All halves are always present on the draft so
+   * switching kind in the form loses nothing until save; only the active half
+   * is emitted.
    */
-  kind: 'write' | 'wardrobe' | 'inventory';
+  kind: 'write' | 'wardrobe' | 'inventory' | 'log';
   /** The target verbatim: `state.…` or `metadata.…`. */
   target: string;
   /** How `value` serializes: a JSON number, a JSON boolean, or an expression string. */
@@ -240,6 +241,8 @@ export interface DraftEffect {
   wardrobe: DraftWardrobeGesture;
   /** The inventory gesture's fields. */
   inventory: DraftInventoryGesture;
+  /** The log line's template (like an outcome message). Trimmed on save. */
+  log: string;
 }
 
 /** An Inventory gesture, form-shaped. `equip` is emitted only on pick_up, and only when false. */
@@ -280,6 +283,7 @@ export function newDraftEffect(kind: DraftEffect['kind'] = 'write'): DraftEffect
     value: '',
     wardrobe: emptyDraftWardrobeGesture(),
     inventory: emptyDraftInventoryGesture(),
+    log: '',
   };
 }
 
@@ -641,6 +645,7 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
         slot: slot ?? '',
       },
       inventory: emptyDraftInventoryGesture(),
+      log: '',
     };
   }
 
@@ -655,6 +660,21 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
       value: '',
       wardrobe: emptyDraftWardrobeGesture(),
       inventory: { action, items: items.length > 0 ? [...items] : [''], equip: equip !== false },
+      log: '',
+    };
+  }
+
+  if (typeof effect.log === 'string') {
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'log',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: emptyDraftWardrobeGesture(),
+      inventory: emptyDraftInventoryGesture(),
+      log: effect.log,
     };
   }
 
@@ -672,6 +692,7 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
     value: effect.value === undefined ? '' : String(effect.value),
     wardrobe: emptyDraftWardrobeGesture(),
     inventory: emptyDraftInventoryGesture(),
+    log: '',
   };
 }
 
@@ -731,6 +752,13 @@ function effectFromDraft(effect: DraftEffect): CustomToolEffect {
     return {
       ...(when !== undefined ? { when } : {}),
       inventory: inventoryFromDraft(effect.inventory),
+    } as CustomToolEffect;
+  }
+
+  if (effect.kind === 'log') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      log: effect.log.trim(),
     } as CustomToolEffect;
   }
 
@@ -1135,7 +1163,7 @@ export interface DraftIssue {
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
     | { section: 'roll'; field?: 'dice' | 'inventory' | 'min' | 'max' | 'multiplier' | 'offset' }
     | { section: 'llm'; field: 'prompt' | 'errorMessage' | 'maxOutput' }
-    | { section: 'effect'; id: string }
+    | { section: 'effect'; id: string; field?: 'log' }
     | { section: 'outcome'; id: string; conditionId?: string }
     | { section: 'message'; id: string };
   message: string;
@@ -1546,6 +1574,20 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
 
     if (effect.kind === 'inventory') {
       validateDraftInventoryGesture(effect, draft, where, issues);
+      continue;
+    }
+
+    if (effect.kind === 'log') {
+      const logWhere: DraftIssue['where'] = { section: 'effect', id: effect.id, field: 'log' };
+      const line = effect.log.trim();
+      if (line === '') {
+        issues.push(err(logWhere, 'a log line needs some prose to write down'));
+      } else {
+        if (line.length > MAX_MESSAGE_LENGTH) {
+          issues.push(err(logWhere, `a log line is at most ${MAX_MESSAGE_LENGTH} characters`));
+        }
+        auditPlaceholders(line, logWhere, draft, issues, { llm: 'warn-if-disabled', allowState: true });
+      }
       continue;
     }
 
@@ -2029,6 +2071,7 @@ export function renameParameterEverywhere(draft: ToolDraft, from: string, to: st
     },
     effects: draft.effects.map((effect) => ({
       ...effect,
+      log: effect.log.replace(placeholder, `{{params.${to}}}`),
       wardrobe: {
         ...effect.wardrobe,
         items: effect.wardrobe.items.map((item) => item.replace(placeholder, `{{params.${to}}}`)),
@@ -2079,6 +2122,10 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
   });
 
   draft.effects.forEach((effect, index) => {
+    if (effect.kind === 'log') {
+      if (paramPlaceholderPattern(name).test(effect.log)) sites.push(`effect ${index + 1}: the log line renders it`);
+      return;
+    }
     if (effect.kind !== 'wardrobe') return;
     if (effect.wardrobe.items.some((item) => paramPlaceholderPattern(name).test(item))) {
       sites.push(`effect ${index + 1}: a wardrobe item names it`);
