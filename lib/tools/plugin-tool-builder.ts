@@ -28,6 +28,7 @@ import {
   rngToolDefinition,
   runCustomToolDefinition,
   buildRunCustomDescription,
+  editCustomToolToolDefinition,
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
@@ -235,6 +236,13 @@ export interface BuildToolsOptions extends InventoryToolFlags {
    */
   customTools?: DiscoveredCustomTool[];
 
+  /**
+   * Whether to offer `edit_custom_tool` (save or validate a `Tools/*.tool.json`
+   * definition). Offered whenever the surface has custom tools switched on,
+   * empty roster or not — it is how a scene's first tool gets written.
+   */
+  editCustomTool?: boolean;
+
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
 
@@ -375,6 +383,7 @@ export async function buildToolsForProvider(
       helpNavigate: options.helpNavigate,
       rng: options.rng,
       customTools: options.customTools?.length ?? 0,
+      editCustomTool: options.editCustomTool,
       state: options.state,
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
@@ -463,6 +472,10 @@ export async function buildToolsForProvider(
         description: buildRunCustomDescription(options.customTools),
       },
     } as UniversalTool);
+  }
+
+  if (options.editCustomTool) {
+    universalTools.push(editCustomToolToolDefinition as UniversalTool);
   }
 
   // Add state tool if enabled (defaults to true when not specified)

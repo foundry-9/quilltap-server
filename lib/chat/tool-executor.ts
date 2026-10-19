@@ -253,6 +253,7 @@ const BUILT_IN_TOOLS = new Set<string>([
   'state',
   // Pascal the Croupier — user-authored pseudo-tools
   'run_custom',
+  'edit_custom_tool',
   'self_inventory',
   'submit_final_response',
   'whisper',
@@ -651,6 +652,35 @@ export async function executeToolCallWithContext(
           value: out.value,
           state: out.state,
           whispered: out.whispered,
+        } : null,
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle edit_custom_tool (Pascal the Croupier — save or validate a definition)
+    if (toolCall.name === 'edit_custom_tool') {
+      const { executeEditCustomTool, formatEditCustomToolResults } = await import('@/lib/tools/handlers/edit-custom-tool-handler');
+
+      // A definition is a document: it resolves and writes with the same
+      // context, and so the same store access, as the doc_* tools.
+      const out = await executeEditCustomTool(toolCall.arguments, {
+        userId,
+        chatId,
+        projectId: context.projectId,
+        characterId,
+        operatorOverride: context.operatorSurface,
+        mountPool: context.mountPool,
+      });
+
+      return {
+        toolName: 'edit_custom_tool',
+        success: out.success,
+        result: out.success ? {
+          formattedText: formatEditCustomToolResults(out),
+          action: out.action,
+          path: out.path,
+          uri: out.uri,
+          name: out.name,
         } : null,
         error: out.success ? undefined : out.error,
       };

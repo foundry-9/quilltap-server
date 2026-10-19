@@ -369,6 +369,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🎲',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
+    edit_custom_tool: {
+      displayName: 'Edit Custom Tool',
+      icon: '🎲',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
     state: {
       displayName: 'State Manager',
       icon: '🗃️',

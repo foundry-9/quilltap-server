@@ -315,6 +315,9 @@ export async function buildTools(
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,
     customTools,
+    // The editor rides on the same switch as the roster, not on the roster's
+    // contents: an empty table is exactly when a first tool needs writing.
+    editCustomTool: !!customToolContext,
     toolConfigs,
   })
 

@@ -144,6 +144,8 @@ export interface CustomToolLoadError {
   reason: string;
   /** Where loading stopped: the bytes, the JSON, the schema, or a same-store name clash. */
   stage?: 'read' | 'json' | 'schema' | 'duplicate';
+  /** The clashing tool name, on a `duplicate` error. */
+  name?: string;
 }
 
 /**
@@ -261,6 +263,70 @@ async function readToolFile(
   return bytes.toString('utf-8');
 }
 
+/** A definition file's text, judged exactly as load time judges it. */
+export type ToolDefinitionValidation =
+  | { ok: true; definition: QtapCustomTool }
+  | { ok: false; stage: 'json' | 'schema'; reason: string };
+
+/**
+ * Parse and schema-check one definition file's text. The single judgement
+ * shared by discovery ({@link loadToolsFromMount}) and the `edit_custom_tool`
+ * save gate, so a file the editor accepts is a file the roster loads. Unknown
+ * keys are tolerated, never rejected — future keys ship under this tolerance
+ * (as `effects` did) and an older build must not choke on a newer file.
+ * Never throws. `where` only labels the debug logs.
+ */
+export function validateToolDefinitionText(
+  raw: string,
+  where: { mountPointId?: string; definitionPath?: string } = {}
+): ToolDefinitionValidation {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch (error) {
+    return { ok: false, stage: 'json', reason: `is not valid JSON: ${getErrorMessage(error)}` };
+  }
+
+  const unknownKeys = collectUnknownKeys(parsedJson);
+  if (unknownKeys.length > 0) {
+    logger.debug('Custom tool carries keys this build does not know', {
+      context: CONTEXT,
+      ...where,
+      unknownKeys,
+    });
+  }
+
+  const result = QtapCustomToolSchema.safeParse(parsedJson);
+  if (!result.success) {
+    const reason = formatDefinitionIssues(result.error);
+    logger.debug('Custom tool definition failed schema validation', {
+      context: CONTEXT,
+      ...where,
+      reason,
+    });
+    return { ok: false, stage: 'schema', reason };
+  }
+
+  return { ok: true, definition: result.data };
+}
+
+/**
+ * Normalise a caller's name for a definition file to its store-relative path,
+ * `Tools/<stem>.tool.json`. Accepts the bare stem (`unlock`), the file name
+ * (`unlock.tool.json`, suffix case-insensitive) or that file name under a
+ * leading `Tools/`. Anything that would land outside the top level of `Tools/`
+ * — another folder, a nested path, an empty stem — returns null: definitions
+ * are a flat root-level convention (see {@link isRootToolFile}).
+ */
+export function toolDefinitionPathFor(file: string): string | null {
+  let name = file.trim().replace(/\\/g, '/');
+  const folderPrefix = `${TOOLS_FOLDER.toLowerCase()}/`;
+  if (name.toLowerCase().startsWith(folderPrefix)) name = name.slice(folderPrefix.length);
+  if (name.toLowerCase().endsWith(TOOL_FILE_SUFFIX)) name = name.slice(0, -TOOL_FILE_SUFFIX.length);
+  if (name.length === 0 || name.includes('/') || name === '.' || name === '..') return null;
+  return `${TOOLS_FOLDER}/${name}${TOOL_FILE_SUFFIX}`;
+}
+
 /**
  * Load every definition in one mount. Never throws: a broken file becomes an
  * error entry, because one malformed `.tool.json` must not take the whole
@@ -325,40 +391,13 @@ export async function loadToolsFromMount(
       continue;
     }
 
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(raw);
-    } catch (error) {
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `is not valid JSON: ${getErrorMessage(error)}`, stage: 'json' });
+    const validated = validateToolDefinitionText(raw, { mountPointId, definitionPath: relativePath });
+    if (!validated.ok) {
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: validated.reason, stage: validated.stage });
       continue;
     }
 
-    const unknownKeys = collectUnknownKeys(parsedJson);
-    if (unknownKeys.length > 0) {
-      // Tolerated, not rejected — future keys ship under this tolerance (as
-      // `effects` did) and an older build must not choke on a newer file.
-      logger.debug('Custom tool carries keys this build does not know', {
-        context: CONTEXT,
-        mountPointId,
-        definitionPath: relativePath,
-        unknownKeys,
-      });
-    }
-
-    const result = QtapCustomToolSchema.safeParse(parsedJson);
-    if (!result.success) {
-      const reason = formatDefinitionIssues(result.error);
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason, stage: 'schema' });
-      logger.debug('Custom tool rejected at load time', {
-        context: CONTEXT,
-        mountPointId,
-        definitionPath: relativePath,
-        reason,
-      });
-      continue;
-    }
-
-    const definition = result.data;
+    const definition = validated.definition;
     const priorPath = nameToPath.get(definition.name);
     if (priorPath) {
       errors.push({
@@ -368,6 +407,7 @@ export async function loadToolsFromMount(
         tier,
         reason: `defines "${definition.name}", which ${priorPath} in this same store already defines`,
         stage: 'duplicate',
+        name: definition.name,
       });
       continue;
     }

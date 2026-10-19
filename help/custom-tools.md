@@ -683,6 +683,18 @@ Should a tool be defined differently for different characters, you'll see each v
 
 **And when it cannot be you, the row says so.** Two cases: a room in which you are playing nobody at all, and a tool whose gate your own character did not pass. Neither leaves anything to run as except another participant, so rather than borrow their sheet in silence the listing puts their name beside the tool — *as Friday* — exactly as it does for a tool defined differently per character. The pick is still not yours to make, but you can see it before you commit to it; where it matters, have that character reach for the tool in the fiction instead of reaching for it yourself from the gutter.
 
+## Letting a character write one — `edit_custom_tool`
+
+A character may draw up a tool of its own, or mend one, through **`edit_custom_tool`**. It is offered wherever Custom Tools is switched on, whether or not the scene has any tools yet — which is precisely when somebody needs to write the first one.
+
+The character names a store (`self` for its own vault) and a file. The file may be given whole (`unlock.tool.json`) or by its name alone (`unlock`), and it always lives directly inside that store's top-level `Tools/` folder. A subfolder, or any other folder, is politely declined.
+
+**Every save is checked before a byte is written.** The definition is held to the very same standard the table holds it to when it loads, and a tool that would land under *Would not read* is not saved at all; the character is told what is amiss and may try again. A second file in the same store claiming the same `name` is refused on the same grounds. A tool that passes is saved like any other document — the Librarian announces it, and the store's own permissions apply.
+
+**Called with no content, it writes nothing.** It reads the file as it stands and says whether it would load. That is the check to make after a definition has been edited by other means — a `doc_str_replace` here, a hand edit there — when one would rather hear about a stray comma now than at the moment of rolling.
+
+You may switch it off like any other tool, under **Pascal's Custom Tools** in the chat's tool settings, alongside `run_custom` itself.
+
 ## When something is wrong with a file
 
 A tool that cannot be loaded is simply left out of the roster, and appears under **Would not read** at the foot of the run dialog's table, with a badge explaining why (click it to open the file on the Workbench in repair mode). It is never half-loaded and never guessed at. Common causes: the JSON doesn't parse; the last outcome isn't `true`; a `$param` names a parameter that doesn't exist, or one that isn't a number; an outcome asks after a parameter you never declared, or asks whether a string is greater than a number; the dice notation has a typo; two files in the same store claim the same name.
@@ -697,7 +709,7 @@ Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, e
 
 ## Turning it off
 
-The **Custom tools** setting on Settings → Chat governs the whole arrangement. Switched off, `run_custom` is never offered to any model, the gutter button goes away, and no trigger phrase is listened for. Your files stay exactly where they are.
+The **Custom tools** setting on Settings → Chat governs the whole arrangement. Switched off, neither `run_custom` nor `edit_custom_tool` is offered to any model, the gutter button goes away, and no trigger phrase is listened for. Your files stay exactly where they are.
 
 Trigger phrases have a switch of their own besides — **Auto-Run Custom Tools on Trigger Phrases**, under Settings → Chat → Automation, off unless you turn it on.
 

@@ -4,6 +4,17 @@
 
 ### 4.11-dev
 
+#### Feature: `edit_custom_tool`
+
+- New LLM tool `edit_custom_tool` (`lib/tools/edit-custom-tool-tool.ts`, handler `lib/tools/handlers/edit-custom-tool-handler.ts`). It saves or validates one custom-tool definition. Input: `mount_point` (`self` allowed), `file` (`unlock`, `unlock.tool.json` or `Tools/unlock.tool.json`), optional `content` (JSON string or object).
+- Only `Tools/<name>.tool.json` at the top level of a store. Any other folder or a nested path is refused (`toolDefinitionPathFor` in `lib/pascal/custom-tools.ts`).
+- With `content`, the definition must pass `validateToolDefinitionText` (JSON parse + `QtapCustomToolSchema`, split out of `loadToolsFromMount` so the editor and discovery use one check) and must not reuse a `name` another file in the same store defines. Only then is it written, through `doc_write_file`'s handler, so store access, `character_write`, the Librarian announcement and the reindex are a document write's. An object is written pretty-printed; a string is written verbatim.
+- Without `content` (or with `null`), nothing is written: the file is read under the read policy and judged the same way.
+- Offered whenever the chat's Custom Tools setting is on (`editCustomTool` build option, keyed on `customToolContext`), including when the roster is empty.
+- Tool settings: new built-in category `pascal` ("Pascal's Custom Tools"). `run_custom` moved there from `utility`; built-in tools are disabled by id, so existing settings are unaffected.
+- `CustomToolLoadError` carries `name` on a `duplicate` error.
+- Help: new section in `help/custom-tools.md`. Test: `__tests__/unit/lib/tools/handlers/edit-custom-tool-handler.test.ts`.
+
 #### Change: Image prompts are cleaned only for a Moderated chat bound for a moderated painter
 
 - New `isUncensoredImageProfile` (`lib/services/dangerous-content/understudy.ts`): an image profile ticked Uncensored-compatible, or the one named on the Concierge desk.

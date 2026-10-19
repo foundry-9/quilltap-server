@@ -238,6 +238,19 @@ export {
   type RunCustomToolContext,
 } from './handlers/run-custom-handler';
 
+// Edit Custom Tool (Pascal's table — save or validate a Tools/*.tool.json)
+export {
+  editCustomToolToolDefinition,
+  validateEditCustomToolInput,
+  type EditCustomToolInput,
+  type EditCustomToolOutput,
+} from './edit-custom-tool-tool';
+
+export {
+  executeEditCustomTool,
+  formatEditCustomToolResults,
+} from './handlers/edit-custom-tool-handler';
+
 // Whisper Tool (Private Messages in Multi-Character Chats)
 export {
   whisperToolDefinition,

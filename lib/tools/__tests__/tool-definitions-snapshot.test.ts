@@ -53,6 +53,7 @@ import { readConversationToolDefinition } from '../read-conversation-tool'
 import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
 import { runCustomToolDefinition } from '../run-custom-tool'
+import { editCustomToolToolDefinition } from '../edit-custom-tool-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
 import {
   searchScriptoriumToolDefinition,
@@ -138,6 +139,7 @@ const ALL_TOOLS = {
   requestFullContext: requestFullContextToolDefinition,
   rng: rngToolDefinition,
   runCustom: runCustomToolDefinition,
+  editCustomTool: editCustomToolToolDefinition,
   runSql: runSqlToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
