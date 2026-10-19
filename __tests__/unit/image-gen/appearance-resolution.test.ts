@@ -515,7 +515,6 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           makePolicy(),
           false,
-          false,
           testSelection,
           testUserId,
           testChatId
@@ -531,7 +530,6 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOffSettings,
           false,
-          false,
           testSelection,
           testUserId,
           testChatId
@@ -543,13 +541,15 @@ describe('Appearance Resolution Module', () => {
       })
     })
 
-    describe('Sanitization skipped for dangerous chat routed to uncensored', () => {
-      it('should return unchanged when isDangerousChat=true and the scene routes uncensored', async () => {
+    describe('Sanitization skipped for an image bound for an uncensored profile', () => {
+      it.each([
+        ['an Unmoderated chat', () => conciergePolicy('unmoderated')],
+        ['a Locked chat', () => conciergePolicy('locked')],
+      ])('should return unchanged for %s', async (_label, makePolicy) => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
-          dangerOnSettings,
-          true, // isDangerousChat
-          true, // hasUncensoredImageProvider
+          makePolicy(),
+          true, // imageTargetUncensored
           testSelection,
           testUserId,
           testChatId
@@ -572,7 +572,6 @@ describe('Appearance Resolution Module', () => {
         await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
           false,
           testSelection,
           testUserId,
@@ -598,7 +597,6 @@ describe('Appearance Resolution Module', () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
           false,
           testSelection,
           testUserId,
@@ -633,7 +631,6 @@ describe('Appearance Resolution Module', () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
           false,
           testSelection,
           testUserId,
@@ -674,7 +671,7 @@ describe('Appearance Resolution Module', () => {
         })
 
         const result = await sanitizeAppearancesIfNeeded(
-          carrying, dangerOnSettings, false, false, testSelection, testUserId, testChatId
+          carrying, dangerOnSettings, false, testSelection, testUserId, testChatId
         )
 
         expect(mockClassifyContent.mock.calls[0][0]).toContain('severed head')
@@ -706,7 +703,6 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOnSettings,
           false,
-          false,
           testSelection,
           testUserId,
           testChatId,
@@ -737,7 +733,6 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOnSettings,
           false,
-          false,
           testSelection,
           testUserId,
           testChatId,
@@ -749,52 +744,40 @@ describe('Appearance Resolution Module', () => {
         expect(result[0].needsConcealment).toBe(true)
       })
 
-      it('should NOT sanitize when dangerous and the scene routes uncensored', async () => {
-        mockClassifyContent.mockResolvedValue({
-          isDangerous: true,
-          score: 0.9,
-          categories: [{ category: 'sexual', score: 0.9 }],
-        })
-
+      // A Moderated chat whose image is bound for an uncensored profile — its
+      // own, or one the pre-flight rerouted to — is not cleaned, and no
+      // classifier call is spent finding out whether it would have been.
+      it('should neither classify nor sanitize a Moderated chat bound for an uncensored profile', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
-          true, // routesDangerousToUncensored
+          true, // imageTargetUncensored
           testSelection,
           testUserId,
           testChatId
         )
 
+        expect(mockClassifyContent).not.toHaveBeenCalled()
         expect(mockSanitizeAppearance).not.toHaveBeenCalled()
         expect(result).toBe(sampleAppearances)
       })
 
-      it('should sanitize an Unmoderated chat whose scene cannot reach the uncensored desk', async () => {
-        mockClassifyContent.mockResolvedValue({
-          isDangerous: true,
-          score: 0.9,
-          categories: [{ category: 'sexual', score: 0.9 }],
-        })
-        mockSanitizeAppearance.mockResolvedValue({
-          success: true,
-          result: [{ characterId: 'char-1', appearanceText: 'A young woman in casual clothes' }],
-        })
-
-        // The pre-screen is off for an Unmoderated chat; routeDirect keeps the check.
+      // An Unmoderated chat is sent as written even to a moderated painter: a
+      // refusal is the post-hoc failover's to answer, not the sanitizer's to
+      // pre-empt.
+      it('should leave an Unmoderated chat as written even when its painter is moderated', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           conciergePolicy('unmoderated'),
-          true,
           false, // no uncensored image profile to route to
           testSelection,
           testUserId,
           testChatId
         )
 
-        expect(mockClassifyContent).toHaveBeenCalledTimes(1)
-        expect(mockSanitizeAppearance).toHaveBeenCalledTimes(1)
-        expect(result[0].wasSanitized).toBe(true)
+        expect(mockClassifyContent).not.toHaveBeenCalled()
+        expect(mockSanitizeAppearance).not.toHaveBeenCalled()
+        expect(result).toBe(sampleAppearances)
       })
 
       // Bug 133. The fourth argument used to be "an uncensored profile is
@@ -821,8 +804,7 @@ describe('Appearance Resolution Module', () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false, // moderated chat
-          false, // ...and this scene is NOT routed to the uncensored provider
+          false, // this scene is NOT bound for an uncensored provider
           testSelection,
           testUserId,
           testChatId
@@ -881,7 +863,6 @@ describe('Appearance Resolution Module', () => {
           multiAppearances,
           dangerOnSettings,
           false,
-          false,
           testSelection,
           testUserId,
           testChatId
@@ -899,7 +880,6 @@ describe('Appearance Resolution Module', () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
           false,
           testSelection,
           testUserId,
@@ -926,7 +906,6 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOnSettings,
           false,
-          false,
           testSelection,
           testUserId,
           testChatId
@@ -950,7 +929,6 @@ describe('Appearance Resolution Module', () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
-          false,
           false,
           testSelection,
           testUserId,

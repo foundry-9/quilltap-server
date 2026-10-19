@@ -49,6 +49,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  isUncensoredImageProfile: jest.requireActual('@/lib/services/dangerous-content/understudy').isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy: jest.fn(),
   resolveUncensoredTextUnderstudy: jest.fn(),
 }))

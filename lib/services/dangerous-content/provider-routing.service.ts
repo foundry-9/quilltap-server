@@ -12,6 +12,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
+  isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy,
   resolveUncensoredTextUnderstudy,
 } from './understudy'
@@ -166,6 +167,21 @@ export async function resolveImageProviderForDangerousContent(
       imageProfile: originalProfile,
       apiKey: originalApiKey,
       reason: `Concierge policy (${conciergePolicy.source}) does not permit rerouting`,
+    }
+  }
+
+  // Already on an uncensored painter → stay put. Trading one uncensored
+  // profile for another buys nothing and overrides the operator's pick.
+  if (isUncensoredImageProfile(originalProfile, conciergePolicy)) {
+    logger.debug('[DangerousContent] Image profile is already uncensored; not rerouting', {
+      profileId: originalProfile.id,
+      profileName: originalProfile.name,
+    })
+    return {
+      rerouted: false,
+      imageProfile: originalProfile,
+      apiKey: originalApiKey,
+      reason: `Image profile is already uncensored: ${originalProfile.name}`,
     }
   }
 

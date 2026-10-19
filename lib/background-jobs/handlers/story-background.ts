@@ -52,7 +52,7 @@ import {
   composeRetryRouteTrail,
   resolveImageRetryUnderstudy,
 } from '@/lib/services/dangerous-content/retry-uncensored';
-import type { ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
+import { isUncensoredImageProfile, type ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
@@ -206,16 +206,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
   const isDangerousChat = shouldUseUncensoredRoute(chat);
   const hasUncensoredImageProvider = Boolean(conciergePolicy.desk.imageProfileId);
-  // A dangerous-marked chat with an uncensored image profile configured is
-  // already headed for a provider that accepts adult content — appearance
-  // sanitization steps aside for exactly this case (see
-  // `sanitizeAppearancesIfNeeded`), so the prompt crafter should too rather
-  // than draping a sheet over a scene nobody asked to have covered.
+  // The scene is cleaned — concealment in the crafter, sanitization of the
+  // appearances — only for a Moderated chat bound for a moderated painter.
+  // Everything else is crafted candidly:
   //
-  // Only when the policy routes direct (on duty and Unmoderated): a candid
-  // prompt is never crafted for a chat the Concierge will not send to the
-  // uncensored desk, or its franker prompt would go straight to the moderated
-  // provider.
+  // - the chat's own image profile is uncensored (`isUncensoredImageProfile`)
+  //   → it accepts the scene, whatever the chat's state;
+  // - the chat is Unmoderated → the operator asked for the scene as written.
+  //   With an uncensored desk (and the Concierge on duty) it is routed there
+  //   below; without one the ordinary painter gets it as written and a
+  //   refusal is answered by the post-hoc failover, not by a draped sheet.
   //
   // "Try uncensored" (`payload.forceUncensored`) puts the Concierge's
   // uncensored understudy in the painter's chair for this one job, whatever
@@ -241,15 +241,22 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     }
     forcedUnderstudy = gate.understudy;
   }
+  const paintsOnUncensoredProfile = isUncensoredImageProfile(imageProfile, conciergePolicy);
+  // Unmoderated and on duty with a desk configured → reroute up front.
+  const routesDirectToDesk =
+    forcedUnderstudy === null
+    && !paintsOnUncensoredProfile
+    && isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect;
   const uncensoredImageTarget =
-    forcedUnderstudy !== null
-    || (isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect);
+    forcedUnderstudy !== null || paintsOnUncensoredProfile || isDangerousChat;
   logger.debug('[StoryBackground] Concierge policy resolved', {
     context: 'background-jobs.story-background',
     jobId: job.id,
     conciergeSource: conciergePolicy.source,
     conciergeState: conciergePolicy.state,
     uncensoredImageTarget,
+    paintsOnUncensoredProfile,
+    routesDirectToDesk,
   });
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
@@ -443,10 +450,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       resolvedAppearances = await sanitizeAppearancesIfNeeded(
         resolvedAppearances,
         conciergePolicy,
-        isDangerousChat,
-        // Story backgrounds never route up front — only `uncensoredImageTarget`
-        // scenes actually reach the uncensored provider (bug 133).
-        uncensoredImageTarget,
+        // Whether this scene's painter is uncensored — the chat's own profile,
+        // the desk it is routed to, or the forced understudy — never whether
+        // one exists somewhere (bug 133). An Unmoderated chat bound for a
+        // moderated painter is not cleaned either: the sanitizer only acts
+        // under a Moderated chat's pre-screen.
+        forcedUnderstudy !== null || paintsOnUncensoredProfile || routesDirectToDesk,
         cheapLLMSelection,
         job.userId,
         payload.chatId,
@@ -507,9 +516,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   ]);
   const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
 
-  // An Unmoderated chat with an uncensored image profile goes straight to the
-  // uncensored desk (`routeDirect`): the candid prompt crafted below must
-  // never be sent to the ordinary painter first.
+  // An Unmoderated chat with an uncensored desk goes straight to it
+  // (`routeDirect`): its candid prompt is never offered to the ordinary
+  // painter first when an uncensored one is to hand. A chat whose own image
+  // profile is already uncensored stays on it.
   let primaryImageProfile: ImageProfile = imageProfile;
   let primaryImageKey: string = apiKey.key_value;
   if (forcedUnderstudy) {
@@ -521,7 +531,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       profileId: primaryImageProfile.id,
       profileName: primaryImageProfile.name,
     });
-  } else if (uncensoredImageTarget) {
+  } else if (routesDirectToDesk) {
     const route = await resolveImageProviderForDangerousContent(
       imageProfile,
       apiKey.key_value,

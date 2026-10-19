@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Change: Image prompts are cleaned only for a Moderated chat bound for a moderated painter
+
+- New `isUncensoredImageProfile` (`lib/services/dangerous-content/understudy.ts`): an image profile ticked Uncensored-compatible, or the one named on the Concierge desk.
+- `sanitizeAppearancesIfNeeded` takes `imageTargetUncensored` (the profile that will actually generate the image is uncensored) in place of `isDangerousChat` + `routesDangerousToUncensored`. It returns unchanged, with no classifier call, when the target is uncensored, in any chat state. Otherwise it sanitizes only under the pre-screen (Moderated, on duty). An Unmoderated chat bound for a moderated provider is no longer sanitized; a refusal is left to the post-hoc failover.
+- `generate_image` passes the profile it ended up on after the pre-flight reroute, so a Moderated chat rerouted to the desk by the pre-screen is no longer sanitized on its way there.
+- Story backgrounds craft candidly (`uncensoredImageTarget`) when the chat's own image profile is uncensored or the chat is Unmoderated (on or off duty, desk named or not), as well as for "Try uncensored". Concealment remains for Moderated and Locked chats on a moderated painter. The up-front route to the desk is unchanged (Unmoderated, on duty, desk named) and is skipped when the chat's own profile is already uncensored.
+- `resolveImageProviderForDangerousContent` no longer reroutes from a profile that is already uncensored (it used to swap it for the desk's or another compatible one). Applies to the tool, story backgrounds, character avatars and wardrobe item images. The post-hoc failover is unchanged.
+- Help: new "What Gets Cleaned Up" section in `help/the-concierge.md`; story-background conditions, the Locked note and `help/image-generation-profiles.md` updated to match.
+
 #### Fix: published vault addresses name the vault (bug 256)
 
 - No address Quilltap hands out depends on who reads it. `qtap://self/…` means the vault of whoever follows it, and the URI producers handed a character's own-vault documents out in that form in tool results, Librarian announcements and `self_inventory`, which every character in a chat reads. A second character following one opened their own file of the same name (a request for Abigail's `metadata.json` returned Friday's), with no error.
