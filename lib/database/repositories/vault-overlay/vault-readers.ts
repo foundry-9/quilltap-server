@@ -44,7 +44,7 @@ import {
   parseVaultPhysicalPrompts,
   parseLegacyWardrobeJson,
   parsePromptFile,
-  parseScenarioFile,
+  parseScenarioFilesSorted,
   parseWardrobeItemFile,
   resolveAndCheckComponentItems,
   isWardrobeItemDocumentPath,
@@ -295,11 +295,7 @@ export async function readCharacterVaultScenarios(
     CHARACTER_SCENARIOS_FOLDER,
     '.md',
   );
-  return docs
-    .slice()
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-    .map((doc) => parseScenarioFile(doc, characterId ?? mountPointId))
-    .filter((s): s is CharacterScenario => s !== null);
+  return parseScenarioFilesSorted(docs, characterId ?? mountPointId);
 }
 
 /**

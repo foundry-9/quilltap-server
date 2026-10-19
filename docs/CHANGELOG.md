@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: Scenario lists sort by title
+
+- Every list of scenarios now sorts by title (frontmatter `name`, or the parser's fallback), then filename, case-insensitively, ignoring a leading "The" (also "the-" / "the_" in filenames). New `lib/scenarios/sort.ts` (`compareScenarios`, `sortScenarios`, `scenarioSortKey`).
+- `buildScenarioList` (every store-tier location's `list`, the instance-wide scenario browser) returns title order. Default-conflict resolution still walks path order, so the alphabetically-first filename still wins.
+- A character vault's scenario array is built by the new `parseScenarioFilesSorted` (`vault-overlay/parsers.ts`) in both the read overlay and `readCharacterVaultScenarios`, in the same order. The implicit scenario for a chat that names none (`firstActiveScenarioContent`) is now the first by title rather than by path.
+- `ScenarioSelect` sorts each optgroup too, so an entry a surface appends locally after a save shows in place.
+
 #### Fix: Inventory dogfood fixes
 
 - The project roster now gates the project's Inventory shelf as it does the project wardrobe. For a character the roster does not admit, `loadInventoryContext` (every `inventory_*` tool and every Pascal read, gate and effect) hides project-tier objects they are not carrying, and `equipItems` / `pickUpItems` refuse a `character` or `pascal` gesture that would take from the shelf with the new `OFF_ROSTER` refusal (`InventoryOffRosterError`). Objects already carried stay visible and can be set down. `inventory_pick_up`, `inventory_equip` and `inventory_read` answer a reference to a hidden shelf object with the roster refusal rather than "not found" (`closedShelfMessage`; `LoadedInventoryContext.closedShelf` keeps the hidden objects for this alone). Operator gestures, arrival defaults, the prompt section and the image pipelines are not gated. New `lib/inventory/roster-gate.ts`; the shared inventory test store gains a roster (`putOffRoster`).

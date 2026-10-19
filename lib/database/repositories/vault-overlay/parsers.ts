@@ -27,6 +27,7 @@ import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
 import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { sortScenarios } from '@/lib/scenarios/sort';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 import {
@@ -670,4 +671,27 @@ export function parseScenarioFile(
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+/**
+ * Parse every `Scenarios/*.md` document of one vault and return them in
+ * display order — title, then filename, leading "The" ignored
+ * (`lib/scenarios/sort.ts`). The one way a vault's scenario array is built, so
+ * `character.scenarios` and therefore its "first scenario" agree with every
+ * picker.
+ */
+export function parseScenarioFilesSorted(
+  docs: DocMountDocument[],
+  characterId: string,
+): CharacterScenario[] {
+  const parsed: Array<{ doc: DocMountDocument; scenario: CharacterScenario }> = [];
+  for (const doc of docs) {
+    const scenario = parseScenarioFile(doc, characterId);
+    if (scenario) parsed.push({ doc, scenario });
+  }
+  return sortScenarios(parsed, ({ doc, scenario }) => ({
+    title: scenario.title,
+    filename: doc.fileName.replace(/\.md$/i, ''),
+    path: doc.relativePath,
+  })).map(({ scenario }) => scenario);
 }

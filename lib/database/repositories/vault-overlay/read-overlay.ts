@@ -23,7 +23,6 @@ import type {
   Character,
   PhysicalDescription,
   CharacterSystemPrompt,
-  CharacterScenario,
 } from '@/lib/schemas/types';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
@@ -50,7 +49,7 @@ import {
   markdownToNullable,
   stableUuidFromString,
   parsePromptFile,
-  parseScenarioFile,
+  parseScenarioFilesSorted,
 } from './parsers';
 
 /** The loaded vault files for a set of mount points, keyed for hydration. */
@@ -302,11 +301,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
   // Scenarios/*.md → scenarios. Vault-authoritative: an empty or
   // all-unparseable folder yields an empty array, never the DB column.
   const scenarioDocs = maps.scenariosByMount.get(mountId) ?? [];
-  const parsedScenarios = scenarioDocs
-    .slice()
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-    .map((doc) => parseScenarioFile(doc, character.id))
-    .filter((s): s is CharacterScenario => s !== null);
+  const parsedScenarios = parseScenarioFilesSorted(scenarioDocs, character.id);
   out = { ...out, scenarios: parsedScenarios };
 
   return out;
