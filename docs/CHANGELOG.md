@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Change: `/photos` leaves out character vaults and gains an album selector
+
+- `/photos` ("My Photos") no longer includes character vaults. Its default view covers every enabled non-character store: Quilltap Uploads, Quilltap General, project stores and other document stores. Previously, promoting an Avatar Roll to a portrait copied it into the character's `photos/` folder, and that copy also showed up in My Photos. The rule is `isUserGalleryMount` in `lib/photos/user-gallery-service.ts`.
+- New album selector on `/photos`: My Photos, or any one store's album (characters, projects, document stores, Quilltap General). It is backed by `GET /api/v1/photos?action=albums` (`listAllPhotoAlbumOptions`, which leaves out archived vaults) and `GET /api/v1/photos?album=<mountPointId>` (`listUserGallery({ mountPointId })`). Search, dedupe and paging work the same in both views. An unknown or disabled album returns 404.
+- Removing a photo from a character's album on `/photos` goes through `DELETE /api/v1/characters/[id]/photos/[linkId]`, as Aurora does. `removeFromUserGallery` and `getUserGalleryEntry` now refuse character-vault links.
+- New query key `queryKeys.photos.albums()`. Help: `help/photo-gallery.md`. Tests: `__tests__/unit/lib/photos/user-gallery-service.test.ts`.
+
 #### Feature: `edit_custom_tool`
 
 - New LLM tool `edit_custom_tool` (`lib/tools/edit-custom-tool-tool.ts`, handler `lib/tools/handlers/edit-custom-tool-handler.ts`). It saves or validates one custom-tool definition. Input: `mount_point` (`self` allowed), `file` (`unlock`, `unlock.tool.json` or `Tools/unlock.tool.json`), optional `content` (JSON string or object).

@@ -3911,11 +3911,15 @@ copy.
 
 ### Photo Gallery
 
-The user's personal image gallery, stored at `<userUploadsMountPointId>/photos/` and deduped by SHA-256. Backed by `lib/photos/user-gallery-service.ts`.
+The user's personal image gallery: a roll-up of the `photos/` folder in every enabled non-character store, deduped by SHA-256. Saves land in `<userUploadsMountPointId>/photos/`. Character vaults are left out of the roll-up; each one is that character's own album. Backed by `lib/photos/user-gallery-service.ts`.
 
 #### `GET /api/v1/photos`
 
-List the user's gallery. Supports optional `query`, `tags`, and pagination parameters.
+List the user's gallery. Supports optional `q`, `tag` (repeatable), `limit` and `offset`. With `album=<mountPointId>`, lists that one store's `photos/` folder instead, character vaults included. Returns `404` for an unknown or disabled album.
+
+#### `GET /api/v1/photos?action=albums`
+
+Every album the `/photos` selector offers, as `{ albums: PhotoAlbumOption[] }` (`listAllPhotoAlbumOptions`): characters (archived vaults left out), projects, document stores and Quilltap General.
 
 #### `POST /api/v1/photos`
 
@@ -3927,7 +3931,7 @@ Get a single gallery entry with its link summary. `[id]` is a `doc_mount_file_li
 
 #### `DELETE /api/v1/photos/[id]`
 
-Remove a gallery entry. Cascades to chunks; garbage collection drops the underlying file row if this was its last link.
+Remove a gallery entry. Refuses a link in a character vault: use `DELETE /api/v1/characters/[id]/photos/[linkId]` for those. Cascades to chunks; garbage collection drops the underlying file row if this was its last link.
 
 ---
 

@@ -1,18 +1,25 @@
 'use client';
 
 /**
- * "My Photos" gallery page — a deduped roll-up of every `photos/` folder
- * across the instance (character vaults, project stores, Quilltap General,
- * Quilltap Uploads). The same image hard-linked into multiple albums
- * collapses to a single card with a "linked in N places" badge that
- * expands to the full linker list in the detail modal.
+ * "My Photos" gallery page. By default a deduped roll-up of every `photos/`
+ * folder outside the character vaults (project stores, Quilltap General,
+ * Quilltap Uploads); the album selector narrows it to any one store's album
+ * instead — a character's vault, a project store, any document store. The
+ * same image hard-linked into multiple albums collapses to a single card
+ * with a "linked in N places" badge that expands to the full linker list in
+ * the detail modal.
  *
- * Backed by `GET /api/v1/photos`; see `lib/photos/user-gallery-service.ts`
- * for the aggregation logic.
+ * Backed by `GET /api/v1/photos` (`album=` for one store, `?action=albums`
+ * for the selector); see `lib/photos/user-gallery-service.ts` for the
+ * aggregation logic.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
+import type { PhotoAlbumKind, PhotoAlbumOption } from '@/lib/photos/photo-album-options';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast, showSuccessToast } from '@/lib/toast';
 import { downloadFetchedFile } from '@/lib/download-utils';
@@ -65,6 +72,32 @@ interface ListResponse {
 
 const PAGE_SIZE = 60;
 
+/** Selector value for the operator's own roll-up (no single store). */
+const MY_PHOTOS = '';
+
+const ALBUM_GROUP_LABELS: Record<PhotoAlbumKind, string> = {
+  character: 'Characters',
+  project: 'Projects',
+  'document-store': 'Document stores',
+  general: 'Quilltap General',
+};
+
+/** Characters' albums are removed through their own door, which scrubs portrait pointers. */
+function photoDeleteUrl(album: PhotoAlbumOption | null, linkId: string): string {
+  return album?.kind === 'character' && album.characterId
+    ? `/api/v1/characters/${album.characterId}/photos/${linkId}`
+    : `/api/v1/photos/${linkId}`;
+}
+
+function buildListParams(albumId: string, query: string, offset: number): string {
+  const params = new URLSearchParams();
+  if (albumId) params.set('album', albumId);
+  if (query.trim()) params.set('q', query.trim());
+  params.set('limit', String(PAGE_SIZE));
+  params.set('offset', String(offset));
+  return params.toString();
+}
+
 export function PhotosView() {
   const [entries, setEntries] = useState<GalleryEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -76,6 +109,26 @@ export function PhotosView() {
   const [appliedQuery, setAppliedQuery] = useState('');
   const [selected, setSelected] = useState<GalleryEntry | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [albumId, setAlbumId] = useState<string>(MY_PHOTOS);
+
+  const { data: albumData } = useQuery({
+    queryKey: queryKeys.photos.albums(),
+    queryFn: ({ signal }) => apiFetch<{ albums: PhotoAlbumOption[] }>('/api/v1/photos?action=albums', { signal }),
+  });
+  const albums = useMemo(() => albumData?.albums ?? [], [albumData]);
+  const album = useMemo(
+    () => (albumId ? albums.find(a => a.mountPointId === albumId) ?? null : null),
+    [albumId, albums]
+  );
+  const albumGroups = useMemo(() => {
+    const groups = new Map<PhotoAlbumKind, PhotoAlbumOption[]>();
+    for (const option of albums) {
+      const list = groups.get(option.kind) ?? [];
+      list.push(option);
+      groups.set(option.kind, list);
+    }
+    return Array.from(groups.entries());
+  }, [albums]);
 
   // Each new search/clear bumps the fetch generation so a stale in-flight
   // load-more from the previous query can't clobber the new page.
@@ -91,11 +144,7 @@ export function PhotosView() {
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
-      params.set('limit', String(PAGE_SIZE));
-      params.set('offset', '0');
-      const res = await fetch(`/api/v1/photos?${params.toString()}`);
+      const res = await fetch(`/api/v1/photos?${buildListParams(albumId, appliedQuery, 0)}`);
       if (!res.ok) {
         throw new Error(`Failed to load gallery (${res.status})`);
       }
@@ -110,9 +159,9 @@ export function PhotosView() {
     } finally {
       if (generation === fetchGenerationRef.current) setLoading(false);
     }
-  }, [appliedQuery]);
+  }, [albumId, appliedQuery]);
 
-  // Initial / on-search-change fetch.
+  // Initial / on-search-or-album-change fetch.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount/search change; the flags it flips are loading/error bookkeeping inside async fetchFirstPage()
     void fetchFirstPage();
@@ -129,11 +178,7 @@ export function PhotosView() {
     const generation = fetchGenerationRef.current;
     setLoadingMore(true);
     try {
-      const params = new URLSearchParams();
-      if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
-      params.set('limit', String(PAGE_SIZE));
-      params.set('offset', String(entries.length));
-      const res = await fetch(`/api/v1/photos?${params.toString()}`);
+      const res = await fetch(`/api/v1/photos?${buildListParams(albumId, appliedQuery, entries.length)}`);
       if (!res.ok) throw new Error(`Failed to load more (${res.status})`);
       const json: ListResponse = await res.json();
       if (generation !== fetchGenerationRef.current) return;
@@ -152,7 +197,7 @@ export function PhotosView() {
     } finally {
       setLoadingMore(false);
     }
-  }, [appliedQuery, entries.length, hasMore, loading, loadingMore]);
+  }, [albumId, appliedQuery, entries.length, hasMore, loading, loadingMore]);
 
   // IntersectionObserver — fires loadMore when the sentinel scrolls into
   // view. rootMargin pre-loads the next page before the user hits the
@@ -185,7 +230,7 @@ export function PhotosView() {
       if (!(await showConfirmation('Remove this photo from this album? Other albums that link the same image will keep their copy.'))) return;
       setDeleting(linkId);
       try {
-        const res = await fetch(`/api/v1/photos/${linkId}`, { method: 'DELETE' });
+        const res = await fetch(photoDeleteUrl(album, linkId), { method: 'DELETE' });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
           throw new Error(json?.error || `Failed to delete (${res.status})`);
@@ -199,7 +244,7 @@ export function PhotosView() {
         setDeleting(null);
       }
     },
-    [selected]
+    [album, selected]
   );
 
   const counterLabel = useMemo(() => {
@@ -219,10 +264,39 @@ export function PhotosView() {
     >
       <header className="flex flex-wrap items-end justify-between gap-6 border-b qt-border-default/60 pb-6">
         <div className="max-w-2xl space-y-2">
-          <h1 className="qt-page-title">My Photos</h1>
+          <h1 className="qt-page-title">
+            {album ? (album.kind === 'character' ? `${album.name}\u2019s Photos` : album.name) : 'My Photos'}
+          </h1>
           <p className="qt-text-small">
-            Every image you&rsquo;ve kept, gathered from each character&rsquo;s vault, each project album, and your private uploads — listed once and linked to wherever it lives.
+            {album?.kind === 'character'
+              ? `The pictures ${album.name} keeps in their own vault \u2014 kept photographs and promoted portraits alike.`
+              : album
+                ? 'The pictures filed in this store\u2019s album.'
+                : 'Every image you\u2019ve kept, gathered from each project album, Quilltap General, and your private uploads \u2014 listed once and linked to wherever it lives. A character\u2019s own album is a separate cabinet; choose it above to look inside.'}
           </p>
+          <label className="flex flex-wrap items-center gap-2 pt-1 text-sm">
+            <span className="qt-text-muted">Album</span>
+            <select
+              className="qt-select w-auto min-w-[14rem]"
+              value={albumId}
+              onChange={(e) => {
+                setAlbumId(e.target.value);
+                setSelected(null);
+              }}
+              aria-label="Choose which album to show"
+            >
+              <option value={MY_PHOTOS}>My Photos</option>
+              {albumGroups.map(([kind, options]) => (
+                <optgroup key={kind} label={ALBUM_GROUP_LABELS[kind]}>
+                  {options.map((option) => (
+                    <option key={option.mountPointId} value={option.mountPointId}>
+                      {option.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
           <p className="qt-text-muted text-xs uppercase tracking-wide">
             {counterLabel}
           </p>

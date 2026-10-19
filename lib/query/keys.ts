@@ -265,6 +265,8 @@ export const queryKeys = {
   photos: {
     all: ['photos'] as const,
     list: (filters?: Filters) => ['photos', 'list', filters ?? {}] as const,
+    /** The albums the `/photos` selector offers. */
+    albums: () => ['photos', 'albums'] as const,
   },
   files: {
     all: ['files'] as const,
