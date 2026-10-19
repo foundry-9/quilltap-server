@@ -152,7 +152,7 @@ export async function handleWriteBlob(
     sizeBytes: stored.sizeBytes,
   });
 
-  const storedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: stored.relativePath, characterId: context.characterId });
+  const storedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: stored.relativePath });
 
   await postLibrarianBlobWriteAnnouncement({
     chatId: context.chatId,
@@ -207,7 +207,7 @@ export async function handleReadBlob(
   const result: DocReadBlobOutput = {
     mount_point: mp.name,
     relative_path: meta.relativePath,
-    uri: await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: meta.relativePath, characterId: context.characterId }),
+    uri: await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: meta.relativePath }),
     original_filename: meta.originalFileName,
     original_mime_type: meta.originalMimeType,
     stored_mime_type: meta.storedMimeType,
@@ -260,7 +260,7 @@ export async function handleListBlobs(
     mp.id,
     folder ? { folder } : {}
   );
-  const uriResolver = await buildDocStoreUriResolver(context.characterId);
+  const uriResolver = await buildDocStoreUriResolver();
   const result: DocListBlobsOutput = {
     mount_point: mp.name,
     blobs: metas.map(m => ({
@@ -304,7 +304,7 @@ export async function handleDeleteBlob(
     return { success: false, error: `Blob not found: ${target.path}` };
   }
   logger.info('Deleted blob', { mountPointId: mp.id, relativePath: target.path });
-  const deletedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: target.path, characterId: context.characterId });
+  const deletedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: target.path });
   await postLibrarianDeleteAnnouncement({
     chatId: context.chatId,
     displayTitle: path.basename(target.path),

@@ -4,6 +4,34 @@
 
 ### 4.11-dev
 
+#### Fix: published vault addresses name the vault (bug 256)
+
+- No address Quilltap hands out depends on who reads it. `qtap://self/…` means the vault of whoever follows it, and the URI producers handed a character's own-vault documents out in that form in tool results, Librarian announcements and `self_inventory`, which every character in a chat reads. A second character following one opened their own file of the same name (a request for Abigail's `metadata.json` returned Friday's), with no error.
+- `docStoreUriFor`, `uriForResolvedPath` and `buildDocStoreUriResolver` (`lib/doc-edit/uri-producers.ts`) always name the store (UUID when the name is ambiguous) and no longer take a character argument.
+- The doc handlers pass the resolved store's name to every Librarian announcement and to Document Mode's `chat_documents` row (`publishedMountPoint` in `lib/tools/handlers/doc-edit/shared.ts`). `librarianUri` prints a bare path for a leftover `self` (an old `chat_documents` row).
+- `self_inventory` names the vault in each listed file's `uri`; a context-file row stored as `self` gets no URI and an explanation; the footer says `self` is the reader's own vault.
+- The path resolver's `NOT_FOUND` names the store asked for; `MISSING_CONTEXT` says a path alone names no store.
+- A character's own `self` reads are unchanged. Prospero's vault whisper and the knowledge injector, which only the owner reads, still use `self`.
+- Test: `__tests__/unit/lib/doc-edit/vault-addresses-reader-independent.test.ts`.
+
+#### Feature: Inventory title lint
+
+- Every Inventory write runs `lintInventoryTitle` (new `lib/inventory/title-lint.ts`) with the object before and after the write. `resolveInventoryRef` stops at the first of id → title → name that matches, so a title equal to a string something means by name silently takes its place.
+- The lint judges the change to the set of reachable titled objects, not a field. A title enters on a create, a rename, a restore from the archive, a cleared title override, a copy, or a move into `Inventory/`, and on a name change under a standing title. It leaves on a rename, an archive, a delete or a move out. Other edits (description, folder) are neither.
+- An entering title is refused (`TITLE_SHADOW`, `InventoryTitleShadowError`) when, after `normalizeTitle` (the resolver's `trim` + `toLowerCase`, then whitespace collapsed and diacritics stripped), it equals the resolved name of any object the location's pool reaches, its own included (`kind-name shadow`), or a literal `inventory` / `inventoryCount` key in any custom tool's `availableWhen` / `withheldWhen` that resolves, with the object left out, to some other object (`live gate shadow`). The message names the title, each collision and the tool. A key that resolves to nothing else passes as `gate key naming` (one `info` row).
+- An entering title fails closed (`TITLE_CHECK_UNAVAILABLE`, `InventoryTitleCheckUnavailableError`), naming what could not be read: a pool tier whose read failed, a consulted store that does not exist, a failed `Tools/` listing, a tool file listed but missing on open, or a tool file whose bytes or JSON cannot be read.
+- A leaving title is never refused. When a gate keys on it, a row is logged at once with `gate dark`, `gate redirected: <owner>`, `gate unverifiable: <what could not be read>` (all alerts) or `gate key moved`.
+- Every lint call writes one `debug` census line (`[InventoryTitleLint] Census`) naming the pools and tool stores read and their sizes.
+- The document-write layer lints too. `writeDatabaseDocument`, `deleteDatabaseDocument`, `moveDatabaseDocument` and `moveDatabaseFolder` (`lib/mount-index/database-store.ts`) call `lintInventoryDocumentChange` (new `lib/inventory/title-lint-documents.ts`) for `Inventory/*.json` and `Tools/*.tool.json` paths, so an edit made with `doc_*` tools or the Scriptorium is linted from the file's prior state. A prior state that cannot be read refuses a titled write. A `Tools/` edit writes the census line only. The Inventory mutations' own projection runs inside `withInventoryWritesLinted` (new `lib/inventory/lint-scope.ts`) and is not linted twice.
+- Not linted: a transfer between tiers (`preserve`), an instance with no title of its own, filesystem-backed stores (they hold no Inventory).
+- New `lib/pascal/tool-gate-keys.ts` (`collectToolGateKeys`) takes the instance-wide census of gate keys. `loadToolsFromMount` / `listAllCustomTools` now return `unread` (failed listings and files listed but missing on open, which the roster still skips) and `storesConsulted`; `CustomToolLoadError` gains `stage`. `InventoryPool` gains `consultedMounts` and `unreadMounts`.
+- The Inventory editor's toast (`describeInventoryRefusal`) shows the two new refusals' lines joined with "; "; the API, tool results and logs keep one line per collision.
+- Tests: `__tests__/unit/lib/inventory/title-lint.test.ts`, `__tests__/unit/lib/inventory/title-lint-documents.test.ts`, `__tests__/unit/lib/mount-index/database-store-title-lint.test.ts`, `__tests__/unit/lib/pascal/tool-gate-keys.test.ts`; the shared Inventory test store gains a fake census (`toolGateKeysModule`, `putGateKey`), `missingMounts` and `docMountDocuments.findByMountPointAndPath`.
+
+#### Test: unit suite ignores an inherited environment
+
+- `npm run test:unit` sets `NODE_ENV=test`, and `jest.setup.ts` clears `QUILLTAP_TIMEZONE`. A shell opened from Quilltap exports `NODE_ENV=production` (React tests then load the production build and fail on `React.act`) and `QUILLTAP_TIMEZONE` (the memory day-reference suites, which compute expectations in the process's own zone, then fail).
+
 #### Fix: Ariel reads full-screen programs (bug 255)
 
 - `terminal_read` and Ariel's periodic summaries now render terminal output through a server-side terminal emulator (`@xterm/headless`, new `lib/terminal/screen.ts`) instead of stripping escape codes. Full-screen programs (Claude Code, vim, less) draw with cursor addressing on the alternate screen, and stripping reduced them to fragments: 422 KB of Claude Code output read back as 526 characters.

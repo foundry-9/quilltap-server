@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.11.0-dev.38",
+  "version": "4.11.0-dev.39",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -48,7 +48,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:integration": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
-    "test:unit": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js",
+    "test:unit": "cross-env NODE_ENV=test LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js",
     "test:watch": "node --no-sparkplug node_modules/jest/bin/jest.js --watch",
     "update:npm": "./scripts/upgrade-dependencies.sh",
     "update:version": "./scripts/update_version.sh"

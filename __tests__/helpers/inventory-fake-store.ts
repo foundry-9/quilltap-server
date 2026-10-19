@@ -10,6 +10,10 @@
  *   jest.mock('@/lib/mount-index/folder-paths', () => require('@/__tests__/helpers/inventory-fake-store').folderPathsModule())
  *   jest.mock('@/lib/instance-settings', () => require('@/__tests__/helpers/inventory-fake-store').instanceSettingsModule())
  *   jest.mock('@/lib/mount-index/tiered-mount-pool', () => require('@/__tests__/helpers/inventory-fake-store').tieredPoolModule())
+ *   jest.mock('@/lib/pascal/tool-gate-keys', () => require('@/__tests__/helpers/inventory-fake-store').toolGateKeysModule())
+ *
+ * The last one feeds the title lint's gate-key census from `state.gateKeys`
+ * (add with {@link putGateKey}) and `state.gateKeysUnread`.
  */
 
 export interface FakeCharacter {
@@ -43,6 +47,12 @@ export const state = {
   groupMounts: new Map<string, Array<{ group: { id: string; name: string }; mountPointIds: string[] }>>(),
   projectMounts: new Map<string, string[]>(),
   files: [] as Array<{ id: string; linkedTo: string[]; category: string; createdAt: string; storageKey?: string; originalFilename: string }>,
+  /** Gate keys the title lint's census reports. */
+  gateKeys: [] as Array<{ ref: string; toolName: string; clause: 'availableWhen' | 'withheldWhen'; subject: 'inventory' | 'inventoryCount'; mountName: string; definitionPath: string }>,
+  /** Mount ids `docMountPoints.findById` answers null for (a store that does not exist). */
+  missingMounts: new Set<string>(),
+  /** What the census reports it could not read. */
+  gateKeysUnread: [] as Array<{ mountName: string; definitionPath: string; reason: string }>,
 };
 
 export function resetStore(): void {
@@ -56,6 +66,9 @@ export function resetStore(): void {
   state.groupMounts.clear();
   state.projectMounts = new Map([['project-1', [PROJECT_MP]]]);
   state.files = [];
+  state.gateKeys = [];
+  state.gateKeysUnread = [];
+  state.missingMounts.clear();
 }
 
 const key = (mp: string, path: string) => `${mp}::${path}`;
@@ -126,6 +139,13 @@ export function repositories() {
       findManyByMountPointsInFolder: jest.fn(async (mps: string[], folder: string, ext = '.md', opts: { recursive?: boolean } = {}) =>
         docsIn(mps, folder, ext, opts.recursive === true),
       ),
+      findByMountPointAndPath: jest.fn(async (mp: string, path: string) => {
+        const found = Array.from(state.docs.entries()).find(([k]) => {
+          const d = split(k);
+          return d.mp === mp && d.path.toLowerCase() === path.toLowerCase();
+        });
+        return found ? { mountPointId: mp, relativePath: split(found[0]).path, content: found[1] } : null;
+      }),
       findManyInFolderContaining: jest.fn(async (folder: string, ext: string, needles: string[]) => {
         const mps = Array.from(new Set(Array.from(state.docs.keys()).map((k) => split(k).mp)))
         return docsIn(mps, folder, ext, true).filter((doc) => needles.some((needle) => String(doc.content ?? '').includes(needle)))
@@ -152,7 +172,7 @@ export function repositories() {
         for (const c of state.characters.values()) if (c.characterDocumentMountPointId) mps.add(c.characterDocumentMountPointId);
         return Array.from(mps).map((id) => ({ id, name: id }));
       }),
-      findById: jest.fn(async (id: string) => ({ id, name: id })),
+      findById: jest.fn(async (id: string) => (state.missingMounts.has(id) ? null : { id, name: id })),
     },
     characters: {
       findByIdRaw: jest.fn(async (id: string) => state.characters.get(id) ?? null),
@@ -294,4 +314,30 @@ export function addCharacter(id: string, name: string, opts: { archived?: boolea
   };
   state.characters.set(id, character);
   return character;
+}
+
+/** A tool gate keyed on `ref` (an `availableWhen.inventory` key unless told otherwise). */
+export function putGateKey(
+  toolName: string,
+  ref: string,
+  opts: { clause?: 'availableWhen' | 'withheldWhen'; subject?: 'inventory' | 'inventoryCount' } = {},
+): void {
+  state.gateKeys.push({
+    ref,
+    toolName,
+    clause: opts.clause ?? 'availableWhen',
+    subject: opts.subject ?? 'inventory',
+    mountName: 'Quilltap General',
+    definitionPath: `Tools/${toolName}.tool.json`,
+  });
+}
+
+export function toolGateKeysModule() {
+  return {
+    collectToolGateKeys: jest.fn(async () => ({
+      keys: [...state.gateKeys],
+      unread: [...state.gateKeysUnread],
+      storesConsulted: ['Quilltap General'],
+    })),
+  };
 }

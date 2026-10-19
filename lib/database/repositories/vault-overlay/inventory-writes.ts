@@ -52,12 +52,18 @@ import {
   type VaultFolderMount,
 } from './item-folder-ops';
 import { projectArrayIntoVaultFolder } from './vault-projection';
+import { withInventoryWritesLinted } from '@/lib/inventory/lint-scope';
 
 /** An Inventory tier's folder on disk. */
 export type InventoryMount = VaultFolderMount;
 
+/**
+ * Serialised per folder, and marked as linted: every write here comes from
+ * the Inventory mutations, which have already run the title lint, so the
+ * document-write layer leaves these alone (`lib/inventory/lint-scope.ts`).
+ */
 function runSerialized<T>(mountPointId: string, fn: () => Promise<T>): Promise<T> {
-  return runSerializedOnKey(chainKey(INVENTORY_FOLDER_RULES, mountPointId), fn);
+  return runSerializedOnKey(chainKey(INVENTORY_FOLDER_RULES, mountPointId), () => withInventoryWritesLinted(fn));
 }
 
 /**
@@ -279,7 +285,7 @@ export function listInventoryFolderPathsInMount(mount: InventoryMount): Promise<
 
 /** Create a folder (normalised path); an existing one in any casing is answered. */
 export function createInventoryFolderInMount(mount: InventoryMount, folder: string): Promise<InventoryFolder> {
-  return createFolderIn(INVENTORY_TREE, mount, folder);
+  return withInventoryWritesLinted(() => createFolderIn(INVENTORY_TREE, mount, folder));
 }
 
 /** Rename a folder in place. */
@@ -288,7 +294,7 @@ export function renameInventoryFolderInMount(
   folder: string,
   newName: string,
 ): Promise<InventoryFolder> {
-  return renameFolderIn(INVENTORY_TREE, mount, folder, newName);
+  return withInventoryWritesLinted(() => renameFolderIn(INVENTORY_TREE, mount, folder, newName));
 }
 
 /** Delete a folder, sending its objects and subfolders up to its parent. */
@@ -296,5 +302,5 @@ export function deleteInventoryFolderInMount(
   mount: InventoryMount,
   folder: string,
 ): Promise<{ movedItems: number; movedFolders: number; parent: string }> {
-  return deleteFolderIn(INVENTORY_TREE, mount, folder);
+  return withInventoryWritesLinted(() => deleteFolderIn(INVENTORY_TREE, mount, folder));
 }

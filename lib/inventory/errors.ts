@@ -19,7 +19,9 @@ export type InventoryRefusalCode =
   | 'NOT_EQUIPPABLE'
   | 'INVALID_SHAPE'
   | 'NOT_A_PARTICIPANT'
-  | 'OFF_ROSTER';
+  | 'OFF_ROSTER'
+  | 'TITLE_SHADOW'
+  | 'TITLE_CHECK_UNAVAILABLE';
 
 /** The base of every Inventory refusal. */
 export class InventoryRefusal extends Error {
@@ -157,5 +159,63 @@ export class InventoryShapeError extends InventoryRefusal {
   constructor(message: string, details: Record<string, unknown> = {}) {
     super('INVALID_SHAPE', message, 400, details);
     this.name = 'InventoryShapeError';
+  }
+}
+
+/** One protected string a candidate title landed on (`lib/inventory/title-lint.ts`). */
+export type InventoryTitleCollision =
+  | { reason: 'kind-name shadow'; kindName: string }
+  | { reason: 'live gate shadow'; toolName: string; ref: string; landsOn: string[] };
+
+/**
+ * A title that would shadow a kind name or a live gate key. The message names
+ * the title and every collision, one line each, and says what to do.
+ */
+export class InventoryTitleShadowError extends InventoryRefusal {
+  constructor(readonly title: string, readonly collisions: InventoryTitleCollision[]) {
+    const lines = [`title rejected: "${title}"`];
+    collisions.forEach((collision, i) => {
+      const lead = i === 0 ? 'collides with' : 'and with';
+      if (collision.reason === 'kind-name shadow') {
+        lines.push(`${lead} KIND NAME "${collision.kindName}" (reason: kind-name shadow)`);
+      } else {
+        lines.push(`${lead} a gate key on tool "${collision.toolName}" (reason: live gate shadow)`);
+        lines.push(`  that gate's "${collision.ref}" already lands on ${collision.landsOn.map((n) => `"${n}"`).join(', ')}`);
+      }
+    });
+    const kind = collisions.some((c) => c.reason === 'kind-name shadow');
+    const gate = collisions.some((c) => c.reason === 'live gate shadow');
+    lines.push(
+      kind && gate
+        ? 'choose a title that is not a kind name and not a gate key.'
+        : kind
+          ? 'choose a title that is not a kind name.'
+          : 'choose a title that is not a gate key.',
+    );
+    super('TITLE_SHADOW', lines.join('\n'), 409, { title, collisions });
+    this.name = 'InventoryTitleShadowError';
+  }
+}
+
+/** What the title lint could not read, by name. */
+export interface InventoryTitleLintUnread {
+  /** The store (and file, when one file failed) that could not be read. */
+  pool: string;
+  reason: string;
+}
+
+/**
+ * The title lint could not build its protected set, so the write is refused
+ * rather than passed unchecked. The message names every pool it could not read.
+ */
+export class InventoryTitleCheckUnavailableError extends InventoryRefusal {
+  constructor(readonly title: string, readonly unread: InventoryTitleLintUnread[]) {
+    const lines = [
+      `title rejected: "${title}"`,
+      ...unread.map((u) => `the title check could not read ${u.pool} (${u.reason})`),
+      'a title is not accepted unchecked; repair what could not be read, then try again.',
+    ];
+    super('TITLE_CHECK_UNAVAILABLE', lines.join('\n'), 409, { title, unread });
+    this.name = 'InventoryTitleCheckUnavailableError';
   }
 }

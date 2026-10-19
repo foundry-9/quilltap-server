@@ -51,6 +51,25 @@ The rest of the item's particulars:
 - **Pictures** — an item may have pictures, uploaded or generated (see below).
 - **Metadata** — a JSON object for whatever else you care to note: weight, charges remaining, the name of the smith. Quilltap does not read it; it is yours.
 
+### A title may not borrow a name
+
+When anything — a character's tool, a custom tool, a message placeholder — asks after an item by a word, Pascal looks for it by id first, then by **title**, then by **name**, and stops at the first that answers. So a title that happens to *be* some other thing's name quietly answers in that thing's place: give a pencil the title "tape measure" and every enquiry after tape measures finds the pencil, while the real tape measures sit unasked-for in the drawer. Nothing complains. It is simply wrong, and confidently so.
+
+Pascal therefore refuses such a title when an item is made, when it is retitled, and when an item with a title is given a new name. He refuses on two grounds and says which:
+
+- **The title is a name.** Any name of anything on the shelves within reach, the item's own included — "Lantern" for a thing whose name is *lantern* is refused as surely as "Sword" for a thing called *pencil*. (*kind-name shadow*)
+- **The title is a word a custom tool's gate asks after, and that word already finds something else.** If the tool's *who may reach for it* gate asks after "ansible resonator" and that phrase already finds an item, a second item titled "Ansible Resonator" would steal the gate from it. (*live gate shadow*)
+
+The refusal names the title, every collision and the tool concerned. The comparison ignores capitals, extra spaces and accents, and nothing else; apostrophes count.
+
+There is one exception, and it is by design: when a gate asks after a phrase that finds **nothing else at all**, the item titled with it *is* the thing the gate means, and the title is allowed. *Friday's Yellow Tape Measure* may be both the tape measure's title and the key of the tool that wants it. Pascal notes such double duty in the log and lets it pass.
+
+Retitling an item *away* from a gate's phrase is never refused, nor is archiving, deleting or moving it off the shelf, but Pascal makes a note at once: whether the gate now finds nothing (the tool has quietly gone dark), finds some other item (the tool is now gated on a stranger), or cannot be told because a shelf or a tool's file would not open (unverifiable — which he counts as an emergency all the same).
+
+Pascal watches the hands as well as the buttons. An item's file edited directly — by a character's document tools, or by you in the Scriptorium — is checked exactly as an edit in the Inventory's own editor is: he reads what the file said before, and judges the change from that. A retitle, an archive, a restore, a deletion and a move into or out of `Inventory/` all count; a new description or a new folder does not.
+
+If Pascal cannot read everything he needs to check — a shelf that will not open, a custom tool's file that is listed but will not load, the previous state of a file being rewritten — he refuses the title rather than guess, and names what he could not read. An item with no title is never refused.
+
 ## Archetypes and instances
 
 A shared shelf often holds not a particular sword but the *idea* of a sword. Create one with **+ New Archetype** (or tick **Archetype** in any new item's editor) and it becomes a class of thing rather than a thing: it can be edited, browsed and instantiated, but never carried.

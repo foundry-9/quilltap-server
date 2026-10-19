@@ -142,6 +142,22 @@ export interface CustomToolLoadError {
   mountName: string;
   tier: MountTier;
   reason: string;
+  /** Where loading stopped: the bytes, the JSON, the schema, or a same-store name clash. */
+  stage?: 'read' | 'json' | 'schema' | 'duplicate';
+}
+
+/**
+ * Something a mount's discovery could not look at: the `Tools/` listing
+ * itself failed, or a file the listing named was gone on open. The roster
+ * skips these quietly (a race, not a defect); a caller that must know every
+ * definition — the inventory title lint — refuses on them instead.
+ */
+export interface CustomToolUnread {
+  mountPointId: string;
+  mountName: string;
+  /** The file, or `Tools/` when the listing failed. */
+  definitionPath: string;
+  reason: string;
 }
 
 /** The resolved roster for one invoker's perspective. */
@@ -257,13 +273,14 @@ async function readToolFile(
 export async function loadToolsFromMount(
   mountPointId: string,
   tier: MountTier
-): Promise<{ found: DiscoveredCustomTool[]; errors: CustomToolLoadError[] }> {
+): Promise<{ found: DiscoveredCustomTool[]; errors: CustomToolLoadError[]; unread: CustomToolUnread[] }> {
   const found: DiscoveredCustomTool[] = [];
   const errors: CustomToolLoadError[] = [];
+  const unread: CustomToolUnread[] = [];
 
   const repos = getRepositories();
   const mount = await repos.docMountPoints.findById(mountPointId);
-  if (!mount || !mount.enabled) return { found, errors };
+  if (!mount || !mount.enabled) return { found, errors, unread };
 
   const mountName = mount.name;
 
@@ -280,7 +297,8 @@ export async function loadToolsFromMount(
       mountName,
       error: getErrorMessage(error),
     });
-    return { found, errors };
+    unread.push({ mountPointId, mountName, definitionPath: `${TOOLS_FOLDER}/`, reason: `listing failed: ${getErrorMessage(error)}` });
+    return { found, errors, unread };
   }
 
   // Same-mount duplicate `name` is a rejection (the spec's rule 5): within one
@@ -293,11 +311,17 @@ export async function loadToolsFromMount(
     try {
       raw = await readToolFile(mount, relativePath);
     } catch (error) {
-      // Deleted between list and read — a race, not a defect. Skip quietly.
-      if (error instanceof FileOpError && error.code === 'SOURCE_NOT_FOUND') continue;
-      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') continue;
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `could not be read: ${getErrorMessage(error)}` });
+      // Deleted between list and read — a race, not a defect. Skip quietly,
+      // but note it: a file that is listed and never opens looks just the same.
+      if (
+        (error instanceof FileOpError && error.code === 'SOURCE_NOT_FOUND') ||
+        (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') ||
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        unread.push({ mountPointId, mountName, definitionPath: relativePath, reason: 'listed but not found on open' });
+        continue;
+      }
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `could not be read: ${getErrorMessage(error)}`, stage: 'read' });
       continue;
     }
 
@@ -305,7 +329,7 @@ export async function loadToolsFromMount(
     try {
       parsedJson = JSON.parse(raw);
     } catch (error) {
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `is not valid JSON: ${getErrorMessage(error)}` });
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `is not valid JSON: ${getErrorMessage(error)}`, stage: 'json' });
       continue;
     }
 
@@ -324,7 +348,7 @@ export async function loadToolsFromMount(
     const result = QtapCustomToolSchema.safeParse(parsedJson);
     if (!result.success) {
       const reason = formatDefinitionIssues(result.error);
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason });
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason, stage: 'schema' });
       logger.debug('Custom tool rejected at load time', {
         context: CONTEXT,
         mountPointId,
@@ -343,6 +367,7 @@ export async function loadToolsFromMount(
         mountName,
         tier,
         reason: `defines "${definition.name}", which ${priorPath} in this same store already defines`,
+        stage: 'duplicate',
       });
       continue;
     }
@@ -351,7 +376,7 @@ export async function loadToolsFromMount(
     found.push({ definition, tier, mountPointId, mountName, definitionPath: relativePath });
   }
 
-  return { found, errors };
+  return { found, errors, unread };
 }
 
 /** Bucket the pool into (tier, mountPointId) pairs in precedence order. */
@@ -565,6 +590,10 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
 export interface CustomToolLibrary {
   entries: DiscoveredCustomTool[];
   errors: CustomToolLoadError[];
+  /** What discovery could not look at (see {@link CustomToolUnread}). */
+  unread: CustomToolUnread[];
+  /** The names of the enabled stores that were looked in. */
+  storesConsulted: string[];
 }
 
 /**
@@ -584,14 +613,18 @@ export async function listAllCustomTools(): Promise<CustomToolLibrary> {
 
   const entries: DiscoveredCustomTool[] = [];
   const errors: CustomToolLoadError[] = [];
+  const unread: CustomToolUnread[] = [];
+  const storesConsulted: string[] = [];
 
   for (const mount of [...mounts].sort((a, b) => a.id.localeCompare(b.id))) {
-    const { found, errors: mountErrors } = await loadToolsFromMount(mount.id, 'global');
+    const { found, errors: mountErrors, unread: mountUnread } = await loadToolsFromMount(mount.id, 'global');
     entries.push(...found);
     errors.push(...mountErrors);
+    unread.push(...mountUnread);
+    storesConsulted.push(mount.name);
   }
 
-  return { entries, errors };
+  return { entries, errors, unread, storesConsulted };
 }
 
 // ---------------------------------------------------------------------------
