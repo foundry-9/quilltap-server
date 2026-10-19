@@ -226,6 +226,8 @@ Unknown **top-level** keys are **ignored with a debug warning**, not rejected �
 
 The roster for a chat is resolved through the existing five-tier pool (`character → participant → group → project → global`, `lib/mount-index/tiered-mount-pool.ts`):
 
+> **Changed in 4.11:** custom tools no longer use the `participant` tier. `resolveCustomToolRoster` resolves the pool without `includeParticipants`, and `RosterContext` has no `characterIds`, so a tool in a character's vault is dealt to that character only. The roster's tiers are `character → group → project → global`.
+
 - **Nearest tier wins** on a `name` collision — a character-tier `unlock` shadows the project-tier `unlock`.
 - `"disabled": true` at a nearer tier suppresses the inherited tool of that name entirely.
 - A collision **within the same tier** (two mounts at the same tier both defining `unlock`) resolves deterministically by mount-point id (lexicographic), with a warning logged and an info badge in the UI popup.

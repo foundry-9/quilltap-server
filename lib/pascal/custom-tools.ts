@@ -119,8 +119,14 @@ import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceNotation
 
 const CONTEXT = 'pascal.custom-tools';
 
-/** Tier precedence, nearest first. A nearer tier shadows a farther one. */
-const TIER_ORDER: MountTier[] = ['character', 'participant', 'group', 'project', 'global'];
+/**
+ * Tier precedence, nearest first. A nearer tier shadows a farther one.
+ *
+ * There is deliberately no 'participant' tier: a tool in a character's vault
+ * is that character's alone, and sharing a room with them does not deal it to
+ * anybody else. Shared tools belong in a group, project, or General store.
+ */
+const TIER_ORDER: MountTier[] = ['character', 'group', 'project', 'global'];
 
 /**
  * A definition found in a store, with the provenance needed to resolve
@@ -179,8 +185,6 @@ export interface RosterContext {
   /** The invoking character — their vault is the 'character' tier. */
   characterId?: string | null;
   characterMountPointId?: string | null;
-  /** Every character in the chat — their vaults form the 'participant' tier. */
-  characterIds?: string[];
   projectId?: string | null;
   /**
    * The invoking character's hydrated fact sheet, which availability gates are
@@ -423,7 +427,9 @@ export async function loadToolsFromMount(
 function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPointId: string }> {
   const byTier: Record<MountTier, string[]> = {
     character: pool.characterMountPointId ? [pool.characterMountPointId] : [],
-    participant: pool.participantMountPointIds,
+    // Never resolved for custom tools (see TIER_ORDER); present only because
+    // the record is keyed by every MountTier.
+    participant: [],
     group: pool.groupMountPointIds,
     project: pool.projectMountPointIds,
     global: pool.globalMountPointId ? [pool.globalMountPointId] : [],
@@ -508,16 +514,13 @@ async function loadInvokerInventory(ctx: RosterContext): Promise<InventoryContex
  * `pascalMeta.definitionTier` both depend on.
  */
 export async function resolveCustomToolRoster(ctx: RosterContext): Promise<CustomToolRoster> {
-  const pool = await resolveTieredMountPool(
-    {
-      userId: ctx.userId,
-      characterId: ctx.characterId ?? null,
-      characterMountPointId: ctx.characterMountPointId ?? null,
-      characterIds: ctx.characterIds,
-      projectId: ctx.projectId ?? null,
-    },
-    { includeParticipants: true }
-  );
+  // No `includeParticipants`: other characters' vaults are not a tier here.
+  const pool = await resolveTieredMountPool({
+    userId: ctx.userId,
+    characterId: ctx.characterId ?? null,
+    characterMountPointId: ctx.characterMountPointId ?? null,
+    projectId: ctx.projectId ?? null,
+  });
 
   const tools = new Map<string, DiscoveredCustomTool>();
   const errors: CustomToolLoadError[] = [];

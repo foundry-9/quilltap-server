@@ -112,7 +112,8 @@ describe('MemoryMaintenanceCard', () => {
   it('clears the archive retention with a blank, as null', async () => {
     renderWithQuery(<MemoryMaintenanceCard />)
     const input = await screen.findByLabelText(/archive retention/i)
-    expect(input).toHaveValue(90)
+    // The card renders its defaults first; wait for the loaded document.
+    await waitFor(() => expect(input).toHaveValue(90))
     fireEvent.change(input, { target: { value: '' } })
     await act(async () => {
       fireEvent.blur(input)
@@ -123,6 +124,7 @@ describe('MemoryMaintenanceCard', () => {
   it('saves a typed per-character cap on blur (review of PR 98)', async () => {
     renderWithQuery(<MemoryMaintenanceCard />)
     const input = await screen.findByLabelText(/per-character cap/i)
+    await waitFor(() => expect(input).toHaveValue(2000))
     fireEvent.change(input, { target: { value: '3000' } })
     await act(async () => {
       fireEvent.blur(input)

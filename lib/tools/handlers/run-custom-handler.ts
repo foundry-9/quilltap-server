@@ -39,8 +39,6 @@ export interface RunCustomToolContext {
   characterId?: string | null;
   /** Fast path for the character's vault; the group tier still needs characterId. */
   characterMountPointId?: string | null;
-  /** Every character in the chat — their vaults form the 'participant' tier. */
-  characterIds?: string[];
   /** Active project, for the 'project' tier. */
   projectId?: string | null;
   /** The caller's participant id — the whisper target for a private roll. */
@@ -146,7 +144,6 @@ export async function executeRunCustomTool(
     chatId: context.chatId,
     characterId: context.characterId ?? null,
     characterMountPointId: context.characterMountPointId ?? null,
-    characterIds: context.characterIds,
     projectId: context.projectId ?? null,
     metadata,
   });

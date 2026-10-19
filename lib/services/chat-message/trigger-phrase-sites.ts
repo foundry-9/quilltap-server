@@ -20,14 +20,6 @@ type TriggerSettings = Pick<ChatSettings, 'customTools' | 'customToolTriggers'> 
 
 interface RoomShape {
   projectId?: string | null
-  participants: Array<{ type: string; characterId?: string | null }>
-}
-
-/** Every character in the room — the roster's 'participant' tier. */
-function roomCharacterIds(chat: RoomShape): string[] {
-  return chat.participants
-    .filter(p => p.type === 'CHARACTER' && p.characterId)
-    .map(p => p.characterId as string)
 }
 
 export interface UserMessageTriggerParams {
@@ -64,7 +56,6 @@ export async function runUserMessageTriggers(params: UserMessageTriggerParams): 
       characterId: seat?.type === 'CHARACTER' && seat.characterId ? seat.characterId : null,
     },
     projectId: params.chat.projectId ?? null,
-    characterIds: roomCharacterIds(params.chat),
     chatSettings: params.chatSettings,
     onPosted: params.onPosted,
   })
@@ -100,7 +91,6 @@ export async function runReplyTriggers(params: ReplyTriggerParams): Promise<Mess
     content: params.content,
     speaker: { participantId: params.characterParticipantId, characterId: params.characterId },
     projectId: params.chat.projectId ?? null,
-    characterIds: roomCharacterIds(params.chat),
     chatSettings: params.chatSettings,
     onPosted: params.onPosted,
   })

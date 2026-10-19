@@ -69,7 +69,6 @@ function params(overrides: Partial<RunTriggeredCustomToolsParams> = {}): RunTrig
     content: 'Abracadabra!',
     speaker: { participantId: PARTICIPANT_ID, characterId: CHARACTER_ID },
     projectId: 'proj-1',
-    characterIds: [CHARACTER_ID, 'char-2'],
     chatSettings: ON,
     ...overrides,
   };
@@ -117,10 +116,11 @@ describe('runTriggeredCustomTools — perspective', () => {
     expect(rosterMock.mock.calls[0][0]).toMatchObject({
       characterId: CHARACTER_ID,
       characterMountPointId: 'vault-1',
-      characterIds: [CHARACTER_ID, 'char-2'],
       projectId: 'proj-1',
       metadata: { blessed: true },
     });
+    // Another participant's vault is never part of the speaker's roster.
+    expect(rosterMock.mock.calls[0][0]).not.toHaveProperty('characterIds');
     expect(runMock.mock.calls[0][0]).toMatchObject({ characterId: CHARACTER_ID, metadata: { blessed: true } });
   });
 

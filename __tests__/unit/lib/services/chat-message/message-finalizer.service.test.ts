@@ -591,8 +591,8 @@ describe('message-finalizer.service', () => {
       chatId: 'chat-1',
       content: 'Please roll 1d20',
       speaker: { participantId: 'participant-1', characterId: 'char-1' },
-      characterIds: ['char-1', 'char-2'],
     })
+    expect(runner.mock.calls[0][0]).not.toHaveProperty('characterIds')
     const runnerOrder = runner.mock.invocationCallOrder[0]
     for (const order of repos.chats.addMessage.mock.invocationCallOrder) {
       expect(order).toBeLessThan(runnerOrder)

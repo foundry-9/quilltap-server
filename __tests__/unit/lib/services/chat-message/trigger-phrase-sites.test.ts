@@ -16,14 +16,7 @@ jest.mock('@/lib/pascal/trigger-runner', () => ({
 
 const runnerMock = runTriggeredCustomTools as jest.Mock
 const SETTINGS = { customTools: true, customToolTriggers: true }
-const CHAT = {
-  projectId: 'proj-1',
-  participants: [
-    { type: 'CHARACTER', characterId: 'char-1' },
-    { type: 'PERSONA', characterId: null },
-    { type: 'CHARACTER', characterId: 'char-2' },
-  ],
-}
+const CHAT = { projectId: 'proj-1' }
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -50,9 +43,9 @@ describe('runUserMessageTriggers', () => {
       content: 'abracadabra',
       speaker: { participantId: null, characterId: null },
       projectId: 'proj-1',
-      characterIds: ['char-1', 'char-2'],
       chatSettings: SETTINGS,
     })
+    expect(runnerMock.mock.calls[0][0]).not.toHaveProperty('characterIds')
   })
 
   it("speaks as a user-driven character seat, with that character's perspective", async () => {
@@ -93,8 +86,8 @@ describe('runReplyTriggers', () => {
     expect(runnerMock.mock.calls[0][0]).toMatchObject({
       content: 'I draw my sword',
       speaker: { participantId: 'seat-1', characterId: 'char-1' },
-      characterIds: ['char-1', 'char-2'],
     })
+    expect(runnerMock.mock.calls[0][0]).not.toHaveProperty('characterIds')
   })
 })
 

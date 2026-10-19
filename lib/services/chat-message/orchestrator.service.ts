@@ -1050,7 +1050,6 @@ async function processMessage(
         chatId,
         characterId: character.id ?? null,
         characterMountPointId: character.characterDocumentMountPointId ?? null,
-        characterIds: participantCharacterIds,
         projectId: chat.projectId ?? null,
         // The responding character's fact sheet, which availability gates are
         // answered against. Already hydrated by the participant resolver, so

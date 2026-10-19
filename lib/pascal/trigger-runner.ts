@@ -54,8 +54,6 @@ export interface RunTriggeredCustomToolsParams {
   content: string;
   speaker: TriggeredSpeaker;
   projectId: string | null;
-  /** Every character in the chat (the 'participant' tier). */
-  characterIds: string[];
   /** The chat settings already in hand at the call site. */
   chatSettings: Pick<ChatSettings, 'customTools' | 'customToolTriggers'> | null | undefined;
   /** Surface each Pascal post the instant it lands (a no-op sink in the job child). */
@@ -132,7 +130,6 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
     chatId,
     characterId: speaker.characterId,
     characterMountPointId,
-    characterIds: params.characterIds,
     projectId: params.projectId,
     metadata,
   });

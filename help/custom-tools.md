@@ -552,9 +552,11 @@ The roll's permanent record notes each object taken up, set down or picked up, a
 
 The same tool name may reasonably exist in several stores, and Quilltap resolves the question by proximity. Nearest to the character wins:
 
-**their own vault → another participant's vault → a group store → a project store → Quilltap General**
+**their own vault → a group store → a project store → Quilltap General**
 
 So an `unlock` in a character's own vault quietly supersedes the project's `unlock`, for that character only. This is how one gives a locksmith better odds than everybody else without anybody else noticing.
+
+**A character's vault is a private pocket, not a communal sideboard.** The tools in a character's own `Tools/` folder are dealt to that character and to nobody else — sharing a room with the locksmith does not put her picks in anybody else's hand, nor does her `disabled` tombstone switch off anybody else's tool. (The group tier is likewise the roller's own: a character is dealt the stores of the groups *they* belong to, never a companion's.) A tool meant for the whole table belongs in a group, project or General store.
 
 To switch off an inherited tool rather than replace it, define it nearer and mark it `"disabled": true`:
 
@@ -677,7 +679,7 @@ Rolling this way posts one thing: the outcome, exactly as it would have appeared
 
 **Which means nothing records that it was you.** Should you nudge a parameter before rolling, that is between you and the wheel: the transcript does not note that the operator reached for the tool, nor what figures you chose, and no character can read what you did to arrange the odds. They see what befell. This seems to us the correct division of information.
 
-Should a tool be defined differently for different characters, you'll see each variant listed with the character's name beside it, and running it rolls that character's version — fact sheet and all, so a metadata-gated table deals to that character exactly as it would have done had they reached for it themselves.
+Should a tool be defined differently for different characters — or kept in one character's vault, so that only they hold it at all — you'll see each variant listed with the character's name beside it, and running it rolls that character's version — fact sheet and all, so a metadata-gated table deals to that character exactly as it would have done had they reached for it themselves.
 
 **Whose fact sheet, when the tool is everyone's.** A tool is listed *once* when it resolves to the same file for everyone at the table — and metadata lives on the character, not in the file, so a metadata-gated tool that everyone shares is listed exactly that way. Running it still rolls as *somebody*, and that somebody is you: the character you are playing in this scene, or the one you are presently typing as when you are playing several. Your sheet is the one the table tests, and your character's groups are the ones a `$state` reference resolves through.
 

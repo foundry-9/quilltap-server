@@ -156,14 +156,12 @@ async function resolveForPerspective(
   chatId: string,
   projectId: string | null,
   perspective: Perspective,
-  allCharacterIds: string[],
 ): Promise<CustomToolRoster> {
   return resolveCustomToolRoster({
     userId: ctx.user.id,
     chatId,
     characterId: perspective.characterId,
     characterMountPointId: perspective.characterMountPointId,
-    characterIds: allCharacterIds,
     projectId,
     // Availability gates are answered against this character's own sheet — the
     // same sheet the roster already resolves their vault tier through, and
@@ -253,7 +251,6 @@ async function handleList(
     return successResponse({ tools: [], errors: [] });
   }
 
-  const allCharacterIds = perspectives.map((p) => p.characterId);
   const projectId = chat.projectId ?? null;
   const operatorIds = operatorCharacterIds(chat.participants, chat.activeTypingParticipantId);
 
@@ -264,7 +261,7 @@ async function handleList(
   const droppedForCap = new Set<string>();
 
   for (const perspective of perspectives) {
-    const roster = await resolveForPerspective(ctx, id, projectId, perspective, allCharacterIds);
+    const roster = await resolveForPerspective(ctx, id, projectId, perspective);
 
     for (const [name, entry] of roster.tools) {
       const bucket = byName.get(name) ?? [];
@@ -401,13 +398,7 @@ async function handleRun(
     return badRequest(`No character participant with id ${body.asCharacterId} is in this chat`);
   }
 
-  const roster = await resolveForPerspective(
-    ctx,
-    id,
-    chat.projectId ?? null,
-    perspective,
-    perspectives.map((p) => p.characterId),
-  );
+  const roster = await resolveForPerspective(ctx, id, chat.projectId ?? null, perspective);
 
   const entry = roster.tools.get(body.tool);
   if (!entry) {

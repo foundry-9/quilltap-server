@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Change: custom tools in a character's vault are that character's only
+
+- A character's vault `Tools/` folder is no longer read for other characters in the same chat. Before, the roster had a `participant` tier: every co-participant's vault tools were dealt to every character, and a `disabled` definition in one character's vault suppressed that name for everyone else in the room.
+- `resolveCustomToolRoster` (`lib/pascal/custom-tools.ts`) resolves the pool without `includeParticipants`; the tiers are character → group → project → global. `characterIds` is removed from `RosterContext`, `RunCustomToolContext` and `RunTriggeredCustomToolsParams`, and from the callers that fed it (orchestrator, tool executor, trigger-phrase sites, `GET/POST /api/v1/chats/[id]/custom-tools`). Other users of the tiered pool (document access) are unchanged.
+- The Salon popup still lists a vault tool and runs it as its owner; the row is tagged with the owner's name unless the operator is playing that character.
+- Help: `help/custom-tools.md` (tiers), `help/pascals-workbench.md` (precedence note). Tests: `custom-tools-discovery`, `trigger-runner`, `trigger-phrase-sites`.
+- Test fix: `memory-maintenance-card.test.tsx` waits for the loaded settings before reading or editing a field (the card renders defaults first, so the test was flaky under a full-suite run).
+
 #### Change: `/photos` leaves out character vaults and gains an album selector
 
 - `/photos` ("My Photos") no longer includes character vaults. Its default view covers every enabled non-character store: Quilltap Uploads, Quilltap General, project stores and other document stores. Previously, promoting an Avatar Roll to a portrait copied it into the character's `photos/` folder, and that copy also showed up in My Photos. The rule is `isUserGalleryMount` in `lib/photos/user-gallery-service.ts`.

@@ -636,7 +636,6 @@ export async function executeToolCallWithContext(
         chatId,
         characterId,
         characterMountPointId: context.characterMountPointId,
-        characterIds: context.characterIds,
         projectId: context.projectId,
         callerParticipantId: context.callingParticipantId,
         onPosted: context.emitPascalResult,

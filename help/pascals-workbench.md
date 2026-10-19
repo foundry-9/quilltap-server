@@ -14,7 +14,7 @@ Find it in the left rail, from **Settings → Chat → Custom tools**, from the 
 
 The Workbench opens on the library: **every definition in every enabled store, face up** — which is deliberately not what the chat popup shows you. The popup deals a resolved roster, with nearer tiers shadowing farther ones and broken files tucked behind badges; the library is the authoring surface, so nothing hides. Each card shows the tool's title and name, the store it lives in, badges for what that store is attached to (the General store, a project, a group, a character's vault, or nothing at all), and its vital statistics — disabled, gated, whispered, dice or range, so many parameters, so many outcomes.
 
-A name defined in more than one store is flagged — *this name is defined in 3 places* — with a reminder of the order of precedence: character, then participant, then group, then project, then global, nearest winning. The library cannot tell you which one a given chat will deal, because that depends on who is rolling; it can only point out the collision.
+A name defined in more than one store is flagged — *this name is defined in 3 places* — with a reminder of the order of precedence: the roller's own vault, then group, then project, then global, nearest winning. (Another character's vault is no tier at all: its tools are dealt to its owner alone.) The library cannot tell you which one a given chat will deal, because that depends on who is rolling; it can only point out the collision.
 
 Files that would not read appear too, prominently, wearing the loader's own explanation verbatim. Opening one lands you in **repair mode** (below), which is precisely where you fix it.
 
