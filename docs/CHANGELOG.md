@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Docs: spec for broader custom-tool gates
+
+- New design `docs/developer/features/pascal-gate-broadening.md`: an `inventoryAggregate` subject for gates and `when` tests (names, titles and `metadata` folded over the equipped, owned or reachable objects, keyed `<scope>.<field>`, with `.min` / `.max` / `.sum` / `.count` numeric folds), per-entry comparison of list values in the one comparison table (which also lets a character-sheet `metadata` key holding a list match), and OR as a one-level any-of array of the existing AND-groups in gates, outcome `when` and effect `when`. Approved, not yet built. Listed in `ROADMAP.md`.
+
 #### Feature: raise a hand or stop from the composer
 
 - The Salon composer has three buttons where it had one: **Send**, an amber **raise your hand** (soft interrupt), and a red **Stop** octagon (hard interrupt). The interrupt buttons are enabled only while a character is generating; Send is disabled then. The sidebar participant card's Stop button is removed (`ParticipantCard` / `ChatSidebar` lose `onStopStreaming`; `ChatComposer` loses `hideStopButton`).
