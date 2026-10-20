@@ -40,7 +40,7 @@ Every item has a **name** — what it is ("sword") — and may have a **title** 
 Each item carries **two descriptions**, and they are for two different audiences:
 
 - **What the characters know about it** (`description`) — told to the model on every turn while the item is carried. *"A broad blade of pattern-welded steel; the inscription on one face reads 'take me up', on the other 'cast me away'."* An item with no description is carried silently: the model is told nothing about it. The browser marks such items so you know.
-- **How it should be drawn** (`imageDescription`) — rendering hints for the image pipelines. While the item is carried it joins the character's appearance, so the Lantern's story backgrounds, the image tool and the character's avatar all show it: *"carrying a longsword with a jewelled pommel."* An item with no drawing description is not depicted.
+- **How it should be drawn** (`imageDescription`) — rendering hints for the image pipelines. While the item is carried it joins the character's appearance, so the Lantern's story backgrounds, the image tool and the character's avatar all show it: *"carrying a longsword with a jewelled pommel."* Leave it empty (or only spaces) and the item is invisible in every picture of the character — avatars, story backgrounds, the image tool — though the item's own picture still has a subject, falling back to its description, title or name.
 
 The rest of the item's particulars:
 

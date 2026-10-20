@@ -358,7 +358,7 @@ export function InventoryItemEditor({
           {textField('title', 'Title', isKit ? 'The Night Shift' : 'Excalibur')}
         </div>
         {areaField('description', 'What the characters know about it', 'Told to the model while the object is carried. Leave empty and the object is silent to the model.')}
-        {areaField('imageDescription', 'How it should be drawn', 'Rendering hints joined to the character\'s appearance while carried, and the subject of the object\'s own picture.', 2)}
+        {areaField('imageDescription', 'How it should be drawn', 'Rendering hints joined to the character\'s appearance while carried, and the subject of the object\'s own picture. Leave empty and the object is invisible in avatars, story backgrounds and every other picture of the character (its own picture falls back to the description above).', 2)}
         {isKit && (
           <fieldset className="space-y-1">
             <legend className="text-sm text-foreground">Members</legend>

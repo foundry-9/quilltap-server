@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Docs: blank Inventory drawing descriptions are invisible
+
+- The Inventory editor's "How it should be drawn" hint and `help/inventory.md` now say an empty or whitespace-only `imageDescription` keeps the object out of avatars, story backgrounds and the image tool; the object's own picture falls back to description, title, then name. Behavior was already this way (`renderCarryingPhrase` trims and skips). Added `__tests__/unit/lib/inventory/image-description.test.ts` to pin it.
+
 #### Fix: composer action buttons stack vertically
 
 - Send, raise-hand and Stop now sit in a column beside the editor at every width, at 2.5rem each, instead of a row of three 3rem buttons that took width from the editor. `.qt-chat-composer-actions` in `_chat.css`, mirrored in theme-storybook 1.0.77.
