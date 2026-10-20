@@ -9,7 +9,7 @@
  */
 
 import { executeEditCustomTool, formatEditCustomToolResults } from '@/lib/tools/handlers/edit-custom-tool-handler';
-import { loadToolsFromMount, toolDefinitionPathFor } from '@/lib/pascal/custom-tools';
+import { loadToolsFromMount, toolDefinitionPathFor, validateToolDefinitionText } from '@/lib/pascal/custom-tools';
 import { resolveDocEditPath, readFileWithMtime } from '@/lib/doc-edit';
 import { handleWriteFile } from '@/lib/tools/handlers/doc-edit/text-handlers';
 import {
@@ -240,5 +240,34 @@ describe('validating without content', () => {
     const out = await executeEditCustomTool({ mount_point: 'Vault', file: 'unlock' }, CONTEXT);
     expect(out.success).toBe(false);
     expect(out.error).toContain('Tools/zz-unlock.tool.json');
+  });
+});
+
+describe('fetching the schema', () => {
+  it('returns the published JSON Schema and specimens that pass the runtime validator, touching no store', async () => {
+    const out = await executeEditCustomTool({ action: 'schema' }, CONTEXT);
+
+    expect(out).toMatchObject({ success: true, action: 'schema' });
+    expect(out.schema).toMatchObject({ $id: 'https://quilltap.ai/schemas/qtap-custom-tool.schema.json' });
+    expect(out.examples).toHaveLength(2);
+    for (const example of out.examples!) {
+      expect(validateToolDefinitionText(JSON.stringify(example)).ok).toBe(true);
+    }
+    expect(resolveDocEditPath).not.toHaveBeenCalled();
+    expect(readFileWithMtime).not.toHaveBeenCalled();
+    expect(handleWriteFile).not.toHaveBeenCalled();
+    expect(formatEditCustomToolResults(out)).toContain('JSON Schema');
+  });
+
+  it('ignores any store fields passed alongside it', async () => {
+    const out = await executeEditCustomTool({ action: 'schema', mount_point: 'Vault', file: 'unlock', content: VALID }, CONTEXT);
+    expect(out.action).toBe('schema');
+    expect(handleWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('still requires mount_point and file without it', async () => {
+    const out = await executeEditCustomTool({ file: 'unlock' }, CONTEXT);
+    expect(out.success).toBe(false);
+    expect(out.error).toMatch(/required unless `action` is "schema"/);
   });
 });

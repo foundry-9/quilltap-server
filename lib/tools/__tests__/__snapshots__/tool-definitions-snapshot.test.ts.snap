@@ -1020,24 +1020,27 @@ exports[`tool definitions: derived OpenAI parameters editCustomTool: parameters 
 {
   "additionalProperties": false,
   "properties": {
+    "action": {
+      "description": "Set to "schema" to fetch the custom-tool definition format — the full JSON Schema plus worked example definitions — instead of saving or validating anything. No other field is needed or read. Omit it to save (with \`content\`) or validate (without).",
+      "enum": [
+        "schema",
+      ],
+      "type": "string",
+    },
     "content": {
       "description": "The complete new definition, as a JSON string or a native object. It is schema-validated before anything is written, and an invalid definition is not saved. Omit it to save nothing and only validate the file as it stands — for instance after editing it with another tool.",
     },
     "file": {
-      "description": "The definition's file name, with or without its ".tool.json" suffix (e.g. "unlock" or "unlock.tool.json"). It always lives directly inside the store's top-level Tools/ folder; no other folder is accepted.",
+      "description": "The definition's file name, with or without its ".tool.json" suffix (e.g. "unlock" or "unlock.tool.json"). It always lives directly inside the store's top-level Tools/ folder; no other folder is accepted. Required unless \`action\` is "schema".",
       "minLength": 1,
       "type": "string",
     },
     "mount_point": {
-      "description": "Name of the document store holding the definition. The reserved value "self" addresses your own character vault.",
+      "description": "Name of the document store holding the definition. The reserved value "self" addresses your own character vault. Required unless \`action\` is "schema".",
       "minLength": 1,
       "type": "string",
     },
   },
-  "required": [
-    "mount_point",
-    "file",
-  ],
   "type": "object",
 }
 `;

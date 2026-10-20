@@ -13,6 +13,10 @@
  * announcement and the reindex are exactly a document write's, with no second
  * write path into stores. A call without content writes nothing: it reads the
  * file as it stands (under the read policy) and passes the same judgement.
+ * `action: "schema"` touches no store: it hands back the published JSON Schema
+ * mirror (`public/schemas/qtap-custom-tool.schema.json`, held to the Zod
+ * schema by its own test) and the two reference specimens, which is
+ * everything a model needs to write a definition from scratch.
  *
  * Job-child safe: the write goes through the doc-edit write path, which the
  * child already buffers; nothing here reads back what it just wrote.
@@ -37,6 +41,9 @@ import {
 } from './doc-edit/shared';
 import { handleWriteFile } from './doc-edit/text-handlers';
 import { validateEditCustomToolInput, type EditCustomToolOutput } from '../edit-custom-tool-tool';
+import customToolJsonSchema from '@/public/schemas/qtap-custom-tool.schema.json';
+import rangeSpecimen from '@/docs/developer/CUSTOM_TOOL_SPEC.json';
+import diceSpecimen from '@/docs/developer/CUSTOM_TOOL_SPEC_DICE.json';
 
 const CONTEXT = 'edit-custom-tool-handler';
 
@@ -94,10 +101,23 @@ export async function executeEditCustomTool(
   const parsed = validateEditCustomToolInput(input);
   if (!parsed) {
     logger.warn('edit_custom_tool validation failed', { context: CONTEXT, chatId: context.chatId, input });
-    return failure('Invalid input: `mount_point` and `file` are required.');
+    return failure('Invalid input: `mount_point` and `file` are required unless `action` is "schema".');
+  }
+
+  if (parsed.action === 'schema') {
+    logger.debug('edit_custom_tool: schema requested', {
+      context: CONTEXT,
+      chatId: context.chatId,
+      characterId: context.characterId,
+    });
+    return { success: true, action: 'schema', schema: customToolJsonSchema, examples: [rangeSpecimen, diceSpecimen] };
   }
 
   const { mount_point: mountPoint, file, content } = parsed;
+  // The input schema's refine already demands both; this narrows the types.
+  if (mountPoint === undefined || file === undefined) {
+    return failure('Invalid input: `mount_point` and `file` are required unless `action` is "schema".');
+  }
   const definitionPath = toolDefinitionPathFor(file);
   if (!definitionPath) {
     return failure(
@@ -224,6 +244,12 @@ export async function executeEditCustomTool(
 export function formatEditCustomToolResults(output: EditCustomToolOutput): string {
   if (!output.success) {
     return `Custom tool edit error: ${output.error || 'Unknown error'}`;
+  }
+  if (output.action === 'schema') {
+    return [
+      'The custom-tool definition format: `schema` is the JSON Schema every Tools/<name>.tool.json file must satisfy, and `examples` are reference definitions that pass it (between them they exercise every feature, so read their descriptions and messages as commentary).',
+      '`roll` is either a range object or a dice string, never both. Write the definition, then save it with edit_custom_tool (`mount_point`, `file`, `content`); a failed save says exactly what to fix.',
+    ].join(' ');
   }
   const where = output.uri ?? output.path;
   return output.action === 'saved'

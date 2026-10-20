@@ -708,6 +708,8 @@ The character names a store (`self` for its own vault) and a file. The file may 
 
 **Called with no content, it writes nothing.** It reads the file as it stands and says whether it would load. That is the check to make after a definition has been edited by other means — a `doc_str_replace` here, a hand edit there — when one would rather hear about a stray comma now than at the moment of rolling.
 
+**And for the character starting from a blank page, it will hand over the rulebook.** Called with `action: "schema"`, it touches no store at all and returns the whole definition format — the very JSON Schema the table judges every file against, every field and every comparison described — along with two worked specimens that between them exercise each feature the format has. A character asked to invent a tool from nothing need not guess at the shape of one; it may read the house rules first, write its definition, and save it in the ordinary way.
+
 You may switch it off like any other tool, under **Pascal's Custom Tools** in the chat's tool settings, alongside `run_custom` itself.
 
 ## When something is wrong with a file
