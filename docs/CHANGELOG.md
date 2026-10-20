@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: composer action buttons stack vertically
+
+- Send, raise-hand and Stop now sit in a column beside the editor at every width, at 2.5rem each, instead of a row of three 3rem buttons that took width from the editor. `.qt-chat-composer-actions` in `_chat.css`, mirrored in theme-storybook 1.0.77.
+
 #### Feature: custom-tool gates and `when` tests gain OR and an `inventoryAggregate` subject
 
 - `availableWhen` / `withheldWhen`, outcome `when` and effect `when` accept an array of their existing objects; the array holds when any element holds (AND inside an element, one level, at most 8). Readers go through new `gateGroups` / `whenGroups` / `effectWhenGroups` helpers in `lib/pascal/custom-tool.types.ts`; a grep-test in `custom-tool-definition.test.ts` blocks raw reads. Load-time issue paths include the group index.

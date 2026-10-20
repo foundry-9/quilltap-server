@@ -6,7 +6,7 @@ url: /salon/:id
 
 > **[Open this page in Quilltap](/salon)**
 
-There comes a moment in every good salon when one simply must get a word in. The composer offers you two ways of doing so, seated to the right of the editor beside the familiar **Send** button. They wake only while somebody is speaking — the rest of the time they sit greyed and patient, like footmen between courses.
+There comes a moment in every good salon when one simply must get a word in. The composer offers you two ways of doing so, stacked to the right of the editor beneath the familiar **Send** button. They wake only while somebody is speaking — the rest of the time they sit greyed and patient, like footmen between courses.
 
 | Button | Colour | What it does |
 |---|---|---|
