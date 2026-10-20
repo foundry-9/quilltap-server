@@ -13,7 +13,7 @@ It is not the [Commonplace Book](memory.md). Memories belong to one character an
 ## What a line is
 
 - A message of one to four thousand characters.
-- Stamped with the time, the chat it was written from, and the character who wrote it (or no character at all, when you ran a tool yourself with nobody in the chair).
+- Stamped with the time, the chat it was written from, and the character who wrote it. When you run one of the tools yourself from the Salon, the line goes down under the character you ran it as (the first active character, if you did not choose one); it carries no character only when the chat has no character in it at all.
 - Written once and never altered. If the facts change, write another line.
 
 ## The three tools
@@ -22,7 +22,7 @@ Three tools are offered to characters in the Salon, switched on by default:
 
 - **`log_create_entry`** takes a `message` and writes it, stamped as above.
 - **`log_grep`** searches every line in the Log with a regular expression (JavaScript syntax), newest first. It takes a `pattern`, an optional `ignore_case`, and a `limit` (50 unless told otherwise, 200 at most).
-- **`log_read`** reads the book by any combination of: `conversationId` (`"current"` means this very chat), `character` (a name, any case, or an id), `from` and `to` (ISO-8601 dates or times, both ends inclusive), and `limit`. Given no filters at all, it returns the latest lines from everywhere.
+- **`log_read`** reads the book by any combination of: `conversationId` (`"current"` means this very chat), `character` (a name, any case, or an id), `from` and `to` (ISO-8601 dates or times, both ends inclusive; a bare date such as `2026-10-19` means the whole of that day, reckoned in UTC, so giving the same date for both reads that one day), and `limit`. Given no filters at all, it returns the latest lines from everywhere.
 
 Both reading tools answer with the entries (each with its text, chat, character, character name and time), a count, and the limit applied. The scope is the entire instance, every chat and every character, so a character may read what another wrote in a different story. If that is not to your taste, switch the tools off, as below.
 

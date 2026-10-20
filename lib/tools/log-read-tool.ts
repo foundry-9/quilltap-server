@@ -16,6 +16,19 @@ const instant = z
   .min(1)
   .refine((value) => !Number.isNaN(Date.parse(value)), { message: 'must be an ISO-8601 date or date-time' })
 
+/** A calendar date with no time, e.g. "2026-10-19". */
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * The stored-form instant a `from` / `to` bound stands for. A bare date is a
+ * whole UTC day: `from` its first millisecond, `to` its last — so
+ * `from: "2026-10-19", to: "2026-10-19"` reads that entire day.
+ */
+export function logReadBoundInstant(value: string, end: 'from' | 'to'): string {
+  if (end === 'to' && BARE_DATE.test(value)) return `${value}T23:59:59.999Z`
+  return new Date(value).toISOString()
+}
+
 /**
  * Zod schema for the log_read tool's input.
  */
@@ -36,7 +49,7 @@ export const logReadToolInputSchema = z
       .describe('Only entries written at or after this moment (ISO-8601, e.g. "2026-10-01" or "2026-10-01T18:00:00Z").'),
     to: instant
       .optional()
-      .describe('Only entries written at or before this moment (ISO-8601). A bare date means the start of that day.'),
+      .describe('Only entries written at or before this moment (ISO-8601). A bare date means the end of that day (UTC), so from and to may name the same date.'),
     limit: llmNumber(
       z
         .number()
@@ -46,7 +59,7 @@ export const logReadToolInputSchema = z
         .describe(`Most entries to return, newest first. Default ${DEFAULT_LOG_RESULT_LIMIT}.`)
     ).optional(),
   })
-  .refine((input) => !input.from || !input.to || Date.parse(input.from) <= Date.parse(input.to), {
+  .refine((input) => !input.from || !input.to || logReadBoundInstant(input.from, 'from') <= logReadBoundInstant(input.to, 'to'), {
     message: 'from must not be after to',
     path: ['from'],
   })

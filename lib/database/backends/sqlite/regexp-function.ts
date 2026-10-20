@@ -57,7 +57,9 @@ export function compileSqlRegexp(
     cache.set(key, regexp);
     return { ok: true, regexp };
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    // V8 already says "Invalid regular expression: …"; the callers add their own prefix.
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: message.replace(/^Invalid regular expression:\s*/, '') };
   }
 }
 

@@ -118,7 +118,8 @@ describe('log tool handlers', () => {
 
     it('refuses a pattern that does not compile, before any query', async () => {
       const result = await executeLogGrepTool({ pattern: '(unclosed' }, CONTEXT);
-      expect(result).toEqual({ success: false, error: expect.stringMatching(/^Invalid regular expression/) });
+      expect(result).toEqual({ success: false, error: expect.stringMatching(/^Invalid regular expression: \/\(unclosed\/: /) });
+      expect(result.error).not.toMatch(/Invalid regular expression:.*Invalid regular expression/);
       expect(logEntries.searchMessages).not.toHaveBeenCalled();
     });
   });
@@ -148,6 +149,22 @@ describe('log tool handlers', () => {
         to: '2026-10-02T10:00:00.000Z',
         limit: 10,
       });
+    });
+
+    it('reads a bare-date `to` as the end of that day, so one date names the whole day', async () => {
+      logEntries.findEntries.mockResolvedValue([]);
+      const result = await executeLogReadTool({ from: '2026-10-19', to: '2026-10-19' }, CONTEXT);
+      expect(result.success).toBe(true);
+      expect(logEntries.findEntries).toHaveBeenCalledWith({
+        from: '2026-10-19T00:00:00.000Z',
+        to: '2026-10-19T23:59:59.999Z',
+        limit: 50,
+      });
+    });
+
+    it('accepts a timed `from` later in the day than a bare-date `to` begins', async () => {
+      logEntries.findEntries.mockResolvedValue([]);
+      expect((await executeLogReadTool({ from: '2026-10-19T18:00:00Z', to: '2026-10-19' }, CONTEXT)).success).toBe(true);
     });
 
     it('names a character it cannot find', async () => {

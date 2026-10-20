@@ -1655,7 +1655,7 @@ exports[`tool definitions: derived OpenAI parameters logRead: parameters snapsho
       "type": "integer",
     },
     "to": {
-      "description": "Only entries written at or before this moment (ISO-8601). A bare date means the start of that day.",
+      "description": "Only entries written at or before this moment (ISO-8601). A bare date means the end of that day (UTC), so from and to may name the same date.",
       "minLength": 1,
       "type": "string",
     },

@@ -13,7 +13,7 @@
 
 import { validateLogCreateEntryInput, type LogCreateEntryToolOutput } from '../log-create-entry-tool';
 import { DEFAULT_LOG_RESULT_LIMIT, validateLogGrepInput } from '../log-grep-tool';
-import { validateLogReadInput } from '../log-read-tool';
+import { logReadBoundInstant, validateLogReadInput } from '../log-read-tool';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -147,12 +147,13 @@ export async function executeLogReadTool(input: unknown, context: LogToolContext
   const chatId = parsed.conversationId === 'current' ? context.chatId : parsed.conversationId;
   const limit = parsed.limit ?? DEFAULT_LOG_RESULT_LIMIT;
   try {
-    // Normalised to the stored form so the bounds compare as the column does.
+    // Normalised to the stored form so the bounds compare as the column does;
+    // a bare-date `to` covers its whole day.
     const entries = await getRepositories().logEntries.findEntries({
       ...(chatId ? { chatId } : {}),
       ...(characterId ? { characterId } : {}),
-      ...(parsed.from ? { from: new Date(parsed.from).toISOString() } : {}),
-      ...(parsed.to ? { to: new Date(parsed.to).toISOString() } : {}),
+      ...(parsed.from ? { from: logReadBoundInstant(parsed.from, 'from') } : {}),
+      ...(parsed.to ? { to: logReadBoundInstant(parsed.to, 'to') } : {}),
       limit,
     });
     logger.debug('log_read answered', { chatId: context.chatId, returned: entries.length, limit });

@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: the Log's date bounds and regex errors
+
+- `log_read`: a bare-date `to` (e.g. `"2026-10-19"`) now means the last millisecond of that UTC day, not its first, so `from` and `to` naming the same date read that whole day. Before, that query returned nothing. The from-not-after-to check uses the same rule. One helper, `logReadBoundInstant` (`lib/tools/log-read-tool.ts`), serves the check and the handler.
+- `log_grep` and the `regexp()` SQL function no longer say "Invalid regular expression: Invalid regular expression: …". `compileSqlRegexp` strips V8's own prefix from the reason.
+- Help (`help/the-log.md`): a line written by the operator through run-tool is stamped with the character it was run as (the first active one by default), not with no character; and bare dates are explained.
+
 #### Feature: the Log
 
 - New table `log_entries` in the LLM logs database (`id`, `message` 1-4000 chars written once, `chatId`, `characterId` nullable, `createdAt`, `updatedAt`), created from the Zod schema in `lib/schemas/log-entry.types.ts` by `LogEntriesRepository` (no migration). Indexes on `createdAt`, `(chatId, createdAt)` and `(characterId, createdAt)`. Repo key `logEntries` joins `LLM_LOGS_REPO_KEYS`; in the job child its writes are buffered, so a `log_create_entry` then `log_grep` in the same autonomous turn does not see the entry.
