@@ -82,6 +82,7 @@ import {
   type EffectCondition,
   effectWhenGroups,
   gateGroups,
+  outcomeTableTestsLlm,
   whenGroups,
 } from './custom-tool.types';
 import { evaluateExpression, formatValue, parseExpression, type ExprValue } from './expressions';
@@ -1398,7 +1399,7 @@ function matchesWhenGroup(when: WhenObject, subjects: OutcomeSubjects, toolName:
 /** What an effect condition may be posed about: the run's subjects, plus the winning outcome. */
 export interface EffectSubjects extends OutcomeSubjects {
   /** The winning outcome — the one subject that exists only after the deal. */
-  outcome: { state: OutcomeState; index: number };
+  outcome: { state: OutcomeState; index: number; brief?: string };
   /** Dice breakdown for `{{dice}}` in expressions — a string, '' for Form A. */
   dice: string;
   /**
@@ -1707,6 +1708,12 @@ export interface PlaceholderSubjects {
   now?: number;
   /** The consult's result. Absent while rendering the consult's own prompt. */
   llm?: LlmSubject;
+  /**
+   * The winning outcome, for `{{outcome.state}}` / `{{outcome.index}}` /
+   * `{{outcome.brief}}`. Present once the table has dealt: before the consult
+   * when no row tests it, after otherwise (so absent from the prompt then).
+   */
+  outcome?: { state: OutcomeState; index: number; brief?: string };
   /** The merged persistent state, for `{{state.path}}` placeholders. */
   state?: CustomToolState;
   /** The rolling character's Inventory, for `{{inventory.<ref>.<field>}}`. */
@@ -1731,6 +1738,8 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
       return vars.dice;
     case 'llm':
       return vars.llm?.output;
+    case 'outcome':
+      return vars.outcome?.[ref.field];
     case 'params':
       return vars.params[ref.name];
     case 'metadata':
@@ -1788,6 +1797,15 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
     switch (ref.kind) {
       case 'llm':
         logger.debug('Custom tool message references {{llm}} with no consult to render', { context: CONTEXT });
+        break;
+      case 'outcome':
+        logger.debug('Custom tool template references {{outcome.*}} it cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: !vars.outcome
+            ? 'the table has not dealt yet (or the consult is read by an outcome row)'
+            : 'the winning outcome has no brief',
+        });
         break;
       case 'metadata':
         logger.debug('Custom tool message references metadata the character cannot render', {
@@ -2007,15 +2025,14 @@ export async function executeCustomTool(
   const now = overrides?.now ?? Date.now();
   const character = overrides?.character?.trim() || undefined;
 
-  // The consult runs AFTER the roll — its prompt may quote the draw — and
-  // BEFORE the table, which may test its answer.
-  let llm: LlmConsultResult | undefined;
-  if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state, inventory });
-    llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
-  }
-
-  const subjects: OutcomeSubjects = {
+  // Two run orders, and the table decides which. A table that TESTS the
+  // consult's answer needs the consult first (the oracle: the model's answer is
+  // the verdict). Any other table is dealt BEFORE the consult, so the prompt
+  // is told the verdict (`{{outcome.brief}}`) rather than asked to recompute it
+  // — a cheap model asked to redo arithmetic the engine has already done will
+  // sometimes report the other branch (bug 257).
+  const consultFirst = definition.llm !== undefined && outcomeTableTestsLlm(definition.outcomes);
+  const baseSubjects: OutcomeSubjects = {
     value,
     roll: raw,
     params,
@@ -2024,26 +2041,66 @@ export async function executeCustomTool(
     state,
     inventory,
     ...(character ? { character } : {}),
-    ...(llm ? { llm } : {}),
   };
-  const outcomeIndex = pickOutcome(definition, subjects);
+  const templateVars = { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state, inventory };
+
+  let llm: LlmConsultResult | undefined;
+  let outcomeIndex: number;
+  let briefs: Array<string | undefined> = [];
+  if (definition.llm && consultFirst) {
+    const prompt = renderTemplate(definition.llm.prompt, templateVars);
+    llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
+    outcomeIndex = pickOutcome(definition, { ...baseSubjects, llm });
+  } else {
+    outcomeIndex = pickOutcome(definition, baseSubjects);
+    if (definition.llm) {
+      const winner = definition.outcomes[outcomeIndex];
+      // The brief is written before the consult, so it quotes only what the
+      // prompt may: no `{{llm}}`, no `{{outcome.*}}` (load rejects both).
+      const brief = winner.brief !== undefined ? renderTemplate(winner.brief, templateVars) : undefined;
+      briefs = [];
+      briefs[outcomeIndex] = brief;
+      logger.debug('Custom tool table dealt ahead of the consult', {
+        context: CONTEXT,
+        tool: definition.name,
+        outcomeIndex,
+        state: winner.state,
+        hasBrief: brief !== undefined,
+      });
+      const prompt = renderTemplate(definition.llm.prompt, {
+        ...templateVars,
+        outcome: { state: winner.state, index: outcomeIndex, ...(brief !== undefined ? { brief } : {}) },
+      });
+      llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
+    }
+  }
+
+  const subjects: OutcomeSubjects = { ...baseSubjects, ...(llm ? { llm } : {}) };
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state, inventory });
+  // Rendered once for the winner, whichever run order dealt it: a brief after
+  // an oracle-first run is never read by the prompt, but `{{outcome.brief}}`
+  // in a message or effect still resolves.
+  const winningBrief =
+    briefs[outcomeIndex] ?? (outcome.brief !== undefined ? renderTemplate(outcome.brief, templateVars) : undefined);
+  const winning = { state: outcome.state, index: outcomeIndex, ...(winningBrief !== undefined ? { brief: winningBrief } : {}) };
+
+  const message = renderTemplate(outcome.message, { ...templateVars, llm, outcome: winning });
+
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, llm, state, inventory })
+    ? renderTemplate(definition.chipLabel, { ...templateVars, llm, outcome: winning })
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written
   // here; the entrances decide whether (and where) the writes land.
   const effectSubjects: EffectSubjects = {
     ...subjects,
-    outcome: { state: outcome.state, index: outcomeIndex },
+    outcome: winning,
     dice: diceBreakdown,
     now,
   };

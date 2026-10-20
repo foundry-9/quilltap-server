@@ -104,7 +104,7 @@ export function OutcomesSection({
       .filter(
         (issue) =>
           issue.severity === 'error' &&
-          (issue.where.section === 'outcome' || issue.where.section === 'message') &&
+          (issue.where.section === 'outcome' || issue.where.section === 'message' || issue.where.section === 'brief') &&
           issue.where.id === id &&
           (conditionId === undefined || (issue.where.section === 'outcome' && issue.where.conditionId === conditionId))
       )
@@ -112,7 +112,12 @@ export function OutcomesSection({
 
   const messageWarnings = (id: string): string[] =>
     issues
-      .filter((issue) => issue.severity === 'warning' && issue.where.section === 'message' && issue.where.id === id)
+      .filter(
+        (issue) =>
+          issue.severity === 'warning' &&
+          (issue.where.section === 'message' || issue.where.section === 'brief') &&
+          issue.where.id === id
+      )
       .map((issue) => issue.message)
 
   const setOutcomes = (next: DraftOutcome[]) => onChange({ ...draft, outcomes: next })
@@ -127,6 +132,7 @@ export function OutcomesSection({
       conditions: [],
       state: 'success',
       message: '',
+      brief: '',
     }
     // Insert above the pinned catch-all.
     setOutcomes([...outcomes.slice(0, -1), fresh, outcomes[outcomes.length - 1]])
@@ -322,6 +328,25 @@ function OutcomeRow({
       </div>
 
       <MessageEditor outcome={outcome} draft={draft} disabled={disabled} onUpdate={onUpdate} />
+
+      {(draft.llmEnabled || outcome.brief !== '') && (
+        <div className="space-y-1">
+          <textarea
+            value={outcome.brief}
+            maxLength={MAX_MESSAGE_LENGTH}
+            onChange={(e) => onUpdate({ brief: e.target.value })}
+            disabled={disabled}
+            rows={2}
+            className="qt-textarea w-full text-sm"
+            placeholder="Brief for the consult's narrator — the verdict this row means, e.g. “Report that the signal is definitively confirmed.” Quote it in the prompt as {{outcome.brief}}."
+            aria-label="Outcome brief for the LLM consult"
+          />
+          <p className="qt-hint">
+            Optional. When no row tests the consult&rsquo;s answer, the table is dealt first and the model is simply
+            told this, rather than asked to work the verdict out for itself.
+          </p>
+        </div>
+      )}
 
       {errors.map((message) => (
         <p key={message} className="text-xs qt-text-destructive">

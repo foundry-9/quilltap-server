@@ -184,13 +184,13 @@
         "errorMessage"
       ],
       "additionalProperties": false,
-      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table. The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
+      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table — unless no outcome tests `llm`, in which case the table is dealt first and the prompt may read the winning row ({{outcome.brief}}). The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
       "properties": {
         "prompt": {
           "type": "string",
           "minLength": 1,
           "maxLength": 4000,
-          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence. When the table decides the verdict (no outcome tests `llm`), do not ask the model to compare numbers: give each outcome a `brief` and write {{outcome.brief}} (also {{outcome.state}}, {{outcome.index}}, the winning row's state and 0-based index) here — the table has already been dealt. A prompt that references {{outcome.*}} on a tool whose outcomes test `llm` is rejected at load."
         },
         "errorMessage": {
           "type": "string",
@@ -262,6 +262,12 @@
               "info"
             ],
             "description": "Semantic state of this outcome. Accents the result bubble; authors never write CSS."
+          },
+          "brief": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "An instruction for the llm block's narrator: the conclusion this outcome means, in the author's words (\"Report that the entanglement is definitively confirmed\"). When this row wins, the consult prompt may quote it as {{outcome.brief}}, so the model is told the verdict the table reached instead of asked to work it out. Takes the placeholders a consult prompt takes (no {{llm}}, no {{outcome.*}}). Needs an llm block, and the prompt can read it only while no outcome row tests `llm`."
           }
         }
       }

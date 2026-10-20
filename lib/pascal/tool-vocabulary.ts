@@ -208,6 +208,7 @@ export function collectToolVocabulary(
     // message, and that message may well quote a fact sheet.
     for (const group of whenGroups(outcome.when)) collectGroup(group);
     collectPlaceholders(outcome.message, declared, found);
+    if (outcome.brief !== undefined) collectPlaceholders(outcome.brief, declared, found);
   }
 
   // The availability gate reads the same fact sheet, and naming its keys stays
@@ -358,6 +359,8 @@ function collectPlaceholders(
         break;
       case 'character':
         found.character = true;
+        break;
+      case 'outcome':
         break;
       case 'inventory':
         found.inventory.add(ref.ref);

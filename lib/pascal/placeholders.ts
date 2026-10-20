@@ -25,6 +25,7 @@ export type PlaceholderRef =
   | { kind: 'roll' }
   | { kind: 'dice' }
   | { kind: 'llm' }
+  | { kind: 'outcome'; field: OutcomePlaceholderField }
   | { kind: 'now' }
   | { kind: 'character' }
   | { kind: 'params'; name: string }
@@ -33,6 +34,16 @@ export type PlaceholderRef =
   | { kind: 'progress'; id: string; field: string }
   | { kind: 'inventory'; ref: string; field: InventoryPlaceholderField; key?: string }
   | { kind: 'unknown'; key: string };
+
+/**
+ * The fields an `{{outcome.<field>}}` placeholder may name: the winning row's
+ * semantic state, its 0-based index (as `pascalMeta.outcomeIndex` records it)
+ * and its `brief`. Known only once the table has dealt — before the consult
+ * when no row tests it, after the consult otherwise.
+ */
+export type OutcomePlaceholderField = 'state' | 'index' | 'brief';
+
+export const OUTCOME_PLACEHOLDER_FIELDS: readonly OutcomePlaceholderField[] = ['state', 'index', 'brief'];
 
 /** The fields an `{{inventory.<ref>.<field>}}` placeholder may name. */
 export type InventoryPlaceholderField = 'title' | 'name' | 'description' | 'state' | 'metadata';
@@ -67,6 +78,7 @@ export function splitInventoryReference(
   return null;
 }
 
+const OUTCOME_PREFIX = 'outcome.';
 const PARAMS_PREFIX = 'params.';
 const METADATA_PREFIX = 'metadata.';
 const STATE_PREFIX = 'state.';
@@ -90,6 +102,10 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
   // progressions and wardrobe the run reads and writes. A run nobody made has
   // none, and the placeholder then renders as written.
   if (key === 'character') return { kind: 'character' };
+  if (key.startsWith(OUTCOME_PREFIX)) {
+    const field = OUTCOME_PLACEHOLDER_FIELDS.find((f) => f === key.slice(OUTCOME_PREFIX.length));
+    if (field) return { kind: 'outcome', field };
+  }
   if (key.startsWith(PARAMS_PREFIX) && key.length > PARAMS_PREFIX.length) {
     return { kind: 'params', name: key.slice(PARAMS_PREFIX.length) };
   }

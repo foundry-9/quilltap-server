@@ -226,6 +226,8 @@ export interface DraftOutcome {
   conditions: DraftCondition[];
   state: OutcomeState;
   message: string;
+  /** The narrator's instruction for this outcome (`{{outcome.brief}}`); '' = none, and nothing is emitted. */
+  brief: string;
 }
 
 /**
@@ -458,13 +460,14 @@ export function newDraft(): ToolDraft {
     llmMaxOutput: '',
     effects: [],
     outcomes: [
-      { id: nextDraftId('outcome'), catchAll: false, conditions: [], state: 'success', message: '' },
+      { id: nextDraftId('outcome'), catchAll: false, conditions: [], state: 'success', message: '', brief: '' },
       {
         id: nextDraftId('outcome'),
         catchAll: true,
         conditions: [],
         state: 'info',
         message: 'The wheel gives {{value}}.',
+        brief: '',
       },
     ],
     schemaValue: DEFAULT_SCHEMA_VALUE,
@@ -856,6 +859,7 @@ function outcomeToDraft(outcome: CustomToolOutcome): DraftOutcome {
     conditions: outcome.when === true ? [] : conditionsFromWhen(outcome.when),
     state: outcome.state,
     message: outcome.message,
+    brief: outcome.brief ?? '',
   };
 }
 
@@ -1212,13 +1216,16 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   }
 
   doc.outcomes = draft.outcomes.map((outcome) => {
+    // Omitted while blank — a brief is optional, and most tables have none.
+    const brief = outcome.brief.trim() === '' ? {} : { brief: outcome.brief };
     if (outcome.catchAll) {
-      return { when: true, message: outcome.message, state: outcome.state };
+      return { when: true, message: outcome.message, state: outcome.state, ...brief };
     }
     return {
       when: whenFromConditions(outcome.conditions) ?? {},
       message: outcome.message,
       state: outcome.state,
+      ...brief,
     };
   });
 
@@ -1252,7 +1259,8 @@ export interface DraftIssue {
     | { section: 'llm'; field: 'prompt' | 'errorMessage' | 'maxOutput' }
     | { section: 'effect'; id: string; field?: 'log' }
     | { section: 'outcome'; id: string; conditionId?: string }
-    | { section: 'message'; id: string };
+    | { section: 'message'; id: string }
+    | { section: 'brief'; id: string };
   message: string;
 }
 
@@ -1338,6 +1346,11 @@ function auditPlaceholders(
       // time; an absent object renders as written, the metadata convention.
       case 'inventory':
         break;
+      // `{{outcome.*}}` names the winning row; the consult prompt's own
+      // rules (it cannot be read when a row tests the consult) are in
+      // `validateLlmPromptPlaceholders`, and a brief's in `validateOutcomeBrief`.
+      case 'outcome':
+        break;
       case 'dice':
         if (draft.rollForm === 'range') {
           issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
@@ -1392,10 +1405,97 @@ function validateChipLabelPlaceholders(draft: ToolDraft, issues: DraftIssue[]): 
  * does not exist yet.
  */
 function validateLlmPromptPlaceholders(draft: ToolDraft, issues: DraftIssue[]): void {
-  auditPlaceholders(draft.llmPrompt, { section: 'llm', field: 'prompt' }, draft, issues, {
+  const where: DraftIssue['where'] = { section: 'llm', field: 'prompt' };
+  auditPlaceholders(draft.llmPrompt, where, draft, issues, {
     llm: 'forbid',
     allowState: false,
   });
+
+  // `{{outcome.*}}` needs the table dealt first, which a row that tests the
+  // consult forbids — the load-time schema rejects it, so the form does too.
+  if (draftTableTestsLlm(draft)) {
+    for (const { key, ref } of scanPlaceholders(draft.llmPrompt)) {
+      if (ref.kind === 'outcome') {
+        issues.push(
+          err(
+            where,
+            `{{${key}}} is not available here — an outcome tests the consult's answer, so the table cannot be dealt before the consult`
+          )
+        );
+      }
+    }
+  }
+
+  // A prompt that compares numbers asks a cheap model to redo arithmetic the
+  // table has already done (bug 257). Advisory: the oracle form is legitimate
+  // when the model is genuinely judging, but a comparison between two figures is not.
+  if (PROMPT_COMPARISON_PATTERN.test(draft.llmPrompt) || PROMPT_DO_THE_MATH_PATTERN.test(draft.llmPrompt)) {
+    issues.push(
+      warn(
+        where,
+        'this prompt asks the model to compare numbers — the outcome table can decide that for you. Give each outcome a brief and write {{outcome.brief}} here, so the model narrates a verdict it was told'
+      )
+    );
+  }
+}
+
+/** `{{x}} >= {{y}}`, with any of the numeric placeholder families on either side of an ordering or equality sign. */
+const PROMPT_COMPARISON_PATTERN =
+  /\{\{\s*(?:value|roll|params\.[^}]+|state\.[^}]+|progress\.[^}]+|metadata\.[^}]+)\s*\}\}\s*(?:>=|<=|>|<|==|=|≥|≤)\s*\{\{|\{\{[^}]+\}\}\s*(?:>=|<=|>|<|==|≥|≤)\s*(?:\{\{|-?\d)/;
+const PROMPT_DO_THE_MATH_PATTERN = /\b(?:do|actually do|work out|compute)\s+the\s+(?:math|arithmetic|maths|sum)\b/i;
+
+/** True when any outcome row tests the consult's answer (`llm`) or its success (`llm-ok`). */
+export function draftTableTestsLlm(draft: Pick<ToolDraft, 'outcomes'>): boolean {
+  return draft.outcomes.some((outcome) =>
+    outcome.conditions.some((c) => c.subject.kind === 'llm' || c.subject.kind === 'llm-ok')
+  );
+}
+
+/** True when the consult prompt quotes the winning row's brief. */
+export function promptReadsBrief(draft: Pick<ToolDraft, 'llmEnabled' | 'llmPrompt'>): boolean {
+  return (
+    draft.llmEnabled &&
+    scanPlaceholders(draft.llmPrompt).some(({ ref }) => ref.kind === 'outcome' && ref.field === 'brief')
+  );
+}
+
+/**
+ * The audit's brief check: which outcome rows can win (`hits > 0` in the
+ * thousand-hand deal) yet carry no brief while the prompt reads
+ * `{{outcome.brief}}` — those would put the placeholder, as written, in front
+ * of the model. Returns the row indexes; empty when the prompt reads no brief.
+ */
+export function reachableOutcomesMissingBrief(
+  draft: Pick<ToolDraft, 'llmEnabled' | 'llmPrompt' | 'outcomes'>,
+  hits: ReadonlyArray<{ index: number; hits: number }>
+): number[] {
+  if (!promptReadsBrief(draft)) return [];
+  return hits
+    .filter((entry) => entry.hits > 0 && (draft.outcomes[entry.index]?.brief.trim() ?? '') === '')
+    .map((entry) => entry.index);
+}
+
+/**
+ * A brief's own audit. It renders before the consult, so it cannot quote the
+ * answer or the winning row (errors, as at load); it needs the consult
+ * enabled to be read at all (an error, as at load); and the usual placeholder
+ * rules apply to the rest.
+ */
+function validateOutcomeBrief(outcome: DraftOutcome, draft: ToolDraft, issues: DraftIssue[]): void {
+  if (outcome.brief.trim() === '') return;
+  const where: DraftIssue['where'] = { section: 'brief', id: outcome.id };
+  if (outcome.brief.length > MAX_MESSAGE_LENGTH) {
+    issues.push(err(where, `a brief is over ${MAX_MESSAGE_LENGTH} characters`));
+  }
+  if (!draft.llmEnabled) {
+    issues.push(err(where, 'has a brief, but the LLM consult is not enabled to read it'));
+  }
+  for (const { key, ref } of scanPlaceholders(outcome.brief)) {
+    if (ref.kind === 'llm' || ref.kind === 'outcome') {
+      issues.push(err(where, `a brief is written before the consult runs and cannot quote {{${key}}}`));
+    }
+  }
+  auditPlaceholders(outcome.brief, where, draft, issues, { llm: 'forbid', allowState: false });
 }
 
 /**
@@ -2138,6 +2238,15 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
       issues.push(err({ section: 'message', id: outcome.id }, `message is over ${MAX_MESSAGE_LENGTH} characters`));
     }
     validateMessagePlaceholders(outcome, draft, issues);
+    validateOutcomeBrief(outcome, draft, issues);
+    if (promptReadsBrief(draft) && outcome.brief.trim() === '') {
+      issues.push(
+        warn(
+          { section: 'brief', id: outcome.id },
+          'the consult prompt reads {{outcome.brief}}, but this outcome has no brief — if it wins, the placeholder reaches the model as written'
+        )
+      );
+    }
   }
 
   return issues;
@@ -2249,6 +2358,7 @@ export function renameParameterEverywhere(draft: ToolDraft, from: string, to: st
     outcomes: draft.outcomes.map((outcome) => ({
       ...outcome,
       message: outcome.message.replace(placeholder, `{{params.${to}}}`),
+      brief: outcome.brief.replace(placeholder, `{{params.${to}}}`),
       conditions: outcome.conditions.map((condition) => ({
         ...condition,
         subject: renameSubject(condition.subject),
@@ -2287,6 +2397,9 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
     }
     if (paramPlaceholderPattern(name).test(outcome.message)) {
       sites.push(`${label}: the message renders it`);
+    }
+    if (paramPlaceholderPattern(name).test(outcome.brief)) {
+      sites.push(`${label}: the brief renders it`);
     }
   });
 

@@ -315,6 +315,42 @@ Chance settles a great many questions, but not all of them are chance's to settl
 
 With that in place, every run pauses after the roll and puts the rendered `prompt` to your instance's **cheap utility model** — the same modest engine that titles your chats and files your memories, chosen in your cheap-model settings. The prompt takes every placeholder a message does — `{{value}}`, `{{roll}}`, `{{dice}}`, `{{params.…}}`, `{{metadata.…}}`, `{{state.…}}` — everything except `{{llm}}` itself, the oracle being in no position to quote an answer it has not yet given. Ask for the shape of answer your table means to test: a bare word, a number, a sentence.
 
+#### When the table, not the oracle, decides
+
+The doorman above is a *judgment*: the model's answer is the verdict, and the table merely reads it back. There is another, quite different, use for the same block — a **narrator**, where the roll and the table settle what happened and the model merely dresses it in prose. A scanner reports "entanglement confirmed" or "not found", and the *number* has already said which.
+
+For a narrator, do **not** write a prompt that says *"if {{roll}} is at least {{params.layers}}, report success; otherwise report failure"*. That asks a modest model to redo arithmetic the engine finished before the prompt was even written, in the middle of a creative task, with the winning and the losing report both in front of it — and a modest model will sometimes pick the wrong one, in lovely prose, with the right numbers printed beneath. Let the table decide, and *tell* the model what it decided. Give each outcome a `brief`:
+
+```json
+"llm": {
+  "prompt": "Write a short scan report for {{params.scan_target}}, in the technical register of the near future. The conclusion you must reach: {{outcome.brief}}. Do not mention that this is fiction or that dice were rolled.",
+  "errorMessage": "The ansible link falters."
+},
+"outcomes": [
+  { "when": { "gte": { "$param": "layers" } }, "state": "success",
+    "brief": "Report that entanglement with {{params.partner}} is definitively confirmed, at very high confidence.",
+    "message": "{{llm}}" },
+  { "when": true, "state": "failure",
+    "brief": "Report that entanglement was not definitively found, leaving room for observer interference.",
+    "message": "{{llm}}" }
+]
+```
+
+The table is dealt **first**, the winning row's `brief` is rendered, and only then is the oracle consulted — so the prompt can quote:
+
+| | |
+|---|---|
+| `{{outcome.brief}}` | the winning row's `brief`, with its own placeholders already filled in |
+| `{{outcome.state}}` | the winning row's state: `success`, `partial`, `failure` or `info` |
+| `{{outcome.index}}` | the winning row's position, counting from 0 (the number the roll record keeps) |
+
+The same three placeholders may be quoted in the outcome messages, the chip label and the effects, where the table has plainly already been dealt. A few rules keep the order honest:
+
+- **If any outcome tests `llm`** (the answer, or its `ok`), the table needs the oracle first, so the oracle cannot read the verdict. The old order holds, and a prompt that quotes `{{outcome.…}}` is refused when the file loads. Pick one: the oracle judges, or the table does.
+- A `brief` is written before the oracle speaks, so it may not quote `{{llm}}` or `{{outcome.…}}` either. It needs an `llm` block to be read at all.
+- A row without a `brief` is not an error, but if the prompt reads `{{outcome.brief}}` and that row wins, the placeholder reaches the model as written. The Workbench warns about every such row, and its audit names any that actually fired.
+- For wording you must have *exactly*, skip the model: write the conclusion into the row's `message` after `{{llm}}`.
+
 What comes back is a pair — *did the oracle answer*, and *what did it say* — and the outcome table may ask about both under the `llm` subject:
 
 ```json
@@ -350,6 +386,7 @@ These may be dropped into a `message`:
 | `{{inventory.sword.title}}` | an object the roller carries or can reach: `.title` (its title, or its name when it has none), `.name`, `.description`, `.state`, or `.metadata.<key>` |
 | `{{now}}` | the moment the run began, in milliseconds since the epoch |
 | `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
+| `{{outcome.state}}`, `{{outcome.index}}`, `{{outcome.brief}}` | the winning row's state, 0-based position and [`brief`](#when-the-table-not-the-oracle-decides) |
 
 Anything else in braces is left exactly as you typed it — as is an `{{inventory.…}}` naming an object the roller cannot reach (its `.state` alone still says `absent`), a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying, or a `{{character}}` on a roll that nobody in particular made (you, from the run dialog, as no one).
 

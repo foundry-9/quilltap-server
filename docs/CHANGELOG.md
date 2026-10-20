@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: a custom tool's LLM consult can narrate a verdict the table already reached (bug 257)
+
+- An outcome row can carry a `brief` (the conclusion it means). When no row tests `llm`, the table is dealt before the consult and the prompt can quote `{{outcome.brief}}`, `{{outcome.state}}` and `{{outcome.index}}`, so the model is told the verdict instead of asked to compare numbers. The same placeholders work in messages, the chip label and effects. Tables that test `llm` keep the old order.
+- Load-time rules: `{{outcome.*}}` in a prompt whose table tests `llm` is rejected; a `brief` needs an `llm` block and cannot quote `{{llm}}` or `{{outcome.*}}`.
+- Workbench: a brief field per outcome, a warning on prompts that compare numbers, a warning on rows without a brief when the prompt reads one, and an audit flag on reachable rows without a brief.
+- Docs: `help/custom-tools.md` ("When the table, not the oracle, decides") and `help/pascals-workbench.md`. Schema mirror updated in `public/schemas/qtap-custom-tool.schema.json`.
+
 #### Docs: blank Inventory drawing descriptions are invisible
 
 - The Inventory editor's "How it should be drawn" hint and `help/inventory.md` now say an empty or whitespace-only `imageDescription` keeps the object out of avatars, story backgrounds and the image tool; the object's own picture falls back to description, title, then name. Behavior was already this way (`renderCarryingPhrase` trims and skips). Added `__tests__/unit/lib/inventory/image-description.test.ts` to pin it.

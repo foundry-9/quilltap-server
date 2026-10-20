@@ -793,6 +793,18 @@ export const CustomToolOutcomeSchema = z.strictObject({
     .max(MAX_MESSAGE_LENGTH)
     .describe('Narrative result. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, and {{metadata.key}}.'),
   state: OutcomeStateSchema.describe('Semantic state, used to accent the result bubble.'),
+  brief: z
+    .string()
+    .min(1)
+    .max(MAX_MESSAGE_LENGTH)
+    .optional()
+    .describe(
+      "An instruction for the LLM consult's narrator: the conclusion this outcome means, in the author's words " +
+        '("Report that the entanglement is definitively confirmed"). When this row wins, the consult prompt may quote it as ' +
+        '{{outcome.brief}}, so the model is TOLD the verdict the table reached instead of asked to work it out. ' +
+        'Takes the placeholders a consult prompt takes. Only meaningful on a tool with an `llm` block, and only ' +
+        'readable by the prompt while no row tests `llm` (a table that reads the answer cannot also be read by the question).'
+    ),
 });
 
 export type CustomToolOutcome = z.infer<typeof CustomToolOutcomeSchema>;
@@ -1240,7 +1252,9 @@ export const CustomToolLlmSchema = z.strictObject({
     .max(MAX_LLM_PROMPT_LENGTH)
     .describe(
       'What to ask. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, and {{state.path}} — but not {{llm}}. ' +
-        'Ask for the answer shape you intend to test: a bare word, a number, a sentence.'
+        'Ask for the answer shape you intend to test: a bare word, a number, a sentence. When the table decides the ' +
+        'verdict (no outcome tests `llm`), do not ask the model to compare numbers: give each outcome a `brief` and ' +
+        'write {{outcome.brief}} (also {{outcome.state}}, {{outcome.index}}) here — the table has already chosen.'
     ),
   errorMessage: z
     .string()
@@ -1362,6 +1376,7 @@ export const QtapCustomToolSchema = z
   .superRefine((tool, ctx) => {
     validateOutcomeOrdering(tool.outcomes, ctx);
     validateReferences(tool, ctx);
+    validateOutcomeBriefs(tool, ctx);
     validateGates(tool, ctx);
     validateEffects(tool, ctx);
     validateTriggers(tool, ctx);
@@ -1419,6 +1434,56 @@ function validateOutcomeOrdering(outcomes: CustomToolOutcome[], ctx: z.Refinemen
         message: 'the final outcome must be a catch-all (when: true) so every roll lands somewhere',
         path: ['outcomes', i, 'when'],
       });
+    }
+  });
+}
+
+/** True when any outcome row's `when` tests the consult (`llm`, or its `ok`). */
+export function outcomeTableTestsLlm(outcomes: ReadonlyArray<Pick<CustomToolOutcome, 'when'>>): boolean {
+  return outcomes.some((outcome) => whenGroups(outcome.when).some((group) => group.llm !== undefined));
+}
+
+/**
+ * Rule: `{{outcome.*}}` and `brief` keep to the run order.
+ *
+ * When no row tests the consult, the table is dealt first and the prompt may
+ * quote the winning row. When some row does, the table needs the answer, so the
+ * prompt cannot read the verdict — a reference there would be a hole for ever,
+ * and it is rejected at load. A `brief` is rendered before the consult too, so
+ * it may quote neither `{{llm}}` nor `{{outcome.*}}`.
+ */
+function validateOutcomeBriefs(
+  tool: { llm?: CustomToolLlm; outcomes: CustomToolOutcome[] },
+  ctx: z.RefinementCtx
+): void {
+  if (tool.llm && outcomeTableTestsLlm(tool.outcomes)) {
+    for (const { key, ref } of scanPlaceholdersInText(tool.llm.prompt)) {
+      if (ref.kind === 'outcome') {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            `the consult prompt references {{${key}}}, but an outcome tests the consult's answer, so the table ` +
+            "cannot be dealt before the consult. Drop the `llm` test, or take the verdict out of the prompt",
+          path: ['llm', 'prompt'],
+        });
+      }
+    }
+  }
+
+  tool.outcomes.forEach((outcome, i) => {
+    if (outcome.brief === undefined) return;
+    const path = ['outcomes', i, 'brief'];
+    if (!tool.llm) {
+      ctx.addIssue({ code: 'custom', message: 'has a `brief`, but the tool declares no `llm` block to read it', path });
+    }
+    for (const { key, ref } of scanPlaceholdersInText(outcome.brief)) {
+      if (ref.kind === 'llm' || ref.kind === 'outcome') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `a brief is written before the consult runs and cannot quote {{${key}}}`,
+          path,
+        });
+      }
     }
   });
 }

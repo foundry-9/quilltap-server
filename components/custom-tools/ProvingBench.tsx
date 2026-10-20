@@ -49,6 +49,7 @@ import { flattenProgressions } from '@/lib/progressions/engine'
 import {
   definitionFromDraft,
   gateFromConditions,
+  reachableOutcomesMissingBrief,
   type ToolDraft,
   type WardrobeVantage,
 } from '@/lib/pascal/tool-draft'
@@ -780,6 +781,7 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
               mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
+              const missingBrief = reachableOutcomesMissingBrief(draft, audit.outcomes)
               const outcome = draft.outcomes[entry.index]
               const label = outcome?.catchAll ? 'otherwise' : `row ${entry.index + 1}`
               return (
@@ -804,6 +806,12 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
                       } as React.CSSProperties}
                     />
                   </div>
+                  {missingBrief.includes(entry.index) && (
+                    <p className="text-xs qt-text-destructive">
+                      This outcome can win, and the consult prompt reads {'{{outcome.brief}}'}, but the row has no
+                      brief — the model would be shown the placeholder as written. Give it a brief.
+                    </p>
+                  )}
                   {entry.hits === 0 && !outcome?.catchAll && (
                     <p className="text-xs qt-text-secondary">
                       This outcome never fired in {audit.runs.toLocaleString()} draws <em>with these parameters and
