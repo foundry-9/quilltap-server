@@ -666,7 +666,7 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle edit_custom_tool (Pascal the Croupier — save or validate a definition)
+    // Handle edit_custom_tool (Pascal the Croupier — save or validate a definition, or fetch the format)
     if (toolCall.name === 'edit_custom_tool') {
       const { executeEditCustomTool, formatEditCustomToolResults } = await import('@/lib/tools/handlers/edit-custom-tool-handler');
 
@@ -690,6 +690,8 @@ export async function executeToolCallWithContext(
           path: out.path,
           uri: out.uri,
           name: out.name,
+          schema: out.schema,
+          examples: out.examples,
         } : null,
         error: out.success ? undefined : out.error,
       };

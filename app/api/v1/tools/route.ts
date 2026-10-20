@@ -230,7 +230,7 @@ const BUILT_IN_TOOLS = [
   {
     id: 'edit_custom_tool',
     name: 'Edit Custom Tool',
-    description: "Save or validate a custom tool definition (Tools/<name>.tool.json at the top level of a document store). Every save is schema-validated first, and an invalid definition is not written.",
+    description: "Save or validate a custom tool definition (Tools/<name>.tool.json at the top level of a document store), or fetch the definition format (JSON Schema and worked examples) to write one from scratch. Every save is schema-validated first, and an invalid definition is not written.",
     source: 'built-in' as const,
     category: 'pascal',
   },

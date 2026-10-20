@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Feature: `edit_custom_tool` can return the definition format
+
+- New input `action: "schema"` on `edit_custom_tool`. It reads and writes no store and returns `schema` (the published `public/schemas/qtap-custom-tool.schema.json`, self-contained with its `$defs`) and `examples` (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`), so a model can write a definition from scratch. Any other fields passed with it are ignored.
+- `mount_point` and `file` are now optional in the input schema, with a refine requiring both unless `action` is `"schema"`. Save and validate behave as before.
+- Tests: handler cases for the schema action (specimens pass `validateToolDefinitionText`, no store touched) and the still-required fields; tool-definition snapshot updated. `help/custom-tools.md` describes the action.
+
 #### Docs: spec for broader custom-tool gates
 
 - New design `docs/developer/features/pascal-gate-broadening.md`: an `inventoryAggregate` subject for gates and `when` tests (names, titles and `metadata` folded over the equipped, owned or reachable objects, keyed `<scope>.<field>`, with `.min` / `.max` / `.sum` / `.count` numeric folds), per-entry comparison of list values in the one comparison table (which also lets a character-sheet `metadata` key holding a list match), and OR as a one-level any-of array of the existing AND-groups in gates, outcome `when` and effect `when`. Approved, not yet built. Listed in `ROADMAP.md`.
