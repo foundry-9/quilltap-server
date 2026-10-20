@@ -33,6 +33,18 @@
  * vault) every inventory comparator declines, the same reading a missing
  * metadata key gets.
  *
+ * `inventoryAggregate` reads one attribute across every object in a scope
+ * (`equipped.names`, `owned.metadata.toolVersion.max`) — a derived sheet,
+ * through the same comparison table, declining with no context like the
+ * other two.
+ *
+ * ## Any-of
+ *
+ * A clause is one group (every test must hold) or an array of groups (any
+ * group may hold). AND binds tighter than OR; groups are tried left to right
+ * and the first to hold decides. An empty context declines every group, so
+ * the fail-closed / fail-open reading below holds for an array unchanged.
+ *
  * ## Fail-soft, and therefore fail-CLOSED for `availableWhen`
  *
  * Metadata tests never throw: an absent key, a list, a value of the wrong type
@@ -46,10 +58,11 @@
  * tell an author whether a fact sheet would be dealt to without a round trip.
  */
 
-import type { QtapCustomTool, ToolGate } from './custom-tool.types';
+import { gateGroups, type QtapCustomTool, type ToolGate, type ToolGateGroup } from './custom-tool.types';
 import { metadataComparatorHolds, type Primitive } from './metadata-match';
 import type { ProgressPrimitive } from '@/lib/progressions/engine';
 import { inventoryCountHolds, inventoryStateHolds, type InventoryContext } from './inventory-subjects';
+import { inventoryAggregateHolds } from './inventory-aggregate';
 
 /** What a gate decided, and which clause decided it. */
 export interface ToolGateVerdict {
@@ -57,6 +70,13 @@ export interface ToolGateVerdict {
   available: boolean;
   /** The clause that withheld it. Absent whenever the tool is available. */
   withheldBy?: 'availableWhen' | 'withheldWhen';
+  /**
+   * For an any-of clause (an array), the index of the group that held — the
+   * one that opened an `availableWhen` or closed a `withheldWhen`. Absent
+   * when no group held, and for a bare-object clause, where there is only
+   * the one.
+   */
+  heldGroup?: number;
 }
 
 /** A definition carries a gate when it declares either clause. */
@@ -80,7 +100,7 @@ export function evaluateToolGate(
   progress?: Record<string, ProgressPrimitive> | null,
   /**
    * The invoker's Inventory context for this chat. Omitted or null → every
-   * `inventory` / `inventoryCount` test declines.
+   * `inventory` / `inventoryCount` / `inventoryAggregate` test declines.
    */
   inventory?: InventoryContext | null
 ): ToolGateVerdict {
@@ -88,20 +108,39 @@ export function evaluateToolGate(
   const progressSheet = progress ?? {};
   const bag = inventory ?? null;
 
-  if (definition.availableWhen && !gateHolds(definition.availableWhen, sheet, progressSheet, bag)) {
-    return { available: false, withheldBy: 'availableWhen' };
+  let opened: number | undefined;
+  if (definition.availableWhen) {
+    const held = heldGroupOf(definition.availableWhen, sheet, progressSheet, bag);
+    if (held === undefined) return { available: false, withheldBy: 'availableWhen' };
+    if (Array.isArray(definition.availableWhen)) opened = held;
   }
 
-  if (definition.withheldWhen && gateHolds(definition.withheldWhen, sheet, progressSheet, bag)) {
-    return { available: false, withheldBy: 'withheldWhen' };
+  if (definition.withheldWhen) {
+    const held = heldGroupOf(definition.withheldWhen, sheet, progressSheet, bag);
+    if (held !== undefined) {
+      return Array.isArray(definition.withheldWhen)
+        ? { available: false, withheldBy: 'withheldWhen', heldGroup: held }
+        : { available: false, withheldBy: 'withheldWhen' };
+    }
   }
 
-  return { available: true };
+  return opened === undefined ? { available: true } : { available: true, heldGroup: opened };
 }
 
-/** Every test in a gate must hold. Keys AND together, as they do in a `when`. */
+/** The first group of a clause that holds, left to right; undefined when none does. */
+function heldGroupOf(
+  clause: ToolGate,
+  metadata: Record<string, unknown>,
+  progress: Record<string, ProgressPrimitive>,
+  inventory: InventoryContext | null
+): number | undefined {
+  const index = gateGroups(clause).findIndex((group) => gateHolds(group, metadata, progress, inventory));
+  return index >= 0 ? index : undefined;
+}
+
+/** Every test in a gate group must hold. Keys AND together, as they do in a `when`. */
 function gateHolds(
-  gate: ToolGate,
+  gate: ToolGateGroup,
   metadata: Record<string, unknown>,
   progress: Record<string, ProgressPrimitive>,
   inventory: InventoryContext | null
@@ -132,6 +171,17 @@ function gateHolds(
   for (const [ref, comparator] of Object.entries(gate.inventoryCount ?? {})) {
     if (!inventoryCountHolds(comparator, ref, inventory)) return false;
   }
+  for (const [key, comparator] of Object.entries(gate.inventoryAggregate ?? {})) {
+    const holds = inventoryAggregateHolds(comparator, key, inventory, {
+      resolveOperand: (comparatorKey) => comparator[comparatorKey] as Primitive,
+    });
+    if (!holds) return false;
+  }
 
   return true;
+}
+
+/** True when a gate clause tests the progress sheet in any group — the roster derives it only then. */
+export function gateNamesProgress(gate: ToolGate | undefined): boolean {
+  return !!gate && gateGroups(gate).some((group) => Object.keys(group.progress ?? {}).length > 0);
 }

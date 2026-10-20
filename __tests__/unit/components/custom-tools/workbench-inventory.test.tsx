@@ -119,3 +119,69 @@ describe('ProvingBench — Mock inventory', () => {
     expect(JSON.parse(String(init.body))).toMatchObject({ inventory: [{ ref: 'sword', state: 'equipped' }] })
   })
 })
+
+describe('the AND / OR toggle and the aggregate subject', () => {
+  it('draws an any-of gate as lines and flips a joiner', () => {
+    const { default: GateSection } = require('@/components/custom-tools/GateSection')
+    const draft = load({
+      availableWhen: [{ metadata: { a: { eq: true } } }, { inventoryAggregate: { 'equipped.names': { eq: 'ring' } } }],
+    })
+    const onChange = jest.fn()
+    render(<GateSection draft={draft} issues={[]} onChange={onChange} />)
+    expect(screen.getByText(/any line that holds opens the door/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Inventory aggregate key')).toHaveValue('equipped.names')
+    const toggle = screen.getByRole('button', { name: /Joined by OR/ })
+    expect(toggle).toHaveTextContent('OR')
+    fireEvent.click(toggle)
+    const next = onChange.mock.calls[0][0] as ToolDraft
+    expect(next.gateConditions[1].joiner).toBe('and')
+  })
+
+  it('offers the aggregate subject on an outcome chip, with every comparator', () => {
+    const draft = load({
+      outcomes: [
+        { when: { inventoryAggregate: { 'owned.metadata.toolVersion.max': { gte: 3 } } }, message: 'x', state: 'success' },
+        { when: true, message: '-', state: 'info' },
+      ],
+    })
+    render(<OutcomesSection draft={draft} issues={[]} onChange={() => {}} />)
+    expect((screen.getByLabelText('Condition subject') as HTMLSelectElement).value).toBe('inventoryAggregate')
+    expect(screen.getByLabelText('Inventory aggregate key')).toHaveValue('owned.metadata.toolVersion.max')
+    expect((screen.getByLabelText('Comparator') as HTMLSelectElement).options).toHaveLength(8)
+  })
+
+  it('fills the key box from the Insert-key helper, keeping a typed metadata key', () => {
+    const draft = load({
+      outcomes: [
+        { when: { inventoryAggregate: { 'equipped.metadata.toolVersion': { eq: 3 } } }, message: 'x', state: 'success' },
+        { when: true, message: '-', state: 'info' },
+      ],
+    })
+    const onChange = jest.fn()
+    render(<OutcomesSection draft={draft} issues={[]} onChange={onChange} />)
+    fireEvent.change(screen.getByLabelText('Insert an aggregate key'), { target: { value: 'owned.metadata.<key>.max' } })
+    const next = onChange.mock.calls[0][0] as ToolDraft
+    expect(next.outcomes[0].conditions[0].subject).toEqual({ kind: 'inventoryAggregate', key: 'owned.metadata.toolVersion.max' })
+  })
+})
+
+describe('ProvingBench — mock metadata and the line that opened the gate', () => {
+  it('sends a row’s metadata, refuses bad JSON, and names the line', async () => {
+    const draft = load({
+      availableWhen: [
+        { metadata: { never: { eq: true } } },
+        { inventoryAggregate: { 'equipped.metadata.toolVersion.max': { gte: 4 } } },
+      ],
+      outcomes: [{ when: true, message: '-', state: 'info' }],
+    })
+    renderWithQuery(<ProvingBench draft={draft} valid />)
+    fireEvent.click(screen.getByRole('button', { name: /add object/ }))
+    fireEvent.change(screen.getByLabelText('Mock object reference'), { target: { value: 'resonator' } })
+    const metadata = screen.getByLabelText('Mock object metadata (JSON object)')
+    fireEvent.change(metadata, { target: { value: '{"toolVersion": ' } })
+    expect(screen.getByText(/resonator: metadata is not valid JSON/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Roll/ })).toBeDisabled()
+    fireEvent.change(metadata, { target: { value: '{"toolVersion": 4}' } })
+    expect(screen.getByText(/passed on line 2/)).toBeInTheDocument()
+  })
+})

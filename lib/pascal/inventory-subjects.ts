@@ -26,6 +26,7 @@
 import type { InventoryContext, InventoryState } from '@/lib/inventory/refs';
 import { splitInventoryReference } from './placeholders';
 import { compareOrdered } from './metadata-match';
+import { gateGroups, type ToolGate } from './custom-tool.types';
 
 export type { InventoryContext, InventoryState } from '@/lib/inventory/refs';
 
@@ -108,7 +109,15 @@ export function inventoryCountHolds(
   return true;
 }
 
-/** True when a definition's gate (either clause) names an Inventory subject. */
-export function gateNamesInventory(gate: { inventory?: object; inventoryCount?: object } | undefined): boolean {
-  return !!gate && (Object.keys(gate.inventory ?? {}).length > 0 || Object.keys(gate.inventoryCount ?? {}).length > 0);
+/** True when a gate clause names an Inventory subject (`inventory`, `inventoryCount` or `inventoryAggregate`) in any group. */
+export function gateNamesInventory(gate: ToolGate | undefined): boolean {
+  return (
+    !!gate &&
+    gateGroups(gate).some(
+      (group) =>
+        Object.keys(group.inventory ?? {}).length > 0 ||
+        Object.keys(group.inventoryCount ?? {}).length > 0 ||
+        Object.keys(group.inventoryAggregate ?? {}).length > 0
+    )
+  );
 }

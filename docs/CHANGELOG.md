@@ -4,6 +4,17 @@
 
 ### 4.11-dev
 
+#### Feature: custom-tool gates and `when` tests gain OR and an `inventoryAggregate` subject
+
+- `availableWhen` / `withheldWhen`, outcome `when` and effect `when` accept an array of their existing objects; the array holds when any element holds (AND inside an element, one level, at most 8). Readers go through new `gateGroups` / `whenGroups` / `effectWhenGroups` helpers in `lib/pascal/custom-tool.types.ts`; a grep-test in `custom-tool-definition.test.ts` blocks raw reads. Load-time issue paths include the group index.
+- New `inventoryAggregate` subject (gates, outcome and effect `when`), keyed `<scope>.<field>`: scopes `equipped`, `owned`, `reachable` (cumulative); fields `count`, `names`, `titles`, `metadata.<key>` (a list) and `metadata.<key>.min` / `.max` / `.sum` / `.count`. New module `lib/pascal/inventory-aggregate.ts`; `InventoryContext.scopeObjects` on the real and mock contexts. Archetypes, archived objects and kits are excluded. A null inventory context declines every aggregate test.
+- `metadataComparatorHolds` now compares an array of primitives entry by entry (`eq` any, `neq` none, `contains` any, `ncontains` none; ordering declines). This also applies to a character-sheet `metadata` key holding a list, which previously never matched. Arrays holding objects, arrays or null still decline.
+- `evaluateToolGate` reports `heldGroup` for an array clause. The roster's withheld log line adds `groups` and `heldGroup`. Run-time inventory now loads when a tool uses only aggregates.
+- `describeWhen` renders any-of groups and aggregate tests for the model; the roster description adds a `Takes stock of:` line. `ToolVocabulary.inventoryAggregates` is new and shown in the run dialog. The gate-key census walks every group and ignores aggregate keys.
+- `formatDefinitionIssues` drops a union branch that only says "expected array", and surfaces the nested reason under "Invalid key in record" (aggregate and progress keys now report why they were rejected).
+- Workbench: AND/OR toggle between chips in the gate and outcome table (OR starts a new line); `inventory aggregate` subject with an Insert-key helper; duplicate-slot checks per line; validation errors for ordering a list or searching a number, warning for a metadata key ending in a fold word. Proving Bench mock rows take a `metadata` JSON object (invalid JSON blocks rolling) and the gate verdict names the line that held.
+- JSON Schema mirror and `CUSTOM_TOOL_SPEC.json` updated (one any-of row with `inventoryAggregate` tests). Help: `custom-tools.md` (OR, list matching, new `inventoryAggregate` section, gates), `pascals-workbench.md`. Spec moved to `features/complete/pascal-gate-broadening.md` with an As-built section.
+
 #### Feature: `edit_custom_tool` can return the definition format
 
 - New input `action: "schema"` on `edit_custom_tool`. It reads and writes no store and returns `schema` (the published `public/schemas/qtap-custom-tool.schema.json`, self-contained with its `$defs`) and `examples` (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`), so a model can write a definition from scratch. Any other fields passed with it are ignored.

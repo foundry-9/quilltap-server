@@ -9,8 +9,9 @@
  * JSON Schema at `public/schemas/qtap-custom-tool.schema.json` mirrors it for
  * editor completion.
  *
- * Design constraint that shapes everything below: outcome tests are
- * AND-composed comparator objects, and indirection is limited to two closed
+ * Design constraint that shapes everything below: tests are AND-composed
+ * comparator objects; a one-level any-of array of them is OR; there is no
+ * nesting and no expression grammar. Indirection is limited to closed
  * forms — a `{ "$param": "name" }` reference, a
  * `{ "$state": "path", "fallback": <literal> }` reference and its Inventory
  * twin `{ "$inventory": "<ref>.metadata.<key>", "fallback": <literal> }`. The **one** place a
@@ -36,6 +37,7 @@ import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation
 import { parsePath } from '@/lib/state/state-paths';
 import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
 import { scanPlaceholders as scanPlaceholdersInText, splitInventoryReference } from './placeholders';
+import { parseAggregateKey } from './inventory-aggregate';
 import { WardrobeItemTypeEnum, type WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 export { MAX_EFFECT_EXPRESSION_LENGTH };
@@ -62,6 +64,12 @@ export const MAX_PARAMETERS = 8;
 
 /** Cap on outcomes per tool. */
 export const MAX_OUTCOMES = 32;
+
+/**
+ * Cap on groups in one any-of array — a gate, an outcome `when`, or an effect
+ * `when` written as an array of AND-groups.
+ */
+export const MAX_WHEN_GROUPS = 8;
 
 /** Cap on tools in a single resolved roster. */
 export const MAX_ROSTER_SIZE = 64;
@@ -484,6 +492,25 @@ const ProgressKeySchema = z.string().superRefine((key, ctx) => {
   if (!parsed.ok) ctx.addIssue({ code: 'custom', message: parsed.reason });
 });
 
+/**
+ * A key into the derived `inventoryAggregate` sheet: `"<scope>.<field>"` —
+ * `equipped.names`, `owned.metadata.toolAbilities`,
+ * `equipped.metadata.toolVersion.max`. The format's vocabulary, so checked at
+ * load time; delegated to `parseAggregateKey`, the one place the grammar
+ * lives. Always literal — it names a scope and a field, never an object.
+ */
+const AggregateKeySchema = z.string().superRefine((key, ctx) => {
+  const parsed = parseAggregateKey(key);
+  if (!parsed.ok) ctx.addIssue({ code: 'custom', message: parsed.reason });
+});
+
+const INVENTORY_AGGREGATE_DESCRIPTION =
+  'Test one attribute across every object in a scope of the rolling character\'s bag, keyed "<scope>.<field>": ' +
+  'scope equipped, owned (own tier, equipped or not) or reachable (everything they can see); field count, names, ' +
+  'titles, metadata.<key> (a list of the objects\' values) or metadata.<key>.min/.max/.sum/.count (a number). ' +
+  'A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ' +
+  'ncontains likewise; ordering needs a fold. With no character or chat, every test declines.';
+
 /** The four states an `inventory` test compares against. */
 export const InventoryStateValueSchema = z.enum(['equipped', 'carried', 'reachable', 'absent']);
 export type InventoryStateValue = z.infer<typeof InventoryStateValueSchema>;
@@ -559,20 +586,16 @@ export const GateComparatorSchema = z
 export type GateComparator = z.infer<typeof GateComparatorSchema>;
 
 /**
- * An availability gate: whether this invoker is offered the tool at all.
+ * One group of an availability gate: tests that must ALL hold.
  *
- * Keyed by metadata key, AND-composed, and fail-soft in exactly the way an
- * outcome's `metadata` test is — a key the character lacks does not match. The
- * subject is `metadata` and only `metadata` because a gate is answered BEFORE
- * the deal: there is no roll to test, no parameters (nobody has called
- * anything), and no consult. `metadata` is what a character carries into the
- * room, so it is the one thing that can be asked about before they sit down.
- *
- * The subject lives under its own key rather than at the top of the object so a
- * later build can add a second one without re-shaping every file already
- * written.
+ * Keyed by subject, AND-composed, and fail-soft in exactly the way an
+ * outcome's `metadata` test is — a key the character lacks does not match.
+ * The subjects are the ones a pre-roll test can honestly have: the character's
+ * `metadata.json`, the progress sheet derived from it, and their Inventory. A
+ * gate is answered BEFORE the deal: there is no roll to test, no parameters
+ * (nobody has called anything), and no consult, so every operand is a literal.
  */
-export const ToolGateSchema = z
+export const ToolGateGroupSchema = z
   .strictObject({
     metadata: z
       .record(MetadataKeySchema, GateComparatorSchema)
@@ -597,18 +620,41 @@ export const ToolGateSchema = z
       .record(InventoryKeySchema, GateInventoryCountComparatorSchema)
       .optional()
       .describe('Test how many kin (same name) of an object the invoking character has equipped in this chat.'),
+    inventoryAggregate: z
+      .record(AggregateKeySchema, GateComparatorSchema)
+      .optional()
+      .describe(INVENTORY_AGGREGATE_DESCRIPTION),
   })
   .refine(
     (gate) =>
       Object.keys(gate.metadata ?? {}).length +
         Object.keys(gate.progress ?? {}).length +
         Object.keys(gate.inventory ?? {}).length +
-        Object.keys(gate.inventoryCount ?? {}).length >
+        Object.keys(gate.inventoryCount ?? {}).length +
+        Object.keys(gate.inventoryAggregate ?? {}).length >
       0,
-    { message: 'must test at least one metadata key, progress field, or inventory object' }
+    { message: 'must test at least one metadata key, progress field, inventory object, or inventory aggregate' }
   );
 
+export type ToolGateGroup = z.infer<typeof ToolGateGroupSchema>;
+
+/**
+ * An availability gate: whether this invoker is offered the tool at all.
+ *
+ * One group (every test must hold), or an any-of array of groups — the gate
+ * holds when ANY group holds. AND binds tighter than OR; there is no nesting.
+ */
+export const ToolGateSchema = z.union([
+  ToolGateGroupSchema,
+  z.array(ToolGateGroupSchema).min(1).max(MAX_WHEN_GROUPS, `at most ${MAX_WHEN_GROUPS} groups`),
+]);
+
 export type ToolGate = z.infer<typeof ToolGateSchema>;
+
+/** A gate's groups, in order — one for a bare object. Every reader of a gate goes through here. */
+export function gateGroups(gate: ToolGate): ToolGateGroup[] {
+  return Array.isArray(gate) ? gate : [gate];
+}
 
 /**
  * The subjects an outcome row and an effect condition share — bare comparators
@@ -649,6 +695,10 @@ const WHEN_SUBJECTS_SHAPE = {
     .record(InventoryKeySchema, NumericComparatorSchema)
     .optional()
     .describe('Test how many kin (same name) of an object the rolling character has equipped in this chat.'),
+  inventoryAggregate: z
+    .record(AggregateKeySchema, MetadataComparatorSchema)
+    .optional()
+    .describe(INVENTORY_AGGREGATE_DESCRIPTION),
 };
 
 /** True when a `when` object tests at least one of the shared subjects. */
@@ -660,9 +710,11 @@ function testsSomething(when: {
   progress?: Record<string, unknown>;
   inventory?: Record<string, unknown>;
   inventoryCount?: Record<string, unknown>;
+  inventoryAggregate?: Record<string, unknown>;
 }): boolean {
   return (
     (when.inventory !== undefined && Object.keys(when.inventory).length > 0) ||
+    (when.inventoryAggregate !== undefined && Object.keys(when.inventoryAggregate).length > 0) ||
     (when.inventoryCount !== undefined && Object.keys(when.inventoryCount).length > 0) ||
     hasComparator(when as Record<string, unknown>) ||
     when.roll !== undefined ||
@@ -694,21 +746,36 @@ function testsSomething(when: {
  * the whole point: a lockpicking table branches on the key its author invented,
  * and must still deal sensibly to the character who's never heard of it.
  *
- * There is still no OR and no nesting: ordered, first-match-wins outcomes make
- * OR unnecessary, and a flat AND of comparators keeps the evaluator eval-free.
+ * Tests are AND-composed comparator objects; a one-level any-of array of them
+ * is OR (see {@link WhenSchema}); there is no nesting and no expression
+ * grammar, which keeps the evaluator eval-free.
  */
 export const WhenObjectSchema = z
   .strictObject(WHEN_SUBJECTS_SHAPE)
   .refine(testsSomething, {
     message:
-      'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, `metadata`, `progress`, `inventory`, or `inventoryCount`',
+      'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, `metadata`, `progress`, `inventory`, `inventoryCount`, or `inventoryAggregate`',
   });
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
 
-export const WhenSchema = z.union([z.literal(true), WhenObjectSchema]);
+/**
+ * An outcome test: `true` (catch-all), one AND-group, or an any-of array of
+ * AND-groups — the row wins when ANY group holds. AND binds tighter than OR.
+ */
+export const WhenSchema = z.union([
+  z.literal(true),
+  WhenObjectSchema,
+  z.array(WhenObjectSchema).min(1).max(MAX_WHEN_GROUPS, `at most ${MAX_WHEN_GROUPS} groups`),
+]);
 
 export type When = z.infer<typeof WhenSchema>;
+
+/** An outcome test's groups, in order — `[]` for the catch-all. Every reader of a `when` goes through here. */
+export function whenGroups(when: When): WhenObject[] {
+  if (when === true) return [];
+  return Array.isArray(when) ? when : [when];
+}
 
 /** The semantic states an outcome may carry. Maps to qt classes at render. */
 export const OutcomeStateSchema = z.enum(['success', 'partial', 'failure', 'info']);
@@ -717,7 +784,8 @@ export type OutcomeState = z.infer<typeof OutcomeStateSchema>;
 
 export const CustomToolOutcomeSchema = z.strictObject({
   when: WhenSchema.describe(
-    '`true` for a catch-all, or comparators on the value, `roll`, `params`, and `metadata` that AND together.'
+    '`true` for a catch-all; or comparators on the value, `roll`, `params`, `metadata` and the other subjects that ' +
+      'AND together; or an array of such objects, any one of which may hold (OR).'
   ),
   message: z
     .string()
@@ -756,10 +824,23 @@ export const EffectWhenSchema = z
   })
   .refine((when) => testsSomething(when) || when.outcome !== undefined, {
     message:
-      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, `metadata`, `progress`, `inventory`, or `inventoryCount`',
+      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, `metadata`, `progress`, `inventory`, `inventoryCount`, or `inventoryAggregate`',
   });
 
 export type EffectWhen = z.infer<typeof EffectWhenSchema>;
+
+/** An effect condition: one group, or an any-of array of groups. */
+export const EffectConditionSchema = z.union([
+  EffectWhenSchema,
+  z.array(EffectWhenSchema).min(1).max(MAX_WHEN_GROUPS, `at most ${MAX_WHEN_GROUPS} groups`),
+]);
+
+export type EffectCondition = z.infer<typeof EffectConditionSchema>;
+
+/** An effect condition's groups, in order. Every reader of an effect `when` goes through here. */
+export function effectWhenGroups(when: EffectCondition): EffectWhen[] {
+  return Array.isArray(when) ? when : [when];
+}
 
 /** What a wardrobe effect does to the rolling character's outfit. */
 export const WardrobeEffectActionSchema = z.enum(['wear', 'take_off', 'clear_slot']);
@@ -849,7 +930,10 @@ export type CustomToolInventoryGesture = z.infer<typeof CustomToolInventoryGestu
  */
 export const CustomToolEffectSchema = z
   .strictObject({
-    when: EffectWhenSchema.optional().describe('Condition for this effect. Omitted = fires on every run.'),
+    when: EffectConditionSchema.optional().describe(
+      'Condition for this effect: one object whose tests AND together, or an array of them, any one of which may ' +
+        'hold (OR). Omitted = fires on every run.'
+    ),
     target: z
       .string()
       .min(1)
@@ -1232,10 +1316,12 @@ export const QtapCustomToolSchema = z
       .describe('What the tool does IN THE FICTION — how the model decides to reach for it.'),
     disabled: z.boolean().optional().describe('true suppresses this name at this tier and below.'),
     availableWhen: ToolGateSchema.optional().describe(
-      'Offer this tool ONLY to an invoker whose metadata satisfies every test here. At most one of availableWhen/withheldWhen.'
+      'Offer this tool ONLY to an invoker who satisfies every test here (or, for an array, every test of any one ' +
+        'element). At most one of availableWhen/withheldWhen.'
     ),
     withheldWhen: ToolGateSchema.optional().describe(
-      'Withhold this tool from an invoker whose metadata satisfies every test here. At most one of availableWhen/withheldWhen.'
+      'Withhold this tool from an invoker who satisfies every test here (or, for an array, every test of any one ' +
+        'element). At most one of availableWhen/withheldWhen.'
     ),
     revealOdds: z
       .boolean()
@@ -1368,17 +1454,20 @@ function validateGates(
   for (const clause of ['availableWhen', 'withheldWhen'] as const) {
     const gate = tool[clause];
     if (!gate) continue;
-    for (const subject of ['inventory', 'inventoryCount'] as const) {
-      for (const key of Object.keys(gate[subject] ?? {})) {
-        if (key.includes('{{')) {
-          ctx.addIssue({
-            code: 'custom',
-            message: `a gate's ${subject} key must be a literal object reference; "${key}" carries a placeholder, and a gate has no parameters to fill it`,
-            path: [clause, subject, key],
-          });
+    gateGroups(gate).forEach((group, g) => {
+      const base: Array<string | number> = Array.isArray(gate) ? [clause, g] : [clause];
+      for (const subject of ['inventory', 'inventoryCount'] as const) {
+        for (const key of Object.keys(group[subject] ?? {})) {
+          if (key.includes('{{')) {
+            ctx.addIssue({
+              code: 'custom',
+              message: `a gate's ${subject} key must be a literal object reference; "${key}" carries a placeholder, and a gate has no parameters to fill it`,
+              path: [...base, subject, key],
+            });
+          }
         }
       }
-    }
+    });
   }
 }
 
@@ -1445,8 +1534,11 @@ function validateReferences(
   validateRollRefs(declared, tool.roll, ctx);
 
   tool.outcomes.forEach((outcome, i) => {
-    if (outcome.when === true) return;
-    validateWhenSubjects(declared, outcome.when, Boolean(tool.llm), ctx, ['outcomes', i, 'when']);
+    const groups = whenGroups(outcome.when);
+    groups.forEach((group, g) => {
+      const path = Array.isArray(outcome.when) ? ['outcomes', i, 'when', g] : ['outcomes', i, 'when'];
+      validateWhenSubjects(declared, group, Boolean(tool.llm), ctx, path);
+    });
   });
 }
 
@@ -1511,6 +1603,13 @@ function validateWhenSubjects(
   // where the character is finally in the room.
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
     validateMetadataOperands(declared, comparator, ctx, [...path, 'metadata', key]);
+  }
+
+  // An aggregate's key is the format's own (checked by its schema); whether a
+  // scope holds anything, and what types its values carry, are facts about a
+  // character — so, as with `metadata`, only the operands are checkable here.
+  for (const [key, comparator] of Object.entries(when.inventoryAggregate ?? {})) {
+    validateMetadataOperands(declared, comparator, ctx, [...path, 'inventoryAggregate', key]);
   }
 
   // `inventory` and `inventoryCount` keys are TEMPLATES: their placeholders
@@ -1593,7 +1692,11 @@ function validateEffects(
     const base = ['effects', i];
 
     if (effect.when !== undefined) {
-      validateWhenSubjects(declared, effect.when, Boolean(tool.llm), ctx, [...base, 'when']);
+      const when = effect.when;
+      effectWhenGroups(when).forEach((group, g) => {
+        const path = Array.isArray(when) ? [...base, 'when', g] : [...base, 'when'];
+        validateWhenSubjects(declared, group, Boolean(tool.llm), ctx, path);
+      });
     }
 
     if (effect.wardrobe !== undefined) {
@@ -1888,17 +1991,37 @@ export function formatDefinitionIssues(error: z.ZodError): string {
   return flattenIssues(error.issues).join('; ');
 }
 
+/** True for a union branch whose only complaint is "this is not an array". */
+function isNotAnArray(branch: readonly z.core.$ZodIssue[]): boolean {
+  return (
+    branch.length === 1 &&
+    branch[0].code === 'invalid_type' &&
+    branch[0].path.length === 0 &&
+    branch[0].expected === 'array'
+  );
+}
+
 function flattenIssues(issues: readonly z.core.$ZodIssue[], prefix: Array<string | number> = []): string[] {
   return issues.map((issue) => {
     const path = [...prefix, ...issue.path];
     const located = (message: string) => (path.length ? `${path.join('.')}: ${message}` : message);
 
     if (issue.code === 'invalid_union') {
+      // An any-of array is an alternative SPELLING, not an alternative
+      // meaning: when the value simply was not an array, that branch has
+      // nothing to say and only buries the real complaint.
+      const relevant = issue.errors.filter((branch) => !isNotAnArray(branch));
       // Sub-issue paths are relative to the union, so carry the prefix down.
-      const branches = issue.errors
+      const branches = (relevant.length > 0 ? relevant : issue.errors)
         .map((branch) => flattenIssues(branch).join('; '))
         .filter((branch) => branch.length > 0);
       if (branches.length > 0) return located(branches.join(' — or — '));
+    }
+
+    if (issue.code === 'invalid_key' && issue.issues.length > 0) {
+      // A record key's own refinement (an aggregate or progress key) says WHY;
+      // "Invalid key in record" alone does not.
+      return located(issue.issues.map((inner) => inner.message).join('; '));
     }
 
     return located(issue.message);

@@ -87,6 +87,14 @@
       "state": "success"
     },
     {
+      "when": [
+        { "gte": 45, "inventoryAggregate": { "equipped.metadata.toolAbilities": { "contains": "pick" } } },
+        { "gte": 45, "inventoryAggregate": { "owned.metadata.toolVersion.max": { "gte": 3 } } }
+      ],
+      "message": "Something in the kit answers to {{params.label}} at {{value}}. Demonstrates OR and `inventoryAggregate`. A `when` may be an ARRAY of test objects: the row wins when ANY one holds; inside each, tests AND together (one level, no nesting, at most 8). `inventoryAggregate` reads one attribute across a scope of the rolling character's bag, keyed <scope>.<field>: equipped, owned (own vault) or reachable; then count, names, titles, metadata.<key> (a list of the objects' values) or metadata.<key>.min/.max/.sum/.count (a number). A list compares entry by entry and ordering needs a fold. So: an equipped object whose toolAbilities mentions \"pick\", OR an owned one whose toolVersion is 3 or more. A run nobody made declines both.",
+      "state": "success"
+    },
+    {
       "when": { "llm": { "ok": false } },
       "message": "{{llm}} — Demonstrates the consult's failure path, and where {{llm}} gets its words when the oracle is silent: the answer BECOMES the llm block's errorMessage, ok goes false, and the run itself never errors. A table that keeps an oracle should decide what silence means; an ok:false row like this is one way, trusting the catch-all is the other.",
       "state": "info"

@@ -35,6 +35,7 @@ import {
   MAX_OUTCOMES,
   MAX_PARAMETERS,
   MAX_TITLE_LENGTH,
+  MAX_WHEN_GROUPS,
   ORDERING_KEYS,
   QtapCustomToolSchema,
   collectUnknownKeys,
@@ -55,6 +56,7 @@ import {
   type CustomToolEffect,
   type CustomToolOutcome,
   type CustomToolParameter,
+  type EffectCondition,
   type EffectWhen,
   type NumberOrParamRef,
   type OutcomeState,
@@ -64,10 +66,15 @@ import {
   type QtapCustomTool,
   type StateRef,
   type ToolGate,
+  type ToolGateGroup,
   type ValueType,
   type Visibility,
   type WhenObject,
+  effectWhenGroups,
+  gateGroups,
+  whenGroups,
 } from './custom-tool.types';
+import { aggregateKeyEndsInFold, isListAggregate, parseAggregateKey } from './inventory-aggregate';
 import { parseDiceNotation } from './dice-notation';
 import { INVENTORY_STATE_VALUES, parseInventoryOperand } from './inventory-subjects';
 import { foldTriggerText, triggersContainedIn } from './trigger-phrases';
@@ -149,7 +156,17 @@ export type ConditionSubject =
   /** An Inventory object's state for the rolling character, keyed by reference (a template). */
   | { kind: 'inventory'; key: string }
   /** How many kin of an object the rolling character has equipped, keyed by reference. */
-  | { kind: 'inventoryCount'; key: string };
+  | { kind: 'inventoryCount'; key: string }
+  /** One attribute across a scope of the bag, keyed `<scope>.<field>` (always literal). */
+  | { kind: 'inventoryAggregate'; key: string };
+
+/**
+ * How a chip joins the one before it. `or` starts a new group (a new line in
+ * the Workbench); `and` — or absent, which every chip saved before OR existed
+ * is — keeps it in the current one. Ignored on the first chip of a list.
+ * AND binds tighter than OR.
+ */
+export type ConditionJoiner = 'and' | 'or';
 
 /** A literal operand — the three kinds an author types straight into a chip. */
 export type LiteralOperand =
@@ -171,6 +188,35 @@ export interface DraftCondition {
   subject: ConditionSubject;
   comparator: ComparatorKey;
   operand: ConditionOperand;
+  /** How this chip joins the one before it; absent means `and`. */
+  joiner?: ConditionJoiner;
+}
+
+/**
+ * Split a flat chip list into its groups at each `or` — the lines of the
+ * Workbench and the elements of an any-of array. A list with no `or` is one
+ * group; an empty list is none.
+ */
+export function groupsOf<C extends { joiner?: ConditionJoiner }>(conditions: readonly C[]): C[][] {
+  const groups: C[][] = [];
+  conditions.forEach((condition, index) => {
+    if (index === 0 || condition.joiner === 'or') groups.push([]);
+    groups[groups.length - 1].push(condition);
+  });
+  return groups;
+}
+
+/** Mark the first chip of every group after the first `or`, and flatten. */
+function joinGroups<C extends { joiner?: ConditionJoiner }>(groups: readonly C[][]): C[] {
+  return groups.flatMap((group, g) =>
+    group.map((condition, i) => (g > 0 && i === 0 ? { ...condition, joiner: 'or' as const } : condition))
+  );
+}
+
+/** One group, a bare object; several, an any-of array; none, undefined. */
+function collapseGroups<T>(groups: readonly T[]): T | T[] | undefined {
+  if (groups.length === 0) return undefined;
+  return groups.length === 1 ? groups[0] : [...groups];
 }
 
 export interface DraftOutcome {
@@ -203,11 +249,13 @@ export interface DraftGateCondition {
    * `inventory` an object's state and `inventoryCount` its equipped kin, keyed
    * by a literal object reference.
    */
-  subject: 'metadata' | 'progress' | 'inventory' | 'inventoryCount';
+  subject: 'metadata' | 'progress' | 'inventory' | 'inventoryCount' | 'inventoryAggregate';
   /** The key this test reads, in that subject's own vocabulary. */
   key: string;
   comparator: ComparatorKey;
   operand: LiteralOperand;
+  /** How this chip joins the one before it; absent means `and`. */
+  joiner?: ConditionJoiner;
 }
 
 /**
@@ -223,7 +271,7 @@ export interface DraftEffect {
   when:
     | { kind: 'always' }
     | { kind: 'outcome-state'; state: OutcomeState }
-    | { kind: 'verbatim'; when: EffectWhen };
+    | { kind: 'verbatim'; when: EffectCondition };
   /**
    * Which half is active: a value write, a wardrobe gesture, an inventory
    * gesture, or a log line. All halves are always present on the draft so
@@ -468,11 +516,17 @@ function comparatorToConditions(subject: ConditionSubject, comparator: ParamComp
 }
 
 /**
- * Flatten a `when` object into chips. Key order inside one comparator follows
- * {@link COMPARATOR_KEYS}; subjects follow the object's own order (value first,
- * then roll, params, metadata — the schema's declaration order).
+ * Flatten a `when` into chips — one group, or every group of an any-of, the
+ * first chip of each later group joined by `or`. Key order inside one
+ * comparator follows {@link COMPARATOR_KEYS}; subjects follow the object's own
+ * order (value first, then roll, params, metadata — the schema's declaration
+ * order).
  */
-export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
+export function conditionsFromWhen(when: WhenObject | WhenObject[]): DraftCondition[] {
+  return joinGroups(whenGroups(when).map(conditionsFromWhenGroup));
+}
+
+function conditionsFromWhenGroup(when: WhenObject): DraftCondition[] {
   const conditions: DraftCondition[] = [];
 
   conditions.push(...comparatorToConditions({ kind: 'value' }, when as ParamComparator));
@@ -515,6 +569,10 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
     conditions.push(...comparatorToConditions({ kind: 'inventoryCount', key }, comparator as ParamComparator));
   }
 
+  for (const [key, comparator] of Object.entries(when.inventoryAggregate ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventoryAggregate', key }, comparator));
+  }
+
   return conditions;
 }
 
@@ -524,6 +582,10 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
  * `metadata` tests precede `progress` ones so a round trip is stable.
  */
 export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
+  return joinGroups(gateGroups(gate).map(gateConditionsFromGroup));
+}
+
+function gateConditionsFromGroup(gate: ToolGateGroup): DraftGateCondition[] {
   const conditions: DraftGateCondition[] = [];
 
   const subjects: Array<[DraftGateCondition['subject'], Record<string, unknown> | undefined]> = [
@@ -531,6 +593,7 @@ export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
     ['progress', gate.progress],
     ['inventory', gate.inventory],
     ['inventoryCount', gate.inventoryCount],
+    ['inventoryAggregate', gate.inventoryAggregate],
   ];
 
   for (const [subject, tests] of subjects) {
@@ -565,11 +628,19 @@ export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
  * exist.
  */
 export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate | undefined {
+  const groups = groupsOf(conditions)
+    .map(gateGroupFromConditions)
+    .filter((group): group is ToolGateGroup => group !== undefined);
+  return collapseGroups(groups);
+}
+
+function gateGroupFromConditions(conditions: DraftGateCondition[]): ToolGateGroup | undefined {
   const sheets: Record<DraftGateCondition['subject'], Record<string, Record<string, unknown>>> = {
     metadata: {},
     progress: {},
     inventory: {},
     inventoryCount: {},
+    inventoryAggregate: {},
   };
 
   for (const condition of conditions) {
@@ -596,11 +667,11 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
   }
 
   const gate: Record<string, unknown> = {};
-  for (const subject of ['metadata', 'progress', 'inventory', 'inventoryCount'] as const) {
+  for (const subject of ['metadata', 'progress', 'inventory', 'inventoryCount', 'inventoryAggregate'] as const) {
     if (Object.keys(sheets[subject]).length > 0) gate[subject] = sheets[subject];
   }
 
-  return Object.keys(gate).length > 0 ? (gate as ToolGate) : undefined;
+  return Object.keys(gate).length > 0 ? (gate as ToolGateGroup) : undefined;
 }
 
 /**
@@ -622,7 +693,7 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
   let when: DraftEffect['when'];
   if (effect.when === undefined) {
     when = { kind: 'always' };
-  } else if (isPlainOutcomeEq(effect.when)) {
+  } else if (!Array.isArray(effect.when) && isPlainOutcomeEq(effect.when)) {
     when = { kind: 'outcome-state', state: effect.when.outcome.eq };
   } else {
     // Carried verbatim with a read-only badge — the $state-default precedent.
@@ -734,7 +805,7 @@ function wardrobeFromDraft(gesture: DraftWardrobeGesture): Record<string, unknow
 
 /** The `effects` entry a draft effect emits — the inverse of {@link effectToDraft}. */
 function effectFromDraft(effect: DraftEffect): CustomToolEffect {
-  let when: EffectWhen | undefined;
+  let when: EffectCondition | undefined;
   if (effect.when.kind === 'outcome-state') {
     when = { outcome: { eq: effect.when.state } } as EffectWhen;
   } else if (effect.when.kind === 'verbatim') {
@@ -944,13 +1015,20 @@ function operandFromDraft(
 }
 
 /**
- * Reassemble chips into a `when` object — the exact inverse of
- * {@link conditionsFromWhen}. Conditions on the same subject merge into one
- * comparator object; incomplete chips (blank operand, blank metadata key) are
- * skipped, which is safe because {@link validateDraft} blocks save while any
- * exist.
+ * Reassemble chips into a `when` — the exact inverse of
+ * {@link conditionsFromWhen}: one object for one group, an any-of array for
+ * several. Conditions on the same subject merge into one comparator object;
+ * incomplete chips (blank operand, blank metadata key) are skipped, which is
+ * safe because {@link validateDraft} blocks save while any exist.
  */
-export function whenFromConditions(conditions: DraftCondition[]): WhenObject | undefined {
+export function whenFromConditions(conditions: DraftCondition[]): WhenObject | WhenObject[] | undefined {
+  const groups = groupsOf(conditions)
+    .map(whenGroupFromConditions)
+    .filter((group): group is WhenObject => group !== undefined);
+  return collapseGroups(groups);
+}
+
+function whenGroupFromConditions(conditions: DraftCondition[]): WhenObject | undefined {
   const when: Record<string, unknown> = {};
   const roll: Record<string, unknown> = {};
   const params: Record<string, Record<string, unknown>> = {};
@@ -958,6 +1036,7 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   const progress: Record<string, Record<string, unknown>> = {};
   const inventory: Record<string, Record<string, unknown>> = {};
   const inventoryCount: Record<string, Record<string, unknown>> = {};
+  const inventoryAggregate: Record<string, Record<string, unknown>> = {};
   const llm: Record<string, unknown> = {};
 
   for (const condition of conditions) {
@@ -1011,6 +1090,13 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
         sheet[key][condition.comparator] = operand;
         break;
       }
+      case 'inventoryAggregate': {
+        const key = condition.subject.key.trim();
+        if (!key) continue;
+        inventoryAggregate[key] = inventoryAggregate[key] ?? {};
+        inventoryAggregate[key][condition.comparator] = operand;
+        break;
+      }
     }
   }
 
@@ -1021,6 +1107,7 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   if (Object.keys(llm).length > 0) when.llm = llm;
   if (Object.keys(inventory).length > 0) when.inventory = inventory;
   if (Object.keys(inventoryCount).length > 0) when.inventoryCount = inventoryCount;
+  if (Object.keys(inventoryAggregate).length > 0) when.inventoryAggregate = inventoryAggregate;
 
   return Object.keys(when).length > 0 ? (when as WhenObject) : undefined;
 }
@@ -1311,6 +1398,53 @@ function validateLlmPromptPlaceholders(draft: ToolDraft, issues: DraftIssue[]): 
   });
 }
 
+/**
+ * The `inventoryAggregate` key audit shared by outcome chips and gate chips:
+ * the key must parse (the loader's own reason, verbatim); a list orders
+ * nothing; a number holds no text; a metadata key whose last segment is a
+ * fold word reads as that fold. Returns false when the chip is broken enough
+ * that further checks would only repeat the complaint.
+ */
+function auditAggregateKey(
+  key: string,
+  comparator: ComparatorKey,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): boolean {
+  const trimmed = key.trim();
+  if (trimmed === '') {
+    issues.push(err(where, 'an inventory aggregate needs a key, like equipped.names'));
+    return false;
+  }
+  if (trimmed.includes('{{')) {
+    issues.push(err(where, 'an aggregate key is literal — it names a scope and a field, never an object'));
+    return false;
+  }
+  const parsed = parseAggregateKey(trimmed);
+  if (!parsed.ok) {
+    issues.push(err(where, parsed.reason));
+    return false;
+  }
+  const list = isListAggregate(parsed.parsed);
+  if (list && ORDERING_KEYS.has(comparator)) {
+    issues.push(err(where, `${comparator} cannot order a list; fold it with .min/.max/.sum/.count`));
+    return false;
+  }
+  if (!list && CONTAINMENT_KEYS.has(comparator)) {
+    issues.push(err(where, `${trimmed} is a number, and a number holds no text`));
+    return false;
+  }
+  if (aggregateKeyEndsInFold(parsed.parsed) && parsed.parsed.field.kind === 'metadata') {
+    issues.push(
+      warn(
+        where,
+        `reads as the .${parsed.parsed.field.fold} of metadata key "${parsed.parsed.field.key}" — a key literally ending in .${parsed.parsed.field.fold} cannot be listed`
+      )
+    );
+  }
+  return true;
+}
+
 function validateCondition(
   condition: DraftCondition,
   outcome: DraftOutcome,
@@ -1369,6 +1503,9 @@ function validateCondition(
   if (condition.subject.kind === 'inventoryCount' && CONTAINMENT_KEYS.has(condition.comparator)) {
     issues.push(err(where, 'an equipped count is a number, and a number holds no text'));
     return;
+  }
+  if (condition.subject.kind === 'inventoryAggregate') {
+    if (!auditAggregateKey(condition.subject.key, condition.comparator, where, issues)) return;
   }
   if ((condition.subject.kind === 'llm' || condition.subject.kind === 'llm-ok') && !draft.llmEnabled) {
     issues.push(err(where, 'tests the LLM consult, but the consult is not enabled'));
@@ -1488,11 +1625,22 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
     );
   }
 
+  const groups = groupsOf(draft.gateConditions);
+  if (groups.length > MAX_WHEN_GROUPS) {
+    issues.push(err({ section: 'gate' }, `at most ${MAX_WHEN_GROUPS} lines joined by OR`));
+  }
+  for (const group of groups) validateGateGroup(group, issues);
+}
+
+/** One line of the gate — slots are per line, as they are per group in the file. */
+function validateGateGroup(conditions: DraftGateCondition[], issues: DraftIssue[]): void {
   const seenSlots = new Set<string>();
-  for (const condition of draft.gateConditions) {
+  for (const condition of conditions) {
     const where: DraftIssue['where'] = { section: 'gate', conditionId: condition.id };
 
-    if (condition.key.trim() === '') {
+    if (condition.subject === 'inventoryAggregate') {
+      if (!auditAggregateKey(condition.key, condition.comparator, where, issues)) continue;
+    } else if (condition.key.trim() === '') {
       issues.push(
         err(where, condition.subject === 'inventory' || condition.subject === 'inventoryCount'
           ? 'a gate condition needs an object reference'
@@ -1516,7 +1664,7 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
           issues.push(err(where, 'pick a state: equipped, carried, reachable or absent'));
         }
         const slot = `${condition.subject}:${gateConditionSlotKey(condition)}`;
-        if (seenSlots.has(slot)) issues.push(err(where, 'the gate can test this object with this comparator only once'));
+        if (seenSlots.has(slot)) issues.push(err(where, 'a line of the gate can test this object with this comparator only once'));
         seenSlots.add(slot);
         continue;
       }
@@ -1528,7 +1676,7 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
 
     const slot = `${condition.subject ?? 'metadata'}:${gateConditionSlotKey(condition)}`;
     if (seenSlots.has(slot)) {
-      issues.push(err(where, 'the gate can test this key with this comparator only once'));
+      issues.push(err(where, 'a line of the gate can test this key with this comparator only once'));
     }
     seenSlots.add(slot);
 
@@ -1563,7 +1711,11 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
   for (const effect of draft.effects) {
     const where: DraftIssue['where'] = { section: 'effect', id: effect.id };
 
-    if (effect.when.kind === 'verbatim' && effect.when.when.llm !== undefined && !draft.llmEnabled) {
+    if (
+      effect.when.kind === 'verbatim' &&
+      effectWhenGroups(effect.when.when).some((group) => group.llm !== undefined) &&
+      !draft.llmEnabled
+    ) {
       issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
     }
 
@@ -1737,6 +1889,15 @@ export function subjectValueType(
       return 'string';
     case 'inventoryCount':
       return 'number';
+    case 'inventoryAggregate': {
+      // A count or a fold is a number. A list's entries are names and titles
+      // (text) or whatever the objects' metadata holds — unknowable, like a
+      // metadata key's.
+      const parsed = parseAggregateKey(subject.key.trim());
+      if (!parsed.ok) return null;
+      if (!isListAggregate(parsed.parsed)) return 'number';
+      return parsed.parsed.field.kind === 'metadata' ? null : 'string';
+    }
   }
 }
 
@@ -1760,12 +1921,12 @@ export function reseatOperandForComparator<O extends ConditionOperand>(
   return operand;
 }
 
-/** Identity of a gate chip for duplicate detection: metadata key + comparator. */
+/** Identity of a gate chip for duplicate detection, within its group: key + comparator. */
 export function gateConditionSlotKey(condition: Pick<DraftGateCondition, 'key' | 'comparator'>): string {
   return `${condition.key}:${condition.comparator}`;
 }
 
-/** Identity of a chip for duplicate detection: subject (+key/name) + comparator. */
+/** Identity of a chip for duplicate detection, within its group: subject (+key/name) + comparator. */
 export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'comparator'>): string {
   const subject = condition.subject;
   switch (subject.kind) {
@@ -1783,6 +1944,8 @@ export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'co
       return `inventory:${subject.key}:${condition.comparator}`;
     case 'inventoryCount':
       return `inventoryCount:${subject.key}:${condition.comparator}`;
+    case 'inventoryAggregate':
+      return `inventoryAggregate:${subject.key}:${condition.comparator}`;
     case 'llm':
       return `llm:${condition.comparator}`;
     case 'llm-ok':
@@ -1948,19 +2111,25 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
       issues.push(err({ section: 'outcome', id: outcome.id }, 'only the final outcome may be the catch-all'));
     }
 
-    const seenSlots = new Set<string>();
-    for (const condition of outcome.conditions) {
-      const slot = conditionSlotKey(condition);
-      if (seenSlots.has(slot)) {
-        issues.push(
-          err(
-            { section: 'outcome', id: outcome.id, conditionId: condition.id },
-            'a row can test this subject with this comparator only once'
-          )
-        );
+    // Slots are per group: `rank > 3 OR rank > 5` is two lines, not a repeat.
+    for (const group of groupsOf(outcome.conditions)) {
+      const seenSlots = new Set<string>();
+      for (const condition of group) {
+        const slot = conditionSlotKey(condition);
+        if (seenSlots.has(slot)) {
+          issues.push(
+            err(
+              { section: 'outcome', id: outcome.id, conditionId: condition.id },
+              'a line can test this subject with this comparator only once'
+            )
+          );
+        }
+        seenSlots.add(slot);
+        validateCondition(condition, outcome, draft, issues);
       }
-      seenSlots.add(slot);
-      validateCondition(condition, outcome, draft, issues);
+    }
+    if (groupsOf(outcome.conditions).length > MAX_WHEN_GROUPS) {
+      issues.push(err({ section: 'outcome', id: outcome.id }, `at most ${MAX_WHEN_GROUPS} lines joined by OR`));
     }
 
     if (outcome.message.trim() === '') {

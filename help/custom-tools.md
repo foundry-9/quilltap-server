@@ -107,7 +107,14 @@ Each entry has a `when`, a `message`, and a `state`.
 { "when": { "gte": 0.30, "lte": 0.60 }, "message": "…", "state": "partial" }
 ```
 
-There is deliberately no "or". You will not need it: the table is read from the top and the first entry that matches wins, so ordering says everything an "or" would have said, and says it more legibly.
+Most of the time you will not need an "or": the table is read from the top and the first entry that matches wins, so ordering says most of what an "or" would have said, and says it legibly. For the rest — one outcome reached by two quite different roads — write the `when` as a **list** of such objects, and the row wins if *any one of them* holds:
+
+```json
+{ "when": [ { "gte": 0.90 }, { "inventory": { "lucky charm": { "eq": "equipped" } } } ],
+  "message": "Fortune smiles, whether by the dice or by the charm.", "state": "success" }
+```
+
+Inside each object the tests still AND together, so **AND binds tighter than OR**: `[ {A, B}, {A, C} ]` reads *"A and B, or A and C"*. There is one level of it only — no lists within lists, no parentheses, and at most eight objects to a list. An author who means *"(B or C) and A"* writes it as `[ {A, B}, {A, C} ]`, which says the same and is a good deal easier on the eye at three in the morning.
 
 #### Asking about more than the number
 
@@ -120,6 +127,7 @@ Written bare like that, the comparisons are about the rolled value. Four other t
 | `params` | what the tool was actually called with, by parameter name |
 | `metadata` | what the *character doing the rolling* carries on their fact sheet |
 | `progress` | how far along one of that character's timed **progressions** is |
+| `inventory`, `inventoryCount`, `inventoryAggregate` | what that character carries — one object, or everything at once (below) |
 | `llm` | what the consulted oracle answered, if the tool keeps one — see below |
 
 So *"the value exceeded 1, and the scale was set past 12"* is written:
@@ -142,7 +150,7 @@ A comparison may also be made against a parameter instead of a number you fixed 
 
 The same trick serves a substring: `{ "contains": { "$param": "searchTerm" } }` looks for whatever text the caller supplied, so one input may be sought inside another — or, as below, inside an oracle's answer.
 
-Still no formulas, still nothing evaluated — only a flat list of comparisons, all of which must hold. It is a smaller box than you might like for about a week, and a considerable comfort thereafter.
+Still no formulas, still nothing evaluated — only comparisons that must all hold, and at most a list of such bundles, any one of which will do. It is a smaller box than you might like for about a week, and a considerable comfort thereafter.
 
 #### Asking what the character is carrying
 
@@ -160,7 +168,8 @@ The same comparisons, ANDed the same way — `contains` and `ncontains` included
 The same quiet non-match covers every way a sheet can decline to answer:
 
 - **The key isn't there at all.** Including under `neq` — absence is not inequality, and `{ "faction": { "neq": "Ordo Ferrum" } }` will not match a character who has no `faction` whatsoever. `ncontains` follows the same rule: a character with no `faction` does not thereby *lack the substring* — they lack the sheet entry, which is a different thing. If you want "hasn't got it" to be *interesting*, put it in the catch-all, or order a row above it that tests something they do have.
-- **The key holds a list or an object.** `knownLanguages: ["Trade Cant"]` is a perfectly good thing to keep on a sheet, but there is no sensible way to ask whether a list is greater than 3, so no comparison against it matches — `contains` included, which searches a single string, not a list's members.
+- **The key holds a list — which is compared entry by entry.** `knownLanguages: ["Trade Cant", "Latin"]` is a perfectly good thing to keep on a sheet, and `{ "eq": "Latin" }` matches it: `eq` holds when *any* entry equals what you named, `neq` when *none* does, `contains` when any entry contains the text, `ncontains` when none does. Exact and case-minded, as ever — `"latin"` is not `"Latin"`. What a list will not do is be *ordered*: there is no sensible way to ask whether a list is greater than 3, so `gt` and its relations decline. An empty list is a fact rather than an absence: `neq` and `ncontains` hold against it, `eq` and `contains` do not.
+- **The key holds an object, or a list with anything but plain values in it.** `dossier: { "rank": "adept" }`, or a list with an object tucked inside, has no entries Pascal can compare, and no comparison against it matches.
 - **The key holds the wrong sort of thing.** Ordering a string (`{ "faction": { "gt": 1 } }`) doesn't match; nor does comparing a number against a string. Note the contrast with `params`, where the very same mistake is refused when the file loads: there, the tool declares its own parameters, so the types are knowable and a nonsense comparison is certainly a typo. Here the file has never met the character, so it cannot be told apart from a perfectly deliberate test of a key that some characters keep as a number and others don't keep at all.
 - **`null` cannot be tested.** There is no way to write `{ "eq": null }`, and that is deliberate: an empty key and an absent one both simply fail to match, which spares you having to decide which of the two you meant.
 
@@ -189,6 +198,47 @@ Its sibling **`inventoryCount`** counts how many objects of that *kind* (the sam
 The object's name is a **template**, as a wardrobe item's is: `{ "inventory": { "{{params.weapon}}": { "eq": "equipped" } } }` lets whoever reaches for the tool say which weapon they mean.
 
 **A run nobody made has no inventory at all** — and so every `inventory` and `inventoryCount` test declines, `{ "eq": "absent" }` and `{ "lt": 1 }` included. That is the same quiet non-match a missing metadata key gets, and for the same reason: we could not establish anything about a bag that does not exist. Only a real character's bag ever reads as `absent` or `0`.
+
+#### Asking about everything they carry — `inventoryAggregate`
+
+`inventory` asks after one object by name. Sometimes the question is broader: *is anything she carries a suppressor?* *Does he have an ansible resonator equipped, whatever it is called on his sheet?* *What is the best `toolVersion` among the gadgets in her hand?* For that there is **`inventoryAggregate`**, which reads one attribute across *every* object in a scope and hands Pascal the lot.
+
+Its key is written `<scope>.<field>`. The scope says whose objects:
+
+| Scope | The objects counted |
+|---|---|
+| `equipped` | everything equipped in this chat |
+| `owned` | everything in their own vault, equipped or not |
+| `reachable` | everything they can see at all — their own, the group's, the project's, Quilltap General |
+
+Each scope includes the one above it. Archetypes, archived objects and kits are never counted (a kit's members speak for it), and an instance carries its archetype's `metadata` as though it were its own.
+
+The field says what is read off each object:
+
+| Field | What Pascal compares |
+|---|---|
+| `count` | how many objects there are |
+| `names` | a list of their names |
+| `titles` | a list of their titles (or names, where they have no title) |
+| `metadata.<key>` | a list of their values for that `metadata` key — an object whose value is itself a list contributes each entry |
+| `metadata.<key>.min`, `.max`, `.sum` | a number, folded from the numeric values among them |
+| `metadata.<key>.count` | how many of them carry a number there |
+
+A list is compared **entry by entry**, by the same rule a list on a character's sheet follows: `eq` when any entry matches, `neq` when none does, `contains` and `ncontains` likewise, and no ordering. So the three questions above are:
+
+```json
+{ "inventoryAggregate": { "equipped.metadata.toolAbilities": { "contains": "suppress" } } }
+{ "inventoryAggregate": { "equipped.names": { "eq": "ansible resonator" } } }
+{ "inventoryAggregate": { "equipped.metadata.toolVersion.max": { "gte": 4 } } }
+```
+
+The first matches an equipped object whose `toolAbilities` is `"suppress, amplify"` *or* `["suppress", "amplify"]` — each entry is searched on its own, so a word cannot straddle two of them. The second is exact, and so does *not* match an *ansible resonator mk2*, nor an *Ansible Resonator*: case counts here, as it does on `metadata`. The third holds when the largest numeric `toolVersion` among the equipped objects is 4 or better.
+
+The folds want numbers. When nothing in scope carries a number under that key, `.min`, `.max` and `.sum` are simply *absent*, and every test against them declines — `{ "gte": 0 }` and `{ "lt": 0 }` alike. `.count` is always there, and reads `0`. To order a list you must fold it first; `{ "equipped.names": { "gt": 1 } }` is a question without an answer, and the Workbench says so.
+
+One small consequence of the spelling: a metadata key whose own name ends in `.min`, `.max`, `.sum` or `.count` is read as that fold, not as a list. If your objects keep a key called `stats.max`, ask for `stats.max.max` and be done with it.
+
+The key is always literal — it names a scope and a field, never an object — though the value compared against may be a `{ "$param": … }` in an outcome, as anywhere else. And, as with its siblings, **a run nobody made has no inventory to take stock of**: every `inventoryAggregate` test declines. With a real bag, an empty scope is merely a fact: `equipped.count` reads `0`, `equipped.names` is an empty list.
 
 A roll, a comparison or a parameter's default may also draw a value *out* of an object's metadata, with a `$inventory` reference — the `$state` reference's twin, fallback and all:
 
@@ -600,7 +650,7 @@ Two optional keys settle it, and only one of them may appear in a file:
 - **`availableWhen`** — offer this tool *only* to a character whose fact sheet passes every test in it.
 - **`withheldWhen`** — the mirror: keep it *from* a character whose sheet passes every test in it.
 
-The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subjects can only ever be `metadata`, `progress`, `inventory` and `inventoryCount` — a character's fact sheet, the timed spans derived from it, and what they carry in this chat are what they bring into the room — and why the values compared against must be plain literals rather than `{ "$param": … }`, `{ "$state": … }` or `{ "$inventory": … }` references. There is nothing yet for those to refer to. For the same reason an `inventory` key in a gate must name its object literally: a gate is asked before anyone has supplied a parameter, so `{{params.weapon}}` there would never mean anything but itself, and the loader refuses it.
+The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subjects can only ever be `metadata`, `progress`, `inventory`, `inventoryCount` and `inventoryAggregate` — a character's fact sheet, the timed spans derived from it, and what they carry in this chat are what they bring into the room — and why the values compared against must be plain literals rather than `{ "$param": … }`, `{ "$state": … }` or `{ "$inventory": … }` references. There is nothing yet for those to refer to. For the same reason an `inventory` key in a gate must name its object literally: a gate is asked before anyone has supplied a parameter, so `{{params.weapon}}` there would never mean anything but itself, and the loader refuses it.
 
 `inventory` in a gate is the sword-swinger's arrangement:
 
@@ -609,6 +659,23 @@ The tests are written exactly as an outcome's `metadata` clause is, and several 
 ```
 
 A character with a sword in hand is offered `swing_sword`; one without is not — and, since a gate with nothing to read declines, neither is a roll made as nobody from the composer.
+
+`inventoryAggregate` in a gate asks after the whole bag at once — offer `jam_signal` to anyone with *something* equipped that can suppress:
+
+```json
+{ "availableWhen": { "inventoryAggregate": { "equipped.metadata.toolAbilities": { "contains": "suppress" } } } }
+```
+
+**A gate may say "or", too.** Write either clause as a list of such objects, and it holds when *any one of them* does — the same rule, and the same one level of it, as an outcome's `when`:
+
+```json
+{ "availableWhen": [
+    { "metadata": { "toolAbilities": { "contains": "programmable" } } },
+    { "inventoryAggregate": { "equipped.names": { "eq": "ansible resonator" } } }
+] }
+```
+
+The automaton with a port is offered `reprogram`; so is the parlourmaid who has had the foresight to equip an ansible resonator. The fail-soft table below holds line by line: a character the gate can learn nothing about passes no line, so an `availableWhen` stays shut and a `withheldWhen` stays unsatisfied.
 
 `progress` in a gate is the whole recharging-weapon arrangement in one line:
 
@@ -634,7 +701,7 @@ So `availableWhen` is the cautious key — a stranger with no fact sheet gets no
 
 **A gated-out tool does not claim its name**, and this is quietly the most useful thing about the arrangement. Should a character's own vault hold a clever `unlock` gated to picklock-carrying characters, and Quilltap General hold a plain one gated to nobody, then the picklock carries the clever version and everyone else falls through to the plain one — same name, same call, different contrivance. Contrast `disabled`, which suppresses a name outright at its tier and beyond. (You may combine them, and it reads as it says: a `disabled` definition with a `withheldWhen` is a tombstone that only tombstones for the characters it names.)
 
-You need not write any of this by hand. Pascal's Workbench puts it at the top of the recipe as **Who may reach for it** — *Anyone*, *Only show if…*, or *Do not show if…* — and its proving bench will tell you whether the fact sheet on the bench would have been dealt the tool at all.
+You need not write any of this by hand. Pascal's Workbench puts it at the top of the recipe as **Who may reach for it** — *Anyone*, *Only show if…*, or *Do not show if…* — with an **AND / OR** toggle between its tests, and its proving bench will tell you whether the fact sheet on the bench would have been dealt the tool at all, and by which line.
 
 ## Rolling in secret
 
@@ -682,7 +749,7 @@ Choosing a preset from the dropdown deals it back into the form. The binding is 
 
 At the foot of the dialog is **What this tool can quote** — the placeholders *this particular tool* actually uses when Pascal writes the outcome.
 
-The emphasis is on *actually*. Nothing is listed because the format allows it: a tool that rolls dice but never writes `{{dice}}` is not offered `{{dice}}`, and a parameter you are filling in appears here only if some message or prompt quotes it back. What you get is one entry for each of `{{value}}`, `{{roll}}`, `{{dice}}`, and `{{llm}}` the tool genuinely writes, one per parameter it genuinely quotes, and — the useful part — one for every metadata key and state path the definition genuinely reads, named. The Inventory has sentences of its own: which objects the tool reads the inventory for, and which it may equip, unequip or pick up for the running character. If a table branches on `hasAnsibleAccess`, the dialog says so, and you need not go opening files to find out what the thing wants to know about your character. A tool that quotes nothing gets no panel at all.
+The emphasis is on *actually*. Nothing is listed because the format allows it: a tool that rolls dice but never writes `{{dice}}` is not offered `{{dice}}`, and a parameter you are filling in appears here only if some message or prompt quotes it back. What you get is one entry for each of `{{value}}`, `{{roll}}`, `{{dice}}`, and `{{llm}}` the tool genuinely writes, one per parameter it genuinely quotes, and — the useful part — one for every metadata key and state path the definition genuinely reads, named. The Inventory has sentences of its own: which objects the tool reads the inventory for, which aggregates it takes stock of (`equipped.names` and the like), and which objects it may equip, unequip or pick up for the running character. If a table branches on `hasAnsibleAccess`, the dialog says so, and you need not go opening files to find out what the thing wants to know about your character. A tool that quotes nothing gets no panel at all.
 
 **These are the author's to place, not yours to type.** The placeholders belong to the tool's own outcome messages and oracle prompt, which are written on Pascal's Workbench. What you type into the form above is sent exactly as written — braces and all — so `{{metadata.rank}}` in a parameter box is the literal text `{{metadata.rank}}`, not a substitution waiting to happen.
 

@@ -112,3 +112,26 @@ describe('collectToolGateKeys', () => {
     expect(census.unread).toEqual([expect.objectContaining({ mountName: '(no enabled stores)' })])
   })
 })
+
+describe('any-of gates', () => {
+  it('walks every group, and does not count aggregate keys', async () => {
+    prime({
+      a: {
+        'Tools/tune.tool.json': {
+          name: 'tune',
+          description: 'Tune.',
+          withheldWhen: [
+            { inventory: { resonator: { eq: 'equipped' } } },
+            { inventoryCount: { ring: { gte: 2 } }, inventoryAggregate: { 'equipped.names': { eq: 'lantern' } } },
+          ],
+          outcomes: [{ when: true, message: 'x', state: 'info' }],
+        },
+      },
+    })
+    const census = await collectToolGateKeys()
+    expect(census.keys.map((k) => `${k.clause}:${k.subject}:${k.ref}`).sort()).toEqual([
+      'withheldWhen:inventory:resonator',
+      'withheldWhen:inventoryCount:ring',
+    ])
+  })
+})

@@ -7,8 +7,10 @@
  * holds wins. The final row is the pinned catch-all: not movable, not
  * deletable, its condition reading "otherwise" — which makes the loader's
  * ordering rule unviolatable by construction. Conditions are chips (subject +
- * comparator + operand) joined by AND; a duplicate subject+comparator pair is
- * blocked at the door because one comparator object can carry each key once.
+ * comparator + operand) joined by AND on a line, and lines joined by OR — a
+ * row wins when any of its lines holds. A duplicate subject+comparator pair on
+ * one line is blocked at the door because one comparator object can carry
+ * each key once.
  */
 
 import { useRef, useState } from 'react'
@@ -26,6 +28,7 @@ import {
 } from '@/lib/pascal/custom-tool.types'
 import {
   conditionSlotKey,
+  groupsOf,
   nextDraftId,
   reseatOperandForComparator,
   subjectValueType,
@@ -40,6 +43,8 @@ import {
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
 import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
+import { ConditionGroups } from './ConditionGroups'
+import { AggregateKeyField } from './AggregateKeyField'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -78,6 +83,8 @@ function subjectSelectValue(subject: ConditionSubject): string {
       return 'inventory'
     case 'inventoryCount':
       return 'inventoryCount'
+    case 'inventoryAggregate':
+      return 'inventoryAggregate'
   }
 }
 
@@ -140,7 +147,10 @@ export function OutcomesSection({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="qt-card-title text-sm">The outcome table</h2>
-          <p className="qt-hint">Checked top to bottom — the first row whose every condition holds wins.</p>
+          <p className="qt-hint">
+            Checked top to bottom — the first row that holds wins. Tests on one line must all hold; any line of a row
+            will do.
+          </p>
         </div>
         <button
           type="button"
@@ -348,7 +358,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
     // Block a change that would collide with an existing subject+comparator
     // slot — one comparator object carries each key once (§4.4.1).
     const slot = conditionSlotKey(next)
-    const collision = outcome.conditions.some((c) => c.id !== id && conditionSlotKey(c) === slot)
+    const line = groupsOf(outcome.conditions).find((group) => group.some((c) => c.id === id)) ?? []
+    const collision = line.some((c) => c.id !== id && conditionSlotKey(c) === slot)
     if (collision) {
       setDuplicateNotice(describeSlot(next))
       return
@@ -364,8 +375,9 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
       comparator: 'gte',
       operand: { kind: 'number', text: '' },
     }
-    // Find a free slot so the fresh chip never lands on a duplicate.
-    const taken = new Set(outcome.conditions.map(conditionSlotKey))
+    // Find a free slot on the last line so the fresh chip never lands on a duplicate.
+    const lines = groupsOf(outcome.conditions)
+    const taken = new Set((lines[lines.length - 1] ?? []).map(conditionSlotKey))
     const comparators: ComparatorKey[] = ['gte', 'gt', 'lte', 'lt', 'eq', 'neq']
     for (const subject of [{ kind: 'value' } as const, { kind: 'roll' } as const]) {
       for (const comparator of comparators) {
@@ -389,9 +401,14 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
 
   return (
     <div className="space-y-1 pl-6">
-      {outcome.conditions.map((condition, i) => (
-        <div key={condition.id} className="flex items-center gap-2 flex-wrap">
-          {i > 0 && <span className="text-xs qt-text-secondary font-mono">AND</span>}
+      <ConditionGroups
+        conditions={outcome.conditions}
+        disabled={disabled}
+        onJoinerChange={(id, joiner) => {
+          setDuplicateNotice(null)
+          setConditions(outcome.conditions.map((c) => (c.id === id ? { ...c, joiner } : c)))
+        }}
+        renderChip={(condition) => (
           <ConditionChip
             condition={condition}
             draft={draft}
@@ -400,8 +417,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
             onChange={(next) => updateCondition(condition.id, next)}
             onDelete={() => deleteCondition(condition.id)}
           />
-        </div>
-      ))}
+        )}
+      />
       {duplicateNotice && <p className="text-xs qt-text-destructive">{duplicateNotice}</p>}
       <button
         type="button"
@@ -420,23 +437,25 @@ function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>)
   const label = COMPARATOR_LABELS[condition.comparator]
   switch (condition.subject.kind) {
     case 'value':
-      return `A row can test ${label} on the value only once.`
+      return `A line can test ${label} on the value only once.`
     case 'roll':
-      return `A row can test ${label} on the raw roll only once.`
+      return `A line can test ${label} on the raw roll only once.`
     case 'param':
-      return `A row can test ${label} on "${condition.subject.name}" only once.`
+      return `A line can test ${label} on "${condition.subject.name}" only once.`
     case 'metadata':
-      return `A row can test ${label} on metadata "${condition.subject.key}" only once.`
+      return `A line can test ${label} on metadata "${condition.subject.key}" only once.`
     case 'progress':
-      return `A row can test ${label} on progress "${condition.subject.key}" only once.`
+      return `A line can test ${label} on progress "${condition.subject.key}" only once.`
     case 'llm':
-      return `A row can test ${label} on the consult's answer only once.`
+      return `A line can test ${label} on the consult's answer only once.`
     case 'llm-ok':
-      return 'A row can test whether the consult succeeded only once.'
+      return 'A line can test whether the consult succeeded only once.'
     case 'inventory':
-      return `A row can test ${label} on the state of "${condition.subject.key}" only once.`
+      return `A line can test ${label} on the state of "${condition.subject.key}" only once.`
     case 'inventoryCount':
-      return `A row can test ${label} on the equipped count of "${condition.subject.key}" only once.`
+      return `A line can test ${label} on the equipped count of "${condition.subject.key}" only once.`
+    case 'inventoryAggregate':
+      return `A line can test ${label} on the aggregate "${condition.subject.key}" only once.`
   }
 }
 
@@ -462,9 +481,14 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   // Metadata and the consult's answer offer every comparator — the stored type
   // is unknowable at authoring time (§4.4.1). String subjects offer equality
   // and containment; boolean subjects only = and ≠; numbers cannot contain.
+  // An aggregate offers everything: whether its key reads as a list or a
+  // number is the validator's to flag beside the chip, so typing the key never
+  // yanks the comparator out from under the author.
   const comparators: ComparatorKey[] =
     subject.kind === 'inventory'
       ? ['eq', 'neq']
+      : subject.kind === 'inventoryAggregate'
+      ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
       : subjectType === 'string'
       ? ['eq', 'neq', 'contains', 'ncontains']
       : subjectType === 'boolean'
@@ -482,7 +506,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       if (!p.name) return false
       // A substring must be text whatever the subject turns out to hold.
       if (containment) return p.type === 'string'
-      if (subject.kind === 'metadata' || subject.kind === 'progress' || subject.kind === 'llm') {
+      if (
+        subject.kind === 'metadata' ||
+        subject.kind === 'progress' ||
+        subject.kind === 'llm' ||
+        (subject.kind === 'inventoryAggregate' && subjectType === null)
+      ) {
         // With the subject's type unknown, no reference can be ruled
         // incompatible — ordering still demands a number, though.
         return !ordering || p.type === 'number' || p.type === 'integer'
@@ -501,6 +530,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     else if (value === 'progress') nextSubject = { kind: 'progress', key: subject.kind === 'progress' ? subject.key : '' }
     else if (value === 'llm') nextSubject = { kind: 'llm' }
     else if (value === 'llm-ok') nextSubject = { kind: 'llm-ok' }
+    else if (value === 'inventoryAggregate') {
+      nextSubject = { kind: 'inventoryAggregate', key: subject.kind === 'inventoryAggregate' ? subject.key : '' }
+    }
     else if (value === 'inventory' || value === 'inventoryCount') {
       const key = subject.kind === 'inventory' || subject.kind === 'inventoryCount' ? subject.key : ''
       nextSubject = { kind: value, key }
@@ -565,6 +597,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         <option value="inventoryCount" title="How many of an object's kind the rolling character has equipped">
           Inventory count…
         </option>
+        <option value="inventoryAggregate" title="One attribute across everything equipped, owned or reachable">
+          Inventory aggregate…
+        </option>
         {draft.llmEnabled && (
           <>
             <option value="llm" title="What the consulted model answered">
@@ -613,6 +648,14 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
           className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
           aria-label="Inventory object reference"
           title="The object, by id, title or name — a template, so {{params.weapon}} lets a parameter choose. A run nobody made declines the test."
+        />
+      )}
+
+      {subject.kind === 'inventoryAggregate' && (
+        <AggregateKeyField
+          value={subject.key}
+          onChange={(key) => onChange({ ...condition, subject: { kind: 'inventoryAggregate', key } })}
+          disabled={disabled}
         />
       )}
 
@@ -698,7 +741,8 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   const typeUnknowable =
     condition.subject.kind === 'metadata' ||
     condition.subject.kind === 'progress' ||
-    condition.subject.kind === 'llm'
+    condition.subject.kind === 'llm' ||
+    (condition.subject.kind === 'inventoryAggregate' && subjectType === null)
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
 

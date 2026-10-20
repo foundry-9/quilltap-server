@@ -10,6 +10,8 @@
  * file the loader will refuse, or red-lines one it would have taken.
  */
 
+import fs from 'fs'
+import path from 'path'
 import Ajv2020 from 'ajv/dist/2020'
 import {
   QtapCustomToolSchema,
@@ -20,6 +22,7 @@ import {
   MAX_CHIP_LABEL_LENGTH,
   MAX_EFFECTS,
   KNOWN_TOP_LEVEL_KEYS,
+  MAX_WHEN_GROUPS,
 } from '@/lib/pascal/custom-tool.types'
 
 import mirror from '@/public/schemas/qtap-custom-tool.schema.json'
@@ -756,6 +759,28 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an inventory effect with no items', withEffects([{ inventory: { action: 'equip', items: [] } }])],
     ['an effect with both a wardrobe and an inventory gesture', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair' }, inventory: { action: 'equip', items: ['x'] } }])],
     ['an effect with both a target and an inventory gesture', withEffects([{ target: 'state.x', value: 1, inventory: { action: 'equip', items: ['x'] } }])],
+    ['an inventoryAggregate list test', withWhen({ inventoryAggregate: { 'equipped.names': { eq: 'ansible resonator' } } })],
+    ['an inventoryAggregate fold test', withWhen({ inventoryAggregate: { 'equipped.metadata.toolVersion.max': { gte: 4 } } })],
+    ['an inventoryAggregate count test', withWhen({ inventoryAggregate: { 'reachable.count': { gt: 0 } } })],
+    ['an inventoryAggregate with a $param operand', withWhen({ inventoryAggregate: { 'owned.titles': { contains: { $param: 'material' } } } }, STR_PARAM)],
+    ['an inventoryAggregate key with no scope', withWhen({ inventoryAggregate: { 'carried.names': { eq: 'x' } } })],
+    ['an inventoryAggregate key with no field', withWhen({ inventoryAggregate: { 'equipped.': { eq: 'x' } } })],
+    ['an inventoryAggregate key with an unknown field', withWhen({ inventoryAggregate: { 'equipped.weight': { gt: 1 } } })],
+    ['an empty inventoryAggregate object', withWhen({ inventoryAggregate: {} })],
+    ['an inventoryAggregate gate', { ...BASE, availableWhen: { inventoryAggregate: { 'equipped.metadata.toolAbilities': { contains: 'suppress' } } } }],
+    ['a $param inside an inventoryAggregate gate', { ...BASE, ...STR_PARAM, availableWhen: { inventoryAggregate: { 'equipped.names': { eq: { $param: 'material' } } } } }],
+    ['an any-of outcome', withWhen([{ gte: 0.9 }, { inventory: { 'lucky charm': { eq: 'equipped' } } }])],
+    ['a one-element any-of outcome', withWhen([{ gte: 0.9 }])],
+    ['an empty any-of outcome', withWhen([])],
+    ['a nested any-of outcome', withWhen([[{ gte: 0.9 }]])],
+    ['an any-of outcome with an empty group', withWhen([{ gte: 0.9 }, {}])],
+    ['an any-of outcome past the cap', withWhen(Array.from({ length: MAX_WHEN_GROUPS + 1 }, (_, i) => ({ gte: i })))],
+    ['an any-of gate', { ...BASE, availableWhen: [{ metadata: { a: { eq: true } } }, { metadata: { b: { eq: true } } }] }],
+    ['an empty any-of gate', { ...BASE, withheldWhen: [] }],
+    ['an any-of gate with an empty group', { ...BASE, withheldWhen: [{ metadata: { a: { eq: 1 } } }, {}] }],
+    ['an any-of effect condition', withEffects([{ when: [{ outcome: { eq: 'success' } }, { metadata: { lucky: { eq: true } } }], target: 'state.x', value: 1 }])],
+    ['an empty any-of effect condition', withEffects([{ when: [], target: 'state.x', value: 1 }])],
+    ['an effect condition with an inventoryAggregate', withEffects([{ when: { inventoryAggregate: { 'owned.count': { gte: 3 } } }, log: 'Encumbered' }])],
   ]
 
   it.each(corpus)('on %s', (_label, doc) => {
@@ -950,5 +975,89 @@ describe('effects — log lines', () => {
     )
     expect(rejection(withEffects([{ log: 'Oracle: {{llm}}' }]))).toMatch(/declares no `llm` block/)
     expect(accepts(withEffects([{ log: 'Oracle: {{llm}}' }], LLM_BLOCK))).toBe(true)
+  })
+})
+
+describe('inventoryAggregate and any-of', () => {
+  it('accepts every aggregate key form and rejects the rest with the parser’s reason', () => {
+    for (const key of [
+      'equipped.count',
+      'owned.names',
+      'reachable.titles',
+      'equipped.metadata.toolAbilities',
+      'equipped.metadata.toolVersion.max',
+      'owned.metadata.a.b',
+    ]) {
+      expect(accepts(withWhen({ inventoryAggregate: { [key]: { eq: 1 } } }))).toBe(true)
+    }
+    expect(rejection(withWhen({ inventoryAggregate: { 'carried.names': { eq: 'x' } } }))).toMatch(/not a scope/)
+    expect(rejection(withWhen({ inventoryAggregate: { 'equipped.weight': { eq: 'x' } } }))).toMatch(/not a field/)
+  })
+
+  it('rejects a $param operand in an aggregate gate, and an undeclared one in an outcome', () => {
+    expect(accepts({ ...BASE, ...STR_PARAM, availableWhen: { inventoryAggregate: { 'equipped.names': { eq: { $param: 'material' } } } } })).toBe(false)
+    expect(rejection(withWhen({ inventoryAggregate: { 'equipped.names': { eq: { $param: 'ghost' } } } }))).toMatch(
+      /undeclared parameter "ghost"/
+    )
+  })
+
+  it('locates an issue inside an any-of group by its index', () => {
+    expect(rejection(withWhen([{ gte: 0.9 }, { params: { ghost: { eq: 1 } } }]))).toMatch(/outcomes\.0\.when\.1\.params\.ghost/)
+    expect(
+      rejection({ ...BASE, ...STR_PARAM, withheldWhen: [{ metadata: { a: { eq: 1 } } }, { inventory: { '{{params.material}}': { eq: 'equipped' } } }] })
+    ).toMatch(/withheldWhen\.1\.inventory.*must be a literal object reference/)
+  })
+
+  it('does not bury a group’s complaint under the array branch', () => {
+    expect(rejection({ ...BASE, availableWhen: {} })).toMatch(/must test at least one/)
+    expect(rejection({ ...BASE, availableWhen: {} })).not.toMatch(/expected array/)
+  })
+
+  it('keeps the catch-all rule: an array is never a catch-all', () => {
+    expect(rejection({ ...BASE, outcomes: [{ when: [{ gte: 0.5 }], message: '-', state: 'info' }] })).toMatch(
+      /final outcome must be a catch-all/
+    )
+  })
+})
+
+/**
+ * Every reader of a gate or a `when` goes through `gateGroups` / `whenGroups`
+ * / `effectWhenGroups`, so an any-of array can never be read as one group by
+ * a site that forgot it could be an array. The types enforce most of it; this
+ * holds the line for the rest.
+ */
+describe('no raw reads of a gate or a when', () => {
+  const ROOTS = ['lib', 'app', 'components']
+  const EXEMPT = new Set([
+    path.join('lib', 'pascal', 'custom-tool.types.ts'),
+    path.join('lib', 'pascal', 'tool-draft.ts'),
+  ])
+  const SUBJECTS = 'metadata|progress|inventory|inventoryCount|inventoryAggregate|params|roll|llm|outcome'
+  const RAW = new RegExp(`(?:availableWhen|withheldWhen|\\.when)\\??\\.(?:${SUBJECTS})\\b`)
+
+  function* walk(dir: string): Generator<string> {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) yield* walk(full)
+      else if (/\.(ts|tsx)$/.test(entry.name)) yield full
+    }
+  }
+
+  it('finds none outside the schema and the draft model', () => {
+    const repo = path.resolve(__dirname, '../../../..')
+    const offenders: string[] = []
+    for (const root of ROOTS) {
+      for (const file of walk(path.join(repo, root))) {
+        const relative = path.relative(repo, file)
+        if (EXEMPT.has(relative)) continue
+        fs.readFileSync(file, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (RAW.test(line)) offenders.push(`${relative}:${i + 1}: ${line.trim()}`)
+          })
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })

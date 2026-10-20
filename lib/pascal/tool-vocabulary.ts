@@ -28,8 +28,11 @@
  */
 
 import {
+  effectWhenGroups,
+  gateGroups,
   isInventoryRef,
   isStateRef,
+  whenGroups,
   parseEffectTarget,
   scanPlaceholders,
   type QtapCustomTool,
@@ -109,6 +112,14 @@ export interface ToolVocabulary {
    * Verbatim, sorted.
    */
   inventoryReads: string[];
+  /**
+   * `inventoryAggregate` keys this tool tests (`equipped.names`,
+   * `owned.metadata.toolVersion.max`) — outcomes, effect conditions, the
+   * gate. A metadata key read through an aggregate is the OBJECTS'
+   * vocabulary, not the character's, so it is not added to `metadata`.
+   * Sorted.
+   */
+  inventoryAggregates: string[];
   /** References this tool's inventory effects may EQUIP, verbatim. Sorted. */
   equips: string[];
   /** References this tool's inventory effects may UNEQUIP, verbatim. Sorted. */
@@ -137,6 +148,7 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     vocabulary.takesOff.length === 0 &&
     vocabulary.clearsSlots.length === 0 &&
     vocabulary.inventoryReads.length === 0 &&
+    vocabulary.inventoryAggregates.length === 0 &&
     vocabulary.equips.length === 0 &&
     vocabulary.unequips.length === 0 &&
     vocabulary.picksUp.length === 0
@@ -170,23 +182,31 @@ export function collectToolVocabulary(
     takesOff: new Set<string>(),
     clearsSlots: new Set<string>(),
     inventory: new Set<string>(),
+    inventoryAggregates: new Set<string>(),
     equips: new Set<string>(),
     unequips: new Set<string>(),
     picksUp: new Set<string>(),
   };
-  const inventoryKeysOf = (when: { inventory?: object; inventoryCount?: object } | undefined): string[] => [
-    ...Object.keys(when?.inventory ?? {}),
-    ...Object.keys(when?.inventoryCount ?? {}),
-  ];
+  // One group's reads — the same for an outcome row, an effect condition and
+  // a gate group. Walked over every group of an any-of.
+  const collectGroup = (group: {
+    metadata?: object;
+    progress?: object;
+    inventory?: object;
+    inventoryCount?: object;
+    inventoryAggregate?: object;
+  }): void => {
+    for (const key of Object.keys(group.metadata ?? {})) found.metadata.add(key);
+    for (const key of Object.keys(group.progress ?? {})) found.progress.add(progressionId(key));
+    for (const key of Object.keys(group.inventory ?? {})) found.inventory.add(key);
+    for (const key of Object.keys(group.inventoryCount ?? {})) found.inventory.add(key);
+    for (const key of Object.keys(group.inventoryAggregate ?? {})) found.inventoryAggregates.add(key);
+  };
 
   for (const outcome of definition.outcomes ?? []) {
     // A catch-all tests nothing, so it names nothing — but it still carries a
     // message, and that message may well quote a fact sheet.
-    if (outcome.when !== true) {
-      for (const key of Object.keys(outcome.when.metadata ?? {})) found.metadata.add(key);
-      for (const key of Object.keys(outcome.when.progress ?? {})) found.progress.add(progressionId(key));
-      for (const key of inventoryKeysOf(outcome.when)) found.inventory.add(key);
-    }
+    for (const group of whenGroups(outcome.when)) collectGroup(group);
     collectPlaceholders(outcome.message, declared, found);
   }
 
@@ -196,9 +216,7 @@ export function collectToolVocabulary(
   // "programmable" is not, and is not said here. A gated-out tool never reaches
   // a roster listing at all, so this only ever describes one the reader has.
   for (const gate of [definition.availableWhen, definition.withheldWhen]) {
-    for (const key of Object.keys(gate?.metadata ?? {})) found.metadata.add(key);
-    for (const key of Object.keys(gate?.progress ?? {})) found.progress.add(progressionId(key));
-    for (const key of inventoryKeysOf(gate)) found.inventory.add(key);
+    if (gate) for (const group of gateGroups(gate)) collectGroup(group);
   }
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);
@@ -216,9 +234,7 @@ export function collectToolVocabulary(
   for (const effect of definition.effects ?? []) {
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
     if (effect.log !== undefined) collectPlaceholders(effect.log, declared, found);
-    for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
-    for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
-    for (const key of inventoryKeysOf(effect.when)) found.inventory.add(key);
+    if (effect.when !== undefined) for (const group of effectWhenGroups(effect.when)) collectGroup(group);
 
     if (effect.inventory) {
       const { action, items } = effect.inventory;
@@ -272,6 +288,7 @@ export function collectToolVocabulary(
     takesOff: sorted(found.takesOff),
     clearsSlots: sorted(found.clearsSlots),
     inventoryReads: sorted(found.inventory),
+    inventoryAggregates: sorted(found.inventoryAggregates),
     equips: sorted(found.equips),
     unequips: sorted(found.unequips),
     picksUp: sorted(found.picksUp),

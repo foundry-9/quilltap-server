@@ -195,6 +195,7 @@ describe('matchesWhen — the metadata subject', () => {
     clearanceLevel: 3,
     faction: 'Ordo Aurum',
     knownLanguages: ['Trade Cant'],
+    sealedOrders: [{ seal: 'red' }],
     dossier: { rank: 'adept' },
     lastSeen: null,
   }
@@ -257,7 +258,8 @@ describe('matchesWhen — the metadata subject', () => {
     it.each([
       ['a key this character has never heard of', { ansibleAccess: { eq: true } }],
       ['an absent key tested with neq — absence is not inequality', { ansibleAccess: { neq: true } }],
-      ['a key holding an array', { knownLanguages: { eq: 'Trade Cant' } }],
+      ['a list holding an object', { sealedOrders: { eq: 'red' } }],
+      ['a list ordered without a fold', { knownLanguages: { gt: 1 } }],
       ['a key holding an object', { dossier: { eq: 'adept' } }],
       ['a key holding null', { lastSeen: { neq: 'never' } }],
       ['a string ordered against a number', { faction: { gt: 1 } }],
@@ -265,10 +267,18 @@ describe('matchesWhen — the metadata subject', () => {
       ['an ordering test whose operand is a string', { clearanceLevel: { gte: 'three' } }],
       ['an absent key tested with ncontains — absence is not a miss', { ansibleAccess: { ncontains: 'x' } }],
       ['a number searched for a substring', { clearanceLevel: { contains: '3' } }],
-      ['an array searched for a substring', { knownLanguages: { contains: 'Trade' } }],
+      ['a list holding an object, searched for a substring', { sealedOrders: { contains: 'red' } }],
     ])('%s', (_label, metadata) => {
       expect(() => against({ metadata } as When)).not.toThrow()
       expect(against({ metadata } as When)).toBe(false)
+    })
+
+    it('compares a list of primitives entry by entry', () => {
+      expect(against({ metadata: { knownLanguages: { eq: 'Trade Cant' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { contains: 'Cant' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { neq: 'Latin' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { ncontains: 'Trade' } } } as When)).toBe(false)
+      expect(against({ metadata: { knownLanguages: { eq: 'Trade' } } } as When)).toBe(false)
     })
 
     it('treats a missing metadata sheet as a sheet with nothing on it', async () => {

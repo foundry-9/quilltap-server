@@ -287,7 +287,12 @@ async function loadRunInventory(
   if (!characterId) return null;
   const vocabulary = collectToolVocabulary(definition);
   const needed =
-    vocabulary.inventoryReads.length + vocabulary.equips.length + vocabulary.unequips.length + vocabulary.picksUp.length > 0;
+    vocabulary.inventoryReads.length +
+      vocabulary.inventoryAggregates.length +
+      vocabulary.equips.length +
+      vocabulary.unequips.length +
+      vocabulary.picksUp.length >
+    0;
   if (!needed) return null;
   try {
     return await loadInventoryContext(getRepositories(), characterId, chatId);

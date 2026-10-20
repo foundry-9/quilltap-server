@@ -56,11 +56,11 @@
     },
     "availableWhen": {
       "$ref": "#/$defs/ToolGate",
-      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. An array of such objects is OR: the clause holds when any one of them does. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
     },
     "withheldWhen": {
       "$ref": "#/$defs/ToolGate",
-      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. An array of such objects is OR: the clause holds when any one of them does. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
     },
     "revealOdds": {
       "type": "boolean",
@@ -229,106 +229,22 @@
         "additionalProperties": false,
         "properties": {
           "when": {
-            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). For OR, write an array of such objects: the row wins when ANY of them holds (AND binds tighter than OR) — [{ \"gte\": 0.9 }, { \"inventory\": { \"lucky charm\": { \"eq\": \"equipped\" } } }]. One level only: no nesting, no parentheses, at most 8 groups, and no expression grammar.",
             "oneOf": [
               {
                 "const": true
               },
               {
-                "type": "object",
-                "minProperties": 1,
-                "additionalProperties": false,
-                "properties": {
-                  "gt": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is greater than."
-                  },
-                  "gte": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is greater than or equal to."
-                  },
-                  "lt": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is less than."
-                  },
-                  "lte": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is less than or equal to."
-                  },
-                  "eq": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is equal to."
-                  },
-                  "neq": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is not equal to."
-                  },
-                  "roll": {
-                    "$ref": "#/$defs/NumericComparator",
-                    "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
-                  },
-                  "params": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/ParamComparator"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
-                    }
-                  },
-                  "metadata": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. At run time a key the character does not have, or one holding a list/object/null, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/MetadataComparator"
-                    },
-                    "propertyNames": {
-                      "minLength": 1
-                    }
-                  },
-                  "progress": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/MetadataComparator"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
-                    }
-                  },
-                  "llm": {
-                    "$ref": "#/$defs/LlmComparator",
-                    "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
-                  },
-                  "inventory": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/InventoryStateComparator"
-                    },
-                    "propertyNames": {
-                      "minLength": 1,
-                      "maxLength": 200
-                    }
-                  },
-                  "inventoryCount": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/NumericComparator"
-                    },
-                    "propertyNames": {
-                      "minLength": 1,
-                      "maxLength": 200
-                    }
-                  }
-                }
+                "$ref": "#/$defs/WhenObject"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "$ref": "#/$defs/WhenObject"
+                },
+                "description": "Any-of: the row wins when any element holds."
               }
             ]
           },
@@ -358,8 +274,20 @@
       "description": "One side effect, recorded after the outcome table has dealt: exactly one of a write (target + value), a wardrobe gesture (wardrobe), an inventory gesture (inventory) or a log line (log). Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures, then inventory gestures, then log lines); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
       "properties": {
         "when": {
-          "$ref": "#/$defs/EffectWhen",
-          "description": "Condition for this effect. Omitted = fires on every run."
+          "description": "Condition for this effect: one object whose tests AND together, or an array of them, any one of which may hold (OR). Omitted = fires on every run.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/EffectWhen"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/EffectWhen"
+              }
+            }
+          ]
         },
         "target": {
           "type": "string",
@@ -563,6 +491,114 @@
         }
       }
     },
+    "WhenObject": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "gt": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is greater than."
+        },
+        "gte": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is greater than or equal to."
+        },
+        "lt": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is less than."
+        },
+        "lte": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is less than or equal to."
+        },
+        "eq": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is equal to."
+        },
+        "neq": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is not equal to."
+        },
+        "roll": {
+          "$ref": "#/$defs/NumericComparator",
+          "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
+        },
+        "params": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
+          "additionalProperties": {
+            "$ref": "#/$defs/ParamComparator"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. A key holding a list of plain values compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, and ordering declines. At run time a key the character does not have, or one holding an object, null or a list of anything else, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "progress": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
+          }
+        },
+        "llm": {
+          "$ref": "#/$defs/LlmComparator",
+          "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
+          "additionalProperties": {
+            "$ref": "#/$defs/InventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
+          "additionalProperties": {
+            "$ref": "#/$defs/NumericComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
+          }
+        }
+      },
+      "description": "One group of an outcome test: subjects that must ALL hold."
+    },
     "EffectWhen": {
       "type": "object",
       "minProperties": 1,
@@ -683,13 +719,40 @@
             "minLength": 1,
             "maxLength": 200
           }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
+          }
         }
       }
     },
     "ToolGate": {
+      "description": "An availability gate: one group of tests that must all hold, or an any-of array of groups — the gate holds when ANY group holds (AND binds tighter than OR; no nesting; at most 8 groups).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ToolGateGroup"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/ToolGateGroup"
+          }
+        }
+      ]
+    },
+    "ToolGateGroup": {
       "type": "object",
       "additionalProperties": false,
-      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json, their derived timed progressions, and what they carry in this chat (inventory, inventoryCount): there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
+      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json, their derived timed progressions, and what they carry in this chat (inventory, inventoryCount): there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test in a group must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
       "properties": {
         "metadata": {
           "type": "object",
@@ -735,6 +798,17 @@
           "propertyNames": {
             "minLength": 1,
             "maxLength": 200
+          }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
           }
         }
       },

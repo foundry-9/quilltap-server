@@ -22,6 +22,7 @@
 
 import { logger } from '@/lib/logger';
 import { listAllCustomTools } from './custom-tools';
+import { gateGroups } from './custom-tool.types';
 
 /** One literal reference one gate keys on. */
 export interface ToolGateKeyUse {
@@ -58,9 +59,13 @@ export async function collectToolGateKeys(): Promise<ToolGateKeyCensus> {
     for (const clause of ['availableWhen', 'withheldWhen'] as const) {
       const gate = definition[clause];
       if (!gate) continue;
-      for (const subject of ['inventory', 'inventoryCount'] as const) {
-        for (const ref of Object.keys(gate[subject] ?? {})) {
-          keys.push({ ref, toolName: definition.name, clause, subject, mountName, definitionPath });
+      // Every group of an any-of. `inventoryAggregate` keys name a scope and
+      // a field, never an object, so no title can shadow one: not counted.
+      for (const group of gateGroups(gate)) {
+        for (const subject of ['inventory', 'inventoryCount'] as const) {
+          for (const ref of Object.keys(group[subject] ?? {})) {
+            keys.push({ ref, toolName: definition.name, clause, subject, mountName, definitionPath });
+          }
         }
       }
     }

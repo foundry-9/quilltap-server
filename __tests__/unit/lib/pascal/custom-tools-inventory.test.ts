@@ -268,3 +268,132 @@ describe('the roster description', () => {
     expect(text).toContain('or what they carry')
   })
 })
+
+describe('any-of and inventoryAggregate at run time (pascal-gate-broadening)', () => {
+  const when = (w: unknown): When => w as When
+  const charm = (state: 'equipped' | 'carried') =>
+    inventoryContextFrom('c', 'chat', { items: [obj('charm', { name: 'lucky charm' })], owns: () => true }, new Set(state === 'equipped' ? ['charm'] : []))
+
+  it('an outcome any-of wins on a high roll OR a charm', () => {
+    const anyOf = when([{ gte: 0.9 }, { inventory: { 'lucky charm': { eq: 'equipped' } } }])
+    expect(matchesWhen(anyOf, { value: 0.95, roll: 0.95, params: {}, inventory: charm('carried') })).toBe(true)
+    expect(matchesWhen(anyOf, { value: 0.1, roll: 0.1, params: {}, inventory: charm('equipped') })).toBe(true)
+    expect(matchesWhen(anyOf, { value: 0.1, roll: 0.1, params: {}, inventory: charm('carried') })).toBe(false)
+    expect(matchesWhen(anyOf, { value: 0.1, roll: 0.1, params: {}, inventory: null })).toBe(false)
+  })
+
+  it('short-circuits left to right: a later group is never evaluated once one holds', () => {
+    // The second group names an undeclared parameter, which throws if reached.
+    const anyOf = when([{ gte: 0.5 }, { params: { ghost: { eq: 1 } } }])
+    expect(matchesWhen(anyOf, { value: 0.9, roll: 0.9, params: {} })).toBe(true)
+    expect(() => matchesWhen(anyOf, { value: 0.1, roll: 0.1, params: {} })).toThrow(/ghost/)
+  })
+
+  it('an effect with an any-of condition fires on either group', async () => {
+    const tool = define({
+      name: 'flip',
+      description: 'Flip.',
+      effects: [
+        {
+          when: [{ outcome: { eq: 'success' } }, { inventory: { 'lucky charm': { eq: 'equipped' } } }],
+          target: 'state.lucky',
+          value: true,
+        },
+      ],
+      outcomes: [
+        { when: { gte: 0.5 }, message: 'up', state: 'success' },
+        { when: true, message: 'down', state: 'failure' },
+      ],
+    })
+    const fired = async (inventory: InventoryContext) => {
+      const result = await executeCustomTool(tool, {}, { inventory })
+      return result.effects?.some((effect) => 'target' in effect) ?? false
+    }
+    // Run until each branch has been seen; the charm alone must suffice on a low roll.
+    const equipped = await fired(charm('equipped'))
+    expect(equipped).toBe(true)
+    let sawLowWithoutCharm = false
+    for (let i = 0; i < 200 && !sawLowWithoutCharm; i++) {
+      const result = await executeCustomTool(tool, {}, { inventory: charm('carried') })
+      if (result.state === 'failure') {
+        sawLowWithoutCharm = true
+        expect(result.effects?.some((effect) => 'target' in effect)).toBe(false)
+      } else {
+        expect(result.effects?.some((effect) => 'target' in effect)).toBe(true)
+      }
+    }
+    expect(sawLowWithoutCharm).toBe(true)
+  })
+
+  it('reads an aggregate in a when, with a $param operand', () => {
+    const ctx = vivienne()
+    const test = when({ inventoryAggregate: { 'equipped.titles': { eq: { $param: 'wanted' } } } })
+    expect(matchesWhen(test, { ...subjects(ctx), params: { wanted: 'Excalibur' } })).toBe(true)
+    expect(matchesWhen(test, { ...subjects(ctx), params: { wanted: 'lantern' } })).toBe(false)
+    expect(matchesWhen(when({ inventoryAggregate: { 'owned.titles': { eq: 'lantern' } } }), subjects(ctx))).toBe(true)
+    expect(matchesWhen(when({ inventoryAggregate: { 'equipped.count': { eq: 3 } } }), subjects(ctx))).toBe(true)
+    expect(matchesWhen(when({ inventoryAggregate: { 'equipped.metadata.bonus.sum': { eq: 3 } } }), subjects(ctx))).toBe(true)
+    expect(matchesWhen(when({ inventoryAggregate: { 'equipped.count': { gte: 0 } } }), subjects(null))).toBe(false)
+  })
+
+  it('describes an any-of and an aggregate to the model', () => {
+    const { buildRunCustomDescription } = require('@/lib/tools/run-custom-tool')
+    const definition = define({
+      name: 'jam',
+      description: 'Jam the signal.',
+      outcomes: [
+        {
+          when: [
+            { gte: 0.5, inventoryAggregate: { 'equipped.metadata.toolVersion.max': { gte: 4 } } },
+            { inventoryAggregate: { 'equipped.names': { eq: 'ansible resonator' } } },
+          ],
+          message: 'Jammed.',
+          state: 'success',
+        },
+        { when: { inventoryAggregate: { 'owned.count': { lt: 1 }, 'owned.metadata.toolAbilities': { ncontains: 'jam' } } }, message: 'Nothing to jam with.', state: 'failure' },
+        { when: true, message: 'Static.', state: 'info' },
+      ],
+    })
+    const text: string = buildRunCustomDescription([{ definition, tier: 'general', mountPointId: 'mp' }])
+    expect(text).toContain(
+      "(value >= 0.5 and your equipped objects' metadata.toolVersion.max >= 4) or your equipped objects' names includes \"ansible resonator\" → success"
+    )
+    expect(text).toContain(
+      "how many objects you own < 1 and your owned objects' metadata.toolAbilities has no entry containing \"jam\" → failure"
+    )
+    expect(text).toContain('Takes stock of: equipped.metadata.toolVersion.max, equipped.names, owned.count, owned.metadata.toolAbilities')
+  })
+})
+
+describe('the roster loads the inventory for an aggregate gate, in any group', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    const files: Record<string, unknown> = {
+      'Tools/tune.tool.json': {
+        name: 'tune',
+        description: 'Tune.',
+        availableWhen: [{ metadata: { never: { eq: true } } }, { inventoryAggregate: { 'equipped.names': { eq: 'ring' } } }],
+        outcomes: [{ when: true, message: 'x', state: 'info' }],
+      },
+    }
+    ;(getRepositories as jest.Mock).mockReturnValue({
+      docMountPoints: { findById: jest.fn(async (id: string) => ({ id, name: id, enabled: true, mountType: 'database', basePath: '' })) },
+      characters: { findById: jest.fn(async () => ({ id: 'c-viv', metadata: {} })) },
+    })
+    ;(resolveTieredMountPool as jest.Mock).mockResolvedValue({
+      characterMountPointId: null, participantMountPointIds: [], groupMountPointIds: [], projectMountPointIds: [], globalMountPointId: 'mp',
+    })
+    ;(listDatabaseFiles as jest.Mock).mockImplementation(async () =>
+      Object.keys(files).map((relativePath) => ({ kind: 'file', relativePath, fileName: relativePath.split('/').pop() })))
+    ;(readMountFileBytes as jest.Mock).mockImplementation(async (_mp: string, path: string) => ({
+      bytes: Buffer.from(JSON.stringify(files[path])), mimeType: 'application/json', fileType: 'json',
+    }))
+  })
+
+  it('deals the tool when the second line holds', async () => {
+    ;(loadInventoryContext as jest.Mock).mockResolvedValue(vivienne())
+    const roster = await resolveCustomToolRoster({ userId: 'u', chatId: 'chat-1', characterId: 'c-viv' })
+    expect([...roster.tools.keys()]).toEqual(['tune'])
+    expect(loadInventoryContext).toHaveBeenCalledTimes(1)
+  })
+})

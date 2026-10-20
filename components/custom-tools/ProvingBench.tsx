@@ -13,10 +13,11 @@
  * shared wardrobe vantage: a character chosen here is the one the side-effects
  * card browses, and a character vantage chosen there seats them here.
  *
- * The *Mock inventory* card is a list of `{ ref, state, count? }` rows the
- * roll, the audit and the gate verdict read as the rolling character's bag
- * (`mockInventoryContext`), so `inventory` / `inventoryCount` tests can be
- * proved without a character. The bench cannot tell whether an object exists:
+ * The *Mock inventory* card is a list of `{ ref, state, count?, metadata? }`
+ * rows the roll, the audit and the gate verdict read as the rolling
+ * character's bag (`mockInventoryContext`), so `inventory` /
+ * `inventoryCount` / `inventoryAggregate` tests can be proved without a
+ * character. The bench cannot tell whether an object exists:
  * `{{inventory.*}}` fields render as written and `$inventory` falls back. No
  * rows means no bag at all — every inventory test declines.
  */
@@ -93,24 +94,55 @@ type FactSheet = { mode: 'character' } | { mode: 'manual'; text: string }
  */
 type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { mode: 'live' }
 
-/** One mock-inventory row as the bench edits it; `count` is loose text ('' = the default). */
+/**
+ * One mock-inventory row as the bench edits it; `count` is loose text ('' =
+ * the default) and `metadata` is JSON object text ('' = `{}`).
+ */
 interface MockInventoryDraftRow {
   id: number
   ref: string
   state: InventoryState
   count: string
+  metadata: string
 }
 
-/** The rows a request sends: blank refs dropped, counts parsed. Empty = no bag at all. */
+/**
+ * A row's metadata, parsed — or why it cannot be. Values must be numbers,
+ * strings, booleans, or lists of them, as the mock schema demands.
+ */
+function parseMockMetadata(text: string): { ok: true; metadata?: MockInventoryRow['metadata'] } | { ok: false; reason: string } {
+  if (text.trim() === '') return { ok: true }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, reason: 'is not valid JSON' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'must be a JSON object' }
+  }
+  const scalar = (v: unknown) =>
+    typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!scalar(value) && !(Array.isArray(value) && value.every(scalar))) {
+      return { ok: false, reason: `"${key}" must be a number, text, true/false, or a list of them` }
+    }
+  }
+  return { ok: true, metadata: parsed as MockInventoryRow['metadata'] }
+}
+
+/** The rows a request sends: blank refs dropped, counts and metadata parsed. Empty = no bag at all. */
 function mockRowsOf(rows: readonly MockInventoryDraftRow[]): MockInventoryRow[] {
   return rows
     .filter((row) => row.ref.trim() !== '')
     .map((row) => {
       const count = Number(row.count)
+      const metadata = parseMockMetadata(row.metadata)
       return {
         ref: row.ref.trim(),
         state: row.state,
         ...(row.count.trim() !== '' && Number.isInteger(count) && count >= 0 ? { count } : {}),
+        ...(metadata.ok && metadata.metadata ? { metadata: metadata.metadata } : {}),
       }
     })
 }
@@ -177,6 +209,14 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   const [mockStateText, setMockStateText] = useState('{}')
   const [mockInventory, setMockInventory] = useState<MockInventoryDraftRow[]>([])
   const mockRows = useMemo(() => mockRowsOf(mockInventory), [mockInventory])
+  /** The first mock row whose metadata will not parse — the bench refuses to run until it does. */
+  const mockInventoryError = useMemo(() => {
+    for (const row of mockInventory) {
+      const parsed = parseMockMetadata(row.metadata)
+      if (!parsed.ok) return `${row.ref.trim() || 'A mock object'}: metadata ${parsed.reason}`
+    }
+    return null
+  }, [mockInventory])
   const benchInventory = mockRows.length > 0 ? mockRows : undefined
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
@@ -192,8 +232,14 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   const testsMetadata = draft.outcomes.some((o) => o.conditions.some((c) => c.subject.kind === 'metadata'))
   const testsInventory =
     draft.outcomes.some((o) =>
-      o.conditions.some((c) => c.subject.kind === 'inventory' || c.subject.kind === 'inventoryCount')
-    ) || draft.gateConditions.some((c) => c.subject === 'inventory' || c.subject === 'inventoryCount')
+      o.conditions.some(
+        (c) =>
+          c.subject.kind === 'inventory' || c.subject.kind === 'inventoryCount' || c.subject.kind === 'inventoryAggregate'
+      )
+    ) ||
+    draft.gateConditions.some(
+      (c) => c.subject === 'inventory' || c.subject === 'inventoryCount' || c.subject === 'inventoryAggregate'
+    )
 
   /**
    * The clock the derived-progressions panel reads.
@@ -375,7 +421,10 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
   })
 
   const benchDisabled =
-    !valid || (sheet.mode === 'manual' && manualSheetError !== null) || mockStateError !== null
+    !valid ||
+    (sheet.mode === 'manual' && manualSheetError !== null) ||
+    mockStateError !== null ||
+    mockInventoryError !== null
   const jsonPreview = useMemo(() => `${JSON.stringify(definition, null, 2)}\n`, [definition])
 
   return (
@@ -548,72 +597,88 @@ export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, 
         )}
       </section>
 
-      {/* Card 2⅞ — Mock inventory, for inventory / inventoryCount tests */}
+      {/* Card 2⅞ — Mock inventory, for inventory / inventoryCount / inventoryAggregate tests */}
       <section className="qt-card p-3 space-y-2">
         <h3 className="qt-card-title text-sm">Mock inventory</h3>
         <p className="qt-hint">
           What the rolling character carries, as the bench pretends it: a reference, its state, and — optionally —
-          how many of its kind are equipped. A reference no row names reads as absent. The bench cannot tell whether
-          an object exists, so its fields render as written and <code>$inventory</code> falls back.
+          how many of its kind are equipped and a <code>metadata</code> object for aggregate tests. A reference no
+          row names reads as absent. The bench cannot tell whether an object exists, so its fields render as
+          written and <code>$inventory</code> falls back.
         </p>
         {mockInventory.map((row) => (
-          <div key={row.id} className="flex items-center gap-1 flex-wrap">
+          <div key={row.id} className="space-y-1">
+            <div className="flex items-center gap-1 flex-wrap">
+              <input
+                type="text"
+                value={row.ref}
+                onChange={(e) =>
+                  setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, ref: e.target.value } : r)))
+                }
+                placeholder="Excalibur"
+                className="qt-input flex-1 min-w-24 text-xs"
+                aria-label="Mock object reference"
+              />
+              <select
+                value={row.state}
+                onChange={(e) =>
+                  setMockInventory((prev) =>
+                    prev.map((r) => (r.id === row.id ? { ...r, state: e.target.value as InventoryState } : r))
+                  )
+                }
+                className="qt-select qt-select-sm w-28"
+                aria-label="Mock object state"
+              >
+                {INVENTORY_STATE_VALUES.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={row.count}
+                onChange={(e) =>
+                  setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, count: e.target.value } : r)))
+                }
+                placeholder={row.state === 'equipped' ? '1' : '0'}
+                className="qt-input w-16 text-xs"
+                aria-label="Mock equipped count"
+                title="How many of its kind are equipped (default: 1 when equipped, else 0)"
+              />
+              <button
+                type="button"
+                className="qt-button qt-button-ghost qt-button-sm"
+                onClick={() => setMockInventory((prev) => prev.filter((r) => r.id !== row.id))}
+                aria-label="Remove this mock object"
+              >
+                <Icon name="close" className="w-3 h-3" />
+              </button>
+            </div>
             <input
               type="text"
-              value={row.ref}
+              value={row.metadata}
               onChange={(e) =>
-                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, ref: e.target.value } : r)))
+                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, metadata: e.target.value } : r)))
               }
-              placeholder="Excalibur"
-              className="qt-input flex-1 min-w-24 text-xs"
-              aria-label="Mock object reference"
+              placeholder='metadata, e.g. {"toolVersion": 3, "toolAbilities": ["suppress"]}'
+              className={`qt-input w-full font-mono text-xs ${parseMockMetadata(row.metadata).ok ? '' : 'qt-input-error'}`}
+              aria-label="Mock object metadata (JSON object)"
+              title="What inventoryAggregate reads off this object. Blank is {}. An equipped row with a count stands for that many copies."
+              spellCheck={false}
             />
-            <select
-              value={row.state}
-              onChange={(e) =>
-                setMockInventory((prev) =>
-                  prev.map((r) => (r.id === row.id ? { ...r, state: e.target.value as InventoryState } : r))
-                )
-              }
-              className="qt-select qt-select-sm w-28"
-              aria-label="Mock object state"
-            >
-              {INVENTORY_STATE_VALUES.map((state) => (
-                <option key={state} value={state}>
-                  {state}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={row.count}
-              onChange={(e) =>
-                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, count: e.target.value } : r)))
-              }
-              placeholder={row.state === 'equipped' ? '1' : '0'}
-              className="qt-input w-16 text-xs"
-              aria-label="Mock equipped count"
-              title="How many of its kind are equipped (default: 1 when equipped, else 0)"
-            />
-            <button
-              type="button"
-              className="qt-button qt-button-ghost qt-button-sm"
-              onClick={() => setMockInventory((prev) => prev.filter((r) => r.id !== row.id))}
-              aria-label="Remove this mock object"
-            >
-              <Icon name="close" className="w-3 h-3" />
-            </button>
           </div>
         ))}
+        {mockInventoryError && <p className="text-xs qt-text-destructive">{mockInventoryError}</p>}
         <button
           type="button"
           className="qt-button qt-button-ghost qt-button-sm"
           onClick={() =>
             setMockInventory((prev) => [
               ...prev,
-              { id: (prev[prev.length - 1]?.id ?? 0) + 1, ref: '', state: 'equipped', count: '' },
+              { id: (prev[prev.length - 1]?.id ?? 0) + 1, ref: '', state: 'equipped', count: '', metadata: '' },
             ])
           }
         >
@@ -778,16 +843,25 @@ function GateVerdictLine({ verdict }: Readonly<{ verdict: ToolGateVerdict | null
     )
   }
 
+  // An any-of names the line that decided it; a single group has only the one.
+  const line = verdict.heldGroup !== undefined ? verdict.heldGroup + 1 : null
+
   if (verdict.available) {
-    return <p className="text-xs qt-text-secondary">✓ This sheet would be offered the tool.</p>
+    return (
+      <p className="text-xs qt-text-secondary">
+        ✓ This sheet would be offered the tool{line !== null ? ` — passed on line ${line}` : ''}.
+      </p>
+    )
   }
 
   return (
     <p className="text-xs qt-text-destructive">
       ✕ This sheet would never be offered the tool —{' '}
       {verdict.withheldBy === 'availableWhen'
-        ? 'it does not pass every “only show if” test.'
-        : 'it passes the “do not show if” test.'}{' '}
+        ? 'it passes no line of the “only show if” tests.'
+        : line !== null
+          ? `it passes line ${line} of the “do not show if” tests.`
+          : 'it passes the “do not show if” test.'}{' '}
       The roll below is the bench indulging you.
     </p>
   )

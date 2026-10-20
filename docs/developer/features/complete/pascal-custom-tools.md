@@ -119,7 +119,7 @@ If `$param` substitution yields `min > max`, or any substituted value is non-fin
 
 ### `when` — comparators, not expressions
 
-`when` is either the literal `true` (catch-all) or an object naming one or more **subjects**, all of which must hold. There is no OR, no nesting, and no string expression grammar — ordered first-match-wins outcomes make OR unnecessary and this keeps the evaluator eval-free and trivially testable.
+`when` is either the literal `true` (catch-all), an object naming one or more **subjects**, all of which must hold, or (since [pascal-gate-broadening.md](./pascal-gate-broadening.md)) an array of such objects, any one of which may hold. Tests are AND-composed comparator objects; a one-level any-of array of them is OR; there is no nesting and no string expression grammar — which keeps the evaluator eval-free and trivially testable.
 
 | Subject | Written as | Tests |
 |---|---|---|
@@ -417,7 +417,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 
 ## Security constraints
 
-- **Outcome tests are comparator objects, never expressions.** Indirection in tests and roll fields is limited to the two closed reference forms (`$param`, `$state`). The **one** place a string grammar exists is an effect's `value` (added by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)), evaluated by the closed, eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string concatenation, parentheses, literals, and `{{ref}}` substitution. There are no identifiers, no function calls, and no member access — the only names that grammar admits are the same `{{...}}` reference families `renderTemplate` already substitutes, so there is still nothing callable and nothing reachable beyond the run's own subjects. Reject on schema, don't sanitize.
+- **Outcome tests are comparator objects, never expressions.** Tests are AND-composed comparator objects; a one-level any-of array of them is OR (gates, outcome `when`, effect `when`; at most `MAX_WHEN_GROUPS` = 8); there is no nesting and no expression grammar. Indirection in tests and roll fields is limited to the two closed reference forms (`$param`, `$state`). The **one** place a string grammar exists is an effect's `value` (added by [pascal-custom-tool-enhancements.md](./pascal-custom-tool-enhancements.md)), evaluated by the closed, eval-free parser in `lib/pascal/expressions.ts`: arithmetic, string concatenation, parentheses, literals, and `{{ref}}` substitution. There are no identifiers, no function calls, and no member access — the only names that grammar admits are the same `{{...}}` reference families `renderTemplate` already substitutes, so there is still nothing callable and nothing reachable beyond the run's own subjects. Reject on schema, don't sanitize.
 - **Wardrobe item references are templates, not expressions.** Since [pascal-wardrobe-effects.md](./pascal-wardrobe-effects.md) an effect may be a `wardrobe` gesture instead of a write; its `items` are rendered through `renderTemplate` and looked up by id or title in the rolling character's wearable pool — no arithmetic, nothing evaluated — and the change goes through the wardrobe's own chokepoints.
 - Roster caps: max 64 tools per resolved roster (excess dropped with a logged warning and UI notice — no silent truncation), max 8 parameters and 32 outcomes per tool, message ≤ 1000 chars, description ≤ 500 chars.
 - Parameter values from the model/UI are validated against declared types and clamped to declared ranges before any use.
@@ -566,10 +566,10 @@ progression at all — not what anyone writing it means.
 **One parser for the `"<id>.<field>"` shape.** `parseProgressKey`
 (`lib/progressions/schema.ts`) is shared by `ProgressKeySchema` and the
 Workbench's `validateDraft`, so the progression-identifier rule is stated once
-rather than in three places. Note that its per-mistake messages surface through
-the Workbench but NOT through `when.progress`: Zod reports a record-key failure
-as its own "Invalid key in record" and discards the refinement's message, so
-there the issue path names the offending key instead. The agreement is asserted
+rather than in three places. Zod reports a record-key failure as its own "Invalid key in record" with the
+refinement's message nested beneath it; since pascal-gate-broadening,
+`formatDefinitionIssues` surfaces that nested reason, so the per-mistake
+messages now reach the load-error badge through `when.progress` too. The agreement is asserted
 in both directions in `__tests__/unit/lib/pascal/custom-tools-progress.test.ts`.
 
 **What Pascal deliberately cannot do.** There is no `progress_set` LLM tool
@@ -577,3 +577,16 @@ and no `state`-tool access to progressions: a model setting its own due date is
 exactly the fudge Pascal exists to prevent. And there is no scheduling — a
 progression completing fires nothing; completion is observed at the next
 prompt (the report) or the next roster resolution (a gate).
+
+## Addition — any-of and `inventoryAggregate` (v4.11, 2026-10-20)
+
+Design of record: [pascal-gate-broadening.md](./pascal-gate-broadening.md).
+`availableWhen` / `withheldWhen`, outcome `when` and effect `when` each accept
+an array of their existing objects (any-of; AND binds tighter; one level; at
+most 8). Every reader goes through `gateGroups` / `whenGroups` /
+`effectWhenGroups` (`custom-tool.types.ts`), and a grep-test in
+`custom-tool-definition.test.ts` holds it. `evaluateToolGate` reports
+`heldGroup` for an array clause. The new `inventoryAggregate` subject reads one
+attribute across a scope of the bag (`lib/pascal/inventory-aggregate.ts`), and
+the one comparison table (`metadata-match.ts`) now compares a list of
+primitives entry by entry — so a `metadata` key holding a list matches too.

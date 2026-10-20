@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
+import { isListAggregate, parseAggregateKey, type AggregateScope } from '@/lib/pascal/inventory-aggregate';
 import {
   isInventoryEffect,
   isLogEffect,
@@ -24,6 +25,8 @@ import {
   isParamRef,
   isWardrobeEffect,
   isWriteEffect,
+  whenGroups,
+  type WhenObject,
   type LlmComparator,
   type NumericComparator,
   type ParamComparator,
@@ -148,12 +151,57 @@ function describeComparator(
 /**
  * Render an outcome test. Every subject is named — the bare comparators are
  * about `value`, so saying so keeps them legible beside a `roll` or a parameter
- * test rather than leaving the model to infer which is which.
+ * test rather than leaving the model to infer which is which. An any-of reads
+ * as each group in parentheses joined by "or" (a one-test group goes bare).
  */
 function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string {
   if (when === true) return 'otherwise';
+  if (!Array.isArray(when)) return describeWhenGroup(when).join(' and ');
+  return whenGroups(when)
+    .map((group) => {
+      const parts = describeWhenGroup(group);
+      return parts.length === 1 ? parts[0] : `(${parts.join(' and ')})`;
+    })
+    .join(' or ');
+}
 
-  const parts: string[] = [
+/** The possessive a scope reads as, and how its count is asked. */
+const SCOPE_WORDS: Record<AggregateScope, { possessive: string; count: string }> = {
+  equipped: { possessive: "your equipped objects'", count: 'how many objects you have equipped' },
+  owned: { possessive: "your owned objects'", count: 'how many objects you own' },
+  reachable: { possessive: "your reachable objects'", count: 'how many objects you can reach' },
+};
+
+/** The list comparators read as sentences about entries, not as symbols. */
+const LIST_WORDS: Array<[keyof ParamComparator, string]> = [
+  ['eq', 'includes'],
+  ['neq', 'includes no'],
+  ['contains', 'has an entry containing'],
+  ['ncontains', 'has no entry containing'],
+];
+
+/** Render one `inventoryAggregate` test. */
+function describeAggregate(key: string, comparator: ParamComparator): string[] {
+  const parsed = parseAggregateKey(key);
+  if (!parsed.ok) return describeComparator(comparator, `your inventory's ${key}`);
+  const { scope, field } = parsed.parsed;
+  const words = SCOPE_WORDS[scope];
+  if (field.kind === 'count') return describeComparator(comparator, words.count);
+  const subject =
+    field.kind === 'metadata'
+      ? field.fold === 'count'
+        ? `how many of ${words.possessive.replace(/'$/, '')} carry a numeric metadata.${field.key}`
+        : `${words.possessive} metadata.${field.key}${field.fold ? `.${field.fold}` : ''}`
+      : `${words.possessive} ${field.kind}`;
+  if (!isListAggregate(parsed.parsed)) return describeComparator(comparator, subject);
+  return LIST_WORDS.filter(([k]) => comparator[k] !== undefined).map(
+    ([k, verb]) => `${subject} ${verb} ${describeOperand(comparator[k])}`
+  );
+}
+
+/** Render one AND-group's tests. */
+function describeWhenGroup(when: WhenObject): string[] {
+  return [
     ...describeComparator(when, 'value'),
     ...(when.roll !== undefined ? describeComparator(when.roll, 'roll') : []),
     ...Object.entries(when.params ?? {}).flatMap(([name, comparator]) => describeComparator(comparator, name)),
@@ -171,9 +219,8 @@ function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string 
     ...Object.entries(when.inventoryCount ?? {}).flatMap(([ref, comparator]) =>
       describeComparator(comparator, `your equipped ${ref} count`)
     ),
+    ...Object.entries(when.inventoryAggregate ?? {}).flatMap(([key, comparator]) => describeAggregate(key, comparator)),
   ];
-
-  return parts.join(' and ');
 }
 
 /** Render an `llm` test: the ok flag reads as a sentence, the rest as comparators. */
@@ -239,8 +286,12 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
       lines.push(`    Side effects: ${describeEffects(definition.effects)}`);
     }
     // Which objects the tool consults — vocabulary, never the odds.
-    const reads = collectToolVocabulary(definition).inventoryReads;
+    const vocabulary = collectToolVocabulary(definition);
+    const reads = vocabulary.inventoryReads;
     if (reads.length > 0) lines.push(`    Reads: your inventory for ${reads.join(', ')}`);
+    if (vocabulary.inventoryAggregates.length > 0) {
+      lines.push(`    Takes stock of: ${vocabulary.inventoryAggregates.join(', ')}`);
+    }
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);
     }

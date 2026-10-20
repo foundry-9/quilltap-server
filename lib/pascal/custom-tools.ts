@@ -79,13 +79,18 @@ import {
   type Visibility,
   type When,
   type WhenObject,
+  type EffectCondition,
+  effectWhenGroups,
+  gateGroups,
+  whenGroups,
 } from './custom-tool.types';
 import { evaluateExpression, formatValue, parseExpression, type ExprValue } from './expressions';
 
 export { formatValue };
 import { compareOrdered, isPrimitive, metadataComparatorHolds } from './metadata-match';
 import { flattenProgressions, type ProgressPrimitive } from '@/lib/progressions/engine';
-import { evaluateToolGate, hasToolGate } from './tool-gate';
+import { evaluateToolGate, gateNamesProgress, hasToolGate } from './tool-gate';
+import { describeAggregateValue, inventoryAggregateHolds } from './inventory-aggregate';
 import {
   gateNamesInventory,
   inventoryCountHolds,
@@ -575,7 +580,7 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
         const verdict = evaluateToolGate(
           entry.definition,
           await invokerMetadata(),
-          entry.definition.availableWhen?.progress || entry.definition.withheldWhen?.progress
+          gateNamesProgress(entry.definition.availableWhen) || gateNamesProgress(entry.definition.withheldWhen)
             ? await invokerProgress()
             : undefined,
           gateNamesInventory(entry.definition.availableWhen) || gateNamesInventory(entry.definition.withheldWhen)
@@ -590,6 +595,8 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
             mountPointId,
             characterId: ctx.characterId ?? null,
             withheldBy: verdict.withheldBy,
+            groups: gateGroups((entry.definition.availableWhen ?? entry.definition.withheldWhen)!).length,
+            heldGroup: verdict.heldGroup ?? null,
           });
           continue;
         }
@@ -1231,13 +1238,34 @@ function matchesLlmComparator(
 }
 
 /**
- * Evaluate an outcome test. Every subject named must hold — bare comparators
- * against the final value, `roll` against the raw draw, `params` against what
- * the caller supplied, `metadata` against the invoking character's fact sheet.
+ * Evaluate an outcome test: the catch-all, one AND-group, or an any-of array
+ * of them (the first group to hold decides, left to right).
  */
 export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'custom tool'): boolean {
   if (when === true) return true;
+  if (!Array.isArray(when)) return matchesWhenGroup(when, subjects, toolName);
+  return anyGroupHolds(when, (group) => matchesWhenGroup(group, subjects, toolName), toolName);
+}
 
+/** Try groups left to right, short-circuiting on the first that holds; logs which one did. */
+function anyGroupHolds<G>(groups: readonly G[], holds: (group: G) => boolean, toolName: string): boolean {
+  const heldGroup = groups.findIndex(holds);
+  logger.debug('Custom tool any-of test', {
+    context: CONTEXT,
+    tool: toolName,
+    groups: groups.length,
+    heldGroup: heldGroup >= 0 ? heldGroup : null,
+  });
+  return heldGroup >= 0;
+}
+
+/**
+ * Evaluate one AND-group of an outcome test. Every subject named must hold —
+ * bare comparators against the final value, `roll` against the raw draw,
+ * `params` against what the caller supplied, `metadata` against the invoking
+ * character's fact sheet, and the Inventory subjects against their bag.
+ */
+function matchesWhenGroup(when: WhenObject, subjects: OutcomeSubjects, toolName: string): boolean {
   const { value, roll, params } = subjects;
   const metadata = subjects.metadata ?? {};
   const progress = subjects.progress ?? {};
@@ -1326,6 +1354,33 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
     }
   }
 
+  // The aggregate sheet: one attribute across a scope of the bag, through the
+  // same comparison table as `metadata`. The key is literal (it names a scope
+  // and a field, never an object); operands resolve like any other.
+  for (const [key, comparator] of Object.entries(when.inventoryAggregate ?? {})) {
+    const holds = inventoryAggregateHolds(comparator, key, inventory, {
+      resolveOperand: (comparatorKey) =>
+        resolveOperand(
+          toolName,
+          comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
+          params,
+          `inventoryAggregate "${key}" ${comparatorKey}`,
+          state,
+          inventory
+        ),
+      onDecline: (reason) =>
+        logger.debug('Custom tool inventoryAggregate test did not match', { context: CONTEXT, tool: toolName, key, reason }),
+    });
+    logger.debug('Custom tool inventoryAggregate test', {
+      context: CONTEXT,
+      tool: toolName,
+      key,
+      value: describeAggregateValue(key, inventory),
+      holds,
+    });
+    if (!holds) return false;
+  }
+
   if (when.llm !== undefined) {
     // No consult ran (a definition without an `llm` block, or a simulation
     // that supplied none): the test fails soft, exactly like a metadata key
@@ -1360,19 +1415,25 @@ export interface EffectSubjects extends OutcomeSubjects {
  * can test — the winning outcome's semantic state.
  */
 export function matchesEffectWhen(
-  when: EffectWhen | undefined,
+  when: EffectCondition | undefined,
   subjects: EffectSubjects,
   toolName = 'custom tool'
 ): boolean {
   if (when === undefined) return true;
+  if (!Array.isArray(when)) return matchesEffectWhenGroup(when, subjects, toolName);
+  return anyGroupHolds(effectWhenGroups(when), (group) => matchesEffectWhenGroup(group, subjects, toolName), toolName);
+}
 
+/** One AND-group of an effect condition: the outcome test, then the shared subjects. */
+function matchesEffectWhenGroup(when: EffectWhen, subjects: EffectSubjects, toolName: string): boolean {
   if (when.outcome !== undefined) {
     if (when.outcome.eq !== undefined && subjects.outcome.state !== when.outcome.eq) return false;
     if (when.outcome.neq !== undefined && subjects.outcome.state === when.outcome.neq) return false;
   }
 
   const { outcome: _outcome, ...shared } = when;
-  return matchesWhen(shared as WhenObject, subjects, toolName);
+  // An outcome-only group has no shared subjects left: it holds on the outcome alone.
+  return matchesWhenGroup(shared as WhenObject, subjects, toolName);
 }
 
 /**
@@ -1611,12 +1672,15 @@ export function collectMetadataTested(
   when: When,
   metadata: Record<string, unknown> | undefined
 ): MetadataTested | undefined {
-  if (when === true || when.metadata === undefined || !metadata) return undefined;
+  if (!metadata) return undefined;
 
+  // Across every group of an any-of: a key some group consulted was consulted.
   const tested: MetadataTested = {};
-  for (const key of Object.keys(when.metadata)) {
-    const value = metadata[key];
-    if (isPrimitive(value)) tested[key] = value;
+  for (const group of whenGroups(when)) {
+    for (const key of Object.keys(group.metadata ?? {})) {
+      const value = metadata[key];
+      if (isPrimitive(value)) tested[key] = value;
+    }
   }
   return Object.keys(tested).length > 0 ? tested : undefined;
 }

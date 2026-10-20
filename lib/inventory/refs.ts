@@ -22,6 +22,7 @@
 
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { isKin, kitState } from '@/lib/inventory/resolve';
+import type { AggregateObject, AggregateScope } from '@/lib/pascal/inventory-aggregate';
 
 /** Where an object stands for the rolling character in this chat. */
 export type InventoryState = 'equipped' | 'carried' | 'reachable' | 'absent';
@@ -174,6 +175,12 @@ export interface InventoryContext {
   equippedKinCount(ref: string): number;
   /** The object a reference reads as (equipped first, then own, then shared), or null. */
   item(ref: string): ResolvedInventoryItem | null;
+  /**
+   * The objects in an `inventoryAggregate` scope, as the aggregate sheet reads
+   * them: `equipped` ⊆ `owned` ⊆ `reachable`. Archetypes, archived objects and
+   * kits are never members. Pure; never throws.
+   */
+  scopeObjects(scope: AggregateScope): readonly AggregateObject[];
   /** The real pool and equipped ids; absent on a mock (the bench). */
   pool?: ResolvedInventoryPool;
   equippedIds?: ReadonlySet<string>;
@@ -186,6 +193,7 @@ export function inventoryContextFrom(
   pool: ResolvedInventoryPool,
   equippedIds: ReadonlySet<string>,
 ): InventoryContext {
+  const scopes = new Map<AggregateScope, readonly AggregateObject[]>();
   return {
     characterId,
     chatId,
@@ -197,5 +205,34 @@ export function inventoryContextFrom(
       const matches = resolveInventoryRef(ref, pool, equippedIds);
       return (matches.find((m) => m.equipped) ?? matches.find((m) => m.own) ?? matches[0])?.item ?? null;
     },
+    scopeObjects: (scope) => {
+      let objects = scopes.get(scope);
+      if (!objects) {
+        objects = scopeObjectsOf(scope, pool, equippedIds);
+        scopes.set(scope, objects);
+      }
+      return objects;
+    },
   };
+}
+
+/**
+ * The carriable objects in a scope — the `resolveInventoryRef` rule (no
+ * archetypes, no archived objects) and no kits (a kit's members stand for
+ * it). Objects are already resolved, so an instance carries its archetype's
+ * metadata.
+ */
+function scopeObjectsOf(
+  scope: AggregateScope,
+  pool: ResolvedInventoryPool,
+  equippedIds: ReadonlySet<string>,
+): AggregateObject[] {
+  return pool.items
+    .filter((item) => !item.isArchetype && item.kind !== 'kit' && !item.archivedAt)
+    .filter((item) => {
+      if (scope === 'reachable') return true;
+      const equipped = equippedIds.has(item.id);
+      return scope === 'equipped' ? equipped : equipped || pool.owns(item.id);
+    })
+    .map((item) => ({ name: item.name, title: item.title || item.name, metadata: item.metadata ?? {} }));
 }

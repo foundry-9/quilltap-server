@@ -236,3 +236,18 @@ Because `resolveInventoryRef` stops at the first round that matches anything, a 
 - **Evidence.** Every call logs one `debug` `[InventoryTitleLint] Census` line naming the pools and tool stores read and their sizes, so a lint that looked and passed is distinguishable from one never called.
 - **Two layers.** The mutations (`item-mutations.ts`) lint with full context (the chat's project tier). The document-write layer lints the household's hands: `database-store.ts` calls `lintInventoryDocumentChange` (`title-lint-documents.ts`) before every write, delete, move and boundary-crossing folder move of an `Inventory/*.json` or `Tools/*.tool.json` file, reading the file's prior state first (unreadable prior state refuses a titled write) and pairing before and after by object id. The mutations' projection runs inside `withInventoryWritesLinted` (`lint-scope.ts`) so it is not linted twice.
 - **Limits.** The pool is the writing location's: a shared tier's pool is its own folder plus General, so a shared-tier title is not checked against characters' vaults, and the document layer reads a character's pool without a chat's project tier. A transfer (`preserve`) and an instance with no own title are not linted. Outcome and effect `when` keys and effect references are not gate keys. Filesystem-backed stores hold no Inventory and are not hooked.
+
+## Addition — `inventoryAggregate` (2026-10-20)
+
+[pascal-gate-broadening.md](./pascal-gate-broadening.md) adds a fourth
+Inventory read: `inventoryAggregate`, keyed `<scope>.<field>` (scopes
+`equipped` ⊆ `owned` ⊆ `reachable`; fields `count`, `names`, `titles`,
+`metadata.<key>` and its `.min` / `.max` / `.sum` / `.count` folds). It reads
+`InventoryContext.scopeObjects(scope)` — on the real context the carriable
+objects of the pool (no archetypes, archived objects or kits; instances
+resolved), memoised per scope; on the bench's mock bag the rows placed by
+state, an equipped row repeated by its `count`. Mock rows gain an optional
+`metadata` object. A null context declines every aggregate test, as with
+`inventory` / `inventoryCount`. Aggregate keys name no object, so the gate-key
+census (`tool-gate-keys.ts`) does not collect them and the title lint is
+unchanged; the census walks every group of an any-of gate.

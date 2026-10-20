@@ -99,6 +99,8 @@ export interface CustomToolReferences {
   clearsSlots?: string[]
   /** Inventory object references this tool reads (tests, quotes, draws from). Absent on older servers. */
   inventoryReads?: string[]
+  /** `inventoryAggregate` keys this tool tests (`equipped.names`, …). Absent on older servers. */
+  inventoryAggregates?: string[]
   /** References this tool's inventory effects may equip, verbatim. Absent on older servers. */
   equips?: string[]
   /** References this tool's inventory effects may unequip, verbatim. Absent on older servers. */
@@ -945,6 +947,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   ].filter((line) => line.values.length > 0)
   // And the Inventory: what it reads, and what it may hand them or take away.
   const readsInventory = tool.references?.inventoryReads ?? []
+  const readsAggregates = tool.references?.inventoryAggregates ?? []
   const inventoryLines: Array<{ key: string; lead: string; values: string[] }> = [
     { key: 'equips', lead: 'It may equip the running character with', values: tool.references?.equips ?? [] },
     { key: 'unequips', lead: 'It may unequip them of', values: tool.references?.unequips ?? [] },
@@ -959,6 +962,7 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
     readsProgress.length === 0 &&
     wardrobeLines.length === 0 &&
     readsInventory.length === 0 &&
+    readsAggregates.length === 0 &&
     inventoryLines.length === 0
   ) {
     return null
@@ -1046,6 +1050,19 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
             <span key={ref}>
               {i > 0 && ', '}
               <code className="font-mono qt-text">{ref}</code>
+            </span>
+          ))}
+          . Run as nobody, it finds no inventory at all.
+        </p>
+      )}
+
+      {readsAggregates.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          It takes stock of everything they carry, reading{' '}
+          {readsAggregates.map((key, i) => (
+            <span key={key}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{key}</code>
             </span>
           ))}
           . Run as nobody, it finds no inventory at all.
