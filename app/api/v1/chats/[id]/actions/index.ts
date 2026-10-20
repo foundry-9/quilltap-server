@@ -17,6 +17,7 @@ export {
   handleRebuildSystemPromptAction,
 } from './participants';
 export { handleTurnAction } from './turn';
+export { handleStopTurn, handleRaiseHand } from './interrupt';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';

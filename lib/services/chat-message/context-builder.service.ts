@@ -110,6 +110,11 @@ export interface BuildMessageContextOptions {
    */
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
   /**
+   * The operator's raised hand landed on this turn: inject the `[YIELD]` Turn
+   * note (`buildTurnYieldInstruction`). Ephemeral, never persisted.
+   */
+  offerYield?: boolean
+  /**
    * Swipe re-apply: the message being re-rolled plus every id in its swipe
    * group. Passed through to `buildContext`, where it makes the inform block
    * carry the rows those generations consumed and no pending row at all.
@@ -1121,6 +1126,8 @@ export async function buildMessageContext(
     reservedOutgoingTokens: options.reservedOutgoingTokens,
     // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
     turnSkip: options.turnSkip,
+    // Raised hand — the yield Turn note, same ephemeral footing.
+    offerYield: options.offerYield,
     // Swipe re-apply: deliver the informs the re-rolled line's generation saw.
     regenerationOfMessageIds: options.regenerationOfMessageIds,
     // The human's own turns, for the chained-turn scene note.

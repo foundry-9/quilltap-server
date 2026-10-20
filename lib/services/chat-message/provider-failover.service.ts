@@ -15,6 +15,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
@@ -178,6 +179,13 @@ export async function attemptEmptyResponseRecovery({
     chainFallbackAttempted: false,
     chainAttempts: [],
   })
+
+  // The operator stopped the turn: an empty reply is what they asked for, not
+  // a failure to recover from. Never re-ask the model behind their back.
+  if (isCurrentTurnStopped()) {
+    logger.info('Skipping empty-response recovery: the operator stopped the turn', { chatId })
+    return flags()
+  }
 
   if (state.fullResponse.trim().length !== 0 || toolMessagesLength > 0) {
     return flags()

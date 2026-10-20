@@ -107,6 +107,10 @@ export const ICON_REGISTRY = {
   'play':          { defaultFile: '/images/icons/play.svg',          defaultMode: 'mask' },
   'pause':         { defaultFile: '/images/icons/pause.svg',         defaultMode: 'mask' },
   'stop':          { defaultFile: '/images/icons/stop.svg',          defaultMode: 'mask' },
+  // The composer's hard stop (an octagon, not the media square above) and its
+  // soft interrupt — the operator's raised hand.
+  'stop-sign':     { defaultFile: '/images/icons/stop-sign.svg',     defaultMode: 'mask' },
+  'hand-raised':   { defaultFile: '/images/icons/hand-raised.svg',   defaultMode: 'mask' },
   'zoom-in':       { defaultFile: '/images/icons/zoom-in.svg',       defaultMode: 'mask' },
   'zoom-out':      { defaultFile: '/images/icons/zoom-out.svg',      defaultMode: 'mask' },
 

@@ -939,19 +939,6 @@
   }
 
   /**
-   * Stop button - stops streaming response (desktop)
-   */
-  .qt-chat-stop-button {
-    background: var(--qt-status-danger-bg);
-    color: var(--qt-status-danger-fg);
-    border: 1px solid var(--qt-status-danger-border);
-  }
-
-  .qt-chat-stop-button:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
-  }
-
-  /**
    * Composer input area
    * Uses flex-grow to fill available space in the composer-inner container.
    * The min-h-12 ensures a minimum height, max-h-48 caps growth.
@@ -1204,6 +1191,21 @@
    */
   .qt-chat-composer-actions {
     @apply flex items-center gap-2;
+    flex-shrink: 0;
+  }
+
+  /* Three round buttons (Send / raise hand / Stop) side by side are a lot of
+     a phone's width; there they stack, smaller, beside the editor instead. */
+  @media (max-width: 639px) {
+    .qt-chat-composer-actions {
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .qt-chat-composer-actions .qt-chat-composer-send {
+      height: 2.5rem;
+      width: 2.5rem;
+    }
   }
 
   /**
@@ -1224,6 +1226,51 @@
 
   .qt-chat-composer-send:hover:not(:disabled) {
     background: var(--qt-button-primary-hover-bg);
+  }
+
+  /**
+   * Stop button - the composer's hard stop: cut the reply off, keep what
+   * streamed, take the floor. Danger red. These follow .qt-chat-composer-send
+   * on purpose: the buttons carry both classes, and at equal specificity the
+   * later rule's colours must win.
+   */
+  .qt-chat-stop-button {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+  }
+
+  .qt-chat-stop-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+  }
+
+  /**
+   * Interrupt button - the composer's soft interrupt: raise a hand and let the
+   * next speaker choose whether to yield. Warning amber; while the hand is up
+   * it gains a ring and a slow pulse so it reads as "waiting on an answer".
+   */
+  .qt-chat-interrupt-button {
+    background: var(--qt-status-warning-bg);
+    color: var(--qt-status-warning-fg);
+    border: 1px solid var(--qt-status-warning-border);
+  }
+
+  .qt-chat-interrupt-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--qt-status-warning-bg) 70%, black);
+  }
+
+  .qt-chat-interrupt-button-raised {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent);
+    animation: qt-hand-raised-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes qt-hand-raised-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent); }
+    50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--qt-status-warning-border) 15%, transparent); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qt-chat-interrupt-button-raised { animation: none; }
   }
 
   /* ==========================================================================
@@ -2966,20 +3013,6 @@
   .qt-participant-avatar-tool-button:hover {
     background: var(--qt-accent-bg, var(--color-primary));
     color: var(--qt-accent-fg, var(--color-primary-foreground));
-  }
-
-  /**
-   * Stop button on participant card - danger colors
-   */
-  .qt-participant-stop-button {
-    background: var(--qt-status-danger-bg);
-    color: var(--qt-status-danger-fg);
-    border: 1px solid var(--qt-status-danger-border);
-    @apply transition-colors;
-  }
-
-  .qt-participant-stop-button:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
   }
 
   /**

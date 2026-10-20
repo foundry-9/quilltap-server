@@ -70,6 +70,8 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `play` | NEW | ▷ | run queue, continue, autonomous run |
 | `pause` | NEW | ❚❚ | pause queue/task |
 | `stop` | NEW | ◻ | stop queue |
+| `stop-sign` | NEW | octagon | the composer's hard Stop (cut the reply off, keep what streamed) |
+| `hand-raised` | NEW | raised hand | the composer's soft interrupt (ask the next speaker to yield) |
 | `zoom-in` | NEW | magnifier + | gallery zoom in |
 | `zoom-out` | NEW | magnifier − | gallery zoom out |
 

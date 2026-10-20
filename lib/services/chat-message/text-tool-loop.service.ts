@@ -29,6 +29,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import {
   encodeContentChunk,
   encodeStatusEvent,
@@ -171,6 +172,12 @@ export async function runTextToolPass(opts: RunTextToolPassOptions): Promise<voi
   let iterations = 0
 
   while (iterations < MAX_TEXT_TOOL_ITERATIONS) {
+    // The operator's hard stop: a tool block that streamed before the stop is
+    // left unexecuted, and no continuation is asked for.
+    if (isCurrentTurnStopped()) {
+      logger.info('Text tool loop halted: the operator stopped the turn', { chatId, iterations })
+      break
+    }
     const latest = rawResponses[rawResponses.length - 1]
     if (!strategy.hasMarkers(latest)) break
 

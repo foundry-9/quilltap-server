@@ -159,7 +159,6 @@ export interface ChatSidebarProps {
   onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
   onRemoveCharacter?: (participantId: string) => void
-  onStopStreaming?: () => void
   onWhisper?: (participantId: string) => void
   impersonatingParticipantIds?: string[]
   activeTypingParticipantId?: string | null
@@ -847,7 +846,6 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               isUserParticipant={isUserParticipant}
               turnPosition={turnEntry?.position ?? null}
               turnStatus={turnEntry?.status}
-              onStopStreaming={turnEntry?.status === 'generating' ? p.onStopStreaming : undefined}
               onNudge={p.onNudge}
               onQueue={p.onQueue}
               onDequeue={p.onDequeue}

@@ -16,6 +16,7 @@ import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
+import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
@@ -451,6 +452,10 @@ export async function* streamMessage(
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
       logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
+      // The operator's hard stop for the Salon stream this call belongs to —
+      // every chat-message call site (primary, retries, failover, tool-loop
+      // continuations, Carina inside the turn) inherits it from here.
+      abortSignal: currentTurnStopSignal(),
     }
   )) {
     chunkCount++
@@ -705,6 +710,16 @@ export function encodeDoneEvent(
     skipped?: boolean
     /** Participant ID of the character who passed (set when `skipped` is true). */
     skippedParticipantId?: string | null
+    /**
+     * Raised hand: this character yielded the floor. Rides with `skipped` on a
+     * bare yield (no bubble to append — the Host announcement is the note).
+     */
+    yielded?: boolean
+    /**
+     * The operator hard-stopped the turn before any prose streamed. Like
+     * `skipped`, the client resets its buffer without a bubble or a toast.
+     */
+    stopped?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -802,7 +817,7 @@ export function encodeTurnCompleteEvent(
 export function encodeChainCompleteEvent(
   encoder: TextEncoder,
   data: {
-    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'yielded' | 'stopped'
     nextSpeakerId: string | null
     chainDepth: number
     /**
@@ -824,6 +839,18 @@ export function encodeChainCompleteEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode the answer to the operator's raised hand: the asked character either
+ * yielded the floor or carried on. Either way the hand is down; the Salon
+ * lowers its button and, on a decline, says who carried on.
+ */
+export function encodeHandAnsweredEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; characterName: string; yielded: boolean }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ handAnswered: true, ...data })}\n\n`)
 }
 
 /**

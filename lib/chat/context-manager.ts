@@ -156,6 +156,7 @@ import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 import { buildInventorySection } from '@/lib/inventory/prompt-section'
 import { buildUserNarrationAnchor } from '@/lib/chat/context/user-narration-anchor'
+import { buildTurnYieldInstruction } from '@/lib/chat/turn-manager/yield-signal'
 import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
@@ -546,6 +547,12 @@ export interface BuildContextOptions {
    * rather than pass. Never persisted. Undefined / `offerSkip: false` → no note.
    */
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
+  /**
+   * The operator has raised a hand (`lib/chat/turn-control.ts`) and this is the
+   * character asked: a Turn note invites it to `[YIELD]` the floor or carry on.
+   * Trails every other section, the skip note included. Never persisted.
+   */
+  offerYield?: boolean
   /**
    * Row ids of the human's own turns (USER, no `systemSender`), captured by the
    * caller before whisper normalization re-roles Staff whispers to USER. Feeds
@@ -2194,6 +2201,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     ? buildTurnSkipInstruction(options.turnSkip.characterName, options.turnSkip.recentlyAddressed)
     : ''
 
+  // Raised hand: the operator wants to cut in, and this character is the one
+  // asked. Same ephemeral footing as the skip note, and read last of all.
+  const turnYieldInstruction = options.offerYield
+    ? buildTurnYieldInstruction(userCharacter?.name || 'The User')
+    : ''
+  if (turnYieldInstruction) {
+    logger.debug('[TurnYield] Offering the yield note to the next speaker', {
+      chatId: chat.id,
+      participantId: respondingParticipant?.id,
+    })
+  }
+
   // Chained multi-character turns: the human's narration sits mid-history and
   // the newest line is another character's, possibly one that contradicts it
   // (a stopped turn that finished server-side, or a second tab). The scene note
@@ -2246,6 +2265,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     inventoryLLMContext,
     informBlock,
     turnSkipInstruction,
+    turnYieldInstruction,
   ].filter((section): section is string => !!section)
 
   // Add new user message (only if provided - not in continue mode)

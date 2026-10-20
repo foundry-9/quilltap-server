@@ -5,6 +5,7 @@ import {
   DEFAULT_CHAIN_CONFIG,
 } from '@/lib/services/chat-message/turn-orchestrator.service';
 import * as turnManager from '@/lib/chat/turn-manager';
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control';
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -32,6 +33,11 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   // The cycle rotation is resolved before every selection; these tests are about
   // the chain guards, so it stands in as "no rotation on file".
   resolveCycleOrder: jest.fn().mockResolvedValue([]),
+}));
+
+// The operator's hard stop is ambient (AsyncLocalStorage); these tests flip it by hand.
+jest.mock('@/lib/chat/turn-control', () => ({
+  isCurrentTurnStopped: jest.fn().mockReturnValue(false),
 }));
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
@@ -407,6 +413,148 @@ describe('turn-orchestrator.service', () => {
       });
 
       expect(processChainedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends the chain, unpaused, when a chained turn yields to the raised hand', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-2', characterName: 'Bob', reason: 'continue' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      // A bare yield: no content, no skip — only `yielded` keeps it from reading
+      // as an empty turn, and it must stop the chain rather than advance it.
+      const processChainedMessage = jest
+        .fn()
+        .mockResolvedValueOnce({ ...initialResult, hasContent: false, messageId: null, yielded: true });
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(processChainedMessage).toHaveBeenCalledTimes(1);
+      expect(decideNextTurn).toHaveBeenCalledTimes(1);
+      expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      expect(repos.chats.update).not.toHaveBeenCalledWith('chat-1', { isPaused: true });
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'yielded',
+        nextSpeakerId: null,
+        chainDepth: 1,
+        paused: false,
+      }));
+    });
+
+    it('ends the chain as a pause when the operator stops a chained turn', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-2', characterName: 'Bob', reason: 'continue' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      // The stopped turn kept its partial reply, so it has content — only the
+      // stop flag keeps the chain from asking for the next speaker.
+      const processChainedMessage = jest.fn().mockImplementation(async () => {
+        (isCurrentTurnStopped as jest.Mock).mockReturnValue(true);
+        return { ...initialResult, messageId: 'msg-partial' };
+      });
+
+      try {
+        await executeTurnChain({
+          repos: repos as any,
+          chatId: 'chat-1',
+          userId: 'user-1',
+          initialResult,
+          initialContinueMode: false,
+          controller,
+          encoder,
+          processChainedMessage,
+          decideNextTurn,
+          persistTurnParticipant,
+        });
+      } finally {
+        (isCurrentTurnStopped as jest.Mock).mockReturnValue(false);
+      }
+
+      expect(processChainedMessage).toHaveBeenCalledTimes(1);
+      expect(decideNextTurn).toHaveBeenCalledTimes(1);
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'stopped',
+        chainDepth: 1,
+        paused: true,
+      }));
+    });
+
+    it('does not chain at all when the INITIAL turn was stopped', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn();
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn();
+      (isCurrentTurnStopped as jest.Mock).mockReturnValue(true);
+
+      try {
+        await executeTurnChain({
+          repos: repos as any,
+          chatId: 'chat-1',
+          userId: 'user-1',
+          initialResult: { ...initialResult, hasContent: false, messageId: null },
+          initialContinueMode: false,
+          controller,
+          encoder,
+          processChainedMessage,
+          decideNextTurn,
+          persistTurnParticipant,
+        });
+      } finally {
+        (isCurrentTurnStopped as jest.Mock).mockReturnValue(false);
+      }
+
+      expect(decideNextTurn).not.toHaveBeenCalled();
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'stopped',
+        chainDepth: 0,
+        paused: true,
+      }));
+    });
+
+    it('ends a yielded INITIAL turn without chaining', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn();
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn();
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult: { ...initialResult, yielded: true },
+        initialContinueMode: true,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(decideNextTurn).not.toHaveBeenCalled();
+      expect(processChainedMessage).not.toHaveBeenCalled();
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'yielded',
+        chainDepth: 0,
+        paused: false,
+      }));
     });
 
     it('stops the chain on a genuinely empty turn (no content, no skip)', async () => {

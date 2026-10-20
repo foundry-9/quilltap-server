@@ -89,7 +89,6 @@ interface ParticipantCardProps {
   // Turn order display
   turnPosition?: number | null // Position in predicted turn order (1-based), null for inactive
   turnStatus?: TurnOrderStatus // Status for badge styling
-  onStopStreaming?: () => void // Stop/interrupt the current generation
   // Impersonation support
   isImpersonating?: boolean // True if user is currently impersonating this participant
   isActiveTyping?: boolean // True if this is the active typing participant (when impersonating multiple)
@@ -137,7 +136,6 @@ export function ParticipantCard({
   canSkip = false,
   turnPosition,
   turnStatus,
-  onStopStreaming,
   isImpersonating = false,
   isActiveTyping = false,
   onImpersonate,
@@ -557,18 +555,8 @@ export function ParticipantCard({
 
       {/* Action buttons */}
       <div className="qt-participant-card-actions">
-        {/* Stop button - shown when this participant is generating */}
-        {turnStatus === 'generating' && onStopStreaming ? (
-          <button
-            onClick={onStopStreaming}
-            className="flex-1 qt-button qt-button-sm qt-participant-stop-button"
-            title="Stop generating"
-            aria-label="Stop generating"
-          >
-            <Icon name="stop" className="w-3.5 h-3.5 mr-1" />
-            Stop
-          </button>
-        ) : isUserParticipant && onSkip ? (
+        {/* Stopping and interrupting live in the composer (Send / raise hand / Stop). */}
+        {isUserParticipant && onSkip ? (
           /* User participant: show Queue and Skip buttons side by side */
           <>
             <button

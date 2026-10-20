@@ -365,6 +365,50 @@ export async function postHostTurnPassAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
+// Turn-yield announcements (the operator's raised hand).
+//
+// When the operator raises a hand and the next character yields the floor
+// rather than carrying on, the Host says so, and the operator speaks next. As
+// with the turn-pass, the persona content never contains the `[YIELD]`
+// sentinel, so the record cannot teach it. `systemKind` is `turn-yield`;
+// `hostEvent.participantId` records who yielded.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_TURN_YIELD = 'turn-yield';
+
+export function buildTurnYieldContent(characterName: string, operatorName: string): string {
+  return `The Host, spying a hand raised at the back of the room, catches ${characterName}'s eye — and ${characterName} yields the floor to ${operatorName} with a gracious little bow. Pray, go on.`;
+}
+
+export function buildTurnYieldOpaqueContent(characterName: string, operatorName: string): string {
+  return `${operatorName} raised a hand to interject, and ${characterName} yielded the floor to them. ${operatorName} speaks next.`;
+}
+
+export interface HostTurnYieldAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the character who yielded. */
+  participantId: string;
+  /** The name the room knows the operator by. */
+  operatorName: string;
+}
+
+/**
+ * Post the Host's turn-yield announcement. Errors are swallowed (the existing
+ * Host-notification contract): a yield must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostTurnYieldAnnouncement(
+  params: HostTurnYieldAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildTurnYieldContent(params.characterName, params.operatorName);
+  const opaqueContent = buildTurnYieldOpaqueContent(params.characterName, params.operatorName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_TURN_YIELD, {
+    participantId: params.participantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Nudge announcements ("invited to speak").
 //
 // When the human summons a specific character to take the floor (the Nudge

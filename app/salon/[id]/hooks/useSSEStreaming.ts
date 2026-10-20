@@ -134,6 +134,12 @@ interface SSEEvent {
   pascalResult?: Message
   skipped?: boolean
   skippedParticipantId?: string | null
+  /** done: the operator hard-stopped the turn before any prose streamed. */
+  stopped?: boolean
+  /** done / handAnswered: the character yielded the floor to the raised hand. */
+  yielded?: boolean
+  /** The character asked about the operator's raised hand has answered it. */
+  handAnswered?: boolean
   // Answer confirmation: the resolved state for a just-streamed message. On a
   // re-affirmation rewrite, `content` carries the replacement bubble text.
   confirmationResult?: {
@@ -329,6 +335,12 @@ export function useSSEStreaming({
 }: UseSSEStreamingParams) {
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  // The operator's interrupts (lib/chat/turn-control.ts on the server): a
+  // raised hand waiting for the next speaker's answer, and a hard stop the
+  // server is still putting away.
+  const [handRaised, setHandRaised] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const stoppingRef = useRef(false)
   const [streamingContent, setStreamingContent] = useState('')
   // Mirror the live "Speaking As" selection into a ref so the send/continue
   // callbacks read the current value without re-creating on every selection.
@@ -719,6 +731,16 @@ export function useSSEStreaming({
         }
       }
 
+      // The raised hand has been answered. A yield speaks for itself (the
+      // Host's note, then the floor); a decline is said here, or the hand
+      // would simply go down with no word of why.
+      if (data.handAnswered) {
+        setHandRaised(false)
+        if (!data.yielded) {
+          showInfoToast(`${data.characterName || 'The speaker'} carried on regardless. Your hand is lowered.`)
+        }
+      }
+
       // Handle an answer-confirmation result — update the badge and, on a
       // revision, swap in the corrected bubble text (a deliberate, visible
       // transparency swap).
@@ -1059,7 +1081,7 @@ export function useSSEStreaming({
         onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
-          if (data.skipped) {
+          if (data.skipped || data.stopped) {
             finishSkippedTurn()
             return
           }
@@ -1123,7 +1145,7 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          if (data.skipped) {
+          if (data.skipped || data.stopped) {
             finishSkippedTurn()
             return
           }
@@ -1230,6 +1252,11 @@ export function useSSEStreaming({
       setWaitingForResponse(false)
       abortControllerRef.current = null
       setResponseStatus(null)
+      // The stream is over: any hand still up has nobody left to ask, and a
+      // stop has finished putting the reply away.
+      setHandRaised(false)
+      stoppingRef.current = false
+      setStopping(false)
       // The turn is over, so every optimistic bubble has had its chance: the
       // reads above retire the ones the server persisted, and anything still
       // standing belongs to a send that never landed at all.
@@ -1314,7 +1341,7 @@ export function useSSEStreaming({
           setResponseStatus(null)
           clearPendingToolExecutionStatus()
 
-          if (data.skipped) {
+          if (data.skipped || data.stopped) {
             finishSkippedTurn()
             return
           }
@@ -1341,7 +1368,7 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          if (data.skipped) {
+          if (data.skipped || data.stopped) {
             finishSkippedTurn()
             return
           }
@@ -1403,6 +1430,9 @@ export function useSSEStreaming({
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
+      setHandRaised(false)
+      stoppingRef.current = false
+      setStopping(false)
       scrollOnStreamComplete()
       // Re-fetch chat to pick up side-channel messages (e.g. whisper tool writes)
       await fetchChat()
@@ -1411,7 +1441,12 @@ export function useSSEStreaming({
     }
   }, [chatId, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
-  const stopStreaming = useCallback(() => {
+  /**
+   * Abandon the local stream outright — the old Stop, now only the fallback
+   * for when the server cannot be told (an old server, a dropped request) or
+   * its stream never closes after it was.
+   */
+  const abandonLocalStream = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
@@ -1422,14 +1457,80 @@ export function useSSEStreaming({
     setRespondingParticipantId(null)
     setStreamingToolBatches([])
     dismissToolExecutionStatus()
-    if (isMultiChar) {
-      setPauseState(true)
-    }
-    if (streamingContent) {
-      showInfoToast('Response stopped - chat paused')
-    }
     resetStreamingContent()
-  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus])
+    stoppingRef.current = false
+    setStopping(false)
+  }, [setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus])
+
+  /**
+   * Hard stop. The server pauses a room with a rotation, abandons the provider
+   * stream, keeps the prose that had streamed as the character's reply (tools
+   * already run stay run, the thinking goes), and closes the stream — whose
+   * own done / chainComplete events then settle this side as on any turn.
+   */
+  const stopStreaming = useCallback(async () => {
+    if (stoppingRef.current) return
+    stoppingRef.current = true
+    setStopping(true)
+    setHandRaised(false)
+    // Reflect the pause at once; the server writes it before it aborts, so
+    // the chain's next decision already reads it.
+    if (isMultiChar) {
+      void setPauseState(true)
+    }
+
+    let serverStopped = false
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=stop-turn`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json() as { stopped?: number; settled?: boolean }
+        serverStopped = (data.stopped ?? 0) > 0
+      }
+    } catch (err) {
+      console.error('[Salon] Stop request failed; abandoning the stream locally', getErrorMessage(err))
+    }
+
+    if (!serverStopped) {
+      abandonLocalStream()
+      await fetchChat()
+    } else {
+      // The server has put the reply away and closed its stream; give the
+      // reader a moment to drain the closing events before letting go.
+      window.setTimeout(() => {
+        if (stoppingRef.current && abortControllerRef.current) {
+          abandonLocalStream()
+          void fetchChat()
+        }
+      }, 3000)
+    }
+    showInfoToast(isMultiChar ? 'Stopped. The floor is yours, and the room is paused.' : 'Stopped. The floor is yours.')
+  }, [chatId, isMultiChar, setPauseState, abandonLocalStream, fetchChat])
+
+  /**
+   * Soft interrupt: raise (or lower) the operator's hand. The next character
+   * built to speak is asked whether to yield; the answer arrives as a
+   * `handAnswered` event, and the stream's end lowers any hand left up.
+   */
+  const toggleRaisedHand = useCallback(async () => {
+    const raise = !handRaised
+    setHandRaised(raise)
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=raise-hand`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raised: raise }),
+      })
+      if (!res.ok) throw new Error(res.statusText || 'Request failed')
+      const data = await res.json() as { raised?: boolean; active?: boolean }
+      setHandRaised(data.raised === true)
+      if (raise && data.active === false) {
+        showInfoToast('Nobody is speaking just now. The floor is already yours.')
+      }
+    } catch (err) {
+      setHandRaised(false)
+      showErrorToast(`Could not raise your hand: ${getErrorMessage(err)}`)
+    }
+  }, [chatId, handRaised])
 
   return {
     sending,
@@ -1445,5 +1546,8 @@ export function useSSEStreaming({
     sendMessage,
     triggerContinueMode,
     stopStreaming,
+    handRaised,
+    toggleRaisedHand,
+    stopping,
   }
 }

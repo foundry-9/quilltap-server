@@ -2098,6 +2098,95 @@
   outline: none;
 }
 
+/* Composer action buttons: Send, the soft interrupt (raise a hand) and the
+   hard Stop. Mirrors app/styles/qt-components/_chat.css. */
+.qt-chat-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 639px) {
+  .qt-chat-composer-actions {
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .qt-chat-composer-actions .qt-chat-composer-send {
+    height: 2.5rem;
+    width: 2.5rem;
+  }
+}
+
+.qt-chat-composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  width: 3rem;
+  border-radius: 9999px;
+  transition: all 200ms;
+  cursor: pointer;
+  background: var(--qt-button-primary-bg);
+  color: var(--qt-button-primary-fg);
+  box-shadow: var(--qt-button-primary-shadow);
+}
+
+.qt-chat-composer-send:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
+}
+
+.qt-chat-composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qt-chat-composer-send:hover:not(:disabled) {
+  background: var(--qt-button-primary-hover-bg);
+}
+
+.qt-chat-continue-button {
+  background: var(--qt-status-info-bg);
+  color: var(--qt-status-info-fg);
+  border: 1px solid var(--qt-status-info-border);
+}
+
+.qt-chat-stop-button {
+  background: var(--qt-status-danger-bg);
+  color: var(--qt-status-danger-fg);
+  border: 1px solid var(--qt-status-danger-border);
+}
+
+.qt-chat-stop-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+}
+
+.qt-chat-interrupt-button {
+  background: var(--qt-status-warning-bg);
+  color: var(--qt-status-warning-fg);
+  border: 1px solid var(--qt-status-warning-border);
+}
+
+.qt-chat-interrupt-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qt-status-warning-bg) 70%, black);
+}
+
+.qt-chat-interrupt-button-raised {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent);
+  animation: qt-hand-raised-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes qt-hand-raised-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--qt-status-warning-border) 15%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qt-chat-interrupt-button-raised { animation: none; }
+}
+
 /* Lexical editor rich text node styles */
 .qt-lexical-contenteditable {
   overflow-y: auto;

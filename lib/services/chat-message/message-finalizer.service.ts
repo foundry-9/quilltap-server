@@ -7,6 +7,7 @@
 
 import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   selectNextSpeaker,
@@ -89,6 +90,10 @@ export async function finalizeMessageResponse({
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
   const { conciergePolicy, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
+  // A reply the operator hard-stopped is kept as it streamed: nothing here may
+  // rewrite it (answer confirmation) or act on its half-finished words (dice,
+  // trigger phrases, Carina markup).
+  const turnStopped = isCurrentTurnStopped()
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const leadingStripped = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
@@ -214,7 +219,7 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     toolMessages,
     participantCharacters,
-    globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true,
+    globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true && !turnStopped,
     cheapLLMSelection,
     connectionProfile,
     conciergePolicy,
@@ -380,7 +385,7 @@ export async function finalizeMessageResponse({
   }
 
   const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
-  if (autoDetectRngInResponse && cleanedResponse) {
+  if (autoDetectRngInResponse && cleanedResponse && !turnStopped) {
     const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
     if (rngPatternsInResponse.length > 0) {
       logger.info('Auto-detected RNG patterns in assistant response', {
@@ -450,7 +455,7 @@ export async function finalizeMessageResponse({
   // set either — the turn's tool-execution context is already drained here.
   // A swipe never reaches this path (regenerate-swipe.service.ts), so a swipe
   // fires nothing, matching the dice. Never throws.
-  await runReplyTriggers({
+  if (!turnStopped) await runReplyTriggers({
     userId,
     chatId,
     chat,
@@ -470,7 +475,7 @@ export async function finalizeMessageResponse({
   // the done event below (so the client's post-turn fetchChat() includes it).
   // The asker is this character's participant; the answer carries
   // systemSender:'carina' and is excluded from memory extraction automatically.
-  if (cleanedResponse) {
+  if (cleanedResponse && !turnStopped) {
     await runCarinaMarkupQuery({
       userId,
       chatId,

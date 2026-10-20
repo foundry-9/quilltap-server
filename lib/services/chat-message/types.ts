@@ -308,6 +308,12 @@ export interface ProcessMessageResult {
   skipped?: boolean
   /** Participant ID of the character who passed (set when `skipped` is true). */
   skippedParticipantId?: string | null
+  /**
+   * Raised hand: the character yielded the floor to the operator (a Host
+   * turn-yield record was posted, with or without a reply of its own). The
+   * chain stops here so the operator speaks next; the chat is not paused.
+   */
+  yielded?: boolean
   /** Scene tracking context for the orchestrator to trigger after chain completion */
   sceneTrackingContext?: {
     connectionProfile: ConnectionProfile

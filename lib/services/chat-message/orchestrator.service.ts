@@ -21,9 +21,11 @@ import {
   selectNextSpeakerAfterUserMessage,
   getPresentCharacterSeats,
   loadRoomCharacters,
+  detectYieldSentinel,
 } from '@/lib/chat/turn-manager'
+import { runWithTurnControl, takeRaisedHand, isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
-import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
+import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement, postHostTurnYieldAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -64,6 +66,7 @@ import {
   encodeTurnStartEvent,
   encodeCarinaAnswerEvent,
   encodeHostAnnouncementEvent,
+  encodeHandAnsweredEvent,
   encodePascalResultEvent,
   encodeChainCompleteEvent,
   safeEnqueue,
@@ -213,71 +216,76 @@ export async function handleSendMessage(
 
   return new ReadableStream({
     async start(controller) {
-      try {
-        const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
+      // The whole stream — first turn, chain, post-chain triggers — runs under
+      // one turn-control handle, so the operator's Stop and raised hand reach
+      // every turn it carries (lib/chat/turn-control.ts).
+      await runWithTurnControl(chatId, async () => {
+        try {
+          const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
 
-        await executeTurnChain({
-          repos,
-          chatId,
-          userId,
-          initialResult: result,
-          initialContinueMode: options.continueMode === true,
-          controller,
-          encoder,
-          processChainedMessage: (chainOptions) => processMessage(
+          await executeTurnChain({
             repos,
             chatId,
             userId,
-            // Autonomous-room chain turns inherit the same flags as the initial call.
-            {
-              ...chainOptions,
-              neverPauseForUser: options.neverPauseForUser,
-              suppressAutomaticImages: options.suppressAutomaticImages,
-              singleTurn: options.singleTurn,
-              autonomousContextCap: options.autonomousContextCap,
-            },
+            initialResult: result,
+            initialContinueMode: options.continueMode === true,
             controller,
             encoder,
-            ledger
-          ),
-          neverPauseForUser: options.neverPauseForUser === true,
-          singleTurn: options.singleTurn === true,
-        })
-
-        // Trigger scene state tracking once after processing (and after any turn chain)
-        if (result.hasContent && result.sceneTrackingContext) {
-          try {
-            await triggerSceneStateTracking(repos, {
+            processChainedMessage: (chainOptions) => processMessage(
+              repos,
               chatId,
               userId,
-              connectionProfile: result.sceneTrackingContext.connectionProfile,
-              chatSettings: result.sceneTrackingContext.memoryChatSettings,
-              characterIds: result.sceneTrackingContext.characterIds,
-            })
-          } catch (error) {
-            logger.warn('Failed to trigger scene state tracking', {
-              chatId,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          }
-        }
+              // Autonomous-room chain turns inherit the same flags as the initial call.
+              {
+                ...chainOptions,
+                neverPauseForUser: options.neverPauseForUser,
+                suppressAutomaticImages: options.suppressAutomaticImages,
+                singleTurn: options.singleTurn,
+                autonomousContextCap: options.autonomousContextCap,
+              },
+              controller,
+              encoder,
+              ledger
+            ),
+            neverPauseForUser: options.neverPauseForUser === true,
+            singleTurn: options.singleTurn === true,
+          })
 
-        // Trigger conversation render (Scriptorium) - runs on every turn with content
-        if (result.hasContent) {
-          try {
-            await triggerConversationRender(repos, { chatId, userId })
-          } catch (error) {
-            logger.warn('Failed to trigger conversation render', {
-              chatId,
-              error: error instanceof Error ? error.message : String(error),
-            })
+          // Trigger scene state tracking once after processing (and after any turn chain)
+          if (result.hasContent && result.sceneTrackingContext) {
+            try {
+              await triggerSceneStateTracking(repos, {
+                chatId,
+                userId,
+                connectionProfile: result.sceneTrackingContext.connectionProfile,
+                chatSettings: result.sceneTrackingContext.memoryChatSettings,
+                characterIds: result.sceneTrackingContext.characterIds,
+              })
+            } catch (error) {
+              logger.warn('Failed to trigger scene state tracking', {
+                chatId,
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
           }
-        }
 
-        safeClose(controller)
-      } catch (error) {
-        handleStreamError(error, controller, encoder, { chatId, ledger })
-      }
+          // Trigger conversation render (Scriptorium) - runs on every turn with content
+          if (result.hasContent) {
+            try {
+              await triggerConversationRender(repos, { chatId, userId })
+            } catch (error) {
+              logger.warn('Failed to trigger conversation render', {
+                chatId,
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
+          }
+
+          safeClose(controller)
+        } catch (error) {
+          handleStreamError(error, controller, encoder, { chatId, ledger })
+        }
+      })
     },
   })
 }
@@ -646,6 +654,23 @@ async function processMessage(
       recentlyAddressed: eligibility.recentlyAddressed,
       characterName: character.name,
     }
+  }
+
+  // ============================================================================
+  // Raised hand — the operator wants to cut in
+  // ============================================================================
+  // The first LLM-voiced turn built after the operator raised a hand is the one
+  // asked whether to yield. Taking the hand consumes it, so a decline lowers it
+  // and nobody after is asked. A held (paused) turn builds no reply to ask in.
+  const offerYield = characterParticipant.controlledBy !== 'user'
+    && !holdForPausedChat
+    && takeRaisedHand()
+  if (offerYield) {
+    logger.info('[TurnYield] Asking the next speaker whether to yield to the raised hand', {
+      chatId,
+      characterId: character.id,
+      participantId: characterParticipant.id,
+    })
   }
 
   // ============================================================================
@@ -1268,6 +1293,8 @@ async function processMessage(
       reservedOutgoingTokens: turnExtras.reservedTokens,
       // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
       turnSkip,
+      // Raised hand — the yield Turn note.
+      offerYield,
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
@@ -1730,11 +1757,98 @@ async function processMessage(
   // follows the tool calls and the reply it sums up rather than preceding them.
   try {
     // ============================================================================
+    // Hard stop — keep exactly what streamed
+    // ============================================================================
+    // The operator stopped the turn. What reached the screen is the reply; the
+    // thinking never was, so it goes. No sentinel is read from a cut-off line —
+    // a half-written "[NOTHING TO" is just words — and tools already run are
+    // saved below as on any other turn.
+    const turnStopped = isCurrentTurnStopped()
+    if (turnStopped) {
+      streamingState.reasoningContent = undefined
+      streamingState.reasoningSegments = []
+      logger.info('[TurnStop] Turn stopped by the operator; keeping what streamed', {
+        chatId,
+        characterId: character.id,
+        participantId: characterParticipant.id,
+        partialLength: streamingState.fullResponse.length,
+        toolCount: toolMessages.length,
+      })
+    }
+
+    // ============================================================================
+    // Raised hand — did the asked character yield?
+    // ============================================================================
+    // Any prose around the sentinel is kept as the character's reply; a bare
+    // yield with no tools run persists nothing but the Host's note. Either way
+    // the chain stops after this turn and the floor is the operator's.
+    let yieldedFloor = false
+    if (offerYield && !turnStopped) {
+      const yieldDetection = detectYieldSentinel(
+        streamingState.fullResponse,
+        character.name,
+        character.aliases ?? undefined,
+      )
+      safeEnqueue(controller, encodeHandAnsweredEvent(encoder, {
+        participantId: characterParticipant.id,
+        characterName: character.name,
+        yielded: yieldDetection.yielded,
+      }))
+      if (yieldDetection.yielded) {
+        yieldedFloor = true
+        streamingState.fullResponse = yieldDetection.cleaned
+        logger.info('[TurnYield] Character yielded the floor to the raised hand', {
+          chatId,
+          characterId: character.id,
+          participantId: characterParticipant.id,
+          withReply: yieldDetection.cleaned.length > 0,
+          toolCount: toolMessages.length,
+        })
+        if (yieldDetection.cleaned.trim().length === 0 && toolMessages.length === 0) {
+          return handleTurnYield({
+            chatId,
+            character,
+            characterParticipant,
+            operatorName: resolvedIdentity.name,
+            isMultiCharacter,
+            userParticipantId,
+            isPaused: chat.isPaused,
+            streaming: streamingState,
+            controller,
+            encoder,
+            mailAlertsOwed: builtContext.mailAlertsOwed,
+          })
+        }
+      } else {
+        logger.info('[TurnYield] Character carried on past the raised hand', {
+          chatId,
+          characterId: character.id,
+          participantId: characterParticipant.id,
+        })
+      }
+    }
+
+    // A yield that came with words (or tools): the reply is saved as usual, then
+    // the Host notes the yield and the chain is told to stop.
+    const finishYieldedTurn = async (result: ProcessMessageResult): Promise<ProcessMessageResult> => {
+      if (!yieldedFloor) return result
+      await announceTurnYield({
+        chatId,
+        character,
+        characterParticipant,
+        operatorName: resolvedIdentity.name,
+        controller,
+        encoder,
+      })
+      return { ...result, yielded: true }
+    }
+
+    // ============================================================================
     // "Nothing to add" turn-skipping — sentinel handling
     // ============================================================================
     // Detect the pass sentinel on the raw response before the finalizer. Only
     // when eligibility was computed for this turn (multi-character, LLM responder).
-    if (turnSkip) {
+    if (turnSkip && !turnStopped && !yieldedFloor) {
       const detection = detectSkipSentinel(
         streamingState.fullResponse,
         character.name,
@@ -1777,7 +1891,7 @@ async function processMessage(
     }
 
     if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
-      return finalizeMessageResponse({
+      const finalized = await finalizeMessageResponse({
         repos,
         chatId,
         userId,
@@ -1811,6 +1925,7 @@ async function processMessage(
           userCharacterId,
         },
       })
+      return finishYieldedTurn(finalized)
     } else if (toolMessages.length > 0) {
       // Save tool messages even without text response
       const toolWhisperContext: ToolWhisperContext = {
@@ -1844,10 +1959,31 @@ async function processMessage(
         modelName: streamingState.effectiveProfile.modelName,
       }))
 
-      return {
+      return finishYieldedTurn({
         isMultiCharacter,
         hasContent: true,
         messageId: toolSaveResult.firstToolMessageId || null,
+        userParticipantId,
+        isPaused: chat.isPaused,
+      })
+    } else if (turnStopped) {
+      // Stopped before a word streamed and before any tool ran: nothing to
+      // keep, and nothing to apologise for — it is what the operator asked.
+      safeEnqueue(controller, encodeDoneEvent(encoder, {
+        messageId: null,
+        participantId: characterParticipant.id,
+        usage: streamingState.usage,
+        cacheUsage: streamingState.cacheUsage,
+        attachmentResults: streamingState.attachmentResults,
+        toolsExecuted: false,
+        stopped: true,
+        provider: streamingState.effectiveProfile.provider,
+        modelName: streamingState.effectiveProfile.modelName,
+      }))
+      return {
+        isMultiCharacter,
+        hasContent: false,
+        messageId: null,
         userParticipantId,
         isPaused: chat.isPaused,
       }
@@ -2208,6 +2344,88 @@ async function handleTurnSkip(params: {
     messageId: null,
     userParticipantId,
     isPaused,
+  }
+}
+
+/**
+ * Post the Host's turn-yield note and surface it live. Shared by the bare
+ * yield and the yield that came with a reply.
+ */
+async function announceTurnYield(params: {
+  chatId: string
+  character: { name: string }
+  characterParticipant: { id: string }
+  operatorName: string
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<void> {
+  const hostMessage = await postHostTurnYieldAnnouncement({
+    chatId: params.chatId,
+    characterName: params.character.name,
+    participantId: params.characterParticipant.id,
+    operatorName: params.operatorName,
+  })
+  if (hostMessage) {
+    safeEnqueue(params.controller, encodeHostAnnouncementEvent(params.encoder, hostMessage))
+  }
+}
+
+/**
+ * Raised hand: the asked character yielded and said nothing else.
+ *
+ * Like a turn-pass, no reply is persisted and the done event is flagged
+ * `skipped` so the client drops its streaming buffer without a phantom bubble
+ * (the Host's yield note is the visible record). Unlike a pass, the rotation is
+ * not advanced — the character gave the floor away rather than spending its
+ * turn — and the result is `yielded`, which stops the chain so the operator
+ * speaks next. Informs stay pending for the character's next real turn.
+ */
+async function handleTurnYield(params: {
+  chatId: string
+  character: { id: string; name: string }
+  characterParticipant: { id: string }
+  operatorName: string
+  isMultiCharacter: boolean
+  userParticipantId: string | null
+  isPaused: boolean
+  streaming: StreamingState
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  /** This turn's announced letters: a yield still read them. */
+  mailAlertsOwed: MailAlertsOwed | null
+}): Promise<ProcessMessageResult> {
+  const { chatId, character, characterParticipant, streaming, controller, encoder } = params
+
+  await markMailAlertsDelivered(params.mailAlertsOwed, { chatId, via: 'turn-yield' })
+  await announceTurnYield(params)
+
+  safeEnqueue(controller, encodeDoneEvent(encoder, {
+    messageId: null,
+    participantId: characterParticipant.id,
+    usage: streaming.usage,
+    cacheUsage: streaming.cacheUsage,
+    attachmentResults: streaming.attachmentResults,
+    toolsExecuted: false,
+    skipped: true,
+    skippedParticipantId: characterParticipant.id,
+    yielded: true,
+    provider: streaming.effectiveProfile.provider,
+    modelName: streaming.effectiveProfile.modelName,
+  }))
+
+  logger.debug('[TurnYield] Bare yield closed without a reply', {
+    chatId,
+    characterId: character.id,
+    participantId: characterParticipant.id,
+  })
+
+  return {
+    isMultiCharacter: params.isMultiCharacter,
+    hasContent: false,
+    messageId: null,
+    userParticipantId: params.userParticipantId,
+    isPaused: params.isPaused,
+    yielded: true,
   }
 }
 

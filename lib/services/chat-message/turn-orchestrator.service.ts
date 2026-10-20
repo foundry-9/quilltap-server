@@ -9,6 +9,7 @@ import {
   resolveCycleOrder,
 } from '@/lib/chat/turn-manager'
 import type { MessageEvent } from '@/lib/schemas/types'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ProcessMessageResult } from './types'
 import {
@@ -336,7 +337,21 @@ export async function executeTurnChain({
   // A skipped initial turn ("nothing to add") is NOT terminal — it advanced the
   // rotation via a Host turn-pass record, so the chain must continue to the next
   // speaker. Only a genuinely empty (no content, no skip) initial turn stops here.
-  if (!initialResult.isMultiCharacter || (!initialResult.hasContent && !initialResult.skipped)) {
+  // The operator's hard stop ends the chain where it stands. The stop action
+  // has already paused the room, so the close says so.
+  if (initialResult.isMultiCharacter && isCurrentTurnStopped()) {
+    await endChainOnStop(repos, chatId, controller, encoder, 0, persistTurnParticipant)
+    return
+  }
+
+  if (!initialResult.isMultiCharacter || (!initialResult.hasContent && !initialResult.skipped && !initialResult.yielded)) {
+    return
+  }
+
+  // A yield to the operator's raised hand ends the chain on the spot — the
+  // floor is theirs — without pausing the room.
+  if (initialResult.yielded) {
+    await endChainOnYield(repos, chatId, controller, encoder, 0, persistTurnParticipant)
     return
   }
 
@@ -424,6 +439,16 @@ export async function executeTurnChain({
         skipped: chainResult.skipped === true,
       }))
 
+      if (isCurrentTurnStopped()) {
+        await endChainOnStop(repos, chatId, controller, encoder, chainDepth, persistTurnParticipant)
+        break
+      }
+
+      if (chainResult.yielded) {
+        await endChainOnYield(repos, chatId, controller, encoder, chainDepth, persistTurnParticipant)
+        break
+      }
+
       // A skipped turn advanced the rotation (Host turn-pass record) — fall
       // through to the next decideNextTurn iteration. Only a genuinely empty
       // response (no content, no skip) stops the chain.
@@ -463,4 +488,48 @@ export async function executeTurnChain({
       break
     }
   }
+}
+
+/**
+ * Close a chain because a character yielded to the operator's raised hand.
+ * Not a pause: the operator's next message chains as usual.
+ */
+async function endChainOnYield(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  chainDepth: number,
+  persistTurnParticipant: typeof persistTurnParticipantId,
+): Promise<void> {
+  logger.info('[TurnOrchestrator] Chain stopped: the floor was yielded to the operator', { chatId, chainDepth })
+  await persistTurnParticipant(repos, chatId, null)
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'yielded',
+    nextSpeakerId: null,
+    chainDepth,
+    paused: false,
+  }))
+}
+
+/**
+ * Close a chain the operator hard-stopped. The stop action paused the room
+ * before it aborted the stream, so this is announced as a pause.
+ */
+async function endChainOnStop(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  chainDepth: number,
+  persistTurnParticipant: typeof persistTurnParticipantId,
+): Promise<void> {
+  logger.info('[TurnOrchestrator] Chain stopped: the operator stopped the turn', { chatId, chainDepth })
+  await persistTurnParticipant(repos, chatId, null)
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'stopped',
+    nextSpeakerId: null,
+    chainDepth,
+    paused: true,
+  }))
 }

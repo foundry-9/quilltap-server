@@ -31,7 +31,7 @@ API reference for Quilltap v4.3 and later.
 > - **Connection-profile fallback chains** — `fallbackProfileId` (the understudy) and `allowTierFallback` on connection profiles. Chains are capped at three attempts and never recurse. See [Connection Profiles](#connection-profiles).
 > - **Image-profile LoRA adapters and model options** — the reserved `loras` parameter key (validated by `ImageLoraSpecSchema`), the per-model `loraSupport` block on the models response, and `POST /api/v1/image-profiles?action=lora-metadata` for reading a LoRA source's public HuggingFace card.
 > - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`. *Superseded in 4.10 by the three states; see below.*
-> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `impersonation-voice-preview`, `inform`, `photo-albums`, `rebuild-summary`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `retry-image-uncensored`, `rng`, `run-tool`, `save-image`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`, `wardrobe-history`, `wardrobe-rollback`. This supersedes the v4.3 list above.
+> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `impersonation-voice-preview`, `inform`, `photo-albums`, `rebuild-summary`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `retry-image-uncensored`, `rng`, `run-tool`, `save-image`, `scenario`, `send-mail`, `state`, `stop-turn`, `raise-hand`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`, `wardrobe-history`, `wardrobe-rollback`. This supersedes the v4.3 list above.
 > - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
 > - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
 
@@ -2632,6 +2632,40 @@ Re-attribute multiple messages from one participant to another in a single opera
   "memoriesDeleted": 7
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=stop-turn`
+
+Hard-stop the chat's open Salon stream(s) (`lib/chat/turn-control.ts`). A room with a rotation (not autonomous) is set `isPaused: true` first, so the chain's next decision reads it. The stream then stops listening to the provider, keeps the prose that had streamed as the character's reply (tools already run are kept; reasoning is dropped), and closes with `chainComplete` reason `stopped`. The response comes back once the stream has settled, or after 15 s.
+
+**Request Body**: none.
+
+**Response**: `200 OK`
+
+```json
+{ "stopped": 1, "settled": true, "paused": true }
+```
+
+`stopped: 0` means no stream was open in this process.
+
+#### `POST /api/v1/chats/[id]?action=raise-hand`
+
+Raise (or lower) the operator's hand on the chat's open Salon stream. The next LLM turn built afterwards is asked, in a trailing Turn note, whether to `[YIELD]`; the stream reports the answer with a `handAnswered` SSE event, and a yield closes the chain with `chainComplete` reason `yielded` (not paused).
+
+**Request Body**:
+
+```json
+{ "raised": true }
+```
+
+`raised` defaults to `true`.
+
+**Response**: `200 OK`
+
+```json
+{ "raised": true, "active": true }
+```
+
+`active: false` means no stream was open, so the floor is already the operator's.
 
 #### `POST /api/v1/chats/[id]?action=turn`
 

@@ -1825,7 +1825,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           onInformClick={modals.openInform}
           informParticipantNames={participantNames}
           onStopStreaming={sseStreaming.stopStreaming}
-          hideStopButton={modals.showParticipantSidebar}
+          onToggleRaisedHand={sseStreaming.toggleRaisedHand}
+          handRaised={sseStreaming.handRaised}
+          canRaiseHand={!participantsWithImpersonation.isSingleCharacterChat && chat?.chatType !== 'autonomous'}
+          stopping={sseStreaming.stopping}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
           onOpenTerminalClick={handleOpenTerminal}
@@ -2052,7 +2055,6 @@ export function SalonView({ chatId }: SalonViewProps) {
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
-          onStopStreaming={sseStreaming.stopStreaming}
           onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
           onRemoveCharacter={chatControls.handleRemoveCharacter}

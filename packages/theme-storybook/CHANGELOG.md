@@ -2,6 +2,12 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.76] - 2026-10-20
+
+### Added
+- `stop-sign` (an octagon) and `hand-raised` in the Icons story's media group, mirroring the app's new registry entries for the Salon composer's Stop and raised-hand buttons.
+- The composer action-button family in `qt-components.css`: `.qt-chat-composer-actions`, `.qt-chat-composer-send`, `.qt-chat-continue-button`, `.qt-chat-stop-button`, and the new `.qt-chat-interrupt-button` / `.qt-chat-interrupt-button-raised` (warning amber, with a pulsing ring while a hand is up). The Chat story's control-buttons section shows the trio.
+
 ## [1.0.75] - 2026-10-19
 
 ### Added

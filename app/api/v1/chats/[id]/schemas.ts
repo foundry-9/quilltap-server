@@ -167,6 +167,11 @@ export const turnActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('skipUserTurn'), participantId: z.uuid() }),
 ]);
 
+/** Soft interrupt: raise (default) or lower the operator's hand. */
+export const raiseHandSchema = z.object({
+  raised: z.boolean().prefault(true),
+});
+
 export const persistTurnSchema = z.object({
   lastTurnParticipantId: z.uuid().nullable(),
 });

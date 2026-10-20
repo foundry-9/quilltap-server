@@ -135,4 +135,53 @@ describe('withStallWatchdog', () => {
       LLMStreamStalledError
     );
   });
+
+  describe('the operator\'s stop (abortSignal)', () => {
+    const slowBudgets = { firstChunkTimeoutMs: 5000, idleTimeoutMs: 5000 };
+
+    it('ends quietly, keeping what arrived, when the stop lands mid-stream', async () => {
+      const controller = new AbortController();
+      const { stream } = silentAfter(['a', 'b']);
+      const seen: string[] = [];
+
+      const done = (async () => {
+        for await (const chunk of withStallWatchdog(stream, { ...slowBudgets, abortSignal: controller.signal })) {
+          seen.push(chunk);
+        }
+      })();
+      await sleep(10);
+      controller.abort();
+
+      await expect(done).resolves.toBeUndefined();
+      expect(seen).toEqual(['a', 'b']);
+    });
+
+    it('abandons a provider still waiting on its first chunk', async () => {
+      const controller = new AbortController();
+      const { stream } = silentAfter<string>([]);
+      const started = Date.now();
+      setTimeout(() => controller.abort(), 15);
+
+      await expect(
+        collect(withStallWatchdog(stream, { ...slowBudgets, abortSignal: controller.signal }))
+      ).resolves.toEqual([]);
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it('yields nothing when already stopped before it starts', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        collect(withStallWatchdog(paced(['a'], 5), { ...slowBudgets, abortSignal: controller.signal }))
+      ).resolves.toEqual([]);
+    });
+
+    it('leaves a healthy stream alone when the stop never fires', async () => {
+      const controller = new AbortController();
+      await expect(
+        collect(withStallWatchdog(paced(['a', 'b'], 5), { ...budgets, abortSignal: controller.signal }))
+      ).resolves.toEqual(['a', 'b']);
+    });
+  });
 });

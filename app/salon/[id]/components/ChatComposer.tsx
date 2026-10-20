@@ -100,9 +100,19 @@ interface ChatComposerProps {
    * chips can name who is still to be told. Omit and the chips stay silent.
    */
   informParticipantNames?: Record<string, string>
+  /** Hard stop: cut the reply off, keep what streamed, cede the floor. */
   onStopStreaming: () => void
-  /** Hide the stop button (when sidebar has its own stop button) */
-  hideStopButton?: boolean
+  /** Soft interrupt: raise (or lower) the operator's hand. */
+  onToggleRaisedHand: () => void
+  /** The operator's hand is up, waiting on the next speaker's answer. */
+  handRaised?: boolean
+  /**
+   * Whether anyone could be asked to yield — a room with a rotation (more than
+   * one character). A lone character's reply hands the floor back anyway.
+   */
+  canRaiseHand?: boolean
+  /** A hard stop is being put away on the server. */
+  stopping?: boolean
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
   /** Whether this chat resolves a non-empty Pascal custom-tool roster */
@@ -185,7 +195,10 @@ export function ChatComposer({
   onInformClick,
   informParticipantNames,
   onStopStreaming,
-  hideStopButton = false,
+  onToggleRaisedHand,
+  handRaised = false,
+  canRaiseHand = false,
+  stopping = false,
   onPendingToolResult,
   customToolsAvailable,
   onCustomToolsClick,
@@ -203,6 +216,7 @@ export function ChatComposer({
   // Every input surface in here is shut by either flag, so ask the question
   // once rather than at each control.
   const composerLocked = disabled || sending
+  const isGenerating = streaming || waitingForResponse
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -589,37 +603,61 @@ export function ChatComposer({
             />
           </div>
 
-          {/* Right side buttons */}
-          {(streaming || waitingForResponse) && !hideStopButton ? (
-            /* Stop button - shown during streaming/waiting (hidden when sidebar has its own) */
+          {/* Right side buttons: Send, raise a hand (soft interrupt), Stop (hard). */}
+          <div className="qt-chat-composer-actions">
+            <button
+              type="submit"
+              disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+              className="qt-chat-composer-send"
+              title={!hasActiveCharacters
+                ? "Add a character to start chatting"
+                : isGenerating
+                  ? "Generating..."
+                  : voiceRehearsal && speakingAs
+                    ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
+                    : "Send message"}
+              aria-label="Send message"
+            >
+              <Icon name="send" className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRaisedHand()
+              }}
+              disabled={!isGenerating || !canRaiseHand || stopping}
+              className={`qt-chat-composer-send qt-chat-interrupt-button${handRaised ? ' qt-chat-interrupt-button-raised' : ''}`}
+              aria-pressed={handRaised}
+              aria-label={handRaised ? 'Lower your hand' : 'Raise your hand to interrupt'}
+              title={!isGenerating
+                ? 'Raise your hand (while someone is speaking)'
+                : !canRaiseHand
+                  ? 'Only one character is present — the floor returns to you after this reply'
+                  : handRaised
+                    ? 'Hand raised — the next speaker will be asked to yield. Click to lower it.'
+                    : 'Raise your hand — the next speaker may yield the floor to you'}
+            >
+              <Icon name="hand-raised" className="w-5 h-5" />
+            </button>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onStopStreaming()
               }}
+              disabled={!isGenerating || stopping}
               className="qt-chat-composer-send qt-chat-stop-button"
-              title="Stop generating"
+              aria-label="Stop"
+              title={stopping
+                ? 'Stopping…'
+                : isGenerating
+                  ? 'Stop — cut the reply off here and take the floor'
+                  : 'Stop (while someone is speaking)'}
             >
-              <Icon name="stop" className="w-5 h-5" />
+              <Icon name="stop-sign" className="w-5 h-5" />
             </button>
-          ) : (
-            /* Send button - disabled while generating when stop is in sidebar */
-            <button
-              type="submit"
-              disabled={composerLocked || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
-              className="qt-chat-composer-send"
-              title={!hasActiveCharacters
-                ? "Add a character to start chatting"
-                : (streaming || waitingForResponse)
-                  ? "Generating..."
-                  : voiceRehearsal && speakingAs
-                    ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
-                    : "Send message"}
-            >
-              <Icon name="send" className="w-5 h-5" />
-            </button>
-          )}
+          </div>
         </form>
       </div>
     </div>

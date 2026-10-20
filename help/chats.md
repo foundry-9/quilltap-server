@@ -213,7 +213,8 @@ Scroll up to see earlier messages in the conversation. Long chats may have:
 When the AI is generating a response:
 
 - **Typing Indicator** — Shows the character is "thinking"
-- **Stop Button** — Cancel generation if you change your mind
+- **Raise your hand** (amber) — Ask the next character to yield the floor to you; see [Cutting In](interrupting.md)
+- **Stop** (red octagon) — Cut the reply off where it stands and take the floor; see [Cutting In](interrupting.md)
 - **Progress** — Some themes show generation progress
 
 **Should you press Return whilst the room is still speaking**, the Salon will not talk over its own

@@ -95,6 +95,8 @@
 [data-icon="play"] { --_qt-icon-mask: url("/images/icons/play.svg"); --_qt-icon-bg: none; }
 [data-icon="pause"] { --_qt-icon-mask: url("/images/icons/pause.svg"); --_qt-icon-bg: none; }
 [data-icon="stop"] { --_qt-icon-mask: url("/images/icons/stop.svg"); --_qt-icon-bg: none; }
+[data-icon="stop-sign"] { --_qt-icon-mask: url("/images/icons/stop-sign.svg"); --_qt-icon-bg: none; }
+[data-icon="hand-raised"] { --_qt-icon-mask: url("/images/icons/hand-raised.svg"); --_qt-icon-bg: none; }
 [data-icon="zoom-in"] { --_qt-icon-mask: url("/images/icons/zoom-in.svg"); --_qt-icon-bg: none; }
 [data-icon="zoom-out"] { --_qt-icon-mask: url("/images/icons/zoom-out.svg"); --_qt-icon-bg: none; }
 [data-icon="projects"] { --_qt-icon-mask: url("/images/icons/projects.svg"); --_qt-icon-bg: none; }

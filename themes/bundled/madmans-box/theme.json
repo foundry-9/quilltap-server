@@ -231,6 +231,8 @@
     "play": "icons/play.svg",
     "pause": "icons/pause.svg",
     "stop": "icons/stop.svg",
+    "stop-sign": "icons/stop-sign.svg",
+    "hand-raised": "icons/hand-raised.svg",
     "zoom-in": "icons/zoom-in.svg",
     "zoom-out": "icons/zoom-out.svg",
     "projects": "icons/projects.svg",

@@ -188,7 +188,6 @@ Reach for it whenever you've revised a character's prompt content elsewhere and 
 - **Nudge** — Force immediate response (LLM characters)
 - **Queue** — Add to speaking queue
 - **Dequeue** — Remove from queue (if queued)
-- **Stop** — Interrupt the current generation (shown on the generating character's card)
 
 **Status Dropdown:**
 - A dropdown selector on every participant card lets you set their participation state
