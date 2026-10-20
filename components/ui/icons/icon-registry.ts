@@ -131,6 +131,7 @@ export const ICON_REGISTRY = {
   'megaphone':     { defaultFile: '/images/icons/megaphone.svg',     defaultMode: 'mask' },
   'mail':          { defaultFile: '/images/icons/mail.svg',          defaultMode: 'mask' },
   'dice':          { defaultFile: '/images/icons/dice.svg',          defaultMode: 'mask' },
+  'inventory':     { defaultFile: '/images/icons/inventory.svg',     defaultMode: 'mask' },
   'sparkles':      { defaultFile: '/images/icons/sparkles.svg',      defaultMode: 'mask' },
   'wand':          { defaultFile: '/images/icons/wand.svg',          defaultMode: 'mask' },
   // The rocking quill shown while a reply is awaited or streaming. The MOTION

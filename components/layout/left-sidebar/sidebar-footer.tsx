@@ -274,7 +274,7 @@ export function SidebarFooter() {
             className="qt-left-sidebar-item justify-center px-0"
             title="Inventory"
           >
-            <Icon name="dice" className="qt-left-sidebar-item-icon w-7 h-7" />
+            <Icon name="inventory" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
 

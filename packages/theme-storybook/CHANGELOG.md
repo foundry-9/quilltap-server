@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.75] - 2026-10-19
+
+### Added
+- `inventory` (an open box with flaps) in the Icons story's People group, mirroring the app's new registry entry for the Inventory.
+
 ## [1.0.71] - 2026-09-19
 
 ### Added

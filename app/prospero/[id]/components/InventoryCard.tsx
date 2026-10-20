@@ -36,7 +36,7 @@ export function InventoryCard({ projectId, expanded, onToggle }: InventoryCardPr
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <Icon name="dice" className="w-5 h-5 qt-text-primary" />
+          <Icon name="inventory" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Inventory ({items.length})</h3>
             <p className="qt-text-small qt-text-secondary">

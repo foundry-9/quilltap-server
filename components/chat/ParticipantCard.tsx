@@ -366,7 +366,7 @@ export function ParticipantCard({
                   title={`Open ${name}'s inventory`}
                   aria-label={`Open ${name}'s inventory`}
                 >
-                  <Icon name="dice" className="w-3.5 h-3.5" />
+                  <Icon name="inventory" className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

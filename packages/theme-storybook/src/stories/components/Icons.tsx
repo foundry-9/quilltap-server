@@ -51,7 +51,7 @@ const ICON_GROUPS: IconGroup[] = [
   },
   {
     category: 'People',
-    names: ['profile', 'user', 'user-plus', 'users', 'megaphone', 'dice'],
+    names: ['profile', 'user', 'user-plus', 'users', 'megaphone', 'dice', 'inventory'],
   },
   {
     category: 'System & tooling',

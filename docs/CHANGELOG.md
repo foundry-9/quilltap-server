@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Change: the Inventory gets its own icon
+
+- New icon `inventory` (an open box with flaps) in `ICON_REGISTRY`, with the default at `public/images/icons/inventory.svg` and its rule in `_icons.css`. The sidebar Inventory button, the participant card's inventory button and the Prospero Inventory card and the Inventory workspace tab (`lib/workspace/tab-meta.ts`) use it instead of `dice`, which stays with the RNG dropdown and Pascal's Workbench.
+- Madman's Box ships a matching override (`themes/bundled/madmans-box/icons/inventory.svg`). Other bundled themes fall back to the default.
+- `docs/developer/ICON_INVENTORY.md` lists the new name, and `help/inventory.md` describes the button as the open box rather than the dice.
+- `themes/tools/madmans-box-icon-preview.html` lists `inventory`, plus `mail`, `thinking` and `brahma-console`, which it was already missing; `check-madmans-box-icons.mjs` passes again.
+- New guard test `__tests__/unit/components/icons/inventory-icon.test.ts` (registry entry, generated CSS rule, Madman's Box override, workspace tab).
+
 #### Fix: the Log's date bounds and regex errors
 
 - `log_read`: a bare-date `to` (e.g. `"2026-10-19"`) now means the last millisecond of that UTC day, not its first, so `from` and `to` naming the same date read that whole day. Before, that query returned nothing. The from-not-after-to check uses the same rule. One helper, `logReadBoundInstant` (`lib/tools/log-read-tool.ts`), serves the check and the handler.
