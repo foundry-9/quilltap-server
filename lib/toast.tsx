@@ -25,7 +25,9 @@ function ensureContainer() {
     toastContainer.style.position = 'fixed'
     toastContainer.style.bottom = '20px'
     toastContainer.style.right = '20px'
-    toastContainer.style.zIndex = '50'
+    // Above every dialog overlay (z-[60]–z-[101]) so a toast raised from inside a
+    // modal is visible; below the full-screen startup gates at z-[9999].
+    toastContainer.style.zIndex = '1000'
     toastContainer.style.pointerEvents = 'none'
     toastContainer.style.display = 'flex'
     toastContainer.style.flexDirection = 'column'

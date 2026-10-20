@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: toasts raised from inside a dialog were hidden behind it
+
+- The toast container (`lib/toast.tsx`) sat at `z-index: 50`, below every dialog overlay (`qt-dialog-overlay` is `z-[60]`, nested dialogs up to `z-[101]`). An error toast from a save inside a modal — e.g. the Inventory object editor refusing a title as a kind-name shadow — appeared behind the dialog where it could not be read. It now sits at `z-index: 1000`, above all dialogs and below the full-screen startup gates (`z-[9999]`).
+
 #### Change: the Inventory gets its own icon
 
 - New icon `inventory` (an open box with flaps) in `ICON_REGISTRY`, with the default at `public/images/icons/inventory.svg` and its rule in `_icons.css`. The sidebar Inventory button, the participant card's inventory button and the Prospero Inventory card and the Inventory workspace tab (`lib/workspace/tab-meta.ts`) use it instead of `dice`, which stays with the RNG dropdown and Pascal's Workbench.
