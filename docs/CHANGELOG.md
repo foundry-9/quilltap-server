@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Fix: memory importance scale no longer rates work commitments with family facts
+
+- The SELF and OTHER extraction prompts, the episode prompt and the consolidation prompt share one recalibrated scale. 0.95 is for facts that redefine a life or bond (marriage, vows, pregnancy, birth, death, a change of body, joining or leaving the family); 0.85 for revelations and spoken personal commitments about a relationship; work commitments to build, file, fix or rule on something sit at 0.60–0.65; work decisions in passing at 0.45. The old 0.90 "spoken commitment" anchor put every "agreed to build X" beside pregnancies, and with newest-first tie-breaking the frozen archive's importance fill became the latest build-session rows.
+- New `WORK_IMPORTANCE_CEILING` (0.65) and `IMPORTANCE_WORK_CEILING_NOTE` in `lib/memory/extraction/prompts/shared.ts`, stated verbatim in all four prompts. The prompts' worked examples were rescored to match, and each gained a 0.95 family-fact example.
+- All four prompts also carry `IMPORTANCE_FACT_NOT_TELLING_NOTE`: a pregnancy, marriage, birth, death, change of body, or someone joining or leaving the family scores 0.95 however it arrives; the 0.85 band is for revelations whose content is not itself such a fact. Without it, a dry run over a breakfast pregnancy announcement scored most pregnancy memories 0.85 as "revealed …".
+- Existing rows are not rescored. The hourly rate limit's importance floor (default 0.7) now drops work notes first under pressure.
+- Tests: `lib/memory/extraction/__tests__/importance-rubric.test.ts`. Help: `help/memory-recall-relevance.md` ("How the Book Rates a New Note"). Phase 1 of `docs/developer/features/inner-circle-recall.md`.
+
 #### Fix: a custom tool's LLM consult can narrate a verdict the table already reached (bug 257)
 
 - An outcome row can carry a `brief` (the conclusion it means). When no row tests `llm`, the table is dealt before the consult and the prompt can quote `{{outcome.brief}}`, `{{outcome.state}}` and `{{outcome.index}}`, so the model is told the verdict instead of asked to compare numbers. The same placeholders work in messages, the chip label and effects. Tables that test `llm` keep the old order.

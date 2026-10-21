@@ -8,7 +8,7 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import { renderStretch, type StretchMessage } from '../window'
-import { renderClockStamp, type ExtractionClock } from './shared'
+import { IMPORTANCE_FACT_NOT_TELLING_NOTE, IMPORTANCE_WORK_CEILING_NOTE, renderClockStamp, type ExtractionClock } from './shared'
 
 /** Hard cap on consolidated episodes per fold. */
 export const FOLD_EPISODE_CAP = 2
@@ -31,8 +31,15 @@ For each episode:
   narrativeTime the in-story time phrase, only when the story runs on a
                 fictional timeline ("the third night at sea")
   entities      2–6 proper nouns: places, people, named things
-  importance    0.20–1.00 (0.9 = a day the participants will retell for
-                years; 0.5 = a pleasant but ordinary outing)
+  importance    0.20–1.00 (0.95 = a day that changed the family: a
+                wedding, a birth, a death, a pregnancy revealed;
+                0.85 = a day the participants will retell for years;
+                0.5 = a pleasant but ordinary outing; a working session
+                is 0.45 or less)
+
+${IMPORTANCE_WORK_CEILING_NOTE}
+
+${IMPORTANCE_FACT_NOT_TELLING_NOTE}
 
 An episode records what was said and done, not what was agreed: attribute proposals and conditions to their speaker, and record an agreement only where the agreeing party's own assent appears in the window.
 

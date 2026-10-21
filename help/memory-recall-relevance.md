@@ -73,6 +73,22 @@ Each turn the Commonplace Book hands a character two bundles of recollection: a 
 
 The weighty shelf is chosen by how firmly a memory has been *established* — its importance together with how often it has been observed again — with the most recently re-observed winning any tie, and each conversation keeps its own shelf rather than borrowing whichever one an earlier conversation happened to leave lying about. When a maintenance round tidies a character's memories, every shelf for that character is rebuilt on the next turn.
 
+### How the Book Rates a New Note
+
+The weightiest shelf can only be as discerning as the ratings it is chosen by, and for a time the Book's clerks rated a promise to *build* something exactly as highly as a promise to *marry* someone. Every "agreed to put up a new logging table" landed beside a wedding, a pregnancy, a birth — and since the newest note wins a tie, a week of workshop talk could crowd a character's own spouse clean off the shelf.
+
+The clerks now work to a stricter ledger:
+
+- **0.95** — what changes the shape of a life or a bond: a marriage or vows, a pregnancy, a birth, a death, a change of body, someone joining or leaving the family.
+- **0.85** — a revelation that alters how a character sees themselves or another, or a personal promise spoken about the relationship itself.
+- **0.60–0.65** — a substantive new fact, plan or position, *including* a commitment to build, file, fix or rule upon something.
+- **0.45** — a working decision, ruling or task agreement made in passing.
+- **0.40** and below — passing preferences, gestures and single notes, as before.
+
+Work of any kind — building, filing, fixing, ruling — never rates above 0.65, however firmly it was sworn to. And the clerks rate the *fact*, not the manner of its telling: a pregnancy announced over breakfast is a pregnancy, and rates 0.95 whether it was declared, confessed, or merely overheard through the pantry door. The 0.85 shelf is kept for revelations whose substance is something else. The same ledger governs new notes, the dated accounts of notable days, and the digests that maintenance binds from many notes. Notes written before the change keep the ratings they were given; they are not re-rated after the fact.
+
+One consequence worth knowing if you use the hourly note limit on the Memory Maintenance card: its importance floor (0.7 by default) now sits above every workshop note, so when a character is writing quickly, the Book keeps the matters of the heart and lets the shop talk go first.
+
 A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence maintenance relies on honest.
 
 ## One Question, Asked Once

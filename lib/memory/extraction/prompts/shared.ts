@@ -155,6 +155,36 @@ export const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIO
   "custody, not confiscation — back at breakfast." A memory that
   drops the limit records a different, larger thing than was said.`
 
+/**
+ * Highest importance a work, project or tooling agreement may carry. Above it
+ * sits only what changes who someone is or what they are to each other.
+ * Before this ceiling every "agreed to build X" scored 0.90 as a "major
+ * commitment", saturating the top of the scale until the frozen archive's
+ * importance fill was simply the newest build-session rows.
+ * See docs/developer/features/inner-circle-recall.md Part A.
+ */
+export const WORK_IMPORTANCE_CEILING = 0.65
+
+/**
+ * The ceiling as every importance rubric states it — the SELF, OTHER and
+ * episode extraction prompts and the consolidation prompt.
+ */
+export const IMPORTANCE_WORK_CEILING_NOTE = `Work, project, and tooling agreements — building, filing, fixing, or
+ruling on something — never score above ${WORK_IMPORTANCE_CEILING.toFixed(2)}, however firmly they
+were spoken. The top of the scale is for what changes who someone is or
+what they are to each other.`
+
+/**
+ * Score the fact, not the telling — stated beside the ceiling in every
+ * importance rubric. A dry run over a breakfast pregnancy announcement scored
+ * most of the pregnancy memories 0.85 because they arrived as "revealed …",
+ * which matched the revelation anchor instead of the life-and-bond one.
+ */
+export const IMPORTANCE_FACT_NOT_TELLING_NOTE = `Score the fact, not the telling. A pregnancy, marriage, birth, death,
+change of body, or someone joining or leaving the family is a 0.95 fact
+however it arrives — announced, revealed, confessed, or overheard. The
+0.85 band is for revelations whose content is not itself such a fact.`
+
 export const TAGS_INSTRUCTION_BLOCK = `TAGS — every memory object MUST carry exactly one value from each axis.
 These describe the memory's frame; they do not change its content.
 
