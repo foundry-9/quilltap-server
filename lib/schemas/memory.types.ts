@@ -147,11 +147,23 @@ export const MemorySchema = z.object({
   consolidatedFrom: z.array(UUIDSchema).default([]),
   /** Last time the consolidator considered this row (clustered or not). */
   consolidatedAt: TimestampSchema.nullable().optional(),
+  /**
+   * Operator-marked standing fact (inner-circle-recall.md Part C): always in
+   * its holder's frozen archive when its subject is present, the holder, or in
+   * the inner circle, always rendered in full, and never folded, consolidated,
+   * demoted or footnoted. At most {@link KEYSTONES_PER_SUBJECT_MAX} hot ones per
+   * (holder, subject). Written only by hand, through `updateMemory` or the
+   * MANUAL create path.
+   */
+  keystone: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
 
 export type Memory = z.infer<typeof MemorySchema>;
+
+/** Most hot keystones one holder may keep about one subject (or about themself). */
+export const KEYSTONES_PER_SUBJECT_MAX = 5
 
 // ============================================================================
 // MEMORIES FILE

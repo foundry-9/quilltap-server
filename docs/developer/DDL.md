@@ -1450,7 +1450,8 @@ CREATE TABLE "memories" (
   "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the CONSOLIDATED digest that replaced this cold row
   "supersededAt" TEXT DEFAULT NULL,      -- added in 4.10 (add-memory-superseded-at-v1): when the row went cold under its digest; set/cleared with supersededById. Cold retention ages by it, not updatedAt (bug 225). Backfilled from updatedAt for rows already superseded
   "consolidatedFrom" TEXT DEFAULT '[]',  -- added in 4.10: on a digest, JSON string[] of the member memory ids it folds
-  "consolidatedAt" TEXT DEFAULT NULL     -- added in 4.10: last time the consolidator considered this row
+  "consolidatedAt" TEXT DEFAULT NULL,    -- added in 4.10: last time the consolidator considered this row
+  "keystone" INTEGER NOT NULL DEFAULT 0  -- added in 4.11 (add-memory-keystone-v1): 1 = operator-marked standing fact. Always in the frozen archive (full text) when its subject is present, the holder, or in the inner circle; never folded, consolidated, demoted, footnoted or cascade-retired. At most 5 hot per (characterId, subject), enforced by updateMemory / the manual create route
 );
 
 CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
@@ -1461,6 +1462,7 @@ CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 CREATE INDEX "idx_memories_character_tier" ON "memories" ("characterId", "tier");  -- added in 4.10 (add-memory-tiers-v1)
 CREATE INDEX "idx_memories_supersededById" ON "memories" ("supersededById") WHERE "supersededById" IS NOT NULL;  -- added in 4.10 (add-memories-superseded-by-index-v1): the delete chokepoint's "members of a deleted digest" lookup
+CREATE INDEX "idx_memories_keystone" ON "memories" ("characterId", "aboutCharacterId") WHERE "keystone" = 1;  -- added in 4.11 (add-memory-keystone-v1): the frozen archive's keystone reads (findKeystones / countKeystones)
 ```
 
 `aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:

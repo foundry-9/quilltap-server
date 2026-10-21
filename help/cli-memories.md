@@ -41,6 +41,7 @@ quilltap memories tree     <id|prefix> [--depth N] [--max-nodes N]       # ASCII
 quilltap memories status   [--character <name|id>] [--port <n>]          # Per-holder rollup + maintenance ledger
 quilltap memories validate [--character <name|id>] [--list]              # Read-only health check
 quilltap memories validate --repair [--write]                            # Ask the running server to mend the lattice
+quilltap memories keystone <id|prefix> [--off] [--write]                 # Mark (or unmark) a standing fact, via the running server
 quilltap memories maintain --character <name|id|all> [--phases a,b] [--dry-run] [--max N] [--threshold X] [--cap N]  # Ask the running server for a round of maintenance
 ```
 
@@ -56,6 +57,7 @@ The same filter flags apply to `ls`, `find`, `grep`, and (where they make sense)
 | `--about <name\|id\|self\|none>` | The *subject*. `self` shorthand for self-referential memories; `none` for legacy memories whose `aboutCharacterId` is null. |
 | `--source AUTO\|MANUAL\|CONSOLIDATED` | Auto-extracted, manually entered, or a digest written by [Memory Maintenance](memory-maintenance.md). |
 | `--tier hot\|cold` | Active (`hot`) memories only, or archived (`cold`) ones. Without it, both. Archived rows are marked with `*` in the `src` column. |
+| `--keystone` | Keystones only — the standing facts you have marked. In tables a keystone's summary is prefixed with `◆`. |
 | `--chat <id\|title\|none>` | The source chat. `none` restricts to manual memories. |
 | `--project <id\|name>` | Project context. |
 | `--since <date>` / `--until <date>` | ISO date floor / ceiling on `createdAt`. |
@@ -154,7 +156,7 @@ quilltap memories show abc12345 --no-related --json
 
 The `<id>` argument accepts a full UUID or a unique prefix of at least eight characters. An ambiguous prefix prints the candidates and exits 2.
 
-The default output shows the holder, the subject, the source, the (raw and reinforced) importance scores, every relevant timestamp, the source chat (or `(manual entry)` if there isn't one), the keywords and tags, the summary, the full content, and — at depth 1 by default — the direct related memories.
+The default output shows the holder, the subject, the source, the tier, whether the memory is a **keystone**, the (raw and reinforced) importance scores, every relevant timestamp, the source chat (or `(manual entry)` if there isn't one), the keywords and tags, the summary, the full content, and — at depth 1 by default — the direct related memories.
 
 Pass `--depth N` to walk further out (caps at 4). Pass `--no-related` (or `--depth 0`) to skip the related section entirely, which is appreciably faster for piping content into another tool.
 
@@ -218,6 +220,18 @@ The verb exits with code `0` if the lattice is clean, or `1` if any dangling lin
 With `--write`, the server scrubs every dangling related link, digest member and `supersededById` pointer (by the same careful route a retirement uses, so no count or link is left askew) and queues embedding jobs for the memories that lack one — up to two thousand per run, so a very large backlog may want a second application. If no default embedding profile is configured, the scrubbing still happens and the CLI tells you why no embedding jobs were queued.
 
 As with `quilltap db characters archive`, the write runs *inside* the server — which already holds the instance lock — rather than in the CLI, so the server must be up. `--write` is still required as the explicit opt-in; the CLI will not mend anything on a mere `--repair`. After a successful `--repair --write`, `validate` exits `0`.
+
+## `keystone` — Setting a Fact in Stone
+
+```text
+quilltap memories keystone abc12345                # rehearse: say what would change
+quilltap memories keystone abc12345 --write        # mark it a keystone
+quilltap memories keystone abc12345 --off --write  # unmark it
+```
+
+A [keystone](memory-recall-relevance.md#keystones-facts-set-in-stone) is a memory the character always recalls in full whenever its subject is present, is the character themself, or is in their inner circle, and which maintenance never folds, digests or archives. The `<id>` accepts a full UUID or a prefix of eight characters or more.
+
+Like `validate --repair`, the change is made by the **running** server, through the same door the Commonplace Book's editor uses — so the limit of five keystones per holder and subject is enforced, and an archived memory is refused. Without `--write` nothing changes; the CLI merely tells you what it would do.
 
 ## `maintain` — A Round of Maintenance
 

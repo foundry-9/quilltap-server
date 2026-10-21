@@ -24,6 +24,7 @@ interface Memory {
   tagDetails?: Tag[]
   importance: number
   source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  keystone?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -43,6 +44,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     summary: memory?.summary || '',
     keywords: memory?.keywords?.join(', ') || '',
     importance: memory?.importance || 0.5,
+    keystone: memory?.keystone ?? false,
   })
 
   const { loading: saving, error, execute, clearError } = useAsyncOperation<void>()
@@ -63,6 +65,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         summary: form.formData.summary,
         keywords,
         importance: form.formData.importance,
+        keystone: form.formData.keystone,
       }
 
       const url = isEditing
@@ -198,6 +201,27 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               <p className="mt-1 qt-text-xs">
                 Higher importance memories are prioritized when building context.
               </p>
+            </div>
+
+            <div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="keystone"
+                  name="keystone"
+                  checked={form.formData.keystone}
+                  onChange={form.handleChange}
+                  className="qt-checkbox mt-0.5"
+                />
+                <span>
+                  <span className="block qt-text-label">Keystone — always remembered</span>
+                  <span className="block qt-text-xs">
+                    A standing fact, set in stone until you yourself chip it out. Whenever its subject is in the
+                    room, in the character&apos;s own circle, or is the character themself, it is recalled in full,
+                    and no tidying of the Book will ever fold, digest or shelve it. Five to a subject, at most.
+                  </span>
+                </span>
+              </label>
             </div>
 
             {error && (

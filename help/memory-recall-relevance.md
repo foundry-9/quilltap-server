@@ -123,6 +123,21 @@ These lines arrive under their own heading, *Those Closest to You*, ahead of the
 
 Nobody present is counted twice: a member of the circle who has joined the chat is recalled among the present company instead. A character in no Group at all simply has no such section.
 
+## Keystones: Facts Set in Stone
+
+Some facts are not to be weighed, ranked or summarised; they are simply so. A sister's name. The colour of a wife's hair. The child she is carrying. The Book's ordinary machinery — importance, reinforcement, the cheerful compression of digests — serves most memories admirably and these few rather poorly, for a fact stated once and never repeated may sink beneath a hundred livelier anecdotes.
+
+So you may mark any memory a **keystone**. Open it in the Commonplace Book, tick **Keystone — always remembered**, and save. (A hand-written memory may be marked as you write it.) From then on:
+
+- whenever its subject is **in the room**, is **the character themself**, or belongs to their **inner circle** (above), the keystone takes its place on the steady shelf ahead of every digest about that person;
+- it is recalled **in full**, never in summary, wherever it appears — a keystone about someone present is lifted into *Those Closest to You* for the purpose;
+- when the shelf runs short of room, every ordinary line gives way before any keystone does;
+- maintenance never folds, digests or archives it (see [Memory Maintenance](memory-maintenance.md#keystones-are-beyond-the-staffs-reach)), and only your own hand changes its words.
+
+A keystone about somebody outside all three circles enjoys no reserved seat; it competes for room like any other memory, though it is still read out in full when it wins one.
+
+Restraint is the whole of the art. A character may keep at most **five** keystones about any one person (and five about themself), and the Book will politely decline a sixth until you unmark one. An archived memory cannot be a keystone; mark the digest that replaced it instead.
+
 ## Whose Life Is It, Anyway?
 
 A character's Commonplace Book keeps two sorts of entry side by side: what the character recalls of *themselves*, and what they have observed of *everybody else*. The two have always been filed apart — but for a time the Book, in its haste to be helpful, read out both sorts in the same breath, without troubling to say which was which. The effect, upon a character of long acquaintance and many entries, was much as you would expect: handed a page of another's doings under the heading *you remember*, it took the page at its word and answered in that person's voice, with that person's history, entirely convinced.

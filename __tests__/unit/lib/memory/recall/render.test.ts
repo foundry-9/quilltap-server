@@ -92,6 +92,16 @@ function head(
 const EMPTY = { content: '', tokenCount: 0, memoriesUsed: 0, lines: [], debugMemories: [] }
 
 describe('renderArchive', () => {
+  it('renders summaries, but a keystone in full', () => {
+    const result = renderArchive([
+      memory('a-id', 'plain summary', 'plain content'),
+      memory('k-id', 'keystone summary', 'Abigail has emerald-green hair and teal eyes', { keystone: true }),
+    ], 1000, provider, SELF_SUBJECT)
+    expect(result.content).toContain('- plain summary')
+    expect(result.content).toContain('- Abigail has emerald-green hair and teal eyes')
+    expect(result.content).not.toContain('keystone summary')
+  })
+
   it('emits memories in input order (caller sorts by id)', () => {
     const archive = [
       memory('a-id', 'first archive entry'),
@@ -147,13 +157,14 @@ describe('renderInnerCircle', () => {
   const ABIGAIL = '00000000-0000-0000-0000-0000000000a1'
   const GREG = '00000000-0000-0000-0000-0000000000a2'
   const subject = { selfCharacterId: SELF_ID, characterNames: new Map([[ABIGAIL, 'Abigail'], [GREG, 'Greg']]) }
-  function entry(id: string, about: string, tier: number, rank: number, order: number, content: string): InnerCircleEntry {
+  function entry(id: string, about: string, tier: number, rank: number, order: number, content: string, keystone = false): InnerCircleEntry {
     return {
-      memory: memory(id, `${id} summary`, content, { aboutCharacterId: about, keywords: ['family', 'past'] }),
+      memory: memory(id, `${id} summary`, content, { aboutCharacterId: about, keywords: ['family', 'past'], keystone }),
       characterId: about,
       tier,
       rank,
       order,
+      keystone,
     }
   }
   const entries = [
@@ -191,6 +202,16 @@ describe('renderInnerCircle', () => {
     const full = renderInnerCircle(sameTier, 1000, provider, subject)
     const tight = renderInnerCircle(sameTier, full.tokenCount - 1, provider, subject)
     expect(tight.lines.map(l => l.memoryId)).toEqual(['a-0', 'g-0'])
+  })
+
+  it('cuts every digest before any keystone, whatever the tier', () => {
+    const mixed = [
+      entry('a-0', ABIGAIL, 0, 0, 0, 'first about Abigail'),
+      entry('g-k', GREG, 2, 0, 1, 'Greg is the ship\'s doctor', true),
+    ]
+    const full = renderInnerCircle(mixed, 1000, provider, subject)
+    const tight = renderInnerCircle(mixed, full.tokenCount - 1, provider, subject)
+    expect(tight.lines.map(l => l.memoryId)).toEqual(['g-k'])
   })
 
   it('is empty with no entries or no room', () => {

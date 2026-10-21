@@ -451,6 +451,7 @@ import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-his
 import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory-v1';
 import { addCharacterInventoryFlagMigration } from './add-character-inventory-flag-v1';
 import { addTerminalSessionGeometryMigration } from './add-terminal-session-geometry-v1';
+import { addMemoryKeystoneMigration } from './add-memory-keystone-v1';
 
 /**
  * All available migrations.
@@ -926,6 +927,8 @@ export const migrations: Migration[] = [
   addCharacterInventoryFlagMigration,
   // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
   addTerminalSessionGeometryMigration,
+  // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
+  addMemoryKeystoneMigration,
 ];
 
 export {
@@ -1378,5 +1381,7 @@ export {
   addCharacterInventoryFlagMigration,
   // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
   addTerminalSessionGeometryMigration,
+  // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
+  addMemoryKeystoneMigration,
 };
 

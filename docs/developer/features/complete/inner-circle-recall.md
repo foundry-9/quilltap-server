@@ -1,10 +1,10 @@
 # Inner-Circle Recall — Groups, Keystones and an Honest Importance Scale
 
-**Status:** Phases 1–2 (Parts A and B) implemented 2026-10-21; Phase 3 proposed
+**Status:** Implemented 2026-10-21 (all three phases; as-built notes in A1, B7 and C7)
 **Owner:** Charlie
 **Drafted:** 2026-10-21
-**Touches:** [memory-system-refactor.md](complete/memory-system-refactor.md) (the archive, recall and admission chokepoints),
-[recall-multiplier-retuning.md](complete/recall-multiplier-retuning.md) (the replay harness used to validate)
+**Touches:** [memory-system-refactor.md](memory-system-refactor.md) (the archive, recall and admission chokepoints),
+[recall-multiplier-retuning.md](recall-multiplier-retuning.md) (the replay harness used to validate)
 
 On the morning of 2026-10-21, in the Friday chat
 `f343608e-d950-4d2c-bcb4-42f22b13edd9`, Friday and Amy each forgot basic facts
@@ -60,7 +60,7 @@ memory at all that says Abigail has a human body or is pregnant.
 
 ### 1.2 Why trivia won the archive
 
-`computeFrozenArchive` ([archive.ts](../../../lib/memory/recall/archive.ts))
+`computeFrozenArchive` ([archive.ts](../../../../lib/memory/recall/archive.ts))
 builds the archive in three steps:
 
 1. 3 hot digests about each character present.
@@ -92,10 +92,10 @@ commitments":
 
 The rubric anchors at fault:
 
-- **[prompts/self.ts](../../../lib/memory/extraction/prompts/self.ts):**
+- **[prompts/self.ts](../../../../lib/memory/extraction/prompts/self.ts):**
   "0.90 The subject made a major commitment (one the subject spoke themselves)
   …".
-- **[prompts/other.ts](../../../lib/memory/extraction/prompts/other.ts):**
+- **[prompts/other.ts](../../../../lib/memory/extraction/prompts/other.ts):**
   "0.90 An explicit new commitment the subject themselves spoke, or a
   revelation …".
 
@@ -486,7 +486,7 @@ memory: one holder, one `aboutCharacterId`.
   - `ALTER TABLE` plus the index;
   - a pretty label in `lib/startup/prettify.ts`;
   - no loop, so no `reportProgress`.
-- Update [DDL.md](../DDL.md), `public/schemas/qtap-export.schema.json`
+- Update [DDL.md](../../DDL.md), `public/schemas/qtap-export.schema.json`
   (`$defs/Memory`), and the export, import and backup paths (the field rides
   with the row; restore and import preserve it).
 - **Limit:** at most `KEYSTONES_PER_SUBJECT_MAX = 5` hot keystones per
@@ -548,6 +548,84 @@ invalidate.
 There is no automatic seeding. The spec's own acceptance test seeds keystones on
 Friday by hand for the facts in §1.1. A future "suggest keystones" maintenance
 phase is listed in §6.
+
+### C7. As built (2026-10-21)
+
+- **Storage.** The column, partial index and migration are as C2 specifies. A
+  fresh database gets the column from the Zod DDL. Raw-query reads
+  (`hydrateRawRows`) convert the stored 0 / 1 to a boolean before validation.
+  Without that, every `findHotDigests` / `findMostImportant` row would have
+  failed `MemorySchema` and been dropped. `MemoryCreateInput` takes `keystone`
+  as optional (default false). Backup, restore and export carry whole rows; the
+  `.qtap` importer names the field explicitly.
+- **Order.** `findKeystones` orders by `createdAt ASC, id ASC`, not
+  `updatedAt`. `updatedAt` moves on every link rewrite and reinforcement, which
+  would reshuffle the section after each invalidation.
+- **Archive placement.**
+  - A present character's keystones are *lifted* into `## Those Closest to You`
+    as entries at tier −1, ahead of the circle. They are step-1 rows, so they
+    do not count against the circle's cap.
+  - Self keystones stay among the anchors. `renderArchive` and `renderHead`
+    render any keystone's `content` instead of its summary, so "full text
+    wherever it lands" holds outside the circle section too.
+  - A circle member's keystones are taken before their digests, outside the
+    tier allowance. All circle keystones are read in one query, so a loose
+    tier's keystone is never skipped by the tier early-stop.
+- **Trim order.** `innerCircleTrimOrder` sorts keystones before every digest,
+  then by tier, rank and order. Under both the count cap and the token budget,
+  every digest therefore gives way before any keystone. This reconciles B2
+  ("its digests, then its keystones") with B3 ("keystones last").
+- **Protection.**
+  - `policyProtectionOf` returns `'keystone'` ahead of every other reason. That
+    covers the near-duplicate fold's eligibility and `retireChatMemories`'
+    `keep: 'manual'`. `sparedBy` gains a `keystone` count.
+  - `bucketCandidates` skips keystones, both as AUTO members and as seed
+    digests, because a seed digest is rewritten when it takes members in.
+  - `isDemotable` excludes keystones. `protection()` reports one protected by
+    its mark.
+  - `foldInto` appends no footnote and widens no anchor field on a keystone
+    survivor. It still counts and links.
+  - The retirement cascade keeps a keystone digest whose last member retires.
+    This goes beyond C4 but follows the same rule: deletion is the operator's.
+- **Writes.**
+  - `updateMemory` validates through `checkKeystone`: hot only, and at most
+    `KEYSTONES_PER_SUBJECT_MAX` per subject.
+  - Self counts the holder's own id and NULL together. The check runs only when
+    the mark is set or a keystone's subject moves.
+  - A refusal is `{ reason: 'keystone-refused', message }`, which the PUT
+    returns as a 400.
+  - The manual create checks the limit before admission. It then marks the
+    admitted row through `updateMemory`, which may be an existing row the
+    candidate folded into.
+- **UI.**
+  - The editor has a **Keystone — always remembered** checkbox.
+  - The card shows a **Keystone** badge.
+  - The list has a **Keystones only** filter (`?keystone=true` on the list
+    route and the paginated finder).
+- **CLI.**
+  - `ls --keystone` lists keystones only. Tables prefix a keystone's summary
+    with ◆.
+  - `show` prints a `Keystone:` line.
+  - `keystone <id> [--off] [--write]` PUTs through the new `putMemory` helper
+    and is a dry run without `--write`. A pre-migration instance reads
+    `0 AS keystone`.
+  - All three shell completions are updated.
+- **Tests.**
+
+  | File | Covers |
+  |---|---|
+  | `keystone-repository.test.ts` | Real SQLite: find, count, hydration |
+  | `keystone-protection.test.ts` | Fold, near-duplicate fold, consolidation, demotion, protection |
+  | `update-memory.test.ts` | The limit, self counting, subject moves, cold refusal, unmarking |
+  | `frozen-archive-cache.test.ts` | Lifting, self, circle priority under the cap |
+  | `render.test.ts` | Full-text anchors, keystone-last trim |
+  | `memory-index-and-retire.test.ts` | Chat-wipe spare, cascade survival |
+  | `policy-protection.test.ts` | The new `keystone` reason |
+
+- **Not yet done.** The §7 step-1 acceptance test seeds the §1.1 facts as
+  keystones by hand on Friday and replays. Friday has not yet run the
+  migration, and seeding is a write, so it is left to the operator. The
+  `memories keystone --write` verb, or the editor, does it.
 
 ---
 
@@ -616,6 +694,6 @@ Experiments run in **V4test**, never in Friday. Friday is used read-only
 - `help/groups.md`: group membership now shapes what characters remember about
   each other.
 - `help/cli-memories.md` and `packages/quilltap/README.md`: `--keystone`.
-- [DDL.md](../DDL.md), `qtap-export.schema.json`, `docs/CHANGELOG.md`.
+- [DDL.md](../../DDL.md), `qtap-export.schema.json`, `docs/CHANGELOG.md`.
 - Move this file to `complete/` with implementation notes when done, and add a
-  line under the memory section of the [ROADMAP](ROADMAP.md).
+  line under the memory section of the [ROADMAP](../ROADMAP.md).

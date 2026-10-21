@@ -18,7 +18,7 @@
  *
  * Membership lives in the mount-index DB; group and character names are plain
  * columns read without the vault overlay, so a broken vault costs a member,
- * never the turn. Design of record: docs/developer/features/inner-circle-recall.md
+ * never the turn. Design of record: docs/developer/features/complete/inner-circle-recall.md
  * (Part B).
  *
  * @module memory/recall/inner-circle

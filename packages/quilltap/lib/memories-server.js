@@ -3,9 +3,10 @@
 /**
  * The one way a `quilltap memories` verb asks the running server to do what
  * the CLI cannot: anything that calls a model, computes an embedding or
- * writes. The CLI's own database access is read-only; `maintain` and
- * `validate --repair` resolve what they can locally and POST the rest to
- * `/api/v1/memories?action=<action>`.
+ * writes. The CLI's own database access is read-only; `maintain`,
+ * `validate --repair` and `keystone` resolve what they can locally and send
+ * the rest to `/api/v1/memories?action=<action>` (or, for a hand edit, the
+ * memory's own PUT).
  *
  * The port comes from `resolveServerPort` (lock-helpers): an explicit
  * `--port`, else the port recorded in the `--instance` / `--data-dir`
@@ -29,28 +30,20 @@ function resolveMemoriesServerPort(flags, { quiet = false } = {}) {
 }
 
 /**
- * POST `body` to `/api/v1/memories?action=<action>` and return the parsed
- * payload. Throws an Error with a readable message on a connection failure
- * or a non-2xx response.
- *
- * @param {object} flags            parsed memories flags (port / instance / dataDir)
- * @param {string} action           the `?action=` name
- * @param {object} body             JSON request body
- * @param {object} [opts]
- * @param {string} [opts.why]       one line on why the server is needed
- * @param {(msg: string) => void} [opts.announce] called with the URL before the request
- * @param {typeof fetch} [opts.fetchImpl] for tests
+ * Send `body` to a memories API path on the running server and return the
+ * parsed payload. Throws an Error with a readable message on a connection
+ * failure or a non-2xx response.
  */
-async function postMemoriesAction(flags, action, body, opts = {}) {
-  const { why, announce, fetchImpl = fetch } = opts;
+async function requestMemoriesApi(flags, method, path, body, opts = {}) {
+  const { why, announce, fetchImpl = fetch, action } = opts;
   const target = resolveMemoriesServerPort(flags);
-  const url = `http://localhost:${target.port}/api/v1/memories?action=${encodeURIComponent(action)}`;
+  const url = `http://localhost:${target.port}${path}`;
   if (announce) announce(url);
 
   let res;
   try {
     res = await fetchImpl(url, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
@@ -75,7 +68,7 @@ async function postMemoriesAction(flags, action, body, opts = {}) {
         .map((d) => `${Array.isArray(d.path) && d.path.length ? d.path.join('.') + ' ' : ''}${d.message || ''}`.trim())
         .join('; ');
     }
-    if (res.status === 400 && /unknown action|invalid action/i.test(msg)) {
+    if (action && res.status === 400 && /unknown action|invalid action/i.test(msg)) {
       msg += ` (is the server older than this CLI? '${action}' needs a matching Quilltap server)`;
     }
     throw new Error(msg);
@@ -83,4 +76,30 @@ async function postMemoriesAction(flags, action, body, opts = {}) {
   return payload;
 }
 
-module.exports = { postMemoriesAction, resolveMemoriesServerPort };
+/**
+ * POST `body` to `/api/v1/memories?action=<action>` and return the parsed
+ * payload. Throws an Error with a readable message on a connection failure
+ * or a non-2xx response.
+ *
+ * @param {object} flags            parsed memories flags (port / instance / dataDir)
+ * @param {string} action           the `?action=` name
+ * @param {object} body             JSON request body
+ * @param {object} [opts]
+ * @param {string} [opts.why]       one line on why the server is needed
+ * @param {(msg: string) => void} [opts.announce] called with the URL before the request
+ * @param {typeof fetch} [opts.fetchImpl] for tests
+ */
+async function postMemoriesAction(flags, action, body, opts = {}) {
+  return requestMemoriesApi(flags, 'POST', `/api/v1/memories?action=${encodeURIComponent(action)}`, body, { ...opts, action });
+}
+
+/**
+ * PUT a hand edit to `/api/v1/memories/<id>` (the edit chokepoint) and return
+ * the parsed payload (`{ memory }`). Same options and errors as
+ * {@link postMemoriesAction}.
+ */
+async function putMemory(flags, id, body, opts = {}) {
+  return requestMemoriesApi(flags, 'PUT', `/api/v1/memories/${encodeURIComponent(id)}`, body, opts);
+}
+
+module.exports = { postMemoriesAction, putMemory, resolveMemoriesServerPort };

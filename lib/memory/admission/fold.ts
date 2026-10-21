@@ -61,7 +61,7 @@ export interface FoldSource {
 export type FoldSurvivor = Pick<
   Memory,
   'id' | 'content' | 'occurredAt' | 'narrativeTime' | 'entities' | 'relatedMemoryIds' | 'lastReinforcedAt'
->
+> & Partial<Pick<Memory, 'keystone'>>
 
 export interface FoldPlan {
   survivorId: string
@@ -102,36 +102,12 @@ function latest(values: ReadonlyArray<string | null | undefined>): string | null
   return values.filter((v): v is string => typeof v === 'string' && v.length > 0).sort().pop() ?? null
 }
 
-/** Work out what folding `absorbed` into `survivor` changes. */
-export function foldInto(
+/** The anchor fields a fold widens: the earliest event time, a narrative time, entities up to the cap. */
+function anchorPatch(
   survivor: FoldSurvivor,
   absorbed: readonly FoldSource[],
   caps: FoldCaps,
-): FoldPlan {
-  const atCap = countReinforcementFootnotes(survivor.content) >= caps.footnoteCap
-
-  // Footnotes, judged against the content as it grows so two sources carrying
-  // the same detail append it once.
-  let content = survivor.content
-  const footnotes: string[] = []
-  for (const source of absorbed) {
-    const novel = extractNovelDetails(source.content, content)
-    if (novel.length === 0) continue
-    const next = appendCappedFootnotes(content, novel, caps.footnoteCap)
-    content = next.content
-    footnotes.push(...next.appended)
-  }
-
-  // Links: the sources' links, minus the group and what the survivor has.
-  const group = new Set<string>([survivor.id])
-  for (const source of absorbed) if (source.id) group.add(source.id)
-  const existingLinks = new Set(survivor.relatedMemoryIds ?? [])
-  const addLinks: string[] = []
-  for (const id of absorbed.flatMap((s) => s.relatedMemoryIds ?? [])) {
-    if (group.has(id) || existingLinks.has(id) || addLinks.includes(id)) continue
-    addLinks.push(id)
-  }
-
+): FoldPlan['patch'] {
   const patch: FoldPlan['patch'] = {}
   const occurredAt = earliest([survivor.occurredAt, ...absorbed.map((s) => s.occurredAt)])
   if (occurredAt && occurredAt !== survivor.occurredAt) patch.occurredAt = occurredAt
@@ -149,6 +125,43 @@ export function foldInto(
     entities.push(entity)
   }
   if (entities.length > (survivor.entities ?? []).length) patch.entities = entities
+  return patch
+}
+
+/** Work out what folding `absorbed` into `survivor` changes. */
+export function foldInto(
+  survivor: FoldSurvivor,
+  absorbed: readonly FoldSource[],
+  caps: FoldCaps,
+): FoldPlan {
+  const atCap = countReinforcementFootnotes(survivor.content) >= caps.footnoteCap
+  // A keystone's words and anchor fields change only by hand edit: a fold into
+  // one counts the observation and links, and writes nothing else.
+  const keystone = !!survivor.keystone
+
+  // Footnotes, judged against the content as it grows so two sources carrying
+  // the same detail append it once.
+  let content = survivor.content
+  const footnotes: string[] = []
+  for (const source of keystone ? [] : absorbed) {
+    const novel = extractNovelDetails(source.content, content)
+    if (novel.length === 0) continue
+    const next = appendCappedFootnotes(content, novel, caps.footnoteCap)
+    content = next.content
+    footnotes.push(...next.appended)
+  }
+
+  // Links: the sources' links, minus the group and what the survivor has.
+  const group = new Set<string>([survivor.id])
+  for (const source of absorbed) if (source.id) group.add(source.id)
+  const existingLinks = new Set(survivor.relatedMemoryIds ?? [])
+  const addLinks: string[] = []
+  for (const id of absorbed.flatMap((s) => s.relatedMemoryIds ?? [])) {
+    if (group.has(id) || existingLinks.has(id) || addLinks.includes(id)) continue
+    addLinks.push(id)
+  }
+
+  const patch: FoldPlan['patch'] = keystone ? {} : anchorPatch(survivor, absorbed, caps)
 
   const reinforcementDelta = absorbed.reduce((sum, s) => sum + Math.max(1, s.reinforcementCount ?? 1), 0)
   const reinforcedAt = latest([

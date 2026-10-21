@@ -19,7 +19,7 @@ export const PROTECTION_THRESHOLD = 0.5
 
 /** The fields protection reads. */
 export type ProtectionInput = Pick<Memory, 'importance' | 'createdAt'> &
-  Partial<Pick<Memory, 'reinforcedImportance' | 'lastReinforcedAt' | 'reinforcementCount' | 'relatedMemoryIds' | 'lastAccessedAt' | 'kind' | 'source'>>
+  Partial<Pick<Memory, 'reinforcedImportance' | 'lastReinforcedAt' | 'reinforcementCount' | 'relatedMemoryIds' | 'lastAccessedAt' | 'kind' | 'source' | 'keystone'>>
 
 /**
  * Configuration for the housekeeping protection score.
@@ -166,15 +166,15 @@ export function calculateProtectionScore(
 }
 
 export interface ProtectionBreakdown extends ProtectionScoreResult {
-  /** True for MANUAL and CONSOLIDATED rows, and for AUTO rows at or above {@link PROTECTION_THRESHOLD}. */
+  /** True for MANUAL and CONSOLIDATED rows and keystones, and for AUTO rows at or above {@link PROTECTION_THRESHOLD}. */
   protected: boolean
-  /** True when the row's source alone protects it (MANUAL or CONSOLIDATED; score reported as 1). */
+  /** True when the row's source or keystone mark alone protects it (score reported as 1). */
   protectedBySource: boolean
 }
 
 /**
  * How much a memory is worth keeping. A hand-written (MANUAL) row or a digest
- * (CONSOLIDATED) is never policy's to remove: it reports `protected: true`
+ * (CONSOLIDATED) or a keystone is never policy's to remove: it reports `protected: true`
  * with score 1. Any other row is protected when its blended score reaches
  * {@link PROTECTION_THRESHOLD}. Pure; `clock.nowMs` defaults to the wall clock.
  */
@@ -184,7 +184,7 @@ export function protection(
   config: ProtectionScoreConfig = DEFAULT_PROTECTION_CONFIG,
 ): ProtectionBreakdown {
   const result = calculateProtectionScore(memory, config, new Date(clock.nowMs ?? Date.now()))
-  if (memory.source === 'MANUAL' || memory.source === 'CONSOLIDATED') {
+  if (memory.source === 'MANUAL' || memory.source === 'CONSOLIDATED' || memory.keystone) {
     return { ...result, score: 1, protected: true, protectedBySource: true }
   }
   return { ...result, protected: result.score >= PROTECTION_THRESHOLD, protectedBySource: false }

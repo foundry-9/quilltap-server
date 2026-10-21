@@ -105,6 +105,8 @@ interface RetireRow {
   aboutCharacterId: string | null
   consolidatedFrom: string | null
   supersededById: string | null
+  /** 1 for a keystone (SQLite boolean). */
+  keystone: number | null
 }
 
 /** Warn when one retirement rewrites more neighbours than a cascade normally would. */
@@ -119,7 +121,7 @@ function emptyReport(requested: number): RetireReport {
     retired: 0,
     retiredIds: [],
     spared: 0,
-    sparedBy: { manual: 0, digest: 0, cold: 0 },
+    sparedBy: { keystone: 0, manual: 0, digest: 0, cold: 0 },
     digestsRetiredWithLastMember: 0,
     vectorsRemoved: 0,
     neighboursTouched: 0,
@@ -143,7 +145,7 @@ async function resolveRows(ids: readonly string[]): Promise<RetireRow[]> {
   for (const chunk of chunkArray([...ids], SQLITE_VARIABLE_CHUNK_SIZE)) {
     rows.push(
       ...(await rawQuery<RetireRow[]>(
-        `SELECT id, characterId, source, tier, aboutCharacterId, consolidatedFrom, supersededById
+        `SELECT id, characterId, source, tier, aboutCharacterId, consolidatedFrom, supersededById, keystone
            FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
         chunk,
       )),
@@ -195,6 +197,7 @@ async function applyKeepManual(
     const protection = policyProtectionOf({
       source: row.source as 'AUTO' | 'MANUAL' | 'CONSOLIDATED',
       tier: row.tier === 'cold' ? 'cold' : 'hot',
+      keystone: !!row.keystone,
     })
     if (!protection) {
       doomed.push(row)
@@ -238,25 +241,35 @@ async function cascadeEmptiedDigests(
   const repos = getRepositories()
   let added = 0
   let containing: DigestRef[] | null = null
+  // A keystone digest is the operator's to delete: it outlives its members.
+  const keptKeystones = new Set<string>()
   for (let pass = 0; pass < MAX_DIGEST_CASCADE_PASSES; pass++) {
     const holders = [...new Set([...doomed.values()].map((r) => r.characterId))]
     const digests = await repos.memories.findDigestsContainingMembers(holders, [...doomed.keys()])
     containing = digests
-    const candidates = digests.filter((d) => !doomed.has(d.id))
+    const candidates = digests.filter((d) => !doomed.has(d.id) && !keptKeystones.has(d.id))
     if (candidates.length === 0) break
 
     const alive = await digestsWithLivingMember(candidates, new Set(doomed.keys()))
     const emptied = candidates.filter((digest) => !alive.has(digest.id))
     if (emptied.length === 0) break
+    let grew = false
     for (const row of await resolveRows(emptied.map((d) => d.id))) {
+      if (row.keystone) {
+        keptKeystones.add(row.id)
+        log.debug('Keystone digest kept though its last member retires', { digestId: row.id, characterId: row.characterId })
+        continue
+      }
       doomed.set(row.id, row)
+      added++
+      grew = true
       log.debug('Digest retires with its last member', {
         digestId: row.id,
         characterId: row.characterId,
         members: parseIdList(row.consolidatedFrom).length,
       })
     }
-    added += emptied.length
+    if (!grew) break
     containing = null // the doomed set grew after this read
   }
   return { added, containing }

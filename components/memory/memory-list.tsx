@@ -29,6 +29,7 @@ interface Memory {
   tagDetails?: Tag[]
   importance: number
   source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  keystone?: boolean
   /** 'cold' rows are archived: out of everyday recall, still on the shelf. */
   tier?: 'hot' | 'cold'
   /** The digest that replaced this row, when it has been folded. */
@@ -64,6 +65,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED'>('ALL')
   const [tierFilter, setTierFilter] = useState<'ALL' | 'hot' | 'cold'>('ALL')
+  const [keystoneOnly, setKeystoneOnly] = useState(false)
   const [viewedDigest, setViewedDigest] = useState<Memory | null>(null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -90,6 +92,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       if (currentSearch) params.set('search', currentSearch)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
       if (tierFilter !== 'ALL') params.set('tier', tierFilter)
+      if (keystoneOnly) params.set('keystone', 'true')
 
       const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
         `/api/v1/memories?${params}`
@@ -128,7 +131,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       setIsLoading(false)
       setLoadingMore(false)
     }
-  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter])
+  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter, keystoneOnly])
 
   // Reset and refetch when filters change or refreshKey changes
   useEffect(() => {
@@ -309,6 +312,15 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           <option value="hot">Active</option>
           <option value="cold">Archived</option>
         </select>
+        <label className="flex items-center gap-2 cursor-pointer qt-text-xs" title="Show only the standing facts you have set in stone">
+          <input
+            type="checkbox"
+            checked={keystoneOnly}
+            onChange={(e) => setKeystoneOnly(e.target.checked)}
+            className="qt-checkbox"
+          />
+          Keystones only
+        </label>
       </div>
 
       {/* Error State */}

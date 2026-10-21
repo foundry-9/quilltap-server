@@ -162,6 +162,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-chat-equipped-inventory-v1': "Fitting each chat with a croupier's ledger of what everyone is carrying",
   'add-character-inventory-flag-v1': 'Granting characters leave to rummage through their own bags',
   'add-terminal-session-geometry-v1': "Measuring each of Ariel's terminal windows, the better to read them back",
+  'add-memory-keystone-v1': 'Setting keystones in the Commonplace Book, that certain facts never slip',
   'add-wardrobe-image-settings-field-v1': 'Engaging a portraitist for the wardrobe',
   'add-memory-tiers-v1': 'Fitting the Commonplace Book with a cellar…',
   'add-memory-superseded-at-v1': 'Chalking a date on every bottle laid down in the cellar…',

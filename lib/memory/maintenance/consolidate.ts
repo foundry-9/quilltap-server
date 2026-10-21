@@ -93,6 +93,9 @@ export function bucketCandidates(
     stats.rowsLoaded++
     rowIndex.set(memory.id, { id: memory.id, relatedMemoryIds: memory.relatedMemoryIds ?? [] })
     const isHot = tierOf(memory) === 'hot'
+    // A keystone is never a member and never a seed: a seed digest is
+    // rewritten when it takes members in, and a member goes cold.
+    if (memory.keystone) continue
 
     if (memory.source === 'CONSOLIDATED') {
       if (!isHot) continue

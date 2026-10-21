@@ -120,6 +120,7 @@ beforeEach(() => {
       searchByContent: jest.fn(async () => []),
       findHotDigests: jest.fn(async (_holder: string, about: string) => (about === IRIS ? [digestB] : [])),
       findMostImportant: jest.fn(async () => [archived]),
+      findKeystones: jest.fn(async () => []),
       findByCharacterAboutCharacters: jest.fn(async () => [digestB, partitionB]),
       findRecentByImportanceTier: jest.fn(async () => ({ high: [recapOnly, archived], medium: [], low: [] })),
       updateAccessTimeBulk: jest.fn(async () => 0),

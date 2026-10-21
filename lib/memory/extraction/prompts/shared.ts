@@ -161,7 +161,7 @@ export const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIO
  * Before this ceiling every "agreed to build X" scored 0.90 as a "major
  * commitment", saturating the top of the scale until the frozen archive's
  * importance fill was simply the newest build-session rows.
- * See docs/developer/features/inner-circle-recall.md Part A.
+ * See docs/developer/features/complete/inner-circle-recall.md Part A.
  */
 export const WORK_IMPORTANCE_CEILING = 0.65
 

@@ -4,6 +4,34 @@
 
 ### 4.11-dev
 
+#### Feature: keystone memories
+
+- New `memories.keystone` column (migration `add-memory-keystone-v1`, with a partial `(characterId, aboutCharacterId)` index). It marks a memory as an operator-set standing fact.
+- In the frozen archive, keystones come before digests for each present character, for the holder, and for each inner-circle member.
+  - A present character's keystones move into `## Those Closest to You`.
+  - Self keystones stay in the anchors.
+  - Any keystone renders as full text, including in the anchors and the head.
+  - When the circle cap or token budget binds, every digest is cut before any keystone.
+- Maintenance never touches a keystone.
+  - The near-duplicate fold, consolidation (as member or seed) and demotion skip keystones, and they don't count against the cap.
+  - `foldInto` adds no `[+]` footnotes and no anchor fields to a keystone.
+  - Chat wipes spare keystones (`policyProtectionOf` returns `'keystone'`).
+  - A keystone digest survives when its last member retires.
+- Limits:
+  - At most 5 hot keystones per holder and subject (`KEYSTONES_PER_SUBJECT_MAX`). Self counts the holder's own id and NULL together.
+  - Cold rows can't be marked.
+  - Both rules are enforced in `updateMemory`. Manual create checks the limit before admission, then marks the row through `updateMemory`.
+- Fixed: raw-query memory reads now convert the stored 0/1 to a boolean before schema validation.
+- New repository methods `findKeystones` (ordered by creation) and `countKeystones`.
+- UI: a "Keystone — always remembered" checkbox in the memory editor, a Keystone badge on cards, and a "Keystones only" list filter (`?keystone=true`).
+- CLI:
+  - `memories ls --keystone` (◆ marks keystones in tables).
+  - `memories show` prints a Keystone line.
+  - New `memories keystone <id> [--off] [--write]` PUTs through the running server and is a dry run without `--write`.
+  - Shell completions updated.
+- Export schema, DDL.md, help (`memory-recall-relevance.md`, `memory-maintenance.md`, `cli-memories.md`) and the CLI README are updated.
+- The inner-circle-recall spec moved to `features/complete/` with as-built notes, and the roadmap now lists it.
+
 #### Feature: group members get reserved full-text slots in recall
 
 - The frozen archive now has an inner-circle step, after present characters and self digests and before the importance fill. Every character who shares a group with the speaker, except anyone present and archived characters, gets hot digests by the tier of the smallest shared group: 3 for the tightest group, 2 for the next, 1 for the rest.
@@ -13,7 +41,7 @@
 - `recall-replay --tuning` accepts `innerCircleShare` and `innerCircleAllowance`.
 - `findNamesByIds` takes an `excludeArchived` option.
 - The recall-replay result now includes the assembly's `warnings`, so a pool that failed is reported instead of showing up empty with no trace entry.
-- Spec: `docs/developer/features/inner-circle-recall.md` (Phase 2).
+- Spec: `docs/developer/features/complete/inner-circle-recall.md` (Phase 2).
 
 #### Fix: memory importance scale no longer rates work commitments with family facts
 
@@ -21,7 +49,7 @@
 - New `WORK_IMPORTANCE_CEILING` (0.65) and `IMPORTANCE_WORK_CEILING_NOTE` in `lib/memory/extraction/prompts/shared.ts`, stated verbatim in all four prompts. The prompts' worked examples were rescored to match, and each gained a 0.95 family-fact example.
 - All four prompts also carry `IMPORTANCE_FACT_NOT_TELLING_NOTE`: a pregnancy, marriage, birth, death, change of body, or someone joining or leaving the family scores 0.95 however it arrives; the 0.85 band is for revelations whose content is not itself such a fact. Without it, a dry run over a breakfast pregnancy announcement scored most pregnancy memories 0.85 as "revealed …".
 - Existing rows are not rescored. The hourly rate limit's importance floor (default 0.7) now drops work notes first under pressure.
-- Tests: `lib/memory/extraction/__tests__/importance-rubric.test.ts`. Help: `help/memory-recall-relevance.md` ("How the Book Rates a New Note"). Phase 1 of `docs/developer/features/inner-circle-recall.md`.
+- Tests: `lib/memory/extraction/__tests__/importance-rubric.test.ts`. Help: `help/memory-recall-relevance.md` ("How the Book Rates a New Note"). Phase 1 of `docs/developer/features/complete/inner-circle-recall.md`.
 
 #### Fix: a custom tool's LLM consult can narrate a verdict the table already reached (bug 257)
 

@@ -1048,6 +1048,10 @@
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
           "description": "Last time the consolidator considered this row. Null/absent when never considered."
         },
+        "keystone": {
+          "type": "boolean",
+          "description": "Operator-marked standing fact: always in the holder's frozen archive (in full) when its subject is present, the holder, or in the holder's group inner circle, and never folded, consolidated, demoted or footnoted. At most 5 hot keystones per (holder, subject). Absent reads as false."
+        },
         "occurredAt": {
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
           "description": "ISO wall-clock time of the EVENT the memory records (episodic spine) — distinct from createdAt, the write clock. Durable data; always exported."

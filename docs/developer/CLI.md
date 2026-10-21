@@ -77,7 +77,13 @@ reason as sync: the work runs through chokepoints that live in TypeScript (`admi
   `?action=repair` (`lib/memory/repair.ts`) with `dryRun: true` unless `--write` is given — the
   CLI's `--write` opt-in, as for `db characters archive`, with the lock held by the server.
 - The port comes from `resolveServerPort` (`lock-helpers.js`): `--port`, else the port recorded in
-  the `--instance`/`--data-dir` lock, else 3000. `memories-server.js` is the one POST helper.
+  the `--instance`/`--data-dir` lock, else 3000. `memories-server.js` is the one server helper:
+  `postMemoriesAction` (`?action=` POSTs) and `putMemory` (the item PUT, i.e. the `updateMemory`
+  chokepoint) share one request/error path.
+- `keystone <id> [--off] [--write]` resolves the id locally and, with `--write`, PUTs
+  `{ keystone }` to `/api/v1/memories/<id>`; without it, it prints what would change. `ls --keystone`
+  filters `m.keystone = 1`; `selectBase` reads `0 AS keystone` on an instance that predates
+  `add-memory-keystone-v1`.
 
 Modules: `packages/quilltap/lib/{memories-commands,memories-maintain-command,memories-server,graph-integrity}.js`.
 Rendering, phase parsing and the body builder are unit-tested in

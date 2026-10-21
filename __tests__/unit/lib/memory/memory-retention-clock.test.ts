@@ -127,7 +127,8 @@ beforeEach(() => {
   db = new Database(':memory:')
   db.exec(`CREATE TABLE memories (
     id TEXT PRIMARY KEY, characterId TEXT, aboutCharacterId TEXT, tier TEXT, source TEXT,
-    supersededById TEXT, supersededAt TEXT, consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT)`)
+    supersededById TEXT, supersededAt TEXT, consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT,
+    keystone INTEGER NOT NULL DEFAULT 0)`)
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) =>
     db.prepare(sql).all(...params))
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)

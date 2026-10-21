@@ -129,7 +129,8 @@ function ageTag(memory: Memory, now: Date): string {
 /**
  * The frozen archive — `## Memory Anchors`. Byte-stable within a compaction
  * generation: input order verbatim (the archive arrives id-sorted), summaries
- * only, and nothing that moves with the clock or the query.
+ * only — a keystone excepted, which always renders in full — and nothing that
+ * moves with the clock or the query.
  */
 export function renderArchive(
   memories: readonly Memory[],
@@ -143,7 +144,9 @@ export function renderArchive(
   let tokens = estimateTokens(`${header}\n`, provider)
   const section = emptySection<DebugMemoryInfo>()
   for (const memory of memories) {
-    const body = memory.summary?.trim() || memory.content?.trim() || ''
+    const body = memory.keystone
+      ? memory.content?.trim() || memory.summary?.trim() || ''
+      : memory.summary?.trim() || memory.content?.trim() || ''
     if (!body) continue
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
     const line = `- ${prefix}${body}${formatDigestProvenance(memory)}${formatKeywordsTag(memory.keywords)}`
@@ -206,7 +209,8 @@ export function renderInnerCircle(
  * The per-turn head — `Most relevant memories for this turn:`. Ranked by the
  * post-adjustment blend when a recall context drove the search, else by
  * salience with relevance breaking near-ties; capped by entries and tokens.
- * Every line is dated: the age label, and any narrative time.
+ * Every line is dated: the age label, and any narrative time. Summaries, but a
+ * keystone in full.
  */
 export function renderHead(
   candidates: readonly RecallCandidate[],
@@ -237,7 +241,9 @@ export function renderHead(
   const section = emptySection<DebugMemoryInfo>()
   const now = new Date(options.nowMs ?? Date.now())
   for (const { memory, score, salience, recallAdjustment } of ranked) {
-    const body = memory.summary?.trim() || memory.content?.trim() || ''
+    const body = memory.keystone
+      ? memory.content?.trim() || memory.summary?.trim() || ''
+      : memory.summary?.trim() || memory.content?.trim() || ''
     if (!body) continue
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
     const line = `${ageTag(memory, now)} ${prefix}${body}${formatDigestProvenance(memory)}${formatKeywordsTag(memory.keywords)}`

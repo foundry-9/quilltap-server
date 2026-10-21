@@ -117,18 +117,22 @@ export interface InnerCircleEntry {
   tier: number
   /** The digest's rank within its member's draw (0 = the member's first). */
   rank: number
-  /** The member's position in circle order. */
+  /** The member's position in circle order (or the present character's, for a lifted keystone). */
   order: number
+  /** An operator-marked standing fact (inner-circle-recall.md Part C). */
+  keystone: boolean
 }
 
 /**
- * Circle rows from most to least protected: tighter tier first, then a
- * member's earlier digests, then circle order. The archive's cap and the
- * renderer's token budget both cut from the end of this order, so the loosest
- * tier gives up lines first.
+ * Circle rows from most to least protected: keystones before digests, then
+ * the tighter tier, then a member's earlier rows, then circle order. The
+ * archive's cap and the renderer's token budget both cut from the end of this
+ * order, so the loosest tier's digests give up lines first and keystones last.
  */
-export function innerCircleTrimOrder<T extends Pick<InnerCircleEntry, 'tier' | 'rank' | 'order'>>(entries: readonly T[]): T[] {
-  return [...entries].sort((a, b) => a.tier - b.tier || a.rank - b.rank || a.order - b.order)
+export function innerCircleTrimOrder<T extends Pick<InnerCircleEntry, 'tier' | 'rank' | 'order' | 'keystone'>>(entries: readonly T[]): T[] {
+  return [...entries].sort((a, b) =>
+    Number(b.keystone) - Number(a.keystone) || a.tier - b.tier || a.rank - b.rank || a.order - b.order,
+  )
 }
 
 /** Which section a delivered row was in. */
