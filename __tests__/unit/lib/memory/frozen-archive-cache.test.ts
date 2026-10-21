@@ -11,8 +11,29 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 const findMostImportant = jest.fn<(...args: any[]) => any>()
 const findHotDigests = jest.fn<(...args: any[]) => any>()
 
+// Group membership: [groupId, characterId] rows, with group names and
+// character names beside them. Empty by default — no inner circle.
+let memberships: Array<[string, string]> = []
+let groupNames: Record<string, string> = {}
+let characterNames: Record<string, string> = {}
+let archivedIds = new Set<string>()
+const findNamesByIds = jest.fn(async (ids: string[], options?: { excludeArchived?: boolean }) =>
+  new Map(ids
+    .filter(id => characterNames[id] && !(options?.excludeArchived && archivedIds.has(id)))
+    .map(id => [id, characterNames[id]] as [string, string])))
+
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: () => ({ memories: { findMostImportant, findHotDigests } }),
+  getRepositories: () => ({
+    memories: { findMostImportant, findHotDigests },
+    groupCharacterMembers: {
+      findByCharacterId: async (characterId: string) =>
+        memberships.filter(([, c]) => c === characterId).map(([groupId, c]) => ({ groupId, characterId: c })),
+      findByGroupId: async (groupId: string) =>
+        memberships.filter(([g]) => g === groupId).map(([g, characterId]) => ({ groupId: g, characterId })),
+    },
+    groups: { findByIdRaw: async (id: string) => (groupNames[id] ? { id, name: groupNames[id] } : null) },
+    characters: { findNamesByIds },
+  }),
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -54,6 +75,10 @@ describe('frozen-archive-cache', () => {
     findMostImportant.mockReset()
     findHotDigests.mockReset()
     findHotDigests.mockResolvedValue([])
+    memberships = []
+    groupNames = {}
+    characterNames = {}
+    archivedIds = new Set()
   })
 
   it('hits cache when called twice with same generation', async () => {
@@ -83,7 +108,7 @@ describe('frozen-archive-cache', () => {
 
     const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0)
 
-    expect(archive.map(m => m.id)).toEqual(['aa-1', 'mm-1', 'zz-1'])
+    expect(archive.anchors.map(m => m.id)).toEqual(['aa-1', 'mm-1', 'zz-1'])
   })
 
   it('caps result at FROZEN_ARCHIVE_SIZE', async () => {
@@ -93,7 +118,7 @@ describe('frozen-archive-cache', () => {
     findMostImportant.mockResolvedValue(surplus)
 
     const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0)
-    expect(archive.length).toBe(FROZEN_ARCHIVE_SIZE)
+    expect(archive.anchors.length).toBe(FROZEN_ARCHIVE_SIZE)
   })
 
   it('invalidateFrozenArchive forces recompute', async () => {
@@ -114,8 +139,8 @@ describe('frozen-archive-cache', () => {
     const a = await getOrComputeFrozenArchive('char-1', 'chat-1', 0)
     const b = await getOrComputeFrozenArchive('char-2', 'chat-1', 0)
 
-    expect(a[0].id).toBe('a-1')
-    expect(b[0].id).toBe('b-1')
+    expect(a.anchors[0].id).toBe('a-1')
+    expect(b.anchors[0].id).toBe('b-1')
   })
 
   it('does not hand a new chat another chat\'s generation-0 archive', async () => {
@@ -125,8 +150,8 @@ describe('frozen-archive-cache', () => {
     const second = await getOrComputeFrozenArchive('char-1', 'chat-2', 0)
 
     expect(findMostImportant).toHaveBeenCalledTimes(2)
-    expect(first[0].id).toBe('old-1')
-    expect(second[0].id).toBe('new-1')
+    expect(first.anchors[0].id).toBe('old-1')
+    expect(second.anchors[0].id).toBe('new-1')
   })
 
   it('recomputes when the requested archive size changes', async () => {
@@ -206,7 +231,7 @@ describe('frozen-archive-cache', () => {
 
       expect(findHotDigests).toHaveBeenCalledWith('char-1', 'laura', 3)
       expect(findHotDigests).toHaveBeenCalledWith('char-1', 'self', 5)
-      expect(archive.map(m => m.id)).toEqual(['d-laura-1', 'd-laura-2', 'd-self-1', 'm-1', 'm-2'])
+      expect(archive.anchors.map(m => m.id)).toEqual(['d-laura-1', 'd-laura-2', 'd-self-1', 'm-1', 'm-2'])
     })
 
     it('dedupes a digest that also appears in the fill pool', async () => {
@@ -215,7 +240,7 @@ describe('frozen-archive-cache', () => {
       findMostImportant.mockResolvedValue([memory('dup-1', 0.95), memory('m-1', 0.5)])
 
       const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { size: 10 })
-      expect(archive.map(m => m.id)).toEqual(['dup-1', 'm-1'])
+      expect(archive.anchors.map(m => m.id)).toEqual(['dup-1', 'm-1'])
     })
 
     it('caps the whole archive at size with digests taking priority', async () => {
@@ -224,7 +249,7 @@ describe('frozen-archive-cache', () => {
       findMostImportant.mockResolvedValue([memory('m-1'), memory('m-2')])
 
       const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { size: 4 })
-      expect(archive.map(m => m.id)).toEqual(['m-1', 's-1', 's-2', 's-3'])
+      expect(archive.anchors.map(m => m.id)).toEqual(['m-1', 's-1', 's-2', 's-3'])
     })
 
     it('is deterministic regardless of present-id order and ignores the responder', async () => {
@@ -240,8 +265,8 @@ describe('frozen-archive-cache', () => {
         size: 10,
         presentCharacterIds: ['amy', 'zed'],
       })
-      expect(a.map(m => m.id)).toEqual(['d-amy', 'd-zed'])
-      expect(b.map(m => m.id)).toEqual(a.map(m => m.id))
+      expect(a.anchors.map(m => m.id)).toEqual(['d-amy', 'd-zed'])
+      expect(b.anchors.map(m => m.id)).toEqual(a.anchors.map(m => m.id))
     })
 
     it('recomputes when the set of present characters changes', async () => {
@@ -250,6 +275,105 @@ describe('frozen-archive-cache', () => {
       await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { presentCharacterIds: ['amy'] })
       await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { presentCharacterIds: ['amy', 'bob'] })
       expect(findMostImportant).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('inner circle (inner-circle-recall.md Part B)', () => {
+    function digest(id: string, about: string): Memory {
+      return { ...memory(id, 0.9), source: 'CONSOLIDATED', consolidatedFrom: ['x', 'y'], aboutCharacterId: about } as unknown as Memory
+    }
+
+    /** Amy's groups: a family of 3, a crew of 4, a club of 6. */
+    function seedGroups() {
+      groupNames = { family: 'Family', crew: 'Crew', club: 'Club' }
+      characterNames = {
+        amy: 'Amy', abigail: 'Abigail', laura: 'Laura',
+        ariel: 'Ariel', vergil: 'Vergil',
+        sarah: 'Sarah', greg: 'Greg', manjit: 'Manjit',
+      }
+      memberships = [
+        ['family', 'amy'], ['family', 'laura'], ['family', 'abigail'],
+        ['crew', 'amy'], ['crew', 'abigail'], ['crew', 'vergil'], ['crew', 'ariel'],
+        ['club', 'amy'], ['club', 'sarah'], ['club', 'greg'], ['club', 'manjit'], ['club', 'ariel'], ['club', 'laura'],
+      ]
+      findHotDigests.mockImplementation(async (_cid: string, about: string, limit: number) =>
+        about === 'self' ? [] : Array.from({ length: 4 }, (_, i) => digest(`d-${about}-${i}`, about)).slice(0, limit))
+      findMostImportant.mockResolvedValue([memory('m-1', 0.9)])
+    }
+
+    it('draws each member by the tier of their tightest group, in circle order, apart from the anchors', async () => {
+      seedGroups()
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+
+      // Tier 0 (Family): Abigail, Laura ×3. Tier 1 (Crew): Ariel, Vergil ×2. Tier 2 (Club): Greg, Manjit, Sarah ×1.
+      expect(archive.circle.map(e => e.memory.id)).toEqual([
+        'd-abigail-0', 'd-abigail-1', 'd-abigail-2',
+        'd-laura-0', 'd-laura-1', 'd-laura-2',
+        'd-ariel-0', 'd-ariel-1',
+        'd-vergil-0', 'd-vergil-1',
+        'd-greg-0', 'd-manjit-0', 'd-sarah-0',
+      ])
+      expect(archive.circle.map(e => e.tier)).toEqual([0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2])
+      expect(archive.anchors.map(m => m.id)).toEqual(['m-1'])
+    })
+
+    it('leaves out whoever is present and archived characters', async () => {
+      seedGroups()
+      archivedIds = new Set(['vergil'])
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60, presentCharacterIds: ['laura'] })
+
+      const members = new Set(archive.circle.map(e => e.characterId))
+      expect(members.has('laura')).toBe(false)
+      expect(members.has('vergil')).toBe(false)
+      expect(members.has('abigail')).toBe(true)
+      expect(findNamesByIds).toHaveBeenCalledWith(expect.any(Array), { excludeArchived: true })
+      // Laura's digests are the present step's, not the circle's.
+      expect(archive.anchors.map(m => m.id)).toEqual(expect.arrayContaining(['d-laura-0', 'd-laura-1', 'd-laura-2']))
+    })
+
+    it('caps the circle at its share; the loosest tier and later digests give way first', async () => {
+      seedGroups()
+      // size 21 → cap 7: tier 0's six rows, then the first of tier 1's ranks.
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 21 })
+      expect(archive.circle.map(e => e.memory.id)).toEqual([
+        'd-abigail-0', 'd-abigail-1', 'd-abigail-2',
+        'd-laura-0', 'd-laura-1', 'd-laura-2',
+        'd-ariel-0',
+      ])
+      // Tier 2 was never read: tiers 0 and 1 already filled the cap.
+      expect(findHotDigests).not.toHaveBeenCalledWith('amy', 'sarah', expect.anything())
+    })
+
+    it('takes its knobs from the caller', async () => {
+      seedGroups()
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, {
+        size: 60,
+        innerCircle: { share: 1, allowance: [1] },
+      })
+      expect(archive.circle.map(e => e.memory.id)).toEqual([
+        'd-abigail-0', 'd-laura-0', 'd-ariel-0', 'd-vergil-0', 'd-greg-0', 'd-manjit-0', 'd-sarah-0',
+      ])
+    })
+
+    it('holds still while the circle does, and recomputes when membership changes', async () => {
+      seedGroups()
+      await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+      await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+      expect(findMostImportant).toHaveBeenCalledTimes(1)
+
+      memberships.push(['family', 'greg'])
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+      expect(findMostImportant).toHaveBeenCalledTimes(2)
+      expect(archive.circle.find(e => e.characterId === 'greg')?.tier).toBe(0)
+    })
+
+    it('recomputes when a member is archived', async () => {
+      seedGroups()
+      await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+      archivedIds = new Set(['abigail'])
+      const archive = await getOrComputeFrozenArchive('amy', 'chat-1', 0, { size: 60 })
+      expect(findMostImportant).toHaveBeenCalledTimes(2)
+      expect(archive.circle.some(e => e.characterId === 'abigail')).toBe(false)
     })
   })
 })

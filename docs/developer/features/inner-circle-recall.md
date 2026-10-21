@@ -1,6 +1,6 @@
 # Inner-Circle Recall — Groups, Keystones and an Honest Importance Scale
 
-**Status:** Phase 1 (Part A) implemented 2026-10-21; Phases 2–3 proposed
+**Status:** Phases 1–2 (Parts A and B) implemented 2026-10-21; Phase 3 proposed
 **Owner:** Charlie
 **Drafted:** 2026-10-21
 **Touches:** [memory-system-refactor.md](complete/memory-system-refactor.md) (the archive, recall and admission chokepoints),
@@ -396,6 +396,67 @@ small.
 through the recall-replay `tuning` input (`RecallTuningInputSchema`: add
 `innerCircleShare`, `innerCircleAllowance`), so the values can be tried against
 the probe set without a code change.
+
+### B7. As built (2026-10-21)
+
+- **Modules.** `resolveInnerCircle`, `innerCircleSignature` and
+  `innerCircleAllowanceFor` are in `lib/memory/recall/inner-circle.ts`.
+  `getOrComputeFrozenArchive` now returns a `FrozenArchive { anchors, circle }`:
+  the anchors stay id-sorted and the circle stays in circle order.
+  `InnerCircleEntry` (with `tier`, `rank` and `order`) and
+  `innerCircleTrimOrder` are in `types.ts`, so `render.ts` stays free of
+  repository imports. `renderInnerCircle` is in `render.ts`.
+- **Cap and budget.** One ordering, `innerCircleTrimOrder` (tier, then rank
+  within the member, then circle order), drives both the archive's count cap
+  and the renderer's token budget. Cutting from its end drops the loosest tier
+  first, and each member's later digests before anyone's first. The count cap
+  is `min(floor(size × share), size − rows already taken)`. A tier is not read
+  at all once the tighter tiers fill the cap. The anchors render in whatever
+  part of `archiveTokenBudget` the circle leaves.
+- **Constants.** `INNER_CIRCLE_ARCHIVE_SHARE` and `INNER_CIRCLE_ALLOWANCE` live
+  in `recall/tags.ts` beside `RECALL_TUNING_DEFAULTS`, not in `assemble.ts`. The
+  resolved tuning (`innerCircleShare`, `innerCircleAllowance`) takes its
+  defaults from them, which keeps a single source.
+- **Invalidation: the signature, not hooks.** The circle is re-read every turn
+  (one `findByCharacterId`, then one `findByGroupId` and one `groups.findByIdRaw`
+  per group, then one `findNamesByIds(…, { excludeArchived: true })`). Its
+  ordered `characterId:tier` signature, plus the share and allowance, is part
+  of the cache check. That covers every event in the B4 table, along with
+  imports and renames that reorder the circle. The explicit
+  `invalidateFrozenArchive` calls at the group routes and in the archive service
+  would therefore be redundant, so they were not added. The cost is a handful
+  of small indexed reads per turn, with no vault reads.
+- **Tests.** `frozen-archive-cache.test.ts` covers:
+  - tiering, order, exclusions, the cap and its trim order, and the tier skip;
+  - the knobs;
+  - recompute on membership change and on archive.
+
+  `render.test.ts` covers full text, order and the budget cut.
+  `assemble-deliver.test.ts` covers section placement, full text and
+  archive-pool dedup.
+- **Replay (Friday, read-only, 2026-10-21).** `recall-replay` was run on chat
+  f343608e at its last turn with `--memory-budget 8000`, which gives archive
+  size 60, a circle cap of 20 and a circle budget of 2,266 tokens. Charlie and
+  the other speaker were present.
+
+  | Holder | Members | Rows held | Rows rendered |
+  |---|---|---|---|
+  | Friday | 8 | 15 | 14 |
+  | Amy | 8 | 15 | 15 |
+
+  - Abigail has three full-text lines in both circles. Friday's include
+    "Abigail is pregnant: fertilization is confirmed…" (0.95).
+  - Amy's three Abigail digests are about the marriage terms and the gravity
+    dose. Neither her hair nor the pregnancy is among them: that is the gap
+    keystones (Part C) fill.
+  - Many circle lines are pre-Phase-1 "committed to…" digests at 0.9, because
+    old rows are not re-rated (§6, backfill rescore).
+  - Two runs gave identical archive pools.
+  - At the replay's default budget of 2,000 tokens (archive size 28), only 3
+    of 9 circle rows fit their 566-token share. Full-text digests run long, so
+    a small budget favours the tightest members by design.
+  - The replay result now carries `warnings`. A failed archive used to leave
+    no trace entry and an empty pool, with no reason given.
 
 ---
 

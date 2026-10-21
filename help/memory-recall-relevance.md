@@ -113,6 +113,16 @@ A digest whispered into a turn carries a short note of where it came from, such 
 
 Recall only ever draws on **active** memories. The originals a digest replaced, and anything maintenance has moved to the archive, are not whispered. They have not been lost: when a character searches its own memory with the `search` tool, archived entries come back too, marked *(archived)* or *(archived — superseded by …)*, so a character digging into the past can still find the details.
 
+## Those Closest to You
+
+A character ought never to forget their own sister merely because she has stepped out of the room. Yet for a long while the steady shelf kept places only for the people *present*, and filled the rest by sheer weight of importance — so a long afternoon of building and filing could crowd a character's own family clean off the page, and a spouse who was not at the table might be recalled, if at all, as a single clipped line.
+
+The Book now consults your [Groups](groups.md). After the people present and the character themselves, the steady shelf turns to everyone who shares a Group with the character — their **inner circle** — and the smallest Group comes first, on the sound principle that a household of four is closer than a club of forty. Members of the character's tightest Group are given three digests apiece, the next Group two, and every looser one a single digest. However wide the circle, it may take no more than a third of the shelf; when room runs short, the loosest acquaintances give way first, and each person's lesser digests before anyone's best.
+
+These lines arrive under their own heading, *Those Closest to You*, ahead of the rest, and in **full** rather than in summary, for these are the facts a character can least afford to get wrong. Like the rest of the steady shelf, the section holds perfectly still from one turn to the next, so it costs nothing extra in a provider's cache. Change a Group's membership — or archive one of its members — and the next turn's shelf is redrawn to suit.
+
+Nobody present is counted twice: a member of the circle who has joined the chat is recalled among the present company instead. A character in no Group at all simply has no such section.
+
 ## Whose Life Is It, Anyway?
 
 A character's Commonplace Book keeps two sorts of entry side by side: what the character recalls of *themselves*, and what they have observed of *everybody else*. The two have always been filed apart — but for a time the Book, in its haste to be helpful, read out both sorts in the same breath, without troubling to say which was which. The effect, upon a character of long acquaintance and many entries, was much as you would expect: handed a page of another's doings under the heading *you remember*, it took the page at its word and answered in that person's voice, with that person's history, entirely convinced.

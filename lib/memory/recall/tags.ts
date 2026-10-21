@@ -264,6 +264,19 @@ export function boostGateStrength(gate: BoostGate, cosine: number, bestCosine: n
 }
 
 /**
+ * Share of the frozen archive (its entry count and its token budget) the inner
+ * circle may take (inner-circle-recall.md B2/B3): 20 of 60 at the largest size.
+ */
+export const INNER_CIRCLE_ARCHIVE_SHARE = 1 / 3
+
+/**
+ * Hot digests drawn per inner-circle member, by tier: the tightest group's
+ * members get the first entry, the next tier the second, and every looser tier
+ * the last.
+ */
+export const INNER_CIRCLE_ALLOWANCE: readonly number[] = Object.freeze([3, 2, 1])
+
+/**
  * The ranking knobs the recall multiplier retuning chose (R1, R2, R4), in force
  * whenever a {@link RecallContext} carries no explicit `tuning`. Chosen on the
  * Friday probe set (docs/developer/features/complete/recall-probe-set-runbook.md, the
@@ -282,6 +295,8 @@ export const RECALL_TUNING_DEFAULTS = {
   anchorMinHits: 1,
   anchorOrder: 'rarest' as 'rarest' | 'distiller',
   backgroundReserve: 0,
+  innerCircleShare: INNER_CIRCLE_ARCHIVE_SHARE,
+  innerCircleAllowance: INNER_CIRCLE_ALLOWANCE,
 }
 
 /**

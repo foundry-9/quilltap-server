@@ -4,6 +4,17 @@
 
 ### 4.11-dev
 
+#### Feature: group members get reserved full-text slots in recall
+
+- The frozen archive now has an inner-circle step, after present characters and self digests and before the importance fill. Every character who shares a group with the speaker, except anyone present and archived characters, gets hot digests by the tier of the smallest shared group: 3 for the tightest group, 2 for the next, 1 for the rest.
+- The step is capped at one third of the archive. When the cap or the token budget binds, the loosest tier loses rows first, and each member's later digests go before anyone's first.
+- Circle rows render in full text under a new `## Those Closest to You` section ahead of `## Memory Anchors`, with no age tags, in a fixed order (tier, group name, member name), so the section stays byte-stable within a compaction generation. They count as archive rows for dedup and delivery.
+- The archive cache now also checks the circle's signature, re-read from group membership each turn. Membership changes, renames that reorder the circle, and archived members take effect on the next turn without explicit invalidation.
+- `recall-replay --tuning` accepts `innerCircleShare` and `innerCircleAllowance`.
+- `findNamesByIds` takes an `excludeArchived` option.
+- The recall-replay result now includes the assembly's `warnings`, so a pool that failed is reported instead of showing up empty with no trace entry.
+- Spec: `docs/developer/features/inner-circle-recall.md` (Phase 2).
+
 #### Fix: memory importance scale no longer rates work commitments with family facts
 
 - The SELF and OTHER extraction prompts, the episode prompt and the consolidation prompt share one recalibrated scale. 0.95 is for facts that redefine a life or bond (marriage, vows, pregnancy, birth, death, a change of body, joining or leaving the family); 0.85 for revelations and spoken personal commitments about a relationship; work commitments to build, file, fix or rule on something sit at 0.60–0.65; work decisions in passing at 0.45. The old 0.90 "spoken commitment" anchor put every "agreed to build X" beside pregnancies, and with newest-first tie-breaking the frozen archive's importance fill became the latest build-session rows.

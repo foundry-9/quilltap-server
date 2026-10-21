@@ -108,5 +108,28 @@ export interface RenderedLine {
   body: string
 }
 
+/** One inner-circle row in a frozen archive: the digest and where it sits in the circle. */
+export interface InnerCircleEntry {
+  memory: Memory
+  /** The circle member the digest is about. */
+  characterId: string
+  /** The member's tier (0 = the holder's tightest group). */
+  tier: number
+  /** The digest's rank within its member's draw (0 = the member's first). */
+  rank: number
+  /** The member's position in circle order. */
+  order: number
+}
+
+/**
+ * Circle rows from most to least protected: tighter tier first, then a
+ * member's earlier digests, then circle order. The archive's cap and the
+ * renderer's token budget both cut from the end of this order, so the loosest
+ * tier gives up lines first.
+ */
+export function innerCircleTrimOrder<T extends Pick<InnerCircleEntry, 'tier' | 'rank' | 'order'>>(entries: readonly T[]): T[] {
+  return [...entries].sort((a, b) => a.tier - b.tier || a.rank - b.rank || a.order - b.order)
+}
+
 /** Which section a delivered row was in. */
 export type RecallPool = 'archive' | 'head' | 'interCharacter' | 'recap' | 'relevant'

@@ -391,7 +391,7 @@ Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-
 
 Tuning and comparable runs:
 
-- `--tuning '<json>'` / `--tuning-file <path>` — retuning constants for the new path only (the old path stays the reference): `boostGateAbs`, `boostGateMargin`, `boostGateRamp` (relevance gate on boosts), `boostCap`, `freshBypassesGate`, `windowBypassesGate`, `multipliers` (`{ "freshEvent24h": 1.3, … }`), `specificAnchors`, `anchorMinHits`, `anchorOrder`, `backgroundReserve`. Unknown keys are rejected. The header's `Tuning` line shows what is active.
+- `--tuning '<json>'` / `--tuning-file <path>` — retuning constants for the new path only (the old path stays the reference): `boostGateAbs`, `boostGateMargin`, `boostGateRamp` (relevance gate on boosts), `boostCap`, `freshBypassesGate`, `windowBypassesGate`, `multipliers` (`{ "freshEvent24h": 1.3, … }`), `specificAnchors`, `anchorMinHits`, `anchorOrder`, `backgroundReserve`, `innerCircleShare` (share of the frozen archive the group inner circle may take, default `0.333…`), `innerCircleAllowance` (digests per circle member by tier, tightest group first, default `[3, 2, 1]`). Unknown keys are rejected. The header's `Tuning` line shows what is active.
 - `--signals-from <replay.json>` — reuse the signals saved in an earlier `--json` replay of the same chat and turn. The distillation is a cheap-LLM call and words the same turn differently each time, so runs you mean to compare should share it.
 - `--as-of` — search only memories created before the turn's opening message, with weights decayed to the turn's own clock: the corpus as it stood then. The header's `Harness` line shows the cutoff and how many later memories were left out.
 

@@ -61,7 +61,9 @@ Options:
                              multipliers
                              {RECALL_MULTIPLIERS key:
                              value}, specificAnchors, anchorMinHits,
-                             anchorOrder, backgroundReserve.
+                             anchorOrder, backgroundReserve,
+                             innerCircleShare, innerCircleAllowance
+                             ([3,2,1] = digests per member by tier).
                              Unknown keys are rejected.
       --tuning-file <path>   Read the --tuning JSON from a file
       --signals-from <path>  Reuse the signals saved in a previous --json
