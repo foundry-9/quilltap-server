@@ -466,6 +466,8 @@ Up to eight phrases per tool, each between three and eighty characters. When a m
 
 **How it rolls.** Every parameter at its default — there is nobody to fill in a form. Visibility follows the tool's own `defaultVisibility`: a whispering tool whispers to whoever spoke the words. The announcement lands *after* the message that caused it (dice, by long habit, land before yours; Pascal is more of a respecter of sequence).
 
+**In a storyteller turn.** A character speaking in [Storyteller Mode](storyteller-mode.md) is held to the tier of the bid you chose, and so are its trigger phrases: a phrase in its reply sets off only a tool whose effect the tier allows. A tool with side effects (a *write*) needs an *Act* bid; a tool without them (a *read*) needs at least *Lookup*. A phrase that names a tool above the tier is simply not heard — nothing is run and nothing is posted. Your own remarks, and every turn outside storyteller mode, are unaffected.
+
 **At most four tools per message.** Should one sentence happen to contain the phrases of six tools, the first four to appear are dealt and the rest are noted in the logs, not run — a sentence should not be able to spend six oracle consultations on your account.
 
 **A word on echoes.** Pascal never hears himself, but a character who *repeats* Pascal's announcement in their own reply will say whatever words it contains — and if those include the tool's own trigger, the tool goes off again on that reply, and possibly again on the next. The Workbench warns you when an outcome message, the chip label or an oracle prompt quotes one of the tool's own phrases. Heed it.

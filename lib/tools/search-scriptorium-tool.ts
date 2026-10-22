@@ -6,6 +6,7 @@
  * memories and conversation history simultaneously.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { llmNumber } from './llm-number'
@@ -287,3 +288,6 @@ export const searchScriptoriumScenarioToolDefinition = {
     parameters: zodToOpenAISchema(searchScriptoriumScenarioToolInputSchema),
   },
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const searchScriptoriumToolEffect: ToolEffectSpec = 'read';

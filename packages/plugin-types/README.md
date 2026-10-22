@@ -143,6 +143,8 @@ logger.error('Failed to connect', { endpoint: 'api.example.com' }, error);
 | `SystemPromptPlugin` | System prompt plugin interface |
 | `SystemPromptData` | Individual prompt entry |
 | `SystemPromptMetadata` | System prompt plugin metadata |
+| `ToolPlugin` | Tool plugin interface (`getToolDefinitions`, `executeByName`, optional `getToolEffects`) |
+| `ToolEffect` | What a tool does to the world: `'none' \| 'read' \| 'write' \| 'destroy'`. Declare it per tool through `ToolPlugin.getToolEffects(config)`; an undeclared tool counts as `'write'` |
 ### Common Types
 
 | Type | Description |

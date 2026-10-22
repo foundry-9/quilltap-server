@@ -12,6 +12,7 @@
  * if it disagrees. Cycles are rejected by the repository at save time.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
@@ -203,3 +204,6 @@ export function validateWardrobeCreateInput(
 
 /** Re-export the slot type for the union-of-types computation in the handler. */
 export type CreateWardrobeItemSlotType = WardrobeItemType;
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeCreateToolEffect: ToolEffectSpec = 'write';

@@ -89,6 +89,7 @@ import { inventoryArchiveToolDefinition } from '../inventory-archive-tool'
 import { inventoryGiveToolDefinition } from '../inventory-give-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
+import { BUILT_IN_TOOL_EFFECTS, effectOfToolCall, isComputedToolEffect, TOOL_EFFECTS } from '../effects'
 
 const ALL_TOOLS = {
   askCarina: askCarinaToolDefinition,
@@ -185,4 +186,87 @@ describe('tool definitions: derived OpenAI parameters', () => {
     }
     expect.assertions(Object.entries(ALL_TOOLS).length * 4)
   })
+})
+
+describe('tool definitions: declared effects', () => {
+  it('every registered tool declares an effect', () => {
+    const missing = Object.values(ALL_TOOLS)
+      .map((tool) => tool.function.name)
+      .filter((name) => !(name in BUILT_IN_TOOL_EFFECTS))
+    expect(missing).toEqual([])
+  })
+
+  it('every declared effect names a registered tool', () => {
+    const registered = new Set(Object.values(ALL_TOOLS).map((tool) => tool.function.name))
+    expect(Object.keys(BUILT_IN_TOOL_EFFECTS).filter((name) => !registered.has(name))).toEqual([])
+  })
+
+  it('effects snapshot (static effect, or "computed (max <effect>)")', () => {
+    const table = Object.fromEntries(
+      Object.entries(BUILT_IN_TOOL_EFFECTS)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, spec]) => [name, isComputedToolEffect(spec) ? `computed (max ${spec.maxEffect})` : spec])
+    )
+    expect(table).toMatchSnapshot()
+  })
+
+  it('every static effect is a known level', () => {
+    for (const spec of Object.values(BUILT_IN_TOOL_EFFECTS)) {
+      if (!isComputedToolEffect(spec)) expect(TOOL_EFFECTS).toContain(spec)
+    }
+  })
+
+  // A computed effect must cover every branch its schema allows, and never
+  // exceed the maximum it declares.
+  const COMPUTED_EXAMPLES: Record<string, Array<[unknown, string]>> = {
+    state: [
+      [{ operation: 'fetch' }, 'read'],
+      [{ operation: 'fetch', context: 'project', path: 'a.b' }, 'read'],
+      [{ operation: 'set', path: 'a', value: 1 }, 'write'],
+      [{ operation: 'delete', path: 'a' }, 'write'],
+      [{ operation: 'explode' }, 'write'],
+    ],
+    edit_custom_tool: [
+      [{ action: 'schema' }, 'none'],
+      [{ mount_point: 'self', file: 'unlock' }, 'read'],
+      [{ mount_point: 'self', file: 'unlock', content: '{}' }, 'write'],
+      [{}, 'write'],
+    ],
+    doc_open_document: [
+      [{ path: 'Notes/today.md' }, 'read'],
+      [{ uri: 'qtap://Some Store/a.md' }, 'read'],
+      [{ title: 'Blank' }, 'write'],
+      [{}, 'write'],
+    ],
+    run_custom: [
+      [{ tool: 'peek' }, 'read'],
+      [{ tool: 'unlock' }, 'write'],
+      [{ tool: 'unknown' }, 'write'],
+      [{}, 'write'],
+    ],
+  }
+  const lookups = { customToolEffects: new Map([['peek', 'read' as const], ['unlock', 'write' as const]]) }
+
+  it('every computed tool has examples', () => {
+    const computed = Object.entries(BUILT_IN_TOOL_EFFECTS)
+      .filter(([, spec]) => isComputedToolEffect(spec))
+      .map(([name]) => name)
+      .sort()
+    expect(computed).toEqual(Object.keys(COMPUTED_EXAMPLES).sort())
+  })
+
+  for (const [name, examples] of Object.entries(COMPUTED_EXAMPLES)) {
+    it(`${name}: computed effect covers each branch`, () => {
+      const spec = BUILT_IN_TOOL_EFFECTS[name]
+      for (const [input, expected] of examples) {
+        expect(effectOfToolCall(name, input, lookups)).toBe(expected)
+      }
+      if (isComputedToolEffect(spec)) {
+        for (const [input] of examples) {
+          const order = ['none', 'read', 'write', 'destroy']
+          expect(order.indexOf(spec(input, lookups))).toBeLessThanOrEqual(order.indexOf(spec.maxEffect))
+        }
+      }
+    })
+  }
 })

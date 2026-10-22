@@ -246,6 +246,16 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
             ✦ {tool.triggerCount} phrase{tool.triggerCount === 1 ? '' : 's'}
           </span>
         )}
+        <span
+          className={tool.effect === 'write' ? 'qt-badge qt-badge-warning' : 'qt-badge qt-badge-info'}
+          title={
+            tool.effect === 'write'
+              ? 'Has side effects (state, wardrobe, inventory or the log): a write. Storyteller turns need an Act bid to run it.'
+              : 'No side effects — rolling and announcing only: a read. A Lookup bid may run it.'
+          }
+        >
+          {tool.effect}
+        </span>
         {tool.parameterCount > 0 && (
           <span className="qt-badge qt-badge-outline">
             {tool.parameterCount} param{tool.parameterCount === 1 ? '' : 's'}

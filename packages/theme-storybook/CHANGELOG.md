@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.78] - 2026-10-22
+
+### Added
+- The `qt-storyteller-*` family in `qt-components.css`, mirroring the app's `_storyteller.css`: the Salon's Normal / Paused / Storyteller turn-mode control (`.qt-storyteller-mode`, `-option`, `-option-active`, `-option-paused`) and the storyteller's bidding board (`.qt-storyteller-board`, `-board-header`, `.qt-storyteller-cards`, `.qt-storyteller-card` with `-selected` / `-act` / `-destroy` / `-quiet` / `-head` / `-name`, `.qt-storyteller-plan`, `-meta`, `-warning`, `-actions`, `.qt-storyteller-summary`). Every colour reads a `--qt-storyteller-*` hook with a token fallback.
+
 ## [1.0.76] - 2026-10-20
 
 ### Added

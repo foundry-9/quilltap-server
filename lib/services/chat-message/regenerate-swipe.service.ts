@@ -34,6 +34,7 @@ import {
   getRoleplayTemplate,
 } from './participant-resolver.service'
 import { buildMessageContext } from './context-builder.service'
+import { buildPlanSection } from '@/lib/storyteller/prompts'
 import { resolveUserIdentity } from './user-identity-resolver.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -204,6 +205,17 @@ export async function regenerateMessageAsSwipe({
       isContinueMode: true,
       contextCompressionSettings: null,
       regenerationOfMessageIds,
+      // A storyteller line re-rolls under the plan it carried out.
+      storytellerSection: targetMessage.storytellerBid
+        ? buildPlanSection({
+            plan: targetMessage.storytellerBid.plan,
+            tier: targetMessage.storytellerBid.tier,
+            toolsNamed: targetMessage.storytellerBid.toolsNamed,
+            spokenSince: [],
+            allowedTools: [],
+            reroll: true,
+          })
+        : undefined,
     },
     previousMessages,
     []
@@ -332,6 +344,8 @@ export async function regenerateMessageAsSwipe({
     // Keep the original's timestamp so the group stays in place in the transcript.
     createdAt: targetMessage.createdAt,
     ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
+    // The variant carries out the same bid as the line it re-rolls.
+    ...(targetMessage.storytellerBid ? { storytellerBid: targetMessage.storytellerBid } : {}),
   } as MessageEvent
 
   await repos.chats.addMessage(chat.id, newSwipe)

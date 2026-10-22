@@ -75,6 +75,8 @@ Links and footnotes are no longer written as absolute values at all (bugs 231, 2
 
 The proxy logs a runtime warning ("Read after buffered write on same table") when a read hits a table already written this job, deduped per `(jobId, readMethod)`. This is a cheap diagnostic for read-your-writes regressions: it compares method names, not row identity, so it flags suspicion rather than proof.
 
+Whether a method is a read or a write is decided by name: the read/write prefixes and the `METHOD_OVERRIDES` table live in `lib/repositories/method-classification.ts`, shared with the parent's **dry scope** (`lib/repositories/dry-scope.ts`, which discards every write but the LLM log for a storyteller bid). A method with a non-conforming name gets its override there, once, for both.
+
 The grouping key is the *table* a method implies, not the repository object — a repository fronting several tables would otherwise warn on pairs that cannot stale each other. `TABLE_GROUP_RESOLVERS` in `child-repositories-proxy.ts` holds the per-repository resolvers (today: `connections` splits `api_keys` from `connection_profiles`); a repository with no resolver is treated as a single table. **When you add a repository that fronts more than one table, add a resolver entry** — otherwise its every read/write pairing warns.
 
 ## Per-database partitioned apply

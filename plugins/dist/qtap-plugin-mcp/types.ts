@@ -5,6 +5,8 @@
  * and plugin state management.
  */
 
+import type { ToolEffect } from '@quilltap/plugin-types';
+
 // ============================================================================
 // Configuration Types
 // ============================================================================
@@ -47,6 +49,13 @@ export interface MCPServerConfig {
 
   /** Whether this server is enabled */
   enabled: boolean;
+
+  /**
+   * What this server's tools do to the world — every tool discovered from it
+   * inherits this. Set by the operator; the server's own MCP annotations
+   * (`readOnlyHint` / `destructiveHint`) are never trusted. Default `write`.
+   */
+  effect: ToolEffect;
 }
 
 /**

@@ -139,6 +139,9 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // Collection-wide: an Inventory file write is announced as the bare topic
   // (see INVENTORY_PATH_PATTERN below).
   inventory: [],
+  // Storyteller rounds never run in the job child; the round service
+  // publishes them from the parent.
+  storytellerRounds: [],
 };
 
 /**

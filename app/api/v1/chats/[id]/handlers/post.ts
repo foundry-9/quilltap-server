@@ -61,6 +61,9 @@ import {
   handleMergeConversation,
   handleSetScenario,
   handleSaveGalleryImage,
+  handleStorytellerRunAction,
+  handleStorytellerAsk,
+  handleStorytellerLie,
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -135,5 +138,8 @@ export async function handlePost(
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
     'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
+    'storyteller-run': () => handleStorytellerRunAction(req, chatId, ctx),
+    'storyteller-ask': () => handleStorytellerAsk(req, chatId, ctx),
+    'storyteller-lie': () => handleStorytellerLie(req, chatId),
   });
 }

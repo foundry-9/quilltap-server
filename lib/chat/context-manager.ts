@@ -559,6 +559,20 @@ export interface BuildContextOptions {
    * the chained-turn scene note (`buildUserNarrationAnchor`). Absent → no note.
    */
   humanTurnMessageIds?: ReadonlySet<string>
+  /**
+   * `'bid'` builds a storyteller bid's context: everything a real turn would
+   * see, but recall is assembled and not delivered (no access stamps, no
+   * anti-repetition ring). The bid runs inside a dry scope
+   * (`lib/repositories/dry-scope.ts`), which discards every other write the
+   * build would make — staff whispers included, though their text still
+   * reaches this context. Default `'turn'`.
+   */
+  purpose?: 'turn' | 'bid'
+  /**
+   * A storyteller section (the bid instructions, or a speaking turn's plan),
+   * appended as the LAST trailing section. Ephemeral, never persisted.
+   */
+  storytellerSection?: string
 }
 
 /**
@@ -2266,6 +2280,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     informBlock,
     turnSkipInstruction,
     turnYieldInstruction,
+    options.storytellerSection,
   ].filter((section): section is string => !!section)
 
   // Add new user message (only if provided - not in continue mode)
@@ -2319,7 +2334,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // so what the model will read is settled. Only now are rows stamped
   // accessed, the head recorded in the anti-repetition ring and the debug
   // record composed — and only for lines whose memory is still in the text.
-  const recallDelivery = character.id && llmRecallText
+  // A bid delivers nothing: it is a plan, not a turn.
+  const recallDelivery = character.id && llmRecallText && options.purpose !== 'bid'
     ? await deliverRecall(recall, {
         characterId: character.id,
         chat,

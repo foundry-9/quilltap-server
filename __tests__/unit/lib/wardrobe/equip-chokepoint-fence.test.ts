@@ -46,7 +46,7 @@ describe('equip chokepoint fence', () => {
 
   it('the chokepoint is a buffered write in the job child', () => {
     const proxy = fs.readFileSync(
-      path.join(ROOT, 'lib/background-jobs/child/child-repositories-proxy.ts'),
+      path.join(ROOT, 'lib/repositories/method-classification.ts'),
       'utf8',
     )
     expect(proxy).toMatch(/'wardrobeWear\.commitEquippedOutfit':\s*'write'/)

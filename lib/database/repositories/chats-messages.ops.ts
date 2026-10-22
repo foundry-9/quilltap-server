@@ -6,6 +6,7 @@
  * used for SQLite collection initialization.
  */
 
+import { StorytellerBidRecordSchema } from '@/lib/schemas/storyteller.types';
 import { z } from 'zod';
 import {
   ChatMetadata,
@@ -109,6 +110,10 @@ export const ChatMessageRowSchema = z.object({
     answererId: UUIDSchema,
     question: z.string(),
   }).nullable().optional(),
+  // Storyteller mode: the bid a speaking turn carried out (round, tier, plan,
+  // tools named). Re-applied on swipe/regenerate; never model-facing. NULL on
+  // every message that was not a storyteller speaking turn.
+  storytellerBid: StorytellerBidRecordSchema.nullable().optional(),
   // Pascal the Croupier (custom pseudo-tools) roll record, set on
   // systemSender='pascal' messages. The server rolled and the server picked the
   // outcome, so none of this is the model's account of its own luck.

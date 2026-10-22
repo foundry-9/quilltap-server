@@ -201,3 +201,24 @@ describe('runTriggeredCustomTools — the deal', () => {
     expect(runMock).not.toHaveBeenCalled();
   });
 });
+
+describe('runTriggeredCustomTools — a storyteller turn’s effect ceiling (D9)', () => {
+  function writingEntry(name: string, triggers: string[]) {
+    const e = entry(name, triggers);
+    return { ...e, definition: { ...e.definition, effects: [{ target: 'state.door', value: 'open' }] } };
+  }
+
+  it('skips a matched tool whose effects exceed the ceiling, without posting', async () => {
+    wireRoster([writingEntry('spell', ['abracadabra'])]);
+    expect(await runTriggeredCustomTools(params({ effectCeiling: 'read' }))).toEqual([]);
+    expect(runMock).not.toHaveBeenCalled();
+    expect(prosperoMock).not.toHaveBeenCalled();
+  });
+
+  it('runs a read tool under a read ceiling, and a write tool under a write ceiling', async () => {
+    wireRoster([entry('peek', ['abracadabra'])]);
+    expect(await runTriggeredCustomTools(params({ effectCeiling: 'read' }))).toHaveLength(1);
+    wireRoster([writingEntry('spell', ['abracadabra'])]);
+    expect(await runTriggeredCustomTools(params({ effectCeiling: 'write' }))).toHaveLength(1);
+  });
+});

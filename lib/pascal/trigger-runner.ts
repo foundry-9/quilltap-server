@@ -34,6 +34,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { resolveCustomToolRoster } from '@/lib/pascal/custom-tools';
 import { runCustomTool } from '@/lib/pascal/run-service';
 import { scanTriggerPhrases } from '@/lib/pascal/trigger-phrases';
+import { customToolEffect } from '@/lib/pascal/tool-effect';
+import { isWithinCeiling, type ToolEffect } from '@/lib/tools/effect-types';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
 import type { ChatSettings } from '@/lib/schemas/settings.types';
@@ -58,6 +60,12 @@ export interface RunTriggeredCustomToolsParams {
   chatSettings: Pick<ChatSettings, 'customTools' | 'customToolTriggers'> | null | undefined;
   /** Surface each Pascal post the instant it lands (a no-op sink in the job child). */
   onPosted?: (message: MessageEvent) => void;
+  /**
+   * The speaking turn's effect ceiling (a storyteller turn). A matched tool
+   * whose derived effect exceeds it is skipped — not run, not posted. Absent
+   * everywhere outside storyteller turns.
+   */
+  effectCeiling?: ToolEffect;
 }
 
 /** Whether a chat's settings let trigger phrases fire at all. */
@@ -158,6 +166,21 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
   for (const hit of hits) {
     const entry = roster.tools.get(hit.tool);
     if (!entry) continue;
+
+    if (params.effectCeiling) {
+      const effect = customToolEffect(entry.definition);
+      if (!isWithinCeiling(effect, params.effectCeiling)) {
+        logger.debug('Triggered custom tool skipped — above the turn\'s effect ceiling', {
+          context: CONTEXT,
+          chatId,
+          tool: hit.tool,
+          phrase: hit.phrase,
+          effect,
+          ceiling: params.effectCeiling,
+        });
+        continue;
+      }
+    }
 
     let outcome;
     try {

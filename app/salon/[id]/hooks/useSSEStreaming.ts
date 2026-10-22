@@ -11,6 +11,19 @@ import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
 import { splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
+import type { StorytellerBid, StorytellerOrder, StorytellerRound } from '@/lib/schemas/storyteller.types'
+
+/** Storyteller frames the Salon's board reads off a send's stream. */
+export type StorytellerStreamEvent =
+  | { kind: 'round'; round: StorytellerRound }
+  | { kind: 'bid'; roundId: string; bid: StorytellerBid }
+  | { kind: 'open'; roundId: string }
+
+/** One live bubble for a concurrent ("all at once") storyteller turn. */
+export interface ConcurrentStream {
+  participantId: string
+  content: string
+}
 
 export interface PendingToolCall {
   id: string
@@ -138,6 +151,19 @@ interface SSEEvent {
   stopped?: boolean
   /** done / handAnswered: the character yielded the floor to the raised hand. */
   yielded?: boolean
+  /**
+   * Storyteller: a frame from one of several turns sharing the stream ("all at
+   * once"). Every such frame carries `participantId`; the Salon keeps one
+   * streaming bubble per participant for them.
+   */
+  concurrent?: boolean
+  /** Storyteller: the round's board as it opened. */
+  storytellerRound?: StorytellerRound
+  /** Storyteller: one seat's bid landed. */
+  storytellerBid?: { roundId: string; bid: StorytellerBid }
+  /** Storyteller: every bid is in (or the board timed out); the choice is the operator's. */
+  roundOpen?: boolean
+  roundId?: string
   /** The character asked about the operator's raised hand has answered it. */
   handAnswered?: boolean
   // Answer confirmation: the resolved state for a just-streamed message. On a
@@ -295,6 +321,8 @@ interface UseSSEStreamingParams {
   setPauseState: (paused: boolean) => void
   /** Called when a tool result arrives, allowing the page to react to specific tools */
   onToolResult?: (name: string, success: boolean, result: unknown) => void
+  /** Storyteller: the board's frames (round opened, bid landed, round open for choosing). */
+  onStorytellerEvent?: (event: StorytellerStreamEvent) => void
 }
 
 /**
@@ -332,7 +360,14 @@ export function useSSEStreaming({
   getFirstCharacterParticipant,
   setPauseState,
   onToolResult: onToolResultCallback,
+  onStorytellerEvent,
 }: UseSSEStreamingParams) {
+  // Storyteller: live bubbles for concurrent turns, keyed by participant.
+  const [concurrentStreams, setConcurrentStreams] = useState<ConcurrentStream[]>([])
+  const onStorytellerEventRef = useRef(onStorytellerEvent)
+  useEffect(() => {
+    onStorytellerEventRef.current = onStorytellerEvent
+  }, [onStorytellerEvent])
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   // The operator's interrupts (lib/chat/turn-control.ts on the server): a
@@ -667,6 +702,64 @@ export function useSSEStreaming({
       const data = parseSSEData(rawData)
       if (!data) return
 
+      // Storyteller board frames: handed to the board, nothing else to do.
+      if (data.storytellerRound) {
+        onStorytellerEventRef.current?.({ kind: 'round', round: data.storytellerRound })
+        return
+      }
+      if (data.storytellerBid) {
+        onStorytellerEventRef.current?.({ kind: 'bid', ...data.storytellerBid })
+        return
+      }
+      if (data.roundOpen && data.roundId) {
+        onStorytellerEventRef.current?.({ kind: 'open', roundId: data.roundId })
+        return
+      }
+
+      // Storyteller "all at once": a frame from one of several concurrent
+      // turns. Each participant gets its own bubble; the shared streaming
+      // slot is left alone.
+      if (data.concurrent && data.participantId) {
+        const pid = data.participantId
+        if (data.turnStart) {
+          setWaitingForResponse(false)
+          setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
+            ? prev
+            : [...prev, { participantId: pid, content: '' }])
+        } else if (data.content) {
+          setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
+            ? prev.map((c) => c.participantId === pid ? { ...c, content: c.content + data.content } : c)
+            : [...prev, { participantId: pid, content: data.content! }])
+        } else if (data.done) {
+          let finished = ''
+          setConcurrentStreams((prev) => {
+            finished = prev.find((c) => c.participantId === pid)?.content ?? ''
+            return prev.filter((c) => c.participantId !== pid)
+          })
+          if (data.messageId && !data.skipped && !data.stopped) {
+            const messageId = data.messageId
+            setMessages((prev) => prev.some((m) => m.id === messageId) ? prev : [...prev, {
+              id: messageId,
+              role: 'ASSISTANT',
+              content: finished,
+              createdAt: new Date().toISOString(),
+              participantId: pid,
+              provider: data.provider || null,
+              modelName: data.modelName || null,
+              routeTrail: data.routeTrail ?? null,
+              isSilentMessage: data.isSilentMessage || undefined,
+              reasoningContent: data.reasoningContent ?? null,
+              reasoningSegments: data.reasoningSegments ?? null,
+            }])
+          }
+        } else if (data.carinaAnswer || data.hostAnnouncement || data.pascalResult) {
+          surfaceMessage((data.carinaAnswer || data.hostAnnouncement || data.pascalResult)!)
+        } else if (data.error) {
+          showErrorToast(data.error)
+        }
+        return
+      }
+
       // Handle status updates
       if (data.status) {
         setResponseStatus(data.status)
@@ -846,7 +939,7 @@ export function useSSEStreaming({
     }
 
     return fullContent
-  }, [scheduleStreamingContent, scheduleStreamingReasoning, resetStreamingContent, fetchChat])
+  }, [scheduleStreamingContent, scheduleStreamingReasoning, resetStreamingContent, fetchChat, surfaceMessage, setMessages])
 
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
@@ -1442,6 +1535,132 @@ export function useSSEStreaming({
   }, [chatId, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
+   * Storyteller: run the operator's selection for an open round. The stream
+   * speaks the chain dialect (turnStart / done / turnComplete, then one
+   * chainComplete), so this reads it as a continue-mode chain does; "all at
+   * once" turns arrive tagged `concurrent` and fill their own bubbles.
+   */
+  const runStorytellerSelection = useCallback(async (
+    roundId: string,
+    participantIds: string[],
+    order: StorytellerOrder,
+  ): Promise<boolean> => {
+    if (streaming || waitingForResponse) {
+      showInfoToast('One moment — the room is still speaking.')
+      return false
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+
+    setWaitingForResponse(true)
+    setStreaming(false)
+    resetStreamingContent()
+    setStreamingToolBatches([])
+    setConcurrentStreams([])
+    let currentParticipantId: string | null = null
+
+    const pushReply = (fullContent: string, data: SSEEvent) => {
+      if (data.skipped || data.stopped) {
+        finishSkippedTurn()
+        return
+      }
+      if (!fullContent.trim()) return
+      const resolvedParticipantId = data.participantId || currentParticipantId
+      setMessages(prev => [...prev, {
+        id: data.messageId || `storyteller-${Date.now()}`,
+        role: 'ASSISTANT',
+        content: fullContent,
+        createdAt: new Date().toISOString(),
+        participantId: resolvedParticipantId,
+        provider: data.provider || null,
+        modelName: data.modelName || null,
+        routeTrail: data.routeTrail ?? null,
+        isSilentMessage: data.isSilentMessage || undefined,
+        reasoningContent: data.reasoningContent ?? null,
+        reasoningSegments: data.reasoningSegments ?? null,
+      }])
+    }
+
+    try {
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+      const res = await fetch(`/api/v1/chats/${chatId}?action=storyteller-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roundId, participantIds, order }),
+        signal,
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'The storyteller could not run that selection')
+      }
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      await readSSEStream(reader, {
+        participantId: null,
+        onToolsDetected: trackToolsDetected,
+        onToolResult: trackToolResult,
+        onSurfacedMessage: surfaceMessage,
+        onConfirmationResult: applyConfirmationResult,
+        onDone: (fullContent, data) => {
+          setResponseStatus(null)
+          clearPendingToolExecutionStatus()
+          pushReply(fullContent, data)
+        },
+        onIntermediateDone: (fullContent, data) => pushReply(fullContent, data),
+        onTurnStart: (event) => {
+          currentParticipantId = event.participantId
+          setRespondingParticipantId(event.participantId)
+          resetStreamingContent()
+          setStreamingToolBatches([])
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async () => {
+          resetStreamingContent()
+          setStreaming(false)
+          setWaitingForResponse(false)
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          resetStreamingContent()
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setConcurrentStreams([])
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          announceChainPause(event)
+          focusInput()
+        },
+      })
+      return true
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (!isAbort) showErrorToast(extractErrorMessage(err))
+      return false
+    } finally {
+      setStreaming(false)
+      setWaitingForResponse(false)
+      resetStreamingContent()
+      setConcurrentStreams([])
+      setRespondingParticipantId(null)
+      setResponseStatus(null)
+      abortControllerRef.current = null
+      setHandRaised(false)
+      stoppingRef.current = false
+      setStopping(false)
+      scrollOnStreamComplete()
+      await fetchChat()
+      notifyQueueChange()
+      focusInput()
+    }
+  }, [chatId, streaming, waitingForResponse, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+
+  /**
    * Abandon the local stream outright — the old Stop, now only the fallback
    * for when the server cannot be told (an old server, a dropped request) or
    * its stream never closes after it was.
@@ -1545,6 +1764,8 @@ export function useSSEStreaming({
     abortControllerRef,
     sendMessage,
     triggerContinueMode,
+    runStorytellerSelection,
+    concurrentStreams,
     stopStreaming,
     handRaised,
     toggleRaisedHand,

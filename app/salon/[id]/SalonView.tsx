@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
+import { StorytellerBoard, withBid, type StorytellerRoundResponse } from '@/components/chat/StorytellerBoard'
+import type { StorytellerStreamEvent } from './hooks/useSSEStreaming'
+import type { AvatarImageSource } from '@/components/ui/Avatar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
@@ -544,6 +547,20 @@ export function SalonView({ chatId }: SalonViewProps) {
     startBackgroundPolling,
   })
 
+  // --- Storyteller board: the send's stream fills the board's cached round ---
+  const storytellerQueryClient = useQueryClient()
+  const handleStorytellerEvent = useCallback((event: StorytellerStreamEvent) => {
+    const key = queryKeys.chats.storytellerRound(id)
+    if (event.kind === 'round') {
+      storytellerQueryClient.setQueryData<StorytellerRoundResponse>(key, { round: event.round })
+    } else if (event.kind === 'bid') {
+      storytellerQueryClient.setQueryData<StorytellerRoundResponse>(key, (prev) =>
+        prev?.round && prev.round.id === event.roundId ? { round: withBid(prev.round, event.bid) } : prev)
+    } else {
+      void storytellerQueryClient.invalidateQueries({ queryKey: key })
+    }
+  }, [id, storytellerQueryClient])
+
   // --- SSE Streaming hook ---
   const sseStreaming = useSSEStreaming({
     chatId: id,
@@ -566,6 +583,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
+    onStorytellerEvent: handleStorytellerEvent,
     onToolResult: (name, success, result) => {
       // React to LLM opening/closing documents
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
@@ -1580,6 +1598,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           streaming={sseStreaming.streaming}
           streamingContent={sseStreaming.streamingContent}
           waitingForResponse={sseStreaming.waitingForResponse}
+          concurrentStreams={sseStreaming.concurrentStreams.map((stream) => ({
+            ...stream,
+            character: chat?.participants.find(p => p.id === stream.participantId)?.character ?? undefined,
+          }))}
           userParticipantId={participantsWithImpersonation.userParticipantId}
           respondingParticipantId={respondingParticipantId}
           chatId={id}
@@ -1716,6 +1738,19 @@ export function SalonView({ chatId }: SalonViewProps) {
             </div>
           )
         })()}
+
+        {/* Storyteller: the round's board, above the composer */}
+        {chat?.turnMode === 'storyteller' && (
+          <StorytellerBoard
+            chatId={id}
+            busy={sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending}
+            avatarFor={(participantId) => {
+              const character = chat?.participants.find(p => p.id === participantId)?.character
+              return character as unknown as AvatarImageSource | undefined
+            }}
+            onRun={sseStreaming.runStorytellerSelection}
+          />
+        )}
 
         {/* Chat Composer */}
         <ChatComposer
@@ -2051,6 +2086,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           waitingForResponse={sseStreaming.waitingForResponse}
           isPaused={isPaused}
           onTogglePause={chatControls.togglePause}
+          turnMode={chat?.turnMode ?? 'rotation'}
+          onSetTurnPosition={chatControls.setTurnPosition}
+          storytellerInviteFilter={chat?.storytellerInviteFilter === true}
+          onToggleStorytellerInviteFilter={chatControls.toggleStorytellerInviteFilter}
           onNudge={turnManagement.handleNudge}
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}

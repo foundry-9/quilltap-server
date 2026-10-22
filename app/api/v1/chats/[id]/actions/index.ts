@@ -62,3 +62,9 @@ export { handleGetGroupStores } from './group-stores';
 export { handleExportMarkdown } from './export-markdown';
 export { handleSetScenario, handleGetScenarioSource } from './scenario';
 export { handleRetryImageUncensored } from './retry-image-uncensored';
+export {
+  handleGetStorytellerRound,
+  handleStorytellerRunAction,
+  handleStorytellerAsk,
+  handleStorytellerLie,
+} from './storyteller';

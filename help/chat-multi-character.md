@@ -322,6 +322,15 @@ The first remark you enter into a paused room is answered with a quiet notice to
 the silence be mistaken for a message that never arrived. Later remarks pass without comment, the
 point having been made.
 
+### Storyteller Mode
+
+The control beside Pause has a third position, **Storyteller**. In it, every post of yours opens a
+*round*: each character is asked in private whether they wish to answer and what they mean to do —
+just speak, look something up, act on the world, or (rarely, and with a warning) delete something
+— and you choose who goes ahead, in rotation order or all at once. Nothing is done that you have not
+first seen proposed, and the floor comes back to you when the round is over. The full tour is on
+[Storyteller Mode](storyteller-mode.md).
+
 The Pause button is also the establishment's own safety catch. It is pressed for you when a turn
 fails outright, when an all-LLM room reaches one of the thresholds above, and — briefly — when the
 Courier is holding a conversation while it waits for a reply you must paste in by hand. In every
@@ -518,6 +527,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Turn Manager](chat-turn-manager.md) — Detailed turn management documentation
 - [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
+- [Storyteller Mode](storyteller-mode.md) — Each post asks the company who wishes to answer
 - [Chat Sidebar](chat-participants.md) — Full sidebar documentation, including the Chat / Visibility / Organize / Edit Content drawers
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
 - [Characters](characters.md) — Creating and managing characters

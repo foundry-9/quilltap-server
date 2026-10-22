@@ -100,14 +100,15 @@ describe('AbstractBaseRepository._update — patch-only fields', () => {
   })
 })
 
-describe('ChatsRepository — the Concierge state and the carried Inventory are patch-only', () => {
-  it('declares conciergeMode, conciergeModeSetBy, conciergeModeReason and equippedInventory', () => {
+describe('ChatsRepository — the Concierge state, the carried Inventory and the turn mode are patch-only', () => {
+  it('declares conciergeMode, conciergeModeSetBy, conciergeModeReason, equippedInventory and turnMode', () => {
     const repo = new ChatsRepository() as unknown as { patchOnlyFields(): readonly string[] }
     expect([...repo.patchOnlyFields()].sort()).toEqual([
       'conciergeMode',
       'conciergeModeReason',
       'conciergeModeSetBy',
       'equippedInventory',
+      'turnMode',
     ])
   })
 })

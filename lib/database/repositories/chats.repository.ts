@@ -21,6 +21,7 @@
  * - ChatSearchReplaceOps: text search and replace in messages
  */
 
+import type { ChatTurnMode } from '@/lib/schemas/storyteller.types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import {
   ChatMetadata,
@@ -54,6 +55,12 @@ const CONCIERGE_MODE_FIELDS: readonly string[] = ['conciergeMode', 'conciergeMod
  * `ChatsRepository.setEquippedInventory`.
  */
 const EQUIPPED_INVENTORY_FIELD = 'equippedInventory';
+
+/**
+ * The chat's turn mode ('rotation' | 'storyteller') — patch-only on this
+ * table, written solely by `ChatsRepository.setTurnMode`.
+ */
+const TURN_MODE_FIELD = 'turnMode';
 
 /**
  * Chats repository with database abstraction layer backend
@@ -564,7 +571,26 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   // `setConciergeMode` below.
 
   protected override patchOnlyFields(): readonly string[] {
-    return [...CONCIERGE_MODE_FIELDS, EQUIPPED_INVENTORY_FIELD];
+    return [...CONCIERGE_MODE_FIELDS, EQUIPPED_INVENTORY_FIELD, TURN_MODE_FIELD];
+  }
+
+  /**
+   * Write a chat's turn mode. Patch-only: the one writer of `turnMode`, so a
+   * whole-row update elsewhere can never carry a stale copy back. 'rotation'
+   * is stored as NULL. Returns whether a row was written.
+   */
+  async setTurnMode(chatId: string, mode: ChatTurnMode): Promise<boolean> {
+    const stored = mode === 'rotation' ? null : mode;
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { [TURN_MODE_FIELD]: stored, updatedAt: new Date().toISOString() } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to write turn mode', { chatId, mode, context: 'storyteller' }, false);
+    logger.debug('Turn mode write', { chatId, mode, written, context: 'storyteller' });
+    return written;
   }
 
   /**

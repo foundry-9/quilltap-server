@@ -13,6 +13,7 @@
  * regenerating a reply does not re-roll.
  */
 
+import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
@@ -355,3 +356,18 @@ function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): strin
   if (effects.some(isLogEffect)) clauses.push('writes to the log');
   return clauses.join('; ');
 }
+
+/**
+ * What this tool does to the world: whatever the named custom tool does —
+ * `read` unless its definition carries effects (`customToolEffect`). The
+ * caller supplies the roster's effects; a name it does not know counts as a
+ * write.
+ */
+export const runCustomToolEffect: ToolEffectSpec = computedToolEffect({
+  schema: runCustomToolInputSchema,
+  resolve: (input, lookups) => lookups.customToolEffects?.get(input.tool) ?? 'write',
+  maxEffect: 'write',
+  notes: {
+    read: 'This turn allows only the custom tools marked "read" in the list above; a tool with effects will be refused.',
+  },
+});

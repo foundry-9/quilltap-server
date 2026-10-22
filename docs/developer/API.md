@@ -2647,6 +2647,26 @@ Hard-stop the chat's open Salon stream(s) (`lib/chat/turn-control.ts`). A room w
 
 `stopped: 0` means no stream was open in this process.
 
+#### Storyteller mode
+
+A chat whose `turnMode` is `'storyteller'` (set with `PUT /api/v1/chats/[id]` and a top-level `"turnMode": "rotation" | "storyteller"` beside `chat`; it is patch-only and written by `ChatsRepository.setTurnMode`, and leaving storyteller mode closes any open round) opens a **round** on every public operator post, instead of drawing a reply. The ordinary send (`POST /api/v1/messages?chatId=`) records the post and then streams the round: a `storytellerRound` frame (the board), one `storytellerBid` frame per seat as each bid lands, `roundOpen { roundId }`, and `chainComplete` reason `round_open`. Bids still out after 45 s land on the round row and reach the board through the `storytellerRounds` realtime topic. A whisper or an `@Name:` query opens no round; a continue-mode send (Nudge) runs one turn with no chain. `chats.storytellerInviteFilter` (boolean, on the `chat` object) weights invitations by talkativeness. Design of record: `docs/developer/features/complete/storyteller-mode.md`.
+
+##### `GET /api/v1/chats/[id]?action=storyteller-round`
+
+The chat's open or running round, else its latest closed one (the board's summary line): `{ "round": StorytellerRound | null }`. A closed round's `bids` are empty.
+
+##### `POST /api/v1/chats/[id]?action=storyteller-run`
+
+Run the operator's selection. **Request Body**: `{ "roundId": "...", "participantIds": ["..."], "order": "sequential" | "simultaneous" }` (`order` defaults to `sequential`). Only seats whose bid status is `bid` may be chosen, and a `destroy`-tier bid only on its own (`400`); a round that is no longer open answers `409`. The response is an SSE stream in the chain dialect: `turnStart` (chainDepth ≥ 1) before each sequential speaker, the turn's own events, `turnComplete`, and one `chainComplete` (`user_turn`, `yielded`, or `stopped` with `paused: true`). With `simultaneous`, Simple and Lookup turns run concurrently (at most 4 per connection profile) and every frame they write carries `participantId` and `concurrent: true`; Act and Destroy turns follow one at a time. Each turn runs under its bid's effect ceiling and stores the bid on its reply (`chat_messages.storytellerBid`).
+
+##### `POST /api/v1/chats/[id]?action=storyteller-ask`
+
+"Ask anyway": one late bid for a seat on an open round (kept quiet, or failed). **Request Body**: `{ "roundId": "...", "participantId": "..." }`. **Response**: `{ "bid": StorytellerBid }`.
+
+##### `POST /api/v1/chats/[id]?action=storyteller-lie`
+
+"Let it lie": close an open round with nobody chosen. **Request Body**: `{ "roundId": "..." }`. **Response**: `{ "closed": true }`.
+
 #### `POST /api/v1/chats/[id]?action=raise-hand`
 
 Raise (or lower) the operator's hand on the chat's open Salon stream. The next LLM turn built afterwards is asked, in a trailing Turn note, whether to `[YIELD]`; the stream reports the answer with a `handAnswered` SSE event, and a yield closes the chain with `chainComplete` reason `yielded` (not paused).

@@ -35873,6 +35873,11 @@ function validateServerConfig(config) {
       return { valid: false, error: "Valid custom headers JSON required for custom-header auth" };
     }
   }
+  const validEffects = ["none", "read", "write", "destroy"];
+  const effect = obj.effect ?? "write";
+  if (typeof effect !== "string" || !validEffects.includes(effect)) {
+    return { valid: false, error: `Invalid effect: ${String(effect)} (expected none, read, write or destroy)` };
+  }
   const sanitizedConfig = {
     name: sanitizeServerName(obj.name),
     displayName: typeof obj.displayName === "string" ? obj.displayName : sanitizeServerName(obj.name),
@@ -35880,7 +35885,8 @@ function validateServerConfig(config) {
     authType,
     enabled: obj.enabled !== false,
     // Default to enabled
-    timeout: typeof obj.timeout === "number" ? Math.max(5, Math.min(120, obj.timeout)) : 30
+    timeout: typeof obj.timeout === "number" ? Math.max(5, Math.min(120, obj.timeout)) : 30,
+    effect
   };
   if (authType === "bearer") {
     sanitizedConfig.bearerToken = obj.bearerToken;
@@ -36664,6 +36670,18 @@ var MCPConnectionManager = class {
     return hierarchy;
   }
   /**
+   * Each discovered tool's effect, inherited from its server's configured
+   * `effect` (default `write`).
+   */
+  getToolEffects() {
+    const effects = {};
+    for (const [quilltapName, mapping] of this.toolIndex) {
+      const config = this.clients.get(mapping.serverId)?.getConfig();
+      effects[quilltapName] = config?.effect ?? "write";
+    }
+    return effects;
+  }
+  /**
    * Attempt to reconnect disconnected servers
    */
   async reconnectDisconnected() {
@@ -36876,6 +36894,13 @@ ${output}`;
   async getToolHierarchy(config) {
     await ensureInitialized(config);
     return connectionManager.getToolHierarchy();
+  },
+  /**
+   * Every tool inherits its server's configured `effect` (default `write`).
+   */
+  async getToolEffects(config) {
+    await ensureInitialized(config);
+    return connectionManager.getToolEffects();
   }
 };
 var pluginExport = { plugin };

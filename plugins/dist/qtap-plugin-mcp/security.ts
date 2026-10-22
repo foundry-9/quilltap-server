@@ -256,6 +256,13 @@ export function validateServerConfig(
     }
   }
 
+  // The operator's statement of what this server's tools do (default: write)
+  const validEffects = ['none', 'read', 'write', 'destroy'];
+  const effect = obj.effect ?? 'write';
+  if (typeof effect !== 'string' || !validEffects.includes(effect)) {
+    return { valid: false, error: `Invalid effect: ${String(effect)} (expected none, read, write or destroy)` };
+  }
+
   // Build sanitized config
   const sanitizedConfig: MCPServerConfig = {
     name: sanitizeServerName(obj.name),
@@ -265,6 +272,7 @@ export function validateServerConfig(
     authType: authType as MCPServerConfig['authType'],
     enabled: obj.enabled !== false, // Default to enabled
     timeout: typeof obj.timeout === 'number' ? Math.max(5, Math.min(120, obj.timeout)) : 30,
+    effect: effect as MCPServerConfig['effect'],
   };
 
   // Add auth credentials

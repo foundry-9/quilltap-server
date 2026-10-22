@@ -40,6 +40,7 @@ import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
 import { runReplyTriggers } from './trigger-phrase-sites'
 import { buildRouteTrail } from './route-trail'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { StorytellerTurnContext } from '@/lib/storyteller/types'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -62,6 +63,13 @@ export interface FinalizeMessageResponseOptions {
   streaming: StreamingState
   compression: CompressionContext
   triggers: TriggerContext
+  /**
+   * A storyteller speaking turn: the bid it carries out (stored on the
+   * message, re-applied on swipe) and its effect ceiling (trigger phrases
+   * above it are skipped). Memory extraction, the summary fold and the danger
+   * classification wait for the round's end (`runStorytellerRoundHousekeeping`).
+   */
+  storyteller?: StorytellerTurnContext
 }
 
 /**
@@ -86,6 +94,7 @@ export async function finalizeMessageResponse({
   streaming,
   compression,
   triggers,
+  storyteller,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
@@ -293,6 +302,20 @@ export async function finalizeMessageResponse({
     routeTrail
   )
 
+  // A storyteller turn records the bid it carried out, so a swipe re-runs it
+  // under the same plan and ceiling. Never model-facing.
+  if (storyteller) {
+    try {
+      await repos.chats.updateMessage(chatId, assistantMessageId, { storytellerBid: storyteller.bidRecord })
+    } catch (error) {
+      logger.warn('Failed to record the storyteller bid on its message', {
+        chatId,
+        messageId: assistantMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   // The turn's recall record (stage trace, delivered pools, the ring line the
   // replay reads back) rides on the message it shaped.
   if (builtContext.recallDebugLog && builtContext.recallDebugLog.length > 0) {
@@ -464,6 +487,7 @@ export async function finalizeMessageResponse({
     characterId: character.id,
     chatSettings,
     onPosted: (msg) => safeEnqueue(controller, encodePascalResultEvent(encoder, msg)),
+    effectCeiling: storyteller?.effectCeiling,
   })
 
   // ============================================================================
@@ -540,7 +564,13 @@ export async function finalizeMessageResponse({
       })
   }
 
-  if (chatSettings) {
+  // A storyteller turn leaves the round's housekeeping to the round's end.
+  if (chatSettings && storyteller) {
+    logger.debug('Storyteller turn: housekeeping deferred to the end of the round', {
+      chatId,
+      roundId: storyteller.bidRecord.roundId,
+    })
+  } else if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
     }
@@ -607,6 +637,46 @@ export async function finalizeMessageResponse({
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
   }
+}
+
+/**
+ * A storyteller round's housekeeping, run once after its last speaking turn:
+ * memory extraction, the context-summary fold (and with it the auto-title
+ * check) and the danger classification — what each turn of a rotation chain
+ * triggers from the finalizer, but once for the whole round, not once per
+ * concurrent turn.
+ */
+export async function runStorytellerRoundHousekeeping(
+  repos: ReturnType<typeof getRepositories>,
+  params: {
+    chatId: string
+    userId: string
+    connectionProfile: ConnectionProfile
+    memoryChatSettings: MemoryChatSettings
+  }
+): Promise<void> {
+  const { chatId, userId, connectionProfile, memoryChatSettings } = params
+  logger.debug('Storyteller round housekeeping', { chatId })
+  await triggerTurnMemoryExtraction(repos, {
+    chatId,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
+  await triggerContextSummaryCheck(repos, {
+    chatId,
+    provider: connectionProfile.provider,
+    modelName: connectionProfile.modelName,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
+  await triggerChatDangerClassification(repos, {
+    chatId,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
 }
 
 /**

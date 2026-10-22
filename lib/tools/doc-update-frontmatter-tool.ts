@@ -4,6 +4,7 @@
  * Supports deletion by setting a key to null.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -69,3 +70,6 @@ export interface DocUpdateFrontmatterOutput {
   uri?: string;
   mtime: number;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docUpdateFrontmatterToolEffect: ToolEffectSpec = 'write';

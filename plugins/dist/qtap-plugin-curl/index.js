@@ -28536,6 +28536,13 @@ var plugin = {
     return [curlToolDefinition];
   },
   /**
+   * curl can POST, PUT and DELETE to the outside world, so it is declared a
+   * write. (A static map cannot tell a GET from a DELETE.)
+   */
+  getToolEffects(_config) {
+    return { curl: "write" };
+  },
+  /**
    * Execute a tool by name (multi-tool pattern)
    *
    * Routes execution to the curl handler.

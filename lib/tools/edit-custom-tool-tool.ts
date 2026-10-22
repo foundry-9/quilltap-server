@@ -15,6 +15,7 @@
  * the derived OpenAI-format `parameters`.
  */
 
+import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -92,3 +93,17 @@ export function validateEditCustomToolInput(input: unknown): EditCustomToolInput
   const parsed = editCustomToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/**
+ * What this tool does to the world: `action: "schema"` touches nothing; a
+ * call without `content` validates (a read); a call with `content` saves.
+ */
+export const editCustomToolToolEffect: ToolEffectSpec = computedToolEffect({
+  schema: editCustomToolInputSchema,
+  resolve: (input) => (input.action === 'schema' ? 'none' : input.content === undefined ? 'read' : 'write'),
+  maxEffect: 'write',
+  notes: {
+    none: 'This turn allows only `action: "schema"`.',
+    read: 'This turn allows only `action: "schema"` and validation (no `content`); saving will be refused.',
+  },
+});

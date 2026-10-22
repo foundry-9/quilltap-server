@@ -10,6 +10,7 @@
  * and any other persistent information needed during roleplay.
  */
 
+import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -116,3 +117,16 @@ export function validateStateInput(input: unknown): StateToolInput | null {
   const parsed = stateToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/**
+ * What this tool does to the world: `fetch` reads; `set` and `delete` write.
+ * Deleting a key is a write, not a destroy — the value can be set again.
+ */
+export const stateToolEffect: ToolEffectSpec = computedToolEffect({
+  schema: stateToolInputSchema,
+  resolve: (input) => (input.operation === 'fetch' ? 'read' : 'write'),
+  maxEffect: 'write',
+  notes: {
+    read: 'This turn allows only `operation: "fetch"`; `set` and `delete` will be refused.',
+  },
+});

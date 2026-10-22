@@ -152,6 +152,13 @@ export interface ChatSidebarProps {
   waitingForResponse?: boolean
   isPaused?: boolean
   onTogglePause?: () => void
+  /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a three-way control. */
+  turnMode?: 'rotation' | 'storyteller'
+  /** Normal (rotation, running) / Paused / Storyteller (bids each round). */
+  onSetTurnPosition?: (position: 'normal' | 'paused' | 'storyteller') => void
+  /** Storyteller: invite seats to bid weighted by talkativeness (off = everyone, every round). */
+  storytellerInviteFilter?: boolean
+  onToggleStorytellerInviteFilter?: () => void
   onNudge: (participantId: string) => void
   onQueue: (participantId: string) => void
   onDequeue: (participantId: string) => void
@@ -757,6 +764,50 @@ function CollapsedStrip({
 }
 
 // =================================================================
+// Turn-mode control
+// =================================================================
+
+const TURN_POSITIONS: Array<{ id: 'normal' | 'paused' | 'storyteller'; label: string; title: string }> = [
+  { id: 'normal', label: 'Normal', title: 'The company takes turns on its own' },
+  { id: 'paused', label: 'Paused', title: 'Nobody answers until you nudge them' },
+  { id: 'storyteller', label: 'Storyteller', title: 'Each of your posts asks the company who wishes to answer; you choose' },
+]
+
+function TurnModeControl({
+  isPaused,
+  turnMode,
+  onSet,
+}: {
+  isPaused: boolean
+  turnMode: 'rotation' | 'storyteller'
+  onSet: (position: 'normal' | 'paused' | 'storyteller') => void
+}) {
+  const current = isPaused ? 'paused' : turnMode === 'storyteller' ? 'storyteller' : 'normal'
+  return (
+    <div className="qt-storyteller-mode mt-3" role="radiogroup" aria-label="Turn mode">
+      {TURN_POSITIONS.map((position) => {
+        const active = position.id === current
+        const classes = ['qt-storyteller-mode-option']
+        if (active) classes.push(position.id === 'paused' ? 'qt-storyteller-mode-option-paused' : 'qt-storyteller-mode-option-active')
+        return (
+          <button
+            key={position.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            className={classes.join(' ')}
+            title={position.title}
+            onClick={() => { if (!active) onSet(position.id) }}
+          >
+            <span>{position.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// =================================================================
 // Participants section
 // =================================================================
 
@@ -798,7 +849,30 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
         </div>
       )}
 
-      {p.onTogglePause && (
+      {p.onSetTurnPosition && (
+        <TurnModeControl
+          isPaused={p.isPaused === true}
+          turnMode={p.turnMode ?? 'rotation'}
+          onSet={p.onSetTurnPosition}
+        />
+      )}
+
+      {p.onSetTurnPosition && p.turnMode === 'storyteller' && p.onToggleStorytellerInviteFilter && (
+        <label
+          className="flex items-center gap-2 cursor-pointer mt-2"
+          title="Each round, a quiet character may be left out — the likelier the less talkative. Kept-quiet seats can still be asked from the board."
+        >
+          <input
+            type="checkbox"
+            checked={p.storytellerInviteFilter === true}
+            onChange={p.onToggleStorytellerInviteFilter}
+            className="qt-checkbox"
+          />
+          <span className="qt-label">Invite by talkativeness</span>
+        </label>
+      )}
+
+      {p.onTogglePause && !p.onSetTurnPosition && (
         <button
           onClick={p.onTogglePause}
           className={`qt-chat-pause-button mt-3 ${p.isPaused ? 'qt-chat-pause-button-paused' : ''}`}

@@ -636,6 +636,8 @@ CREATE TABLE "chats" (
   "lastFullRebuildTurn" INTEGER DEFAULT 0,
   "summaryAnchorMessageIds" TEXT DEFAULT '[]',
   "isPaused" INTEGER DEFAULT 0,
+  "turnMode" TEXT DEFAULT NULL,               -- Storyteller mode: 'rotation' (NULL) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
+  "storytellerInviteFilter" INTEGER DEFAULT 0, -- Storyteller mode: 1 = invite each seat to bid with probability 0.25 + 0.75 × talkativeness; 0 = invite everyone. Added by add-storyteller-mode-v1.
   "isManuallyRenamed" INTEGER DEFAULT 0,
   "impersonatingParticipantIds" TEXT DEFAULT '[]',
   "activeTypingParticipantId" TEXT,
@@ -800,6 +802,34 @@ reopened by a skip, nudge or continue — or an autonomous room's next speaker �
 is not extracted again from its first line; a regenerate clears it with the
 rest and does not read it. It travels in bundles as
 `turnExtractionWatermarkMessageId`.
+
+### storyteller_rounds
+
+```sql
+CREATE TABLE "storyteller_rounds" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "triggerMessageId" TEXT,          -- the operator post that opened the round
+  "status" TEXT NOT NULL,           -- 'open' | 'running' | 'closed'
+  "bids" TEXT DEFAULT '[]',         -- JSON: one card per invited seat (participantId, characterId, characterName, status, statedTier, tier, tierRaised, tools, plan, reason, talkativeness, silent, askedAt, answeredAt). Cleared when the round closes.
+  "selection" TEXT DEFAULT NULL,    -- JSON: { participantIds, order: 'sequential'|'simultaneous'|null, chosenAt, names }
+  "closedReason" TEXT DEFAULT NULL, -- 'ran' | 'let-lie' | 'superseded' | 'abandoned'
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  "closedAt" TEXT DEFAULT NULL,
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_storyteller_rounds_chat" ON "storyteller_rounds" ("chatId", "status");
+```
+
+Storyteller mode's rounds. An operator post in a storyteller chat opens one;
+every invited LLM seat's bid lands on `bids` while it is `open`. When the round
+closes its `bids` are cleared — the full bid calls stay in the LLM log
+(`llm_logs.type = 'STORYTELLER_BID'`, grouped by `storytellerRoundId`) — and
+only the ids, timings and selection are kept. **Not exported or backed up**:
+bids are not part of the record; a replace-mode restore truncates the table.
+Repository: `StorytellerRoundsRepository`. Added by `add-storyteller-mode-v1`.
 
 ### chat_informs
 
@@ -1001,6 +1031,7 @@ CREATE TABLE "chat_messages" (
   "confirmationRevised" INTEGER DEFAULT NULL, -- Answer confirmation: shown content is a re-affirmation rewrite of the original.
   "confirmationNotes" TEXT DEFAULT NULL,      -- Answer confirmation: cheap-LLM discrepancy explanation (badge hover text).
   "confirmationOriginalContent" TEXT DEFAULT NULL, -- Answer confirmation: pre-revision text retained for the logs when confirmationRevised.
+  "storytellerBid" TEXT DEFAULT NULL,         -- Storyteller mode: JSON { roundId, tier: 'simple'|'lookup'|'act'|'destroy', plan, toolsNamed } — the bid this speaking turn carried out. A swipe copies it and re-rolls under the same plan. Part of the record (export, backup); never sent to a model. NULL on every other message. Added by add-storyteller-mode-v1.
   "pascalMeta" TEXT DEFAULT NULL,             -- Pascal the Croupier (custom pseudo-tools): JSON { tool, toolTitle?, chipLabel?, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, metadataTested?, llm?, effects?, invokedBy, triggerPhrase?, callerParticipantId? } on systemSender='pascal' messages. `toolTitle` is the display title at roll time; absent on rows written before it existed, where readers fall back to `tool`. `chipLabel` is the definition's chipLabel template rendered at roll time — the per-run label the Salon chip and the bubble heading share; absent on older rows and unlabelled tools, where readers fall back to `toolTitle`, then `tool`. `metadataTested` records the keys the winning row consulted at their roll-time values. `llm` records an LLM consult when the definition declared one: { ok, output, prompt, reason?, provider?, model? } — output is the model's trimmed answer, or the author's errorMessage when the consult failed (`reason` holds the technical cause). `effects` records the side effects the run applied, in order: [{ target, previous?, next, tier? }] — the raw target as written ('state.encounter.count' / 'metadata.lockpick'), the prior value when there was one, what was written, and (state targets only) which tier the write landed in; absent when the run declared or applied none. A wardrobe effect records one entry per change that landed, with target 'wardrobe.wear' / 'wardrobe.take_off' / 'wardrobe.clear_slot', `previous` the character's EquippedSlots before the change, and `next` = { item?: { id, title }, slot?, slotsAffected, effect: 'layered' | 'replaced' | 'removed' | 'cleared', slots } (the slots after it; `item` absent on clear_slot). An Inventory effect records one entry per object that landed, with target 'inventory.equip' / 'inventory.unequip' / 'inventory.pick_up', `previous` the character's equipped object ids before the gesture, and `next` = { item: { id, title }, created?, equipped } (the ids after it; `created` marks an instance the gesture made). `invokedBy` is 'llm' (a model's `run_custom`), 'user' (the operator's popup) or 'trigger' (a trigger phrase said in the chat, with the phrase as written in `triggerPhrase`). The Salon body shows none of it — the bubble stays the author's message; this column carries the audit. The server-side roll record — authoritative, so a model cannot fudge a failure into a success (nor its recorded consequences). NULL on every non-Pascal message. Added by add-pascal-message-meta-v1; chipLabel/effects/triggerPhrase ride the JSON column with no migration.
   "routeTrail" TEXT DEFAULT NULL              -- Message route trail: JSON [{ profileId, profileName, provider, modelName, via, outcome, trigger?, evidence?, profileKind?, detail? }] — every profile tried for this turn, in the order tried. `via` says how the profile came to be asked ('primary' | 'retry' | 'concierge' | 'understudy' | 'tier-pick'); `outcome` is 'answered' | 'failed' (fell over on its own) | 'refused' (declined on content grounds); `trigger` is the fallback engine's failure class ('auth' | 'rate-limit' | 'network' | 'model-missing' | 'provider-error' | 'empty-response' | 'moderation-refusal'), absent on the entry that answered; `evidence` says how a refusal was established ('typed-error' — the plugin threw a moderation rejection — 'provider-code', 'finish-reason' and 'message-pattern' — the provider said so, by code, stop reason or wording — or 'inferred' from an empty body on a Concierge-flagged turn); `profileKind` is 'image' when the entry names an image profile (absent = a connection profile); `detail` is a short reason capped at 200 chars, never the full error body. The last entry always agrees with this row's provider/modelName, which stay authoritative for who answered. NULL on every message whose turn had no failure (nearly all of them — a one-entry trail would say nothing provider/modelName do not). Besides assistant turns, image-bearing rows carry an image trail when a picture was refused on the way: the TOOL row of a generate_image call and the Lantern / Aurora announcement (written by generateImageWithConciergeFailover). JSON only — no schema migration. Added by add-route-trail-message-column-v1.
 );
@@ -1864,6 +1895,7 @@ CREATE TABLE "llm_logs" (
   "requestHashes" TEXT,
   "durationMs" INTEGER,
   "autonomousRunId" TEXT,
+  "storytellerRoundId" TEXT,
   "connectionProfileId" TEXT,
   "imageProfileId" TEXT,
   "createdAt" TEXT NOT NULL,
@@ -1875,6 +1907,7 @@ CREATE INDEX "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC);
 CREATE INDEX "idx_llm_logs_type" ON "llm_logs" ("type");
 CREATE INDEX "idx_llm_logs_userId" ON "llm_logs" ("userId");
 CREATE INDEX "idx_llm_logs_autonomousRunId" ON "llm_logs" ("autonomousRunId");
+CREATE INDEX "idx_llm_logs_storytellerRoundId" ON "llm_logs" ("storytellerRoundId");
 CREATE INDEX "idx_llm_logs_connectionProfileId" ON "llm_logs" ("connectionProfileId");
 CREATE INDEX "idx_llm_logs_imageProfileId" ON "llm_logs" ("imageProfileId");
 ```
@@ -1886,6 +1919,8 @@ CREATE INDEX "idx_llm_logs_imageProfileId" ON "llm_logs" ("imageProfileId");
 `durationMs` is the wall-clock of the provider call. The shared cheap-LLM path (`lib/memory/cheap-llm-tasks/core-execution.ts`) and several service call sites did not populate it before 4.9; the character optimizer hardcoded `0`, which poisoned any average taken over the column. All of those now measure.
 
 `autonomousRunId` is stamped on every LLM call made within an autonomous-room turn (the turn plus its agent-mode tool sub-calls), via an `AsyncLocalStorage` context the turn handler establishes. It is `NULL` for all non-autonomous calls. The autonomous-room turn handler sums `usage.totalTokens` for a run by this column to enforce the per-run token budget — superseding the older timestamp-window sum, which double-counted overlapping chat activity and background housekeeping. Added by migration `add-llm-logs-autonomous-run-id-column-v1`.
+
+`storytellerRoundId` is stamped on every LLM call made for a storyteller round — each bid (`type = 'STORYTELLER_BID'`, the only record a losing bid leaves) and each speaking turn the round runs — via the round `AsyncLocalStorage` (`lib/storyteller/round-context.ts`). `NULL` outside a round. The Salon's LLM inspector groups a round by it. Added by migration `add-llm-logs-storyteller-round-id-column-v1`.
 
 ### SQLite statistics tables (auto-managed)
 

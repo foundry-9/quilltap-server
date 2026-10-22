@@ -8,6 +8,7 @@
  * right now, and token usage from the most recent LLM call.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -517,3 +518,6 @@ export function validateSelfInventoryInput(
   const parsed = selfInventoryToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const selfInventoryToolEffect: ToolEffectSpec = 'read';

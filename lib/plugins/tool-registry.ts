@@ -18,6 +18,7 @@ import type {
   ToolExecutionResult,
 } from './interfaces/tool-plugin';
 import { getErrorMessage } from '@/lib/error-utils';
+import { TOOL_EFFECTS, type ToolEffect } from '@/lib/tools/effect-types';
 import { AbstractMapRegistry } from './abstract-map-registry';
 import type { BaseRegistryState } from './base-registry';
 
@@ -132,6 +133,33 @@ class ToolRegistry extends AbstractMapRegistry<ToolPlugin, ToolRegistryState> {
    */
   getPluginNames(): string[] {
     return Array.from(this.state.plugins.keys());
+  }
+
+  /**
+   * Every plugin tool's declared effect, keyed by tool name. A plugin that
+   * declares nothing (or whose declaration fails) contributes nothing, so its
+   * tools count as `write` wherever this map is consulted.
+   *
+   * @param configs Plugin name (without the `qtap-plugin-` prefix) → user configuration
+   */
+  async getToolEffects(configs: ReadonlyMap<string, Record<string, unknown>>): Promise<Map<string, ToolEffect>> {
+    const effects = new Map<string, ToolEffect>();
+    for (const plugin of this.getAllPlugins()) {
+      if (typeof plugin.getToolEffects !== 'function') continue;
+      const pluginName = plugin.metadata.toolName;
+      try {
+        const declared = await plugin.getToolEffects(configs.get(pluginName) ?? {});
+        for (const [toolName, effect] of Object.entries(declared ?? {})) {
+          if (TOOL_EFFECTS.includes(effect)) effects.set(toolName, effect);
+        }
+      } catch (error) {
+        this.registryLogger.warn('Plugin tool effects unavailable; its tools count as write', {
+          plugin: pluginName,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+    return effects;
   }
 
   /**

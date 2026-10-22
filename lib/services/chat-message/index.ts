@@ -24,6 +24,7 @@ export type {
 // Orchestrator (main entry point)
 export {
   handleSendMessage,
+  handleStorytellerRun,
   sendMessageSchema,
   continueMessageSchema,
 } from './orchestrator.service'

@@ -6,6 +6,7 @@
  * configuration help, and usage instructions to better assist users.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { llmNumber } from './llm-number'
@@ -95,3 +96,6 @@ export function validateHelpSearchInput(
   const parsed = helpSearchToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const helpSearchToolEffect: ToolEffectSpec = 'read';

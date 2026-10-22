@@ -29,7 +29,7 @@ import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapte
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement, postHostTurnYieldAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
-import type { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, Character, ChatMetadataBase } from '@/lib/schemas/types'
 
 import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
@@ -59,6 +59,7 @@ import {
 } from './tool-execution.service'
 import {
   buildTools,
+  applyEffectCeilingToTools,
   encodeDebugInfo,
   encodeFallbackInfo,
   encodeDoneEvent,
@@ -70,9 +71,22 @@ import {
   encodeHandAnsweredEvent,
   encodePascalResultEvent,
   encodeChainCompleteEvent,
+  encodeTurnCompleteEvent,
+  encodeStorytellerRoundEvent,
+  encodeStorytellerBidEvent,
+  encodeRoundOpenEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
+import { lowerToolEffect, type ToolEffect } from '@/lib/tools/effects'
+import { parseCarinaQuery } from '@/lib/chat/carina-parser'
+import { buildBidOffer, callForBid } from '@/lib/storyteller/bid-call'
+import { buildBidSection, buildPlanSection } from '@/lib/storyteller/prompts'
+import type { StorytellerBidCallOutcome, StorytellerBidOffer } from '@/lib/storyteller/types'
+import type { StorytellerOrder } from '@/lib/schemas/storyteller.types'
+import { runDry } from '@/lib/repositories/dry-scope'
+import { sinkController, taggingController } from '@/lib/storyteller/sse-tag'
+import { runStorytellerRoundHousekeeping } from './message-finalizer.service'
 import { dispatchCourierTransport } from './courier-transport.service'
 import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
@@ -230,6 +244,21 @@ export async function handleSendMessage(
 
           const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
 
+          // Storyteller: the post is recorded; open a round of bids instead of
+          // a reply. The stream carries the bids as they land and ends with
+          // `roundOpen`; the operator's choice comes back on its own request.
+          if (result.storytellerHold) {
+            await openRoundOnSend({ chatId, userId, hold: result.storytellerHold, controller, encoder })
+            safeClose(controller)
+            return
+          }
+
+          // Storyteller mode never chains: a nudge (or Continue) runs one turn,
+          // with no ceiling, and the floor returns to the operator.
+          const storytellerSingleTurn = options.continueMode === true
+            && options.neverPauseForUser !== true
+            && (await repos.chats.findById(chatId))?.turnMode === 'storyteller'
+
           await executeTurnChain({
             repos,
             chatId,
@@ -257,7 +286,7 @@ export async function handleSendMessage(
             neverPauseForUser: options.neverPauseForUser === true,
             // A whisper's target answers once; the floor then goes back to the
             // operator (bug 258).
-            singleTurn: options.singleTurn === true || isWhisper,
+            singleTurn: options.singleTurn === true || isWhisper || storytellerSingleTurn,
           })
 
           // Trigger scene state tracking once after processing (and after any turn chain)
@@ -290,6 +319,184 @@ export async function handleSendMessage(
             }
           }
 
+          safeClose(controller)
+        } catch (error) {
+          handleStreamError(error, controller, encoder, { chatId, ledger })
+        }
+      })
+    },
+  })
+}
+
+/**
+ * Storyteller: open a round for a recorded operator post, streaming the board
+ * as it fills. An `@Name:` post opens none — it was answered already.
+ */
+async function openRoundOnSend(params: {
+  chatId: string
+  userId: string
+  hold: NonNullable<ProcessMessageResult['storytellerHold']>
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<void> {
+  const { chatId, userId, hold, controller, encoder } = params
+  if (hold.carina) {
+    logger.debug('[Storyteller] Carina query — no round opens', { chatId })
+    safeEnqueue(controller, encodeChainCompleteEvent(encoder, { reason: 'user_turn', nextSpeakerId: null, chainDepth: 0 }))
+    return
+  }
+  const { openStorytellerRound } = await import('@/lib/storyteller/round.service')
+  let roundId: string | null = null
+  const round = await openStorytellerRound({
+    chatId,
+    userId,
+    triggerMessageId: hold.triggerMessageId,
+    onRound: (opened) => {
+      roundId = opened.id
+      safeEnqueue(controller, encodeStorytellerRoundEvent(encoder, opened))
+    },
+    // Late bids (after the board timeout) find the stream closed; safeEnqueue
+    // drops them and the board hears of them through realtime instead.
+    onBid: (bid) => {
+      if (roundId) safeEnqueue(controller, encodeStorytellerBidEvent(encoder, { roundId, bid }))
+    },
+  })
+  safeEnqueue(controller, encodeRoundOpenEvent(encoder, { roundId: round.id }))
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, { reason: 'round_open', nextSpeakerId: null, chainDepth: 0 }))
+}
+
+/**
+ * Storyteller: build one seat's BID — the same context a turn would see, the
+ * bid section trailing, one call with tools offered and none callable — inside
+ * a dry scope, so nothing the build touches is written: no staff whisper, no
+ * recall stamp, no consumed inform or raised hand. Only the LLM log row lands.
+ */
+export async function runStorytellerBid(params: {
+  chatId: string
+  userId: string
+  participantId: string
+  roundId: string
+}): Promise<StorytellerBidCallOutcome> {
+  const { chatId, userId, participantId, roundId } = params
+  return runDry(`storyteller-bid:${participantId}`, async () => {
+    try {
+      const result = await processMessage(
+        getRepositories(),
+        chatId,
+        userId,
+        { continueMode: true, respondingParticipantId: participantId, storytellerBid: { roundId } },
+        sinkController(),
+        new TextEncoder(),
+        { userMessagePersisted: false, pendingToolResultsPersisted: false }
+      )
+      return result.bid ?? { ok: false, reason: 'The bid could not be built' }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      logger.warn('[Storyteller] Bid build failed', { chatId, participantId, roundId, error: reason })
+      return { ok: false, reason }
+    }
+  })
+}
+
+/**
+ * Storyteller: run the operator's selection for an open round, as an SSE
+ * stream in the Salon's chain dialect — a `turnStart` (depth ≥ 1) before each
+ * speaker, a `turnComplete` after, one `chainComplete` at the end. "All at
+ * once" Simple / Lookup turns share the stream concurrently, each frame tagged
+ * with its participant (`concurrent: true`). Validation happens before the
+ * stream exists, so a bad selection is an ordinary 4xx.
+ */
+export async function handleStorytellerRun(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  request: { roundId: string; participantIds: string[]; order: StorytellerOrder }
+): Promise<ReadableStream<Uint8Array>> {
+  const { planStorytellerRun, runStorytellerRound } = await import('@/lib/storyteller/round.service')
+  const { round, turns } = await planStorytellerRun({ chatId, ...request })
+  const encoder = new TextEncoder()
+  const ledger: SubmissionLedger = { userMessagePersisted: false, pendingToolResultsPersisted: false }
+
+  return new ReadableStream({
+    async start(controller) {
+      await runWithTurnControl(chatId, async () => {
+        try {
+          const outcome = await runStorytellerRound({
+            chatId,
+            round,
+            turns,
+            order: request.order,
+            runTurn: async (turn, storyteller) => {
+              const turnController = turn.concurrent ? taggingController(controller, turn.participantId) : controller
+              const result = await processMessage(
+                repos,
+                chatId,
+                userId,
+                { continueMode: true, respondingParticipantId: turn.participantId, storyteller },
+                turnController,
+                encoder,
+                ledger
+              )
+              return {
+                spoke: result.hasContent && !result.skipped,
+                yielded: result.yielded === true,
+                messageId: result.messageId,
+                sceneTrackingContext: result.sceneTrackingContext,
+              }
+            },
+            onTurnStart: (turn, depth) => {
+              if (turn.concurrent) return
+              safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+                participantId: turn.participantId,
+                characterName: turn.characterName,
+                chainDepth: depth,
+              }))
+            },
+            onTurnEnd: (turn, depth, result) => {
+              if (turn.concurrent) return
+              safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
+                participantId: turn.participantId,
+                messageId: result.messageId ?? '',
+                chainDepth: depth,
+                skipped: !result.spoke || undefined,
+              }))
+            },
+          })
+
+          // Once for the whole round: memory extraction, the summary fold
+          // (and its title check), danger classification, scene tracking and
+          // the Scriptorium render.
+          const tracking = outcome.lastOutcome?.sceneTrackingContext
+          if (tracking) {
+            try {
+              await runStorytellerRoundHousekeeping(repos, {
+                chatId,
+                userId,
+                connectionProfile: tracking.connectionProfile,
+                memoryChatSettings: tracking.memoryChatSettings,
+              })
+              await triggerSceneStateTracking(repos, {
+                chatId,
+                userId,
+                connectionProfile: tracking.connectionProfile,
+                chatSettings: tracking.memoryChatSettings,
+                characterIds: tracking.characterIds,
+              })
+              await triggerConversationRender(repos, { chatId, userId })
+            } catch (error) {
+              logger.warn('[Storyteller] Round housekeeping failed', {
+                chatId,
+                roundId: round.id,
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
+          }
+
+          safeEnqueue(controller, encodeChainCompleteEvent(encoder, outcome.ended === 'stopped'
+            ? { reason: 'stopped', nextSpeakerId: null, chainDepth: turns.length, paused: true }
+            : outcome.ended === 'yielded'
+              ? { reason: 'yielded', nextSpeakerId: null, chainDepth: turns.length }
+              : { reason: 'user_turn', nextSpeakerId: null, chainDepth: turns.length }))
           safeClose(controller)
         } catch (error) {
           handleStreamError(error, controller, encoder, { chatId, ledger })
@@ -350,6 +557,31 @@ async function processMessage(
     })
   }
 
+  // ============================================================================
+  // Storyteller — the operator's post opens a round instead of drawing a reply
+  // ============================================================================
+  // In a storyteller chat (not paused) a public operator post is recorded in
+  // full exactly as a paused chat records it, and then, instead of a reply,
+  // `handleSendMessage` opens a round of bids. A whisper still draws its one
+  // reply (bug 258); an autonomous room never runs in this mode.
+  const holdForStoryteller = !holdForPausedChat
+    && !isContinueMode
+    && chat.turnMode === 'storyteller'
+    && !(options.targetParticipantIds && options.targetParticipantIds.length > 0)
+    && options.neverPauseForUser !== true
+  if (holdForStoryteller) {
+    logger.info('[Orchestrator] Storyteller chat — recording the operator post; a round will open', {
+      chatId,
+      hasContent: !!options.content,
+    })
+  }
+  // Both holds record the post and stop before a character's turn is built.
+  const holdUserTurn = holdForPausedChat || holdForStoryteller
+
+  // A storyteller bid: a dry, plan-only build for one seat (see runStorytellerBid).
+  const isBid = !!options.storytellerBid
+  const storytellerTurn = options.storyteller
+
   // Resolve responding participant
   // For whisper messages, the target participant should respond (not the default first character)
   const respondingId = options.respondingParticipantId
@@ -376,7 +608,8 @@ async function processMessage(
     // A paused chat already holds every user post below — and holds it more
     // completely (staged tool results, auto-detected rolls, danger flags). The
     // fairness guard would persist a thinner copy of the same message first.
-    !holdForPausedChat &&
+    // A storyteller post opens a round, which asks every LLM seat at once.
+    !holdUserTurn &&
     !options.respondingParticipantId &&
     !(options.targetParticipantIds && options.targetParticipantIds.length > 0) &&
     !options.nudge &&
@@ -521,7 +754,7 @@ async function processMessage(
   // Held posts build no request, so the flag must survive to be spent by the
   // turn the user eventually asks for.
   let bypassCompression = false
-  if (chat.requestFullContextOnNextMessage === true && !holdForPausedChat) {
+  if (chat.requestFullContextOnNextMessage === true && !holdUserTurn) {
     bypassCompression = true
     // Reset the flag
     await repos.chats.update(chatId, { requestFullContextOnNextMessage: false })
@@ -649,7 +882,12 @@ async function processMessage(
   // responder. `summoned` (nudge or queue-pop) withholds the option — you don't
   // offer a pass to a voice the operator explicitly called on.
   let turnSkip: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string } | undefined
-  if (qualifiesForTurnSkipping(chat.participants) && characterParticipant.controlledBy !== 'user') {
+  if (storytellerTurn) {
+    // A storyteller turn may always pass: the operator chose the speaker, but
+    // the moment its plan was for may have gone by (D13). The plan section
+    // carries the pass instruction, so no separate skip note is built.
+    turnSkip = { offerSkip: true, recentlyAddressed: false, characterName: character.name }
+  } else if (!isBid && qualifiesForTurnSkipping(chat.participants) && characterParticipant.controlledBy !== 'user') {
     const eligibility = computeSkipEligibility({
       events: existingMessages,
       participants: chat.participants,
@@ -671,8 +909,10 @@ async function processMessage(
   // The first LLM-voiced turn built after the operator raised a hand is the one
   // asked whether to yield. Taking the hand consumes it, so a decline lowers it
   // and nobody after is asked. A held (paused) turn builds no reply to ask in.
+  // A bid is not a turn: it never takes the hand.
   const offerYield = characterParticipant.controlledBy !== 'user'
-    && !holdForPausedChat
+    && !holdUserTurn
+    && !isBid
     && takeRaisedHand()
   if (offerYield) {
     logger.info('[TurnYield] Asking the next speaker whether to yield to the raised hand', {
@@ -703,12 +943,15 @@ async function processMessage(
   // post nobody does, so the cadence waits for the turn the user asks for.
   const shouldInjectContext = reinjectInterval > 0 && messageCount > 0
     && messageCount % reinjectInterval === 0
-    && !holdForPausedChat
+    && !holdUserTurn
+    && !isBid
 
   if (shouldInjectContext) {
     const projectContext = project ? await loadProsperoProjectContext(project.id) : null
     const generalContext = await loadProsperoGeneralContext()
-    if (projectContext || generalContext) {
+    // Concurrent storyteller turns share one message count: the group's first
+    // posts the public announcement, and the rest only their own whispers.
+    if ((projectContext || generalContext) && !storytellerTurn?.concurrentFollower) {
       const posted = await postProsperoContextAnnouncement({
         chatId,
         project: projectContext,
@@ -968,6 +1211,20 @@ async function processMessage(
   // Everything above belongs to the message the user just wrote. Everything
   // below belongs to a character's turn, and a paused room grants none. Stop
   // here, before a single token is spent on tools, context or the model.
+  if (holdForStoryteller) {
+    // The round opens from handleSendMessage, which holds the stream. An
+    // `@Name:` query is answered as in every mode, and opens no round.
+    const carina = !!(content && parseCarinaQuery(content))
+    await repos.chats.update(chatId, { lastTurnParticipantId: null })
+    return {
+      isMultiCharacter,
+      hasContent: false,
+      messageId: userMessageId,
+      userParticipantId,
+      isPaused: false,
+      storytellerHold: { triggerMessageId: userMessageId, carina },
+    }
+  }
   if (holdForPausedChat) {
     return finishHeldUserTurn({
       repos,
@@ -1095,6 +1352,11 @@ async function processMessage(
   let tools: unknown[] = []
   let modelSupportsNativeTools = false
   let useNativeWebSearch = false
+  let customToolEffects = new Map<string, ToolEffect>()
+  let pluginToolEffects = new Map<string, ToolEffect>()
+  // The highest effect a tool call may have this turn; unset = no ceiling.
+  // A storyteller turn starts at its bid's tier.
+  let turnEffectCeiling: ToolEffect | undefined = storytellerTurn?.effectCeiling
   if (!isEffectiveCourier) {
     // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
     // Always pass disabledTools and disabledToolGroups for filtering
@@ -1124,31 +1386,39 @@ async function processMessage(
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
     useNativeWebSearch = builtTools.useNativeWebSearch
 
-    // 4.6 Private Character Rooms — destructive-tool filter for autonomous rooms.
-    // Apply BEFORE the LLM call so the model never sees disallowed tools.
+    customToolEffects = builtTools.customToolEffects
+    pluginToolEffects = builtTools.pluginToolEffects
+
+    // 4.6 Private Character Rooms — destructive-tool gate for autonomous rooms.
     // User-level destructiveToolPolicy is a CEILING: 'always_refuse' overrides
-    // any permissive per-room runDestructiveToolsAllowed flag.
+    // any permissive per-room runDestructiveToolsAllowed flag. Without
+    // permission the turn's effect ceiling drops to `write`: the list loses
+    // every `destroy` tool before the LLM call, and the executor refuses one
+    // regardless.
     if (chat.chatType === 'autonomous') {
-      const { DESTRUCTIVE_TOOL_NAMES } = await import('@/lib/tools/destructive-tools')
       const chatSettings = await repos.chatSettings.findByUserId(userId)
       const policy = chatSettings?.autonomousRoomSettings?.destructiveToolPolicy ?? 'opt_in_per_room'
       const allowedAtRoom = (chat as { runDestructiveToolsAllowed?: number }).runDestructiveToolsAllowed === 1
       const destructiveAllowed = policy !== 'always_refuse' && allowedAtRoom
       if (!destructiveAllowed) {
-        const before = tools.length
-        tools = tools.filter((tool: unknown) => {
-          const toolObj = tool as { function?: { name?: string }; name?: string }
-          const toolName = toolObj.function?.name || toolObj.name
-          return !toolName || !DESTRUCTIVE_TOOL_NAMES.has(toolName)
+        turnEffectCeiling = lowerToolEffect(turnEffectCeiling, 'write')
+        logger.debug('Autonomous room: destructive tools withheld by effect ceiling', {
+          chatId,
+          policy,
+          allowedAtRoom,
         })
-        if (before !== tools.length) {
-          logger.info('Autonomous room: destructive tools filtered from per-turn list', {
-            chatId,
-            policy,
-            allowedAtRoom,
-            removed: before - tools.length,
-          })
-        }
+      }
+    }
+
+    if (turnEffectCeiling) {
+      const before = tools.length
+      tools = applyEffectCeilingToTools(tools, turnEffectCeiling, { customToolEffects, pluginToolEffects })
+      if (before !== tools.length) {
+        logger.info('Tools above the turn\'s effect ceiling filtered from per-turn list', {
+          chatId,
+          ceiling: turnEffectCeiling,
+          removed: before - tools.length,
+        })
       }
     }
   }
@@ -1265,6 +1535,42 @@ async function processMessage(
     provider: streamingState.effectiveProfile.provider,
   })
 
+  // ============================================================================
+  // Storyteller — the bid section, or a speaking turn's plan
+  // ============================================================================
+  // Both ride as the last trailing section, never in the system prefix, so a
+  // bid shares the character's cached prefix with the turn it may become.
+  let bidOffer: StorytellerBidOffer | null = null
+  let storytellerSection: string | undefined
+  if (isBid) {
+    bidOffer = buildBidOffer({
+      tools,
+      customToolEffects,
+      pluginToolEffects,
+      silent: characterParticipant.status === 'silent',
+    })
+    storytellerSection = buildBidSection({
+      characterName: character.name,
+      talkativeness: characterParticipant.talkativeness ?? character.talkativeness ?? 0.5,
+      offer: bidOffer,
+    })
+  } else if (storytellerTurn) {
+    storytellerSection = buildPlanSection({
+      plan: storytellerTurn.bidRecord.plan,
+      tier: storytellerTurn.bidRecord.tier,
+      toolsNamed: storytellerTurn.bidRecord.toolsNamed,
+      spokenSince: storytellerTurn.spokenSince,
+      allowedTools: extractToolNames(tools),
+    })
+    logger.debug('[Storyteller] Speaking turn carries its bid', {
+      chatId,
+      participantId: characterParticipant.id,
+      roundId: storytellerTurn.bidRecord.roundId,
+      tier: storytellerTurn.bidRecord.tier,
+      ceiling: turnEffectCeiling,
+    })
+  }
+
   // Send status update for context gathering
   safeEnqueue(controller, encodeStatusEvent(encoder, {
     stage: 'gathering',
@@ -1301,9 +1607,14 @@ async function processMessage(
       // after this returns.
       reservedOutgoingTokens: turnExtras.reservedTokens,
       // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
-      turnSkip,
+      // A storyteller turn's plan section carries its own pass instruction.
+      turnSkip: storytellerTurn ? undefined : turnSkip,
       // Raised hand — the yield Turn note.
       offerYield,
+      // Storyteller: a bid builds dry and delivers no recall; the bid or plan
+      // section trails everything else.
+      purpose: isBid ? 'bid' : 'turn',
+      storytellerSection,
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
@@ -1348,6 +1659,17 @@ async function processMessage(
   // and emits SSE events. Turn chaining is halted by isPaused=true; the paste
   // resolver clears the pause when the user submits a reply.
   // ============================================================================
+  if (isEffectiveCourier && isBid) {
+    // The Courier is a person with a clipboard; there is nobody to ask for a bid.
+    return {
+      isMultiCharacter,
+      hasContent: false,
+      messageId: null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+      bid: { ok: false, reason: 'This character answers through the Courier, which cannot bid.' },
+    }
+  }
   if (isEffectiveCourier) {
     return dispatchCourierTransport({
       repos,
@@ -1400,6 +1722,10 @@ async function processMessage(
   // post-turn refetch — same live-SSE pattern as the Carina answer above.
   toolContext.emitPascalResult = (msg) =>
     safeEnqueue(controller, encodePascalResultEvent(encoder, msg))
+  // The effect ceiling travels with the context; the executor is where it bites.
+  toolContext.customToolEffects = customToolEffects
+  toolContext.pluginToolEffects = pluginToolEffects
+  if (turnEffectCeiling) toolContext.effectCeiling = turnEffectCeiling
 
   // ============================================================================
   // Tool Change Notification
@@ -1461,6 +1787,31 @@ async function processMessage(
       maxTurns: agentMode.maxTurns,
       enabledSource: agentMode.enabledSource,
     })
+  }
+
+  // ============================================================================
+  // Storyteller bid — one call, nothing saved or streamed
+  // ============================================================================
+  if (isBid && bidOffer) {
+    const bid = await callForBid({
+      messages: formattedMessages,
+      connectionProfile: streamingState.effectiveProfile,
+      apiKey: streamingState.effectiveApiKey,
+      modelParams,
+      tools: actualTools,
+      useNativeWebSearch: false,
+      userId,
+      chatId,
+      characterId: character.id,
+    }, bidOffer)
+    return {
+      isMultiCharacter,
+      hasContent: false,
+      messageId: null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+      bid,
+    }
   }
 
   // Send debug info
@@ -1926,6 +2277,7 @@ async function processMessage(
           contextCompressionSettings,
           allProfiles,
         },
+        storyteller: storytellerTurn,
         triggers: {
           conciergePolicy,
           chatSettings,

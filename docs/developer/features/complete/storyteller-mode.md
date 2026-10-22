@@ -1,9 +1,11 @@
 # Storyteller Mode — Spec
 
-**Status:** Proposal / Not Implemented
+**Status:** Implemented 2026-10-22 (4.11.0-dev), all four phases; verified live on V4test. See
+[Implementation notes](#implementation-notes) for the audit table, the open items' answers and
+where the build departs from the text below.
 **Scope:** quilltap-server (Salon back end and client), `@quilltap/plugin-types`, `qtap-plugin-mcp`
 **Prerequisite:** bug 258 (an operator whisper runs single-turn and queues behind an open stream),
-[fixed 2026-10-22](../bugs/fixed/bug-258-whisper-starts-chain.md)
+[fixed 2026-10-22](../../bugs/fixed/bug-258-whisper-starts-chain.md)
 
 ## Summary
 
@@ -399,3 +401,85 @@ Each phase is verified live on `V4test`, using `fd40d93a-5930-4a02-a9aa-f7a80836
    whisper.
 4. **Storyteller in a one-character chat**: offer the mode there at all, or hide it? (A board with
    one card is just Paused mode with a preview.)
+
+## Implementation notes
+
+### Tool-effect audit (Part 1.2)
+
+Every built-in tool, as declared beside its definition (`xxxToolEffect`) and collected in
+`lib/tools/effects.ts`. The snapshot test records this table and fails on an undeclared tool.
+
+| Effect | Tools |
+|---|---|
+| `none` | `rng` (posting a roll is reporting), `whisper` (speech), `submit_final_response` |
+| `read` | `ask_carina`, `describe_image`, `list_images`, `doc_read_file`, `doc_grep`, `doc_list_files`, `doc_read_frontmatter`, `doc_read_heading`, `doc_read_blob`, `doc_list_blobs`, `doc_close_document`, `doc_focus`, `help_search`, `help_settings`, `help_navigate`, `inventory_list`, `inventory_read`, `list_mail`, `read_mail`, `log_grep`, `log_read`, `project_info`, `read_conversation`, `request_full_context`, `run_sql`, `search`, `self_inventory`, `terminal_list`, `terminal_read`, `wardrobe_list`, `wardrobe_read`, `wardrobe_history`, `search_web` |
+| `write` | `attach_image`, `keep_image`, `doc_copy_file`, `doc_create_folder`, `doc_insert_text`, `doc_move_file`, `doc_move_folder`, `doc_str_replace`, `doc_update_frontmatter`, `doc_update_heading`, `doc_write_blob`, `doc_write_file`, `generate_image`, `inventory_archive`, `inventory_create`, `inventory_equip`, `inventory_give`, `inventory_pick_up`, `inventory_unequip`, `inventory_update`, `log_create_entry`, `send_mail`, `upsert_annotation`, `wardrobe_archive`, `wardrobe_create`, `wardrobe_rollback`, `wardrobe_take_off`, `wardrobe_update`, `wardrobe_wear` |
+| `destroy` | `discard_mail`, `doc_delete_blob`, `doc_delete_file`, `doc_delete_folder`, `delete_annotation` |
+| computed (max `write`) | `state` (`fetch` → read; `set`/`delete` → write — a deleted key can be set again, so it is not a destroy), `edit_custom_tool` (`action: "schema"` → none; no `content` → read; `content` → write), `doc_open_document` (a `path`/`uri` → read; a new blank document → write), `run_custom` (the named custom tool's `customToolEffect`; an unknown name → write) |
+
+Judgement calls worth recording: the archive tools are `write` (archiving is undone by
+unarchiving); `delete_annotation` is `destroy`, which newly withholds it in autonomous rooms
+without destructive permission; the UI-attention tools (`doc_focus`, `doc_close_document`,
+`help_navigate`) are `read`; the inventory, wardrobe and terminal families needed no computed
+effects, being one action per tool. The bundled curl plugin declares `curl` a `write` (it can
+POST/PUT/DELETE, and a static map cannot tell a GET apart).
+
+### The open items, answered
+
+1. **Board timeout:** 45 s, a constant (`STORYTELLER_BOARD_TIMEOUT_MS`), not a per-chat setting.
+2. **Concurrency cap:** 4 per connection profile, a constant (`STORYTELLER_CONCURRENCY_PER_PROFILE`).
+3. **Is a whisper's reply private?** Left as it is; not part of this work.
+4. **One-character chats:** the mode is offered wherever the sidebar's turn control is. A one-card
+   board still earns its keep, because the bid sets the tier the turn runs under.
+
+### Where the build departs from the text
+
+- **The dry build's guarantee is a dry scope, not a grep-test.** `runStorytellerBid` runs the
+  ordinary turn path (`processMessage`, continue mode, `storytellerBid`) inside `runDry`
+  (`lib/repositories/dry-scope.ts`): under it `getRepositories()` returns a wrapper that discards
+  every write — by the same name rules as the job child's proxy, now shared in
+  `lib/repositories/method-classification.ts` — and lets only the LLM log through. That catches
+  writes nobody thought to gate, which a grep-test would not. `purpose: 'bid'` still skips the
+  work whose only point is a write (recall delivery, the raised hand, the cadence posts), and the
+  staff whispers' text still reaches the bid's context, since a discarded `addMessage` hands its
+  row back. Verified live: a bid discards the Commonplace whisper, the scene-cache update and the
+  stale-whisper sweep.
+- **The bid and plan sections ride through `buildContext`'s trailing sections**
+  (`storytellerSection`, last), so their placement and token budgeting are the same as every other
+  trailing section.
+- **Tool choice "none".** The bid always sends the turn's tool list with `toolChoice: 'none'`
+  (`streamMessage` gained the option); providers that ignore it (OpenAI, Anthropic plugins today)
+  are asked in the prompt not to call a tool, and a call that comes back anyway is discarded. In
+  live testing gpt-5 complied every time.
+- **Plugin effects** are wired through the server's own `ToolPlugin` mirror
+  (`lib/plugins/interfaces/tool-plugin.ts`) and `toolRegistry.getToolEffects(configs)`, so the
+  host reads them before `@quilltap/plugin-types` 2.9.0 is installed. The published type allows a
+  sync or async map (MCP discovers its tools asynchronously).
+- **MCP** has no configuration UI beyond the servers JSON, so the per-server setting is an
+  `"effect"` field there (default `write`); MCP's own annotations are not consulted.
+- **The autonomous-room gate** sets an effect ceiling of `write` when destructive tools are not
+  permitted, so the executor refuses a `destroy` call as well as the list leaving it off.
+- **Concurrent turns and Prospero.** All concurrent turns share one message count, so only the
+  group's first posts the cadence's public Prospero announcement; each still gets its own
+  group-context whisper.
+- **SSE tagging.** Content and status frames did not carry `participantId`, so concurrent turns
+  write through `taggingController` (`lib/storyteller/sse-tag.ts`), which stamps `participantId`
+  and `concurrent: true` onto every frame.
+- **A swipe** of a storyteller line re-rolls with the plan section in `reroll` form (no pass, no
+  tool allowance — a swipe runs no tools) and copies `storytellerBid` onto the variant.
+- **The invite filter** is a plain chat column, `storytellerInviteFilter`, toggled from the sidebar
+  beneath the turn-mode control.
+
+### Where it lives
+
+- Effects: `lib/tools/effect-types.ts`, `lib/tools/effects.ts`, `lib/pascal/tool-effect.ts`; the
+  ceiling in `lib/chat/tool-executor.ts`, `applyEffectCeilingToTools` in `streaming.service.ts`.
+- Rounds: `lib/storyteller/` (`round.service.ts`, `bid-call.ts`, `bid-parse.ts`, `tiers.ts`,
+  `cards.ts`, `invite.ts`, `prompts.ts`, `sse-tag.ts`, `round-context.ts`),
+  `StorytellerRoundsRepository`, the orchestrator's `runStorytellerBid` / `handleStorytellerRun`
+  / `openRoundOnSend`, and `app/api/v1/chats/[id]/actions/storyteller.ts`.
+- Client: `components/chat/StorytellerBoard.tsx`, the sidebar's `TurnModeControl`, and
+  `useSSEStreaming`'s `runStorytellerSelection` / `concurrentStreams`.
+- Styles: `app/styles/qt-components/_storyteller.css` (`qt-storyteller-*`), mirrored into
+  theme-storybook.
+

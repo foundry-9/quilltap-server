@@ -7,6 +7,7 @@
  * through the standard character-vault search.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -64,3 +65,6 @@ export interface KeepImageOutput {
   /** SHA-256 of the image binary. */
   sha256: string;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const keepImageToolEffect: ToolEffectSpec = 'write';

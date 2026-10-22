@@ -4,6 +4,7 @@
  * The anchor text must be unique within the file if used.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -100,3 +101,6 @@ export interface DocInsertTextOutput {
   mtime: number;
   line_number: number;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docInsertTextToolEffect: ToolEffectSpec = 'write';

@@ -16,6 +16,7 @@ import {
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
 import { ControlledByEnum } from './character.types';
+import { ChatTurnModeSchema, StorytellerBidRecordSchema } from './storyteller.types';
 
 // ============================================================================
 // DANGER FLAGS
@@ -460,6 +461,14 @@ export const MessageEventSchema = z.object({
     question: z.string(),
   }).nullable().optional(),
   /**
+   * Storyteller mode: the bid this speaking turn carried out — round, tier,
+   * plan, tools named. A swipe or regenerate re-applies it, so a re-roll runs
+   * under the same plan and ceiling. Part of the record (export, backup), but
+   * never model-facing: stripped from every transcript a model reads.
+   * NULL on every message that was not a storyteller speaking turn.
+   */
+  storytellerBid: StorytellerBidRecordSchema.nullable().optional(),
+  /**
    * Pascal the Croupier (custom pseudo-tools) roll record, set on
    * `systemSender = 'pascal'` messages. The whole point of the column is that
    * the *server* rolled and the *server* chose the outcome: the model asked for
@@ -880,6 +889,18 @@ export const ChatMetadataSchema = z.object({
   summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
+  /**
+   * Turn mode: 'rotation' (NULL) or 'storyteller' — each operator post opens a
+   * round of bids. Independent of `isPaused`. **Patch-only**: written only by
+   * `ChatsRepository.setTurnMode`, so a whole-row update cannot carry a stale
+   * copy back.
+   */
+  turnMode: ChatTurnModeSchema.nullable().optional(),
+  /**
+   * Storyteller mode: invite each seat to bid with probability
+   * `0.25 + 0.75 × talkativeness` instead of inviting everyone. Off by default.
+   */
+  storytellerInviteFilter: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
 
@@ -1190,7 +1211,7 @@ export const ChatMetadataSchema = z.object({
    */
   runMilestonesAnnounced: z.number().int().nonnegative().default(0),
 
-  /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
+  /** 1 = owner pre-authorized `destroy`-effect tools (lib/tools/effects.ts); 0 = disabled. */
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
   /**
    * Per-run token-budget counting mode. 1 (default) = exclude prompt-cache
@@ -1285,6 +1306,10 @@ export const ChatMetadataBaseSchema = z.object({
   summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
+  /** Turn mode ('rotation' | 'storyteller'). See ChatMetadataSchema. */
+  turnMode: ChatTurnModeSchema.nullable().optional(),
+  /** Storyteller invite filter. See ChatMetadataSchema. */
+  storytellerInviteFilter: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
   // Impersonation state

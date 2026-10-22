@@ -49,6 +49,7 @@ import {
   handleGetMailbox,
   handleExportMarkdown,
   handleGetInforms,
+  handleGetStorytellerRound,
   handleGetStoryBackground,
   handleGetScenarioSource,
 } from '../actions';
@@ -77,6 +78,7 @@ export async function handleGet(
       'inventory': () => handleGetInventory(chatId, ctx),
       'photo-albums': () => handleGetPhotoAlbums(chatId, ctx),
       'informs': () => handleGetInforms(chatId, ctx),
+      'storyteller-round': () => handleGetStorytellerRound(chatId, ctx),
       'group-stores': () => handleGetGroupStores(chatId, ctx),
       'mailbox': () => handleGetMailbox(req, chatId, ctx),
       // `?all=true` is the Open-Document picker's "look everywhere" mode
@@ -372,6 +374,9 @@ async function handleGetChat(
       spokenThisCycleParticipantIds: chatMetadata.spokenThisCycleParticipantIds ?? '[]',
       cycleOrderParticipantIds: chatMetadata.cycleOrderParticipantIds ?? '[]',
       isPaused: chatMetadata.isPaused ?? false,
+      // Storyteller mode: the turn mode ('rotation' when NULL) and its invite filter.
+      turnMode: chatMetadata.turnMode ?? 'rotation',
+      storytellerInviteFilter: chatMetadata.storytellerInviteFilter ?? false,
       // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
       // pause (opens AllLLMPauseModal on load / mid-session).
       allLLMPauseTurnCount: chatMetadata.allLLMPauseTurnCount ?? 0,

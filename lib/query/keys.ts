@@ -67,6 +67,11 @@ export const queryKeys = {
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
     /**
+     * The chat's current storyteller round (open, running, or the last closed
+     * one for the summary line), from `?action=storyteller-round`.
+     */
+    storytellerRound: (id: string) => ['chats', id, 'storytellerRound'] as const,
+    /**
      * The project a chat belongs to, as the wardrobe reads it to fold the
      * project tier into a character's wardrobe. Deliberately not `detail(id)`:
      * the realtime `chats` topic refetches `detail` on every message, and the

@@ -234,6 +234,10 @@ export interface Chat {
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
   isPaused?: boolean
+  /** Turn mode: rotation (Normal) or storyteller (each operator post opens a round of bids) */
+  turnMode?: 'rotation' | 'storyteller'
+  /** Storyteller: invite seats to bid weighted by talkativeness */
+  storytellerInviteFilter?: boolean
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed?: boolean
   /** Array of participant IDs the user is currently impersonating */

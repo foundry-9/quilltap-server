@@ -586,6 +586,20 @@ export async function processChatUpdates(
     }
   }
 
+  // Turn mode (rotation / storyteller). Patch-only: its own setter. Leaving
+  // storyteller mode closes whatever round was still open.
+  if (validatedData.turnMode) {
+    const before = updatedChat.turnMode ?? 'rotation';
+    await repos.chats.setTurnMode(chatId, validatedData.turnMode);
+    if (before === 'storyteller' && validatedData.turnMode !== 'storyteller') {
+      const { abandonStorytellerRound } = await import('@/lib/storyteller/round.service');
+      await abandonStorytellerRound(chatId, 'abandoned');
+    }
+    const refetched = await repos.chats.findById(chatId);
+    if (refetched) updatedChat = refetched;
+    logger.info('[Chats v1] Turn mode set', { chatId, from: before, to: validatedData.turnMode });
+  }
+
   // Per-chat Concierge state (Moderated / Unmoderated / Locked). Routed
   // through the one transition chokepoint so each change does the right DB
   // writes and posts the Concierge's announcement in one place.

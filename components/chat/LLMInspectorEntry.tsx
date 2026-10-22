@@ -27,6 +27,7 @@ const TYPE_BADGE_CLASSES: Record<string, string> = {
   CUSTOM_TOOL_CONSULT: 'qt-bg-info/15 qt-text-info',
   VOICE_REWRITE: 'qt-bg-info/15 qt-text-info',
   SCENARIO_BUILDER: 'qt-bg-info/15 qt-text-info',
+  STORYTELLER_BID: 'qt-bg-primary/15 qt-text-primary',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -45,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
   CUSTOM_TOOL_CONSULT: 'Consult',
   VOICE_REWRITE: 'Voice',
   SCENARIO_BUILDER: 'Scenario',
+  STORYTELLER_BID: 'Bid',
 }
 
 function formatTokens(log: LLMLog): string {
@@ -91,6 +93,16 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
         <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${badgeClass} flex-shrink-0`}>
           {typeLabel}
         </span>
+
+        {/* Storyteller round this call belonged to (a bid or a speaking turn) */}
+        {log.storytellerRoundId && (
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded qt-bg-muted qt-text-secondary flex-shrink-0"
+            title={`Storyteller round ${log.storytellerRoundId}`}
+          >
+            round {log.storytellerRoundId.slice(0, 6)}
+          </span>
+        )}
 
         {/* Provider/model */}
         <span className="text-xs qt-text-secondary truncate min-w-0 flex-shrink">

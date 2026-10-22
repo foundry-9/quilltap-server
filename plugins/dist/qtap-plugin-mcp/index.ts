@@ -12,6 +12,7 @@ import type {
   ToolPlugin,
   ToolMetadata,
   ToolHierarchyInfo,
+  ToolEffect,
   ToolExecutionContext,
   ToolExecutionResult,
   UniversalTool,
@@ -279,6 +280,14 @@ export const plugin: ToolPlugin = {
     // Ensure plugin is initialized before returning hierarchy
     await ensureInitialized(config);
     return connectionManager.getToolHierarchy();
+  },
+
+  /**
+   * Every tool inherits its server's configured `effect` (default `write`).
+   */
+  async getToolEffects(config: Record<string, unknown>): Promise<Record<string, ToolEffect>> {
+    await ensureInitialized(config);
+    return connectionManager.getToolEffects();
   },
 };
 

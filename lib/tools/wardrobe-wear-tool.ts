@@ -18,6 +18,7 @@
  * To TAKE items off or empty a slot, use `wardrobe_take_off` instead.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
@@ -146,3 +147,6 @@ export function validateWardrobeWearInput(
   const parsed = wardrobeWearToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeWearToolEffect: ToolEffectSpec = 'write';

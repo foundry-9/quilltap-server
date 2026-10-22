@@ -9,6 +9,7 @@
  * Gated by `canDressThemselves`, beside `wardrobe_wear` / `wardrobe_take_off`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
@@ -67,3 +68,6 @@ export function validateWardrobeRollbackInput(input: unknown): WardrobeRollbackT
   const parsed = wardrobeRollbackToolInputSchema.safeParse(input ?? {})
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeRollbackToolEffect: ToolEffectSpec = 'write';

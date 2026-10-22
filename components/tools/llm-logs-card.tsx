@@ -43,6 +43,7 @@ export default function LLMLogsCard() {
       'CUSTOM_TOOL_CONSULT': 'Custom Tool',
       'VOICE_REWRITE': 'Voice Rewrite',
       'SCENARIO_BUILDER': 'Scenario Builder',
+      'STORYTELLER_BID': 'Storyteller Bid',
     }
     return labels[type] || type
   }

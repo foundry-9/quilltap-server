@@ -6,11 +6,13 @@ import { Icon } from '@/components/ui/icon'
 import LLMInspectorEntry from './LLMInspectorEntry'
 import type { LLMLog, LLMLogType } from '@/lib/schemas/types'
 
-type FilterCategory = 'all' | 'chat' | 'memory' | 'system' | 'image' | 'safety' | 'other'
+type FilterCategory = 'all' | 'chat' | 'storyteller' | 'memory' | 'system' | 'image' | 'safety' | 'other'
 
 const FILTER_GROUPS: Record<FilterCategory, LLMLogType[] | null> = {
   all: null,
   chat: ['CHAT_MESSAGE', 'TOOL_CONTINUATION'],
+  // Bids, plus every call a round ran (matched on storytellerRoundId below)
+  storyteller: ['STORYTELLER_BID'],
   memory: ['MEMORY_EXTRACTION'],
   system: ['TITLE_GENERATION', 'SUMMARIZATION', 'CONTEXT_COMPRESSION'],
   image: ['IMAGE_PROMPT_CRAFTING', 'IMAGE_DESCRIPTION', 'APPEARANCE_RESOLUTION'],
@@ -21,6 +23,7 @@ const FILTER_GROUPS: Record<FilterCategory, LLMLogType[] | null> = {
 const FILTER_LABELS: Record<FilterCategory, string> = {
   all: 'All',
   chat: 'Chat Messages',
+  storyteller: 'Storyteller Rounds',
   memory: 'Memory',
   system: 'System Ops',
   image: 'Image',
@@ -58,6 +61,10 @@ export default function LLMInspectorPanel({
   const filteredLogs = useMemo(() => {
     const types = FILTER_GROUPS[filter]
     if (!types) return chronologicalLogs
+    if (filter === 'storyteller') {
+      // A round as one group: its bids and its speaking turns, in round order
+      return chronologicalLogs.filter(log => types.includes(log.type) || !!log.storytellerRoundId)
+    }
     return chronologicalLogs.filter(log => types.includes(log.type))
   }, [chronologicalLogs, filter])
 

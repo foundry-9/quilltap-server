@@ -7,6 +7,7 @@
  * `canManageInventory`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { InventoryRefInputSchema } from './inventory-read-tool'
@@ -52,3 +53,6 @@ export function validateInventoryPickUpInput(input: unknown): InventoryPickUpToo
   const parsed = inventoryPickUpToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const inventoryPickUpToolEffect: ToolEffectSpec = 'write';

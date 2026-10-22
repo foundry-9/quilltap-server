@@ -4,6 +4,7 @@
  * Vaults is on, the visible albums of other characters in the chat).
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -84,3 +85,6 @@ export interface ListImagesOutput {
   total: number;
   has_more: boolean;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const listImagesToolEffect: ToolEffectSpec = 'read';

@@ -6,6 +6,7 @@
  * Scriptorium Phase 4.0 Deliverable 3 - Phase B
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -66,3 +67,6 @@ export interface DocMoveFolderOutput {
   /** Canonical qtap:// URI for the folder's new location. */
   uri?: string;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docMoveFolderToolEffect: ToolEffectSpec = 'write';

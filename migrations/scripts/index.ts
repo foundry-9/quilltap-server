@@ -452,6 +452,8 @@ import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory
 import { addCharacterInventoryFlagMigration } from './add-character-inventory-flag-v1';
 import { addTerminalSessionGeometryMigration } from './add-terminal-session-geometry-v1';
 import { addMemoryKeystoneMigration } from './add-memory-keystone-v1';
+import { addStorytellerModeMigration } from './add-storyteller-mode-v1';
+import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-storyteller-round-id-column';
 
 /**
  * All available migrations.
@@ -929,6 +931,10 @@ export const migrations: Migration[] = [
   addTerminalSessionGeometryMigration,
   // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
   addMemoryKeystoneMigration,
+  // Storyteller mode: chats.turnMode, chat_messages.storytellerBid, storyteller_rounds
+  addStorytellerModeMigration,
+  // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
+  addLLMLogsStorytellerRoundIdColumnMigration,
 ];
 
 export {
@@ -1383,5 +1389,9 @@ export {
   addTerminalSessionGeometryMigration,
   // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
   addMemoryKeystoneMigration,
+  // Storyteller mode: chats.turnMode, chat_messages.storytellerBid, storyteller_rounds
+  addStorytellerModeMigration,
+  // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
+  addLLMLogsStorytellerRoundIdColumnMigration,
 };
 

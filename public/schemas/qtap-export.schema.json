@@ -716,6 +716,14 @@
           "enum": ["manual", "refusals", "classifier", "migration", null],
           "description": "Why the chat is in its conciergeMode. NULL when Moderated."
         },
+        "turnMode": {
+          "enum": ["rotation", "storyteller", null],
+          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
+        },
+        "storytellerInviteFilter": {
+          "type": ["boolean", "null"],
+          "description": "Storyteller mode: invite each character to bid with probability 0.25 + 0.75 × talkativeness instead of inviting everyone. Default false."
+        },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],
           "description": "Per-chat answer-confirmation override. NULL = inherit (project override, then the global setting); 'ON'/'OFF' = force the Salon consistency check on/off for this chat."
@@ -935,6 +943,17 @@
           "properties": {
             "answererId": { "type": "string", "description": "Workspace character ID of the Carina answerer." },
             "question": { "type": "string", "description": "Verbatim question that was asked." }
+          }
+        },
+        "storytellerBid": {
+          "type": ["object", "null"],
+          "description": "Storyteller mode: the bid this speaking turn carried out. A swipe re-rolls under the same plan. Never sent to a model. NULL on every message that was not a storyteller speaking turn.",
+          "required": ["roundId", "tier", "plan"],
+          "properties": {
+            "roundId": { "type": "string", "description": "The round the bid was made in." },
+            "tier": { "enum": ["simple", "lookup", "act", "destroy"], "description": "The tier the turn ran under: simple (no tools), lookup (read-only tools), act (changes allowed), destroy (deletion allowed)." },
+            "plan": { "type": "string", "description": "What the character planned, in its own words." },
+            "toolsNamed": { "type": "array", "items": { "type": "string" }, "description": "Tools the character named when it bid." }
           }
         },
         "pascalMeta": {

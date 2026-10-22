@@ -16,6 +16,7 @@
  * Refuses to overwrite an existing destination file, matching doc_move_file.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -87,3 +88,6 @@ export interface DocCopyFileOutput {
   uri?: string;
   mtime: number;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docCopyFileToolEffect: ToolEffectSpec = 'write';

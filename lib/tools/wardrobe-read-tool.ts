@@ -9,6 +9,7 @@
  * wardrobe, the project, and Quilltap General.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -133,3 +134,6 @@ export function validateWardrobeReadInput(
   const parsed = wardrobeReadToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const wardrobeReadToolEffect: ToolEffectSpec = 'read';

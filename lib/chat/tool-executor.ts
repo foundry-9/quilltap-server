@@ -117,6 +117,12 @@ import {
   type TerminalToolError as TerminalToolErrorType,
 } from '@/lib/tools/handlers/terminal-handler';
 import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
+import {
+  describeCeilingRefusal,
+  effectOfToolCall,
+  isWithinCeiling,
+  type ToolEffect,
+} from '@/lib/tools/effects';
 
 export interface ToolCallRequest {
   name: string;
@@ -239,6 +245,18 @@ export interface ToolExecutionContext {
    * `operatorSurface`: the executor refuses a context that sets both.
    */
   mountPool?: TieredMountPool;
+  /**
+   * The highest effect a call may have this turn (a storyteller turn's bid
+   * tier; an autonomous room without destructive-tool permission). A call
+   * above it is not executed: it returns a tool result saying so, and the
+   * model carries on. Unset everywhere else. This check is the guarantee —
+   * `buildTools()`'s list filter only spares the model offers it can't use.
+   */
+  effectCeiling?: ToolEffect;
+  /** Custom tool name → derived effect for the caller's roster, so `run_custom` can be ranked. */
+  customToolEffects?: ReadonlyMap<string, ToolEffect>;
+  /** Plugin / MCP tool name → declared effect. Missing tools count as `write`. */
+  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
 }
 
 /**
@@ -320,6 +338,36 @@ export async function executeToolCallWithContext(
       result: null,
       error: 'Tool context is misconfigured (mountPool and operatorSurface are mutually exclusive).',
     };
+  }
+
+  // The effect ceiling — the one place a call's effect is checked.
+  if (context.effectCeiling) {
+    const effect = effectOfToolCall(toolCall.name, toolCall.arguments, {
+      customToolEffects: context.customToolEffects,
+      pluginToolEffects: context.pluginToolEffects,
+    });
+    if (!isWithinCeiling(effect, context.effectCeiling)) {
+      logger.info('Tool call refused: above the turn\'s effect ceiling', {
+        context: 'tool-executor',
+        toolName: toolCall.name,
+        chatId,
+        effect,
+        ceiling: context.effectCeiling,
+      });
+      const message = describeCeilingRefusal(toolCall.name, effect, context.effectCeiling);
+      return {
+        toolName: toolCall.name,
+        success: false,
+        result: { formattedText: message },
+        error: message,
+      };
+    }
+    logger.debug('Tool call within the turn\'s effect ceiling', {
+      context: 'tool-executor',
+      toolName: toolCall.name,
+      effect,
+      ceiling: context.effectCeiling,
+    });
   }
 
   try {

@@ -6,6 +6,7 @@
  * never destroyed. Gated by `canManageInventory`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { InventoryRefInputSchema } from './inventory-read-tool'
@@ -41,3 +42,6 @@ export function validateInventoryArchiveInput(input: unknown): InventoryArchiveT
   const parsed = inventoryArchiveToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const inventoryArchiveToolEffect: ToolEffectSpec = 'write';

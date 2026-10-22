@@ -129,6 +129,11 @@ interface VirtualizedMessageListProps {
   thinkingCollapsedByDefault?: boolean
   /** Live cumulative reasoning ("thinking") for the in-progress streaming message. DISPLAY ONLY. */
   streamingReasoning?: string
+  /**
+   * Storyteller "all at once": one live bubble per concurrent speaker, beside
+   * the ordinary streaming slot.
+   */
+  concurrentStreams?: Array<{ participantId: string; content: string; character: CharacterData | undefined }>
   /** Whether to show the floating jump-to-bottom button (reader has scrolled up). */
   showScrollToBottom?: boolean
   /** Click handler for the jump-to-bottom button. */
@@ -188,6 +193,7 @@ export function VirtualizedMessageList({
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
+  concurrentStreams = [],
   showScrollToBottom = false,
   onScrollToBottom,
 }: VirtualizedMessageListProps) {
@@ -411,6 +417,24 @@ export function VirtualizedMessageList({
           streamingReasoning={showThinking ? streamingReasoning : ''}
           thinkingCollapsedByDefault={thinkingCollapsedByDefault}
         />
+
+        {/* Storyteller "all at once": overlapping speech, a bubble per speaker */}
+        {concurrentStreams.map((stream) => (
+          <StreamingMessage
+            key={`concurrent-${stream.participantId}`}
+            streaming={stream.content.length > 0}
+            streamingContent={stream.content}
+            waitingForResponse={stream.content.length === 0}
+            respondingCharacter={stream.character}
+            renderingPatterns={roleplayRenderingPatterns}
+            dialogueDetection={roleplayDialogueDetection}
+            shouldShowAvatars={shouldShowAvatars()}
+            isDangerousChat={isDangerousChat}
+            streamingToolBatches={[]}
+            streamingReasoning=""
+            thinkingCollapsedByDefault={thinkingCollapsedByDefault}
+          />
+        ))}
 
         <div ref={messagesEndRef} />
       </div>

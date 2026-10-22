@@ -39,6 +39,7 @@ export const LLMLogTypeEnum = z.enum([
   'CUSTOM_TOOL_CONSULT',
   'VOICE_REWRITE',
   'SCENARIO_BUILDER',
+  'STORYTELLER_BID',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 
@@ -162,6 +163,11 @@ export const LLMLogSchema = z.object({
   // per-run token spend can be summed by run instead of by a fragile
   // timestamp window. Null for all non-autonomous calls.
   autonomousRunId: UUIDSchema.nullable().optional(),
+
+  // Storyteller round linkage. Set on every LLM call made for a storyteller
+  // round — each bid (type STORYTELLER_BID) and each speaking turn the round
+  // runs — via the round AsyncLocalStorage. Null outside a round.
+  storytellerRoundId: UUIDSchema.nullable().optional(),
 
   // Provider info
   provider: z.string(),

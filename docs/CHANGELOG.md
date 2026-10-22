@@ -4,6 +4,33 @@
 
 ### 4.11-dev
 
+#### Feature: Storyteller mode and declared tool effects
+
+Spec: `docs/developer/features/complete/storyteller-mode.md` (implemented; moved to `complete/`).
+
+- Tool effects (Part 1):
+  - Every tool declares an effect: `none`, `read`, `write` or `destroy`. Undeclared counts as `write`.
+  - Built-in tools declare it beside their definitions (`xxxToolEffect`); `lib/tools/effects.ts` collects them (`BUILT_IN_TOOL_EFFECTS`) and resolves any call with `effectOfToolCall` / `maxEffectOfTool`. `state`, `edit_custom_tool`, `doc_open_document` and `run_custom` compute theirs from the validated input.
+  - The tool-definitions snapshot test fails on an undeclared tool, records each effect, and checks every computed effect's branches.
+  - `ToolExecutionContext.effectCeiling`: `executeToolCallWithContext` refuses a call above the turn's ceiling with a tool result saying why. `buildTools()` (`BuildToolsExtras.effectCeiling`, `applyEffectCeilingToTools`) drops tools whose static effect is above it and adds a one-line note to computed ones.
+  - `DESTRUCTIVE_TOOL_NAMES` (`lib/tools/destructive-tools.ts`) is deleted. The autonomous-room gate now sets a `write` ceiling when destructive tools are not permitted, so `destroy` tools are filtered and refused at execution. `doc_delete_blob` and `delete_annotation` are now `destroy` and newly gated there.
+  - Pascal: `customToolEffect` (`lib/pascal/tool-effect.ts`) is `write` for a definition with any effect, else `read`. The Workbench library shows it as a badge. Trigger phrases in a storyteller turn skip a tool above the turn's ceiling.
+  - Plugins: `@quilltap/plugin-types` 2.9.0 adds `ToolEffect` and `ToolPlugin.getToolEffects?(config)` (sync or async). The host reads it through `toolRegistry.getToolEffects`. MCP plugin 1.1.45: each server's config takes an `effect` (default `write`) inherited by its tools. curl plugin 1.0.32 declares `curl` a `write`.
+- Storyteller mode (Part 2):
+  - `chats.turnMode` (`'rotation'` NULL / `'storyteller'`, patch-only, `ChatsRepository.setTurnMode`) and `chats.storytellerInviteFilter`. Set through `PUT /api/v1/chats/[id]` with a top-level `turnMode`. Leaving storyteller mode closes the open round.
+  - An operator post in a storyteller chat is recorded, then opens a round instead of drawing a reply. Every present LLM character seat is asked for a bid in parallel; bids stream to the send as `storytellerRound` / `storytellerBid` frames, then `roundOpen` and `chainComplete` reason `round_open`. Board timeout 45 s; late bids reach the board through the new `storytellerRounds` realtime topic.
+  - A bid is a full in-character call built by the ordinary turn path (`runStorytellerBid`) with `purpose: 'bid'`, run inside a dry scope (`lib/repositories/dry-scope.ts`) that discards every repository write except the LLM log. The bid section is the last trailing section. The call sends the turn's tools with the new `toolChoice: 'none'` stream option and is logged as `STORYTELLER_BID`.
+  - Bid replies are parsed forgivingly (`lib/storyteller/bid-parse.ts`). The server computes the tier (Simple / Lookup / Act / Destroy) from the stated tier and the named tools (`tiers.ts`) and notes when the tools raised it.
+  - New actions: `?action=storyteller-run` (SSE; `sequential` or `simultaneous`), `?action=storyteller-ask` (Ask anyway), `?action=storyteller-lie` (Let it lie), `GET ?action=storyteller-round`.
+  - Speaking turns run under the tier's ceiling, carry a trailing "your plan" section, may pass with `[NOTHING TO ADD]`, and store the bid on the reply (`chat_messages.storytellerBid`). A swipe re-rolls under the same plan and copies the bid. Memory extraction, the summary fold, danger classification, scene tracking and the Scriptorium render run once after the round (`runStorytellerRoundHousekeeping`).
+  - Sequential order follows `resolveCycleOrder`. "All at once" runs Simple and Lookup turns concurrently (at most 4 per connection profile), then Act and Destroy turns in order. Concurrent frames are tagged with `participantId` and `concurrent: true`; only the group's first turn posts the cadence's public Prospero announcement.
+  - A nudge in storyteller mode runs one turn with no ceiling and no chain. A whisper and an `@Name:` query open no round.
+  - New table `storyteller_rounds` (bids cleared on close; not exported or backed up; truncated by replace-mode restore). New `llm_logs.storytellerRoundId`, stamped through `lib/storyteller/round-context.ts`. Migrations `add-storyteller-mode-v1` and `add-llm-logs-storyteller-round-id-column-v1`.
+- Client: the sidebar's Pause button is a three-way Normal / Paused / Storyteller control, with an "Invite by talkativeness" toggle. The board (`components/chat/StorytellerBoard.tsx`) sits above the composer. `useSSEStreaming` gains `runStorytellerSelection` and one streaming bubble per concurrent speaker. The LLM inspector has a "Storyteller Rounds" filter and a round chip.
+- Repository method classification (read/write prefixes, `METHOD_OVERRIDES`, synthetic write results) moved from the job child's proxy to `lib/repositories/method-classification.ts`, shared with the dry scope.
+- New `qt-storyteller-*` classes (`app/styles/qt-components/_storyteller.css`), mirrored into theme-storybook 1.0.78.
+- Docs: new `help/storyteller-mode.md`; updates to `chat-multi-character.md`, `chat-participants.md`, `pascals-workbench.md`, `custom-tools.md`, `autonomous-rooms.md`, `tools-settings.md`; DDL.md, API.md, FEATURES.md, `BACKGROUND_JOBS_CHILD.md`, the plugin-types README, and the export schema (`turnMode`, `storytellerInviteFilter`, `storytellerBid`).
+
 #### Fix: a whisper no longer starts a turn chain of its own (bug 258)
 
 - A whisper from the Whisper dialog now gets one reply from its target and no chain afterward. The floor goes back to the operator.

@@ -90,6 +90,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
           ]
         : [queryKeys.chats.all]
 
+    case 'storytellerRounds':
+      // Scoped by chat id: the board for that chat re-reads its round.
+      return id ? [queryKeys.chats.storytellerRound(id)] : [queryKeys.chats.all]
+
     case 'projects':
       return id
         ? [

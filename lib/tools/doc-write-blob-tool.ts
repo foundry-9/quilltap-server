@@ -4,6 +4,7 @@
  * images to WebP via sharp before storing in doc_mount_blobs.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -70,3 +71,6 @@ export interface DocWriteBlobOutput {
   stored_mime_type: string;
   sha256: string;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docWriteBlobToolEffect: ToolEffectSpec = 'write';

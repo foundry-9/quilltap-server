@@ -7,6 +7,7 @@
  * This tool is only available when agent mode is enabled for a chat.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { llmNumber } from './llm-number'
@@ -83,3 +84,6 @@ export function validateSubmitFinalResponseInput(
   const parsed = submitFinalResponseToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: nothing beyond its own result (speech and reporting are not side effects). */
+export const submitFinalResponseToolEffect: ToolEffectSpec = 'none';

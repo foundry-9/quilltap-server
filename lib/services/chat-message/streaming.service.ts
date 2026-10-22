@@ -24,7 +24,17 @@ import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
 import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
+import { customToolEffectMap } from '@/lib/pascal/tool-effect'
+import {
+  isComputedToolEffect,
+  isWithinCeiling,
+  maxEffectOfTool,
+  toolEffectSpecOf,
+  type ToolEffect,
+  type ToolEffectContext,
+} from '@/lib/tools/effects'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -61,6 +71,13 @@ export interface StreamOptions {
   stop?: string[]
   /** LLM log row type for this call. Defaults to `CHAT_MESSAGE`. */
   logType?: LLMLogType
+  /**
+   * Tool choice. `'none'` offers the tools (so the request's cached prefix
+   * matches a real turn's) while asking the model not to call any — the
+   * storyteller bid. Providers that ignore it may still return a call; the
+   * caller discards it.
+   */
+  toolChoice?: 'auto' | 'none'
 }
 
 /**
@@ -148,6 +165,58 @@ export interface BuildToolsExtras {
   documentsOnlySearch?: boolean
   /** `false` withholds `search_web` even when the profile allows it. */
   webSearch?: boolean
+  /**
+   * The turn's effect ceiling (a storyteller turn). A tool whose static effect
+   * is above it is dropped; a tool whose effect depends on its input stays
+   * listed with one line saying which uses this turn allows. The executor's
+   * check is the guarantee; this only spares the model offers it can't use.
+   */
+  effectCeiling?: ToolEffect
+}
+
+/** Name and description slots of a provider-format tool, whichever shape it takes. */
+function toolNameOf(tool: unknown): string | undefined {
+  const toolObj = tool as { function?: { name?: string }; name?: string }
+  return toolObj.function?.name || toolObj.name
+}
+
+/**
+ * Apply an effect ceiling to a built tool list (see `BuildToolsExtras.effectCeiling`).
+ * Exported for the storyteller bid, which lists the same tools.
+ */
+export function applyEffectCeilingToTools(
+  tools: unknown[],
+  ceiling: ToolEffect,
+  ctx: ToolEffectContext
+): unknown[] {
+  const kept: unknown[] = []
+  const dropped: string[] = []
+  for (const tool of tools) {
+    const name = toolNameOf(tool)
+    if (!name) {
+      kept.push(tool)
+      continue
+    }
+    const max = maxEffectOfTool(name, ctx)
+    if (isWithinCeiling(max, ceiling)) {
+      kept.push(tool)
+      continue
+    }
+    const spec = toolEffectSpecOf(name)
+    const note = spec && isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
+    if (!note) {
+      dropped.push(name)
+      continue
+    }
+    const toolObj = tool as { function?: { description?: string }; description?: string }
+    if (toolObj.function) {
+      kept.push({ ...toolObj, function: { ...toolObj.function, description: `${toolObj.function.description ?? ''}\n\n${note}` } })
+    } else {
+      kept.push({ ...toolObj, description: `${toolObj.description ?? ''}\n\n${note}` })
+    }
+  }
+  logger.debug('Effect ceiling applied to tool list', { ceiling, kept: kept.length, dropped })
+  return kept
 }
 
 /**
@@ -222,7 +291,13 @@ export async function buildTools(
   tools: unknown[]
   modelSupportsNativeTools: boolean
   useNativeWebSearch: boolean
+  /** Custom tool name → derived effect, for the roster offered this turn (empty when none). */
+  customToolEffects: Map<string, ToolEffect>
+  /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
+  pluginToolEffects: Map<string, ToolEffect>
 }> {
+  const customToolEffects = new Map<string, ToolEffect>()
+  let pluginToolEffects = new Map<string, ToolEffect>()
   const provider = await createLLMProvider(
     connectionProfile.provider,
     connectionProfile.baseUrl || undefined
@@ -239,7 +314,7 @@ export async function buildTools(
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
   }
 
   // Fetch user's plugin tool configurations from database
@@ -263,7 +338,7 @@ export async function buildTools(
   // If disabledTools is undefined (not an array), skip tools entirely for this message
   // This is a legacy fallback - tools are now always sent with every prompt
   if (disabledTools === undefined) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
   }
 
   // Pascal's custom pseudo-tools. Resolved once per turn, at the last possible
@@ -275,6 +350,11 @@ export async function buildTools(
     try {
       const roster = await resolveCustomToolRoster(customToolContext)
       customTools = [...roster.tools.values()]
+      for (const [name, effect] of customToolEffectMap(
+        customTools.map((entry) => ({ name: entry.definition.name, definition: entry.definition }))
+      )) {
+        customToolEffects.set(name, effect)
+      }
     } catch (rosterError) {
       // A broken vault must not take the whole turn down — the character simply
       // goes to the table without their custom tools.
@@ -376,7 +456,21 @@ export async function buildTools(
 
   }
 
-  return { tools, modelSupportsNativeTools, useNativeWebSearch }
+  try {
+    const { toolRegistry } = await import('@/lib/plugins/tool-registry')
+    pluginToolEffects = await toolRegistry.getToolEffects(toolConfigs)
+  } catch (effectsError) {
+    logger.warn('Failed to read plugin tool effects; plugin tools count as write', {
+      userId,
+      error: effectsError instanceof Error ? effectsError.message : String(effectsError),
+    })
+  }
+
+  if (extras?.effectCeiling) {
+    tools = applyEffectCeilingToTools(tools, extras.effectCeiling, { customToolEffects, pluginToolEffects })
+  }
+
+  return { tools, modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
 }
 
 /**
@@ -395,7 +489,7 @@ export async function* streamMessage(
   thoughtSignature?: string
   reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE' } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE', toolChoice } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -440,6 +534,7 @@ export async function* streamMessage(
         maxTokens: sampling.maxTokens,
         topP: sampling.topP,
         tools: tools.length > 0 ? tools : undefined,
+        ...(toolChoice && tools.length > 0 ? { toolChoice } : {}),
         webSearchEnabled: useNativeWebSearch,
         profileParameters: modelParams,
         cacheKey,
@@ -817,7 +912,7 @@ export function encodeTurnCompleteEvent(
 export function encodeChainCompleteEvent(
   encoder: TextEncoder,
   data: {
-    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'yielded' | 'stopped'
+    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'yielded' | 'stopped' | 'round_open'
     nextSpeakerId: string | null
     chainDepth: number
     /**
@@ -839,6 +934,32 @@ export function encodeChainCompleteEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Storyteller: the round's board as it stands (sent when a round opens).
+ */
+export function encodeStorytellerRoundEvent(encoder: TextEncoder, round: StorytellerRound): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ storytellerRound: round })}\n\n`)
+}
+
+/**
+ * Storyteller: one seat's bid landed (or failed, or passed).
+ */
+export function encodeStorytellerBidEvent(
+  encoder: TextEncoder,
+  data: { roundId: string; bid: StorytellerBid }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ storytellerBid: data })}\n\n`)
+}
+
+/**
+ * Storyteller: every bid is in (or the board timeout passed). The floor is the
+ * operator's; the board waits for a selection. Followed by a `round_open`
+ * chain-complete, which ends the send's stream.
+ */
+export function encodeRoundOpenEvent(encoder: TextEncoder, data: { roundId: string }): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ roundOpen: true, ...data })}\n\n`)
 }
 
 /**

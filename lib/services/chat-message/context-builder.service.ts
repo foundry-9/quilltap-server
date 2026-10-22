@@ -114,6 +114,10 @@ export interface BuildMessageContextOptions {
    * note (`buildTurnYieldInstruction`). Ephemeral, never persisted.
    */
   offerYield?: boolean
+  /** `'bid'` for a storyteller bid's dry build (see `BuildContextOptions.purpose`). */
+  purpose?: 'turn' | 'bid'
+  /** The storyteller bid or plan section, appended as the last trailing section. */
+  storytellerSection?: string
   /**
    * Swipe re-apply: the message being re-rolled plus every id in its swipe
    * group. Passed through to `buildContext`, where it makes the inform block
@@ -1128,6 +1132,9 @@ export async function buildMessageContext(
     turnSkip: options.turnSkip,
     // Raised hand — the yield Turn note, same ephemeral footing.
     offerYield: options.offerYield,
+    // Storyteller: a bid's dry build, and the bid or plan section.
+    purpose: options.purpose,
+    storytellerSection: options.storytellerSection,
     // Swipe re-apply: deliver the informs the re-rolled line's generation saw.
     regenerationOfMessageIds: options.regenerationOfMessageIds,
     // The human's own turns, for the chained-turn scene note.

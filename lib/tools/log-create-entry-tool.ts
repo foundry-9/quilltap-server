@@ -7,6 +7,7 @@
  * own context, never taken from the model.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { MAX_LOG_ENTRY_MESSAGE_LENGTH } from '@/lib/schemas/log-entry.types'
@@ -56,3 +57,6 @@ export function validateLogCreateEntryInput(input: unknown): LogCreateEntryToolI
   const parsed = logCreateEntryToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const logCreateEntryToolEffect: ToolEffectSpec = 'write';

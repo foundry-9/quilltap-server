@@ -4,6 +4,7 @@
  * Returns parsed frontmatter with the file path for reference.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -64,3 +65,6 @@ export interface DocReadFrontmatterOutput {
   /** Canonical qtap:// URI for the file. */
   uri?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docReadFrontmatterToolEffect: ToolEffectSpec = 'read';

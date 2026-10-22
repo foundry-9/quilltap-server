@@ -16,6 +16,7 @@ import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { displayTitle, type Visibility } from './custom-tool.types';
 import { listAllCustomTools } from './custom-tools';
+import { customToolEffect } from './tool-effect';
 
 const CONTEXT = 'pascal.workbench';
 
@@ -43,6 +44,11 @@ export interface CustomToolLibraryEntry {
   llm: boolean;
   /** How many trigger phrases the tool listens for (0 = none). */
   triggerCount: number;
+  /**
+   * What the tool does to the world (`customToolEffect`): `read` unless it
+   * carries effects, then `write`. A storyteller bid ranks it by this.
+   */
+  effect: 'read' | 'write';
   parameterCount: number;
   outcomeCount: number;
   mountPointId: string;
@@ -199,6 +205,7 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
           : 'range',
     llm: entry.definition.llm !== undefined,
     triggerCount: entry.definition.triggers?.length ?? 0,
+    effect: customToolEffect(entry.definition) === 'read' ? 'read' : 'write',
     parameterCount: Object.keys(entry.definition.parameters ?? {}).length,
     outcomeCount: entry.definition.outcomes.length,
     mountPointId: entry.mountPointId,

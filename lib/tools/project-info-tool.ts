@@ -11,6 +11,7 @@
  * @module tools/project-info-tool
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -126,3 +127,6 @@ export function validateProjectInfoInput(
   const parsed = projectInfoToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const projectInfoToolEffect: ToolEffectSpec = 'read';

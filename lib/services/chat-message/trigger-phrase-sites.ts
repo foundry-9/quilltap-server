@@ -12,6 +12,7 @@
  * `regenerate-swipe.service.ts`), so a swipe fires nothing, matching the dice.
  */
 
+import type { ToolEffect } from '@/lib/tools/effect-types'
 import { runTriggeredCustomTools } from '@/lib/pascal/trigger-runner'
 import type { ChatSettings } from '@/lib/schemas/settings.types'
 import type { MessageEvent } from '@/lib/schemas/chat.types'
@@ -76,6 +77,8 @@ export interface ReplyTriggerParams {
   characterId: string
   chatSettings: TriggerSettings
   onPosted: (message: MessageEvent) => void
+  /** A storyteller turn's effect ceiling: a matched tool above it is skipped. */
+  effectCeiling?: ToolEffect
 }
 
 /**
@@ -93,5 +96,6 @@ export async function runReplyTriggers(params: ReplyTriggerParams): Promise<Mess
     projectId: params.chat.projectId ?? null,
     chatSettings: params.chatSettings,
     onPosted: params.onPosted,
+    effectCeiling: params.effectCeiling,
   })
 }

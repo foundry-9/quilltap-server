@@ -48,6 +48,11 @@ export const REALTIME_TOPICS = [
    * `chats` topic's.
    */
   'inventory',
+  /**
+   * Storyteller rounds, scoped by *chat* id: a round opened, a bid landed, a
+   * selection made, a round closed. The board re-reads the chat's round.
+   */
+  'storytellerRounds',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

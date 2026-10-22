@@ -3,6 +3,7 @@
  * (and optionally its bytes as base64) from a document store.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -63,3 +64,6 @@ export interface DocReadBlobOutput {
   description: string;
   data_base64?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docReadBlobToolEffect: ToolEffectSpec = 'read';

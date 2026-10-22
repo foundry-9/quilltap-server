@@ -8,6 +8,7 @@
  * Gated by `canDressThemselves`, beside `wardrobe_wear` / `wardrobe_take_off`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import type { WardrobeHistorySource } from '@/lib/schemas/chat-wardrobe-history.types'
@@ -70,3 +71,6 @@ export function validateWardrobeHistoryInput(input: unknown): WardrobeHistoryToo
   const parsed = wardrobeHistoryToolInputSchema.safeParse(input ?? {})
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const wardrobeHistoryToolEffect: ToolEffectSpec = 'read';

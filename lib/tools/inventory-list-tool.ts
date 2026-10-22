@@ -8,6 +8,7 @@
  * by `canManageInventory`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import type { InventoryState } from '@/lib/inventory/refs'
@@ -81,3 +82,6 @@ export function validateInventoryListInput(input: unknown): InventoryListToolInp
   const parsed = inventoryListToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const inventoryListToolEffect: ToolEffectSpec = 'read';

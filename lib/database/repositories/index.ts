@@ -58,6 +58,7 @@ export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
 export { ChatInformsRepository } from './chat-informs.repository';
+export { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 export { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 export { WardrobeWearRepository } from './wardrobe-wear.repository';
 export { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
@@ -105,6 +106,7 @@ import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
 import { ChatInformsRepository } from './chat-informs.repository';
+import { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 import { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 import { WardrobeWearRepository } from './wardrobe-wear.repository';
 import { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
@@ -157,6 +159,7 @@ export interface RepositoryContainer {
   groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
   chatInforms: ChatInformsRepository;
+  storytellerRounds: StorytellerRoundsRepository;
   memoryExtractionCursors: MemoryExtractionCursorsRepository;
   wardrobeWear: WardrobeWearRepository;
   wardrobeHistory: ChatWardrobeHistoryRepository;
@@ -222,6 +225,7 @@ export function createRepositories(): RepositoryContainer {
       groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
       chatInforms: new ChatInformsRepository(),
+      storytellerRounds: new StorytellerRoundsRepository(),
       memoryExtractionCursors: new MemoryExtractionCursorsRepository(),
       // The wear ledger's chokepoint writes equipped slots through this chats repo.
       wardrobeWear: new WardrobeWearRepository(chatsRepo),

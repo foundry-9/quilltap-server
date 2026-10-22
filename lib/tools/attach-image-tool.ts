@@ -11,6 +11,7 @@
  * copy you write here.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -61,3 +62,6 @@ export interface AttachedImageDescriptor {
   height?: number;
   sha256: string;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const attachImageToolEffect: ToolEffectSpec = 'write';

@@ -91,6 +91,7 @@ const GET_ACTIONS = [
   'inventory',
   'photo-albums',
   'informs',
+  'storyteller-round',
   'group-stores',
   'mailbox',
   'accessible-stores',

@@ -1,3 +1,4 @@
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -72,3 +73,6 @@ export interface TerminalReadOutput {
   scrollback: string;
   rawScrollback?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const terminalReadToolEffect: ToolEffectSpec = 'read';

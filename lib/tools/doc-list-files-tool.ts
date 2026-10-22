@@ -4,6 +4,7 @@
  * Supports filtering by mount point, scope, folder, and glob patterns.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -85,3 +86,6 @@ export interface DocListFilesOutput {
   files: DocFileInfo[];
   total: number;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docListFilesToolEffect: ToolEffectSpec = 'read';
