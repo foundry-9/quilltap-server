@@ -6,6 +6,7 @@ import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 
 /**
  * The greeting's own stall budgets, tighter than the Salon's defaults.
@@ -55,6 +56,7 @@ export type GreetingRequest = {
    */
   trailingContextSections?: string[]
   /** For llm_logs */
+  connectionProfileId?: string
   userId?: string
   chatId?: string
   characterId?: string
@@ -143,6 +145,7 @@ export async function generateGreetingMessage({
   projectContext,
   recentConversationsBlock,
   trailingContextSections,
+  connectionProfileId,
   userId,
   chatId,
   characterId,
@@ -186,6 +189,9 @@ export async function generateGreetingMessage({
   // a concatenation. Same contract the Salon's streaming path relies on.
   let accumulatedReasoning = ''
   let finalUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+  let finalCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
+  let finalRawUsage: Record<string, unknown> | null = null
+  let finishReason: string | null = null
   let streamError: Error | undefined
   try {
     for await (const chunk of withStallWatchdog(
@@ -222,6 +228,15 @@ export async function generateGreetingMessage({
           totalTokens: chunk.usage.totalTokens ?? 0,
         }
       }
+      if (chunk.cacheUsage) {
+        finalCacheUsage = chunk.cacheUsage
+      }
+      if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
+        finalRawUsage = chunk.rawProviderUsage as Record<string, unknown>
+      }
+      if (chunk.done) {
+        finishReason = extractFinishReason(chunk.rawResponse)
+      }
     }
   } catch (err) {
     streamError = err instanceof Error ? err : new Error(String(err))
@@ -236,6 +251,7 @@ export async function generateGreetingMessage({
         characterId,
         provider,
         modelName,
+        connectionProfileId: connectionProfileId ?? null,
         request: {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           ...(temperature !== undefined ? { temperature } : {}),
@@ -243,9 +259,12 @@ export async function generateGreetingMessage({
         },
         response: {
           content: accumulated,
+          finishReason,
           ...(streamError ? { error: streamError.message } : {}),
         },
         usage: finalUsage,
+        cacheUsage: finalCacheUsage,
+        rawProviderUsage: finalRawUsage,
         durationMs,
       }).catch(err => {
         logger.warn('[Greeting Generation] Failed to log LLM call', {

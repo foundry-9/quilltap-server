@@ -52,16 +52,18 @@ Each entry in the Inspector displays:
 
 - **Timestamp** - When the API call was made
 - **Type badge** - Color-coded by operation type:
-  - **Chat / Tool** (primary color) - Direct chat messages and tool continuations
-  - **Memory** (info blue) - Memory extraction operations
-  - **Title / Summary / Compress** (secondary) - Background system operations
-  - **Image** (warning amber) - Image prompt crafting, description, appearance resolution
+  - **Chat / Tool / Bid** (primary color) - Direct chat messages (including swipe re-rolls, opening greetings and the occasional recovery note), tool continuations, and Storyteller bids
+  - **Memory / Confirm / Consult / Voice** (info blue) - Memory extraction, answer confirmation, Pascal's consultations and voiced announcements
+  - **Title / Summary / Compress / Scene** (secondary) - Background system operations, scene-state tracking among them
+  - **Image** (warning amber) - Picture-making in all its forms: prompt crafting, image description, appearance resolution, the pictures themselves, and wardrobe and inventory portraits
   - **Safety** (red) - Dangerous content classification
-  - **Wizard / Import** (green) - Character wizard and AI import operations
+  - **Wizard / Import / Optimizer** (green) - Character wizard, AI import and the other character workshops
 - **Provider/Model** - Which AI service and model handled the request
 - **Token summary** - Input tokens and output tokens at a glance
 - **Duration** - How long the API call took
 - **Error indicator** - A red icon if the request failed
+
+Every call the Salon makes on a conversation's behalf is entered in the ledger — not merely the ones that end happily. A call that fails, stalls, is stopped by your hand, or is abandoned partway is recorded with its error and whatever words had arrived by then, so a refused reply sits right beside the understudy that answered in its place. Each entry carries its token and cache figures wherever the provider reported them.
 
 ### Expanding an Entry
 
@@ -77,11 +79,12 @@ Use the filter dropdown in the Inspector header to narrow down what you see:
 
 - **All** - Every log entry
 - **Chat Messages** - Direct chat and tool continuation calls
+- **Storyteller Rounds** - Bids, and every call a Storyteller round ran
 - **Memory** - Memory extraction operations
-- **System Ops** - Title generation, summarization, context compression
-- **Image** - Image-related operations
+- **System Ops** - Title generation, summarization, context compression, scene-state tracking
+- **Image** - Image-related operations, the pictures themselves included
 - **Safety** - Dangerous content classification
-- **Other** - Character wizard, AI import
+- **Other** - Everything the named filters do not claim (answer confirmation, Pascal's consultations, voiced announcements, the character workshops), so no entry is reachable only through **All**
 
 ### Live Updates
 
