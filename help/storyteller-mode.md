@@ -40,10 +40,15 @@ left out is shown on the board as *kept quiet*, with an **Ask anyway** button.
    mean to do. Bids are gathered for up to 45 seconds; any that arrive later still appear.
 3. **You choose.** Tick the bids you want and press:
    - **Run in order** — the chosen characters speak one after another, in the turn manager's
-     rotation, each hearing what the others said before them.
+     rotation, each hearing what the others said before them. Should you prefer to call the
+     order yourself, take hold of a card and drag it into place (on a touch screen, press and
+     hold a moment first). Once you have rearranged the board, each chosen card wears a small
+     number showing when its owner shall speak, and the rotation stands aside; **Reset order**
+     returns the cards to their original places and the decision to the rotation.
    - **All at once** — the chosen characters speak over one another, as people at a dinner table
      do. Each sees the scene as it stood when you posted, and nobody answers anybody else within
-     the round. (Characters bidding to *act* go one at a time after the crowd has finished.)
+     the round. (Characters bidding to *act* go one at a time after the crowd has finished — in
+     the order you have dragged them, if you have.)
    - **Let it lie** — nobody answers. The floor stays with you.
 4. **The floor returns to you.** Storyteller mode never chains past the round. The board folds
    into one line naming who spoke, until your next post opens a fresh round.

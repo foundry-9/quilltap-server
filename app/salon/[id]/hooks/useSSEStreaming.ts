@@ -1544,6 +1544,7 @@ export function useSSEStreaming({
     roundId: string,
     participantIds: string[],
     order: StorytellerOrder,
+    keepOrder = false,
   ): Promise<boolean> => {
     if (streaming || waitingForResponse) {
       showInfoToast('One moment — the room is still speaking.')
@@ -1589,7 +1590,7 @@ export function useSSEStreaming({
       const res = await fetch(`/api/v1/chats/${chatId}?action=storyteller-run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roundId, participantIds, order }),
+        body: JSON.stringify({ roundId, participantIds, order, keepOrder }),
         signal,
       })
       if (!res.ok) {

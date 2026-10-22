@@ -411,7 +411,7 @@ export async function handleStorytellerRun(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   userId: string,
-  request: { roundId: string; participantIds: string[]; order: StorytellerOrder }
+  request: { roundId: string; participantIds: string[]; order: StorytellerOrder; keepOrder?: boolean }
 ): Promise<ReadableStream<Uint8Array>> {
   const { planStorytellerRun, runStorytellerRound } = await import('@/lib/storyteller/round.service')
   const { round, turns } = await planStorytellerRun({ chatId, ...request })

@@ -55,11 +55,13 @@ export async function handleStorytellerRunAction(
       roundId: body.roundId,
       count: body.participantIds.length,
       order: body.order ?? 'sequential',
+      keepOrder: body.keepOrder === true,
     });
     const stream = await handleStorytellerRun(repos, chatId, user.id, {
       roundId: body.roundId,
       participantIds: body.participantIds,
       order: body.order ?? 'sequential',
+      keepOrder: body.keepOrder === true,
     });
     return sseStreamResponse(stream);
   } catch (error) {

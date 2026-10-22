@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Feature: drag storyteller bids into running order
+
+- The storyteller board's cards are sortable (`@dnd-kit`, mouse drag, long-press on touch, keyboard). Only cards with a live bid can be picked up. Once rearranged, chosen cards show their place in the run, and a "Reset order" button returns the board to the round's own order.
+- `POST /api/v1/chats/[id]?action=storyteller-run` takes `keepOrder`. When `true`, `planStorytellerRun` runs `participantIds` in the order given instead of sorting by `resolveCycleOrder`; this also orders an all-at-once round's Act / Destroy tail. Without it, behavior is unchanged.
+- New `qt-storyteller-board-tools`, `qt-storyteller-card-draggable`, `qt-storyteller-card-dragging` and `qt-storyteller-card-order` classes, mirrored to theme-storybook 1.0.80.
+
 #### Feature: operator intervention in Pascal custom tools
 
 - A custom tool can be marked intervenable: top-level `intervention: { enabled, fields? }` and per-member `intervene` flags on parameters and effects, in the Zod schema, the published JSON Schema and the Workbench draft. Workbench gains a "Let me take a hand in each roll" toggle, per-field hand toggles, and a library marker.

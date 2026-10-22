@@ -141,6 +141,8 @@ export const StorytellerRunRequestSchema = z.object({
   roundId: z.string(),
   participantIds: z.array(z.string()),
   order: StorytellerOrderSchema.optional(),
+  /** The operator arranged the board by hand: run `participantIds` as given, not in rotation order. */
+  keepOrder: z.boolean().optional(),
 });
 
 /** Body of `POST /api/v1/chats/[id]?action=storyteller-ask`. */

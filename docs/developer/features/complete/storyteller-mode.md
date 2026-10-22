@@ -296,7 +296,7 @@ Controls:
 - Typing a new message while a round is open closes that round unrun and opens a new one.
 
 A selection is POSTed to `/api/v1/chats/[id]?action=storyteller-run` with
-`{ roundId, participantIds, order: 'sequential' | 'simultaneous' }`, which returns the SSE stream
+`{ roundId, participantIds, order: 'sequential' | 'simultaneous', keepOrder? }`, which returns the SSE stream
 for phase 2. The board collapses into a one-line summary of who was chosen, which stays until the
 next round.
 
@@ -307,7 +307,9 @@ rules.
 
 1. `resolveCycleOrder` gives the order. It's drawn now if no cycle is under way, using the same
    weighted draw as Normal mode.
-2. The selected seats are run in that order.
+2. The selected seats are run in that order — unless the operator dragged the board's cards
+   into an order of their own, in which case the client sends `keepOrder: true` and
+   `participantIds` in board order, and `planStorytellerRun` skips the rotation sort.
 3. Each turn is a continue-mode `processMessage` for that seat, with:
    - `effectCeiling` = the computed tier
    - the bid stored on the message (2.1)

@@ -268,6 +268,8 @@ export async function planStorytellerRun(params: {
   roundId: string;
   participantIds: string[];
   order: StorytellerOrder;
+  /** The operator arranged the board by hand: keep `participantIds` order instead of the rotation's. */
+  keepOrder?: boolean;
 }): Promise<{ round: StorytellerRound; turns: StorytellerPlannedTurn[] }> {
   const repos = getRepositories();
   const round = await repos.storytellerRounds.findById(params.roundId);
@@ -289,23 +291,35 @@ export async function planStorytellerRun(params: {
 
   const chat = await repos.chats.findById(params.chatId);
   if (!chat) throw new StorytellerRoundError('Chat not found', 404);
-  const characters = await loadRoomCharacters(repos, chat.participants);
-  const messages = (await repos.chats.getMessages(params.chatId)).filter(
-    (m): m is MessageEvent => m.type === 'message'
-  );
-  const turnState = calculateTurnStateFromHistory({
-    messages,
-    participants: chat.participants,
-    userParticipantId: findUserParticipant(chat.participants)?.id ?? null,
-    spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
-    cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
-  });
-  const cycle = await resolveCycleOrder(repos, chat, characters, turnState);
-  const rank = (id: string) => {
-    const index = cycle.indexOf(id);
-    return index === -1 ? cycle.length + chosen.indexOf(id) : index;
-  };
-  const ordered = [...bids].sort((a, b) => rank(a.participantId) - rank(b.participantId));
+
+  let ordered: StorytellerBid[];
+  if (params.keepOrder) {
+    // The operator dragged the cards into the order they want; that order stands.
+    ordered = bids;
+    logger.debug('Storyteller run keeps the operator\'s order', {
+      chatId: params.chatId,
+      roundId: params.roundId,
+      participantIds: chosen,
+    });
+  } else {
+    const characters = await loadRoomCharacters(repos, chat.participants);
+    const messages = (await repos.chats.getMessages(params.chatId)).filter(
+      (m): m is MessageEvent => m.type === 'message'
+    );
+    const turnState = calculateTurnStateFromHistory({
+      messages,
+      participants: chat.participants,
+      userParticipantId: findUserParticipant(chat.participants)?.id ?? null,
+      spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+      cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
+    });
+    const cycle = await resolveCycleOrder(repos, chat, characters, turnState);
+    const rank = (id: string) => {
+      const index = cycle.indexOf(id);
+      return index === -1 ? cycle.length + chosen.indexOf(id) : index;
+    };
+    ordered = [...bids].sort((a, b) => rank(a.participantId) - rank(b.participantId));
+  }
 
   const turns: StorytellerPlannedTurn[] = ordered.map((bid) => ({
     bid,
@@ -314,7 +328,7 @@ export async function planStorytellerRun(params: {
     concurrent: params.order === 'simultaneous' && (bid.tier === 'simple' || bid.tier === 'lookup'),
     profileKey: chat.participants.find((p) => p.id === bid.participantId)?.connectionProfileId ?? 'default',
   }));
-  // All at once: the concurrent group first, then the Act / Destroy tail in rotation order.
+  // All at once: the concurrent group first, then the Act / Destroy tail in the order above (stable sort).
   turns.sort((a, b) => Number(b.concurrent) - Number(a.concurrent));
   return { round, turns };
 }

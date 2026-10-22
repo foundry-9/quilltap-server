@@ -79,6 +79,12 @@
     font-weight: 600;
   }
 
+  .qt-storyteller-board-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
   .qt-storyteller-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
@@ -114,6 +120,35 @@
 
   .qt-storyteller-card-quiet {
     opacity: 0.65;
+  }
+
+  /* A bid card can be dragged to set the running order. */
+  .qt-storyteller-card-draggable {
+    cursor: grab;
+  }
+
+  .qt-storyteller-card-dragging {
+    position: relative;
+    z-index: 10;
+    cursor: grabbing;
+    opacity: 0.85;
+    box-shadow: var(--qt-storyteller-card-dragging-shadow, 0 4px 12px rgb(0 0 0 / 0.25));
+  }
+
+  /* Its place in the running order, once the operator has arranged the board. */
+  .qt-storyteller-card-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.25rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    background: var(--qt-storyteller-card-order-bg, var(--color-primary));
+    color: var(--qt-storyteller-card-order-fg, var(--color-primary-foreground));
   }
 
   .qt-storyteller-card-head {
