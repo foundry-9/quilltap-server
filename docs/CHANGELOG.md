@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Docs: spec for operator intervention in Pascal custom tools
+
+- New spec `docs/developer/features/pascal-operator-intervention.md`. Not implemented.
+- A custom tool can be marked intervenable, with a per-field flag for what the operator may change. When a model's `run_custom` call or a trigger phrase runs one, the run is held in the parent process. The operator can edit the parameters, roll, value, consult prompt and answer, outcome, message, state, effects, visibility, announcer, title and chip label for that run only, run it as rolled, or veto it. Edits recompute the later fields without rerolling.
+- The model is never told. A veto returns "The tool did not run." to a plain character; only a `systemTransparency` character or a user-controlled seat hears that "the table is closed." Changes are recorded in `pascalMeta.intervention`, which no model reads.
+
 #### Feature: Storyteller mode and declared tool effects
 
 Spec: `docs/developer/features/complete/storyteller-mode.md` (implemented; moved to `complete/`).
