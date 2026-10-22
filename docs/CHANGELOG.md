@@ -4,6 +4,17 @@
 
 ### 4.11-dev
 
+#### Fix: every Salon LLM call reaches the LLM Inspector
+
+- `streamMessage` (`lib/services/chat-message/streaming.service.ts`) writes one log row per call however it ends. A call that throws is logged with its error and partial content; one its consumer abandons is logged with a note. Before, only calls that reached a terminal chunk were logged, so a refused or stalled primary never appeared beside the failover that replaced it.
+- Swipe regeneration (`regenerate-swipe.service.ts`) now streams through `streamMessage` instead of calling the provider directly, so it is logged (with cache usage) against the chat and the new swipe's id. It also picks up the versioned character cache key the ordinary turn uses.
+- Request-limit recovery (`recovery.service.ts`) passes `userId`, `chatId`, `characterId` and a pre-minted `messageId`; it was never logged.
+- Image description (`sendVisionRequest`) takes a `chatId`, threaded from `file-attachment-fallback.ts` through every describe attempt, and records `connectionProfileId` and cache usage. Its rows used to carry no chat link.
+- Cheap-LLM tasks (`core-execution.ts`) log failed attempts with their error and record `finishReason` and `cacheUsage`. The danger classifier does the same.
+- The opening greeting records `cacheUsage`, `rawProviderUsage`, `finishReason` and `connectionProfileId`.
+- `POST /api/v1/images?action=generate` logs each image attempt as `IMAGE_GENERATION` with the chat that asked.
+- Inspector: badge colours and labels are typed `Record<LLMLogType, …>`, so a new log type will not compile until it has both. Scene tracking joins System Ops; image generation and wardrobe/inventory pictures join Image; "Other" is derived as every type no named filter claims.
+
 #### Feature: Storyteller mode and declared tool effects
 
 Spec: `docs/developer/features/complete/storyteller-mode.md` (implemented; moved to `complete/`).

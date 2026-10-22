@@ -521,110 +521,144 @@ export async function* streamMessage(
   const cacheKey = buildCharacterCacheKey(characterId)
   const sampling = resolveSamplingParams(modelParams)
 
-  // A provider that answers with headers and then goes silent would otherwise
-  // hold this `for await` open forever — the SDK's own timeout stops at the
-  // headers. The watchdog turns that into an ordinary throw, which the fallback
-  // engine reads as `network` and routes to the understudy.
-  for await (const chunk of withStallWatchdog(
-    provider.streamMessage(
-      {
-        messages: llmMessages,
-        model: connectionProfile.modelName,
-        temperature: sampling.temperature,
-        maxTokens: sampling.maxTokens,
-        topP: sampling.topP,
-        tools: tools.length > 0 ? tools : undefined,
-        ...(toolChoice && tools.length > 0 ? { toolChoice } : {}),
-        webSearchEnabled: useNativeWebSearch,
-        profileParameters: modelParams,
-        cacheKey,
-        previousResponseId,
-        stop,
-      },
-      apiKey
-    ),
-    {
+  // One row per call, whatever becomes of it. A call that fails, stalls, is
+  // stopped by the operator or is abandoned by its consumer was still asked,
+  // and the Inspector is where the operator goes to see what was asked — so
+  // the row is written on the terminal chunk when there is one, and from the
+  // `finally` below when there is not.
+  let logged = false
+  const record = (outcome: { finishReason?: string | null; error?: string }) => {
+    if (logged || !userId) return
+    logged = true
+    const durationMs = Date.now() - startTime
+    const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
+
+    logLLMCall({
+      userId,
+      type: logType,
+      messageId,
+      chatId,
+      characterId,
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
-      logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
-      // The operator's hard stop for the Salon stream this call belongs to —
-      // every chat-message call site (primary, retries, failover, tool-loop
-      // continuations, Carina inside the turn) inherits it from here.
-      abortSignal: currentTurnStopSignal(),
-    }
-  )) {
-    chunkCount++
-    if (chunk.content) {
-      // Normalize content that may be wrapped in content block format
-      // e.g., [{'type': 'text', 'text': "actual content"}]
-      const normalizedContent = normalizeContentBlockFormat(chunk.content)
-      if (normalizedContent !== chunk.content) {
-        chunk.content = normalizedContent
-      }
-      totalContentLength += chunk.content.length
-      accumulatedContent += chunk.content
-    }
-    if (chunk.usage) {
-      lastUsage = chunk.usage
-    }
-    if (chunk.cacheUsage) {
-      lastCacheUsage = chunk.cacheUsage
-    }
-    // Snapshot the provider-shape `usage` object pre-normalization so future
-    // plugin regressions (provider reports cached tokens but plugin never
-    // reads the field) show up as `rawProviderUsage` populated while
-    // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
-    // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
-    // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
-    // Google: `usageMetadata.cachedContentTokenCount`).
-    if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
-      lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
-    }
-    if (chunk.done) {
+      connectionProfileId: connectionProfile.id,
+      request: {
+        messages: llmMessages.map(m => ({
+          role: m.role,
+          content: m.content,
+          attachments: m.attachments,
+        })),
+        temperature: sampling.temperature,
+        maxTokens: sampling.maxTokens,
+        tools: tools.length > 0 ? tools : undefined,
+      },
+      response: {
+        content: accumulatedContent,
+        finishReason: outcome.finishReason ?? null,
+        ...(outcome.error ? { error: outcome.error } : {}),
+      },
+      usage: lastUsage,
+      cacheUsage: lastCacheUsage,
+      rawProviderUsage: lastRawProviderUsage,
+      requestHashes,
+      durationMs,
+    }).catch(err => {
+      logger.warn('Failed to log LLM call from streaming service', {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }
 
-      // Log the LLM call if userId is provided
-      if (userId) {
-        const durationMs = Date.now() - startTime
-        const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
-        const finishReason = extractFinishReason(chunk.rawResponse)
-
-        logLLMCall({
-          userId,
-          type: logType,
-          messageId,
-          chatId,
-          characterId,
-          provider: connectionProfile.provider,
-          modelName: connectionProfile.modelName,
-          connectionProfileId: connectionProfile.id,
-          request: {
-            messages: llmMessages.map(m => ({
-              role: m.role,
-              content: m.content,
-              attachments: m.attachments,
-            })),
-            temperature: sampling.temperature,
-            maxTokens: sampling.maxTokens,
-            tools: tools.length > 0 ? tools : undefined,
-          },
-          response: {
-            content: accumulatedContent,
-            finishReason,
-          },
-          usage: lastUsage,
-          cacheUsage: lastCacheUsage,
-          rawProviderUsage: lastRawProviderUsage,
-          requestHashes,
-          durationMs,
-        }).catch(err => {
-          logger.warn('Failed to log LLM call from streaming service', {
-            userId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
+  let exhausted = false
+  let failure: string | undefined
+  try {
+    // A provider that answers with headers and then goes silent would otherwise
+    // hold this `for await` open forever — the SDK's own timeout stops at the
+    // headers. The watchdog turns that into an ordinary throw, which the fallback
+    // engine reads as `network` and routes to the understudy.
+    for await (const chunk of withStallWatchdog(
+      provider.streamMessage(
+        {
+          messages: llmMessages,
+          model: connectionProfile.modelName,
+          temperature: sampling.temperature,
+          maxTokens: sampling.maxTokens,
+          topP: sampling.topP,
+          tools: tools.length > 0 ? tools : undefined,
+          ...(toolChoice && tools.length > 0 ? { toolChoice } : {}),
+          webSearchEnabled: useNativeWebSearch,
+          profileParameters: modelParams,
+          cacheKey,
+          previousResponseId,
+          stop,
+        },
+        apiKey
+      ),
+      {
+        provider: connectionProfile.provider,
+        modelName: connectionProfile.modelName,
+        logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
+        // The operator's hard stop for the Salon stream this call belongs to —
+        // every chat-message call site (primary, retries, failover, tool-loop
+        // continuations, Carina inside the turn) inherits it from here.
+        abortSignal: currentTurnStopSignal(),
       }
+    )) {
+      chunkCount++
+      if (chunk.content) {
+        // Normalize content that may be wrapped in content block format
+        // e.g., [{'type': 'text', 'text': "actual content"}]
+        const normalizedContent = normalizeContentBlockFormat(chunk.content)
+        if (normalizedContent !== chunk.content) {
+          chunk.content = normalizedContent
+        }
+        totalContentLength += chunk.content.length
+        accumulatedContent += chunk.content
+      }
+      if (chunk.usage) {
+        lastUsage = chunk.usage
+      }
+      if (chunk.cacheUsage) {
+        lastCacheUsage = chunk.cacheUsage
+      }
+      // Snapshot the provider-shape `usage` object pre-normalization so future
+      // plugin regressions (provider reports cached tokens but plugin never
+      // reads the field) show up as `rawProviderUsage` populated while
+      // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
+      // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
+      // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
+      // Google: `usageMetadata.cachedContentTokenCount`).
+      if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
+        lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
+      }
+      if (chunk.done) {
+        record({ finishReason: extractFinishReason(chunk.rawResponse) })
+      }
+      yield chunk
     }
-    yield chunk
+    exhausted = true
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error)
+    throw error
+  } finally {
+    if (!logged) {
+      logger.debug('Recording an LLM stream that ended without a terminal chunk', {
+        chatId,
+        messageId,
+        logType,
+        chunkCount,
+        exhausted,
+        failed: failure !== undefined,
+      })
+      record(
+        failure !== undefined
+          ? { error: failure }
+          : exhausted
+            ? {}
+            : { error: 'The stream was closed before the provider finished' }
+      )
+    }
   }
 }
 

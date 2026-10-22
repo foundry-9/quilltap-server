@@ -11,38 +11,58 @@ interface LLMInspectorEntryProps {
 
 type TabType = 'request' | 'response' | 'usage'
 
-const TYPE_BADGE_CLASSES: Record<string, string> = {
+// Exhaustive over the log-type enum: a new type does not compile until it has
+// a badge and a label here.
+const TYPE_BADGE_CLASSES: Record<LLMLogType, string> = {
   CHAT_MESSAGE: 'qt-bg-primary/15 qt-text-primary',
   TOOL_CONTINUATION: 'qt-bg-primary/15 qt-text-primary',
   MEMORY_EXTRACTION: 'qt-bg-info/15 qt-text-info',
   TITLE_GENERATION: 'qt-bg-secondary/50 qt-text-secondary',
   SUMMARIZATION: 'qt-bg-secondary/50 qt-text-secondary',
   CONTEXT_COMPRESSION: 'qt-bg-secondary/50 qt-text-secondary',
+  SCENE_STATE_TRACKING: 'qt-bg-secondary/50 qt-text-secondary',
   IMAGE_PROMPT_CRAFTING: 'qt-bg-warning/15 qt-text-warning',
   IMAGE_DESCRIPTION: 'qt-bg-warning/15 qt-text-warning',
   APPEARANCE_RESOLUTION: 'qt-bg-warning/15 qt-text-warning',
+  IMAGE_GENERATION: 'qt-bg-warning/15 qt-text-warning',
+  WARDROBE_IMAGE_ANALYSIS: 'qt-bg-warning/15 qt-text-warning',
+  WARDROBE_ITEM_IMAGE: 'qt-bg-warning/15 qt-text-warning',
+  INVENTORY_ITEM_IMAGE: 'qt-bg-warning/15 qt-text-warning',
   DANGER_CLASSIFICATION: 'qt-bg-destructive/15 qt-text-destructive',
   CHARACTER_WIZARD: 'qt-bg-success/15 qt-text-success',
   AI_IMPORT: 'qt-bg-success/15 qt-text-success',
+  CHARACTER_OPTIMIZER: 'qt-bg-success/15 qt-text-success',
+  EXTERNAL_PROMPT: 'qt-bg-success/15 qt-text-success',
+  AUTO_CONFIGURE: 'qt-bg-success/15 qt-text-success',
+  ANSWER_CONFIRMATION: 'qt-bg-info/15 qt-text-info',
   CUSTOM_TOOL_CONSULT: 'qt-bg-info/15 qt-text-info',
   VOICE_REWRITE: 'qt-bg-info/15 qt-text-info',
   SCENARIO_BUILDER: 'qt-bg-info/15 qt-text-info',
   STORYTELLER_BID: 'qt-bg-primary/15 qt-text-primary',
 }
 
-const TYPE_LABELS: Record<string, string> = {
+const TYPE_LABELS: Record<LLMLogType, string> = {
   CHAT_MESSAGE: 'Chat',
   TOOL_CONTINUATION: 'Tool',
   MEMORY_EXTRACTION: 'Memory',
   TITLE_GENERATION: 'Title',
   SUMMARIZATION: 'Summary',
   CONTEXT_COMPRESSION: 'Compress',
+  SCENE_STATE_TRACKING: 'Scene',
   IMAGE_PROMPT_CRAFTING: 'Img Prompt',
   IMAGE_DESCRIPTION: 'Img Desc',
   APPEARANCE_RESOLUTION: 'Appearance',
+  IMAGE_GENERATION: 'Image',
+  WARDROBE_IMAGE_ANALYSIS: 'Wardrobe Scan',
+  WARDROBE_ITEM_IMAGE: 'Wardrobe Img',
+  INVENTORY_ITEM_IMAGE: 'Inventory Img',
   DANGER_CLASSIFICATION: 'Safety',
   CHARACTER_WIZARD: 'Wizard',
   AI_IMPORT: 'Import',
+  CHARACTER_OPTIMIZER: 'Optimizer',
+  EXTERNAL_PROMPT: 'Ext Prompt',
+  AUTO_CONFIGURE: 'Auto-Config',
+  ANSWER_CONFIRMATION: 'Confirm',
   CUSTOM_TOOL_CONSULT: 'Consult',
   VOICE_REWRITE: 'Voice',
   SCENARIO_BUILDER: 'Scenario',
@@ -69,8 +89,8 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
   const [expanded, setExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('request')
 
-  const badgeClass = TYPE_BADGE_CLASSES[log.type] || 'qt-bg-muted qt-text-secondary'
-  const typeLabel = TYPE_LABELS[log.type] || log.type
+  const badgeClass = TYPE_BADGE_CLASSES[log.type] ?? 'qt-bg-muted qt-text-secondary'
+  const typeLabel = TYPE_LABELS[log.type] ?? log.type
 
   return (
     <div

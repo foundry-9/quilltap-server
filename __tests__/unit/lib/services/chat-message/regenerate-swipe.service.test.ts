@@ -16,12 +16,15 @@ const streamChunks: Array<Record<string, unknown>> = [
   },
 ]
 
-const streamMessage = jest.fn(async function* () {
+// The re-roll goes through the shared `streamMessage`, which owns the stall
+// watchdog and the LLM log row; the test stands in for it and records what it
+// was asked so the log linkage can be checked.
+const streamMessage = jest.fn(async function* (_options: Record<string, unknown>) {
   for (const chunk of streamChunks) yield chunk
 })
 
-jest.mock('@/lib/llm', () => ({
-  createLLMProvider: jest.fn(async () => ({ streamMessage })),
+jest.mock('@/lib/services/chat-message/streaming.service', () => ({
+  streamMessage: (options: Record<string, unknown>) => streamMessage(options),
 }))
 
 jest.mock('@/lib/services/chat-message/participant-resolver.service', () => ({
@@ -176,6 +179,25 @@ describe('regenerateMessageAsSwipe', () => {
       'chat-1', 'msg-abigail', { swipeGroupId: 'swipe-msg-abigail', swipeIndex: 0 }
     )
     expect((repos as any).chats.addMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('logs the re-roll against the chat and the swipe it produced, so the Inspector can find it', async () => {
+    const repos = buildRepos()
+    const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+    const allMessages = [makeMessage('msg-user', 'USER', now, 'p-revenant'), target]
+
+    const newSwipe = await regenerateMessageAsSwipe({
+      repos, userId: 'user-1', chat, targetMessage: target, allMessages,
+    })
+
+    expect(streamMessage).toHaveBeenCalledTimes(1)
+    expect(streamMessage.mock.calls[0][0]).toMatchObject({
+      userId: 'user-1',
+      chatId: 'chat-1',
+      characterId: 'char-abigail',
+      messageId: newSwipe.id,
+      tools: [],
+    })
   })
 
   it('appends to an existing swipe group without re-anchoring the original', async () => {
