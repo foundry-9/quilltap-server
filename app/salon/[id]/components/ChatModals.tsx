@@ -13,6 +13,7 @@ import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import RunToolModal from '@/components/chat/RunToolModal'
 import CustomToolRunDialog from '@/components/chat/CustomToolRunDialog'
+import CustomToolInterventionDialog from '@/components/chat/CustomToolInterventionDialog'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
@@ -503,6 +504,10 @@ export function ChatModals({
         }}
         initialTool={customToolRequest.tool ? { ...customToolRequest.tool, nonce: customToolRequest.nonce } : null}
       />
+
+      {/* Pascal's held rolls (operator intervention). Reads the chat's pending
+          holds from the server, so a reload or a second tab reopens it. */}
+      <CustomToolInterventionDialog chatId={chatId} />
 
       {chat && (
         <StateEditorModal

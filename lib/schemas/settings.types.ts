@@ -804,6 +804,13 @@ export const ChatSettingsSchema = z.object({
    * false). Dead while `customTools` is off.
    */
   customToolTriggers: z.boolean().default(false),
+  /**
+   * Hold a custom tool marked intervenable for the operator, in a dialog,
+   * before Pascal announces its roll (default: true). Off means every run goes
+   * ahead as rolled. A held roll waits indefinitely, so this is the switch for
+   * letting a chat run unattended. Dead while `customTools` is off.
+   */
+  customToolIntervention: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */

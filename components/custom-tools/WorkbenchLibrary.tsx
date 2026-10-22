@@ -166,7 +166,12 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
           onClick={() => onOpen(tool.mountPointId, tool.definitionPath)}
           title="Open on the workbench"
         >
-          <span className="block text-sm font-medium truncate">{tool.title}</span>
+          <span className="flex items-center gap-1 text-sm font-medium">
+            <span className="truncate">{tool.title}</span>
+            {tool.intervention && (
+              <Icon name="hand-raised" className="qt-intervention-mark w-3.5 h-3.5" title="Holds each roll for you" />
+            )}
+          </span>
           <span className="block text-xs font-mono qt-text-secondary truncate">{tool.name}</span>
           {tool.description && (
             <span className="block text-xs qt-text-secondary mt-1 line-clamp-2">{tool.description}</span>

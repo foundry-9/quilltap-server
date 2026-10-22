@@ -11,6 +11,11 @@
  *     and an index-invalidated cache would miss exactly those edits (see the
  *     freshness note atop `lib/pascal/custom-tools.ts`).
  *
+ * GET ?action=interventions, POST ?action=intervention-preview /
+ * intervention-reask / intervention-resolve
+ *   - Operator intervention: read and resolve runs held for the operator.
+ *     See `./interventions.ts`.
+ *
  * POST /api/v1/chats/[id]/custom-tools?action=run
  *   - Run one tool at the operator's behest. Posts Pascal's outcome, and
  *     nothing else — see the note in `handleRun` on why the operator's own
@@ -61,6 +66,12 @@ import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import { runCustomTool } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
+import {
+  handleInterventionPreview,
+  handleInterventionReask,
+  handleInterventionResolve,
+  handleListInterventions,
+} from './interventions';
 
 const HANDLER = 'api.v1.chats.custom-tools';
 
@@ -450,8 +461,15 @@ async function handleRun(
     metadata: body.asCharacterId ? perspective.metadata : {},
     whisperTargetIds: [ctx.user.id],
     invokedBy: 'user',
+    // The operator set this run's parameters themselves; it is never held.
+    mayHold: false,
     callerParticipantId: null,
   });
+
+  if (outcome.ok === 'vetoed') {
+    // Unreachable (`mayHold: false`), but a veto is never an error to report.
+    return successResponse({ messages: [], result: null });
+  }
 
   if (!outcome.ok) {
     // Pascal never announces a run that did not happen — the failure is
@@ -495,6 +513,15 @@ async function handleRun(
   });
 }
 
-export const GET = createContextParamsHandler<{ id: string }>(withActionDispatch({}, handleList));
+export const GET = createContextParamsHandler<{ id: string }>(
+  withActionDispatch({ interventions: handleListInterventions }, handleList),
+);
 
-export const POST = createContextParamsHandler<{ id: string }>(withActionDispatch({ run: handleRun }));
+export const POST = createContextParamsHandler<{ id: string }>(
+  withActionDispatch({
+    run: handleRun,
+    'intervention-preview': handleInterventionPreview,
+    'intervention-reask': handleInterventionReask,
+    'intervention-resolve': handleInterventionResolve,
+  }),
+);

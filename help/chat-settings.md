@@ -78,6 +78,7 @@ Controls automatic behavior during chat interactions.
 - Both you and the AI can trigger random events naturally through conversation
 
 - **Auto-Run Custom Tools on Trigger Phrases** — Off by default. When on, a message from anyone in the chat that contains one of a custom tool's declared trigger phrases runs that tool automatically, with every parameter at its default, and Pascal announces the outcome after the message. Phrases are matched as plain text in any case, Carina question lines and staff announcements are never listened to, and at most four tools fire per message. Does nothing while **Custom tools** is off — the checkbox is greyed out until it is on. See [Words that pull the lever](custom-tools.md#words-that-pull-the-lever--triggers).
+- **Hold intervenable rolls for me** — On by default. A custom tool marked intervenable pauses, after Pascal has dealt it and before he announces it, so you may adjust the run, force an outcome, or set it aside. A held roll waits for you indefinitely; switch this off to let every roll go ahead as dealt, as you might before leaving a chat to run on its own. Does nothing while **Custom tools** is off. See [Taking a Hand in the Deal](custom-tools.md#taking-a-hand-in-the-deal--intervention).
 
 **When to disable:**
 

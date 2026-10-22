@@ -52,6 +52,7 @@ async function updateChatSettings(
   autoDetectRng?: boolean,
   customTools?: boolean,
   customToolTriggers?: boolean,
+  customToolIntervention?: boolean,
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
@@ -179,6 +180,12 @@ async function updateChatSettings(
       throw new Error('Invalid customToolTriggers value (must be boolean)')
     }
     updateData.customToolTriggers = customToolTriggers
+  }
+  if (typeof customToolIntervention !== 'undefined') {
+    if (typeof customToolIntervention !== 'boolean') {
+      throw new Error('Invalid customToolIntervention value (must be boolean)')
+    }
+    updateData.customToolIntervention = customToolIntervention
   }
   if (typeof agentModeSettings !== 'undefined') {
     const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
@@ -404,6 +411,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       autoDetectRng,
       customTools,
       customToolTriggers,
+      customToolIntervention,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -441,6 +449,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       autoDetectRng,
       customTools,
       customToolTriggers,
+      customToolIntervention,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,

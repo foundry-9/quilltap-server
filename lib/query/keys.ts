@@ -195,6 +195,11 @@ export const queryKeys = {
      */
     byChat: (chatId: string) => ['custom-tools', chatId] as const,
     /**
+     * The runs held for the operator in one chat (operator intervention).
+     * Refreshed by the `customToolInterventions` realtime topic.
+     */
+    interventions: (chatId: string) => ['custom-tools', chatId, 'interventions'] as const,
+    /**
      * Pascal's Workbench: every definition in every enabled store, no
      * per-invoker shadowing. Fresh per request, same doctrine as `byChat`.
      */

@@ -195,6 +195,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-auto-detect-rng-field-v1': 'Adding auto-detect-RNG flag to chats',
   'add-custom-tools-field-v1': 'Laying your own contrivances out upon Pascal’s baize',
   'add-custom-tool-triggers-field-v1': 'Teaching Pascal which words to listen for',
+  'add-custom-tool-intervention-field-v1': 'Teaching Pascal to wait for your nod',
   'add-memory-extraction-limits-field-v1': 'Adding memory-extraction limits to chats',
   'add-memory-extraction-concurrency-field-v1': 'Adding memory-extraction concurrency to chats',
   'add-memory-gate-fields-v1': 'Adding memory gate fields',

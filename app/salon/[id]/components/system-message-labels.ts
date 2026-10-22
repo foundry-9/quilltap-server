@@ -207,6 +207,54 @@ export function getSystemKindDisplayLabel(
   return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
 }
 
+/**
+ * The "adjusted" badge's tooltip for a Pascal roll the operator changed while
+ * it was held (operator intervention): each changed field as *dealt → final*.
+ * Null when the roll was never adjusted. Operator-facing only — the Salon's own
+ * view of the transcript, which no model reads.
+ */
+export function getInterventionSummary(message: Pick<Message, 'systemSender' | 'pascalMeta'>): string | null {
+  const meta = message.pascalMeta
+  const record = meta?.intervention
+  if (message.systemSender !== 'pascal' || !meta || !record || record.changed.length === 0) return null
+  const { dealt } = record
+  const show = (v: unknown) => (typeof v === 'number' && !Number.isInteger(v) ? String(Number(v.toPrecision(4))) : String(v))
+  const parts = record.changed.map((key) => {
+    if (key.startsWith('params.')) {
+      const name = key.slice('params.'.length)
+      return `${name} ${show(dealt.params[name])} → ${show(meta.params[name])}`
+    }
+    if (key.startsWith('effects.')) return `effect ${Number(key.slice('effects.'.length)) + 1} changed`
+    switch (key) {
+      case 'roll':
+        return dealt.diceRolls && meta.diceRolls
+          ? `dice [${dealt.diceRolls.join(', ')}] → [${meta.diceRolls.join(', ')}]`
+          : `roll ${show(dealt.raw)} → ${show(meta.raw)}`
+      case 'value':
+        return `value ${show(dealt.value)} → ${show(meta.value)}`
+      case 'outcome':
+        return `outcome row ${dealt.outcomeIndex + 1} → ${meta.outcomeIndex + 1}`
+      case 'state':
+        return `verdict ${dealt.state} → ${meta.state}`
+      case 'message':
+        return 'message rewritten'
+      case 'llmAnswer':
+        return "the oracle's answer replaced"
+      case 'chipLabel':
+        return `label "${dealt.chipLabel ?? ''}" → "${meta.chipLabel ?? ''}"`
+      case 'title':
+        return `title "${dealt.toolTitle ?? ''}" → "${meta.toolTitle ?? ''}"`
+      case 'visibility':
+        return `${dealt.visibility} → ${dealt.visibility === 'public' ? 'whisper' : 'public'}`
+      case 'announcer':
+        return `announced by ${dealt.announcer === 'pascal' ? 'the character' : 'Pascal'}, not ${dealt.announcer === 'pascal' ? 'Pascal' : 'the character'}`
+      default:
+        return key
+    }
+  })
+  return `Adjusted before it was dealt: ${parts.join('; ')}`
+}
+
 /** The semantic states an author may assign to a custom tool's outcome row. */
 export type PascalOutcomeState = 'success' | 'partial' | 'failure' | 'info'
 

@@ -443,6 +443,8 @@ import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-versio
 import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
 // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
 import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-field';
+// Pascal operator intervention: customToolIntervention toggle column on chat_settings
+import { addCustomToolInterventionFieldMigration } from './add-custom-tool-intervention-field';
 // Composer slash commands: composerSlashCommands toggle column on chat_settings
 import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-commands-field';
 import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-history-table-v1';
@@ -916,6 +918,8 @@ export const migrations: Migration[] = [
   dropHousekeepingConsolidationJobsMigration,
   // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
   addCustomToolTriggersFieldMigration,
+  // Pascal operator intervention: customToolIntervention toggle column on chat_settings
+  addCustomToolInterventionFieldMigration,
   // Composer slash commands: composerSlashCommands toggle column on chat_settings
   addComposerSlashCommandsFieldMigration,
   // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
@@ -1374,6 +1378,8 @@ export {
   dropHousekeepingConsolidationJobsMigration,
   // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
   addCustomToolTriggersFieldMigration,
+  // Pascal operator intervention: customToolIntervention toggle column on chat_settings
+  addCustomToolInterventionFieldMigration,
   // Composer slash commands: composerSlashCommands toggle column on chat_settings
   addComposerSlashCommandsFieldMigration,
   // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits

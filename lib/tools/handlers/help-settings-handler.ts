@@ -111,6 +111,7 @@ async function fetchCategorySettings(
         autoDetectRng: settings.autoDetectRng,
         customTools: settings.customTools,
         customToolTriggers: settings.customToolTriggers,
+        customToolIntervention: settings.customToolIntervention,
         llmLoggingSettings: settings.llmLoggingSettings,
         avatarDisplayMode: settings.avatarDisplayMode,
         avatarDisplayStyle: settings.avatarDisplayStyle,

@@ -6,6 +6,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import {
   getAnnouncementSenderName,
   getSystemKindDisplayLabel,
+  getInterventionSummary,
   getAnnouncementImportance,
   getAnnouncementOutcomeState,
   getAnnouncementAccentClasses,
@@ -67,6 +68,7 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
   const senderName = getAnnouncementSenderName(message, announcerNames)
   const kindLabel = getSystemKindDisplayLabel(message)
   const outcomeState = getAnnouncementOutcomeState(message)
+  const adjusted = getInterventionSummary(message)
   const importance = getAnnouncementImportance(message)
   const dotModifier = outcomeState
     ? `qt-chat-announcement-dot-outcome-${outcomeState}`
@@ -79,6 +81,12 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
           who can't see the accent (and for anyone skimming with a screen reader). */}
       {outcomeState && <span className="sr-only">{outcomeState}</span>}
       {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+      {adjusted && (
+        <span className="qt-intervention-badge" title={adjusted}>
+          <Icon name="hand-raised" className="w-3 h-3" aria-hidden="true" />
+          <span className="sr-only">{adjusted}</span>
+        </span>
+      )}
       <WhisperTag message={message} participantNames={participantNames} />
       <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
       <Icon

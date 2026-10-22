@@ -1,10 +1,10 @@
 # Pascal Operator Intervention — Spec
 
-**Status:** Proposed 2026-10-22. Not started.
+**Status:** Implemented 2026-10-22 (4.11-dev). See the As-built notes at the end.
 **Owner subsystem:** Pascal the Croupier (custom tools — `lib/pascal/`, Workbench at `/custom-tools`).
-**Builds on:** [pascal-custom-tools.md](complete/pascal-custom-tools.md) (the format and the run
-service), [pascal-trigger-phrases.md](complete/pascal-trigger-phrases.md) (the third entrance),
-[storyteller-mode.md](complete/storyteller-mode.md) (tool effects and the ceiling check).
+**Builds on:** [pascal-custom-tools.md](pascal-custom-tools.md) (the format and the run
+service), [pascal-trigger-phrases.md](pascal-trigger-phrases.md) (the third entrance),
+[storyteller-mode.md](storyteller-mode.md) (tool effects and the ceiling check).
 
 ## Summary
 
@@ -490,3 +490,26 @@ row), resolution (`info`: decision, the list of changed fields, cause `stop` or 
   timeout policy, and nobody is watching.
 - Editing a definition from the dialog. Every change is for one run only.
 - Timeouts (I2).
+
+## As built (2026-10-22)
+
+Implemented as specified, with these notes:
+
+- **Settings column.** `chatSettings.customToolIntervention` lives in a `chat_settings` column like its siblings, so it needed a migration (`add-custom-tool-intervention-field-v1`, `INTEGER DEFAULT 1`) despite Part 5's "no migration", which applies to `pascalMeta` only. The toggle sits beside the trigger-phrase toggle in Settings → Chat → Automation, and the settings route validates it by hand the way its siblings are validated rather than through `patchSchemaOf`.
+- **Keep-alive.** `runWithTurnControl` gained an optional `keepAlive` pinger (the orchestrator passes one per stream), read with `currentTurnKeepAlive()`; the registry pings every 15 s while a hold waits.
+- **Deal is server-computed.** The resolve action recomputes the run and hands the `RecomputedRun` to the waiting turn with the decision, so the turn never recomputes. A deal whose recompute changes nothing is treated as as-rolled and records nothing.
+- **Pinned state.** A pinned `state` is the state announced and the one effect conditions test (`when.outcome`); the outcome row, brief and `{{outcome.index}}` stay the winning row's.
+- **The range draw** is always taken (or replayed), even for a degenerate `min === max` range, so a parameter that later widens the range still has luck to scale.
+- **Re-ask** unpins `llmAnswer`: a fresh answer replaces a pinned one.
+- **Consistency warnings.** "Pinned message no longer matches" is read as: the message is pinned and a row other than the one first dealt now wins.
+- **CSS** lives in its own `app/styles/qt-components/_intervention.css` (like `_storyteller.css`), mirrored into theme-storybook 1.0.79.
+- **The dialog** cannot be dismissed unanswered; there is no "later". The realtime topic invalidates `queryKeys.customTools.interventions(chatId)` through `topic-map.ts`; the query polls only while the socket is down.
+
+### Live check on V4test (2026-10-22)
+
+Verified with a throwaway intervenable tool (`Tools/brass_wheel.tool.json` in V4test's Quilltap General): a model's `run_custom` held, adjusted (parameter, forced row, two Re-asks) and dealt — Pascal posted the final run, `pascalMeta.intervention` recorded eight changed fields, the badge tooltip listed them, and the character narrated the final result; a veto posted nothing and returned "The tool did not run."; Stop mid-hold vetoed (`cause: stop`) and a second call in the same turn was vetoed at once on the stopped signal; a trigger phrase held ("overheard"); a second tab showed the same hold and resolving it there closed the first tab's dialog; a reload reopened the dialog. Storyteller's simultaneous turns were not exercised live (covered by the registry's per-hold queue).
+
+Two known limits:
+
+- **A reload mid-hold reopens the dialog, but the turn that was waiting does not survive the resolution.** The Salon stream has no `cancel` handling, and much of the streaming stack calls `controller.enqueue` directly; once the page that opened the stream is gone, the first raw enqueue after the hold settles throws ("Controller is already closed") and the turn ends — after a deal, Pascal's post and the effects stand, but the tool result is not saved and the character does not reply. This is pre-existing for any mid-turn disconnect; holds make it routine. A second tab does not have the problem (the first tab's stream stays open).
+- **The dialog's overlay covers the composer's Stop button**, so in the tab showing the dialog the veto is the way to refuse; Stop remains reachable from another tab, and the server path is verified.

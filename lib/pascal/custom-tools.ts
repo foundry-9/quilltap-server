@@ -742,6 +742,52 @@ export class CustomToolRunError extends Error {
 /** Resolved parameter values, post-default and post-clamp. */
 export type ResolvedParams = Record<string, number | string | boolean>;
 
+/**
+ * The random draw a run used, recorded so a held run can be recomputed with
+ * the same luck (operator intervention, spec §3.1). For the range form it is
+ * the UNIT draw `u ∈ [0, 1)` that is scaled into `[min, max)` — so a parameter
+ * change that moves the bounds keeps a top-10% draw in the top 10% of the new
+ * range. For the dice form it is the faces.
+ */
+export type RecordedDraw = { form: 'range'; unit: number } | { form: 'dice'; faces: number[] };
+
+/** One effect's operator setting for a held run. Edited fields are literals, never expressions. */
+export interface EffectPin {
+  /** `auto` follows the effect's own `when`; `on` fires it regardless; `off` suppresses it. */
+  mode: 'auto' | 'on' | 'off';
+  /** A write's value, taken literally. */
+  value?: number | string | boolean;
+  /** A wardrobe or inventory gesture's references, taken literally (resolved at apply time as usual). */
+  items?: string[];
+  /** A log line, taken literally. */
+  log?: string;
+}
+
+/**
+ * Fields of a run the operator has pinned in the hold dialog. Each present key
+ * replaces what the engine would have computed; everything downstream that is
+ * not pinned is recomputed from it. Absent everywhere outside a held run.
+ */
+export interface RunPins {
+  /** Range form: the raw draw, taken as given. */
+  roll?: number;
+  /** Dice form: the faces, one per die, clamped to [1, sides]. */
+  dice?: number[];
+  /** Range form: the value after modifiers. */
+  value?: number;
+  /** The consult's answer, in place of any consult result. */
+  llmAnswer?: { ok: boolean; output: string };
+  /** This outcome row wins, whatever the table says. */
+  outcomeIndex?: number;
+  /** The rendered message, taken literally — no placeholders re-rendered. */
+  message?: string;
+  state?: OutcomeState;
+  /** The rendered chip label, taken literally. */
+  chipLabel?: string;
+  /** Per effect index (file order). */
+  effects?: Record<number, EffectPin>;
+}
+
 /** Everything a run produced — enough to post the message and fill pascalMeta. */
 export interface CustomToolRunResult {
   tool: string;
@@ -779,6 +825,16 @@ export interface CustomToolRunResult {
    * Absent when the definition declares none.
    */
   effects?: ResolvedEffect[];
+  /** The random draw this run used — what a held run replays. */
+  draw: RecordedDraw;
+  /**
+   * The consult prompt as rendered for THIS run. Equal to `llm.prompt` on an
+   * ordinary run; on a replay it may differ from the prompt that produced the
+   * answer in use, which is how a held run knows its answer is out of date.
+   */
+  llmPromptRendered?: string;
+  /** When the outcome was pinned: the row the table itself would have picked. */
+  tableOutcomeIndex?: number;
 }
 
 /**
@@ -921,22 +977,29 @@ function resolveRollField(
  * (48 bits — comfortably more precision than a double's 52-bit mantissa needs
  * for this, and far beyond what any outcome table can distinguish).
  */
-function cryptoUniform(min: number, max: number): number {
+function cryptoUnit(): number {
   const bytes = randomBytes(6);
   let scaled = 0;
   for (const byte of bytes) scaled = scaled * 256 + byte;
-  const fraction = scaled / 2 ** 48;
-  return min + fraction * (max - min);
+  return scaled / 2 ** 48;
 }
 
-/** Draw the raw value for Form A, honouring `$param` and `$state` bounds. */
+/**
+ * Draw the raw value for Form A, honouring `$param` and `$state` bounds.
+ *
+ * The unit draw is always taken (or replayed), even for a degenerate range, so
+ * a held run whose parameters later widen the range still has luck to scale.
+ * A pinned `roll` replaces the raw draw and a pinned `value` the transform.
+ */
 function rollRange(
   definition: QtapCustomTool,
   range: RollRange,
   params: ResolvedParams,
   state: CustomToolState,
-  inventory?: InventoryContext | null
-): { raw: number; value: number } {
+  inventory?: InventoryContext | null,
+  unitDraw?: number,
+  pins?: Pick<RunPins, 'roll' | 'value'>
+): { raw: number; value: number; unit: number } {
   const min = resolveRollField(definition.name, 'min', range.min, params, 0, state, inventory);
   const max = resolveRollField(definition.name, 'max', range.max, params, 1, state, inventory);
   const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state, inventory);
@@ -948,19 +1011,21 @@ function rollRange(
     );
   }
 
-  const raw = min === max ? min : cryptoUniform(min, max);
+  const unit = unitDraw ?? cryptoUnit();
+  const raw = pins?.roll ?? (min === max ? min : min + unit * (max - min));
 
   // The transform order is fixed and load-bearing: multiply, then offset, then
   // round. Rounding first would quantise before the offset could shift it.
   let value = raw * multiplier;
   value = value + offset;
   if (range.round) value = Math.round(value);
+  if (pins?.value !== undefined) value = pins.value;
 
   if (!Number.isFinite(value)) {
     throw new CustomToolRunError(`${definition.name}: the roll produced a value that is not a finite number`);
   }
 
-  return { raw, value };
+  return { raw, value, unit };
 }
 
 /** Everything an outcome test may be posed about. */
@@ -1519,7 +1584,12 @@ export function isApplicableEffect(
  * load-time rejections and only reach here as regressions, handled the same
  * fail-soft way.
  */
-function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): ResolvedEffect[] {
+function resolveEffects(
+  definition: QtapCustomTool,
+  subjects: EffectSubjects,
+  /** A held run's per-effect settings (operator intervention). Absent everywhere else. */
+  pins?: Record<number, EffectPin>
+): ResolvedEffect[] {
   const resolveRef = (refname: string): ExprValue | undefined => {
     const v = resolvePlaceholderValue(classifyPlaceholder(refname), subjects);
     return isPrimitive(v) ? v : undefined;
@@ -1536,25 +1606,38 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
   };
 
   return (definition.effects ?? []).map((effect, index) => {
-    let holds: boolean;
-    try {
-      holds = matchesEffectWhen(effect.when, subjects, definition.name);
-    } catch (error) {
-      // A comparator regression past load-time validation. An outcome row in
-      // this state fails the run; an effect never does — it just doesn't fire.
-      return skipped(index, `condition could not be evaluated: ${getErrorMessage(error)}`);
+    const pin = pins?.[index];
+    if (pin?.mode === 'off') return skipped(index, 'switched off for this run');
+
+    // A forced effect fires whatever its condition says; it can never add an
+    // effect the definition lacks, only override this one's `when`.
+    if (pin?.mode !== 'on') {
+      let holds: boolean;
+      try {
+        holds = matchesEffectWhen(effect.when, subjects, definition.name);
+      } catch (error) {
+        // A comparator regression past load-time validation. An outcome row in
+        // this state fails the run; an effect never does — it just doesn't fire.
+        return skipped(index, `condition could not be evaluated: ${getErrorMessage(error)}`);
+      }
+      if (!holds) return skipped(index, 'condition did not hold');
     }
-    if (!holds) return skipped(index, 'condition did not hold');
+
+    // An edited gesture's references, or an edited log line, are literals —
+    // the operator is editing what gets written, not the template.
+    const literalItems = pin?.items?.map((item) => item.trim()).filter((item) => item.length > 0);
 
     if (isWardrobeEffect(effect)) {
-      return resolveWardrobeGesture(definition.name, index, effect.wardrobe, subjects, skipped);
+      const gesture = literalItems ? { ...effect.wardrobe, items: literalItems } : effect.wardrobe;
+      return resolveWardrobeGesture(definition.name, index, gesture, subjects, skipped, literalItems !== undefined);
     }
     if (isInventoryEffect(effect)) {
-      return resolveInventoryGesture(definition.name, index, effect.inventory, subjects, skipped);
+      const gesture = literalItems ? { ...effect.inventory, items: literalItems } : effect.inventory;
+      return resolveInventoryGesture(definition.name, index, gesture, subjects, skipped, literalItems !== undefined);
     }
     if (isLogEffect(effect)) {
       // A template, like an outcome message — not an expression.
-      const line = renderTemplate(effect.log, subjects).trim();
+      const line = (pin?.log !== undefined ? pin.log : renderTemplate(effect.log, subjects)).trim();
       return line.length > 0 ? { index, log: line } : skipped(index, 'log line rendered empty');
     }
     if (effect.target === undefined || effect.value === undefined) {
@@ -1564,6 +1647,8 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) return skipped(index, `target ${target.reason}`);
+
+    if (pin?.value !== undefined) return { index, target: target.target, value: pin.value };
 
     if (typeof effect.value !== 'string') {
       return { index, target: target.target, value: effect.value };
@@ -1591,11 +1676,13 @@ function resolveWardrobeGesture(
   index: number,
   gesture: CustomToolWardrobeGesture,
   subjects: EffectSubjects,
-  skipped: (index: number, reason: string) => ResolvedEffect
+  skipped: (index: number, reason: string) => ResolvedEffect,
+  /** The references are the operator's literals — not rendered as templates. */
+  literal = false
 ): ResolvedEffect {
   const items: string[] = [];
   for (const raw of gesture.items ?? []) {
-    const rendered = renderTemplate(raw, subjects).trim();
+    const rendered = (literal ? raw : renderTemplate(raw, subjects)).trim();
     if (rendered.length === 0) {
       logger.debug('Custom tool wardrobe item reference rendered empty; dropped', {
         context: CONTEXT,
@@ -1633,11 +1720,13 @@ function resolveInventoryGesture(
   index: number,
   gesture: CustomToolInventoryGesture,
   subjects: EffectSubjects,
-  skipped: (index: number, reason: string) => ResolvedEffect
+  skipped: (index: number, reason: string) => ResolvedEffect,
+  /** The references are the operator's literals — not rendered as templates. */
+  literal = false
 ): ResolvedEffect {
   const items: string[] = [];
   for (const raw of gesture.items) {
-    const rendered = renderTemplate(raw, subjects).trim();
+    const rendered = (literal ? raw : renderTemplate(raw, subjects)).trim();
     if (rendered.length === 0) {
       logger.debug('Custom tool inventory reference rendered empty; dropped', {
         context: CONTEXT,
@@ -1899,6 +1988,22 @@ async function resolveLlmConsult(
   };
 }
 
+/**
+ * Pose a definition's consult once, with a prompt given whole — the hold
+ * dialog's Re-ask (operator intervention). The same fail-soft resolution as a
+ * run's own consult: never throws.
+ */
+export function poseLlmConsult(
+  definition: QtapCustomTool,
+  prompt: string,
+  invoke: LlmInvoker | undefined
+): Promise<LlmConsultResult> {
+  if (!definition.llm) {
+    throw new CustomToolRunError(`${definition.name}: this tool consults no model`);
+  }
+  return resolveLlmConsult(definition.name, definition.llm, prompt, invoke);
+}
+
 /** A definition's roll, parsed once so a thousand draws need not re-parse it. */
 type PreparedRoll = { form: 'dice'; notation: string; parsed: DiceNotation } | { form: 'range'; range: RollRange };
 
@@ -1949,13 +2054,35 @@ function drawRoll(
   roll: PreparedRoll,
   params: ResolvedParams,
   state: CustomToolState,
-  inventory?: InventoryContext | null
-): { raw: number; value: number; dice?: DiceRollResult } {
+  inventory?: InventoryContext | null,
+  replay?: { draw?: RecordedDraw; pins?: RunPins }
+): { raw: number; value: number; dice?: DiceRollResult; draw: RecordedDraw } {
   if (roll.form === 'dice') {
-    const rolled = rollNotation(roll.parsed);
-    return { raw: rolled.total, value: rolled.total, dice: rolled };
+    const faces = replay?.pins?.dice ?? (replay?.draw?.form === 'dice' ? replay.draw.faces : undefined);
+    const rolled = faces ? diceFromFaces(definition.name, roll.parsed, faces) : rollNotation(roll.parsed);
+    // Dice carry their own modifier, so the total is both raw and value: a
+    // pinned total without its faces would make `{{dice}}` lie.
+    return { raw: rolled.total, value: rolled.total, dice: rolled, draw: { form: 'dice', faces: [...rolled.results] } };
   }
-  return rollRange(definition, roll.range, params, state, inventory);
+  const unit = replay?.draw?.form === 'range' ? replay.draw.unit : undefined;
+  const { raw, value, unit: used } = rollRange(definition, roll.range, params, state, inventory, unit, replay?.pins);
+  return { raw, value, draw: { form: 'range', unit: used } };
+}
+
+/**
+ * A dice result from given faces (a replayed draw or the operator's pin): each
+ * face clamped to [1, sides], the total their sum plus the notation's modifier.
+ * The count must match the notation — a held run's notation cannot change.
+ */
+function diceFromFaces(toolName: string, notation: DiceNotation, faces: number[]): DiceRollResult {
+  if (faces.length !== notation.count) {
+    throw new CustomToolRunError(
+      `${toolName}: ${faces.length} dice given for ${notation.count}d${notation.sides}`
+    );
+  }
+  const results = faces.map((face) => Math.min(notation.sides, Math.max(1, Math.round(face))));
+  const subtotal = results.reduce((sum, face) => sum + face, 0);
+  return { ...notation, results, subtotal, total: subtotal + notation.modifier };
 }
 
 /**
@@ -2005,14 +2132,34 @@ export async function executeCustomTool(
      */
     inventory?: InventoryContext | null;
     llmInvoke?: LlmInvoker;
+    /**
+     * Operator intervention (lib/pascal/intervention/): the random draw to
+     * replay instead of fresh randomness. Absent = a fresh draw.
+     */
+    draw?: RecordedDraw;
+    /**
+     * Operator intervention: the consult result to use instead of calling
+     * `llmInvoke`. When supplied, the invoker is never called.
+     */
+    consult?: LlmConsultResult;
+    /** Operator intervention: the fields the operator pinned. */
+    pins?: RunPins;
   }
 ): Promise<CustomToolRunResult> {
   const state = overrides?.state ?? {};
   const inventory = overrides?.inventory ?? null;
+  const pins = overrides?.pins;
   const params = resolveParams(definition, suppliedParams, state, inventory);
 
+  if (pins?.outcomeIndex !== undefined && !definition.outcomes[pins.outcomeIndex]) {
+    throw new CustomToolRunError(`${definition.name}: there is no outcome row ${pins.outcomeIndex}`);
+  }
+
   const roll = prepareRoll(definition, inventory);
-  const { raw, value, dice } = drawRoll(definition, roll, params, state, inventory);
+  const { raw, value, dice, draw } = drawRoll(definition, roll, params, state, inventory, {
+    ...(overrides?.draw ? { draw: overrides.draw } : {}),
+    ...(pins ? { pins } : {}),
+  });
   const rollForm = roll.form;
   const notation = roll.form === 'dice' ? roll.notation : undefined;
   const diceRolls = dice?.results;
@@ -2044,15 +2191,30 @@ export async function executeCustomTool(
   };
   const templateVars = { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state, inventory };
 
+  // A held run never calls the model from here: a pinned answer, or the
+  // consult it was handed, stands in. Only a Re-ask spends a call, and that
+  // goes through the dialog's own action.
+  const consult = async (spec: CustomToolLlm, prompt: string): Promise<LlmConsultResult> => {
+    if (pins?.llmAnswer) return { ok: pins.llmAnswer.ok, output: pins.llmAnswer.output, prompt };
+    if (overrides?.consult) return overrides.consult;
+    return resolveLlmConsult(definition.name, spec, prompt, overrides?.llmInvoke);
+  };
+
   let llm: LlmConsultResult | undefined;
+  let llmPromptRendered: string | undefined;
   let outcomeIndex: number;
+  let tableOutcomeIndex: number | undefined;
   let briefs: Array<string | undefined> = [];
   if (definition.llm && consultFirst) {
-    const prompt = renderTemplate(definition.llm.prompt, templateVars);
-    llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
-    outcomeIndex = pickOutcome(definition, { ...baseSubjects, llm });
+    llmPromptRendered = renderTemplate(definition.llm.prompt, templateVars);
+    llm = await consult(definition.llm, llmPromptRendered);
+    const tablePick = pickOutcome(definition, { ...baseSubjects, llm });
+    outcomeIndex = pins?.outcomeIndex ?? tablePick;
+    if (pins?.outcomeIndex !== undefined) tableOutcomeIndex = tablePick;
   } else {
-    outcomeIndex = pickOutcome(definition, baseSubjects);
+    const tablePick = pickOutcome(definition, baseSubjects);
+    outcomeIndex = pins?.outcomeIndex ?? tablePick;
+    if (pins?.outcomeIndex !== undefined) tableOutcomeIndex = tablePick;
     if (definition.llm) {
       const winner = definition.outcomes[outcomeIndex];
       // The brief is written before the consult, so it quotes only what the
@@ -2067,11 +2229,11 @@ export async function executeCustomTool(
         state: winner.state,
         hasBrief: brief !== undefined,
       });
-      const prompt = renderTemplate(definition.llm.prompt, {
+      llmPromptRendered = renderTemplate(definition.llm.prompt, {
         ...templateVars,
         outcome: { state: winner.state, index: outcomeIndex, ...(brief !== undefined ? { brief } : {}) },
       });
-      llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
+      llm = await consult(definition.llm, llmPromptRendered);
     }
   }
 
@@ -2083,9 +2245,12 @@ export async function executeCustomTool(
   // in a message or effect still resolves.
   const winningBrief =
     briefs[outcomeIndex] ?? (outcome.brief !== undefined ? renderTemplate(outcome.brief, templateVars) : undefined);
-  const winning = { state: outcome.state, index: outcomeIndex, ...(winningBrief !== undefined ? { brief: winningBrief } : {}) };
+  // A pinned state is the state the run announces, and the one effects test.
+  const finalState = pins?.state ?? outcome.state;
+  const winning = { state: finalState, index: outcomeIndex, ...(winningBrief !== undefined ? { brief: winningBrief } : {}) };
 
-  const message = renderTemplate(outcome.message, { ...templateVars, llm, outcome: winning });
+  // A pinned message is the operator's literal text: no placeholders re-rendered in it.
+  const message = pins?.message ?? renderTemplate(outcome.message, { ...templateVars, llm, outcome: winning });
 
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
@@ -2093,7 +2258,7 @@ export async function executeCustomTool(
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { ...templateVars, llm, outcome: winning })
+    ? (pins?.chipLabel ?? renderTemplate(definition.chipLabel, { ...templateVars, llm, outcome: winning }))
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written
@@ -2106,7 +2271,7 @@ export async function executeCustomTool(
   };
   const effects =
     definition.effects && definition.effects.length > 0
-      ? resolveEffects(definition, effectSubjects)
+      ? resolveEffects(definition, effectSubjects, pins?.effects)
       : undefined;
 
   const visibility: Visibility =
@@ -2124,7 +2289,7 @@ export async function executeCustomTool(
     raw,
     diceRolls,
     value,
-    state: outcome.state,
+    state: finalState,
     outcomeIndex,
     message,
     diceBreakdown,
@@ -2133,6 +2298,9 @@ export async function executeCustomTool(
     ...(llm ? { llm } : {}),
     ...(chipLabel !== undefined ? { chipLabel } : {}),
     ...(effects ? { effects } : {}),
+    draw,
+    ...(llmPromptRendered !== undefined ? { llmPromptRendered } : {}),
+    ...(tableOutcomeIndex !== undefined ? { tableOutcomeIndex } : {}),
   };
 }
 

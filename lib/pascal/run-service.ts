@@ -25,6 +25,12 @@
  *      ever applied.
  *   3. Pascal never announces a run that did not happen. A refused run comes
  *      back as `{ ok: false }` and the entrance hands it to Prospero.
+ *   4. Operator intervention: an intervenable run reached by a model or a
+ *      trigger phrase is HELD between the deal and the effects, until the
+ *      operator deals it (perhaps changed), lets it stand, or vetoes it. A
+ *      veto returns `{ ok: 'vetoed' }` before any effect or post. Holds open
+ *      only in the parent, never in the job child or an autonomous room
+ *      (`lib/pascal/intervention/`).
  *
  * Job-child safe: reads pass through, the writes go through the buffered
  * `getRepositories()` proxy, and nothing here reads back what it wrote.
@@ -40,15 +46,25 @@ import {
   type CustomToolRunResult,
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
-import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { applyCustomToolEffects, type AppliedEffect } from '@/lib/pascal/side-effects';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { flattenProgressions } from '@/lib/progressions/engine';
 import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import { loadInventoryContext, type LoadedInventoryContext } from '@/lib/inventory/context';
 import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
-import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
+import { buildPascalResultContent, postPascalResult, type PascalMeta } from '@/lib/services/pascal/writer';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/chat.types';
+import { currentTurnKeepAlive, currentTurnStopSignal } from '@/lib/chat/turn-control';
+import { isIntervenable } from '@/lib/pascal/intervention/eligibility';
+import { hold } from '@/lib/pascal/intervention/registry';
+import {
+  changedFields,
+  factsOf,
+  presentationFor,
+  type RecomputedRun,
+  type RunPresentation,
+  type RunSnapshot,
+} from '@/lib/pascal/intervention/recompute';
 
 const CONTEXT = 'pascal.run-service';
 
@@ -79,6 +95,12 @@ export interface RunCustomToolParams {
   whisperTargetIds: string[] | null;
   /** Provenance for pascalMeta. */
   invokedBy: 'llm' | 'user' | 'trigger';
+  /**
+   * Whether this entrance may hold the run for the operator (operator
+   * intervention). Entrances decide; the service checks the rest — the
+   * definition, the chat settings, the process and the chat type.
+   */
+  mayHold: boolean;
   /** Recorded in pascalMeta when set. */
   callerParticipantId: string | null;
   /** The phrase that fired a triggered run, as written in the definition. */
@@ -98,7 +120,9 @@ export interface RunCustomToolParams {
 
 export type RunCustomToolOutcome =
   | { ok: true; result: CustomToolRunResult; posted: MessageEvent | null; appliedEffects: AppliedEffect[] }
-  | { ok: false; reason: string; whisper: boolean };
+  | { ok: false; reason: string; whisper: boolean }
+  /** The operator set the table aside: nothing was applied and nothing posted. */
+  | { ok: 'vetoed' };
 
 /**
  * Deal one hand: cascade → execute → effects → Pascal's post. Resolves the group
@@ -120,8 +144,9 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
   // The group tier is scoped to the rolling character's own groups, or skipped
   // for a run nobody made rather than borrowing an arbitrary participant's.
   let cascade: StateCascadeResult | null = null;
+  let chat: ChatMetadata | null = params.chat ?? null;
   try {
-    const chat = params.chat ?? (await getRepositories().chats.findById(chatId));
+    chat = chat ?? (await getRepositories().chats.findById(chatId));
     if (chat) {
       cascade = await resolveStateCascade({
         chat,
@@ -169,6 +194,32 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
     throw error;
   }
 
+  // Operator intervention: the deal is done, nothing is applied or posted yet.
+  let presentation: RunPresentation = presentationFor(entry.definition, result.visibility);
+  let intervention: PascalMeta['intervention'];
+  if (await mayHoldRun(params, chat)) {
+    const held = await holdForOperator(params, {
+      characterName,
+      result,
+      snapshot: {
+        params: params.parameters ?? null,
+        private: params.private,
+        metadata,
+        progress,
+        now: nowMs,
+        character: characterName,
+        state: cascade?.merged ?? {},
+        inventory,
+      },
+    });
+    if (held.kind === 'veto') return { ok: 'vetoed' };
+    if (held.kind === 'deal') {
+      result = held.run.result;
+      presentation = held.run.presentation;
+      intervention = held.record;
+    }
+  }
+
   // The applier never throws. `characterId` null → metadata, progress and
   // wardrobe effects skip.
   const appliedEffects = result.effects?.length
@@ -189,7 +240,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
   const whispered = result.visibility === 'whisper';
   const targetParticipantIds = whispered && params.whisperTargetIds?.length ? params.whisperTargetIds : null;
 
-  const toolTitle = displayTitle(entry.definition);
+  const toolTitle = presentation.title;
   const { content, opaqueContent } = buildPascalResultContent({
     toolTitle,
     ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
@@ -200,7 +251,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
   // place. Still Pascal's record (systemSender, pascalMeta, the chip) — only the
   // face and name on the bubble, and the speaker tag the model reads, change.
   // A run nobody made has no one to speak it, so Pascal does.
-  const announcerCharacterId = entry.definition.announceAsCharacter === true ? characterId : null;
+  const announcerCharacterId = presentation.announcer === 'character' ? characterId : null;
 
   const posted = await postPascalResult({
     chatId,
@@ -228,6 +279,7 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
       invokedBy: params.invokedBy,
       ...(params.invokedBy === 'trigger' && params.triggerPhrase ? { triggerPhrase: params.triggerPhrase } : {}),
       ...(params.callerParticipantId ? { callerParticipantId: params.callerParticipantId } : {}),
+      ...(intervention ? { intervention } : {}),
     },
   });
 
@@ -245,6 +297,117 @@ export async function runCustomTool(params: RunCustomToolParams): Promise<RunCus
   });
 
   return { ok: true, result, posted, appliedEffects };
+}
+
+/**
+ * Whether this run may be held for the operator. Every "no" is logged at
+ * debug with its reason; only an intervenable definition is worth a line.
+ */
+async function mayHoldRun(params: RunCustomToolParams, chat: ChatMetadata | null): Promise<boolean> {
+  const { entry, chatId } = params;
+  if (!isIntervenable(entry.definition)) return false;
+
+  const skip = (reason: string) => {
+    logger.debug('Custom tool run not held', { context: CONTEXT, chatId, tool: entry.definition.name, reason });
+    return false;
+  };
+  if (!params.mayHold) return skip('this entrance never holds (the operator\'s own run)');
+  // The job child has nobody watching and cannot wait on the parent's dialog.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') return skip('running in the job child');
+  if (chat?.chatType === 'autonomous') return skip('an autonomous room');
+
+  try {
+    const settings = await getRepositories().chatSettings.findByUserId(params.userId);
+    if (settings?.customTools === false) return skip('custom tools are off');
+    if (settings?.customToolIntervention === false) return skip('the operator switched intervention off');
+  } catch (error) {
+    // Unreadable settings: the default is on, and a held run is recoverable
+    // (the operator can let it stand), where a skipped hold is not.
+    logger.debug('Custom tool hold: chat settings unreadable, holding by default', {
+      context: CONTEXT,
+      chatId,
+      error: getErrorMessage(error),
+    });
+  }
+  return true;
+}
+
+type HoldOutcome =
+  | { kind: 'veto' }
+  | { kind: 'as-rolled' }
+  | { kind: 'deal'; run: RecomputedRun; record: PascalMeta['intervention'] };
+
+/**
+ * Hold the dealt run until the operator answers. A deal that changes nothing
+ * is an as-rolled deal and records nothing — the badge marks a change, and
+ * "I looked and let it stand" is not one.
+ */
+async function holdForOperator(
+  params: RunCustomToolParams,
+  dealt: { characterName: string | null; result: CustomToolRunResult; snapshot: RunSnapshot }
+): Promise<HoldOutcome> {
+  const { entry, chatId } = params;
+  const { result, snapshot } = dealt;
+  const signal = currentTurnStopSignal();
+  const keepAlive = currentTurnKeepAlive();
+
+  const { decision } = hold(
+    {
+      chatId,
+      userId: params.userId,
+      entrance: params.invokedBy === 'trigger' ? 'trigger' : 'llm',
+      characterId: params.characterId,
+      characterName: dealt.characterName,
+      ...(params.triggerPhrase ? { triggerPhrase: params.triggerPhrase } : {}),
+      definition: entry.definition,
+      definitionTier: entry.tier,
+      definitionMountId: entry.mountPointId,
+      snapshot,
+      draw: result.draw,
+      baseline: result,
+      consults: result.llm ? [result.llm] : [],
+    },
+    { ...(signal ? { signal } : {}), ...(keepAlive ? { keepAlive } : {}) }
+  );
+
+  const answer = await decision;
+  if (answer.kind === 'veto') {
+    logger.info('Custom tool run set aside by the operator', {
+      context: CONTEXT,
+      chatId,
+      tool: entry.definition.name,
+      invokedBy: params.invokedBy,
+      cause: answer.cause,
+    });
+    return { kind: 'veto' };
+  }
+  if (answer.kind === 'as-rolled') return { kind: 'as-rolled' };
+
+  const before = factsOf(entry.definition, result, presentationFor(entry.definition, result.visibility));
+  const after = factsOf(entry.definition, answer.run.result, answer.run.presentation);
+  const changed = changedFields(before, after);
+  logger.info('Custom tool run dealt by the operator', {
+    context: CONTEXT,
+    chatId,
+    tool: entry.definition.name,
+    changed,
+    reasks: answer.reasks,
+    staleAnswer: answer.run.staleAnswer,
+  });
+  if (changed.length === 0) return { kind: 'as-rolled' };
+
+  return {
+    kind: 'deal',
+    run: answer.run,
+    record: {
+      resolvedAt: new Date().toISOString(),
+      decision: 'deal',
+      changed,
+      dealt: before,
+      ...(answer.reasks > 0 ? { reasks: answer.reasks } : {}),
+      ...(answer.run.staleAnswer ? { staleAnswer: true } : {}),
+    },
+  };
 }
 
 /**

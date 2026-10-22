@@ -80,6 +80,7 @@ import {
 } from '@/components/inventory/inventory-reference-picker'
 import { useInventoryVantageItems } from '@/lib/hooks/use-inventory-vantage-items'
 import { inventoryLabel } from '@/lib/inventory/resolve'
+import { InterventionToggle } from './InterventionToggle'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
@@ -251,6 +252,14 @@ export function SideEffectsSection({
                   </select>
                 )}
               </label>
+              {draft.intervention.enabled && (
+                <InterventionToggle
+                  shown={effect.intervene !== false}
+                  onChange={(next) => updateEffect(effect.id, { intervene: next ? undefined : false })}
+                  label="Show this effect in the hold dialog"
+                  disabled={disabled}
+                />
+              )}
               <button
                 type="button"
                 className="qt-button qt-button-ghost qt-button-sm ml-auto"

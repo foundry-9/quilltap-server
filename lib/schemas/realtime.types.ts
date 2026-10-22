@@ -53,6 +53,12 @@ export const REALTIME_TOPICS = [
    * selection made, a round closed. The board re-reads the chat's round.
    */
   'storytellerRounds',
+  /**
+   * Custom-tool runs held for the operator (Pascal operator intervention),
+   * scoped by *chat* id: a hold opened or settled. The dialog re-reads the
+   * chat's pending holds.
+   */
+  'customToolInterventions',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

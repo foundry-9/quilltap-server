@@ -62,6 +62,7 @@ interface UseChatSettingsReturn {
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleCustomToolsChange: (value: boolean) => Promise<void>
   handleCustomToolTriggersChange: (value: boolean) => Promise<void>
+  handleCustomToolInterventionChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
@@ -377,6 +378,22 @@ export function useChatSettings(): UseChatSettingsReturn {
         { customToolTriggers: value },
         'Failed to update trigger phrase setting',
         'Failed to update trigger phrase setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
+   * Update custom-tool intervention (hold intervenable rolls) setting
+   */
+  const handleCustomToolInterventionChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { customToolIntervention: value },
+        'Failed to update roll intervention setting',
+        'Failed to update roll intervention setting'
       )
     },
     [settings, patchChatSettings]
@@ -789,6 +806,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAutoDetectRngChange,
     handleCustomToolsChange,
     handleCustomToolTriggersChange,
+    handleCustomToolInterventionChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,

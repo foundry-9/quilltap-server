@@ -77,6 +77,7 @@ import {
   encodeRoundOpenEvent,
   safeEnqueue,
   safeClose,
+  encodeKeepAlive,
 } from './streaming.service'
 import { lowerToolEffect, type ToolEffect } from '@/lib/tools/effects'
 import { parseCarinaQuery } from '@/lib/chat/carina-parser'
@@ -323,7 +324,7 @@ export async function handleSendMessage(
         } catch (error) {
           handleStreamError(error, controller, encoder, { chatId, ledger })
         }
-      })
+      }, { keepAlive: () => safeEnqueue(controller, encodeKeepAlive(encoder)) })
     },
   })
 }
@@ -501,7 +502,7 @@ export async function handleStorytellerRun(
         } catch (error) {
           handleStreamError(error, controller, encoder, { chatId, ledger })
         }
-      })
+      }, { keepAlive: () => safeEnqueue(controller, encodeKeepAlive(encoder)) })
     },
   })
 }

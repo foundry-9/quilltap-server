@@ -22,6 +22,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { resolveCustomToolRoster, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import { runCustomTool, type RunCustomToolOutcome } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
+import { vetoResultFor } from '@/lib/pascal/intervention/veto-result';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
 import { validateRunCustomInput, type RunCustomToolInput, type RunCustomToolOutput } from '../run-custom-tool';
 
@@ -92,6 +93,33 @@ async function reportFailure(
   });
 
   return failure(reason, toolName);
+}
+
+/**
+ * Whether the caller may be told the chat is a game: a user-controlled seat, or
+ * a character granted `systemTransparency` (resolved as Carina resolves an
+ * asker's). Any failed read counts as plain, so a failure can never tell a
+ * character it is in a game.
+ */
+async function callerKnowsItIsAGame(context: RunCustomToolContext): Promise<boolean> {
+  try {
+    const repos = getRepositories();
+    if (context.callerParticipantId) {
+      const chat = await repos.chats.findById(context.chatId);
+      const seat = chat?.participants.find((p) => p.id === context.callerParticipantId);
+      if (seat?.controlledBy === 'user') return true;
+    }
+    if (!context.characterId) return false;
+    const character = await repos.characters.findByIdRaw(context.characterId);
+    return character?.systemTransparency === true;
+  } catch (error) {
+    logger.debug('run_custom veto: caller transparency unreadable, treating as plain', {
+      context: CONTEXT,
+      chatId: context.chatId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
 }
 
 /**
@@ -186,6 +214,7 @@ export async function executeRunCustomTool(
       // whisper filter exempts (see app/salon/[id]/whisper-visibility.ts).
       whisperTargetIds: context.callerParticipantId ? [context.callerParticipantId] : null,
       invokedBy: 'llm',
+      mayHold: true,
       callerParticipantId: context.callerParticipantId ?? null,
       nowMs,
       ...turnContainersOf(context),
@@ -193,6 +222,19 @@ export async function executeRunCustomTool(
   } catch (error) {
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
     return reportFailure(context, toolName, getErrorMessage(error), whisper);
+  }
+
+  if (outcome.ok === 'vetoed') {
+    // The operator set the table aside. No Prospero bubble — nothing failed —
+    // and nothing in the result says a run was held or by whom (spec I13).
+    const transparent = await callerKnowsItIsAGame(context);
+    logger.info('run_custom set aside by the operator', {
+      context: CONTEXT,
+      chatId: context.chatId,
+      tool: toolName,
+      transparent,
+    });
+    return failure(vetoResultFor(transparent), toolName);
   }
 
   if (!outcome.ok) {

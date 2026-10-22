@@ -195,6 +195,7 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
         characterName,
         whisperTargetIds,
         invokedBy: 'trigger',
+        mayHold: true,
         callerParticipantId: speaker.participantId,
         triggerPhrase: hit.phrase,
         nowMs,
@@ -205,6 +206,17 @@ async function runTriggered(params: RunTriggeredCustomToolsParams): Promise<Mess
         reason: getErrorMessage(error),
         whisper: entry.definition.defaultVisibility === 'whisper',
       };
+    }
+
+    if (outcome.ok === 'vetoed') {
+      // The operator set the table aside: a run that posted nothing, said nowhere.
+      logger.debug('Triggered custom tool set aside by the operator', {
+        context: CONTEXT,
+        chatId,
+        tool: hit.tool,
+        phrase: hit.phrase,
+      });
+      continue;
     }
 
     if (!outcome.ok) {

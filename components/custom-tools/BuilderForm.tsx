@@ -44,7 +44,9 @@ import {
   type NumberOrParamValue,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
+import type { InterventionFieldKey } from '@/lib/pascal/custom-tool.types'
 import { GateSection } from './GateSection'
+import { InterventionToggle, ToolFieldInterventionToggle } from './InterventionToggle'
 import { NumberOrParamField } from './NumberOrParamField'
 import { TriggerPhrasesField } from './TriggerPhrasesField'
 
@@ -89,6 +91,17 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
     .map((i) => i.message)
 
   const update = (partial: Partial<ToolDraft>) => onChange({ ...draft, ...partial })
+
+  const intervening = draft.intervention.enabled
+  const fieldToggle = (fieldKey: InterventionFieldKey, label: string) => (
+    <ToolFieldInterventionToggle
+      draft={draft}
+      onChange={onChange}
+      fieldKey={fieldKey}
+      label={label}
+      disabled={disabled}
+    />
+  )
 
   const handleTitleChange = (title: string) => {
     if (nameTracksTitle) {
@@ -220,9 +233,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         <h2 className="qt-card-title text-sm">The contrivance itself</h2>
 
         <div>
-          <label htmlFor="wb-title" className="qt-label">
-            Title
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="wb-title" className="qt-label">
+              Title
+            </label>
+            {fieldToggle('title', 'Show the title in the hold dialog')}
+          </div>
           <input
             id="wb-title"
             type="text"
@@ -239,9 +255,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         </div>
 
         <div>
-          <label htmlFor="wb-chip-label" className="qt-label">
-            Chip label
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="wb-chip-label" className="qt-label">
+              Chip label
+            </label>
+            {fieldToggle('chipLabel', 'Show the chip label in the hold dialog')}
+          </div>
           <input
             id="wb-chip-label"
             type="text"
@@ -329,6 +348,7 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             />
             Reveal the odds
           </label>
+          <span className="flex items-center gap-2">
           <label className="flex items-center gap-2">
             Results
             <select
@@ -342,6 +362,9 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
               <option value="whisper">whispered</option>
             </select>
           </label>
+          {fieldToggle('visibility', 'Show the visibility in the hold dialog')}
+          </span>
+          <span className="flex items-center gap-2">
           <label
             className="flex items-center gap-2"
             title="On: the character who rolled announces the outcome under their own name and face. A roll nobody in particular made is still Pascal's to announce."
@@ -355,7 +378,31 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             />
             The character announces it
           </label>
+            {fieldToggle('announcer', 'Show the announcer in the hold dialog')}
+          </span>
+          <label
+            className="flex items-center gap-2"
+            title="On: each run a character or a trigger phrase reaches waits for you before Pascal announces it. The model is never told. A character who can read this store can read the flag."
+          >
+            <input
+              type="checkbox"
+              className="qt-checkbox"
+              checked={intervening}
+              onChange={(e) =>
+                onChange({ ...draft, intervention: { ...draft.intervention, enabled: e.target.checked } })
+              }
+              disabled={disabled}
+            />
+            Let me take a hand in each roll
+          </label>
         </div>
+        {intervening && (
+          <p className="qt-hint">
+            With this on, each run a character or a trigger phrase reaches is held at the table until you have
+            looked it over; only then does Pascal announce it. The model is never told. Mind that a character who
+            can read this store can read the flag.
+          </p>
+        )}
 
         <TriggerPhrasesField
           triggers={draft.triggers}
@@ -430,6 +477,14 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
                   <option value="string">string</option>
                   <option value="boolean">boolean</option>
                 </select>
+                {intervening && (
+                  <InterventionToggle
+                    shown={param.intervene !== false}
+                    onChange={(next) => updateParam(param.id, { intervene: next ? undefined : false })}
+                    label={`Show ${param.name || 'this parameter'} in the hold dialog`}
+                    disabled={disabled}
+                  />
+                )}
                 <button
                   type="button"
                   className="qt-button qt-button-ghost qt-button-sm ml-auto"
@@ -521,7 +576,10 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
       {/* Roll */}
       <section className="qt-card p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="qt-card-title text-sm">The roll</h2>
+          <h2 className="qt-card-title text-sm flex items-center gap-2">
+            The roll
+            {fieldToggle('roll', 'Show the roll in the hold dialog')}
+          </h2>
           <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Roll form">
             {(['range', 'dice', 'inventory'] as const).map((form) => (
               <button
@@ -632,6 +690,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
               />
               Round the final value
             </label>
+            {intervening && (
+              <div className="flex items-center gap-2 text-sm">
+                Final value after the multiplier, offset and rounding
+                {fieldToggle('value', 'Show the final value in the hold dialog')}
+              </div>
+            )}
             {(rollFieldError('min') || rollFieldError('max') || rollFieldError('multiplier') || rollFieldError('offset')) && (
               <p className="text-xs qt-text-destructive">
                 {rollFieldError('min') ?? rollFieldError('max') ?? rollFieldError('multiplier') ?? rollFieldError('offset')}
@@ -661,9 +725,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
         {draft.llmEnabled ? (
           <div className="space-y-3">
             <div>
-              <label htmlFor="wb-llm-prompt" className="qt-label">
-                The question
-              </label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="wb-llm-prompt" className="qt-label">
+                  The question
+                </label>
+                {fieldToggle('llmPrompt', 'Show the oracle’s question in the hold dialog')}
+              </div>
               <textarea
                 id="wb-llm-prompt"
                 value={draft.llmPrompt}
@@ -707,9 +774,12 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             </div>
 
             <div>
-              <label htmlFor="wb-llm-max-output" className="qt-label">
-                Answer cap
-              </label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="wb-llm-max-output" className="qt-label">
+                  Answer cap
+                </label>
+                {fieldToggle('llmAnswer', 'Show the oracle’s answer in the hold dialog')}
+              </div>
               <input
                 id="wb-llm-max-output"
                 type="number"

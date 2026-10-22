@@ -1004,7 +1004,20 @@
             },
             "invokedBy": { "type": "string", "enum": ["llm", "user", "trigger"], "description": "Whether the model reached for the tool, the user ran it themselves, or a trigger phrase said in the chat set it off." },
             "triggerPhrase": { "type": "string", "description": "The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'." },
-            "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
+            "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." },
+            "intervention": {
+              "type": "object",
+              "description": "Operator intervention: the run was held for the operator and changed before it was announced. The other pascalMeta fields describe the run as announced; this records what was first dealt and which fields changed. Absent when the run was never held or was let stand as rolled. Operator-facing only; no model reads it.",
+              "required": ["resolvedAt", "decision", "changed", "dealt"],
+              "properties": {
+                "resolvedAt": { "type": "string", "description": "ISO timestamp of the operator's decision." },
+                "decision": { "type": "string", "enum": ["deal", "as-rolled"] },
+                "changed": { "type": "array", "items": { "type": "string" }, "description": "Changed field keys: 'params.<name>', 'roll', 'value', 'llmAnswer', 'outcome', 'message', 'state', 'chipLabel', 'title', 'visibility', 'announcer', 'effects.<index>'." },
+                "dealt": { "type": "object", "description": "The run as first dealt: params, raw, diceRolls?, value, outcomeIndex, state, message, chipLabel?, toolTitle?, visibility, announcer, llm?, effects?." },
+                "reasks": { "type": "integer", "description": "Consult calls made from the hold dialog." },
+                "staleAnswer": { "type": "boolean", "description": "Dealt with a consult answer given to a different prompt than the one in force." }
+              }
+            }
           }
         },
         "routeTrail": {

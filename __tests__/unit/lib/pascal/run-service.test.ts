@@ -75,6 +75,7 @@ function params(overrides: Partial<RunCustomToolParams> = {}): RunCustomToolPara
     metadata: {},
     whisperTargetIds: null,
     invokedBy: 'llm',
+    mayHold: false,
     callerParticipantId: null,
     ...overrides,
   };

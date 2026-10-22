@@ -7,6 +7,7 @@ import {
   DEFAULT_AUTO_DETECT_RNG,
   DEFAULT_CUSTOM_TOOLS,
   DEFAULT_CUSTOM_TOOL_TRIGGERS,
+  DEFAULT_CUSTOM_TOOL_INTERVENTION,
   type AutomationKey,
 } from './types'
 
@@ -15,6 +16,7 @@ export interface AutomationSettingsProps {
   saving: boolean
   onAutoDetectRngChange: (value: boolean) => Promise<void>
   onCustomToolTriggersChange: (value: boolean) => Promise<void>
+  onCustomToolInterventionChange: (value: boolean) => Promise<void>
 }
 
 /** One row's state: its value, its writer, and whether it is dead right now. */
@@ -34,6 +36,7 @@ export function AutomationSettings({
   saving,
   onAutoDetectRngChange,
   onCustomToolTriggersChange,
+  onCustomToolInterventionChange,
 }: AutomationSettingsProps) {
   const customToolsOn = settings.customTools ?? DEFAULT_CUSTOM_TOOLS
 
@@ -45,6 +48,11 @@ export function AutomationSettings({
     customToolTriggers: {
       value: settings.customToolTriggers ?? DEFAULT_CUSTOM_TOOL_TRIGGERS,
       onChange: onCustomToolTriggersChange,
+      disabled: !customToolsOn,
+    },
+    customToolIntervention: {
+      value: settings.customToolIntervention ?? DEFAULT_CUSTOM_TOOL_INTERVENTION,
+      onChange: onCustomToolInterventionChange,
       disabled: !customToolsOn,
     },
   }

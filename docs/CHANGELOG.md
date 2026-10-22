@@ -4,6 +4,18 @@
 
 ### 4.11-dev
 
+#### Feature: operator intervention in Pascal custom tools
+
+- A custom tool can be marked intervenable: top-level `intervention: { enabled, fields? }` and per-member `intervene` flags on parameters and effects, in the Zod schema, the published JSON Schema and the Workbench draft. Workbench gains a "Let me take a hand in each roll" toggle, per-field hand toggles, and a library marker.
+- `runCustomTool` takes `mayHold`. `run_custom` and trigger phrases pass `true`; the popup passes `false`. An intervenable run is held after the deal and before effects and the post, but only in the parent process, outside autonomous rooms, and with `chatSettings.customToolIntervention` on (new column, default on, migration `add-custom-tool-intervention-field-v1`, Settings → Chat → Automation).
+- New `lib/pascal/intervention/`: a `processSingleton` hold registry (first resolve wins, no timeout, Stop vetoes, keep-alive pings through the turn's new `keepAlive` hook in `turn-control.ts`), the overrides schema and hidden-field check, a pure recompute, and the veto wording.
+- `executeCustomTool` returns the random draw it used (the unit draw for ranges, the faces for dice) and accepts `draw`, `consult` and `pins`, so a held run is recomputed by the same engine without rerolling or calling the model.
+- New actions on `/api/v1/chats/[id]/custom-tools`: `GET ?action=interventions`, `POST ?action=intervention-preview|intervention-reask|intervention-resolve`. An override naming a hidden field is a 400; a second resolve is a 409.
+- New realtime topic `customToolInterventions` and query key `customTools.interventions(chatId)`. The Salon mounts `CustomToolInterventionDialog`, which reopens after a reload or in a second tab and queues several holds.
+- A veto posts nothing and applies nothing. `run_custom` gets "The tool did not run." for a plain character and the "table is closed" wording for a `systemTransparency` character or a user-controlled seat.
+- A changed deal records `pascalMeta.intervention` (what was dealt, which fields changed, Re-ask count, stale-answer flag). An as-rolled decision, or a deal that changed nothing, records nothing. The Pascal chip shows a hand badge with a dealt → final tooltip. No model-facing path reads `pascalMeta`.
+- New `qt-intervention*` / `qt-intervene-toggle*` classes in `_intervention.css`, mirrored to theme-storybook 1.0.79.
+
 #### Fix: every Salon LLM call reaches the LLM Inspector
 
 - `streamMessage` (`lib/services/chat-message/streaming.service.ts`) writes one log row per call however it ends. A call that throws is logged with its error and partial content; one its consumer abandons is logged with a note. Before, only calls that reached a terminal chunk were logged, so a refused or stalled primary never appeared beside the failover that replaced it.

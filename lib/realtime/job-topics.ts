@@ -142,6 +142,9 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // Storyteller rounds never run in the job child; the round service
   // publishes them from the parent.
   storytellerRounds: [],
+  // Holds never open in the job child (autonomous runs go ahead as rolled);
+  // the registry publishes from the parent.
+  customToolInterventions: [],
 };
 
 /**

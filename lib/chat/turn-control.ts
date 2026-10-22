@@ -43,6 +43,12 @@ interface TurnControlEntry {
   /** Resolves when the stream's work has finished, stopped or not. */
   readonly settled: Promise<void>
   readonly settle: () => void
+  /**
+   * Send one SSE keep-alive ping down this stream; false once it has closed.
+   * For work that waits a long time inside a turn with nothing to say — a
+   * custom-tool run held for the operator (lib/pascal/intervention/).
+   */
+  readonly keepAlive?: () => boolean
 }
 
 interface TurnControlState {
@@ -60,7 +66,11 @@ const state = processSingleton<TurnControlState>('chat.turnControl', () => ({
  * awaits inherits the handle; it is unregistered (and its `settled` promise
  * resolved) when `fn` finishes, however it finishes.
  */
-export async function runWithTurnControl<T>(chatId: string, fn: () => Promise<T>): Promise<T> {
+export async function runWithTurnControl<T>(
+  chatId: string,
+  fn: () => Promise<T>,
+  options: { keepAlive?: () => boolean } = {}
+): Promise<T> {
   let settle: () => void = () => {}
   const settled = new Promise<void>((resolve) => { settle = resolve })
   const entry: TurnControlEntry = {
@@ -69,6 +79,7 @@ export async function runWithTurnControl<T>(chatId: string, fn: () => Promise<T>
     handRaised: false,
     settled,
     settle,
+    ...(options.keepAlive ? { keepAlive: options.keepAlive } : {}),
   }
 
   let entries = state.byChat.get(chatId)
@@ -100,6 +111,14 @@ export async function runWithTurnControl<T>(chatId: string, fn: () => Promise<T>
  */
 export function currentTurnStopSignal(): AbortSignal | undefined {
   return state.als.getStore()?.controller.signal
+}
+
+/**
+ * The keep-alive ping of the stream this code is running inside, or undefined
+ * outside a registered Salon stream (or one registered without a pinger).
+ */
+export function currentTurnKeepAlive(): (() => boolean) | undefined {
+  return state.als.getStore()?.keepAlive
 }
 
 /** Has the operator hard-stopped the stream this code is running inside? */

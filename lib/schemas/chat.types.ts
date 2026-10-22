@@ -569,6 +569,45 @@ export const MessageEventSchema = z.object({
     /** The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'. */
     triggerPhrase: z.string().optional(),
     callerParticipantId: UUIDSchema.optional(),
+    /**
+     * Operator intervention: the run was held for the operator and changed
+     * before it was announced. The top-level fields above describe the run AS
+     * ANNOUNCED; this records what was first dealt and which fields changed
+     * (`params.<name>`, `roll`, `value`, `llmAnswer`, `outcome`, `message`,
+     * `state`, `chipLabel`, `title`, `visibility`, `announcer`,
+     * `effects.<index>`). Absent when the run was never held, or was let
+     * stand as rolled; a veto posts nothing at all. Operator-facing only:
+     * no model-facing path reads `pascalMeta`.
+     */
+    intervention: z.object({
+      resolvedAt: z.string(),
+      decision: z.enum(['deal', 'as-rolled']),
+      changed: z.array(z.string()),
+      dealt: z.object({
+        params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+        raw: z.number(),
+        diceRolls: z.array(z.number()).optional(),
+        value: z.number(),
+        outcomeIndex: z.number(),
+        state: z.enum(['success', 'partial', 'failure', 'info']),
+        message: z.string(),
+        chipLabel: z.string().optional(),
+        toolTitle: z.string().optional(),
+        visibility: z.enum(['public', 'whisper']),
+        announcer: z.enum(['pascal', 'character']),
+        llm: z.object({ ok: z.boolean(), output: z.string(), prompt: z.string() }).optional(),
+        effects: z.array(z.object({
+          index: z.number(),
+          fired: z.boolean(),
+          target: z.string(),
+          next: z.unknown().optional(),
+        })).optional(),
+      }),
+      /** Consult calls made from the dialog. */
+      reasks: z.number().int().optional(),
+      /** Dealt with a consult answer given to a different prompt than the one in force. */
+      staleAnswer: z.boolean().optional(),
+    }).optional(),
   }).nullable().optional(),
   /**
    * The Courier: when non-null, this message is a placeholder for a manual /

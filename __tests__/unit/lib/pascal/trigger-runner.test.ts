@@ -222,3 +222,14 @@ describe('runTriggeredCustomTools — a storyteller turn’s effect ceiling (D9)
     expect(await runTriggeredCustomTools(params({ effectCeiling: 'write' }))).toHaveLength(1);
   });
 });
+
+describe('runTriggeredCustomTools — operator intervention', () => {
+  it('lets the run hold, and treats a veto as a run that posted nothing', async () => {
+    runMock.mockResolvedValue({ ok: 'vetoed' });
+    const onPosted = jest.fn();
+    expect(await runTriggeredCustomTools(params({ onPosted }))).toEqual([]);
+    expect(runMock.mock.calls[0][0].mayHold).toBe(true);
+    expect(onPosted).not.toHaveBeenCalled();
+    expect(prosperoMock).not.toHaveBeenCalled();
+  });
+});

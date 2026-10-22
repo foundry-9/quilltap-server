@@ -79,8 +79,29 @@ export interface Message {
       next: unknown
       tier?: 'chat' | 'project' | 'group' | 'general'
     }>
-    invokedBy: 'llm' | 'user'
+    invokedBy: 'llm' | 'user' | 'trigger'
     callerParticipantId?: string
+    /** Operator intervention: what was first dealt and which fields the operator changed. Operator-facing only — the "adjusted" badge. */
+    intervention?: {
+      resolvedAt: string
+      decision: 'deal' | 'as-rolled'
+      changed: string[]
+      dealt: {
+        params: Record<string, number | string | boolean>
+        raw: number
+        diceRolls?: number[]
+        value: number
+        outcomeIndex: number
+        state: 'success' | 'partial' | 'failure' | 'info'
+        message: string
+        chipLabel?: string
+        toolTitle?: string
+        visibility: 'public' | 'whisper'
+        announcer: 'pascal' | 'character'
+      }
+      reasks?: number
+      staleAnswer?: boolean
+    }
   } | null
   /** Host structured payload. On turn-pass records (systemKind='turn-pass'), participantId names the character/participant who passed — read by the client Skip-button guard. */
   hostEvent?: {

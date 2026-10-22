@@ -320,6 +320,7 @@ Cast sizes:
 
 - **Custom tools offered to models**: Yes
 - **Auto-Run on Trigger Phrases**: No
+- **Hold Intervenable Rolls for the Operator**: No
 - *(the inventory of definitions lives in the Scriptorium section — they are documents, not settings)*
 
 #### Timestamps

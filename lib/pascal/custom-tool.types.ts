@@ -244,6 +244,13 @@ export const CustomToolParameterSchema = z
       .describe('What this parameter means, in the fiction.'),
     min: z.number().finite().optional().describe('Numeric types only. Run-time values are clamped up to this.'),
     max: z.number().finite().optional().describe('Numeric types only. Run-time values are clamped down to this.'),
+    intervene: z
+      .boolean()
+      .optional()
+      .describe(
+        'Operator intervention only: false hides this parameter from the hold dialog. Absent or true shows it. ' +
+          'Ignored unless the tool\'s intervention block is enabled.'
+      ),
   })
   .superRefine((param, ctx) => {
     const numeric = param.type === 'number' || param.type === 'integer';
@@ -986,6 +993,13 @@ export const CustomToolEffectSchema = z
           'message: plain prose, with {{value}}, {{roll}}, {{character}}, {{params.x}}, {{state.path}} and the other ' +
           'placeholder families substituted. Recorded against this chat and the rolling character.'
       ),
+    intervene: z
+      .boolean()
+      .optional()
+      .describe(
+        'Operator intervention only: false hides this effect from the hold dialog. Absent or true shows it. ' +
+          'Ignored unless the tool\'s intervention block is enabled.'
+      ),
   })
   .superRefine((effect, ctx) => {
     const isWrite = effect.target !== undefined || effect.value !== undefined;
@@ -1280,6 +1294,54 @@ export const CustomToolLlmSchema = z.strictObject({
 export type CustomToolLlm = z.infer<typeof CustomToolLlmSchema>;
 
 /**
+ * The parts of a run that are not objects in the file — so their intervention
+ * flags live in the tool-level `intervention.fields` block rather than on the
+ * member itself (parameters and effects carry their own `intervene` flag).
+ * Closed: an unknown key is rejected at load, like everywhere else in the format.
+ */
+export const INTERVENTION_FIELD_KEYS = [
+  'roll',
+  'value',
+  'llmPrompt',
+  'llmAnswer',
+  'outcome',
+  'message',
+  'state',
+  'chipLabel',
+  'title',
+  'visibility',
+  'announcer',
+] as const;
+
+export type InterventionFieldKey = (typeof INTERVENTION_FIELD_KEYS)[number];
+
+/**
+ * Operator intervention: an intervenable tool's run, reached by a model's
+ * `run_custom` or a trigger phrase, is held for the operator before it is
+ * announced. Design of record: docs/developer/features/complete/pascal-operator-intervention.md.
+ *
+ * Flags on a tool that is not intervenable, and keys naming something the tool
+ * lacks (`llmAnswer` with no `llm` block), are accepted and ignored — they can
+ * never mislead a run, and switching the master toggle off and on keeps them.
+ */
+export const CustomToolInterventionSchema = z.strictObject({
+  enabled: z
+    .boolean()
+    .describe('Required. true holds each model- or trigger-reached run for the operator; false keeps the block but switches it off.'),
+  fields: z
+    .strictObject(
+      Object.fromEntries(INTERVENTION_FIELD_KEYS.map((key) => [key, z.boolean().optional()])) as Record<
+        InterventionFieldKey,
+        z.ZodOptional<z.ZodBoolean>
+      >
+    )
+    .optional()
+    .describe('Per-field visibility in the hold dialog. A key set to false hides that field; absent keys are shown.'),
+});
+
+export type CustomToolIntervention = z.infer<typeof CustomToolInterventionSchema>;
+
+/**
  * The custom-tool definition.
  *
  * Unknown TOP-LEVEL keys are tolerated, which reserves room for future keys
@@ -1349,6 +1411,11 @@ export const QtapCustomToolSchema = z
         'true: the rolling character announces the outcome under their own name and face, in place of Pascal. ' +
           'A run nobody made (the bare operator) is still announced by Pascal. Default false.'
       ),
+    intervention: CustomToolInterventionSchema.optional().describe(
+      'Operator intervention: hold each run a model or a trigger phrase reaches, so the operator can adjust, force or ' +
+        'veto it before it is announced. Never shown to the model — but a character with read access to the store can ' +
+        'read the file, flag and all.'
+    ),
     parameters: z
       .record(IdentifierSchema, CustomToolParameterSchema)
       .refine((params) => Object.keys(params).length <= MAX_PARAMETERS, {

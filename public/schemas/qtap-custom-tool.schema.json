@@ -80,6 +80,60 @@
       "default": false,
       "description": "When true, the rolling character announces the outcome under their own name and avatar instead of Pascal, and the model reads it as that character's line. The roll record is unchanged. A run made by nobody in particular (the bare operator, with no character seat) is still announced by Pascal."
     },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "description": "Operator intervention: hold each run a model's run_custom or a trigger phrase reaches, so the operator can adjust any shown part of it, force an outcome, or veto it before Pascal announces it. Changes apply to that one run only; nothing is written back to this file. The operator's own popup runs and autonomous rooms never hold. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Required. true holds runs for the operator; false keeps the block (and its per-field choices) but switches it off."
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-field visibility in the hold dialog. A key set to false hides that part of the run (and the server refuses an override naming it). Absent keys are shown. Keys naming something the tool lacks (llmAnswer with no llm block) are accepted and ignored.",
+          "properties": {
+            "roll": {
+              "type": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            },
+            "llmPrompt": {
+              "type": "boolean"
+            },
+            "llmAnswer": {
+              "type": "boolean"
+            },
+            "outcome": {
+              "type": "boolean"
+            },
+            "message": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "boolean"
+            },
+            "chipLabel": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "boolean"
+            },
+            "visibility": {
+              "type": "boolean"
+            },
+            "announcer": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
     "parameters": {
       "type": "object",
       "maxProperties": 8,
@@ -132,6 +186,10 @@
           "max": {
             "type": "number",
             "description": "Numeric types only. Run-time values are clamped down to this."
+          },
+          "intervene": {
+            "type": "boolean",
+            "description": "Operator intervention only: false hides this parameter from the hold dialog. Absent or true shows it. Ignored unless intervention.enabled is true. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds."
           }
         }
       }
@@ -330,6 +388,10 @@
           "minLength": 1,
           "maxLength": 1000,
           "description": "A line for the log (the one the log_read and log_grep tools search) instead of a write. A TEMPLATE, like an outcome message — plain prose, not an expression, so no inner quoting: {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}} and the other placeholder families are substituted, and unknown ones are left as written. Recorded against this chat and the rolling character (none on a run nobody in particular made). A line that renders empty is skipped."
+        },
+        "intervene": {
+          "type": "boolean",
+          "description": "Operator intervention only: false hides this effect from the hold dialog. Absent or true shows it. Ignored unless intervention.enabled is true. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds."
         }
       },
       "oneOf": [

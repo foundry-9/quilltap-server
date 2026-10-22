@@ -99,6 +99,8 @@ export interface ChatSettings {
   customTools?: boolean
   /** Whether a custom tool's trigger phrases, said by anyone in a chat, run it automatically with its defaults */
   customToolTriggers?: boolean
+  /** Whether a custom tool marked intervenable is held for the operator's say-so before Pascal announces it */
+  customToolIntervention?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
@@ -508,6 +510,11 @@ export const AUTOMATION_OPTIONS = [
     label: 'Auto-Run Custom Tools on Trigger Phrases',
     description: 'When anyone in a chat says a phrase one of Pascal\'s custom tools declares, run that tool automatically with its defaults. Requires Custom Tools.',
   },
+  {
+    key: 'customToolIntervention' as const,
+    label: 'Hold intervenable rolls for me',
+    description: 'A custom tool marked for intervention pauses for your say-so before Pascal announces it. A held roll waits for you indefinitely; switch this off and every roll goes ahead as dealt, which is how a chat may be left to run unattended. Requires Custom Tools.',
+  },
 ] as const
 
 /** The settings an Automation row toggles. */
@@ -527,6 +534,11 @@ export const DEFAULT_CUSTOM_TOOLS = true
  * Default trigger-phrase setting — off: overhearing is a surprise the first time
  */
 export const DEFAULT_CUSTOM_TOOL_TRIGGERS = false
+
+/**
+ * Default intervention setting — on: a held roll is the safe state, and the operator opts out to run unattended
+ */
+export const DEFAULT_CUSTOM_TOOL_INTERVENTION = true
 
 /**
  * Agent Mode Settings

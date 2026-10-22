@@ -1,0 +1,119 @@
+/**
+ * Pascal operator intervention — the hold dialog, the Workbench's hand
+ * toggles, and the "adjusted" badge on a Pascal chip.
+ *
+ *   qt-intervention*        — the hold dialog (components/chat/CustomToolInterventionDialog.tsx)
+ *   qt-intervention-badge   — the hand beside an adjusted roll's chip label
+ *   qt-intervention-mark    — the hand on an intervenable tool in the library
+ *   qt-intervene-toggle*    — the Workbench's per-field show/hide toggle
+ *
+ * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
+ * Every colour reads a --qt-intervention-* / --qt-intervene-* hook with a token fallback.
+ */
+
+@layer components {
+  /* The hold dialog's body. */
+  .qt-intervention {
+    color: var(--qt-intervention-fg, var(--color-foreground));
+  }
+
+  /* "2 more waiting." beside the header line. */
+  .qt-intervention-queue {
+    font-weight: 600;
+    color: var(--qt-intervention-queue-fg, var(--color-primary));
+  }
+
+  /* One part of the run: parameters, roll, consult, outcome… */
+  .qt-intervention-section {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--qt-intervention-section-border, var(--color-border));
+    border-radius: var(--qt-intervention-section-radius, 0.5rem);
+  }
+
+  /* A section the operator has changed. */
+  .qt-intervention-section--pinned {
+    border-color: var(--qt-intervention-pinned-border, var(--color-primary));
+  }
+
+  /* The reset control: unpins the section. */
+  .qt-intervention-reset {
+    text-decoration: underline;
+    color: var(--qt-intervention-reset-fg, var(--color-primary));
+    cursor: pointer;
+  }
+
+  /* One outcome row; click to force it. Wears the .qt-pascal-result accent. */
+  .qt-intervention-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    opacity: 0.75;
+    cursor: pointer;
+  }
+
+  .qt-intervention-row:hover {
+    opacity: 1;
+  }
+
+  /* The row that wins under the current settings. */
+  .qt-intervention-row--winning {
+    opacity: 1;
+    font-weight: 600;
+    outline: 2px solid var(--qt-intervention-winning-outline, var(--color-primary));
+    outline-offset: 1px;
+  }
+
+  /* One declared effect, with its Auto / On / Off control. */
+  .qt-intervention-effect {
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--qt-intervention-section-border, var(--color-border));
+  }
+
+  .qt-intervention-effect:last-child {
+    border-bottom: none;
+  }
+
+  /* An advisory note: a stale answer, a forced row, a clamped parameter. */
+  .qt-intervention-note {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--qt-intervention-note-fg, var(--color-warning));
+  }
+
+  /* The "adjusted" hand beside a Pascal chip's label. */
+  .qt-intervention-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.25rem;
+    color: var(--qt-intervention-badge-fg, var(--color-muted-foreground));
+  }
+
+  /* The hand on an intervenable tool in the Workbench library. */
+  .qt-intervention-mark {
+    display: inline-block;
+    flex-shrink: 0;
+    color: var(--qt-intervention-badge-fg, var(--color-muted-foreground));
+  }
+
+  /* The Workbench's per-field hand toggle: shown in the hold dialog, or not. */
+  .qt-intervene-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.125rem;
+    border-radius: 0.25rem;
+    color: var(--qt-intervene-toggle-fg, var(--color-primary));
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .qt-intervene-toggle:hover {
+    background-color: var(--qt-intervene-toggle-hover-bg, var(--color-accent));
+  }
+
+  /* A field the author has hidden from the dialog. */
+  .qt-intervene-toggle--off {
+    color: var(--qt-intervene-toggle-off-fg, var(--color-muted-foreground));
+    opacity: 0.5;
+  }
+}

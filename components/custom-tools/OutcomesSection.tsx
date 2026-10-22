@@ -45,6 +45,7 @@ import { LiteralOperandField } from './LiteralOperandField'
 import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
 import { ConditionGroups } from './ConditionGroups'
 import { AggregateKeyField } from './AggregateKeyField'
+import { ToolFieldInterventionToggle } from './InterventionToggle'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -152,7 +153,40 @@ export function OutcomesSection({
     <section className="qt-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="qt-card-title text-sm">The outcome table</h2>
+          <h2 className="qt-card-title text-sm flex items-center gap-2">
+            The outcome table
+            <ToolFieldInterventionToggle
+              draft={draft}
+              onChange={onChange}
+              fieldKey="outcome"
+              label="Show the winning outcome in the hold dialog"
+              disabled={disabled}
+            />
+          </h2>
+          {draft.intervention.enabled && (
+            <div className="flex items-center gap-4 text-xs qt-text-secondary">
+              <span className="flex items-center gap-1">
+                Message
+                <ToolFieldInterventionToggle
+                  draft={draft}
+                  onChange={onChange}
+                  fieldKey="message"
+                  label="Show the rendered message in the hold dialog"
+                  disabled={disabled}
+                />
+              </span>
+              <span className="flex items-center gap-1">
+                State
+                <ToolFieldInterventionToggle
+                  draft={draft}
+                  onChange={onChange}
+                  fieldKey="state"
+                  label="Show the outcome state in the hold dialog"
+                  disabled={disabled}
+                />
+              </span>
+            </div>
+          )}
           <p className="qt-hint">
             Checked top to bottom — the first row that holds wins. Tests on one line must all hold; any line of a row
             will do.

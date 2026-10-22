@@ -276,6 +276,7 @@ export interface FeatureConfigInfo {
   autoDetectRng: boolean;
   customTools: boolean;
   customToolTriggers: boolean;
+  customToolIntervention: boolean;
   avatarDisplay: { mode: string; style: string };
   coreWhisper: {
     enabled: boolean;

@@ -9,6 +9,7 @@
  * same loaders.
  */
 
+import { isIntervenable } from './intervention/eligibility';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
@@ -44,6 +45,8 @@ export interface CustomToolLibraryEntry {
   llm: boolean;
   /** How many trigger phrases the tool listens for (0 = none). */
   triggerCount: number;
+  /** Whether the tool holds its runs for the operator (operator intervention). */
+  intervention: boolean;
   /**
    * What the tool does to the world (`customToolEffect`): `read` unless it
    * carries effects, then `write`. A storyteller bid ranks it by this.
@@ -195,6 +198,7 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     title: displayTitle(entry.definition),
     description: entry.definition.description,
     disabled: entry.definition.disabled ?? false,
+    intervention: isIntervenable(entry.definition),
     gate: entry.definition.availableWhen ? 'available' : entry.definition.withheldWhen ? 'withheld' : null,
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
     rollForm:

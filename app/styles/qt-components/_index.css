@@ -37,6 +37,7 @@
 @import "./_chat.css";         /* Chat messages, composer, participants */
 @import "./_roleplay.css";     /* Roleplay-template chips + add-on flourishes */
 @import "./_storyteller.css";  /* Storyteller turn-mode control + bidding board */
+@import "./_intervention.css";  /* Pascal operator intervention: hold dialog, toggles, badge */
 @import "./_content.css";      /* Badges, avatars, code blocks */
 @import "./_typography.css";   /* Semantic typography classes */
 @import "./_workspace.css";    /* Tabbed workspace: panes, tab strip, divider, drop-zones */
