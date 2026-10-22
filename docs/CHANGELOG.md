@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Fix: a whisper no longer starts a turn chain of its own (bug 258)
+
+- A whisper from the Whisper dialog now gets one reply from its target and no chain afterward. The floor goes back to the operator.
+- A whisper sent while another Salon stream is running in the chat waits for that stream to finish (`waitForEarlierTurns` in `lib/chat/turn-control.ts`) instead of running beside it.
+- Before: the whisper ran a full chain in a stream the Salon never displayed, concurrently with any chain already running, both drawing on the same turn queue and rotation.
+- `isOperatorWhisperSend` (`lib/services/chat-message/whisper-send.ts`) decides which sends get this treatment. Docs: `help/chat-multi-character.md` ("Who Answers a Whisper").
+- Docs: new spec `docs/developer/features/storyteller-mode.md` for a third Salon turn mode, in which characters bid to answer and the operator picks who speaks. It also covers declared tool effects (`none` / `read` / `write` / `destroy`). Not implemented.
+
 #### Feature: keystone memories
 
 - New `memories.keystone` column (migration `add-memory-keystone-v1`, with a partial `(characterId, aboutCharacterId)` index). It marks a memory as an operator-set standing fact.

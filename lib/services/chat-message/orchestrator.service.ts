@@ -23,7 +23,8 @@ import {
   loadRoomCharacters,
   detectYieldSentinel,
 } from '@/lib/chat/turn-manager'
-import { runWithTurnControl, takeRaisedHand, isCurrentTurnStopped } from '@/lib/chat/turn-control'
+import { runWithTurnControl, takeRaisedHand, isCurrentTurnStopped, waitForEarlierTurns } from '@/lib/chat/turn-control'
+import { isOperatorWhisperSend } from './whisper-send'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement, postHostTurnYieldAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
@@ -221,6 +222,12 @@ export async function handleSendMessage(
       // every turn it carries (lib/chat/turn-control.ts).
       await runWithTurnControl(chatId, async () => {
         try {
+          const isWhisper = isOperatorWhisperSend(options)
+          if (isWhisper) {
+            const waitedOn = await waitForEarlierTurns(chatId)
+            logger.debug('[Orchestrator] Whisper send: single reply, no chain', { chatId, waitedOn })
+          }
+
           const result = await processMessage(repos, chatId, userId, options, controller, encoder, ledger)
 
           await executeTurnChain({
@@ -248,7 +255,9 @@ export async function handleSendMessage(
               ledger
             ),
             neverPauseForUser: options.neverPauseForUser === true,
-            singleTurn: options.singleTurn === true,
+            // A whisper's target answers once; the floor then goes back to the
+            // operator (bug 258).
+            singleTurn: options.singleTurn === true || isWhisper,
           })
 
           // Trigger scene state tracking once after processing (and after any turn chain)

@@ -55,7 +55,9 @@ export function WhisperDialog({
       onClose()
 
       // Consume the SSE stream so the server-side response completes,
-      // then notify parent to refresh the chat and resume turn order
+      // then notify parent to refresh the chat. The stream carries the
+      // target's one reply and no chain (bug 258); if a chain was already
+      // running, the server holds the whisper until that chain finishes.
       const reader = response.body?.getReader()
       if (reader) {
         try {

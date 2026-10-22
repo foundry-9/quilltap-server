@@ -10,6 +10,7 @@ import {
   hasActiveTurn,
   setHandRaised,
   stopActiveTurns,
+  waitForEarlierTurns,
 } from '@/lib/chat/turn-control'
 
 jest.mock('@/lib/logger', () => ({
@@ -121,5 +122,60 @@ describe('turn control', () => {
 
   it('is a no-op stop when nothing is running', async () => {
     await expect(stopActiveTurns('chat-none')).resolves.toEqual({ stopped: 0, settled: true })
+  })
+  describe('waitForEarlierTurns (bug 258)', () => {
+    it('returns at once when no earlier stream is open', async () => {
+      await expect(runWithTurnControl('chat-w1', () => waitForEarlierTurns('chat-w1'))).resolves.toBe(0)
+    })
+
+    it('waits for a stream opened earlier to finish before going on', async () => {
+      const gate = latch()
+      const order: string[] = []
+      const chain = runWithTurnControl('chat-w2', async () => {
+        await gate.promise
+        order.push('chain done')
+      })
+      const whisper = runWithTurnControl('chat-w2', async () => {
+        const waited = await waitForEarlierTurns('chat-w2')
+        order.push('whisper runs')
+        return waited
+      })
+      await Promise.resolve()
+      expect(order).toEqual([])
+      gate.open()
+      await expect(whisper).resolves.toBe(1)
+      await chain
+      expect(order).toEqual(['chain done', 'whisper runs'])
+    })
+
+    it('never waits on a stream opened after it, so two waiters cannot deadlock', async () => {
+      const gate = latch()
+      const order: string[] = []
+      const chain = runWithTurnControl('chat-w3', async () => {
+        await gate.promise
+        order.push('chain')
+      })
+      const first = runWithTurnControl('chat-w3', async () => {
+        await waitForEarlierTurns('chat-w3')
+        order.push('first whisper')
+      })
+      const second = runWithTurnControl('chat-w3', async () => {
+        const waited = await waitForEarlierTurns('chat-w3')
+        order.push('second whisper')
+        return waited
+      })
+      gate.open()
+      await expect(second).resolves.toBe(2)
+      await Promise.all([chain, first])
+      expect(order).toEqual(['chain', 'first whisper', 'second whisper'])
+    })
+
+    it('ignores streams in other chats', async () => {
+      const gate = latch()
+      const other = runWithTurnControl('chat-w4-other', () => gate.promise)
+      await expect(runWithTurnControl('chat-w4', () => waitForEarlierTurns('chat-w4'))).resolves.toBe(0)
+      gate.open()
+      await other
+    })
   })
 })

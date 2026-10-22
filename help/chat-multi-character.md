@@ -368,6 +368,12 @@ A whisper is a message visible only to its sender and its intended recipient. Al
 
 **For You, the Distinguished Reader:** When participating in a chat with three or more characters, you will find a small speech-bubble icon beside each character in the participant sidebar. Clicking it opens a whisper dialog—a discreet little window where you may compose your private communique.
 
+### Who Answers a Whisper
+
+A whisper is an aside, not a round of conversation. The character you addressed answers you **once**, and then the floor returns to you; the rest of the company does not take it as their cue to start talking, which would be rather like the whole table chiming in on a remark made behind a fan.
+
+Should you whisper while the room is already in full flow, with characters taking their turns one after another, your note waits politely until the present round is done, and only then does its recipient answer it. The house will not have two speakers at once on your account.
+
 ### Visibility
 
 - **Default:** Whispers between AI characters are hidden from the chat display, preserving the illusion that some things are, in fact, private.

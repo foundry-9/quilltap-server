@@ -126,6 +126,31 @@ export function hasActiveTurn(chatId: string): boolean {
 }
 
 /**
+ * Wait until every stream that opened for this chat BEFORE the calling one has
+ * finished. A whisper uses this to queue behind a chain already running rather
+ * than start a second speaker beside it (bug 258).
+ *
+ * Only earlier streams are awaited (a `Set` iterates in insertion order), so
+ * two waiting streams can never wait on each other. A stream opened later is
+ * none of this one's business. Called outside a registered stream, it waits on
+ * every open stream for the chat. Returns how many streams it waited on.
+ */
+export async function waitForEarlierTurns(chatId: string): Promise<number> {
+  const self = state.als.getStore()
+  const earlier: TurnControlEntry[] = []
+  for (const entry of state.byChat.get(chatId) ?? []) {
+    if (entry === self) break
+    earlier.push(entry)
+  }
+  if (earlier.length === 0) return 0
+
+  logger.debug('[TurnControl] Waiting for earlier stream(s) to finish', { chatId, streams: earlier.length })
+  await Promise.all(earlier.map((e) => e.settled))
+  logger.debug('[TurnControl] Earlier stream(s) finished', { chatId, streams: earlier.length })
+  return earlier.length
+}
+
+/**
  * Raise (or lower) the operator's hand on every open stream for the chat.
  * Returns how many streams heard it — zero means nothing was running, and the
  * floor is already the operator's.

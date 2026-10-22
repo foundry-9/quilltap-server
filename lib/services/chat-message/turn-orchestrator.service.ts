@@ -307,9 +307,10 @@ export interface ExecuteTurnChainOptions {
    */
   neverPauseForUser?: boolean
   /**
-   * When true, skip the chain loop entirely — the caller will enqueue the
-   * next character turn as a separate job. Used by the autonomous-room
-   * handler so each turn is one job (buffered writes flush at job end →
+   * When true, skip the chain loop entirely. Used by an operator whisper,
+   * whose target answers once and hands the floor back (bug 258), and by the
+   * autonomous-room handler, which enqueues the next character turn as a
+   * separate job so each turn is one job (buffered writes flush at job end →
    * `shouldChainNext` would otherwise see stale history and re-pick the
    * same speaker; per-turn budget checks would otherwise be bypassed for
    * up to 20 chain iterations).

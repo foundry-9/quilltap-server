@@ -143,7 +143,9 @@ export interface SendMessageOptions {
    *      budget check only fires between jobs, so a 20-deep chain can blow
    *      through caps before anyone notices.
    *
-   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`. An
+   * operator whisper also runs single-turn, decided inside `handleSendMessage`
+   * (`isOperatorWhisperSend`) rather than through this field (bug 258).
    */
   singleTurn?: boolean
   /**
