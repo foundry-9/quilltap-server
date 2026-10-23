@@ -44,6 +44,7 @@ import type {
   InterventionPreview,
   InterventionRunView,
 } from '@/lib/pascal/intervention/view'
+import { describeSpan } from '@/lib/pascal/intervention/spans'
 
 const PREVIEW_DEBOUNCE_MS = 300
 const OUTCOME_STATES: OutcomeState[] = ['success', 'partial', 'failure', 'info']
@@ -323,12 +324,22 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
                 onChange={(n) => pin({ roll: n })}
               />
             )}
+            <SpanHint testId="intervention-roll-span">
+              {run.rollForm === 'dice'
+                ? `${run.notation ?? 'The dice'} can come to ${describeSpan(run.rollSpan)}${
+                    hold.definition.diceSides ? `, each die 1 to ${hold.definition.diceSides}` : ''
+                  }.`
+                : `The table draws ${describeSpan(run.rollSpan)}.`}
+            </SpanHint>
           </Section>
         )}
 
         {shown.has('value') && run.rollForm === 'range' && (
           <Section title="The value" pinned={overrides.value !== undefined} onReset={() => reset('value')} dealt={formatNumber(dealt.value)}>
             <NumberField label="Value after modifiers" value={overrides.value ?? run.value} onChange={(n) => pin({ value: n })} />
+            <SpanHint testId="intervention-value-span">
+              After the modifiers, it comes to {describeSpan(run.valueSpan)}.
+            </SpanHint>
           </Section>
         )}
 
@@ -493,6 +504,15 @@ function Section({ title, pinned, onReset, dealt, children }: Readonly<SectionPr
       </div>
       {children}
     </section>
+  )
+}
+
+/** What a field could have been dealt, given the parameters as they stand. */
+function SpanHint({ testId, children }: Readonly<{ testId: string; children: React.ReactNode }>) {
+  return (
+    <p className="text-xs qt-text-secondary" data-testid={testId}>
+      {children}
+    </p>
   )
 }
 

@@ -26,6 +26,7 @@ import { displayTitle, type QtapCustomTool, type Visibility } from '../custom-to
 import type { InventoryContext } from '../inventory-subjects';
 import type { ProgressPrimitive } from '@/lib/progressions/engine';
 import type { InterventionOverrides } from './overrides';
+import { describeSpan, withinSpan } from './spans';
 
 /** Everything a run was dealt against, frozen at deal time — a mid-hold edit elsewhere is not picked up. */
 export interface RunSnapshot {
@@ -156,6 +157,12 @@ export async function recomputeRun(input: RecomputeInput): Promise<RecomputedRun
     result.outcomeIndex !== input.dealtOutcomeIndex
   ) {
     warnings.push('The message is pinned, but a different outcome row now wins; check that the words still fit it.');
+  }
+  if (overrides.roll !== undefined && !withinSpan(overrides.roll, result.rollSpan)) {
+    warnings.push(`The pinned draw lies outside what the table could deal (${describeSpan(result.rollSpan)}).`);
+  }
+  if (overrides.value !== undefined && !withinSpan(overrides.value, result.valueSpan)) {
+    warnings.push(`The pinned value lies outside what the modifiers could reach (${describeSpan(result.valueSpan)}).`);
   }
   if (staleAnswer) {
     warnings.push('The consult\'s answer was given to a different prompt. Re-ask, or deal it as it stands.');

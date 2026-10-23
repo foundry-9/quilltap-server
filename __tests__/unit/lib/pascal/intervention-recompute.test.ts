@@ -268,3 +268,67 @@ describe('changedFields', () => {
     expect(changedFields(factsOf(RANGE, dealt.result, dealt.presentation), factsOf(RANGE, dealt.result, dealt.presentation))).toEqual([])
   })
 })
+
+describe('what the run could have been', () => {
+  const ranged = (roll: Record<string, unknown>) =>
+    QtapCustomToolSchema.parse({
+      name: 'span',
+      description: 'Span.',
+      intervention: { enabled: true },
+      roll,
+      outcomes: [{ when: true, message: '{{value}}', state: 'info' }],
+    })
+
+  it('reports the half-open draw and follows it through a $param bound', async () => {
+    const run = await recomputeRun({
+      definition: RANGE,
+      snapshot: SNAPSHOT,
+      draw: { form: 'range', unit: 0.5 },
+      overrides: { params: { top: 50 } },
+    })
+    expect(run.result.rollSpan).toEqual({ min: 0, max: 50, maxExclusive: true })
+    expect(run.result.valueSpan).toEqual({ min: 0, max: 50, maxExclusive: true })
+  })
+
+  it('carries the span through multiply, offset and round', async () => {
+    const result = await executeCustomTool(ranged({ min: 1, max: 21, multiplier: 2, offset: 3, round: true }), {})
+    expect(result.rollSpan).toEqual({ min: 1, max: 21, maxExclusive: true })
+    // 1*2+3 = 5 reachable; just under 21*2+3 = 45 rounds to 45.
+    expect(result.valueSpan).toEqual({ min: 5, max: 45 })
+  })
+
+  it('does not let a half on the open end round up into reach', async () => {
+    const result = await executeCustomTool(ranged({ min: 0, max: 10, offset: 0.5, round: true }), {})
+    // Values reach just under 10.5, which rounds to 10, never 11.
+    expect(result.valueSpan).toEqual({ min: 1, max: 10 })
+  })
+
+  it('swaps the ends, and the open one, under a negative multiplier', async () => {
+    const result = await executeCustomTool(ranged({ min: 1, max: 21, multiplier: -2 }), {})
+    expect(result.valueSpan).toEqual({ min: -42, max: -2, minExclusive: true })
+  })
+
+  it('gives dice their total from all-ones to all-sides', async () => {
+    const result = await executeCustomTool(DICE, {})
+    expect(result.rollSpan).toEqual({ min: 3, max: 13 })
+    expect(result.valueSpan).toEqual({ min: 3, max: 13 })
+  })
+
+  it('warns when a pin lands outside what the table could deal', async () => {
+    const run = await recomputeRun({
+      definition: RANGE,
+      snapshot: SNAPSHOT,
+      draw: { form: 'range', unit: 0.5 },
+      overrides: { roll: 12, value: -1 },
+    })
+    expect(run.warnings).toContain('The pinned draw lies outside what the table could deal (0 up to (not including) 10).')
+    expect(run.warnings).toContain('The pinned value lies outside what the modifiers could reach (0 up to (not including) 10).')
+    const inside = await recomputeRun({
+      definition: RANGE,
+      snapshot: SNAPSHOT,
+      draw: { form: 'range', unit: 0.5 },
+      overrides: { roll: 9.9 },
+    })
+    expect(inside.warnings).toEqual([])
+  })
+})

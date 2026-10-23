@@ -16,6 +16,7 @@ import type {
   Visibility,
   When,
 } from '../custom-tool.types';
+import type { RunSpan } from '../custom-tools';
 
 /** One declared effect, as this run resolved it. */
 export interface InterventionEffectView {
@@ -43,7 +44,11 @@ export interface InterventionRunView {
   raw: number;
   diceRolls?: number[];
   diceBreakdown: string;
+  /** What the table could have drawn under these parameters (dice: the total). */
+  rollSpan: RunSpan;
   value: number;
+  /** What the value could have come to after modifiers (dice: the total). */
+  valueSpan: RunSpan;
   outcomeIndex: number;
   /** When the outcome is forced: the row the table itself would pick. */
   tableOutcomeIndex?: number;

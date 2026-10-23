@@ -30,8 +30,10 @@ function runView(overrides: Partial<InterventionRunView> = {}): InterventionRunV
     params: { bonus: 0 },
     rollForm: 'range',
     raw: 0.7,
+    rollSpan: { min: 0, max: 1, maxExclusive: true },
     diceBreakdown: '',
     value: 70,
+    valueSpan: { min: 0, max: 100, maxExclusive: true },
     outcomeIndex: 0,
     state: 'success',
     message: 'The house pays out.',
@@ -169,6 +171,43 @@ describe('CustomToolInterventionDialog — what is shown', () => {
     renderDialog()
     await screen.findByTestId('custom-tool-intervention')
     expect(screen.getByText('The roll')).toBeTruthy()
+  })
+
+  it('says what the draw and the value could have been', async () => {
+    holds = [holdView('a')]
+    renderDialog()
+    await screen.findByTestId('custom-tool-intervention')
+    expect(screen.getByTestId('intervention-roll-span').textContent).toBe(
+      'The table draws 0 up to (not including) 1.'
+    )
+    expect(screen.getByTestId('intervention-value-span').textContent).toBe(
+      'After the modifiers, it comes to 0 up to (not including) 100.'
+    )
+  })
+
+  it('gives a dice roll its total and its faces', async () => {
+    const dice = runView({
+      rollForm: 'dice',
+      notation: '3d6+2',
+      raw: 12,
+      value: 12,
+      diceRolls: [3, 4, 3],
+      diceBreakdown: '3d6+2: [3, 4, 3] + 2 = 12',
+      rollSpan: { min: 5, max: 20 },
+      valueSpan: { min: 5, max: 20 },
+    })
+    holds = [
+      holdView('a', {
+        definition: { ...holdView('a').definition, diceSides: 6 },
+        baseline: previewOf(dice),
+      }),
+    ]
+    renderDialog()
+    await screen.findByTestId('custom-tool-intervention')
+    expect(screen.getByTestId('intervention-roll-span').textContent).toBe(
+      '3d6+2 can come to 5 to 20, each die 1 to 6.'
+    )
+    expect(screen.queryByTestId('intervention-value-span')).toBeNull()
   })
 })
 

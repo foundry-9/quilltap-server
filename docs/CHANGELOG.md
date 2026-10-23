@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Feature: min/max ranges in the Pascal intervention dialog
+
+- `executeCustomTool` reports `rollSpan` and `valueSpan` (`RunSpan` in `lib/pascal/custom-tools.ts`): what the raw draw and the value after modifiers could have been under the run's resolved parameters. Range form: `[min, max)` carried through multiply, offset and round (a negative multiplier swaps the ends; rounding makes both ends reachable values). Dice: all ones to all sides, modifier included. Spans ignore pins.
+- The hold dialog shows them under the roll and the value (dice also show the per-die range) and they refresh with each preview. The phrasing is `describeSpan` in the new client-safe `lib/pascal/intervention/spans.ts`.
+- Recompute adds a non-blocking warning when a pinned draw or value lies outside its span.
+- Spans are on the intervention view only; they do not reach `pascalMeta` or any model.
+
 #### Feature: wardrobe pronoun guidance
 
 - Wardrobe items take an optional `pronounGuidance` list (frontmatter key `pronounGuidance`): the standard pronoun sets the item is meant for, named by subject (`he`, `she`, `they`, `it`). The values are the Aurora pronoun picker's presets, now shared from `lib/characters/pronoun-presets.ts`. Empty or absent means the item is offered to everyone. Unknown values are dropped on read.

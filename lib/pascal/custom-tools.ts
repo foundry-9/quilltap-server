@@ -751,6 +751,19 @@ export type ResolvedParams = Record<string, number | string | boolean>;
  */
 export type RecordedDraw = { form: 'range'; unit: number } | { form: 'dice'; faces: number[] };
 
+/**
+ * What a draw could have produced, given the run's resolved parameters: the
+ * low and high ends, each inclusive unless flagged. The range form's raw draw
+ * is half-open (`[min, max)`); after rounding both ends are reachable values.
+ * The hold dialog shows these so the operator knows what they are bending.
+ */
+export interface RunSpan {
+  min: number;
+  max: number;
+  minExclusive?: boolean;
+  maxExclusive?: boolean;
+}
+
 /** One effect's operator setting for a held run. Edited fields are literals, never expressions. */
 export interface EffectPin {
   /** `auto` follows the effect's own `when`; `on` fires it regardless; `off` suppresses it. */
@@ -827,6 +840,10 @@ export interface CustomToolRunResult {
   effects?: ResolvedEffect[];
   /** The random draw this run used — what a held run replays. */
   draw: RecordedDraw;
+  /** What the raw draw could have been (dice: the total). Independent of any pin. */
+  rollSpan: RunSpan;
+  /** What the value could have been after modifiers (dice: the total). Independent of any pin. */
+  valueSpan: RunSpan;
   /**
    * The consult prompt as rendered for THIS run. Equal to `llm.prompt` on an
    * ordinary run; on a replay it may differ from the prompt that produced the
@@ -999,7 +1016,7 @@ function rollRange(
   inventory?: InventoryContext | null,
   unitDraw?: number,
   pins?: Pick<RunPins, 'roll' | 'value'>
-): { raw: number; value: number; unit: number } {
+): { raw: number; value: number; unit: number; rollSpan: RunSpan; valueSpan: RunSpan } {
   const min = resolveRollField(definition.name, 'min', range.min, params, 0, state, inventory);
   const max = resolveRollField(definition.name, 'max', range.max, params, 1, state, inventory);
   const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state, inventory);
@@ -1025,7 +1042,37 @@ function rollRange(
     throw new CustomToolRunError(`${definition.name}: the roll produced a value that is not a finite number`);
   }
 
-  return { raw, value, unit };
+  const rollSpan: RunSpan = min === max ? { min, max } : { min, max, maxExclusive: true };
+  return { raw, value, unit, rollSpan, valueSpan: transformSpan(rollSpan, multiplier, offset, range.round === true) };
+}
+
+/**
+ * Carry a raw span through the range form's transform (multiply, offset,
+ * round). A negative multiplier swaps the ends, and with them which end is
+ * open. Rounding makes both ends reachable values: the largest rounding of a
+ * value strictly below `t` is `ceil(t - 0.5)`, the smallest of one strictly
+ * above is `Math.round(t)` (which rounds halves up).
+ */
+function transformSpan(span: RunSpan, multiplier: number, offset: number, round: boolean): RunSpan {
+  const low = span.min * multiplier + offset;
+  const high = span.max * multiplier + offset;
+  const swapped = multiplier < 0;
+  const out: RunSpan =
+    multiplier === 0
+      ? { min: offset, max: offset }
+      : swapped
+        ? { min: high, max: low, ...(span.maxExclusive ? { minExclusive: true } : {}) }
+        : { min: low, max: high, ...(span.maxExclusive ? { maxExclusive: true } : {}) };
+  if (!round) return out;
+  return {
+    min: Math.round(out.min),
+    max: out.maxExclusive ? Math.ceil(out.max - 0.5) : Math.round(out.max),
+  };
+}
+
+/** A dice notation's reachable totals: every die low, every die high. */
+function diceSpan(notation: DiceNotation): RunSpan {
+  return { min: notation.count + notation.modifier, max: notation.count * notation.sides + notation.modifier };
 }
 
 /** Everything an outcome test may be posed about. */
@@ -2056,17 +2103,33 @@ function drawRoll(
   state: CustomToolState,
   inventory?: InventoryContext | null,
   replay?: { draw?: RecordedDraw; pins?: RunPins }
-): { raw: number; value: number; dice?: DiceRollResult; draw: RecordedDraw } {
+): { raw: number; value: number; dice?: DiceRollResult; draw: RecordedDraw; rollSpan: RunSpan; valueSpan: RunSpan } {
   if (roll.form === 'dice') {
     const faces = replay?.pins?.dice ?? (replay?.draw?.form === 'dice' ? replay.draw.faces : undefined);
     const rolled = faces ? diceFromFaces(definition.name, roll.parsed, faces) : rollNotation(roll.parsed);
     // Dice carry their own modifier, so the total is both raw and value: a
     // pinned total without its faces would make `{{dice}}` lie.
-    return { raw: rolled.total, value: rolled.total, dice: rolled, draw: { form: 'dice', faces: [...rolled.results] } };
+    const span = diceSpan(roll.parsed);
+    return {
+      raw: rolled.total,
+      value: rolled.total,
+      dice: rolled,
+      draw: { form: 'dice', faces: [...rolled.results] },
+      rollSpan: span,
+      valueSpan: span,
+    };
   }
   const unit = replay?.draw?.form === 'range' ? replay.draw.unit : undefined;
-  const { raw, value, unit: used } = rollRange(definition, roll.range, params, state, inventory, unit, replay?.pins);
-  return { raw, value, draw: { form: 'range', unit: used } };
+  const { raw, value, unit: used, rollSpan, valueSpan } = rollRange(
+    definition,
+    roll.range,
+    params,
+    state,
+    inventory,
+    unit,
+    replay?.pins
+  );
+  return { raw, value, draw: { form: 'range', unit: used }, rollSpan, valueSpan };
 }
 
 /**
@@ -2156,7 +2219,7 @@ export async function executeCustomTool(
   }
 
   const roll = prepareRoll(definition, inventory);
-  const { raw, value, dice, draw } = drawRoll(definition, roll, params, state, inventory, {
+  const { raw, value, dice, draw, rollSpan, valueSpan } = drawRoll(definition, roll, params, state, inventory, {
     ...(overrides?.draw ? { draw: overrides.draw } : {}),
     ...(pins ? { pins } : {}),
   });
@@ -2299,6 +2362,8 @@ export async function executeCustomTool(
     ...(chipLabel !== undefined ? { chipLabel } : {}),
     ...(effects ? { effects } : {}),
     draw,
+    rollSpan,
+    valueSpan,
     ...(llmPromptRendered !== undefined ? { llmPromptRendered } : {}),
     ...(tableOutcomeIndex !== undefined ? { tableOutcomeIndex } : {}),
   };
