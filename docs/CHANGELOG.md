@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Feature: wardrobe pronoun guidance
+
+- Wardrobe items take an optional `pronounGuidance` list (frontmatter key `pronounGuidance`): the standard pronoun sets the item is meant for, named by subject (`he`, `she`, `they`, `it`). The values are the Aurora pronoun picker's presets, now shared from `lib/characters/pronoun-presets.ts`. Empty or absent means the item is offered to everyone. Unknown values are dropped on read.
+- One rule, `fitsPronounGuidance` / `filterByPronounGuidance` (`lib/wardrobe/pronoun-guidance.ts`): an item with guidance is offered only to characters whose pronouns are one of its sets. A character with unset or custom pronouns is offered everything. Guidance never blocks wearing an item by id or title.
+- `wardrobe_list` is pronoun-aware by default. New `pronoun_aware` parameter (default `true`); currently equipped items are always listed. The result reports `hidden_by_pronoun_guidance` and each item's `pronoun_guidance`, and the formatted text says how many were held back. `wardrobe_read` reports `pronoun_guidance`. `wardrobe_create` and `wardrobe_update` take `pronoun_guidance`.
+- The "Let character choose" outfit pass only offers the cheap LLM items that fit the character's pronouns.
+- Wardrobe UI: a Pronoun Guidance field in the item editor; a "Pronoun-aware" checkbox (default on, shows the hidden count) in a character's Wardrobe list, which also narrows the Live / Outfit Builder pickers; the same checkbox in the chat-start composer. Rows show their guidance. New `usePronounGuidanceFilter` hook and `PronounAwareToggle` component; `OutfitComposer` / `EquippedSlotRow` take an optional `pickableItems`.
+- Export schema documents the new `WardrobeItem.pronounGuidance` field. No migration: the field lives in vault frontmatter.
+
 #### Feature: Novel roleplay template
 
 - New built-in roleplay template **Novel** (`lib/chat/novel-template.ts`): narration is unmarked prose shown in italics, dialogue goes in straight or curly double quotes, `*emphasis*` (single asterisks, hidden) is shown bold and italic, `**` means nothing and is dropped from display, and `((OOC))` uses the OOC style. Its system prompt ends with a correctly formatted example passage. Its rendering patterns come from `generateTemplateRenderingPatterns`, the same generator user templates use.

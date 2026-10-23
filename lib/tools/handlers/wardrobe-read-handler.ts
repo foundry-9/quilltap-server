@@ -33,6 +33,7 @@ import type { WardrobeRepos } from './wardrobe-handler-shared';
 import { resolveWearers } from '@/lib/wardrobe/wear-history';
 import { formatWornRelative } from '@/lib/wardrobe/wear-display';
 import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
+import { formatPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
 /** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
 export type WardrobeReadToolContext = WardrobeToolContext;
@@ -65,6 +66,7 @@ export async function buildWardrobeReadOutput(
     image_file_id: item.imageFileId ?? null,
     types: item.types,
     appropriateness: item.appropriateness ?? null,
+    pronoun_guidance: item.pronounGuidance ?? [],
     is_default: item.isDefault ?? false,
     replace: item.replace ?? false,
     is_composite: isComposite,
@@ -211,6 +213,7 @@ export function buildWardrobeReadFailure(error: string): WardrobeReadToolOutput 
     image_file_id: null,
     types: [],
     appropriateness: null,
+    pronoun_guidance: [],
     is_default: false,
     replace: false,
     is_composite: false,
@@ -287,6 +290,9 @@ export function formatWardrobeReadResults(
   const lines: string[] = [`${output.title} (${output.item_id})${folderTag}`];
   lines.push(`  types: ${output.types.join(', ')}`);
   if (output.appropriateness) lines.push(`  appropriateness: ${output.appropriateness}`);
+  if (output.pronoun_guidance.length > 0) {
+    lines.push(`  pronoun guidance: meant for ${formatPronounGuidance(output.pronoun_guidance)}`);
+  }
   if (output.description) lines.push(`  description: ${output.description}`);
   lines.push(`  portrait cue: ${output.image_prompt ?? '(none — falls back to title)'}`);
   lines.push(`  picture: ${output.image_file_id ? formatWardrobeImageHandle(output.image_file_id) : '(none)'}`);

@@ -3,7 +3,7 @@
 /**
  * The wardrobe browser — one container's closet as a small file manager:
  * a breadcrumb, the subfolders of the folder you are in, then its items, with
- * the search, kind, slot, sort and visibility filters, row actions, a select
+ * the search, kind, slot, sort, visibility and pronoun-aware filters, row actions, a select
  * mode for filing several items at once, and a "+ New Item" button — plus
  * `WardrobeItemOverlays`, the editor / move-copy / full-screen picture the row
  * actions open.
@@ -69,6 +69,8 @@ import { ItemFolderRow } from '@/components/item-browser/ItemFolderRow'
 import { ItemSelectBar } from '@/components/item-browser/ItemSelectBar'
 import { ItemTierRow } from '@/components/item-browser/ItemTierRow'
 import type { ComponentMode } from './WardrobeComponentModeFieldset'
+import { PronounAwareToggle } from './PronounAwareToggle'
+import type { PronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
 
 type SlotFilter = 'all' | WardrobeItemType
 const SLOT_FILTERS: SlotFilter[] = ['all', ...WARDROBE_SLOT_TYPES]
@@ -93,6 +95,11 @@ export interface WardrobeBrowserProps {
   onImportFromImage?: () => void
   /** Cap the list's height (the dialog) instead of letting it grow (a card). */
   scrollList?: boolean
+  /**
+   * Character view only: the pronoun-aware filter (owned by the caller so the
+   * composers beside the list share its switch).
+   */
+  pronounFilter?: PronounGuidanceFilter
 }
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -107,6 +114,7 @@ export function WardrobeBrowser({
   wear,
   onImportFromImage,
   scrollList = true,
+  pronounFilter,
 }: WardrobeBrowserProps) {
   const isCharacterScope = container?.scope === 'character'
   const { listItems, resolutionPool, loading, canManage } = data
@@ -181,8 +189,15 @@ export function WardrobeBrowser({
     [containerKey],
   )
 
+  // Pronoun guidance narrows the pool itself (character view, switch on), so
+  // tier and folder counts agree with the rows beneath them.
+  const offeredItems = useMemo(
+    () => (isCharacterScope && pronounFilter ? pronounFilter.offer(listItems) : listItems),
+    [isCharacterScope, pronounFilter, listItems],
+  )
+
   const filteredItems = useMemo(() => {
-    const sorted = sortAndFilterWardrobeItems(listItems, { sort: listSort, neverWornOnly })
+    const sorted = sortAndFilterWardrobeItems(offeredItems, { sort: listSort, neverWornOnly })
     const term = titleFilter.trim().toLowerCase()
     return sorted.filter((i) => {
       // No archived filter here on purpose: the fetch already omitted them
@@ -198,7 +213,7 @@ export function WardrobeBrowser({
       return true
     })
   }, [
-    listItems,
+    offeredItems,
     listSort,
     neverWornOnly,
     slotFilter,
@@ -212,8 +227,8 @@ export function WardrobeBrowser({
   // Everything in the tier being browsed, filters aside — what folder rows
   // count and what "nothing hangs here" is judged against.
   const tierItems = useMemo(
-    () => listItems.filter((i) => tierOf(i) === currentTier),
-    [listItems, tierOf, currentTier],
+    () => offeredItems.filter((i) => tierOf(i) === currentTier),
+    [offeredItems, tierOf, currentTier],
   )
 
   const folderRows = useMemo<FolderRowView[]>(
@@ -224,9 +239,9 @@ export function WardrobeBrowser({
   const sharedTierRows = useMemo(
     () =>
       isCharacterScope && inOwnTier && !searching && currentFolder === '' && showShared
-        ? tierRows(listItems, tierOf)
+        ? tierRows(offeredItems, tierOf)
         : [],
-    [isCharacterScope, inOwnTier, searching, currentFolder, showShared, listItems, tierOf],
+    [isCharacterScope, inOwnTier, searching, currentFolder, showShared, offeredItems, tierOf],
   )
 
   const visibleItems = useMemo(
@@ -491,6 +506,9 @@ export function WardrobeBrowser({
             />
             Never worn
           </label>
+          {isCharacterScope && pronounFilter && (
+            <PronounAwareToggle filter={pronounFilter} items={listItems} />
+          )}
         </div>
 
         {/* Folder bar: where we are, and the filing controls. */}

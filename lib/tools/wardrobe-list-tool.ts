@@ -3,12 +3,15 @@
  *
  * Provides a tool interface for LLMs to browse a character's wardrobe items.
  * Supports filtering by type and appropriateness, and shows equipped status.
+ * Pronoun-aware by default: items whose pronoun guidance names other pronouns
+ * than the caller's are held back unless `pronoun_aware: false`.
  */
 
 import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { pronounAwareToolParam } from './wardrobe-pronoun-params'
 
 /**
  * Zod schema for the wardrobe list tool's input.
@@ -34,6 +37,7 @@ export const wardrobeListToolInputSchema = z.object({
       'Whether to include currently equipped items in the results. Defaults to true.'
     )
     .optional(),
+  pronoun_aware: pronounAwareToolParam,
 })
 
 /**
@@ -57,6 +61,8 @@ export interface WardrobeListItemResult {
   image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
+  /** Pronoun guidance: the pronouns (by subject) the item is meant for. Empty = everyone. */
+  pronoun_guidance: string[];
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
   is_own: boolean;
   /**
@@ -109,6 +115,11 @@ export interface WardrobeListToolOutput {
   success: boolean;
   items: WardrobeListItemResult[];
   total_count: number;
+  /**
+   * How many items the pronoun-aware filter held back (0 when it was off, or
+   * the caller has no standard pronouns). `pronoun_aware: false` lists them.
+   */
+  hidden_by_pronoun_guidance?: number;
   /** Outfit presets available for this character */
   presets?: WardrobeListPresetResult[];
   /** Error message if operation failed */
@@ -126,6 +137,8 @@ export const wardrobeListToolDefinition = {
       'Retrieve wardrobe items available to the current character — from their ' +
       'own wardrobe plus shared items in the project and Quilltap General. ' +
       'Supports optional filtering by item type and appropriateness context. ' +
+      'Pronoun-aware by default: items whose pronoun guidance names other pronouns than ' +
+      'yours are left out (the result says how many) — pass pronoun_aware: false to see them. ' +
       'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
       'a composite flag indicating whether it bundles other items, and an is_own ' +
       'flag (shared archetypes can be worn but not edited), how often YOU have ' +

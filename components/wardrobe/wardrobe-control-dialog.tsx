@@ -56,6 +56,7 @@ import { useStagedLiveOutfits } from './hooks/useStagedLiveOutfits'
 import { OutfitHistoryTab } from './outfit-history-tab'
 import { useFittingRoom } from './hooks/useFittingRoom'
 import { useComposerHandlers } from './hooks/useComposerHandlers'
+import { usePronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
 
 interface CharacterSummary {
   id: string
@@ -237,6 +238,11 @@ function WardrobeControlDialogInner({
   const [showArchived, setShowArchived] = useState(false)
   const data = useWardrobeListData(selectedContainer, { chatId, includeArchived: showArchived })
   const items = data.characterItems
+
+  // Pronoun-aware (on by default): one switch for the list and both
+  // composers' pickers. Worn chips still resolve against every item.
+  const pronounFilter = usePronounGuidanceFilter(selectedCharacterId)
+  const pickableItems = useMemo(() => pronounFilter.offer(items), [pronounFilter, items])
 
   // True while an imperative confirmation dialog is up. That dialog renders
   // into document.body (outside this modal), so a click on its buttons would
@@ -482,6 +488,7 @@ function WardrobeControlDialogInner({
             actions={actions}
             showArchived={showArchived}
             onShowArchivedChange={setShowArchived}
+            pronounFilter={pronounFilter}
             wear={
               isCharacterScope
                 ? {
@@ -548,7 +555,12 @@ function WardrobeControlDialogInner({
                   <p className="qt-text-xs qt-text-secondary px-1">
                     Edits stage here and apply when you click Done. Nothing happens until then.
                   </p>
-                  <OutfitComposer items={items} slots={live.displaySlots} {...liveHandlers} />
+                  <OutfitComposer
+                    items={items}
+                    pickableItems={pickableItems}
+                    slots={live.displaySlots}
+                    {...liveHandlers}
+                  />
                 </div>
               ) : (
                 <div className="space-y-2 mb-3">
@@ -638,7 +650,12 @@ function WardrobeControlDialogInner({
                       )}
                     </div>
                   </div>
-                  <OutfitComposer items={items} slots={fitting.slots} {...fittingHandlers} />
+                  <OutfitComposer
+                    items={items}
+                    pickableItems={pickableItems}
+                    slots={fitting.slots}
+                    {...fittingHandlers}
+                  />
                 </div>
               )}
 

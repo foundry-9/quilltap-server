@@ -49,6 +49,8 @@ export interface WardrobeReadToolOutput {
   image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
+  /** Pronoun guidance: the pronouns (by subject) the item is meant for. Empty = everyone. */
+  pronoun_guidance: string[];
   /** Whether this item is part of the character's default outfit. */
   is_default: boolean;
   /** Composite behaviour on equip: false = additive (layer), true = clear-then-set. */

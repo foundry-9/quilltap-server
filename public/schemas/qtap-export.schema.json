@@ -1517,6 +1517,11 @@
           "type": "boolean",
           "description": "Whether this item is part of the character's default outfit"
         },
+        "pronounGuidance": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["he", "she", "they", "it"] },
+          "description": "Pronoun guidance: the standard pronoun sets (by subject) this item is meant for. Pronoun-aware listings offer it only to characters with one of these pronouns. Empty or absent means it is offered to everyone. Unknown values are dropped on import."
+        },
         "replace": {
           "type": "boolean",
           "description": "Composite items only: if true, equipping clears the slots the composite designates before placing its components; if false/absent, equipping is additive (layers without clearing). Ignored for leaf items."

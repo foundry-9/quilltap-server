@@ -172,6 +172,7 @@ export async function executeWardrobeCreateTool(
       component_item_ids,
       component_titles,
       replace,
+      pronoun_guidance,
       generate_image,
     } = parsed;
 
@@ -228,6 +229,7 @@ export async function executeWardrobeCreateTool(
         appropriateness,
         isDefault: false,
         replace: replace ?? false,
+        pronounGuidance: pronoun_guidance,
       },
       { lookup: pool.byId },
     );

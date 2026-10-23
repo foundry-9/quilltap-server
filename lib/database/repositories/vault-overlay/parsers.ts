@@ -25,6 +25,7 @@ import {
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { sortScenarios } from '@/lib/scenarios/sort';
@@ -382,6 +383,9 @@ export function parseWardrobeItemFile(
 
   const replace = parsed.data?.replace === true;
 
+  // Unknown values are dropped; an item left with none is offered to everyone.
+  const pronounGuidance = normalizePronounGuidance(parsed.data?.pronounGuidance);
+
   let archivedAt: string | null = null;
   const archivedAtRaw = parsed.data?.archivedAt;
   if (typeof archivedAtRaw === 'string' && archivedAtRaw.length > 0) {
@@ -445,6 +449,7 @@ export function parseWardrobeItemFile(
     appropriateness,
     isDefault,
     replace,
+    ...(pronounGuidance.length > 0 ? { pronounGuidance } : {}),
     componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
     imageFileId,

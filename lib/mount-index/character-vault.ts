@@ -27,6 +27,7 @@ import type {
   CharacterScenario,
 } from '@/lib/schemas/character.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
 export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
 
@@ -349,6 +350,10 @@ export function buildWardrobeItemFile(
   }
   if (item.replace) {
     data.replace = true;
+  }
+  const pronounGuidance = normalizePronounGuidance(item.pronounGuidance);
+  if (pronounGuidance.length > 0) {
+    data.pronounGuidance = pronounGuidance;
   }
   if (item.archivedAt) {
     data.archived = true;

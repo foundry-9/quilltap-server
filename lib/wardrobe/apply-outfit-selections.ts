@@ -47,6 +47,7 @@ import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
+import { filterByPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
@@ -353,7 +354,17 @@ export async function applyOutfitSelections(
             // wardrobe is shared used to fail this guard and fall through to
             // (empty) defaults without the LLM ever being consulted.
             const pool = await getPool(characterId);
-            const wardrobeItems = pool.wearable();
+            // Pronoun-aware, like every listing a character chooses from:
+            // items meant for other pronouns are not offered.
+            const offered = filterByPronounGuidance(pool.wearable(), character?.pronouns);
+            const wardrobeItems = offered.items;
+            if (offered.hiddenCount > 0) {
+              logger.debug('[applyOutfitSelections] Pronoun guidance held items back from the green room', {
+                chatId,
+                characterId,
+                hiddenCount: offered.hiddenCount,
+              });
+            }
 
             if (character && wardrobeItems.length > 0) {
               const resolved = selectCheapLLMFromProfiles(

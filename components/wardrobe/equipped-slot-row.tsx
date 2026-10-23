@@ -31,6 +31,11 @@ interface EquippedSlotRowProps {
    * composites the picker itself won't offer.
    */
   allItems: ListedWardrobeItem[]
+  /**
+   * What the picker offers (garments for this slot are drawn from it).
+   * Defaults to `allItems`; the pronoun-aware filter narrows it.
+   */
+  pickableItems?: ListedWardrobeItem[]
   onAdd: (slot: WardrobeItemType, itemId: string) => void
   onRemove: (slot: WardrobeItemType, itemId: string) => void
   onClear: (slot: WardrobeItemType) => void
@@ -40,6 +45,7 @@ export function EquippedSlotRow({
   slot,
   equippedIds,
   allItems,
+  pickableItems,
   onAdd,
   onRemove,
   onClear,
@@ -71,11 +77,11 @@ export function EquippedSlotRow({
   const candidates = useMemo(() => {
     const equipped = new Set(equippedIds)
     const term = search.trim().toLowerCase()
-    return selectGarments(allItems)
+    return selectGarments(pickableItems ?? allItems)
       .filter((i) => i.types.includes(slot))
       .filter((i) => !equipped.has(i.id))
       .filter((i) => (term ? i.title.toLowerCase().includes(term) : true))
-  }, [allItems, slot, equippedIds, search])
+  }, [allItems, pickableItems, slot, equippedIds, search])
 
   return (
     <div className="qt-card py-2 px-3">

@@ -29,9 +29,16 @@ describe('item drafts', () => {
       componentItemIds: [],
       // A leaf always replaces its slots; the flag is composite-only.
       replace: false,
+      // An item read without guidance is offered to everyone.
+      pronounGuidance: [],
       // An item read without a folder sits at the top level.
       folder: '',
     })
+  })
+
+  it('carries pronoun guidance through the draft', () => {
+    const gown = { ...coat, pronounGuidance: ['she', 'they'] } as unknown as WardrobeItem
+    expect(draftToPayload(draftFromItem(gown)).pronounGuidance).toEqual(['she', 'they'])
   })
 
   it('keeps replace for a composite and sends blank text as null', () => {

@@ -9,7 +9,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { isComposite } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import type { PronounGuidance, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
 import { draftFromItem, emptyDraft, payloadForEdit, validateDraft } from '@/lib/wardrobe/item-draft'
@@ -29,6 +29,7 @@ import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeCha
 import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
 import { WardrobeItemImageSection } from './wardrobe-item-editor/WardrobeItemImageSection'
 import { WardrobeFolderField } from './wardrobe-item-editor/WardrobeFolderField'
+import { WardrobePronounGuidanceField } from './wardrobe-item-editor/WardrobePronounGuidanceField'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -142,6 +143,10 @@ export function WardrobeItemEditor({
   // covering every clothing slot but only containing a ring) — seeded from the
   // stored types, so editing only ever widens (`buildCompositeTypes`).
   const [replace, setReplace] = useState<boolean>(initialDraft.replace)
+  // Pronoun guidance: who the item is offered to. Empty = everyone.
+  const [pronounGuidance, setPronounGuidance] = useState<PronounGuidance[]>(
+    initialDraft.pronounGuidance,
+  )
   const [bundleDesignatedTypes, setBundleDesignatedTypes] = useState<WardrobeItemType[]>(
     initialDraft.types,
   )
@@ -386,6 +391,7 @@ export function WardrobeItemEditor({
       types: isBundle ? effectiveTypes : selectedTypes,
       componentItemIds: isBundle ? componentItemIds : [],
       replace,
+      pronounGuidance,
       folder,
     })
     if (!validation.ok) {
@@ -710,6 +716,9 @@ export function WardrobeItemEditor({
                 When is this appropriate to wear? e.g., formal, casual, intimate, combat.
               </p>
             </div>
+
+            {/* Pronoun guidance — who the piece is offered to. */}
+            <WardrobePronounGuidanceField value={pronounGuidance} onChange={setPronounGuidance} />
 
             {/* Portrait cue — plain-text phrase handed to the image-makers. */}
             <div>

@@ -7,6 +7,7 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { CharacterFormData, CharacterScenario } from '../types'
+import { STANDARD_PRONOUNS } from '@/lib/characters/pronoun-presets'
 
 interface CharacterBasicInfoProps {
   characterId: string
@@ -52,12 +53,10 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
   )
 }
 
+// The standard sets are shared with the wardrobe's pronoun guidance.
 const PRONOUN_PRESETS = [
   { label: 'Not set', value: null },
-  { label: 'He/Him/His', value: { subject: 'he', object: 'him', possessive: 'his' } },
-  { label: 'She/Her/Her', value: { subject: 'she', object: 'her', possessive: 'her' } },
-  { label: 'They/Them/Their', value: { subject: 'they', object: 'them', possessive: 'their' } },
-  { label: 'It/It/Its', value: { subject: 'it', object: 'it', possessive: 'its' } },
+  ...STANDARD_PRONOUNS,
   { label: 'Custom', value: 'custom' as const },
 ] as const
 

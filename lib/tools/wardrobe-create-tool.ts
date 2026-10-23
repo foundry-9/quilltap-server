@@ -18,6 +18,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance';
+import { pronounGuidanceToolParam } from './wardrobe-pronoun-params';
 import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation';
 
 /**
@@ -64,6 +65,7 @@ export const wardrobeCreateToolInputSchema = z
         'Context tags describing when this item is appropriate, such as "casual", "formal", "athletic", etc.'
       )
       .optional(),
+    pronoun_guidance: pronounGuidanceToolParam('set'),
     equip_now: z
       .boolean()
       .default(false)

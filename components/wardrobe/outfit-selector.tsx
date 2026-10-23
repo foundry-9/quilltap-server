@@ -25,6 +25,8 @@ import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-it
 import { buildDefaultOutfit, buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit'
 import { appendWornBundleIds, type StagedGesture } from '@/lib/wardrobe/staged-live-outfits'
 import { OutfitComposer } from './outfit-composer'
+import { PronounAwareToggle } from './PronounAwareToggle'
+import { usePronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
 import { useComposerHandlers } from './hooks/useComposerHandlers'
 
 // ============================================================================
@@ -210,6 +212,10 @@ function CharacterOutfitSection({
     () => new Map(wardrobeItems.map((i) => [i.id, i])),
     [wardrobeItems],
   )
+
+  // Pronoun-aware pickers (on by default); seeded defaults stay as they are.
+  const pronounFilter = usePronounGuidanceFilter(internalMode === 'manual' ? character.id : null)
+  const pickableItems = useMemo(() => pronounFilter.offer(wardrobeItems), [pronounFilter, wardrobeItems])
 
   // Resolve the provisional opening mode once the wardrobe has been read. A
   // character with a usable default outfit (any non-archived default item —
@@ -423,7 +429,8 @@ function CharacterOutfitSection({
                 </p>
               ) : (
                 <>
-                  <div className="flex justify-end mb-2">
+                  <div className="flex items-center justify-end gap-3 mb-2">
+                    <PronounAwareToggle filter={pronounFilter} items={wardrobeItems} />
                     <button
                       type="button"
                       onClick={handleClearAll}
@@ -434,7 +441,12 @@ function CharacterOutfitSection({
                       Clear all
                     </button>
                   </div>
-                  <OutfitComposer items={wardrobeItems} slots={stagedSlots} {...composerHandlers} />
+                  <OutfitComposer
+                    items={wardrobeItems}
+                    pickableItems={pickableItems}
+                    slots={stagedSlots}
+                    {...composerHandlers}
+                  />
                 </>
               )}
             </div>
