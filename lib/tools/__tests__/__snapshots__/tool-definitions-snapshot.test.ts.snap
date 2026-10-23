@@ -1329,7 +1329,7 @@ exports[`tool definitions: derived OpenAI parameters inventoryCreate: parameters
       "type": "boolean",
     },
     "image_description": {
-      "description": "How the object looks, for pictures (rendering hints only).",
+      "description": "How the object looks, for pictures — the ONLY text about it the image generator sees (never the description). Supply it whenever the object would be visible in a portrait or scene. 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "dented brass pocket compass on a short chain".",
       "maxLength": 2000,
       "type": "string",
     },
@@ -1547,7 +1547,7 @@ exports[`tool definitions: derived OpenAI parameters inventoryUpdate: parameters
       "type": "string",
     },
     "image_description": {
-      "description": "How the object looks, for pictures (rendering hints only).",
+      "description": "How the object looks, for pictures — the ONLY text about it the image generator sees (never the description). Supply it whenever the object would be visible in a portrait or scene. 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "dented brass pocket compass on a short chain".",
       "maxLength": 2000,
       "type": "string",
     },
@@ -2356,7 +2356,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "type": "array",
     },
     "description": {
-      "description": "A detailed description of the wardrobe item.",
+      "description": "Prose for you and the other characters to read. It is NEVER used for pictures — put what the item looks like in image_prompt as well.",
       "type": "string",
     },
     "equip_now": {
@@ -2369,7 +2369,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "type": "boolean",
     },
     "image_prompt": {
-      "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
+      "description": "Portrait Cue — ALWAYS supply this for a new garment. It is the ONLY text about the item that avatars, story backgrounds and item pictures ever see (the description is never shown to them; without a cue they get only the title). 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "ankle-length emerald silk gown, square neckline, gold beaded sash". It is joined into a comma-separated outfit list. May be omitted for a composite, whose components speak for it.",
       "type": "string",
     },
     "pronoun_guidance": {
@@ -2562,7 +2562,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
       "type": "array",
     },
     "description": {
-      "description": "New description. Omit to leave unchanged.",
+      "description": "New description. Omit to leave unchanged. Prose for you and the other characters to read. It is NEVER used for pictures — put what the item looks like in image_prompt as well.",
       "type": "string",
     },
     "generate_image": {
@@ -2570,7 +2570,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
       "type": "boolean",
     },
     "image_prompt": {
-      "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",
+      "description": "New Portrait Cue — the only text about the item the image generator sees (never the description). 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. Supply one whenever the item has none or its look changes. Omit to leave unchanged.",
       "type": "string",
     },
     "is_default": {

@@ -249,6 +249,7 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
  */
 const CONTENT_PARAM_MAP: Record<string, string> = {
   inventory_create: 'description',
+  wardrobe_create: 'description',
   whisper: 'message',
   generate_image: 'prompt',
   search_web: 'query',

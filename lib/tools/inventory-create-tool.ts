@@ -9,6 +9,7 @@
 import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { INVENTORY_IMAGE_DESCRIPTION_GUIDANCE } from './image-cue-guidance'
 import type { InventoryObjectSummary } from './handlers/inventory-handler-shared'
 
 /** The fields a character may set on an object of their own. */
@@ -22,7 +23,7 @@ export const inventoryObjectFieldsShape = {
   image_description: z
     .string()
     .max(2000)
-    .describe('How the object looks, for pictures (rendering hints only).')
+    .describe(INVENTORY_IMAGE_DESCRIPTION_GUIDANCE)
     .optional(),
   emoji: z.string().max(16).describe('A single emoji glyph for it.').optional(),
   max_equipped: z
@@ -59,8 +60,9 @@ export const inventoryCreateToolDefinition = {
     name: 'inventory_create',
     description:
       'Make a new object of your own (not clothing) in your own vault, and optionally equip it. ' +
-      'Give it a plain name, and optionally a title, a description, how it looks, an emoji and ' +
-      'free-form metadata.',
+      'Give it a plain name, and optionally a title, a description, an emoji and free-form ' +
+      'metadata. Set image_description (how it looks, 200 characters or fewer of literal visual ' +
+      'detail) for anything that could appear in a picture: pictures never read the description.',
     parameters: zodToOpenAISchema(inventoryCreateToolInputSchema),
   },
 }

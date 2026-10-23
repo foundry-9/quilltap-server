@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: wardrobe and inventory tools ask for a picture cue
+
+- `wardrobe_create` / `wardrobe_update` (`image_prompt`, `description`) and `inventory_create` / `inventory_update` (`image_description`) now tell the model plainly that image pipelines never read the description, and ask for a literal visual cue of 200 characters or fewer with every new garment or visible object. Without one, avatars and story backgrounds got only the item's title. Wording is shared from `lib/tools/image-cue-guidance.ts`. The 200 characters is guidance only, not enforced.
+- Text-block (non-native tool) instructions for `CREATE_WARDROBE_ITEM` and `CREATE_INVENTORY_ITEM` carry the same instruction and show `cue=` / `looks=` in their examples.
+- Fixed: the body of a text-block `CREATE_WARDROBE_ITEM` was passed as `content`, which `wardrobe_create` does not accept, so its description was silently dropped. It now maps to `description`.
+
 #### Feature: always-on floating Brahma Console
 
 - New `BrahmaConsoleLauncher` button, pinned bottom-left just right of the left rail on every authenticated page. Never disabled; toggles the floating Brahma Console dialog. With no connection profile the console opens to its "wants for an engine" note.

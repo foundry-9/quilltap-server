@@ -207,10 +207,11 @@ Return to a numbered outfit from the history: [[ROLLBACK_OUTFIT index="2" /]]`)
   if (options.wardrobeCreate) {
     toolDocs.push(`
 ### Create Wardrobe Item
-Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items, and set a Portrait Cue (image_prompt) to steer image generation.
-Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items.
+For every single garment ALWAYS give a cue: 200 characters or fewer of literal visual detail (colour, material, cut). Pictures are drawn from the cue, never from the description text between the tags.
+Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual" cue="long crimson wool scarf, golden tassels"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
 Composite outfit (bundles existing items by id or title): [[CREATE_WARDROBE_ITEM title="Rain Outfit" component_titles="Yellow Slicker,Dark Jeans,Wellington Boots"]]Practical attire for a downpour[[/CREATE_WARDROBE_ITEM]]
-Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
+Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" cue="long crimson wool scarf, golden tassels" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
   }
 
   if (options.wardrobeUpdate) {
@@ -269,7 +270,8 @@ With a title of its own: [[PICK_UP ref="magic bow" title="Whisperwind" /]]`)
   if (options.inventoryCreate) {
     toolDocs.push(`
 ### Create an Object
-[[CREATE_INVENTORY_ITEM name="compass" title="The Navigator" equip="true"]]A brass compass that points toward home[[/CREATE_INVENTORY_ITEM]]`)
+Give anything that could appear in a picture a looks: 200 characters or fewer of literal visual detail. Pictures are drawn from it, never from the description text between the tags.
+[[CREATE_INVENTORY_ITEM name="compass" title="The Navigator" looks="dented brass pocket compass on a short chain" equip="true"]]A brass compass that points toward home[[/CREATE_INVENTORY_ITEM]]`)
   }
 
   if (options.inventoryUpdate) {

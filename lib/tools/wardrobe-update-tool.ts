@@ -18,6 +18,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 import { pronounGuidanceToolParam } from './wardrobe-pronoun-params'
+import {
+  WARDROBE_DESCRIPTION_GUIDANCE,
+  WARDROBE_UPDATE_IMAGE_PROMPT_GUIDANCE,
+} from './image-cue-guidance'
 import type { WardrobeReadToolOutput } from './wardrobe-read-tool'
 import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation'
 
@@ -41,15 +45,11 @@ export const wardrobeUpdateToolInputSchema = z
       .optional(),
     description: z
       .string()
-      .describe('New description. Omit to leave unchanged.')
+      .describe(`New description. Omit to leave unchanged. ${WARDROBE_DESCRIPTION_GUIDANCE}`)
       .optional(),
     image_prompt: z
       .string()
-      .describe(
-        'New Portrait Cue — a short, literal, plain-text visual phrase fed to ' +
-        'the image generator in place of the title. Terse, never Markdown. Omit ' +
-        'to leave unchanged.'
-      )
+      .describe(WARDROBE_UPDATE_IMAGE_PROMPT_GUIDANCE)
       .optional(),
     appropriateness: z
       .string()
