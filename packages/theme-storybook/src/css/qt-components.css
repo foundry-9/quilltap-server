@@ -1291,6 +1291,127 @@
 }
 
 /* ==========================================================================
+   FLOATING DIALOG - Movable, resizable floating panel
+   z 58 places it between panels (z 55) and modals (z 60)
+   ========================================================================== */
+
+.qt-floating-dialog {
+  position: fixed;
+  z-index: 58;
+  border-radius: var(--qt-dialog-radius, var(--radius-lg, 0.5rem));
+  background: var(--qt-dialog-bg, var(--color-background));
+  border: 1px solid var(--qt-dialog-border, var(--color-border));
+  box-shadow: var(--qt-dialog-shadow, 0 24px 48px -12px rgb(0 0 0 / 0.18));
+  resize: both;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Topmost floating dialog — lifted above every portal modal (Brahma Console) */
+.qt-floating-dialog-topmost {
+  z-index: var(--qt-floating-layer-z);
+}
+
+.qt-floating-dialog-header {
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid var(--qt-dialog-border, var(--color-border));
+  background: var(--qt-dialog-bg, var(--color-background));
+  flex-shrink: 0;
+}
+
+.qt-floating-dialog-header:active {
+  cursor: grabbing;
+}
+
+.qt-floating-dialog-title {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-floating-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.qt-floating-dialog-close {
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  color: var(--color-muted-foreground);
+  transition: color 150ms, background-color 150ms;
+}
+
+.qt-floating-dialog-close:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.qt-floating-dialog-body {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   BRAHMA CONSOLE LAUNCHER - The always-on button beside the left rail
+   Sits in the topmost floating layer so it stays reachable over any modal.
+   ========================================================================== */
+
+.qt-brahma-launcher {
+  position: fixed;
+  left: calc(var(--qt-left-sidebar-collapsed-width) + var(--qt-brahma-launcher-offset));
+  bottom: var(--qt-brahma-launcher-offset);
+  z-index: var(--qt-floating-layer-z);
+  width: var(--qt-brahma-launcher-size);
+  height: var(--qt-brahma-launcher-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--qt-brahma-launcher-bg);
+  color: var(--qt-brahma-launcher-fg);
+  border: 2px solid var(--qt-brahma-launcher-ring);
+  box-shadow: var(--qt-brahma-launcher-shadow);
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.qt-brahma-launcher:hover {
+  background: var(--qt-brahma-launcher-hover-bg);
+  transform: scale(1.06);
+}
+
+.qt-brahma-launcher:focus-visible {
+  outline: 2px solid var(--qt-brahma-launcher-ring);
+  outline-offset: 3px;
+}
+
+.qt-brahma-launcher-active,
+.qt-brahma-launcher-active:hover {
+  background: var(--qt-brahma-launcher-active-bg);
+  color: var(--qt-brahma-launcher-active-fg);
+}
+
+.qt-brahma-launcher-icon {
+  width: 60%;
+  height: 60%;
+}
+
+/* ==========================================================================
    SLIDE-OVER PANELS
    ========================================================================== */
 

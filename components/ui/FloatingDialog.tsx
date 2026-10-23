@@ -4,12 +4,19 @@
  * FloatingDialog
  *
  * A floating, draggable, resizable dialog component rendered via portal.
- * Used for the help chat dialog. Persists position/size to localStorage.
+ * Used for the help chat dialog and the Brahma Console. Persists position/size
+ * to localStorage.
+ *
+ * By default it sits in the panel layer, beneath portal modals. `topmost` lifts
+ * it into the floating layer above every modal (see `floating-layer.ts`): it
+ * then belongs to no modal, so using it never dismisses the one beneath, and
+ * Escape closes it only when pressed inside it.
  */
 
 import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
+import { floatingLayerProps } from '@/components/ui/floating-layer'
 
 export interface DialogGeometry {
   x: number
@@ -29,6 +36,8 @@ interface FloatingDialogProps {
   minWidth?: number
   minHeight?: number
   headerActions?: ReactNode
+  /** Float above every portal modal instead of beneath them */
+  topmost?: boolean
 }
 
 const DEFAULT_GEOMETRY: DialogGeometry = {
@@ -85,6 +94,7 @@ export function FloatingDialog({
   minWidth = 320,
   minHeight = 300,
   headerActions,
+  topmost = false,
 }: FloatingDialogProps) {
   const [geometry, setGeometry] = useState<DialogGeometry>(() =>
     constrainToViewport(loadGeometry(storageKey, initialGeometry), minWidth, minHeight)
@@ -152,22 +162,30 @@ export function FloatingDialog({
     return () => observer.disconnect()
   }, [isOpen, geometry, updateGeometry])
 
-  // Escape key closes
+  // Escape key closes. A topmost dialog floats over whatever modal is open, so
+  // it listens on itself only — and swallows the key, so the modal beneath
+  // doesn't close too — rather than closing on every Escape in the document.
   useEffect(() => {
     if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const el = dialogRef.current
+    const target: HTMLElement | Document | null = topmost ? el : document
+    if (!target) return
+    const handleKeyDown = (e: Event) => {
+      if ((e as KeyboardEvent).key !== 'Escape') return
+      if (topmost) e.stopPropagation()
+      onClose()
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+    target.addEventListener('keydown', handleKeyDown)
+    return () => target.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose, topmost])
 
   if (!isOpen) return null
 
   return createPortal(
     <div
       ref={dialogRef}
-      className="qt-floating-dialog"
+      className={topmost ? 'qt-floating-dialog qt-floating-dialog-topmost' : 'qt-floating-dialog'}
+      {...(topmost ? floatingLayerProps : {})}
       style={{
         left: geometry.x,
         top: geometry.y,

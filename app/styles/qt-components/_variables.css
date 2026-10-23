@@ -276,6 +276,21 @@
   --qt-dialog-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.18);
   --qt-dialog-backdrop: rgb(0 0 0 / 0.45);
 
+  /* Topmost floating layer — above every portal modal (z ≤ 101), below the
+     startup gates (z 9999). Holds the always-on Brahma Console. */
+  --qt-floating-layer-z: 1000;
+
+  /* Brahma Console launcher — the always-on button beside the left rail */
+  --qt-brahma-launcher-size: 2.75rem;
+  --qt-brahma-launcher-offset: 0.75rem;
+  --qt-brahma-launcher-bg: var(--color-primary);
+  --qt-brahma-launcher-fg: var(--color-primary-foreground);
+  --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --qt-brahma-launcher-active-bg: var(--color-background);
+  --qt-brahma-launcher-active-fg: var(--color-primary);
+  --qt-brahma-launcher-ring: var(--color-primary);
+  --qt-brahma-launcher-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35);
+
   --qt-popover-radius: var(--radius-md);
   --qt-popover-bg: var(--color-popover);
   --qt-popover-fg: var(--color-popover-foreground);

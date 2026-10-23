@@ -4,6 +4,16 @@
 
 ### 4.11-dev
 
+#### Feature: always-on floating Brahma Console
+
+- New `BrahmaConsoleLauncher` button, pinned bottom-left just right of the left rail on every authenticated page. Never disabled; toggles the floating Brahma Console dialog. With no connection profile the console opens to its "wants for an engine" note.
+- The floating console now works with the workspace enabled (before, the sidebar mark opened only the workspace tab there). The sidebar mark is unchanged: workspace tab inside the workspace, floating dialog elsewhere.
+- `FloatingDialog` takes `topmost`: the dialog sits in a new floating layer (`--qt-floating-layer-z: 1000`, above every portal modal, below the startup gates), carries `data-qt-floating-layer`, and closes on Escape only when the key is pressed inside it (the key is swallowed). `useClickOutside` ignores mousedowns and Escapes inside that layer (`isInFloatingLayer`, `components/ui/floating-layer.ts`), so using the console never dismisses the modal beneath it.
+- Refactor: the console body is `BrahmaConsolePanel` (render-prop: `headerActions` + `body`), shared by the workspace tab (`BrahmaConsoleView`) and the floating dialog (`BrahmaConsoleDialog`). Which conversation a surface is on is per surface (`useBrahmaConsoleSession`, own localStorage key each), so the tab and the dialog no longer share a current chat. The provider keeps only open/close/toggle and the profile list.
+- The floating console stays mounted while hidden, so a streaming reply keeps arriving and reopening returns to the same conversation (it used to reset to the launcher on every open).
+- Console header: the model picker shows on the launcher too (default profile until one is picked; the pick is used for the next new conversation), plus a "Past conversations" button beside "New conversation". A remembered conversation that 404s falls back to the launcher.
+- New `qt-floating-dialog-topmost`, `qt-brahma-launcher`, `qt-brahma-launcher-active`, `qt-brahma-launcher-icon` and `--qt-brahma-launcher-*` tokens; the `qt-floating-dialog` family is now mirrored in theme-storybook (1.0.81).
+
 #### Feature: min/max ranges in the Pascal intervention dialog
 
 - `executeCustomTool` reports `rollSpan` and `valueSpan` (`RunSpan` in `lib/pascal/custom-tools.ts`): what the raw draw and the value after modifiers could have been under the run's resolved parameters. Range form: `[min, max)` carried through multiply, offset and round (a negative multiplier swaps the ends; rounding makes both ends reachable values). Dice: all ones to all sides, modifier included. Spans ignore pins.

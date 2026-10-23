@@ -18,6 +18,7 @@ import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 import { BrahmaConsoleProvider } from '@/components/providers/brahma-console-provider'
 import { BrahmaConsoleDialog } from '@/components/brahma-console/BrahmaConsoleDialog'
+import { BrahmaConsoleLauncher } from '@/components/brahma-console/BrahmaConsoleLauncher'
 import { QtapLinkProvider } from '@/components/providers/qtap-link-provider'
 import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
@@ -137,6 +138,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             )}
             <HelpChatDialog />
             <BrahmaConsoleDialog />
+            <BrahmaConsoleLauncher />
             <WardrobeControlDialog />
             <InventoryControlDialog />
           </InventoryDialogProvider>

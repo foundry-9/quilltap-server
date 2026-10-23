@@ -196,6 +196,20 @@
   --qt-left-sidebar-overlay-z: 40;
   --qt-left-sidebar-z: 50;
 
+  /* Topmost floating layer — above every portal modal, below the startup gates */
+  --qt-floating-layer-z: 1000;
+
+  /* Brahma Console launcher — the always-on button beside the left rail */
+  --qt-brahma-launcher-size: 2.75rem;
+  --qt-brahma-launcher-offset: 0.75rem;
+  --qt-brahma-launcher-bg: var(--color-primary);
+  --qt-brahma-launcher-fg: var(--color-primary-foreground);
+  --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --qt-brahma-launcher-active-bg: var(--color-background);
+  --qt-brahma-launcher-active-fg: var(--color-primary);
+  --qt-brahma-launcher-ring: var(--color-primary);
+  --qt-brahma-launcher-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35);
+
   /* App Header Variables */
   --qt-app-header-height: 3.5rem;
   --qt-app-header-bg: var(--color-background);

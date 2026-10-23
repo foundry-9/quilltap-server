@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, RefObject } from 'react';
+import { isInFloatingLayer } from '@/components/ui/floating-layer';
 
 export interface UseClickOutsideOptions {
   /**
@@ -72,6 +73,12 @@ export function useClickOutside(
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
+      // The topmost floating layer (the always-on Brahma Console) is not part
+      // of whatever is open beneath it — using it must not dismiss that.
+      if (isInFloatingLayer(event.target)) {
+        return;
+      }
+
       // Check if click is inside the main ref
       if (ref.current?.contains(target)) {
         return;
@@ -91,6 +98,9 @@ export function useClickOutside(
     const handleKeyDown = onEscape
       ? (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
+            if (isInFloatingLayer(event.target)) {
+              return;
+            }
             if (escapeCapture) {
               event.stopPropagation();
               event.preventDefault();
