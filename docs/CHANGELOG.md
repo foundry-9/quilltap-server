@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Docs: draft 4.11.0 release notes
+
+- Added `docs/releases/4.11.0.md` (`draft: true`): overview of the 4.11 cycle and an Upgrading section covering vault-scoped custom tools, inventory self-management on by default, and the newly destructive-gated `doc_delete_blob` / `delete_annotation` in autonomous rooms.
+
 #### Fix: wardrobe and inventory tools ask for a picture cue
 
 - `wardrobe_create` / `wardrobe_update` (`image_prompt`, `description`) and `inventory_create` / `inventory_update` (`image_description`) now tell the model plainly that image pipelines never read the description, and ask for a literal visual cue of 200 characters or fewer with every new garment or visible object. Without one, avatars and story backgrounds got only the item's title. Wording is shared from `lib/tools/image-cue-guidance.ts`. The 200 characters is guidance only, not enforced.
