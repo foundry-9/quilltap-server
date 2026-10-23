@@ -67,9 +67,9 @@ An address Quilltap hands back always **names the vault** — `qtap://Abigail%20
 
 ### Reading & Searching
 
-- **`doc_read_file`** — Read file contents with optional line-range pagination
-- **`doc_list_files`** — List files across stores, with optional folder, glob pattern, and scope filters. By courtesy it omits the housekeeping clutter — hidden operating-system files (`.DS_Store` and its ilk) and the Estate's own auto-generated portraits and backdrops (anything resting in a `character-avatars` or `story-backgrounds` folder). Should one genuinely wish to see those incidental images, pass `includeAutomaticImages: true`; images a character has deliberately saved to an album live elsewhere and are always shown.
-- **`doc_grep`** — Search for text across files using literal or regex patterns, with context lines
+- **`doc_read_file`** — Read file contents with optional line-range pagination. A file you attached to a chat is readable too: it is shelved as an upload rather than written as a document, but its words were taken down on arrival, and those are what you are handed
+- **`doc_list_files`** — List files across stores, with optional folder, glob pattern, and scope filters. The pattern is a proper glob, indifferent to capital letters: `*.md` or a bare `CHANGELOG.md` finds a file of that name in any folder; `drafts/*.md` keeps to one folder; `**/` crosses any number of folders, the store's own front hall included (so `**/CHANGELOG.md` finds one lying at the top); and `*.{md,txt}` takes either. By courtesy it omits the housekeeping clutter — hidden operating-system files (`.DS_Store` and its ilk) and the Estate's own auto-generated portraits and backdrops (anything resting in a `character-avatars` or `story-backgrounds` folder). Should one genuinely wish to see those incidental images, pass `includeAutomaticImages: true`; images a character has deliberately saved to an album live elsewhere and are always shown.
+- **`doc_grep`** — Search for text across files using literal or regex patterns, with context lines. Uploaded files — Markdown, text, JSON, PDF and Word documents — are searched along with everything written in place
 - **`doc_read_frontmatter`** — Read YAML frontmatter from a markdown file
 - **`doc_read_heading`** — Read all content under a specific heading in a markdown file
 

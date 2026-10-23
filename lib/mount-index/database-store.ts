@@ -25,7 +25,7 @@ import {
   emitDocumentMoved,
   emitDocumentWritten,
 } from './db-store-events';
-import { detectNativeText } from './path-utils';
+import { detectNativeText, isExtractableBlobPath } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
 import { inventoryWritesAreLinted, isTitleLintFolder, isTitleLintPath } from '@/lib/inventory/lint-scope';
 import type { InventoryDocumentChange } from '@/lib/inventory/title-lint-documents';
@@ -96,6 +96,43 @@ export async function readDatabaseDocument(
     mtime: new Date(doc.lastModified).getTime(),
     size: doc.content.length,
   };
+}
+
+/**
+ * The readable text of a blob at a path: the `extractedText` its link carries
+ * once ingest (or the startup backfill) converted it — a PDF/DOCX's derived
+ * text, or an uploaded .md/.txt/.json's own content (bug 260). Null when there
+ * is no blob there or nothing usable was extracted.
+ */
+export async function readDatabaseBlobText(
+  mountPointId: string,
+  relativePath: string
+): Promise<{ content: string; mtime: number; size: number; storedMimeType: string } | null> {
+  const repos = getRepositories();
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, normaliseRelativePath(relativePath));
+  if (!blob?.extractedText || blob.extractionStatus !== 'converted') return null;
+  return {
+    content: blob.extractedText,
+    mtime: new Date(blob.updatedAt).getTime(),
+    size: blob.sizeBytes,
+    storedMimeType: blob.storedMimeType,
+  };
+}
+
+/**
+ * Every blob in a store whose text can be searched, as `{ relativePath,
+ * content }`: extractable types (PDF, DOCX, native text) with converted text.
+ * `doc_grep` reads this beside `doc_mount_documents` so an upload is found
+ * like a written document (bug 260).
+ */
+export async function listDatabaseBlobTexts(
+  mountPointId: string
+): Promise<Array<{ relativePath: string; content: string }>> {
+  const repos = getRepositories();
+  const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
+  return blobs
+    .filter(b => b.extractionStatus === 'converted' && !!b.extractedText && isExtractableBlobPath(b.relativePath))
+    .map(b => ({ relativePath: b.relativePath, content: b.extractedText as string }));
 }
 
 /**

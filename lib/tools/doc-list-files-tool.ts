@@ -32,7 +32,7 @@ export const docListFilesToolInputSchema = z.object({
     .optional(),
   pattern: z
     .string()
-    .describe('Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js").')
+    .describe('Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js"). A pattern with no "/" matches file names in any folder; "**/" spans any number of folders, including none. Case-insensitive.')
     .optional(),
   recursive: z
     .boolean()

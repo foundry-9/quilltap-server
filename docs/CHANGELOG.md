@@ -4,6 +4,16 @@
 
 ### 4.11-dev
 
+#### Fix: doc tools can read, grep and search chat uploads (bugs 260, 261)
+
+- Bug 260: chat uploads land in the project store (or Quilltap Uploads) as blobs, and the upload bridges had text extraction off, so `doc_read_file`, `doc_grep` and search could not see an uploaded `.md`, `.txt`, `.json`, PDF or DOCX. On `Friday` a character sent to find an uploaded `CHANGELOG.md` at the project root got ENOENT and said it did not exist.
+  - New `extractBlobText` in `lib/mount-index/store-file.ts`: the one place blob text is derived. PDF/DOCX through the converter, native text as its own bytes. `storeMountFile` uses it for every extractable blob (`isExtractableBlobPath` / `EXTRACTABLE_BLOB_EXTENSIONS` in `path-utils.ts`), so the REST blob route also extracts native text now.
+  - `project-store-bridge` and `user-uploads-bridge` pass `extractText: true`, `enqueueEmbedding: true`. Uploads are still blobs; `files.storageKey` is unchanged.
+  - `doc_read_file` falls back to a blob's extracted text when a database store has no document at a text path (read-only; edit tools are unchanged). `doc_grep` also searches blob text. Both via new `readDatabaseBlobText` / `listDatabaseBlobTexts` in `database-store.ts`.
+  - New startup pass `backfillUploadBlobText` (`lib/startup/backfill-upload-blob-text.ts`), chained after the document-store scan: extracts, chunks and queues embeddings for blob links in database stores still at `extractionStatus = 'none'` with an extractable extension (`docMountBlobs.listUnextractedByExtensions`). Idempotent by status, no flag. 87 files on `Friday`.
+- Bug 261: `doc_list_files`' `pattern` matched only `*.ext` or an exact name, so `**/CHANGELOG.md` found nothing. New `compilePathGlob` (`lib/doc-edit/path-glob.ts`): `**`, `*`, `?`, `{a,b}`, `[…]`; a pattern with no `/` matches file names in any folder; `**/` matches zero or more folders; case-insensitive. Tool description updated (snapshot regenerated).
+- Help: `help/file-uploads.md` ("A word on manuscripts") and `help/document-editing-tools.md`.
+
 #### Fix: every character gets every attachment in multi-character chats (bug 259)
 
 - Characters after the first to answer get a user's attachments re-loaded from history (bug 121). That path had an 80,000-character cap per turn and skipped any file that would not fit, with only a server-log warning, while the first responder got every file with no cap. On `Friday` a 108 KB `CHANGELOG.md` reached Amy (first) and not Friday (second), and Friday's prompt gave no sign it was missing.

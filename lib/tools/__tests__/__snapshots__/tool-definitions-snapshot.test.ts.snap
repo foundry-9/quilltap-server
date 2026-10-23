@@ -562,7 +562,7 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "string",
     },
     "pattern": {
-      "description": "Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js").",
+      "description": "Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js"). A pattern with no "/" matches file names in any folder; "**/" spans any number of folders, including none. Case-insensitive.",
       "type": "string",
     },
     "recursive": {

@@ -36,6 +36,8 @@ jest.mock('@/lib/instance-settings', () => ({
 
 jest.mock('@/lib/mount-index/database-store', () => ({
   listDatabaseFiles: jest.fn(),
+  listDatabaseBlobTexts: jest.fn().mockResolvedValue([]),
+  readDatabaseBlobText: jest.fn().mockResolvedValue(null),
 }));
 
 const ACTING = 'char-leilani';

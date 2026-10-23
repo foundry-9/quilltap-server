@@ -466,6 +466,43 @@ export class DocMountBlobsRepository {
   }
 
   /**
+   * Every blob link in a database-backed store still marked
+   * `extractionStatus = 'none'` whose path ends in one of `extensions`
+   * (lower-case, with the dot). The startup backfill's worklist (bug 260):
+   * uploads that predate text extraction. Filesystem and Obsidian stores are
+   * left out — the doc tools read those from disk. Extension matching is
+   * case-insensitive.
+   */
+  async listUnextractedByExtensions(extensions: string[]): Promise<DocMountBlobWithLink[]> {
+    if (extensions.length === 0) return [];
+    try {
+      const likes = extensions.map(() => 'LOWER(l.relativePath) LIKE ?').join(' OR ');
+      return this.db().prepare(
+        `SELECT
+           b.id, b.fileId, b.sha256, b.sizeBytes, b.storedMimeType,
+           b.createdAt, b.updatedAt,
+           l.id AS linkId, l.mountPointId, l.relativePath, l.fileName,
+           l.folderId, l.originalFileName, l.originalMimeType,
+           l.description, l.descriptionUpdatedAt,
+           l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+           l.lastModified
+         FROM doc_mount_file_links l
+         JOIN doc_mount_blobs b ON b.fileId = l.fileId
+         JOIN doc_mount_points m ON m.id = l.mountPointId
+         WHERE m.mountType = 'database'
+           AND COALESCE(l.extractionStatus, 'none') = 'none' AND (${likes})
+         ORDER BY l.mountPointId, l.relativePath`
+      ).all(...extensions.map(ext => `%${ext.toLowerCase()}`)) as DocMountBlobWithLink[];
+    } catch (error) {
+      logger.warn('Failed to list unextracted blobs', {
+        extensions,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Update the description on one link to a blob row. Blobs themselves don't
    * carry per-link metadata; the description is a property of the
    * (mountPoint, path) link, and content-addressing means one blob row can
