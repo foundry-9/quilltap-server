@@ -111,6 +111,10 @@ The rules are strongest paired with [turn skipping](turn-skipping.md), which giv
 
 By the time the third character in a round takes the floor, your message is no longer the freshest thing in the room — two replies sit on top of it, and occasionally one of them (a turn you stopped that finished anyway, say) contradicts what you narrated. So on every chained turn — the second responder onward, and any Continue or Nudge — each character is handed a brief **scene note**: your most recent message is the current state of the scene, and where any other speaker's line conflicts with what you narrated, your account is what happened. What the character *does* about it remains its own business. The note is never added on the first responder's turn (your message is already the last word there), and nothing is stored.
 
+### Everyone Reads What You Hand Round
+
+Attach a document or a photograph to your message and every character in the room receives it, whole, on their next turn after you sent it: the first to answer has it handed straight across, and each who follows has it fetched back out of the record before they speak. Length is no bar. A changelog the size of a modest novella reaches the fourth speaker exactly as it reached the first, and nobody is quietly handed the cover and told it was the book. Each character is shown a given attachment once; after they have answered, it is theirs to remember rather than to be re-read every turn. A character who joins later and has not been given the chat's history does not see uploads from before their arrival. Should the whole of it outgrow a model's appetite, the usual context trimming applies to it as to any long message.
+
 ### Control Modes
 
 Each character can be:

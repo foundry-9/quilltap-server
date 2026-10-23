@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: every character gets every attachment in multi-character chats (bug 259)
+
+- Characters after the first to answer get a user's attachments re-loaded from history (bug 121). That path had an 80,000-character cap per turn and skipped any file that would not fit, with only a server-log warning, while the first responder got every file with no cap. On `Friday` a 108 KB `CHANGELOG.md` reached Amy (first) and not Friday (second), and Friday's prompt gave no sign it was missing.
+- Removed the cap (`REHYDRATED_ATTACHMENT_CHAR_BUDGET`) from `rehydrateUserAttachments` (`lib/services/chat-message/context-builder.service.ts`). Each character now gets every unseen upload whole on its first turn after the upload, the same as the first responder; `buildContext` trims it like any other message. Exported `rehydrateUserAttachments` for a regression test.
+- Documented in `help/chat-multi-character.md` ("Everyone Reads What You Hand Round").
+
 #### Docs: draft 4.11.0 release notes
 
 - Added `docs/releases/4.11.0.md` (`draft: true`): overview of the 4.11 cycle and an Upgrading section covering vault-scoped custom tools, inventory self-management on by default, and the newly destructive-gated `doc_delete_blob` / `delete_annotation` in autonomous rooms.
