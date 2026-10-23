@@ -24,9 +24,11 @@ import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import { formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@/lib/paths';
 import { isDevelopment } from '@/lib/env';
-import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
+import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessIncludedParts, SelfInventoryVaultCoreFilesSection, SelfInventoryCoreFile, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
 import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD, type SelfInventoryToolContext } from './helpers';
 import { chatActivityAt } from '@/lib/chat/chat-activity';
+import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import { CORE_VAULT_FILE_SUMMARIES } from '@/lib/services/character-field-semantics';
 
 async function buildVaultCharacterSection(
   character: Character,
@@ -73,6 +75,67 @@ async function buildVaultCharacterSection(
     fileCount: files.length,
     files,
   };
+}
+
+/**
+ * The nine core files of the character's vault — the overlay's single-file
+ * paths, in its order — each with whether it exists and what belongs in it.
+ * Matched case-insensitively, as the overlay's own lookups are.
+ */
+async function buildVaultCoreFilesSection(
+  character: Character
+): Promise<SelfInventoryVaultCoreFilesSection> {
+  if (isMountIndexDegraded()) {
+    return {
+      available: false,
+      reason: 'mount_index_degraded',
+      message: 'Mount index database is in degraded mode.',
+    };
+  }
+
+  const mountPointId = character.characterDocumentMountPointId;
+  if (!mountPointId) {
+    return {
+      available: false,
+      reason: 'no_vault',
+      message: 'Character has no vault mount point.',
+    };
+  }
+
+  const repos = getRepositories();
+  const mountPoint = await repos.docMountPoints.findById(mountPointId);
+  if (!mountPoint) {
+    return {
+      available: false,
+      reason: 'no_vault',
+      message: `Mount point ${mountPointId} not found.`,
+    };
+  }
+
+  const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
+  const byLowerPath = new Map(rows.map((row) => [row.relativePath.toLowerCase(), row]));
+
+  const files: SelfInventoryCoreFile[] = SINGLE_FILE_OVERLAY_PATHS.map((corePath) => {
+    const row = byLowerPath.get(corePath.toLowerCase());
+    const foundPath = row?.relativePath ?? corePath;
+    return {
+      path: foundPath,
+      exists: Boolean(row),
+      fileSizeBytes: row ? row.fileSizeBytes : null,
+      // Named, not `qtap://self/…` — see buildVaultCharacterSection (bug 256).
+      uri: formatDocStoreUri({ mountPointName: mountPoint.name, mountPointId: mountPoint.id, path: foundPath }),
+      holds: CORE_VAULT_FILE_SUMMARIES[corePath],
+    };
+  });
+
+  logger.debug('self_inventory: core files resolved', {
+    context: 'self-inventory-handler',
+    characterId: character.id,
+    present: files.filter((f) => f.exists).length,
+    total: files.length,
+  });
+
+  return { available: true, mountPointName: mountPoint.name, files };
 }
 
 /** A group the calling character belongs to, with its resolved store ids. */
@@ -861,13 +924,20 @@ export async function buildVaultWrapper(
       })
     );
   }
+  if (parts.coreFiles) {
+    out.coreFiles = await buildVaultCoreFilesSection(character).catch((err) => ({
+      available: false as const,
+      reason: 'error' as const,
+      message: getErrorMessage(err),
+    }));
+  }
   return out;
 }
 
 export async function buildVaultAccessWrapper(
   character: Character,
   context: SelfInventoryToolContext,
-  parts: SelfInventoryVaultIncludedParts
+  parts: SelfInventoryVaultAccessIncludedParts
 ): Promise<SelfInventoryVaultAccessSection> {
   const out: SelfInventoryVaultAccessSection = { includedParts: parts };
   if (parts.character) {
@@ -1075,13 +1145,14 @@ export function resolveVaultIncludedParts(
   const wantsAll = requested.has('vault');
   const character = wantsAll || requested.has('vault.character');
   const groups = wantsAll || requested.has('vault.groups');
-  if (!character && !groups) return null;
-  return { character, groups };
+  const coreFiles = wantsAll || requested.has('vault.coreFiles');
+  if (!character && !groups && !coreFiles) return null;
+  return { character, groups, coreFiles };
 }
 
 export function resolveVaultAccessIncludedParts(
   requested: Set<SelfInventorySection>
-): SelfInventoryVaultIncludedParts | null {
+): SelfInventoryVaultAccessIncludedParts | null {
   const wantsAll = requested.has('vaultAccess');
   const character = wantsAll || requested.has('vaultAccess.character');
   const groups = wantsAll || requested.has('vaultAccess.groups');

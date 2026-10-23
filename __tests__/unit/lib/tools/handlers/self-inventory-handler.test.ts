@@ -53,6 +53,9 @@ const mockRepos = {
   projectDocMountLinks: {
     findByProjectId: jest.fn(),
   },
+  chatSettings: {
+    findByUserId: jest.fn(),
+  },
 }
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -63,11 +66,26 @@ jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({
   isMountIndexDegraded: jest.fn(() => false),
 }))
 
+jest.mock('@/lib/wardrobe/pool', () => ({
+  loadWearablePool: jest.fn(),
+}))
+
+jest.mock('@/lib/inventory/context', () => ({
+  loadInventoryContext: jest.fn(),
+}))
+
+jest.mock('@/lib/pascal/custom-tools', () => ({
+  resolveCustomToolRoster: jest.fn(),
+}))
+
 import fs from 'fs'
 import {
   executeSelfInventoryTool,
   formatSelfInventoryResults,
 } from '@/lib/tools/handlers/self-inventory-handler'
+import { loadWearablePool } from '@/lib/wardrobe/pool'
+import { loadInventoryContext } from '@/lib/inventory/context'
+import { resolveCustomToolRoster } from '@/lib/pascal/custom-tools'
 
 const mockFs = fs as unknown as {
   readdirSync: jest.Mock
@@ -211,7 +229,7 @@ describe('self-inventory vault / vaultAccess sub-sections', () => {
 
     const output = await executeSelfInventoryTool({ sections: ['vault.character'] }, baseContext)
     expect(output.success).toBe(true)
-    expect(output.vault?.includedParts).toEqual({ character: true, groups: false })
+    expect(output.vault?.includedParts).toEqual({ character: true, groups: false, coreFiles: false })
 
     const character = output.vault?.character
     if (!character || !character.available) throw new Error('expected available character vault')
@@ -235,7 +253,7 @@ describe('self-inventory vault / vaultAccess sub-sections', () => {
     expect(character.files.map(f => f.relativePath)).toEqual(['images/avatar.webp', 'manifesto.md'])
   })
 
-  it('bare vault returns both character and groups parts', async () => {
+  it('bare vault returns character, groups and coreFiles parts', async () => {
     mockRepos.groupCharacterMembers.findByCharacterId.mockResolvedValue([
       { groupId: 'g1', characterId: 'char-1' },
     ])
@@ -251,13 +269,61 @@ describe('self-inventory vault / vaultAccess sub-sections', () => {
     )
 
     const output = await executeSelfInventoryTool({ sections: ['vault'] }, baseContext)
-    expect(output.vault?.includedParts).toEqual({ character: true, groups: true })
+    expect(output.vault?.includedParts).toEqual({ character: true, groups: true, coreFiles: true })
     expect(output.vault?.character).toBeDefined()
 
     const groupsSection = output.vault?.groups
     if (!groupsSection || !groupsSection.available) throw new Error('expected available group vaults')
     expect(groupsSection.groups[0]?.groupName).toBe('The Council')
     expect(groupsSection.groups[0]?.files.map(f => f.relativePath)).toEqual(['charter.md'])
+  })
+
+  it('vault.coreFiles lists all nine core files, matched case-insensitively', async () => {
+    mockRepos.docMountFiles.findByMountPointId.mockResolvedValue([
+      fileRow('properties.json', 'json'),
+      fileRow('Manifesto.md'),
+      { ...fileRow('identity.md'), fileSizeBytes: 0 },
+      fileRow('lore/notes.md'),
+    ])
+
+    const output = await executeSelfInventoryTool({ sections: ['vault.coreFiles'] }, baseContext)
+    expect(output.vault?.includedParts).toEqual({ character: false, groups: false, coreFiles: true })
+    expect(output.vault?.character).toBeUndefined()
+
+    const core = output.vault?.coreFiles
+    if (!core || !core.available) throw new Error('expected available core files')
+    expect(core.files.map(f => f.path)).toEqual([
+      'properties.json',
+      'metadata.json',
+      'identity.md',
+      'description.md',
+      'Manifesto.md',
+      'personality.md',
+      'example-dialogues.md',
+      'physical-description.md',
+      'physical-prompts.json',
+    ])
+    expect(core.files.filter(f => f.exists).map(f => f.path)).toEqual([
+      'properties.json',
+      'identity.md',
+      'Manifesto.md',
+    ])
+    expect(core.files.every(f => f.holds.length > 0)).toBe(true)
+    expect(core.files.every(f => f.uri.startsWith('qtap://') && !f.uri.startsWith('qtap://self'))).toBe(true)
+
+    const formatted = formatSelfInventoryResults(output)
+    expect(formatted).toContain('## Core Vault Files')
+    expect(formatted).toContain('3 of 9 present')
+    expect(formatted).toContain('identity.md [exists, empty]')
+    expect(formatted).toContain('metadata.json [MISSING]')
+  })
+
+  it('vault.coreFiles reports no_vault when the character has none', async () => {
+    mockRepos.characters.findById.mockResolvedValue({ id: 'char-1', name: 'Friday' })
+    const output = await executeSelfInventoryTool({ sections: ['vault.coreFiles'] }, baseContext)
+    expect(output.vault?.coreFiles).toEqual(
+      expect.objectContaining({ available: false, reason: 'no_vault' }),
+    )
   })
 
   it('vaultAccess.groups lists members chat-independently, all read/write', async () => {
@@ -482,5 +548,117 @@ describe('self-inventory carina section (either-side reachability)', () => {
     expect(formatted).toContain('Characters you can reach via Carina (2):')
     expect(formatted).toContain('- Aria (also a Carina answerer)')
     expect(formatted).toContain('- Plain')
+  })
+})
+
+describe('self-inventory holdings section', () => {
+  const mockLoadWearablePool = loadWearablePool as jest.Mock
+  const mockLoadInventoryContext = loadInventoryContext as jest.Mock
+  const mockResolveRoster = resolveCustomToolRoster as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRepos.characters.findById.mockResolvedValue({
+      id: 'char-1',
+      name: 'Friday',
+      characterDocumentMountPointId: 'mp-char-1',
+      metadata: { rank: 'captain' },
+    })
+    mockRepos.chats.findById.mockResolvedValue({ id: 'chat-1', projectId: 'proj-1', participants: [] })
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ customTools: true })
+    mockLoadWearablePool.mockResolvedValue({
+      wearable: () => [
+        { id: 'w1', origin: { scope: 'character' } },
+        { id: 'w2', origin: { scope: 'general' } },
+        { id: 'w3', componentItemIds: ['w1', 'w2'], origin: { scope: 'character' } },
+      ],
+    })
+    mockLoadInventoryContext.mockResolvedValue({
+      pool: {
+        items: [
+          { id: 'i1', kind: 'item', isArchetype: false, origin: { scope: 'character' } },
+          { id: 'i2', kind: 'item', isArchetype: false, origin: { scope: 'project' } },
+          { id: 'i3', kind: 'kit', isArchetype: false, origin: { scope: 'group' } },
+          { id: 'i4', kind: 'item', isArchetype: true, origin: { scope: 'general' } },
+          { id: 'i5', kind: 'item', isArchetype: false, archivedAt: '2026-01-01T00:00:00.000Z', origin: { scope: 'character' } },
+        ],
+      },
+      equippedIds: new Set(['i1']),
+    })
+    mockResolveRoster.mockResolvedValue({
+      tools: new Map([
+        ['Pick Lock', { definition: { name: 'Pick Lock' }, tier: 'character' }],
+        ['Draw Card', { definition: { name: 'Draw Card' }, tier: 'global' }],
+      ]),
+      errors: [],
+      droppedForCap: [],
+    })
+  })
+
+  it('bare holdings counts wardrobe, inventory and custom tools by tier', async () => {
+    const output = await executeSelfInventoryTool({ sections: ['holdings'] }, baseContext)
+    const holdings = output.holdings
+    expect(holdings?.includedParts).toEqual({ wardrobe: true, inventory: true, customTools: true })
+
+    expect(mockLoadWearablePool).toHaveBeenCalledWith(mockRepos, 'char-1', undefined, { chatId: 'chat-1' })
+    expect(holdings?.wardrobe).toEqual({
+      available: true,
+      garments: 2,
+      outfits: 1,
+      byTier: { character: 2, group: 0, project: 0, general: 1 },
+    })
+
+    expect(holdings?.inventory).toEqual({
+      available: true,
+      objects: 2,
+      kits: 1,
+      archetypes: 1,
+      carriedHere: 1,
+      byTier: { character: 1, group: 1, project: 1, general: 1 },
+    })
+
+    expect(mockResolveRoster).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: 'char-1',
+        characterMountPointId: 'mp-char-1',
+        projectId: 'proj-1',
+        metadata: { rank: 'captain' },
+      }),
+    )
+    expect(holdings?.customTools).toEqual({
+      available: true,
+      count: 2,
+      names: ['Draw Card', 'Pick Lock'],
+      byTier: { character: 1, group: 0, project: 0, general: 1 },
+    })
+
+    const formatted = formatSelfInventoryResults(output)
+    expect(formatted).toContain('## Holdings')
+    expect(formatted).toContain('- Outfits: 1')
+    expect(formatted).toContain('- Carrying in this chat: 1')
+    expect(formatted).toContain('Draw Card, Pick Lock')
+  })
+
+  it('holdings.inventory alone loads nothing else', async () => {
+    const output = await executeSelfInventoryTool({ sections: ['holdings.inventory'] }, baseContext)
+    expect(output.holdings?.includedParts).toEqual({ wardrobe: false, inventory: true, customTools: false })
+    expect(output.holdings?.wardrobe).toBeUndefined()
+    expect(mockLoadWearablePool).not.toHaveBeenCalled()
+    expect(mockResolveRoster).not.toHaveBeenCalled()
+  })
+
+  it('custom tools switched off reports unavailable without resolving a roster', async () => {
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ customTools: false })
+    const output = await executeSelfInventoryTool({ sections: ['holdings.customTools'] }, baseContext)
+    expect(output.holdings?.customTools).toEqual(expect.objectContaining({ available: false }))
+    expect(mockResolveRoster).not.toHaveBeenCalled()
+  })
+
+  it('one failing part does not take the others down', async () => {
+    mockLoadWearablePool.mockRejectedValue(new Error('vault unreadable'))
+    const output = await executeSelfInventoryTool({ sections: ['holdings'] }, baseContext)
+    expect(output.holdings?.wardrobe).toEqual({ available: false, message: 'vault unreadable' })
+    expect(output.holdings?.inventory?.available).toBe(true)
+    expect(output.holdings?.customTools?.available).toBe(true)
   })
 })

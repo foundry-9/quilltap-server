@@ -5,7 +5,8 @@
  * in their character vault, memory statistics, conversation statistics, the
  * static system prompt that goes into every turn, the memories that were
  * loaded into this turn's prompt, who has access to this character's vault
- * right now, and token usage from the most recent LLM call.
+ * right now, token usage from the most recent LLM call, and how many
+ * garments, objects and custom tools are within reach.
  */
 
 import type { ToolEffectSpec } from './effect-types';
@@ -16,6 +17,7 @@ export const SELF_INVENTORY_SECTIONS = [
   'vault',
   'vault.character',
   'vault.groups',
+  'vault.coreFiles',
   'vaultAccess',
   'vaultAccess.character',
   'vaultAccess.groups',
@@ -35,6 +37,10 @@ export const SELF_INVENTORY_SECTIONS = [
   'context.groups',
   'context.characters',
   'context.files',
+  'holdings',
+  'holdings.wardrobe',
+  'holdings.inventory',
+  'holdings.customTools',
 ] as const;
 
 export type SelfInventorySection = typeof SELF_INVENTORY_SECTIONS[number];
@@ -50,6 +56,7 @@ export type QuilltapSubSection = typeof QUILLTAP_SUB_SECTIONS[number];
 export const VAULT_SUB_SECTIONS = [
   'vault.character',
   'vault.groups',
+  'vault.coreFiles',
 ] as const satisfies readonly SelfInventorySection[];
 
 export type VaultSubSection = typeof VAULT_SUB_SECTIONS[number];
@@ -71,6 +78,14 @@ export const CONTEXT_SUB_SECTIONS = [
 
 export type ContextSubSection = typeof CONTEXT_SUB_SECTIONS[number];
 
+export const HOLDINGS_SUB_SECTIONS = [
+  'holdings.wardrobe',
+  'holdings.inventory',
+  'holdings.customTools',
+] as const satisfies readonly SelfInventorySection[];
+
+export type HoldingsSubSection = typeof HOLDINGS_SUB_SECTIONS[number];
+
 /**
  * Zod schema for the self inventory tool's input.
  */
@@ -79,8 +94,9 @@ export const selfInventoryToolInputSchema = z.object({
     z.enum(SELF_INVENTORY_SECTIONS)
       .describe(
         'Which section(s) to include. Options: ' +
-        '"vault" (files in your own character vault AND your group vaults), with finer-grained dotted variants ' +
-        '"vault.character" (just your own vault) and "vault.groups" (just the vaults of the groups you belong to); ' +
+        '"vault" (files in your own character vault AND your group vaults, plus the core-file checklist), with finer-grained dotted variants ' +
+        '"vault.character" (just your own vault), "vault.groups" (just the vaults of the groups you belong to), and ' +
+        '"vault.coreFiles" (the nine core files of your vault — path, whether each exists, and what belongs in it); ' +
         '"vaultAccess" (who can read/write your character vault in this chat AND who can read/write your group vaults), ' +
         'with dotted variants "vaultAccess.character" (this chat only) and "vaultAccess.groups" (group members, in any chat); ' +
         '"memory" (total and high-importance memory counts), ' +
@@ -96,14 +112,16 @@ export const selfInventoryToolInputSchema = z.object({
         '"quilltap.changelog" (the changelog only); ' +
         '"context" (where you are right now: this chat, the current project, your groups, the characters present with you, ' +
         'and the files attached to this chat with instructions for reaching each via the doc_* tools), with dotted variants ' +
-        '"context.chat", "context.project", "context.groups", "context.characters", and "context.files".'
+        '"context.chat", "context.project", "context.groups", "context.characters", and "context.files"; ' +
+        '"holdings" (counts of what is within your reach: wardrobe garments and outfits, Inventory objects, and custom tools), ' +
+        'with dotted variants "holdings.wardrobe", "holdings.inventory", and "holdings.customTools".'
       )
   ).optional()
     .describe(
       'Optional list of section names to return. If omitted or empty, all top-level sections are returned ' +
-      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context"). ' +
+      '(equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context", "holdings"). ' +
       'Pass one or more section names to receive only those sections — useful for saving tokens when ' +
-      'you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", and "context.*" sub-sections let you ' +
+      'you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", "context.*", and "holdings.*" sub-sections let you ' +
       'fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).'
     ),
   includeAutomaticImages: z.boolean().optional()
@@ -127,10 +145,15 @@ export interface SelfInventoryVaultFile {
   uri?: string;
 }
 
-/** Which vault parts a `vault` request resolved to. Mirrors the quilltap pattern. */
-export interface SelfInventoryVaultIncludedParts {
+/** Which parts a `vaultAccess` request resolved to. Mirrors the quilltap pattern. */
+export interface SelfInventoryVaultAccessIncludedParts {
   character: boolean;
   groups: boolean;
+}
+
+/** Which vault parts a `vault` request resolved to. */
+export interface SelfInventoryVaultIncludedParts extends SelfInventoryVaultAccessIncludedParts {
+  coreFiles: boolean;
 }
 
 /** The character's own vault (auto-generated files filtered out by default). */
@@ -169,15 +192,41 @@ export type SelfInventoryVaultGroupsSection =
       message: string;
     };
 
+/** One of the nine core files of a character vault. */
+export interface SelfInventoryCoreFile {
+  /** Vault-relative path, as the overlay names it. */
+  path: string;
+  exists: boolean;
+  /** Size of the file as found; null when it does not exist. */
+  fileSizeBytes: number | null;
+  /** Canonical qtap:// URI for reaching (or creating) this file. */
+  uri: string;
+  /** The short version of what belongs in this file. */
+  holds: string;
+}
+
+export type SelfInventoryVaultCoreFilesSection =
+  | {
+      available: true;
+      mountPointName: string;
+      files: SelfInventoryCoreFile[];
+    }
+  | {
+      available: false;
+      reason: 'no_vault' | 'mount_index_degraded' | 'error';
+      message: string;
+    };
+
 /**
- * The `vault` section is a wrapper carrying whichever of the two parts the
- * caller asked for. Bare `vault` resolves both; `vault.character` /
- * `vault.groups` resolve just one.
+ * The `vault` section is a wrapper carrying whichever parts the caller asked
+ * for. Bare `vault` resolves all three; `vault.character` / `vault.groups` /
+ * `vault.coreFiles` resolve just one.
  */
 export interface SelfInventoryVaultSection {
   includedParts: SelfInventoryVaultIncludedParts;
   character?: SelfInventoryVaultCharacterSection;
   groups?: SelfInventoryVaultGroupsSection;
+  coreFiles?: SelfInventoryVaultCoreFilesSection;
 }
 
 export interface SelfInventoryMemorySection {
@@ -287,7 +336,7 @@ export type SelfInventoryVaultAccessGroupsSection =
  * asked for. Bare `vaultAccess` resolves both; the dotted variants resolve one.
  */
 export interface SelfInventoryVaultAccessSection {
-  includedParts: SelfInventoryVaultIncludedParts;
+  includedParts: SelfInventoryVaultAccessIncludedParts;
   character?: SelfInventoryVaultAccessCharacterSection;
   groups?: SelfInventoryVaultAccessGroupsSection;
 }
@@ -461,6 +510,69 @@ export interface SelfInventoryContextSection {
   files?: SelfInventoryContextFiles;
 }
 
+// ============================================================================
+// HOLDINGS SECTION — what is within the character's reach, counted
+// ============================================================================
+
+/** A count split by the tier it was found in (own vault, groups, project, Quilltap General). */
+export interface SelfInventoryTierCounts {
+  character: number;
+  group: number;
+  project: number;
+  general: number;
+}
+
+export type SelfInventoryHoldingsWardrobe =
+  | {
+      available: true;
+      /** Wearable single items (not archived). */
+      garments: number;
+      /** Wearable composite items — outfits bundling other items (not archived). */
+      outfits: number;
+      /** Garments and outfits together, by tier. */
+      byTier: SelfInventoryTierCounts;
+    }
+  | { available: false; message: string };
+
+export type SelfInventoryHoldingsInventory =
+  | {
+      available: true;
+      /** Objects you could carry (single items, not archetypes, not archived). */
+      objects: number;
+      /** Kits — named sets of objects carried as one. */
+      kits: number;
+      /** Archetypes — classes of object, never carried; instances derive from them. */
+      archetypes: number;
+      /** Objects you are carrying in this chat. */
+      carriedHere: number;
+      /** Objects, kits and archetypes together, by tier. */
+      byTier: SelfInventoryTierCounts;
+    }
+  | { available: false; message: string };
+
+export type SelfInventoryHoldingsCustomTools =
+  | {
+      available: true;
+      count: number;
+      /** Tool names, sorted — each is a `run_custom` target. */
+      names: string[];
+      byTier: SelfInventoryTierCounts;
+    }
+  | { available: false; message: string };
+
+export interface SelfInventoryHoldingsIncludedParts {
+  wardrobe: boolean;
+  inventory: boolean;
+  customTools: boolean;
+}
+
+export interface SelfInventoryHoldingsSection {
+  includedParts: SelfInventoryHoldingsIncludedParts;
+  wardrobe?: SelfInventoryHoldingsWardrobe;
+  inventory?: SelfInventoryHoldingsInventory;
+  customTools?: SelfInventoryHoldingsCustomTools;
+}
+
 export interface SelfInventoryToolOutput {
   success: boolean;
   quilltapVersion: string;
@@ -476,6 +588,7 @@ export interface SelfInventoryToolOutput {
   carina?: SelfInventoryCarinaSection;
   quilltap?: SelfInventoryQuilltapSection;
   context?: SelfInventoryContextSection;
+  holdings?: SelfInventoryHoldingsSection;
   error?: string;
 }
 
@@ -484,10 +597,11 @@ export const selfInventoryToolDefinition = {
   function: {
     name: 'self_inventory',
     description:
-      'Return an introspection report about yourself in this chat. Ten top-level sections are available: ' +
+      'Return an introspection report about yourself in this chat. Eleven top-level sections are available: ' +
       '"vault" (every file in your own character vault AND the vaults of the groups you belong to, with metadata for ' +
-      'doc_read_file; auto-generated avatars/backgrounds are hidden unless includeAutomaticImages is true) — request just ' +
-      '"vault.character" or "vault.groups" for one half; ' +
+      'doc_read_file; auto-generated avatars/backgrounds are hidden unless includeAutomaticImages is true; plus a checklist ' +
+      'of the nine core files of your vault) — request just "vault.character", "vault.groups", or "vault.coreFiles" ' +
+      '(each core file\'s path, whether it exists, and the short version of what belongs in it) for one part; ' +
       '"vaultAccess" (who can read or write your character vault in this chat, plus who can read/write your group vaults) — ' +
       'request "vaultAccess.character" (this chat) or "vaultAccess.groups" (group members, regardless of chat) for one half; ' +
       '"memory" (total and high-importance memory counts), ' +
@@ -505,7 +619,10 @@ export const selfInventoryToolDefinition = {
       'your groups (ids, names, linked stores), the other characters present with you (names, aliases, identities), and the ' +
       'files attached to this chat with a copy-pasteable doc_read_file(...) call for each — request "context.chat", ' +
       '"context.project", "context.groups", "context.characters", or "context.files" for one part. ' +
-      'Pass a "sections" array to request only specific sections; omit it to receive all ten top-level sections. ' +
+      '"holdings" counts what is within your reach: wardrobe garments and outfits, Inventory objects (and what you carry ' +
+      'here), and the custom tools you can run, each split by where it lives — request "holdings.wardrobe", ' +
+      '"holdings.inventory", or "holdings.customTools" for one part. ' +
+      'Pass a "sections" array to request only specific sections; omit it to receive all eleven top-level sections. ' +
       'Use this when you need to know what source material you have access to, who is around you, how you are currently ' +
       'configured, or how close the last turn was to the context window limit.',
     parameters: zodToOpenAISchema(selfInventoryToolInputSchema),

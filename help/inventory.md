@@ -174,7 +174,7 @@ However many of these a character uses in one reply, Pascal posts **one** line a
 
 Whether a character may use any of these tools is the **Inventory Management** setting on the character's page in Aurora, beside *Self-Dressing* and *Outfit Creation*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
 
-The [`self_inventory`](character-system-transparency.md) tool, despite the name, has nothing to do with any of this: it is a character's look at their own settings, not their pockets.
+The [`self_inventory`](character-system-transparency.md) tool, despite the name, cannot pick anything up or set anything down: it is a character's look at their own settings, not a hand in their pockets. It will, however, *count* the pockets on request — its `holdings.inventory` part reports how many objects, kits and archetypes are within reach, how many the character is carrying in this chat, and which shelves they came from.
 
 ## Pascal's custom tools and the Inventory
 

@@ -7,7 +7,7 @@
  */
 
 import { formatBytes } from '@/lib/utils/format-bytes';
-import type { SelfInventoryToolOutput, SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultFile, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryVaultAccessParticipant, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryRuntimeMode, SelfInventoryContextSection, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextCharacters, SelfInventoryContextFiles } from '../../self-inventory-tool';
+import type { SelfInventoryToolOutput, SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultCoreFilesSection, SelfInventoryHoldingsSection, SelfInventoryHoldingsWardrobe, SelfInventoryHoldingsInventory, SelfInventoryHoldingsCustomTools, SelfInventoryTierCounts, SelfInventoryVaultGroupsSection, SelfInventoryVaultFile, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryVaultAccessParticipant, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryRuntimeMode, SelfInventoryContextSection, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextCharacters, SelfInventoryContextFiles } from '../../self-inventory-tool';
 import { formatNumber, formatDate } from './helpers';
 
 function formatVaultFileLine(f: SelfInventoryVaultFile): string {
@@ -50,10 +50,32 @@ function formatVaultGroups(section: SelfInventoryVaultGroupsSection): string {
   return [`## Group Vaults`, ...blocks].join('\n\n');
 }
 
+function formatVaultCoreFiles(section: SelfInventoryVaultCoreFilesSection): string {
+  if (!section.available) {
+    return `## Core Vault Files\nUnavailable — ${section.message}`;
+  }
+  const present = section.files.filter((f) => f.exists).length;
+  const lines = section.files.map((f) => {
+    const state = f.exists
+      ? f.fileSizeBytes === 0
+        ? 'exists, empty'
+        : `exists, ${formatBytes(f.fileSizeBytes ?? 0)}`
+      : 'MISSING';
+    return `- ${f.path} [${state}] — ${f.holds}\n    uri: ${f.uri}`;
+  });
+  return [
+    `## Core Vault Files`,
+    `${section.mountPointName}: ${present} of ${section.files.length} present`,
+    ...lines,
+    `(To fill in a missing or empty file, write it with doc_write_file at its uri.)`,
+  ].join('\n');
+}
+
 function formatVaultSection(section: SelfInventoryVaultSection): string {
   const parts: string[] = [];
   if (section.character) parts.push(formatVaultCharacter(section.character));
   if (section.groups) parts.push(formatVaultGroups(section.groups));
+  if (section.coreFiles) parts.push(formatVaultCoreFiles(section.coreFiles));
   return parts.join('\n\n');
 }
 
@@ -389,6 +411,56 @@ function formatContextSection(section: SelfInventoryContextSection): string {
   return parts.join('\n');
 }
 
+function formatTierCounts(counts: SelfInventoryTierCounts): string {
+  const labels: Array<[keyof SelfInventoryTierCounts, string]> = [
+    ['character', 'your vault'],
+    ['group', 'groups'],
+    ['project', 'project'],
+    ['general', 'Quilltap General'],
+  ];
+  const parts = labels.filter(([key]) => counts[key] > 0).map(([key, label]) => `${label} ${counts[key]}`);
+  return parts.length > 0 ? parts.join(', ') : 'none';
+}
+
+function formatHoldingsWardrobe(w: SelfInventoryHoldingsWardrobe): string {
+  if (!w.available) return `### Wardrobe\nUnavailable — ${w.message}`;
+  return [
+    `### Wardrobe`,
+    `- Garments: ${formatNumber(w.garments)}`,
+    `- Outfits: ${formatNumber(w.outfits)}`,
+    `- By tier: ${formatTierCounts(w.byTier)}`,
+  ].join('\n');
+}
+
+function formatHoldingsInventory(inv: SelfInventoryHoldingsInventory): string {
+  if (!inv.available) return `### Inventory\nUnavailable — ${inv.message}`;
+  return [
+    `### Inventory`,
+    `- Objects: ${formatNumber(inv.objects)}`,
+    `- Kits: ${formatNumber(inv.kits)}`,
+    `- Archetypes: ${formatNumber(inv.archetypes)}`,
+    `- Carrying in this chat: ${formatNumber(inv.carriedHere)}`,
+    `- By tier: ${formatTierCounts(inv.byTier)}`,
+  ].join('\n');
+}
+
+function formatHoldingsCustomTools(t: SelfInventoryHoldingsCustomTools): string {
+  if (!t.available) return `### Custom Tools\nUnavailable — ${t.message}`;
+  const lines = [`### Custom Tools`, `- Available: ${formatNumber(t.count)}`];
+  if (t.count > 0) {
+    lines.push(`- By tier: ${formatTierCounts(t.byTier)}`, `- Names (run with run_custom): ${t.names.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+function formatHoldingsSection(section: SelfInventoryHoldingsSection): string {
+  const parts: string[] = [`## Holdings`];
+  if (section.wardrobe) parts.push('', formatHoldingsWardrobe(section.wardrobe));
+  if (section.inventory) parts.push('', formatHoldingsInventory(section.inventory));
+  if (section.customTools) parts.push('', formatHoldingsCustomTools(section.customTools));
+  return parts.join('\n');
+}
+
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
     return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
@@ -430,6 +502,9 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
   }
   if (output.context) {
     lines.push('', formatContextSection(output.context));
+  }
+  if (output.holdings) {
+    lines.push('', formatHoldingsSection(output.holdings));
   }
 
   return lines.join('\n');

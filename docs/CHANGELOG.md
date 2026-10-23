@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Feature: self_inventory core-file checklist and holdings counts
+
+- New `vault.coreFiles` sub-section of `self_inventory`: the nine core files of the character's vault (`SINGLE_FILE_OVERLAY_PATHS`, in overlay order), each with its path as found (matched case-insensitively), whether it exists, its size, its named `qtap://` URI, and a one-line summary of what belongs in it. Bare `vault` now includes it. Summaries live in `CORE_VAULT_FILE_SUMMARIES` (`lib/services/character-field-semantics.ts`), keyed by the overlay path type so a new core file fails to compile until it is described.
+- New top-level `holdings` section, with `holdings.wardrobe`, `holdings.inventory` and `holdings.customTools`. Counts what the character can reach, read through the same loaders the tools use: wearable garments and outfits (composites) via `loadWearablePool`; objects, kits, archetypes and objects carried in this chat via `loadInventoryContext` (roster-gated, archived skipped); runnable custom tools with their names via `resolveCustomToolRoster` (unavailable when custom tools are off). Each count is split by tier (own vault, groups, project, Quilltap General). Each part fails soft on its own. Code in `lib/tools/handlers/self-inventory/holdings.ts`.
+- `SelfInventoryVaultIncludedParts` gained `coreFiles`; `vaultAccess` now uses its own `SelfInventoryVaultAccessIncludedParts`. Tool description updated (snapshot regenerated).
+- Help: `help/character-system-transparency.md`, `help/inventory.md`; `docs/FEATURES.md` self_inventory summary brought up to date.
+
 #### Fix: doc tools can read, grep and search chat uploads (bugs 260, 261)
 
 - Bug 260: chat uploads land in the project store (or Quilltap Uploads) as blobs, and the upload bridges had text extraction off, so `doc_read_file`, `doc_grep` and search could not see an uploaded `.md`, `.txt`, `.json`, PDF or DOCX. On `Friday` a character sent to find an uploaded `CHANGELOG.md` at the project root got ENOENT and said it did not exist.
