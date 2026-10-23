@@ -4,6 +4,23 @@
 
 ### 4.11-dev
 
+#### Feature: Novel roleplay template
+
+- New built-in roleplay template **Novel** (`lib/chat/novel-template.ts`): narration is unmarked prose shown in italics, dialogue goes in straight or curly double quotes, `*emphasis*` (single asterisks, hidden) is shown bold and italic, `**` means nothing and is dropped from display, and `((OOC))` uses the OOC style. Its system prompt ends with a correctly formatted example passage. Its rendering patterns come from `generateTemplateRenderingPatterns`, the same generator user templates use.
+- Template capabilities, all available in the template editor:
+  - `narrationDelimiters: null` means narration is unmarked prose (editor: "None — plain prose").
+  - `unmarkedStyle` (`{ style, addOns? }`) styles text that no delimiter claims. New editor style option `qt-roleplay-plain` (a theme hook with no CSS of its own).
+  - `markdownAsterisks: false` escapes single `*` before Markdown parsing, so a `*` delimiter can claim it. It also strips `**` runs. Scene-break lines, list bullets, inline code, math and fences are left alone. The composer hides its Bold button for such templates.
+  - Wrap delimiters accept `matchCurlyQuotes` (straight quotes also match `“”`/`‘’`) and `closeOptional` (an unclosed span runs to the end of the text run, for speech carried over several paragraphs).
+- `RenderingPattern.scope` gains `unmarked`, `literal` and `strip`; `className` may be empty for the last two. `tokenizeInline` takes `{ unmarkedClassName }` and runs the other inline rules inside each matched span (up to three levels deep), so emphasis inside dialogue is styled. `Segment` gains `children`. The client (`MessageContent`) and server (`markdown-postprocess`) adapters apply the unmarked class only to text directly inside an unclaimed block. A line-claimed block drops it.
+- `isQuoteSensitiveRoleplayConfig` no longer turns off smart quotes for a wrap pattern that names each straight quote's curly forms.
+- The formatting-hint generator describes unmarked narration, curly-tolerant and unclosed wraps, and the `**` rule.
+- Migration `add-roleplay-template-unmarked-fields-v1` adds `roleplay_templates.unmarkedStyle` (TEXT) and `markdownAsterisks` (INTEGER, default 1). The export schema and DDL.md include the new fields.
+
+#### Fix: roleplay template narration pairs read back as strings
+
+- `narrationDelimiters` is a string-or-tuple union, so the schema classifier did not treat it as a JSON column. A pair such as Quilltap RP's `["[","]"]` was stored as JSON text and read back as a single string, and a `null` read back as `'*'`. The roleplay-templates repository now writes the field as JSON text and decodes it on every read (`roleplay-template-narration-codec.ts`). Legacy raw values still decode.
+
 #### Feature: drag storyteller bids into running order
 
 - The storyteller board's cards are sortable (`@dnd-kit`, mouse drag, long-press on touch, keyboard). Only cards with a live bid can be picked up. Once rearranged, chosen cards show their place in the run, and a "Reset order" button returns the board to the round's own order.

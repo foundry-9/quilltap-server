@@ -1544,7 +1544,9 @@ CREATE TABLE "roleplay_templates" (
   "dialogueDetection" TEXT,
   "narrationDelimiters" TEXT DEFAULT '"*"',
   "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
+  "updatedAt" TEXT NOT NULL,
+  "unmarkedStyle" TEXT,
+  "markdownAsterisks" INTEGER DEFAULT 1
 );
 
 CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("createdAt" DESC);
@@ -1564,6 +1566,16 @@ CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 > boolean (the renderer then emits the pattern's `rpBody` capture group instead of the full
 > match); add-ons are baked into the pattern's `className`. `linePrefix`/`tagPrefix` rules are
 > `line`-scoped (the class lands on the whole block, not an inline span).
+>
+> **`narrationDelimiters`** is JSON text written by the repository itself
+> (`roleplay-template-narration-codec.ts`): `"*"`, `["[","]"]`, or `null` (narration is
+> unmarked prose). Legacy rows holding a raw delimiter (`*`) still decode; a NULL column reads
+> as `'*'`. **`unmarkedStyle`** (since `add-roleplay-template-unmarked-fields-v1`) is JSON
+> `{ style, addOns? }` or NULL — the class for text no delimiter claims. **`markdownAsterisks`**
+> (same migration, default 1) — 0 takes `*` away from Markdown. `wrap` delimiters may also carry
+> `matchCurlyQuotes` and `closeOptional` booleans. `renderingPatterns.scope` may additionally be
+> `unmarked` (class for unclaimed text), `literal` (escape matches before Markdown) or `strip`
+> (remove matches before Markdown); `className` is empty for the last two.
 
 ### tags
 

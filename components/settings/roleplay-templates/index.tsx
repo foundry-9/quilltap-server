@@ -12,6 +12,7 @@ import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 
 /** Known CSS style options for delimiter entries */
 const STYLE_OPTIONS = [
+  { value: 'qt-roleplay-plain', label: 'Plain (no chip — dress it with flourishes)' },
   { value: 'qt-chat-narration', label: 'Narration' },
   { value: 'qt-chat-dialogue', label: 'Dialogue' },
   { value: 'qt-chat-ooc', label: 'Out of Character' },
@@ -37,6 +38,88 @@ const FONT_OPTIONS: { value: DelimiterAddOns['font']; label: string }[] = [
   { value: 'display', label: 'Display' },
   { value: 'script', label: 'Script' },
 ]
+
+/** The flourish checkboxes and selects, shared by delimiters and unmarked text. */
+function AddOnsEditor({
+  addOns,
+  onChange,
+}: {
+  addOns: DelimiterAddOns
+  onChange: <K extends keyof DelimiterAddOns>(key: K, value: DelimiterAddOns[K]) => void
+}) {
+  return (
+    <div>
+      <label className="qt-text-xs qt-text-secondary">Flourishes</label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+        <label className="flex items-center gap-1 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={addOns.bold}
+            onChange={(e) => onChange('bold', e.target.checked)}
+            className="qt-checkbox"
+          />
+          <span className="text-xs">Bold</span>
+        </label>
+        <label className="flex items-center gap-1 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={addOns.italic}
+            onChange={(e) => onChange('italic', e.target.checked)}
+            className="qt-checkbox"
+          />
+          <span className="text-xs">Italic</span>
+        </label>
+        <label className="flex items-center gap-1 cursor-pointer" title="Swap foreground and background">
+          <input
+            type="checkbox"
+            checked={addOns.reverse}
+            onChange={(e) => onChange('reverse', e.target.checked)}
+            className="qt-checkbox"
+          />
+          <span className="text-xs">Reverse</span>
+        </label>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        <div>
+          <label className="qt-text-xs">Underline</label>
+          <select
+            value={addOns.underline}
+            onChange={(e) => onChange('underline', e.target.value as DelimiterAddOns['underline'])}
+            className="qt-select w-full text-sm"
+          >
+            <option value="none">None</option>
+            <option value="single">Single</option>
+            <option value="double">Double</option>
+          </select>
+        </div>
+        <div>
+          <label className="qt-text-xs">Border</label>
+          <select
+            value={addOns.border}
+            onChange={(e) => onChange('border', e.target.value as DelimiterAddOns['border'])}
+            className="qt-select w-full text-sm"
+          >
+            <option value="none">None</option>
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+          </select>
+        </div>
+        <div>
+          <label className="qt-text-xs">Font</label>
+          <select
+            value={addOns.font}
+            onChange={(e) => onChange('font', e.target.value as DelimiterAddOns['font'])}
+            className="qt-select w-full text-sm"
+          >
+            {FONT_OPTIONS.map(opt => (
+              <option key={opt.value || 'default'} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function RoleplayTemplatesTab() {
   const {
@@ -302,7 +385,7 @@ export default function RoleplayTemplatesTab() {
                       <button
                         type="button"
                         onClick={appendFormattingHint}
-                        disabled={formData.delimiters.length === 0 && !formData.narrationOpen.trim()}
+                        disabled={formData.delimiters.length === 0 && formData.narrationDelimiterMode !== 'none' && !formData.narrationOpen.trim()}
                         className="px-2 py-1 text-xs rounded border qt-border-default qt-hover-accent disabled:opacity-50"
                         title="Append a starter formatting guide drafted from the delimiters above"
                       >
@@ -325,7 +408,7 @@ export default function RoleplayTemplatesTab() {
                     Narration Delimiters <span className="qt-text-destructive">*</span>
                   </label>
                   <p className="qt-text-xs mb-2">
-                    How narration and action text is marked in this template&apos;s formatting.
+                    How narration and action text is marked in this template&apos;s formatting &mdash; or, as in a proper novel, not marked at all.
                   </p>
                   <div className="flex items-center gap-3 mb-2">
                     <label className="flex items-center gap-1.5 cursor-pointer">
@@ -355,9 +438,28 @@ export default function RoleplayTemplatesTab() {
                       />
                       <span className="text-sm">Different open &amp; close</span>
                     </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="narrationDelimiterMode"
+                        checked={formData.narrationDelimiterMode === 'none'}
+                        onChange={() => setFormData(prev => ({
+                          ...prev,
+                          narrationDelimiterMode: 'none',
+                          // Unmarked narration wants a look of its own.
+                          unmarkedEnabled: true,
+                        }))}
+                        className="qt-radio"
+                      />
+                      <span className="text-sm">None &mdash; plain prose</span>
+                    </label>
                   </div>
                   <div className="flex items-center gap-2">
-                    {formData.narrationDelimiterMode === 'single' ? (
+                    {formData.narrationDelimiterMode === 'none' ? (
+                      <span className="qt-text-xs qt-text-secondary">
+                        Narration carries no marks; style it under <em>Unmarked Text</em> below.
+                      </span>
+                    ) : formData.narrationDelimiterMode === 'single' ? (
                       <div className="flex items-center gap-2">
                         <label className="qt-text-xs whitespace-nowrap">Delimiter:</label>
                         <input
@@ -402,6 +504,62 @@ export default function RoleplayTemplatesTab() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Unmarked text + Markdown asterisks */}
+                <div>
+                  <label className="qt-label mb-1">Unmarked Text</label>
+                  <p className="qt-text-xs mb-2">
+                    Whatever no delimiter lays claim to. Give it a style of its own and it is dressed accordingly &mdash; italic narration, say, for a template whose narration wears no marks.
+                  </p>
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.unmarkedEnabled}
+                      onChange={(e) => setFormData(prev => ({ ...prev, unmarkedEnabled: e.target.checked }))}
+                      className="qt-checkbox"
+                    />
+                    <span className="qt-text-xs">Style unmarked text</span>
+                  </label>
+                  {formData.unmarkedEnabled && (
+                    <div className="border qt-border-default rounded-lg p-3 qt-bg-muted/20 space-y-2">
+                      <div>
+                        <label className="qt-text-xs">Style (CSS class)</label>
+                        <input
+                          type="text"
+                          list="qt-style-options-unmarked"
+                          value={formData.unmarkedStyle}
+                          onChange={(e) => setFormData(prev => ({ ...prev, unmarkedStyle: e.target.value }))}
+                          placeholder="qt-roleplay-plain"
+                          maxLength={50}
+                          className="qt-input w-full text-sm font-mono"
+                        />
+                        <datalist id="qt-style-options-unmarked">
+                          {STYLE_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </datalist>
+                      </div>
+                      <AddOnsEditor
+                        addOns={formData.unmarkedAddOns}
+                        onChange={(key, value) => setFormData(prev => ({
+                          ...prev,
+                          unmarkedAddOns: { ...prev.unmarkedAddOns, [key]: value },
+                        }))}
+                      />
+                    </div>
+                  )}
+                  <label className="flex items-start gap-2 cursor-pointer mt-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.markdownAsterisks}
+                      onChange={(e) => setFormData(prev => ({ ...prev, markdownAsterisks: e.target.checked }))}
+                      className="qt-checkbox mt-0.5"
+                    />
+                    <span className="qt-text-xs">
+                      Markdown reads asterisks as bold and italic. Untick it to hand a single <code className="font-mono">*</code> to your own delimiters (an emphasis mark, perhaps); doubled <code className="font-mono">**</code> then mean nothing at all and are quietly dropped.
+                    </span>
+                  </label>
                 </div>
 
                 {/* Delimiters Array Editor */}
@@ -552,6 +710,29 @@ export default function RoleplayTemplatesTab() {
                             </div>
                           )}
 
+                          {delimiter.kind === 'wrap' && (
+                            <div className="mt-2 space-y-1">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={delimiter.matchCurlyQuotes}
+                                  onChange={(e) => setDelimiterFields(index, { matchCurlyQuotes: e.target.checked })}
+                                  className="qt-checkbox"
+                                />
+                                <span className="qt-text-xs">Straight quotes also match curly ones (&quot; and &ldquo;&hellip;&rdquo; alike)</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={delimiter.closeOptional}
+                                  onChange={(e) => setDelimiterFields(index, { closeOptional: e.target.checked })}
+                                  className="qt-checkbox"
+                                />
+                                <span className="qt-text-xs">May run unclosed to the end of a paragraph (speech carried over several)</span>
+                              </label>
+                            </div>
+                          )}
+
                           {delimiter.kind === 'linePrefix' && (
                             <div>
                               <label className="qt-text-xs">Line marker</label>
@@ -616,76 +797,10 @@ export default function RoleplayTemplatesTab() {
                               <span className="qt-text-xs">Conceal the marks when rendered</span>
                             </label>
 
-                            <div>
-                              <label className="qt-text-xs qt-text-secondary">Flourishes</label>
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                                <label className="flex items-center gap-1 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={delimiter.addOns.bold}
-                                    onChange={(e) => updateAddOn(index, 'bold', e.target.checked)}
-                                    className="qt-checkbox"
-                                  />
-                                  <span className="text-xs">Bold</span>
-                                </label>
-                                <label className="flex items-center gap-1 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={delimiter.addOns.italic}
-                                    onChange={(e) => updateAddOn(index, 'italic', e.target.checked)}
-                                    className="qt-checkbox"
-                                  />
-                                  <span className="text-xs">Italic</span>
-                                </label>
-                                <label className="flex items-center gap-1 cursor-pointer" title="Swap foreground and background">
-                                  <input
-                                    type="checkbox"
-                                    checked={delimiter.addOns.reverse}
-                                    onChange={(e) => updateAddOn(index, 'reverse', e.target.checked)}
-                                    className="qt-checkbox"
-                                  />
-                                  <span className="text-xs">Reverse</span>
-                                </label>
-                              </div>
-                              <div className="grid grid-cols-3 gap-2 mt-2">
-                                <div>
-                                  <label className="qt-text-xs">Underline</label>
-                                  <select
-                                    value={delimiter.addOns.underline}
-                                    onChange={(e) => updateAddOn(index, 'underline', e.target.value as DelimiterAddOns['underline'])}
-                                    className="qt-select w-full text-sm"
-                                  >
-                                    <option value="none">None</option>
-                                    <option value="single">Single</option>
-                                    <option value="double">Double</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="qt-text-xs">Border</label>
-                                  <select
-                                    value={delimiter.addOns.border}
-                                    onChange={(e) => updateAddOn(index, 'border', e.target.value as DelimiterAddOns['border'])}
-                                    className="qt-select w-full text-sm"
-                                  >
-                                    <option value="none">None</option>
-                                    <option value="solid">Solid</option>
-                                    <option value="dashed">Dashed</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="qt-text-xs">Font</label>
-                                  <select
-                                    value={delimiter.addOns.font}
-                                    onChange={(e) => updateAddOn(index, 'font', e.target.value as DelimiterAddOns['font'])}
-                                    className="qt-select w-full text-sm"
-                                  >
-                                    {FONT_OPTIONS.map(opt => (
-                                      <option key={opt.value || 'default'} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
+                            <AddOnsEditor
+                              addOns={delimiter.addOns}
+                              onChange={(key, value) => updateAddOn(index, key, value)}
+                            />
                           </div>
                         </div>
                       ))}
@@ -706,7 +821,7 @@ export default function RoleplayTemplatesTab() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim() || !formData.narrationOpen.trim() || (formData.narrationDelimiterMode === 'pair' && !formData.narrationClose.trim())}
+                  disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim() || (formData.narrationDelimiterMode !== 'none' && (!formData.narrationOpen.trim() || (formData.narrationDelimiterMode === 'pair' && !formData.narrationClose.trim())))}
                   className="qt-button qt-button-primary px-4 py-2 rounded-md disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingTemplate ? 'Save Changes' : 'Create Template'}

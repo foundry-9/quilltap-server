@@ -11,8 +11,13 @@ import {
   RoleplayTemplateSchema,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { NOVEL_TEMPLATE } from '@/lib/chat/novel-template';
+import {
+  encodeNarrationDelimiters,
+  decodeNarrationDelimiters,
+} from './roleplay-template-narration-codec';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { TypedQueryFilter } from '../interfaces';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 
 /**
  * Built-in roleplay templates that are seeded on first access.
@@ -64,6 +69,8 @@ You must adhere to the following standard roleplay syntax for all outputs.
     },
     // Narration uses single asterisks
     narrationDelimiters: '*',
+    unmarkedStyle: null,
+    markdownAsterisks: true,
   },
   // Quilltap RP - bracket-based formatting (migrated from plugin)
   {
@@ -101,7 +108,11 @@ You must adhere to the following custom syntax for all outputs. Do NOT use stand
     ],
     dialogueDetection: null,
     narrationDelimiters: ['[', ']'],
+    unmarkedStyle: null,
+    markdownAsterisks: true,
   },
+  // Novel - prose as a published novel prints it (see lib/chat/novel-template.ts)
+  NOVEL_TEMPLATE,
 ];
 
 /**
@@ -114,6 +125,51 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
 
   constructor() {
     super('roleplay_templates', RoleplayTemplateSchema);
+  }
+
+  // ============================================================================
+  // NARRATION STORAGE CODEC
+  // ============================================================================
+  // narrationDelimiters is written as JSON text and decoded on every read (see
+  // roleplay-template-narration-codec.ts) so a pair and a null both survive.
+
+  /** A template as read: narrationDelimiters decoded from its stored text. */
+  private decoded(template: RoleplayTemplate): RoleplayTemplate {
+    return { ...template, narrationDelimiters: decodeNarrationDelimiters(template.narrationDelimiters) };
+  }
+
+  /** A template as written: narrationDelimiters encoded as JSON text. */
+  private encoded<P extends Partial<RoleplayTemplate>>(template: P): P {
+    if (!('narrationDelimiters' in template)) return template;
+    return {
+      ...template,
+      narrationDelimiters: encodeNarrationDelimiters(template.narrationDelimiters ?? null),
+    };
+  }
+
+  protected toPersistedRow(validated: RoleplayTemplate): RoleplayTemplate {
+    return this.encoded(validated);
+  }
+
+  protected async _findById(id: string): Promise<RoleplayTemplate | null> {
+    const found = await super._findById(id);
+    return found ? this.decoded(found) : null;
+  }
+
+  protected async _findAll(): Promise<RoleplayTemplate[]> {
+    return (await super._findAll()).map((t) => this.decoded(t));
+  }
+
+  protected async findByFilter(
+    filter: TypedQueryFilter<RoleplayTemplate>,
+    options?: QueryOptions,
+  ): Promise<RoleplayTemplate[]> {
+    return (await super.findByFilter(filter, options)).map((t) => this.decoded(t));
+  }
+
+  protected async findOneByFilter(filter: TypedQueryFilter<RoleplayTemplate>): Promise<RoleplayTemplate | null> {
+    const found = await super.findOneByFilter(filter);
+    return found ? this.decoded(found) : null;
   }
 
   // ============================================================================
@@ -162,7 +218,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
             };
 
             const validated = this.validate(newTemplate);
-            await collection.insertOne(validated);
+            await collection.insertOne(this.encoded(validated));
 
             logger.info('Built-in roleplay template seeded', {
               templateId: id,
@@ -179,12 +235,14 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
               renderingPatterns: template.renderingPatterns,
               dialogueDetection: template.dialogueDetection,
               narrationDelimiters: template.narrationDelimiters,
+              unmarkedStyle: template.unmarkedStyle,
+              markdownAsterisks: template.markdownAsterisks,
               updatedAt: now,
             };
 
             await collection.updateOne(
               { id: existing.id },
-              { $set: updateData }
+              { $set: this.encoded(updateData) }
             );
           }
         }
@@ -323,13 +381,18 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
           return null;
         }
 
-        const updated = await this._update(id, data);
+        // _update writes the whole merged row, so the narration value always
+        // travels encoded — the patch's if it names one, else the stored one.
+        const narrationDelimiters = 'narrationDelimiters' in data
+          ? data.narrationDelimiters ?? null
+          : existing.narrationDelimiters;
+        const updated = await this._update(id, this.encoded({ ...data, narrationDelimiters }));
 
         if (updated) {
           logger.info('Roleplay template updated successfully', { templateId: id });
         }
 
-        return updated;
+        return updated ? this.decoded(updated) : null;
       },
       'Error updating roleplay template',
       { templateId: id }

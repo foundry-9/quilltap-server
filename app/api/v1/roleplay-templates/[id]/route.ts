@@ -12,8 +12,8 @@ import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { generateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema } from '@/lib/schemas/template.types';
+import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
+import { TemplateDelimiterSchema, UnmarkedStyleSchema } from '@/lib/schemas/template.types';
 
 // ============================================================================
 // Schemas
@@ -27,10 +27,13 @@ const updateRoleplayTemplateSchema = z.object({
   delimiters: z.array(TemplateDelimiterSchema).optional(),
   renderingPatterns: z.array(z.any()).optional(),
   dialogueDetection: z.any().optional().nullable(),
+  // null = narration is unmarked plain prose
   narrationDelimiters: z.union([
     z.string().min(1),
     z.tuple([z.string().min(1), z.string().min(1)]),
-  ]).optional(),
+  ]).nullable().optional(),
+  unmarkedStyle: UnmarkedStyleSchema.nullable().optional(),
+  markdownAsterisks: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -51,12 +54,8 @@ export const GET = createContextParamsHandler<{ id: string }>(
     }
 
     // Auto-generate rendering patterns for templates that have delimiters but no patterns
-    if ((!template.renderingPatterns || template.renderingPatterns.length === 0) &&
-        ((template.delimiters && template.delimiters.length > 0) || template.narrationDelimiters)) {
-      template.renderingPatterns = generateRenderingPatterns(
-        template.delimiters || [],
-        template.narrationDelimiters
-      );
+    if (!template.renderingPatterns || template.renderingPatterns.length === 0) {
+      template.renderingPatterns = generateTemplateRenderingPatterns(template);
     }
 
     return successResponse(template);
@@ -122,14 +121,29 @@ export const PUT = createContextParamsHandler<{ id: string }>(
       systemPrompt: validatedData.systemPrompt?.trim(),
     };
 
-    // Auto-generate rendering patterns from delimiters if delimiters changed but no explicit patterns
-    if (validatedData.delimiters && !validatedData.renderingPatterns) {
-      const narDelim = validatedData.narrationDelimiters || existingTemplate.narrationDelimiters;
-      updateData.renderingPatterns = generateRenderingPatterns(validatedData.delimiters, narDelim);
-    } else if (validatedData.narrationDelimiters && !validatedData.renderingPatterns && !validatedData.delimiters) {
-      // Narration delimiters changed but no delimiters or patterns provided — regenerate
-      const delims = existingTemplate.delimiters || [];
-      updateData.renderingPatterns = generateRenderingPatterns(delims, validatedData.narrationDelimiters);
+    // Regenerate rendering patterns whenever any authoring field they derive from
+    // changed and no explicit patterns were sent. Every field falls back to the
+    // stored value, so a partial update never drops the others' patterns.
+    const derivesPatterns =
+      validatedData.delimiters !== undefined ||
+      validatedData.narrationDelimiters !== undefined ||
+      validatedData.unmarkedStyle !== undefined ||
+      validatedData.markdownAsterisks !== undefined;
+    if (derivesPatterns && !validatedData.renderingPatterns) {
+      updateData.renderingPatterns = generateTemplateRenderingPatterns({
+        delimiters: validatedData.delimiters ?? existingTemplate.delimiters,
+        narrationDelimiters: validatedData.narrationDelimiters !== undefined
+          ? validatedData.narrationDelimiters
+          : existingTemplate.narrationDelimiters,
+        unmarkedStyle: validatedData.unmarkedStyle !== undefined
+          ? validatedData.unmarkedStyle
+          : existingTemplate.unmarkedStyle,
+        markdownAsterisks: validatedData.markdownAsterisks ?? existingTemplate.markdownAsterisks,
+      });
+      logger.debug('Roleplay template patterns regenerated for update', {
+        templateId: id,
+        patternCount: (updateData.renderingPatterns as unknown[]).length,
+      });
     }
 
     const updatedTemplate = await repos.roleplayTemplates.update(id, updateData);

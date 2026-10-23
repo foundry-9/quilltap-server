@@ -21,6 +21,7 @@ import {
   DEFAULT_RENDERING_PATTERNS,
   DEFAULT_DIALOGUE_DETECTION,
   compileRenderingPatterns,
+  unmarkedClassFor,
   tokenizeInline,
   lineMatchFor,
   wrapBlockMatchFor,
@@ -158,7 +159,7 @@ interface MessageContentProps {
 function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
   return segments.map((seg, i) =>
     seg.className
-      ? <span key={i} className={seg.className}>{seg.text}</span>
+      ? <span key={i} className={seg.className}>{seg.children ? segmentsToReactNodes(seg.children) : seg.text}</span>
       : seg.text
   )
 }
@@ -168,9 +169,14 @@ function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
  * The match-walk itself lives in the shared core (tokenizeInline); this is the
  * thin React adapter over its Segment[] output.
  */
-function processChildren(children: ReactNode, compiledRules: CompiledRule[]): ReactNode {
+function processChildren(
+  children: ReactNode,
+  compiledRules: CompiledRule[],
+  unmarkedClassName?: string,
+): ReactNode {
+  const options = { unmarkedClassName }
   if (typeof children === 'string') {
-    const segments = tokenizeInline(children, compiledRules)
+    const segments = tokenizeInline(children, compiledRules, options)
     return segments.length === 1 && !segments[0].className
       ? segments[0].text
       : <>{segmentsToReactNodes(segments)}</>
@@ -179,7 +185,7 @@ function processChildren(children: ReactNode, compiledRules: CompiledRule[]): Re
   if (Array.isArray(children)) {
     return children.map((child, i) => {
       if (typeof child === 'string') {
-        const segments = tokenizeInline(child, compiledRules)
+        const segments = tokenizeInline(child, compiledRules, options)
         return segments.length === 1 && !segments[0].className
           ? segments[0].text
           : <span key={i}>{segmentsToReactNodes(segments)}</span>
@@ -323,7 +329,10 @@ function renderLineBlock(
     lineMatch?.hideDelimiters && lineMatch.prefix
       ? stripLeadingPrefix(children, lineMatch.prefix)
       : children
-  return { className: lineMatch?.className, content: processChildren(effective, compiledRules) }
+  // Unmarked styling belongs to blocks no rule owns: a line-claimed block's
+  // text is the rule's, not the template's default.
+  const unmarked = lineMatch ? undefined : unmarkedClassFor(compiledRules)
+  return { className: lineMatch?.className, content: processChildren(effective, compiledRules, unmarked) }
 }
 
 export default function MessageContent({

@@ -128,7 +128,7 @@ interface ChatComposerProps {
   /** The character a `/` command's immediate built-in run acts as — Run Tool's default */
   slashDefaultCharacterId?: string | null
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
-  narrationDelimiters?: NarrationDelimiters
+  narrationDelimiters?: NarrationDelimiters | null
   /** Callback to open a new terminal session */
   onOpenTerminalClick?: () => void
   /** Whether Terminal Mode is currently active (hides the open-terminal button) */

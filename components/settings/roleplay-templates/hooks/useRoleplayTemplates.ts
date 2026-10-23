@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA, EMPTY_ADD_ONS } from '../types'
-import type { TemplateDelimiter, DelimiterAddOns } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, DelimiterAddOns, UnmarkedStyle } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import { generateFormattingPromptHint } from '@/lib/chat/template-prompt-hint'
 
@@ -66,6 +66,8 @@ function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
     tagClose: ']',
     tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
     hideDelimiter: d.hideDelimiter ?? false,
+    matchCurlyQuotes: false,
+    closeOptional: false,
     addOns: { ...EMPTY_ADD_ONS, ...(d.addOns ?? {}) },
   }
 
@@ -91,6 +93,8 @@ function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
     delimiterMode: isPair ? 'pair' : 'single',
     delimiterOpen: isPair ? (d.delimiters as [string, string])[0] : (d.delimiters as string),
     delimiterClose: isPair ? (d.delimiters as [string, string])[1] : (d.delimiters as string),
+    matchCurlyQuotes: d.matchCurlyQuotes ?? false,
+    closeOptional: d.closeOptional ?? false,
   }
 }
 
@@ -144,8 +148,43 @@ function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimit
           : e.delimiterOpen,
         style,
         ...deco,
+        ...(e.matchCurlyQuotes ? { matchCurlyQuotes: true } : {}),
+        ...(e.closeOptional ? { closeOptional: true } : {}),
       }
     })
+}
+
+/** The form's narration choice as stored: a string, a pair, or null (unmarked prose). */
+function narrationFromForm(f: TemplateFormData): string | [string, string] | null {
+  if (f.narrationDelimiterMode === 'none') return null
+  return f.narrationDelimiterMode === 'pair' ? [f.narrationOpen, f.narrationClose] : f.narrationOpen
+}
+
+/** The form's unmarked-text style as stored, or null when unstyled. */
+function unmarkedFromForm(f: TemplateFormData): UnmarkedStyle | null {
+  if (!f.unmarkedEnabled) return null
+  const style = f.unmarkedStyle.trim() || 'qt-roleplay-plain'
+  return hasAnyAddOn(f.unmarkedAddOns) ? { style, addOns: f.unmarkedAddOns } : { style }
+}
+
+/** Populate the form from a stored template (edit and copy-as-new share it). */
+function templateToFormData(template: RoleplayTemplate, name: string): TemplateFormData {
+  const delimiters = template.narrationDelimiters
+  const isPair = Array.isArray(delimiters)
+  const unmarked = template.unmarkedStyle ?? null
+  return {
+    name,
+    description: template.description || '',
+    systemPrompt: template.systemPrompt,
+    narrationDelimiterMode: delimiters === null ? 'none' : isPair ? 'pair' : 'single',
+    narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
+    narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
+    delimiters: (template.delimiters || []).map(delimiterToFormEntry),
+    unmarkedEnabled: unmarked !== null,
+    unmarkedStyle: unmarked?.style ?? INITIAL_FORM_DATA.unmarkedStyle,
+    unmarkedAddOns: { ...EMPTY_ADD_ONS, ...(unmarked?.addOns ?? {}) },
+    markdownAsterisks: template.markdownAsterisks ?? true,
+  }
 }
 
 export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
@@ -223,17 +262,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const openEditModal = (template: RoleplayTemplate) => {
     setEditingTemplate(template)
-    const delimiters = template.narrationDelimiters
-    const isPair = Array.isArray(delimiters)
-    setFormData({
-      name: template.name,
-      description: template.description || '',
-      systemPrompt: template.systemPrompt,
-      narrationDelimiterMode: isPair ? 'pair' : 'single',
-      narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
-      narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
-      delimiters: (template.delimiters || []).map(delimiterToFormEntry),
-    })
+    setFormData(templateToFormData(template, template.name))
     setIsModalOpen(true)
   }
 
@@ -248,17 +277,14 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setSaving(true)
       setError(null)
 
-      // Build narrationDelimiters from form state
-      const narrationDelimiters = formData.narrationDelimiterMode === 'pair'
-        ? [formData.narrationOpen, formData.narrationClose]
-        : formData.narrationOpen
-
       const payload = {
         name: formData.name,
         description: formData.description,
         systemPrompt: formData.systemPrompt,
-        narrationDelimiters,
+        narrationDelimiters: narrationFromForm(formData),
         delimiters: formEntriesToDelimiters(formData.delimiters),
+        unmarkedStyle: unmarkedFromForm(formData),
+        markdownAsterisks: formData.markdownAsterisks,
       }
 
       if (editingTemplate) {
@@ -335,10 +361,11 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const appendFormattingHint = useCallback(() => {
     setFormData(prev => {
-      const narration: string | [string, string] = prev.narrationDelimiterMode === 'pair'
-        ? [prev.narrationOpen, prev.narrationClose]
-        : prev.narrationOpen
-      const hint = generateFormattingPromptHint(formEntriesToDelimiters(prev.delimiters), narration)
+      const hint = generateFormattingPromptHint(
+        formEntriesToDelimiters(prev.delimiters),
+        narrationFromForm(prev),
+        { markdownAsterisks: prev.markdownAsterisks },
+      )
       if (!hint) return prev
       const separator = prev.systemPrompt.trim() ? '\n\n' : ''
       return { ...prev, systemPrompt: prev.systemPrompt + separator + hint }
@@ -347,17 +374,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const handleCopyAsNew = (template: RoleplayTemplate) => {
     setEditingTemplate(null)
-    const delimiters = template.narrationDelimiters
-    const isPair = Array.isArray(delimiters)
-    setFormData({
-      name: `${template.name} (Copy)`,
-      description: template.description || '',
-      systemPrompt: template.systemPrompt,
-      narrationDelimiterMode: isPair ? 'pair' : 'single',
-      narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
-      narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
-      delimiters: (template.delimiters || []).map(delimiterToFormEntry),
-    })
+    setFormData(templateToFormData(template, `${template.name} (Copy)`))
     setIsModalOpen(true)
   }
 

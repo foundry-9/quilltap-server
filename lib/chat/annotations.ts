@@ -7,7 +7,7 @@
  * @module lib/chat/annotations
  */
 
-import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters, DelimiterAddOns } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, AnnotationButton, RenderingPattern, NarrationDelimiters, DelimiterAddOns, UnmarkedStyle } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import { escapeRegex } from '@/lib/utils/regex'
 
@@ -102,30 +102,58 @@ export function addOnClassesFor(addOns?: DelimiterAddOns): string[] {
   return classes
 }
 
-/** Compose a delimiter's base style class with its add-on classes. */
-function composeClassName(delimiter: TemplateDelimiter): string {
-  return [delimiter.style, ...addOnClassesFor(delimiter.addOns)].join(' ')
+/** Compose a delimiter's (or unmarked style's) base class with its add-on classes. */
+function composeClassName(styled: { style: string; addOns?: DelimiterAddOns }): string {
+  return [styled.style, ...addOnClassesFor(styled.addOns)].join(' ')
 }
 
 // ============================================================================
 // RENDERING PATTERN AUTO-GENERATION
 // ============================================================================
 
+/** Template-wide rendering choices that sit beside the delimiter list. */
+export interface TemplateRenderingOptions {
+  /** How text no delimiter claims is displayed (emits an `unmarked` pattern). */
+  unmarkedStyle?: UnmarkedStyle | null
+  /**
+   * `false` takes asterisks away from Markdown: doubled `**` runs are stripped
+   * and single `*` is made literal, so a `*` wrap delimiter can claim it.
+   * Absent/`true` ⇒ Markdown bold/italic as usual.
+   */
+  markdownAsterisks?: boolean
+}
+
+/**
+ * Pre-parse patterns for a template with `markdownAsterisks: false`. Order
+ * matters: the doubled runs are stripped before the single ones are escaped.
+ */
+const LITERAL_ASTERISK_PATTERNS: RenderingPattern[] = [
+  { pattern: '\\*{2,}', className: '', scope: 'strip' },
+  { pattern: '\\*', className: '', scope: 'literal' },
+]
+
 /**
  * Auto-generate rendering patterns from template delimiters and narration delimiters.
  *
  * For each delimiter entry, builds a regex that matches text enclosed in those
  * delimiters and applies the entry's CSS style class. Also generates a pattern
- * for narrationDelimiters if not already covered by a delimiter entry.
+ * for narrationDelimiters if not already covered by a delimiter entry (a `null`
+ * narration — unmarked prose — generates none), plus the template-wide
+ * `strip`/`literal`/`unmarked` patterns from {@link TemplateRenderingOptions}.
  *
  * This is used as a default when a template doesn't have explicit renderingPatterns.
  */
 export function generateRenderingPatterns(
   delimiters: TemplateDelimiter[],
-  narrationDelimiters?: NarrationDelimiters
+  narrationDelimiters?: NarrationDelimiters | null,
+  options: TemplateRenderingOptions = {},
 ): RenderingPattern[] {
   const patterns: RenderingPattern[] = []
   const seen = new Set<string>()
+
+  if (options.markdownAsterisks === false) {
+    patterns.push(...LITERAL_ASTERISK_PATTERNS.map((p) => ({ ...p })))
+  }
 
   for (const d of delimiters) {
     const { prefix, suffix } = delimiterToPrefixSuffix(d)
@@ -165,7 +193,29 @@ export function generateRenderingPatterns(
     }
   }
 
+  if (options.unmarkedStyle?.style) {
+    // `pattern` is never matched for this scope; it only satisfies the schema.
+    patterns.push({ pattern: '[\\s\\S]', className: composeClassName(options.unmarkedStyle), scope: 'unmarked' })
+  }
+
   return patterns
+}
+
+/**
+ * {@link generateRenderingPatterns} over a whole template's authoring fields —
+ * the one call the API routes and the built-in table use, so a template's
+ * patterns are always derived the same way from the same four fields.
+ */
+export function generateTemplateRenderingPatterns(template: {
+  delimiters?: TemplateDelimiter[] | null
+  narrationDelimiters?: NarrationDelimiters | null
+  unmarkedStyle?: UnmarkedStyle | null
+  markdownAsterisks?: boolean
+}): RenderingPattern[] {
+  return generateRenderingPatterns(template.delimiters ?? [], template.narrationDelimiters, {
+    unmarkedStyle: template.unmarkedStyle,
+    markdownAsterisks: template.markdownAsterisks,
+  })
 }
 
 /** A compiled-pattern descriptor: regex source, optional flags, and render scope. */
@@ -207,9 +257,52 @@ function buildDelimiterPattern(delimiter: TemplateDelimiter): BuiltPattern | nul
     case 'wrap':
     default: {
       const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-      return buildWrapPattern(prefix, suffix)
+      return buildWrapPattern(prefix, suffix, {
+        matchCurlyQuotes: delimiter.matchCurlyQuotes,
+        closeOptional: delimiter.closeOptional,
+      })
     }
   }
+}
+
+/** The curly forms a straight quote may also be written as, by side. */
+const CURLY_QUOTE_FORMS: Record<string, { open: string; close: string }> = {
+  '"': { open: '\u201c', close: '\u201d' },
+  "'": { open: '\u2018', close: '\u2019' },
+}
+
+/** Every quote glyph (straight or curly) mapped back to its straight form. */
+const STRAIGHT_FORM_OF: Record<string, string> = {
+  '"': '"', '\u201c': '"', '\u201d': '"',
+  "'": "'", '\u2018': "'", '\u2019': "'",
+}
+
+/** Regex-source `\\uXXXX` escape for a character. */
+function uEscape(ch: string): string {
+  return `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`
+}
+
+/**
+ * The alternatives a delimiter string matches when `matchCurlyQuotes` is on:
+ * each quote glyph becomes a character class of its straight form plus the
+ * curly form for this side; everything else is matched literally. Also returns
+ * the raw characters involved, for a body exclusion class.
+ */
+function quoteTolerant(delim: string, side: 'open' | 'close'): { source: string; chars: string[] } {
+  let source = ''
+  const chars: string[] = []
+  for (const ch of delim) {
+    const straight = STRAIGHT_FORM_OF[ch]
+    if (straight) {
+      const curly = CURLY_QUOTE_FORMS[straight][side]
+      source += `[${escapeRegex(straight)}${uEscape(curly)}]`
+      chars.push(straight, curly)
+    } else {
+      source += escapeRegex(ch)
+      chars.push(ch)
+    }
+  }
+  return { source, chars }
 }
 
 /**
@@ -218,9 +311,35 @@ function buildDelimiterPattern(delimiter: TemplateDelimiter): BuiltPattern | nul
  *
  * The inner content is captured in the named group `rpBody` so the renderer can
  * emit just the content (dropping the delimiters) when a delimiter opts into hide.
+ *
+ * `matchCurlyQuotes` lets straight quotes in the pair match their curly forms;
+ * `closeOptional` lets an unclosed span run to the end of the text run.
  */
-function buildWrapPattern(prefix: string, suffix: string): BuiltPattern | null {
+function buildWrapPattern(
+  prefix: string,
+  suffix: string,
+  opts: { matchCurlyQuotes?: boolean; closeOptional?: boolean } = {},
+): BuiltPattern | null {
   if (!prefix && !suffix) return null
+
+  if (prefix && suffix && (opts.matchCurlyQuotes || opts.closeOptional)) {
+    const open = opts.matchCurlyQuotes
+      ? quoteTolerant(prefix, 'open')
+      : { source: escapeRegex(prefix), chars: [...prefix] }
+    const close = opts.matchCurlyQuotes
+      ? quoteTolerant(suffix, 'close')
+      : { source: escapeRegex(suffix), chars: [...suffix] }
+    // The body may not contain any closing character (mirrors the plain paths).
+    const exclude = [...new Set(close.chars)]
+      .map((ch) => (ch.charCodeAt(0) > 0x7f ? uEscape(ch) : ch === '-' ? '\\-' : escapeRegex(ch)))
+      .join('')
+    const closing = opts.closeOptional ? `(?:${close.source}|$)` : close.source
+    const linkExclusion = suffix === ']' && !opts.closeOptional ? '(?!\\()' : ''
+    return {
+      regex: `${open.source}(?<rpBody>[^${exclude}]+)${closing}${linkExclusion}`,
+      scope: 'inline',
+    }
+  }
 
   // Defensive: a wrap with an empty suffix degrades to a line-start prefix.
   // (The migration reclassifies such legacy entries to `linePrefix`.)

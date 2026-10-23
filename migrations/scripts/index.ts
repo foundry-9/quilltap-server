@@ -456,6 +456,8 @@ import { addTerminalSessionGeometryMigration } from './add-terminal-session-geom
 import { addMemoryKeystoneMigration } from './add-memory-keystone-v1';
 import { addStorytellerModeMigration } from './add-storyteller-mode-v1';
 import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-storyteller-round-id-column';
+// Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
+import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-template-unmarked-fields-v1';
 
 /**
  * All available migrations.
@@ -939,6 +941,8 @@ export const migrations: Migration[] = [
   addStorytellerModeMigration,
   // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
   addLLMLogsStorytellerRoundIdColumnMigration,
+  // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
+  addRoleplayTemplateUnmarkedFieldsMigration,
 ];
 
 export {
@@ -1399,5 +1403,6 @@ export {
   addStorytellerModeMigration,
   // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
   addLLMLogsStorytellerRoundIdColumnMigration,
+  addRoleplayTemplateUnmarkedFieldsMigration,
 };
 

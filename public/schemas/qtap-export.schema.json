@@ -1197,7 +1197,9 @@
         "marker": { "type": "string", "description": "linePrefix only — the line-start marker." },
         "open": { "type": "string", "description": "tagPrefix only — opening bracket." },
         "close": { "type": "string", "description": "tagPrefix only — closing bracket." },
-        "tokenPattern": { "type": "string", "description": "tagPrefix only — inner-token Unicode regex." }
+        "tokenPattern": { "type": "string", "description": "tagPrefix only — inner-token Unicode regex." },
+        "matchCurlyQuotes": { "type": "boolean", "description": "wrap only — straight quotes in the delimiters also match their curly forms." },
+        "closeOptional": { "type": "boolean", "description": "wrap only — an unclosed span runs to the end of its paragraph." }
       }
     },
 
@@ -1220,11 +1222,30 @@
           "items": { "$ref": "#/$defs/TemplateDelimiter" }
         },
         "narrationDelimiters": {
-          "description": "Narration delimiter(s) — single string or [open, close] pair",
+          "description": "Narration delimiter(s) — single string, [open, close] pair, or null for unmarked plain-prose narration",
           "anyOf": [
             { "type": "string", "minLength": 1 },
-            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 2, "maxItems": 2 }
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 2, "maxItems": 2 },
+            { "type": "null" }
           ]
+        },
+        "unmarkedStyle": {
+          "description": "How text no delimiter claims is displayed; null leaves it unstyled.",
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["style"],
+              "properties": {
+                "style": { "type": "string", "minLength": 1, "maxLength": 50 },
+                "addOns": { "$ref": "#/$defs/DelimiterAddOns" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "markdownAsterisks": {
+          "type": "boolean",
+          "description": "Whether Markdown reads asterisks as bold/italic (default true). False hands single * to the template's delimiters and drops doubled **."
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },

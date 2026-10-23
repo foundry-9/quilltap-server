@@ -88,6 +88,19 @@ export const WrapDelimiterSchema = z.object({
     z.string(),
     z.tuple([z.string(), z.string()]),
   ]),
+  /**
+   * When true, a straight quote in the delimiters also matches its curly forms
+   * (`"` opens as `"`/`\u201c` and closes as `"`/`\u201d`; `'` likewise with
+   * `\u2018`/`\u2019`), in any mix — models and the smart-typography display
+   * setting both produce either. Absent ⇒ the delimiters match literally.
+   */
+  matchCurlyQuotes: z.boolean().optional(),
+  /**
+   * When true, a span that opens but never closes runs to the end of its
+   * paragraph (prose convention: speech carried over several paragraphs leaves
+   * each one unclosed until the last). Absent ⇒ an unclosed span is not styled.
+   */
+  closeOptional: z.boolean().optional(),
 });
 
 /**
@@ -180,8 +193,8 @@ export type AnnotationButton = {
 export const RenderingPatternSchema = z.object({
   /** Regex pattern as a string (converted to RegExp at runtime) */
   pattern: z.string().min(1),
-  /** CSS class to apply to matched text (e.g., qt-chat-narration, qt-chat-ooc) */
-  className: z.string().min(1),
+  /** CSS class to apply to matched text (e.g., qt-chat-narration, qt-chat-ooc); unused (may be empty) for `literal`/`strip` */
+  className: z.string(),
   /** Optional regex flags (e.g., 'm' for multiline) */
   flags: z.string().optional(),
   /**
@@ -189,8 +202,19 @@ export const RenderingPatternSchema = z.object({
    * `<span>` within its line; `line` styles the WHOLE block the match belongs to
    * (applied at the block element, not as an inline span — e.g. a `// OOC` line or
    * a `[TAG]` line). Absent on legacy patterns, which are treated as `inline`.
+   *
+   * Three template-wide scopes carry no span of their own:
+   * - `unmarked` — `className` styles every run of text that no inline rule
+   *   claims (a template whose narration is plain prose). `pattern` is unused.
+   * - `literal` — before Markdown parsing, every match of `pattern` is escaped
+   *   so Markdown reads it as plain text and the template's own delimiters can
+   *   claim it (e.g. single `*` as an emphasis mark, not Markdown italics).
+   * - `strip` — before Markdown parsing, every match of `pattern` is removed
+   *   (e.g. `**`, which means nothing in such a template).
+   * Both pre-parse scopes skip code and Markdown's own block syntax (a `* `
+   * bullet, a `***` scene break); `className` is unused for them.
    */
-  scope: z.enum(['inline', 'line']).optional(),
+  scope: z.enum(['inline', 'line', 'unmarked', 'literal', 'strip']).optional(),
   /**
    * When true, the renderer hides the delimiter chars, emitting only the kept
    * content. The pattern wraps that content in capture group 1; the renderer
@@ -198,7 +222,10 @@ export const RenderingPatternSchema = z.object({
    * (line). Absent on patterns whose delimiters stay visible.
    */
   hideDelimiters: z.boolean().optional(),
-});
+}).refine(
+  (p) => p.scope === 'literal' || p.scope === 'strip' || p.className.length > 0,
+  { message: 'className is required for span-styling patterns', path: ['className'] },
+);
 
 export type RenderingPattern = z.infer<typeof RenderingPatternSchema>;
 
@@ -237,6 +264,23 @@ export const NarrationDelimitersSchema = z.union([
 export type NarrationDelimiters = z.infer<typeof NarrationDelimitersSchema>;
 
 // ============================================================================
+// UNMARKED TEXT STYLE
+// ============================================================================
+
+/**
+ * How a template displays text that no delimiter claims. A template whose
+ * narration is plain prose (narrationDelimiters `null`) uses this to style it;
+ * any template may set it. Same base-class + add-on shape as a delimiter.
+ */
+export const UnmarkedStyleSchema = z.object({
+  /** CSS class for unmarked text (e.g. `qt-roleplay-plain`). */
+  style: z.string().min(1).max(50),
+  addOns: DelimiterAddOnsSchema.optional(),
+});
+
+export type UnmarkedStyle = z.infer<typeof UnmarkedStyleSchema>;
+
+// ============================================================================
 // ROLEPLAY TEMPLATES
 // ============================================================================
 
@@ -254,8 +298,19 @@ export const RoleplayTemplateSchema = z.object({
   renderingPatterns: z.array(RenderingPatternSchema).default([]),
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection: DialogueDetectionSchema.nullable().optional(),
-  /** Narration delimiters — required for new templates. Defaults to '*' for backward compatibility */
-  narrationDelimiters: NarrationDelimitersSchema.default('*'),
+  /**
+   * Narration delimiters. `null` means narration is unmarked plain prose (style it
+   * with `unmarkedStyle`). Defaults to '*' for backward compatibility.
+   */
+  narrationDelimiters: NarrationDelimitersSchema.nullable().default('*'),
+  /** How text no delimiter claims is displayed; `null` ⇒ left unstyled. */
+  unmarkedStyle: UnmarkedStyleSchema.nullable().optional(),
+  /**
+   * Whether Markdown reads asterisks as bold/italic (the default). `false` hands
+   * single `*` to the template's delimiters and makes doubled `**` meaningless
+   * (they are dropped from display).
+   */
+  markdownAsterisks: z.boolean().default(true),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

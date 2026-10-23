@@ -201,7 +201,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
-  const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | undefined>(undefined)
+  const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | null | undefined>(undefined)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
