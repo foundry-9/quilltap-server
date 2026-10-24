@@ -4,6 +4,11 @@
 
 ### 4.11-dev
 
+#### Docs: 4.11.0 release notes corrections
+
+- Keystones: notes now say keystones are recalled for the character and for everyone present or in her inner circle, not "every turn they are relevant."
+- Upgrading: removed the "same as Self-Dressing" comparison for *Can manage inventory*; fixed unbalanced bold markup on *Let me take a hand* **on**.
+
 #### Feature: punctuation warnings in the Salon composer
 
 - New pure engine `lib/punctuation-lint/engine.ts` (`lintPunctuation`, no imports; same ESLint import ban as `lib/smart-typography/`) with a v5 contract corpus in `fixtures/punctuation-vectors.json`. Rules: a double quote opened inside open dialogue (and its partner), a closer with nothing to close, a quote with spaces on both sides or glued between words, a backwards curly quote, dialogue left unclosed when the next paragraph doesn't open with a quote, an unpaired `*`/`**` run, an unpaired `((`/`))`. Paragraphs split on blank lines; `6"` inch marks, `2 * 3`, `* * *` scene breaks and code are exempt. A caret position suppresses flags on a mark still being typed.
