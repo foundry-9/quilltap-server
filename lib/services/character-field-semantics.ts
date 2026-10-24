@@ -166,5 +166,5 @@ export const CORE_VAULT_FILE_SUMMARIES: Readonly<Record<(typeof SINGLE_FILE_OVER
   'physical-description.md':
     'Your body with nothing removable: face, hair, eyes, skin, build, distinctive features. No clothing or accessories (those are the wardrobe). Noun phrases; also fed to image models.',
   'physical-prompts.json':
-    'Image-generation prompts for your appearance as JSON: headAndShoulders, short, medium, long, complete. Terse noun phrases, no clothing.',
+    'Image-generation prompts for your appearance as JSON: headAndShoulders, short, medium, long, complete, plus a `humanoid` flag (false when you have no head, shoulders or body to draw). Terse noun phrases, no clothing.',
 };

@@ -233,6 +233,7 @@ export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | 
       medium: primary?.mediumPrompt ?? null,
       long: primary?.longPrompt ?? null,
       complete: primary?.completePrompt ?? null,
+      humanoid: primary?.humanoid ?? true,
     },
     null,
     2,

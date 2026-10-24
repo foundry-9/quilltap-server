@@ -11,7 +11,7 @@ import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/tim
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
-import { pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -246,8 +246,14 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     const desc = character.physicalDescription
     const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
     const descText = pickPhysicalDescription(desc, 'self-image')
+    // A non-humanoid character (`humanoid: false` in physical-prompts.json)
+    // is told so, lest it narrate a shrug or a nod it has no body for. Only
+    // that flag adds the line, so no existing character's stack changes.
+    const formNote = isHumanoid(desc)
+      ? ''
+      : '\nYou have no humanoid body: no head, face, shoulders, hands or limbs. Never describe yourself as having or using one.'
     if (descText) {
-      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}`)
+      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}${formNote}`)
     }
   }
 

@@ -24,7 +24,11 @@ import {
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
-import { pickPhysicalDescription } from '@/lib/characters/physical-description';
+import {
+  isHumanoid,
+  NON_HUMANOID_IMAGE_DIRECTION,
+  pickPhysicalDescription,
+} from '@/lib/characters/physical-description';
 
 interface BuildPromptOptions {
   /**
@@ -68,13 +72,24 @@ export interface FigureIdentityBlock {
   /**
    * "woman" / "man" from the character's pronouns, else "person" — never a
    * binary presentation forced onto a character who hasn't declared one.
+   * A non-humanoid character is a "non-humanoid entity" whatever its
+   * pronouns: "he" says nothing about having a man's body.
    */
   subjectNoun: string;
+  /** False when the character has no humanoid body (`isHumanoid`). */
+  humanoid: boolean;
   /** The chosen physical-description text, trimmed ('' when none). */
   physicalText: string;
-  /** `physicalText` with exactly one closing period ('' when none). */
+  /**
+   * `physicalText` with exactly one closing period ('' when none), followed
+   * for a non-humanoid character by {@link NON_HUMANOID_IMAGE_DIRECTION} —
+   * which is therefore never '' for one.
+   */
   physBlock: string;
 }
+
+/** Subject noun for a character with no humanoid body. */
+export const NON_HUMANOID_SUBJECT_NOUN = 'non-humanoid entity';
 
 /**
  * The identity block every picture of a character opens with: the physical
@@ -93,13 +108,21 @@ export function buildFigureIdentityBlock(
   // it, a gender-neutral physical description plus an outfit cue (e.g. a
   // "men's" shirt) can make the generator render the wrong sex. `they`/
   // neopronouns/unset → no anchor, leaving "person".
-  const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
+  // A non-humanoid character takes no anchor: its pronouns name it, they
+  // don't give it a body.
+  const humanoid = isHumanoid(character.physicalDescription);
+  const subjectNoun = humanoid
+    ? genderNounFromPronouns(character.pronouns) ?? 'person'
+    : NON_HUMANOID_SUBJECT_NOUN;
 
   // Strip any trailing terminal punctuation off the physical description so
   // we don't end up with "background.." once we re-append a period.
-  const physBlock = physicalText ? `${physicalText.replace(/[.!?]+$/, '')}.` : '';
+  const physSentence = physicalText ? `${physicalText.replace(/[.!?]+$/, '')}.` : '';
+  const physBlock = humanoid
+    ? physSentence
+    : [physSentence, `${NON_HUMANOID_IMAGE_DIRECTION}.`].filter(Boolean).join(' ');
 
-  return { subjectNoun, physicalText, physBlock };
+  return { subjectNoun, humanoid, physicalText, physBlock };
 }
 
 /**
@@ -158,12 +181,32 @@ export async function buildCharacterAvatarPrompt(
 
   const figure = buildFigureIdentityBlock(character, 'head-and-shoulders');
   const physicalText = figure.physicalText;
+  const { humanoid } = figure;
 
   let outfitText = '';
   // Whether the character's upper body is bare (no item bubbles up into the
   // top slot). Drives a tighter crop below so a bare chest is never in frame.
   let topIsBare = false;
-  if (equippedSlots) {
+  if (equippedSlots && !humanoid) {
+    // No head, shoulders or torso to crop to, so no slot is cut off at the
+    // frame and no bare-chest framing applies: whatever it has on is listed,
+    // empty slots omitted. Nothing on at all → no outfit text, never
+    // describeOutfit's "completely naked" fallback for a thing with no body.
+    const resolved = resolveEquippedOutfitForCharacter(
+      await loadWearablePool(repos, character.id, projectMountPointIds ?? []),
+      equippedSlots,
+    );
+    const slotValues = buildOutfitSlotValues((slot) =>
+      decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+    );
+    const omit = WARDROBE_SLOT_TYPES.filter((slot) => slotValues[slot].length === 0);
+    if (omit.length < WARDROBE_SLOT_TYPES.length) {
+      outfitText = describeOutfit(slotValues, { omit }).trimEnd();
+    }
+    for (const slot of WARDROBE_SLOT_TYPES) {
+      leafCounts[slot] = resolved.leafItemsBySlot[slot].length;
+    }
+  } else if (equippedSlots) {
     // Avatars are head-and-shoulders only. We pass the FULL equipped slots in
     // so the resolver can route coverage by each leaf's own `types` — an item
     // sitting in slots.bottom whose types include "top" still bubbles up into
@@ -229,10 +272,16 @@ export async function buildCharacterAvatarPrompt(
     // to SFW image providers; a bare chest is what gets refused. The framing
     // constraint keeps the portrait generatable without any "topless" wording.
     const opening = soloFigureIntro('portrait', subjectNoun, character.name);
-    const intro = topIsBare
-      ? `${opening}. Close-up headshot cropped at the collarbone — only the face, neck, and bare shoulders are visible; the chest and torso are outside the frame.`
-      : `${opening}, head-and-shoulders crop, three-quarter view.`;
-    const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
+    // A non-humanoid character has no head and shoulders to crop to: its
+    // whole form is the portrait, and it is a "subject", never a "person".
+    const intro = !humanoid
+      ? `${opening}, its whole form in frame.`
+      : topIsBare
+        ? `${opening}. Close-up headshot cropped at the collarbone — only the face, neck, and bare shoulders are visible; the chest and torso are outside the frame.`
+        : `${opening}, head-and-shoulders crop, three-quarter view.`;
+    const outro = humanoid
+      ? `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`
+      : `Character portrait, detailed, high quality, natural lighting. Only one subject in the image.`;
     const { physBlock } = figure;
     // Outfit is a markdown list (lines starting with "- "). Markdown renderers
     // need a blank line before the first list item, so the outfit block is

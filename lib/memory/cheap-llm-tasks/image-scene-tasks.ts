@@ -22,7 +22,7 @@ import type {
   StoryBackgroundPromptContext,
   UncensoredFallbackOptions,
 } from './types'
-import { pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { NON_HUMANOID_IMAGE_DIRECTION, pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 interface AestheticPromptInputs {
   sceneAesthetic?: string | null
@@ -85,6 +85,7 @@ Your task is to write a SINGLE COHERENT PARAGRAPH that:
 CRITICAL WRITING GUIDELINES:
 - Write in a cinematic, descriptive style suitable for image generation
 - If a person's gender is specified (e.g., [man] or [woman]), ALWAYS refer to them using that gender term (e.g., "a man with...", "a woman with...")
+- If an entity is marked [not humanoid], it has NO head, face, neck, shoulders, torso, arms, legs or any human or humanoid body. Describe only the form its description gives, never call it a man, woman or person, and never imply a body part it lacks
 - Introduce people with phrases like "A young woman with...", "Beside her, a middle-aged man with..."
 - NEVER just concatenate descriptions - write flowing prose that a human would write
 - Use transitional phrases to connect people: "sitting on the lap of", "next to", "holding hands with", etc.
@@ -252,6 +253,7 @@ CRITICAL GUIDELINES:
 - This is for a BACKGROUND image, not a portrait - the scene/environment is primary
 - Characters should be toward the left and right of the frame, not centered
 - If a character description begins with a gender term like "A man" or "A woman", always include that term when describing the character in the prompt
+- If a character description says it is "Not humanoid", it has no head, face, shoulders or human body; describe only the form given and never imply a body part it lacks
 - Characters should be described briefly, focusing on visual traits (hair color, clothing style, notable features)
 - Focus on atmospheric qualities: lighting, weather, time of day, mood
 - Include environmental details: location type, architectural elements, nature
@@ -517,8 +519,14 @@ export async function craftImagePrompt(
   // Format placeholder data for the LLM
   const placeholderDetails = expansionContext.placeholders
     .map(p => {
-      const genderHint = p.gender === 'male' ? ' [man]' : p.gender === 'female' ? ' [woman]' : '';
+      const genderHint = p.nonHumanoid
+        ? ' [not humanoid]'
+        : p.gender === 'male' ? ' [man]' : p.gender === 'female' ? ' [woman]' : '';
       const parts: string[] = [`${p.placeholder} (${p.name}${genderHint}):`];
+
+      if (p.nonHumanoid) {
+        parts.push(`  Form: ${NON_HUMANOID_IMAGE_DIRECTION}`);
+      }
 
       if (p.gender) {
         parts.push(`  Gender: ${p.gender === 'male' ? 'man' : 'woman'} — always refer to this person as a ${p.gender === 'male' ? 'man' : 'woman'} in the prompt`);

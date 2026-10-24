@@ -67,6 +67,7 @@ const PHYSICAL_PROMPTS_JSON = {
   medium: null,
   long: null,
   complete: null,
+  humanoid: true,
 };
 
 export interface CharacterScaffoldResult {

@@ -261,6 +261,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
         patched.mediumPrompt = parsedPrompts.medium;
         patched.longPrompt = parsedPrompts.long;
         patched.completePrompt = parsedPrompts.complete;
+        patched.humanoid = parsedPrompts.humanoid ?? true;
       }
     }
 

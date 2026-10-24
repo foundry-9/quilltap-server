@@ -91,6 +91,8 @@ const updateCharacterSchema = z.object({
       longPrompt: z.string().max(750).nullable().optional(),
       completePrompt: z.string().max(1000).nullable().optional(),
       fullDescription: z.string().nullable().optional(),
+      // Omitted → the vault's current value is kept (managed-fields write).
+      humanoid: z.boolean().optional(),
       createdAt: z.string().optional(),
       updatedAt: z.string().optional(),
     })
@@ -186,6 +188,7 @@ async function handleUpdateCharacter(
         longPrompt: rawPhysical.longPrompt ?? null,
         completePrompt: rawPhysical.completePrompt ?? null,
         fullDescription: rawPhysical.fullDescription ?? null,
+        ...(rawPhysical.humanoid !== undefined ? { humanoid: rawPhysical.humanoid } : {}),
         createdAt: rawPhysical.createdAt ?? now,
         updatedAt: now,
       });

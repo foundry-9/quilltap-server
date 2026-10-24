@@ -4,6 +4,14 @@
 
 ### 4.11-dev
 
+#### Feature: non-humanoid characters
+
+- `physical-prompts.json` gains an optional `humanoid` boolean (absent = `true`), hydrated onto `PhysicalDescription.humanoid`. The Aurora Descriptions tab has a **Humanoid** checkbox for it. A physical write that omits the flag (AI Wizard, optimizer, head-and-shoulders backfill) keeps the vault's value; new vaults are scaffolded with `humanoid: true`.
+- `isHumanoid` and `NON_HUMANOID_IMAGE_DIRECTION` (`lib/characters/physical-description.ts`) are the one reader and the one instruction. For `humanoid: false`, `pickPhysicalDescription(..., 'head-and-shoulders')` skips the head-and-shoulders prompt and leads with medium.
+- Avatar prompt: no head-and-shoulders crop, no pronoun-derived "man"/"woman" (subject is "non-humanoid entity"), the non-humanoid direction, whole form in frame, equipped items listed without slot cropping or nudity fallback.
+- Wardrobe worn picture, Lantern scene descriptions (`sceneDescriptionParts`, story-background fallbacks), image-tool expansion (`nonHumanoid` placeholder flag, no gender hint) and the scene-state baseline all carry the direction and drop the gender anchor.
+- The character's own Physical Appearance section adds a "no humanoid body" line (only when the flag is false, so existing identity stacks are byte-identical). The optimizer's appearance pass is told not to suggest a head-and-shoulders prompt. The head-and-shoulders backfill skips non-humanoid characters.
+
 #### Feature: name chips for absent characters replace the Host's introduction cards
 
 - The Host no longer posts a card when an absent workspace character is named. Instead the Salon puts a chip on the name at its first mention in the chat; hovering (or focusing) it shows the card in the shared `Tooltip` (pinnable, scrollable): name, aliases, pronouns, identity/description. The model still gets the same card from the referent ledger.

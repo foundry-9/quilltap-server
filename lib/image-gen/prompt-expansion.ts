@@ -9,6 +9,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
 import type { Pronouns } from '@/lib/schemas/character.types';
 import { genderFromPronouns } from '@/lib/characters/pronoun-gender';
+import { isHumanoid } from '@/lib/characters/physical-description';
 import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
@@ -284,6 +285,7 @@ export function buildExpansionContext(
     placeholder: string;
     name: string;
     gender?: string;
+    nonHumanoid?: boolean;
     usageContext?: string;
     tiers: {
       short?: string;
@@ -301,13 +303,22 @@ export function buildExpansionContext(
   provider: string;
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
-    // Derive gender hint from standard pronouns
-    const gender: string | undefined = genderFromPronouns(placeholder.pronouns) ?? undefined;
-
     // Check if we have a resolved appearance for this character
     const resolved = resolvedAppearances?.find(
       a => a.characterId === placeholder.entityId
     );
+
+    // A character with no humanoid body takes no gender hint — its pronouns
+    // don't give it a man's or a woman's body — and is flagged instead.
+    const humanoid = resolved
+      ? resolved.humanoid !== false
+      : isHumanoid(placeholder.descriptions?.[0]);
+    const nonHumanoid = humanoid ? undefined : true;
+
+    // Derive gender hint from standard pronouns
+    const gender: string | undefined = humanoid
+      ? genderFromPronouns(placeholder.pronouns) ?? undefined
+      : undefined;
 
     if (resolved) {
       // Use the single resolved appearance instead of all tiers/clothing
@@ -315,6 +326,7 @@ export function buildExpansionContext(
         placeholder: placeholder.placeholder,
         name: placeholder.name,
         gender,
+        ...(nonHumanoid ? { nonHumanoid } : {}),
         usageContext: resolved.physicalDescriptionName,
         tiers: {
           // Put the resolved description in the 'complete' tier so the
@@ -346,6 +358,7 @@ export function buildExpansionContext(
       placeholder: placeholder.placeholder,
       name: placeholder.name,
       gender,
+      ...(nonHumanoid ? { nonHumanoid } : {}),
       usageContext: tiers?.usageContext,
       tiers: {
         short: tiers?.short,

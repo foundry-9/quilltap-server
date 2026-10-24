@@ -21,7 +21,11 @@ import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { pickPhysicalDescription } from '@/lib/characters/physical-description';
+import {
+  isHumanoid,
+  NON_HUMANOID_IMAGE_DIRECTION,
+  pickPhysicalDescription,
+} from '@/lib/characters/physical-description';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -211,7 +215,12 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     return {
       characterId: char!.id,
       characterName: char!.name,
-      physicalDescription: pickPhysicalDescription(char!.physicalDescription, 'scene'),
+      // The tracker writes the appearance the Lantern later paints from, so a
+      // non-humanoid character's baseline says it has no body to describe.
+      physicalDescription: isHumanoid(char!.physicalDescription)
+        ? pickPhysicalDescription(char!.physicalDescription, 'scene')
+        : [pickPhysicalDescription(char!.physicalDescription, 'scene'), NON_HUMANOID_IMAGE_DIRECTION]
+            .filter(Boolean).join('. '),
       clothingDescription,
       scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
     };

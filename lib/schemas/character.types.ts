@@ -76,6 +76,12 @@ export const PhysicalDescriptionSchema = z.object({
   longPrompt: z.string().max(750).nullable().optional(),
   completePrompt: z.string().max(1000).nullable().optional(),
   fullDescription: z.string().nullable().optional(),
+  // Whether the character has a body that can be drawn as one (head,
+  // shoulders, torso, limbs). Absent means true; `false` marks a character
+  // such as a moving geometric form, and every image pipeline then drops the
+  // portrait crop and the pronoun-derived "man"/"woman" anchor and says it is
+  // not humanoid. Read through `isHumanoid` (lib/characters/physical-description.ts).
+  humanoid: z.boolean().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

@@ -113,6 +113,11 @@ export interface ImagePromptExpansionContext {
     name: string
     /** Gender derived from pronouns: 'male', 'female', or undefined */
     gender?: string
+    /**
+     * True when the character has no humanoid body. The crafter then never
+     * gives it a head, face, shoulders or limbs; `gender` is left unset.
+     */
+    nonHumanoid?: boolean
     usageContext?: string
     tiers: {
       short?: string

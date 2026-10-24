@@ -10,6 +10,7 @@
  * streaming progress updates and structured JSON responses.
  */
 
+import { isHumanoid } from '@/lib/characters/physical-description';
 import { createLLMProvider } from '@/lib/llm';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key';
@@ -525,7 +526,8 @@ Additional rules specific to physical-description refinement:
 - currentValue must be the existing text of that sub-field (empty string if it has none).
 - proposedValue must be the complete new text for that sub-field.
 - Keep the image prompts (headAndShoulders/short/medium/long/complete) in the comma-or-phrase style image models expect; keep fullDescription in prose.
-- For headAndShouldersPrompt specifically: describe ONLY what a head-and-shoulders crop shows (face, hair, expression, neckline, visible upper attire). Never describe breasts, torso, waist, hips, legs, or any anatomy below the shoulders.
+- For headAndShouldersPrompt specifically: describe ONLY what a head-and-shoulders crop shows (face, hair, expression, neckline, visible upper attire). Never describe breasts, torso, waist, hips, legs, or any anatomy below the shoulders.${isHumanoid(pd) ? '' : `
+- THIS CHARACTER IS NOT HUMANOID: it has no head, face, neck, shoulders, torso or limbs. Never give any sub-field a body part it lacks, and do not suggest a headAndShouldersPrompt at all — it is unused for a non-humanoid character.`}
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }

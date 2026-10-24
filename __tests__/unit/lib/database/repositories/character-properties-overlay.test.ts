@@ -629,6 +629,29 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     expect(result.physicalDescription!.headAndShouldersPrompt).toBe('vault-headshoulders');
   });
 
+  it('hydrates humanoid from physical-prompts.json; absent reads as true', async () => {
+    mockRepoPaths({
+      [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
+        { mountPointId: 'mp-1', content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }) },
+        { mountPointId: 'mp-2', content: JSON.stringify(VALID_VAULT_PHYSICAL_PROMPTS) },
+      ],
+    });
+    const spheres = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
+    });
+    const legacy = makeCharacter({
+      id: 'b',
+      characterDocumentMountPointId: 'mp-2',
+      physicalDescription: makePhysicalDescription({ id: 'pd-2' }),
+    });
+    const [a, b] = await applyDocumentStoreOverlay([spheres, legacy]);
+    expect(a.physicalDescription!.humanoid).toBe(false);
+    expect(a.physicalDescription!.shortPrompt).toBe('vault-short');
+    expect(b.physicalDescription!.humanoid).toBe(true);
+  });
+
   it('back-compat: a legacy physical-prompts.json without headAndShoulders still parses (field null, other tiers survive)', async () => {
     mockRepoPaths({
       [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
@@ -1644,6 +1667,60 @@ describe('applyDocumentStoreWriteOverlay — corrupt properties.json (Bug 8)', (
   });
 });
 
+describe('applyDocumentStoreWriteOverlay — physical-prompts.json humanoid flag', () => {
+  const CHAR_ID = 'char-spheres';
+  const MOUNT_ID = 'mount-spheres';
+  const incoming = {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'default',
+    shortPrompt: 'new short',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  function physPromptsWrite() {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+    );
+    return call ? JSON.parse(call[2] as string) : undefined;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Orrery',
+          characterDocumentMountPointId: MOUNT_ID,
+        }),
+      },
+    });
+  });
+
+  it('keeps the vault\'s humanoid: false when the write does not name it', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }),
+      mtime: 0,
+      size: 100,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { physicalDescription: incoming } as never);
+    const written = physPromptsWrite();
+    expect(written.short).toBe('new short');
+    expect(written.humanoid).toBe(false);
+  });
+
+  it('writes an explicit humanoid value as given', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }),
+      mtime: 0,
+      size: 100,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { physicalDescription: { ...incoming, humanoid: true } } as never);
+    expect(physPromptsWrite().humanoid).toBe(true);
+  });
+});
+
 describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1716,6 +1793,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       medium: 'medium',
       long: 'long',
       complete: 'complete',
+      humanoid: true,
     });
 
     // No items, no presets → no Wardrobe/*.md or Outfits/*.md writes, and the
