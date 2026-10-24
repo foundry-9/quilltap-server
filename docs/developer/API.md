@@ -2609,6 +2609,13 @@ Where the chat's scene came from. Query key `queryKeys.chats.scenarioSource(chat
 - The chat-start `systemKind: "scenario"` message is **not** removed or rewritten.
 - `updateChatSchema` (`PUT /api/v1/chats/[id]`) deliberately does **not** expose `scenarioText`; a bare field update would skip the recompile and the announcement.
 
+#### `GET /api/v1/chats/[id]?action=absent-mentions`
+
+Absent workspace characters named in the chat, for the Salon's name chips (`lib/chat/absent-mentions.ts`). Query key `queryKeys.chats.absentMentions(chatId)`, refreshed by the `chats` realtime topic.
+
+**Response**: `{ mentions: [{ messageId, characterId, text, card: { name, aliases, pronouns, body } }] }` — one entry per absent character: the first spoken message (no Staff messages) that names them, the name or alias exactly as written there (case-sensitive, letter-bounded), and their card. `card` is `offSceneCardFields`, the same particulars the model gets in the referent ledger; `pronouns` is `subject/object/possessive` or null; `body` is identity, else description, with `{{char}}` / `{{user}}` bound.
+- "Absent" is `presenceOf`: not seated (removed seats count as absent), and not the operator's unseated persona where the operator speaks without a seat.
+
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`
 
 Re-attribute multiple messages from one participant to another in a single operation. All memories associated with the affected messages are permanently deleted.

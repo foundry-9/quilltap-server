@@ -4,6 +4,7 @@ import { memo } from 'react'
 import MessageContent from './MessageContent'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import type { AbsentMentionChip } from './MentionChip'
 
 interface LazyMessageContentProps {
   content: string
@@ -19,6 +20,8 @@ interface LazyMessageContentProps {
   forceRender?: boolean
   /** Server-side pre-rendered HTML for simple messages */
   renderedHtml?: string | null
+  /** Name chips for absent characters first named here (see MessageContent) */
+  mentions?: ReadonlyArray<AbsentMentionChip>
 }
 
 /**
@@ -39,6 +42,7 @@ function LazyMessageContentInner({
   renderingPatterns,
   dialogueDetection,
   renderedHtml,
+  mentions,
 }: LazyMessageContentProps) {
   const hasQtapUri = content.includes('qtap://')
   // Quick-hide "Salon Images": pre-rendered HTML carries its <img> tags
@@ -51,7 +55,10 @@ function LazyMessageContentInner({
   // height-stable, so render it directly. Messages mentioning qtap:// must use
   // MessageContent so links are interactive via QtapLink (server-rendered HTML
   // anchors have no React click handler for in-app open behavior).
-  if (renderedHtml && !hasQtapUri && !(imagesHidden && htmlHasImage)) {
+  // A message carrying a name chip takes the full render too: the chip is a
+  // React component with a hover card.
+  const hasMentions = !!mentions && mentions.length > 0
+  if (renderedHtml && !hasQtapUri && !hasMentions && !(imagesHidden && htmlHasImage)) {
     return (
       <div
         className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}
@@ -67,6 +74,7 @@ function LazyMessageContentInner({
       className={className}
       renderingPatterns={renderingPatterns}
       dialogueDetection={dialogueDetection}
+      mentions={mentions}
     />
   )
 }
@@ -82,7 +90,8 @@ const LazyMessageContent = memo(LazyMessageContentInner, (prev, next) => {
     prev.className === next.className &&
     prev.renderingPatterns === next.renderingPatterns &&
     prev.dialogueDetection === next.dialogueDetection &&
-    prev.renderedHtml === next.renderedHtml
+    prev.renderedHtml === next.renderedHtml &&
+    prev.mentions === next.mentions
   )
 })
 

@@ -96,7 +96,7 @@ import {
   formatCurrentSceneState,
   type SceneStateEmissionEntry,
 } from './context/scene-state'
-import { SceneStateSchema, type SceneState, operatorSpeaksWithoutSeat } from '@/lib/schemas/chat.types'
+import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped'
 import {
@@ -116,9 +116,6 @@ import {
   selectRecentMessages,
   type SelectableMessage,
 } from './context/message-selector'
-import {
-  findMentionedCharacterIds,
-} from './context/mentioned-characters'
 import {
   retrieveKnowledgeForTurn,
   type KnowledgeDebugEntry,
@@ -158,12 +155,11 @@ import { buildInventorySection } from '@/lib/inventory/prompt-section'
 import { buildUserNarrationAnchor } from '@/lib/chat/context/user-narration-anchor'
 import { buildClosingEcho, buildReferentLedger, REFERENT_LEDGER_WINDOW_LINES, type ReferentLedgerLine } from '@/lib/chat/context/referent-ledger'
 import { resolveSpeakerNames, speakerLabel } from '@/lib/chat/speaker-names'
+import { presenceOf, spokenText } from '@/lib/chat/absent-mentions'
 import { buildTurnYieldInstruction } from '@/lib/chat/turn-manager/yield-signal'
 import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
-  postHostOffSceneCharactersAnnouncement,
-  findIntroducedOffSceneCharacterIds,
   renderOffSceneCard,
 } from '@/lib/services/host-notifications/writer'
 import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
@@ -780,142 +776,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // delivered as Aurora whispers in the transcript, so the per-turn
   // system-prompt loading of equipped outfits has been removed.
 
-  // Off-scene character introductions: scan the conversation for workspace
-  // characters who are NOT current participants but get name-dropped in
-  // history. The first time each one is named, the Host introduces them with
-  // a public chat message — for the operator only: it is record-only
-  // (`isOffSceneMentionIntroduction`) and never reaches a model. The model
-  // hears about absent people from the referent ledger, a trailing section
-  // after the cached prefix that carries their cards on every turn they are
-  // named (below). The card used to ride in the history, where it could land
-  // between a line and the reply leaning on it and cost the pronoun its
-  // antecedent.
-  //
-  // Idempotent per character: prior Host announcements stamp the introduced
-  // IDs onto `hostEvent.introducedCharacterIds`, so repeated mentions of
-  // already-introduced characters are no-ops.
-  //
-  // Failures here must never break prompt assembly — log and skip on error.
-  // Kept for the referent ledger further down, so it need not read either again.
-  let ledgerCharacters: Character[] | null = null
-  let ledgerChatMessages: unknown[] | null = null
-  try {
-    const repos = getRepositories()
-    const allUserCharacters = await repos.characters.findByUserId(userId)
-    ledgerCharacters = allUserCharacters
-
-    // Build the set of character IDs to exclude from the candidate pool.
-    const excludedCharacterIds = new Set<string>()
-    excludedCharacterIds.add(character.id)
-    if (allParticipants) {
-      for (const participant of allParticipants) {
-        if (
-          participant.type === 'CHARACTER' &&
-          participant.characterId &&
-          participant.status !== 'removed'
-        ) {
-          excludedCharacterIds.add(participant.characterId)
-        }
-      }
-    }
-
-    // Also exclude the user's persona by name (no ID is exposed via options) —
-    // but only where the operator speaks without a seat, so an unseated
-    // persona is the voice of the USER messages. In an autonomous room nobody
-    // types as them: `userCharacter` there is only the system-wide fallback
-    // that `{{user}}` resolves to, and excluding it hid the one absent person
-    // the cast most often talks to (bug 172). A seated persona is already
-    // excluded by characterId above.
-    const userCharacterNameLower = operatorSpeaksWithoutSeat(chat.chatType)
-      ? userCharacter?.name?.trim().toLowerCase()
-      : undefined
-    logger.debug('[ContextManager] Off-scene persona exclusion', {
-      chatId: chat.id,
-      chatType: chat.chatType,
-      excludesPersonaByName: Boolean(userCharacterNameLower),
-    })
-
-    const candidates = allUserCharacters.filter(c => {
-      if (excludedCharacterIds.has(c.id)) return false
-      if (userCharacterNameLower && c.name.trim().toLowerCase() === userCharacterNameLower) {
-        return false
-      }
-      return true
-    })
-
-    if (candidates.length > 0) {
-      // Build the scan corpus from things characters and the user actually
-      // *said* — not from synthetic messages (Host/Lantern/Aurora/Librarian/
-      // Concierge/Commonplace Book whispers and announcements) and not from
-      // the conversation summary. Otherwise the Host introduces workspace
-      // characters whose names only ever appeared in a memory whisper or a
-      // summary, which the participants haven't actually talked about.
-      //
-      // `existingMessages` is the trimmed role/content view used for LLM
-      // context and has already been stripped of systemSender/hostEvent, so
-      // load the full chat history from the repo to read those fields — both
-      // for filtering the scan corpus and for the introducedIds diff below.
-      const fullChatMessages = await repos.chats.getMessages(chat.id)
-      ledgerChatMessages = fullChatMessages
-      const corpusParts: string[] = []
-      for (const m of fullChatMessages as Array<{
-        type?: string
-        role?: string
-        content?: string
-        systemSender?: string | null
-      }>) {
-        if (m.type !== undefined && m.type !== 'message') continue
-        if (!m.content) continue
-        // Skip synthetic system whispers/announcements (the Host, Commonplace
-        // Book recall, Lantern story-background notes, etc.).
-        if (m.systemSender) continue
-        const role = (m.role || '').toUpperCase()
-        if (role !== 'USER' && role !== 'ASSISTANT') continue
-        if (role === 'ASSISTANT') {
-          const cleaned = stripToolArtifacts(m.content)
-          if (!cleaned) continue
-          corpusParts.push(cleaned)
-        } else {
-          corpusParts.push(m.content)
-        }
-      }
-      const scanCorpus = corpusParts.join('\n')
-
-      const matchedIds = findMentionedCharacterIds(scanCorpus, candidates)
-      if (matchedIds.size > 0) {
-        // Diff against characters already introduced by prior Host
-        // announcements in this chat — only newly-mentioned ones get a fresh
-        // intro.
-        const introducedIds = findIntroducedOffSceneCharacterIds(fullChatMessages)
-        const newcomerIds = new Set<string>()
-        for (const id of matchedIds) {
-          if (!introducedIds.has(id)) newcomerIds.add(id)
-        }
-
-        if (newcomerIds.size > 0) {
-          const newcomers = candidates.filter(c => newcomerIds.has(c.id))
-          await postHostOffSceneCharactersAnnouncement({
-            chatId: chat.id,
-            characters: newcomers.map(c => ({
-              id: c.id,
-              name: c.name,
-              aliases: c.aliases ?? undefined,
-              pronouns: c.pronouns ?? undefined,
-              identity: c.identity ?? undefined,
-              description: c.description ?? undefined,
-            })),
-          })
-        } else {
-        }
-      } else {
-      }
-    }
-  } catch (error) {
-    logger.warn('[ContextManager] Failed to compute off-scene character introductions', {
-      chatId: chat.id,
-      error: getErrorMessage(error),
-    })
-  }
+  // Absent workspace characters are no longer introduced by a Host card in
+  // the conversation. The model hears of them from the referent ledger (below,
+  // card and all); the operator sees a chip on the name at its first mention
+  // (`lib/chat/absent-mentions.ts`).
 
   const tSystemPromptStart = performance.now()
   // Phase H: prefer the precompiled identity stack from
@@ -2268,7 +2132,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         ? m.participantId === respondingParticipant.id
         : (m.role || '').toUpperCase() === 'ASSISTANT'
 
-    const ledgerSource = (ledgerChatMessages ?? (await getRepositories().chats.getMessages(chat.id))) as Array<{
+    const repos = getRepositories()
+    const ledgerSource = (await repos.chats.getMessages(chat.id)) as Array<{
       type?: string
       role?: string
       content?: string
@@ -2278,11 +2143,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const spoken: ReferentLedgerLine[] = []
     for (let i = ledgerSource.length - 1; i >= 0 && spoken.length < REFERENT_LEDGER_WINDOW_LINES; i--) {
       const m = ledgerSource[i]
-      if (m.type !== undefined && m.type !== 'message') continue
-      if (m.systemSender || !m.content) continue
-      const role = (m.role || '').toUpperCase()
-      if (role !== 'USER' && role !== 'ASSISTANT') continue
-      const content = role === 'ASSISTANT' ? stripToolArtifacts(m.content) : m.content
+      const content = spokenText(m)
       if (!content) continue
       spoken.unshift({ speaker: labelFor(m), isResponder: isResponderLine(m), content })
     }
@@ -2296,30 +2157,25 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       spoken.push({ speaker: userSpeaker, isResponder: false, content: newUserMessage })
     }
 
-    const seated = new Set(
-      (allParticipants ?? [])
-        .filter(p => p.status !== 'removed' && p.characterId)
-        .map(p => p.characterId as string),
-    )
-    // An unseated persona is the voice of the user's lines wherever the
-    // operator speaks without a seat, so it is in the room, not absent; in an
-    // autonomous room nobody speaks as them and they are absent like anyone
-    // (the same rule the off-scene scan keeps, bug 172).
-    const personaInRoomName = operatorSpeaksWithoutSeat(chat.chatType)
-      ? userCharacter?.name?.trim().toLowerCase()
-      : undefined
+    // The same presence rule the Salon's name chips use: seated characters,
+    // and an unseated persona wherever the operator speaks without a seat.
+    const isInRoom = presenceOf({
+      participants: allParticipants ?? chat.participants,
+      chatType: chat.chatType,
+      personaName: userCharacter?.name,
+    })
     referentLedger = buildReferentLedger({
       lines: spoken,
-      people: (ledgerCharacters ?? (await getRepositories().characters.findByUserId(userId))).map(c => {
-        const inRoom = seated.has(c.id) || (!!personaInRoomName && c.name.trim().toLowerCase() === personaInRoomName)
+      people: (await repos.characters.findByUserId(userId)).map(c => {
+        const inRoom = isInRoom(c)
         return {
           id: c.id,
           name: c.name,
           aliases: c.aliases ?? null,
           pronouns: c.pronouns ?? null,
           inRoom,
-          // Absent people bring their card: the same one the Host posts for
-          // the operator, which the model no longer sees in the history.
+          // Absent people bring their card — the particulars the Salon's
+          // name-chip popup shows the operator.
           renderCard: inRoom
             ? undefined
             : () => renderOffSceneCard(

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
@@ -18,6 +18,8 @@ import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse
 import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import MessageContent from '@/components/chat/MessageContent'
+import { useAbsentMentions } from '@/hooks/useAbsentMentions'
+import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
@@ -202,6 +204,8 @@ function MessageRowInner({
   regeneration = null,
 }: MessageRowProps) {
   const imagesHidden = useImagesHidden()
+  // Name chips: absent characters whose first mention in the chat is here.
+  const mentions = useAbsentMentions(chatId, message.id)
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
   // Silent message styling is based solely on the persisted flag set when the message
@@ -239,6 +243,12 @@ function MessageRowInner({
     ? buildInterleavedLayout(message.content, attachedTools, reasoningSegments)
     : null
   const trailingTools = isSourceView ? attachedTools : (toolLayout?.trailingTools ?? [])
+  // Prose split around tool calls renders in runs; each chip goes to the first
+  // run that names it.
+  const partMentions = useMemo(
+    () => (toolLayout ? assignMentionsToRuns(toolLayout.parts.map(p => (p.kind === 'text' ? p.text : null)), mentions) : null),
+    [toolLayout, mentions],
+  )
 
   // The Courier: pending placeholder for a manual / clipboard turn. Render
   // a special bubble with the Markdown blob, copy button, attachment links,
@@ -443,6 +453,7 @@ function MessageRowInner({
                         renderingPatterns={renderingPatterns}
                         dialogueDetection={dialogueDetection}
                         forceRender={forceRender}
+                        mentions={partMentions?.[idx]}
                       />
                     ) : part.kind === 'reasoning' ? (
                       <ThinkingBlock
@@ -471,7 +482,7 @@ function MessageRowInner({
                     )
                   )
                 ) : (
-                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
+                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} mentions={mentions} />
                 )}
               </DangerContentWrapper>
               )}

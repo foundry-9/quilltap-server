@@ -23,6 +23,7 @@ jest.mock('@/components/chat/MessageContent', () => ({
   default: ({ content }: { content: string }) => <div>{content}</div>,
 }))
 jest.mock('@/components/terminal/TerminalEmbed', () => ({ TerminalEmbed: () => null }))
+jest.mock('@/hooks/useAbsentMentions', () => ({ useAbsentMentions: () => [] }))
 
 const noop = () => {}
 

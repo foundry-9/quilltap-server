@@ -697,6 +697,26 @@
     padding: 0.25rem 0;
   }
 
+  /* Name chip: an absent character's first mention in a chat (MentionChip).
+     It keeps the surrounding roleplay colour; a soft tint and a dotted rule
+     say there is a card to hover. */
+  .qt-mention-chip {
+    color: inherit;
+    padding: 0 0.25em;
+    border-radius: 0.375rem;
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    border-bottom: 1px dotted color-mix(in srgb, var(--color-primary) 70%, transparent);
+    cursor: help;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .qt-mention-chip:hover,
+  .qt-mention-chip:focus-visible {
+    background: color-mix(in srgb, var(--color-primary) 26%, transparent);
+    outline: none;
+  }
+
   /* ==========================================================================
      MARKDOWN ELEMENT SPACING
      Since @tailwindcss/typography is not installed in v4, we define all

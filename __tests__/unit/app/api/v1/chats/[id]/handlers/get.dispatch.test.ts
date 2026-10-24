@@ -98,6 +98,7 @@ const GET_ACTIONS = [
   'get-background',
   'gallery',
   'scenario-source',
+  'absent-mentions',
   'cost',
 ]
 

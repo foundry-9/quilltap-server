@@ -34,7 +34,7 @@
  */
 
 import { logger } from '@/lib/logger'
-import { escapeRegex } from '@/lib/utils/regex'
+import { buildNameMatcher, lastNameMatch } from '@/lib/chat/name-mentions'
 
 const CONTEXT = 'chat.context.referent-ledger'
 
@@ -88,26 +88,6 @@ interface Mention {
   lineIndex: number
   offset: number
   length: number
-}
-
-/**
- * Case-sensitive, letter-boundary matcher for one person's name and aliases.
- * Case matters here, unlike the Host's introduction scan: an alias like "Doc"
- * or "Ember" is a common word in lower case, and a ledger that points at the
- * wrong person is worse than none.
- */
-function personMatcher(person: ReferentLedgerPerson): RegExp | null {
-  const tokens = new Set<string>()
-  for (const token of [person.name, ...(person.aliases ?? [])]) {
-    const trimmed = token?.trim()
-    if (trimmed) tokens.add(trimmed)
-  }
-  if (tokens.size === 0) return null
-  const alternation = Array.from(tokens)
-    .sort((a, b) => b.length - a.length)
-    .map(escapeRegex)
-    .join('|')
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])`, 'gu')
 }
 
 /** The sentence around `offset`, whitespace-collapsed and trimmed to the quote budget. */
@@ -172,15 +152,12 @@ export function buildReferentLedger(input: BuildReferentLedgerInput): string {
 
   const latest = new Map<string, Mention>()
   for (const person of candidates) {
-    const matcher = personMatcher(person)
+    const matcher = buildNameMatcher([person.name, ...(person.aliases ?? [])])
     if (!matcher) continue
     for (let i = lines.length - 1; i >= 0 && !latest.has(person.id); i--) {
-      let last: RegExpExecArray | null = null
-      let m: RegExpExecArray | null
-      matcher.lastIndex = 0
-      while ((m = matcher.exec(lines[i].content)) !== null) last = m
+      const last = lastNameMatch(lines[i].content, matcher)
       if (last) {
-        latest.set(person.id, { person, lineIndex: i, offset: last.index, length: last[0].length })
+        latest.set(person.id, { person, lineIndex: i, offset: last.index, length: last.text.length })
       }
     }
   }

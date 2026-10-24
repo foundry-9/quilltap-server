@@ -83,6 +83,7 @@ import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
 import { buildRenderItems } from './announcement-render-items'
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
@@ -403,8 +404,12 @@ export function SalonView({ chatId }: SalonViewProps) {
     (customToolsQuery.data?.tools?.length ?? 0) > 0 ||
     (customToolsQuery.data?.errors?.length ?? 0) > 0
 
+  // The Host's old "spoken of" cards stay in the transcript but not the feed:
+  // an absent character's name now carries a chip with the same card on hover
+  // (`useAbsentMentions`, `MentionChip`).
   const visibleMessages = useMemo(() => {
     return messages.filter(msg =>
+      !isOffSceneMentionIntroduction(msg) &&
       isMessageVisibleToOperator(msg, {
         showAllWhispers,
         userParticipantIds: userParticipantIdSet,

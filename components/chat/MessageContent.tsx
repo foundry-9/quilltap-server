@@ -32,6 +32,8 @@ import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { HiddenInlineImage, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
+import { MentionChipsContext, withMentionChips, type AbsentMentionChip } from '@/components/chat/MentionChip'
+import { rehypeMentionMarkers } from '@/lib/chat/mention-markers'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -150,6 +152,11 @@ interface MessageContentProps {
    * database-backed stores' images render inline.
    */
   blobMountPointId?: string
+  /**
+   * Absent characters first named in this message: each one's first eligible
+   * occurrence becomes a chip with their card on hover (the Salon only).
+   */
+  mentions?: ReadonlyArray<AbsentMentionChip>
 }
 
 /**
@@ -159,8 +166,8 @@ interface MessageContentProps {
 function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
   return segments.map((seg, i) =>
     seg.className
-      ? <span key={i} className={seg.className}>{seg.children ? segmentsToReactNodes(seg.children) : seg.text}</span>
-      : seg.text
+      ? <span key={i} className={seg.className}>{seg.children ? segmentsToReactNodes(seg.children) : withMentionChips(seg.text)}</span>
+      : withMentionChips(seg.text, i)
   )
 }
 
@@ -178,7 +185,7 @@ function processChildren(
   if (typeof children === 'string') {
     const segments = tokenizeInline(children, compiledRules, options)
     return segments.length === 1 && !segments[0].className
-      ? segments[0].text
+      ? withMentionChips(segments[0].text)
       : <>{segmentsToReactNodes(segments)}</>
   }
 
@@ -187,7 +194,7 @@ function processChildren(
       if (typeof child === 'string') {
         const segments = tokenizeInline(child, compiledRules, options)
         return segments.length === 1 && !segments[0].className
-          ? segments[0].text
+          ? withMentionChips(segments[0].text, i)
           : <span key={i}>{segmentsToReactNodes(segments)}</span>
       }
       return child
@@ -341,6 +348,7 @@ export default function MessageContent({
   renderingPatterns,
   dialogueDetection,
   blobMountPointId,
+  mentions,
 }: MessageContentProps) {
   // Use provided patterns or fall back to defaults
   const patterns = renderingPatterns && renderingPatterns.length > 0
@@ -380,6 +388,14 @@ export default function MessageContent({
         : [remarkGfm, [remarkMath, REMARK_MATH_OPTIONS], remarkBreaks],
     [curlQuotes],
   ) as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']
+
+  // Name chips: katex first, so math is already spans the marker pass skips.
+  const rehypePlugins = useMemo(
+    () => (mentions && mentions.length > 0
+      ? [rehypeKatex, [rehypeMentionMarkers, mentions]]
+      : [rehypeKatex]) as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'],
+    [mentions],
+  )
 
   // Compile patterns once for efficient matching
   const compiledRules = useMemo(
@@ -536,6 +552,7 @@ export default function MessageContent({
   return (
     <>
       <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`}>
+        <MentionChipsContext.Provider value={mentions ?? null}>
         <ReactMarkdown
           // remark-breaks turns a single newline into a hard <br>. In chat, an
           // author who hits Enter means a line break (the way Slack/Discord/GitHub
@@ -550,7 +567,7 @@ export default function MessageContent({
           // lib/services/markdown-renderer.service.ts — if the two lists
           // disagree, a message changes appearance when it stops streaming.
           remarkPlugins={remarkPlugins}
-          rehypePlugins={[rehypeKatex]}
+          rehypePlugins={rehypePlugins}
           // react-markdown's default URL sanitizer only allows http(s)/mailto/
           // etc., so it would strip `qtap://` hrefs before they reach `a()`.
           // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
@@ -560,6 +577,7 @@ export default function MessageContent({
         >
           {processedContent}
         </ReactMarkdown>
+        </MentionChipsContext.Provider>
       </div>
     </>
   )

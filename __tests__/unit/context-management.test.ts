@@ -1313,25 +1313,30 @@ describe('Context Manager', () => {
           ],
         })
 
-      it('introduces the persona as off scene in an autonomous room', async () => {
+      const ledgerOf = (result: { messages: Array<{ content: unknown }> }) =>
+        String(result.messages[result.messages.length - 1].content)
+
+      it('tells the model the persona is not in the room in an autonomous room', async () => {
         const repoMock = buildReposFor()
         mockedGetRepositories.mockReturnValue(repoMock as any)
 
-        await runFor('autonomous')
+        const result = await runFor('autonomous')
 
-        expect(repoMock.chats.addMessage).toHaveBeenCalledTimes(1)
-        const [, posted] = repoMock.chats.addMessage.mock.calls[0]
-        expect(posted.systemKind).toBe('off-scene-characters')
-        expect(posted.hostEvent).toEqual({ introducedCharacterIds: ['char-charlie'] })
-        expect(posted.content).toContain('### Charlie')
+        expect(ledgerOf(result)).toContain('**Charlie** (')
+        expect(ledgerOf(result)).toContain('not in the room) — last named by')
+        // The Host posts nothing: absent people are a chip for the operator
+        // and a ledger card for the model.
+        expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       })
 
       it('still treats the persona as present in a Salon chat', async () => {
         const repoMock = buildReposFor()
         mockedGetRepositories.mockReturnValue(repoMock as any)
 
-        await runFor('salon')
+        const result = await runFor('salon')
 
+        expect(ledgerOf(result)).toMatch(/\*\*Charlie\*\* \([^)]*; in the room\)/)
+        expect(ledgerOf(result)).not.toContain('Particulars of those not in the room')
         expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       })
     })

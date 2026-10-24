@@ -4,6 +4,18 @@
 
 ### 4.11-dev
 
+#### Feature: name chips for absent characters replace the Host's introduction cards
+
+- The Host no longer posts a card when an absent workspace character is named. Instead the Salon puts a chip on the name at its first mention in the chat; hovering (or focusing) it shows the card in the shared `Tooltip` (pinnable, scrollable): name, aliases, pronouns, identity/description. The model still gets the same card from the referent ledger.
+- New `GET /api/v1/chats/[id]?action=absent-mentions` (`lib/chat/absent-mentions.ts`): for each absent character, the first spoken message naming them, the name as written, and `offSceneCardFields` (new; `renderOffSceneCard` now formats from it). Query key `queryKeys.chats.absentMentions`, on the `chats` realtime topic; hook `useAbsentMentions`.
+- `presenceOf` and `spokenText` (same module) are the one rule for who is in the room and what counts as a spoken line; the context builder's ledger uses both.
+- New shared matcher `lib/chat/name-mentions.ts` (case-sensitive, letter-bounded, longest token first), used by the ledger and the chips.
+- Rendering: `rehypeMentionMarkers` (`lib/chat/mention-markers.ts`) wraps the first eligible occurrence (direct text of p/h1–h6/li/blockquote; not code, links, emphasis or math) in private-use markers, so the roleplay tokenizer still styles the surrounding line; `MessageContent` turns marked runs into `MentionChip`s. A message with chips skips the pre-rendered HTML fast path. Prose split around tool calls gives each chip to the first run that names it (`assignMentionsToRuns`).
+- Old "spoken of" cards stay in the transcript but are hidden from the Salon feed.
+- Removed: the per-turn off-scene scan and posting in `buildContext`, `findIntroducedOffSceneCharacterIds`, and `lib/chat/context/mentioned-characters.ts` (with its test). The writer's `'mentioned'` wording has no caller now; Continue Elsewhere's left-behind notice is unchanged.
+- New `qt-mention-chip` class (`_chat.css`), mirrored to theme-storybook (1.0.82).
+- Docs: API.md, PROMPT_ARCHITECTURE.md §2; help `help/salon-host-introductions.md` (now "Absent Acquaintances").
+
 #### Change: absent-character cards move from the history to the referent ledger
 
 - The Host's "spoken of" introduction (the card posted the first time an absent workspace character is named) no longer reaches the model. It is record-only: `isRecordOnlyMessage` (`buildMessageContext`) and `extractVisibleConversation` (cheap-LLM tasks, including compression) strip it, and the context builder no longer pushes the new card into the turn. It is still posted to the Salon for the operator.

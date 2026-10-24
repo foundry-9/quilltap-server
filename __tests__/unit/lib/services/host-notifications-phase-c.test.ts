@@ -51,7 +51,6 @@ import {
   buildTimestampContent,
   buildOffSceneCharactersContent,
   buildOffSceneCharactersOpaqueContent,
-  findIntroducedOffSceneCharacterIds,
   postHostOffSceneCharactersAnnouncement,
   postHostNoUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer'
@@ -443,75 +442,6 @@ describe('buildOffSceneCharactersContent', () => {
   })
 })
 
-describe('findIntroducedOffSceneCharacterIds', () => {
-  it('returns empty for messages with no off-scene host announcements', () => {
-    const result = findIntroducedOffSceneCharacterIds([
-      { type: 'message', role: 'USER', content: 'hello' },
-      { type: 'message', role: 'ASSISTANT', systemSender: 'host', systemKind: 'add', hostEvent: { participantId: 'p-1', toStatus: 'active' } },
-    ])
-    expect(result.size).toBe(0)
-  })
-
-  it('extracts character IDs from prior off-scene-characters host messages', () => {
-    const result = findIntroducedOffSceneCharacterIds([
-      {
-        type: 'message',
-        role: 'ASSISTANT',
-        systemSender: 'host',
-        systemKind: 'off-scene-characters',
-        hostEvent: { introducedCharacterIds: ['c-1', 'c-2'] },
-      },
-      {
-        type: 'message',
-        role: 'ASSISTANT',
-        systemSender: 'host',
-        systemKind: 'off-scene-characters',
-        hostEvent: { introducedCharacterIds: ['c-3'] },
-      },
-    ])
-    expect([...result].sort()).toEqual(['c-1', 'c-2', 'c-3'])
-  })
-
-  it('ignores messages whose hostEvent lacks introducedCharacterIds', () => {
-    const result = findIntroducedOffSceneCharacterIds([
-      {
-        type: 'message',
-        role: 'ASSISTANT',
-        systemSender: 'host',
-        systemKind: 'off-scene-characters',
-        hostEvent: { participantId: 'p-1', toStatus: 'active' }, // wrong shape
-      },
-      {
-        type: 'message',
-        role: 'ASSISTANT',
-        systemSender: 'host',
-        systemKind: 'off-scene-characters',
-        // hostEvent missing entirely
-      },
-    ])
-    expect(result.size).toBe(0)
-  })
-
-  it('counts left-behind notices as introductions', () => {
-    const result = findIntroducedOffSceneCharacterIds([
-      {
-        type: 'message',
-        role: 'ASSISTANT',
-        systemSender: 'host',
-        systemKind: 'off-scene-left-behind',
-        hostEvent: { introducedCharacterIds: ['c-9'] },
-      },
-    ])
-    expect([...result]).toEqual(['c-9'])
-  })
-
-  it('tolerates malformed messages without throwing', () => {
-    expect(() =>
-      findIntroducedOffSceneCharacterIds([null, undefined, 'string', { type: 'message' }] as unknown[]),
-    ).not.toThrow()
-  })
-})
-
 describe('isOffSceneMentionIntroduction', () => {
   it('is true for a "spoken of" introduction', () => {
     expect(
@@ -641,31 +571,6 @@ describe('postHostOffSceneCharactersAnnouncement', () => {
       characters: [{ id: 'c-1', name: 'Gary' }],
     })
     expect(result).toBeNull()
-  })
-
-  it('round-trips with findIntroducedOffSceneCharacterIds — once persisted, the IDs become discoverable', async () => {
-    let storedMessage: Record<string, unknown> | null = null
-    const addMessage = jest.fn().mockImplementation(async (_chatId: string, msg: Record<string, unknown>) => {
-      storedMessage = msg
-    })
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockResolvedValue({ id: CHAT_ID, messages: [], addMessage }),
-        addMessage,
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    await postHostOffSceneCharactersAnnouncement({
-      chatId: CHAT_ID,
-      characters: [
-        { id: 'c-1', name: 'Gary' },
-        { id: 'c-2', name: 'Sunny' },
-      ],
-    })
-
-    expect(storedMessage).not.toBeNull()
-    const introduced = findIntroducedOffSceneCharacterIds([storedMessage as unknown])
-    expect([...introduced].sort()).toEqual(['c-1', 'c-2'])
   })
 })
 

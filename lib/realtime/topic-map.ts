@@ -74,6 +74,9 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // a cancel publishes the topic explicitly — so the composer chips
             // stay honest without a poll.
             queryKeys.chats.informs(id),
+            // Name chips for absent characters. A new message — the only
+            // thing that can name someone — publishes `chats`.
+            queryKeys.chats.absentMentions(id),
             // What everyone in the chat is wearing. An LLM's wardrobe_* call
             // or an Aurora announcement lands as a message, which publishes
             // `chats` — without this a tool-driven outfit change left the

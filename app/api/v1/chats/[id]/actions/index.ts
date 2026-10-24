@@ -30,6 +30,7 @@ export { handleToggleAgentMode } from './agent-mode';
 export { handleGetStoryBackground, handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot, handleGetWardrobeHistory, handleWardrobeRollback } from './outfit';
+export { handleGetAbsentMentions } from './absent-mentions';
 export { handleGetInventory, handleInventoryEquip, handleInventoryResetDefaults } from './inventory';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';

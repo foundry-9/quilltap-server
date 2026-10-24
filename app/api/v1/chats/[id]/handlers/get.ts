@@ -19,6 +19,7 @@
  * GET /api/v1/chats/[id]?action=accessible-stores[&all=true] - Stores for the Open-Document picker
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
+ * GET /api/v1/chats/[id]?action=absent-mentions - Absent characters named in the chat: first mention and card
  *
  * An unregistered `?action=` answers 400 with the list above; it never falls
  * through to the chat body.
@@ -52,6 +53,7 @@ import {
   handleGetStorytellerRound,
   handleGetStoryBackground,
   handleGetScenarioSource,
+  handleGetAbsentMentions,
 } from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -88,6 +90,7 @@ export async function handleGet(
       'get-background': () => handleGetStoryBackground(chatId, ctx),
       'gallery': () => handleGallery(req, ctx, chatId),
       'scenario-source': () => handleGetScenarioSource(chatId, ctx),
+      'absent-mentions': () => handleGetAbsentMentions(chatId, ctx),
       'cost': () => handleCost(req, ctx, chatId),
     },
     () => handleGetChat(req, ctx, chatId)

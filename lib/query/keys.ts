@@ -67,6 +67,13 @@ export const queryKeys = {
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
     /**
+     * Absent workspace characters named in one conversation, from
+     * `?action=absent-mentions`: the message that first names each, and their
+     * card. Drives the Salon's name chips; rides the `chats` realtime topic,
+     * since a new message is what can add one.
+     */
+    absentMentions: (id: string) => ['chats', id, 'absent-mentions'] as const,
+    /**
      * The chat's current storyteller round (open, running, or the last closed
      * one for the summary line), from `?action=storyteller-round`.
      */
