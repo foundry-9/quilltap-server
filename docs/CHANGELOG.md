@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Feature: referent ledger and closing echo in the trailing context
+
+- Characters lost track of who a pronoun meant. On `Friday` (chat `c277aef9…`, glm-5.3-flash) Friday ended a turn with "…Abigail will absolutely make that a formal finding. You've seen how she documents." Charlie replied "When she's not scolding Vergil for his bedside manner." Friday answered as if "she" were herself. In the request, a Host card for Greg sat between the two lines, and Charlie's 50-character line was followed by about 21 KB of scene state and recall.
+- New `lib/chat/context/referent-ledger.ts`, two trailing sections added after the inform block and before the turn notes:
+  - `buildReferentLedger` ("Who is being spoken of"): everyone named (name or alias, case-sensitive, letter-bounded) in the last 6 spoken lines (no Staff messages), most recently named first, at most 8. Each entry has pronouns, in the room or not, who last named them and the sentence they were named in (plus the next sentence when it fits in 220 characters). Leaves out the responder and the author of the latest line. Empty when nobody is named.
+  - `buildClosingEcho` ("The line you are answering"): the new user message repeated last. Over 1,500 characters, only the closing paragraphs. Empty on chained / continue turns.
+- Wired in `buildContext` (`lib/chat/context-manager.ts`). Reuses the character list and message read from the off-scene introduction scan. Speaker names come from `resolveSpeakerNames` / `speakerLabel`. Warn-and-skip on error. Not in the cached prefix, not persisted; no builder version bump.
+- Help: `help/salon-host-introductions.md` ("Keeping Track of Who Is Meant").
+
 #### Fix: Pascal hold dialog can re-ask a hidden consult
 
 - A held run's consult prompt can quote things the operator changes in the dialog (the winning row's `brief`, a parameter). When a tool hid both `llmPrompt` and `llmAnswer`, the dialog showed no Consult section, so there was no out-of-date marker and no Re-ask; the run dealt with an answer written for the old outcome. Seen on `Friday` with `read_timestream`: moving the value across 0 changed the outcome from the `bad-result` brief to the `expected-outcome` brief, and the message kept the old text.

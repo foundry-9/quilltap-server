@@ -156,6 +156,8 @@ import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 import { buildInventorySection } from '@/lib/inventory/prompt-section'
 import { buildUserNarrationAnchor } from '@/lib/chat/context/user-narration-anchor'
+import { buildClosingEcho, buildReferentLedger, REFERENT_LEDGER_WINDOW_LINES, type ReferentLedgerLine } from '@/lib/chat/context/referent-ledger'
+import { resolveSpeakerNames, speakerLabel } from '@/lib/chat/speaker-names'
 import { buildTurnYieldInstruction } from '@/lib/chat/turn-manager/yield-signal'
 import {
   postHostTimestampAnnouncement,
@@ -791,9 +793,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   //
   // Failures here must never break prompt assembly — log and skip on error.
   let pendingOffSceneAnnouncement: { content: string } | null = null
+  // Kept for the referent ledger further down, so it need not read either again.
+  let ledgerCharacters: Character[] | null = null
+  let ledgerChatMessages: unknown[] | null = null
   try {
     const repos = getRepositories()
     const allUserCharacters = await repos.characters.findByUserId(userId)
+    ledgerCharacters = allUserCharacters
 
     // Build the set of character IDs to exclude from the candidate pool.
     const excludedCharacterIds = new Set<string>()
@@ -847,6 +853,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // load the full chat history from the repo to read those fields — both
       // for filtering the scan corpus and for the introducedIds diff below.
       const fullChatMessages = await repos.chats.getMessages(chat.id)
+      ledgerChatMessages = fullChatMessages
       const corpusParts: string[] = []
       for (const m of fullChatMessages as Array<{
         type?: string
@@ -2264,10 +2271,84 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // The referent ledger and the closing echo: who the last few lines were
+  // about, and the line being answered, repeated after recall so it is the
+  // last thing the model reads about the conversation. Both are reads only and
+  // never fail the turn (`lib/chat/context/referent-ledger.ts`).
+  let referentLedger = ''
+  let closingEcho = ''
+  try {
+    const speakerNames = await resolveSpeakerNames({ participants: allParticipants ?? chat.participants ?? [] })
+    const userName = userCharacter?.name || 'User'
+    const labelFor = (m: { role?: string; participantId?: string | null }): string => {
+      const label = speakerLabel(
+        { role: (m.role || '').toUpperCase() as 'USER' | 'ASSISTANT', participantId: m.participantId ?? undefined },
+        speakerNames,
+      )
+      return label === 'User' ? userName : label
+    }
+    const isResponderLine = (m: { role?: string; participantId?: string | null }): boolean =>
+      respondingParticipant
+        ? m.participantId === respondingParticipant.id
+        : (m.role || '').toUpperCase() === 'ASSISTANT'
+
+    const ledgerSource = (ledgerChatMessages ?? (await getRepositories().chats.getMessages(chat.id))) as Array<{
+      type?: string
+      role?: string
+      content?: string
+      participantId?: string | null
+      systemSender?: string | null
+    }>
+    const spoken: ReferentLedgerLine[] = []
+    for (let i = ledgerSource.length - 1; i >= 0 && spoken.length < REFERENT_LEDGER_WINDOW_LINES; i--) {
+      const m = ledgerSource[i]
+      if (m.type !== undefined && m.type !== 'message') continue
+      if (m.systemSender || !m.content) continue
+      const role = (m.role || '').toUpperCase()
+      if (role !== 'USER' && role !== 'ASSISTANT') continue
+      const content = role === 'ASSISTANT' ? stripToolArtifacts(m.content) : m.content
+      if (!content) continue
+      spoken.unshift({ speaker: labelFor(m), isResponder: isResponderLine(m), content })
+    }
+
+    // The new user message is normally persisted before the context is built;
+    // when it is not (or not yet), it is still the line being answered.
+    const latestSpoken = spoken[spoken.length - 1]
+    const userSpeaker =
+      (activeUserParticipantId && speakerNames.get(activeUserParticipantId)) || userName
+    if (newUserMessage && latestSpoken?.content.trim() !== newUserMessage.trim()) {
+      spoken.push({ speaker: userSpeaker, isResponder: false, content: newUserMessage })
+    }
+
+    const seated = new Set(
+      (allParticipants ?? [])
+        .filter(p => p.status !== 'removed' && p.characterId)
+        .map(p => p.characterId as string),
+    )
+    referentLedger = buildReferentLedger({
+      lines: spoken,
+      people: (ledgerCharacters ?? (await getRepositories().characters.findByUserId(userId))).map(c => ({
+        id: c.id,
+        name: c.name,
+        aliases: c.aliases ?? null,
+        pronouns: c.pronouns ?? null,
+        inRoom: seated.has(c.id),
+      })),
+      responderId: character.id,
+    })
+    closingEcho = buildClosingEcho({ newUserMessage, speakerName: userSpeaker })
+  } catch (ledgerError) {
+    logger.warn('[ReferentLedger] Could not build the referent ledger; turn continues', {
+      chatId: chat.id,
+      error: getErrorMessage(ledgerError),
+    })
+  }
+
   // The trailing sections, in their one order: who the character is (Core
   // whisper), what it remembers (recall), what arrived for it (mail), what it
   // is carrying (progressions, then the Inventory), what the operator says is
-  // so (inform), and the turn note last. Built ONCE and used by both branches below — two
+  // so (inform), who the conversation is about (the referent ledger), the line
+  // being answered (the echo), and the turn notes last. Built ONCE and used by both branches below — two
   // hand-kept copies of this list is how recall, mail and the Core whisper
   // went missing from turns with no new user message while their side effects
   // (whisper posted, rows stamped, cadence advanced) still ran (bug 199).
@@ -2278,6 +2359,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     progressionsLLMContext,
     inventoryLLMContext,
     informBlock,
+    referentLedger,
+    closingEcho,
     turnSkipInstruction,
     turnYieldInstruction,
     options.storytellerSection,

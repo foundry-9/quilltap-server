@@ -50,6 +50,17 @@ When a conversation is carried off by **Continue Elsewhere** and someone from th
 
 It matters more than it might seem. The carried-over history keeps every remark the travelling party made *to* the absentee, but none of the absentee's own replies, so without the notice the company would take them for a guest in the room who has gone oddly quiet. The notice counts as their introduction, so the Host does not introduce them a second time when their name comes up later.
 
+## Keeping Track of Who Is Meant
+
+An introduction is made once, and a long conversation soon leaves it behind. That is all very well for remembering *who* Abigail is, but a "she" is a slippery article. Say a character closes a remark with *"…Abigail will make that a formal finding. You've seen how she documents,"* and you answer, *"When she's not scolding Vergil,"* — a careless model, with a great deal of scenery and recollection piled between those two lines, may decide the "she" is itself.
+
+So on every turn the Host slips a short, private note to the character about to answer, which you never see in the feed:
+
+- **Who is being spoken of.** Everyone named in the last few lines, the most recently named first, each with their pronouns, whether they are in the room, who last named them and the very sentence in which they did. The character answering is left off (it is "you"), and so is whoever wrote the latest line (that is "I"). Nobody named, no note.
+- **The line being answered.** Your latest message, repeated at the very end, after the scene and the memories have had their say, so that the last thing the character reads is what you actually said. A very long message is repeated by its closing paragraphs only.
+
+Neither costs a thing in extra calls to a model, and neither is kept in the chat history.
+
 ## What This Doesn't Do
 
 - **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, open the **Chat Sidebar** on the right, expand the **Participants** drawer, and use **Add Character** at the bottom.
