@@ -124,7 +124,9 @@ const eslintConfig = defineConfig([
     // See docs/developer/features/complete/composer-smart-typography.md. Adding an
     // import here is not a lint failure to silence; it means the code belongs
     // in `components/chat/lexical/plugins/SmartTypographyPlugin.tsx` instead.
-    files: ['lib/smart-typography/**/*.ts'],
+    // `lib/punctuation-lint/**` (composer punctuation warnings) shares the
+    // contract: the engine travels to v5, the Lexical adapter does not.
+    files: ['lib/smart-typography/**/*.ts', 'lib/punctuation-lint/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

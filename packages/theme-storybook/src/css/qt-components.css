@@ -166,6 +166,10 @@
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
+  /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
+  --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --qt-punctuation-warning-underline: var(--color-warning);
+
   /* Badge palette tokens - referenced by the provider badges */
   --qt-badge-primary-bg: var(--color-primary);
   --qt-badge-primary-fg: var(--color-primary-foreground);
@@ -2300,6 +2304,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .qt-chat-interrupt-button-raised { animation: none; }
+}
+
+/* Composer punctuation warnings — painted by PunctuationLintPlugin through the
+   CSS Custom Highlight API, so no element carries a class. Only background and
+   text-decoration are styleable on a ::highlight. */
+::highlight(qt-punctuation-warning) {
+  background-color: var(--qt-punctuation-warning-bg);
+  text-decoration: underline wavy var(--qt-punctuation-warning-underline);
+  text-decoration-thickness: 2px;
 }
 
 /* Lexical editor rich text node styles */

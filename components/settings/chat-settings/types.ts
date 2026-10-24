@@ -189,12 +189,15 @@ export interface SmartTypographySettings {
   dashes?: boolean
   /** `...` → ellipsis, as you type. */
   ellipsis?: boolean
+  /** Paint a warning over punctuation that looks wrong while typing. */
+  punctuationWarnings?: boolean
 }
 
 export const DEFAULT_SMART_TYPOGRAPHY_SETTINGS: SmartTypographySettings = {
   displayQuotes: false,
   dashes: true,
   ellipsis: true,
+  punctuationWarnings: true,
 }
 
 /**

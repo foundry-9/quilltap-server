@@ -236,6 +236,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               displayQuotes: false,
               dashes: true,
               ellipsis: true,
+              punctuationWarnings: true,
             },
             defaultRoleplayTemplateId,
             ...data,

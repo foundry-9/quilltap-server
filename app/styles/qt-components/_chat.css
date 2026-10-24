@@ -1036,6 +1036,17 @@
   }
 
   /**
+   * Composer punctuation warnings — painted by PunctuationLintPlugin through the
+   * CSS Custom Highlight API, so no element carries a class. Only background
+   * and text-decoration are styleable on a ::highlight.
+   */
+  ::highlight(qt-punctuation-warning) {
+    background-color: var(--qt-punctuation-warning-bg);
+    text-decoration: underline wavy var(--qt-punctuation-warning-underline);
+    text-decoration-thickness: 2px;
+  }
+
+  /**
    * Lexical rich text node styles
    */
   .qt-lexical-root {

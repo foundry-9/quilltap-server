@@ -46,6 +46,7 @@ import {
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { SmartTypographyPlugin } from './plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
+import { PunctuationLintPlugin } from './plugins/PunctuationLintPlugin'
 import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
 import { MentionTypeaheadPlugin } from './plugins/MentionTypeaheadPlugin'
 import { SlashCommandPlugin } from './plugins/SlashCommandPlugin'
@@ -178,6 +179,8 @@ const ComposerPlugins = forwardRef<
           table in SmartTypographyPlugin. */}
       <SmartTypographyPlugin />
       <TextReplacementPlugin />
+      {/* Read-only: paints warnings, never edits, so its order is immaterial. */}
+      <PunctuationLintPlugin />
     </>
   )
 })

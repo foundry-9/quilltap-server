@@ -99,6 +99,10 @@
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
+  /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
+  --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --qt-punctuation-warning-underline: var(--color-warning);
+
   /* ==========================================================================
      ALERT TOKENS
      ========================================================================== */

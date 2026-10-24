@@ -289,12 +289,24 @@ One acknowledged imperfection, and we would rather name it than have you discove
 
 Nothing in the second group fires inside code fences or `inline code`, nor in the source-mode views, nor upon pasted text, nor while an input method editor is mid-composition.
 
+**And a third arrangement, which changes nothing at all and merely clears its throat.** *Warn about punctuation that looks wrong* keeps an eye on the Salon composer while you write and tints, with a wavy underline, any mark that is about to make a hash of the formatting:
+
+- a double quote opened **inside dialogue that is already open** — `"He told me "go away" and left."` — which the formatter will read as the speech ending early. Quoting someone within speech wants single quotes: `"He told me 'go away' and left."`
+- a closing quote with nothing before it to close
+- a quote marooned between two spaces, or jammed between two words with no space at all (`"Hello,"she said`)
+- a curly quote facing the wrong way
+- dialogue that never closes, when the next paragraph does not open with a quotation mark to carry the speech on (a speaker running across several paragraphs, each opened and only the last closed, is quite correct and goes unremarked)
+- an `*`, a `((` or a `))` with no partner
+
+Rest the pointer on a tinted mark and a small note explains the objection. **Nothing is ever corrected for you** — the house has seen what becomes of automatic correction and will not be party to it — and nothing you are still in the middle of typing is flagged: an opening quote with the caret just past it, or emphasis you have not yet closed, waits until you move on. An inch mark after a number (`6"`) is let alone, as is a lone asterisk with spaces either side (`2 * 3`) and a `* * *` scene break. Code is ignored. The warnings live only on the screen; they are not stored, sent, or exported.
+
 **Setting Options:**
 
 - **Curly quotes when displaying messages** — Off by default. On: the conversation displays curly quotes. Your stored text and the model's input are unaffected either way.
 - **Dashes (`--` → `–`, `---` → `—`)** — On by default. Applies in the Salon composer and the Document Mode rich editor.
 - **Ellipsis (`...` → `…`)** — On by default. Same two surfaces.
 - **Try it** — A scratch textarea for the second group. Type a couple of hyphens or three full stops and watch. Nothing typed here is saved.
+- **Warn about punctuation that looks wrong** — On by default. Tints suspect quotes, asterisks and double parentheses in the Salon composer. Never alters your text.
 
 **How to configure:**
 
@@ -314,6 +326,7 @@ Nothing in the second group fires inside code fences or `inline code`, nor in th
 - **Curly quotes:** you are writing about code, measurements in inches, or anything where the straight mark is the correct mark on screen as well as on disk
 - **Dashes:** you routinely write command-line flags in plain prose and would rather they never be disturbed — though note the ladder gives you a fourth hyphen as an escape, and Backspace as another
 - **Ellipsis:** you have a use for exactly three separate full stops
+- **Punctuation warnings:** your prose habitually does something the rules above consider irregular, and the tinting has become a nag rather than a help
 
 **Notes for the careful:**
 

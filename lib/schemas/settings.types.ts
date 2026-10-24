@@ -683,6 +683,8 @@ export const SmartTypographySettingsSchema = z.object({
   dashes: z.boolean().default(true),
   /** Part B — `...` becomes an ellipsis as you type. Default: true. */
   ellipsis: z.boolean().default(true),
+  /** Paint a warning over quotes, asterisks and `((`/`))` that look wrong while typing. Never rewrites. Default: true. */
+  punctuationWarnings: z.boolean().default(true),
 });
 
 export type SmartTypographySettings = z.infer<typeof SmartTypographySettingsSchema>;
@@ -854,6 +856,7 @@ export const ChatSettingsSchema = z.object({
     displayQuotes: false,
     dashes: true,
     ellipsis: true,
+    punctuationWarnings: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

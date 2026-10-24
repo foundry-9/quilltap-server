@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Feature: punctuation warnings in the Salon composer
+
+- New pure engine `lib/punctuation-lint/engine.ts` (`lintPunctuation`, no imports; same ESLint import ban as `lib/smart-typography/`) with a v5 contract corpus in `fixtures/punctuation-vectors.json`. Rules: a double quote opened inside open dialogue (and its partner), a closer with nothing to close, a quote with spaces on both sides or glued between words, a backwards curly quote, dialogue left unclosed when the next paragraph doesn't open with a quote, an unpaired `*`/`**` run, an unpaired `((`/`))`. Paragraphs split on blank lines; `6"` inch marks, `2 * 3`, `* * *` scene breaks and code are exempt. A caret position suppresses flags on a mark still being typed.
+- New `PunctuationLintPlugin` (`components/chat/lexical/plugins/`) mounted in the Salon composer. Paints with the CSS Custom Highlight API (`::highlight(qt-punctuation-warning)`), so it adds no nodes and never edits text; the editable root's `title` explains a hovered mark. No-op where the API is missing.
+- New `smartTypographySettings.punctuationWarnings` (default `true`) with a toggle on the Smart Typography card. No migration; the Zod default fills it in for existing rows.
+- New `--qt-punctuation-warning-bg` / `--qt-punctuation-warning-underline` tokens and the `::highlight` rule, mirrored to theme-storybook (1.0.83).
+
 #### Feature: non-humanoid characters
 
 - `physical-prompts.json` gains an optional `humanoid` boolean (absent = `true`), hydrated onto `PhysicalDescription.humanoid`. The Aurora Descriptions tab has a **Humanoid** checkbox for it. A physical write that omits the flag (AI Wizard, optimizer, head-and-shoulders backfill) keeps the vault's value; new vaults are scaffolded with `humanoid: true`.
