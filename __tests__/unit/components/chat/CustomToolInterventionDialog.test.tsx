@@ -85,6 +85,7 @@ function holdView(id: string, overrides: Partial<InterventionHoldView> = {}): In
 
 let holds: InterventionHoldView[] = []
 let previewReply: InterventionPreview
+let reaskReply: InterventionPreview
 let calls: Array<{ url: string; method: string; body?: unknown }> = []
 
 function reply(body: unknown): Promise<Response> {
@@ -101,6 +102,7 @@ function routeFetch() {
       calls.push({ url, method, body })
       if (url.includes('action=interventions')) return reply({ holds })
       if (url.includes('action=intervention-preview')) return reply({ preview: previewReply })
+      if (url.includes('action=intervention-reask')) return reply({ preview: reaskReply, consults: [] })
       if (url.includes('action=intervention-resolve')) {
         holds = holds.filter((h) => h.id !== body?.id)
         return reply({ resolved: body?.decision?.kind })
@@ -115,6 +117,7 @@ beforeEach(() => {
   holds = []
   calls = []
   previewReply = previewOf(runView({ message: 'PREVIEWED MESSAGE' }))
+  reaskReply = previewOf(runView({ message: 'RE-ASKED MESSAGE' }))
   routeFetch()
 })
 
@@ -345,5 +348,39 @@ describe('CustomToolInterventionDialog — answering without dealing', () => {
     fireEvent.click(screen.getByText('Keep the table'))
     expect(screen.getByText('As rolled')).toBeTruthy()
     expect(callsTo('intervention-resolve')).toHaveLength(0)
+  })
+})
+
+describe('CustomToolInterventionDialog — a consult the author hid', () => {
+  function hiddenConsultHold(): InterventionHoldView {
+    const base = holdView('a')
+    return { ...base, definition: { ...base.definition, hasLlm: true } }
+  }
+
+  it('says when a change has put the answer out of date, and re-asks on request', async () => {
+    holds = [hiddenConsultHold()]
+    previewReply = { ...previewOf(runView({ message: 'OLD ANSWER' })), staleAnswer: true }
+    renderDialog()
+    await screen.findByTestId('custom-tool-intervention')
+
+    // Neither the prompt nor the answer is rendered, but the oracle is.
+    expect(screen.queryByText('Prompt')).toBeNull()
+    expect(screen.getByTestId('intervention-hidden-consult')).toBeTruthy()
+    expect(screen.getByText(/still fits the question/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /row 2|keeps it|→ failure/ }))
+    await screen.findByText(/altered what the oracle would be asked/)
+
+    fireEvent.click(screen.getByText('Re-ask'))
+    await waitFor(() => expect(callsTo('intervention-reask')).toHaveLength(1))
+    expect(callsTo('intervention-reask')[0].body).toMatchObject({ id: 'a', overrides: { outcomeIndex: 1 } })
+    await waitFor(() => expect(screen.getByLabelText('Message')).toHaveProperty('value', 'RE-ASKED MESSAGE'))
+  })
+
+  it('shows no oracle section for a tool that consults none', async () => {
+    holds = [holdView('a')]
+    renderDialog()
+    await screen.findByTestId('custom-tool-intervention')
+    expect(screen.queryByTestId('intervention-hidden-consult')).toBeNull()
   })
 })

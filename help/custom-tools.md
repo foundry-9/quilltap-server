@@ -780,7 +780,7 @@ On the Workbench this is the **Let me take a hand in each roll** tick, off for e
 "intervention": { "enabled": true, "fields": { "roll": false, "llmPrompt": false } }
 ```
 
-The keys are `roll`, `value`, `llmPrompt`, `llmAnswer`, `outcome`, `message`, `state`, `chipLabel`, `title`, `visibility` and `announcer`. A hidden field is not merely left out of the dialog; the house refuses any attempt to change it. Switching the tool's intervention off keeps your choices for when you switch it back on.
+The keys are `roll`, `value`, `llmPrompt`, `llmAnswer`, `outcome`, `message`, `state`, `chipLabel`, `title`, `visibility` and `announcer`. A hidden field is not merely left out of the dialog; the house refuses any attempt to change it. One courtesy survives the hiding of the oracle: since its prompt may quote the very things you change — the winning row's `brief`, a parameter — the dialog keeps a small **The oracle** section with a **Re-ask** button, and tells you plainly when your adjustments have left its answer replying to a question nobody is asking any longer. A Re-ask poses the prompt exactly as the run now renders it; it never lets you rewrite a prompt the author hid. Switching the tool's intervention off keeps your choices for when you switch it back on.
 
 **When it holds, and when it does not.** A run reached by a character's `run_custom`, or by a trigger phrase, is held. Your own runs from the gutter dialog are not — you set those figures yourself. Neither are runs in autonomous rooms, where nobody is watching.
 

@@ -420,6 +420,31 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
           </Section>
         )}
 
+        {hold.definition.hasLlm && !(shown.has('llmPrompt') || shown.has('llmAnswer')) && (
+          // The author hid the consult itself, but a change upstream can still
+          // alter what it would be asked; say so, and let the operator re-ask.
+          <Section title="The oracle">
+            <div className="flex flex-wrap items-center gap-2" data-testid="intervention-hidden-consult">
+              <button
+                type="button"
+                className="qt-button qt-button-secondary"
+                onClick={() => reaskMutation.mutate()}
+                disabled={reaskMutation.isPending || busy}
+              >
+                {reaskMutation.isPending ? 'Asking…' : 'Re-ask'}
+              </button>
+              {preview.staleAnswer ? (
+                <span className="qt-intervention-note">
+                  Your changes have altered what the oracle would be asked; its answer was given to a different question.
+                </span>
+              ) : (
+                <span className="text-xs qt-text-secondary">The oracle’s answer still fits the question.</span>
+              )}
+              {consults.length > 1 && <span className="text-xs qt-text-secondary">Asked {consults.length} times.</span>}
+            </div>
+          </Section>
+        )}
+
         {shown.has('message') && (
           <Section title="The message" pinned={overrides.message !== undefined} onReset={() => reset('message')}>
             <textarea
@@ -483,8 +508,9 @@ function HeldRun({ chatId, hold, waiting, onSettled }: Readonly<HeldRunProps>) {
 
 interface SectionProps {
   title: string
-  pinned: boolean
-  onReset: () => void
+  /** Absent for a section with nothing to pin. */
+  pinned?: boolean
+  onReset?: () => void
   /** The value as first dealt, shown once the field has been changed. */
   dealt?: string
   children: React.ReactNode
@@ -495,7 +521,7 @@ function Section({ title, pinned, onReset, dealt, children }: Readonly<SectionPr
     <section className={`qt-intervention-section${pinned ? ' qt-intervention-section--pinned' : ''}`}>
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <h3 className="text-sm font-semibold">{title}</h3>
-        {pinned && (
+        {pinned && onReset && (
           <span className="text-xs qt-text-secondary">
             {dealt !== undefined ? `dealt: ${dealt} · ` : ''}
             <button type="button" className="qt-intervention-reset" onClick={onReset}>reset</button>

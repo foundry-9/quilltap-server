@@ -501,6 +501,7 @@ Implemented as specified, with these notes:
 - **Pinned state.** A pinned `state` is the state announced and the one effect conditions test (`when.outcome`); the outcome row, brief and `{{outcome.index}}` stay the winning row's.
 - **The range draw** is always taken (or replayed), even for a degenerate `min === max` range, so a parameter that later widens the range still has luck to scale.
 - **Re-ask** unpins `llmAnswer`: a fresh answer replaces a pinned one.
+- **Re-ask on a hidden consult** (2026-10-24). Part 2.3 first limited Re-ask to tools whose `llmPrompt` or `llmAnswer` is eligible. That left a tool hiding both with no way to refresh an answer made stale by an operator change its prompt quotes (`{{outcome.brief}}`). Re-ask is now allowed for any tool with an `llm` block, posing the prompt as the run renders it; an `llmPrompt` override on a hidden prompt is still refused. The dialog shows a compact "The oracle" section (Re-ask plus the stale note) when the full consult section is hidden.
 - **Consistency warnings.** "Pinned message no longer matches" is read as: the message is pinned and a row other than the one first dealt now wins.
 - **CSS** lives in its own `app/styles/qt-components/_intervention.css` (like `_storyteller.css`), mirrored into theme-storybook 1.0.79.
 - **The dialog** cannot be dismissed unanswered; there is no "later". The realtime topic invalidates `queryKeys.customTools.interventions(chatId)` through `topic-map.ts`; the query polls only while the socket is down.

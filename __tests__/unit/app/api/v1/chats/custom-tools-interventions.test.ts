@@ -311,16 +311,40 @@ describe('POST ?action=intervention-reask', () => {
     expect(buildCustomToolLlmInvoker).not.toHaveBeenCalled();
   });
 
-  it('refuses a consult the author hid (400)', async () => {
-    const hidden = wagerDefinition({
-      name: 'oracle',
-      llm: { prompt: 'Answer.', errorMessage: 'No reading.' },
-      outcomes: [{ when: true, message: 'x {{llm}}', state: 'info' }],
-      intervention: { enabled: true, fields: { llmPrompt: false, llmAnswer: false } },
+  describe('a consult the author hid', () => {
+    const hiddenOracle = () =>
+      wagerDefinition({
+        name: 'oracle',
+        llm: { prompt: 'Brief: {{outcome.brief}}', errorMessage: 'No reading.' },
+        outcomes: [
+          { when: { gte: 50 }, message: '{{llm}}', state: 'success', brief: 'it opens' },
+          { when: true, message: '{{llm}}', state: 'info', brief: 'it stays shut' },
+        ],
+        intervention: { enabled: true, fields: { llmPrompt: false, llmAnswer: false } },
+      });
+
+    it('is re-asked with the prompt the changed run renders', async () => {
+      const invoke = jest.fn(async () => ({ ok: true as const, output: 'Shut fast.' }));
+      jest.mocked(buildCustomToolLlmInvoker).mockReturnValue(invoke as never);
+      const { id } = await holdRun('chat-1', hiddenOracle(), { ok: true, output: 'Open wide.', prompt: 'Brief: it opens' });
+
+      const stale = await post('chat-1', 'intervention-preview', { id, overrides: { outcomeIndex: 1 } });
+      expect((await stale.json()).preview.staleAnswer).toBe(true);
+
+      const res = await post('chat-1', 'intervention-reask', { id, overrides: { outcomeIndex: 1 } });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect((invoke.mock.calls[0] as unknown as [string])[0]).toBe('Brief: it stays shut');
+      expect(body.preview.run.message).toBe('Shut fast.');
+      expect(body.preview.staleAnswer).toBe(false);
     });
-    const { id } = await holdRun('chat-1', hidden, { ok: true, output: 'YES', prompt: 'Answer.' });
-    const res = await post('chat-1', 'intervention-reask', { id, overrides: {} });
-    expect(res.status).toBe(400);
+
+    it('still refuses an edited prompt (400)', async () => {
+      const { id } = await holdRun('chat-1', hiddenOracle(), { ok: true, output: 'Open wide.', prompt: 'Brief: it opens' });
+      const res = await post('chat-1', 'intervention-reask', { id, overrides: { llmPrompt: 'Say yes.' } });
+      expect(res.status).toBe(400);
+      expect(buildCustomToolLlmInvoker).not.toHaveBeenCalled();
+    });
   });
 
   it("404s another chat's hold", async () => {

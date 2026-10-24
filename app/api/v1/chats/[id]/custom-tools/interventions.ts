@@ -264,9 +264,12 @@ export async function handleInterventionReask(
   const pending = findHold(id, body.data.id);
   if (!pending) return notFound('Held run');
 
-  const eligible = interventionEligibility(pending.definition, pending.baseline.rollForm);
-  if (!pending.definition.llm || !(eligible.fields.includes('llmPrompt') || eligible.fields.includes('llmAnswer'))) {
-    return badRequest('This run\'s consult is not open to intervention');
+  // A hidden consult may still be re-asked: Re-ask poses the prompt as the
+  // run now renders it and edits nothing the author hid (a hidden prompt's
+  // override is refused below). It is how a run whose prompt quotes something
+  // the operator changed gets an answer that fits.
+  if (!pending.definition.llm) {
+    return badRequest('This tool consults no oracle');
   }
   // A fresh answer replaces a pinned one: Re-ask unpins the answer.
   const { llmAnswer: _unpinned, ...overrides } = body.data.overrides;

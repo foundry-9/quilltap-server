@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: Pascal hold dialog can re-ask a hidden consult
+
+- A held run's consult prompt can quote things the operator changes in the dialog (the winning row's `brief`, a parameter). When a tool hid both `llmPrompt` and `llmAnswer`, the dialog showed no Consult section, so there was no out-of-date marker and no Re-ask; the run dealt with an answer written for the old outcome. Seen on `Friday` with `read_timestream`: moving the value across 0 changed the outcome from the `bad-result` brief to the `expected-outcome` brief, and the message kept the old text.
+- `?action=intervention-reask` now works for any tool with an `llm` block. It poses the prompt the run currently renders. An `llmPrompt` override on a hidden prompt is still refused (400).
+- `CustomToolInterventionDialog` shows a small "The oracle" section when the consult is hidden: a Re-ask button and a note saying whether the answer still fits the question (`staleAnswer`).
+- Help: `help/custom-tools.md` ("Taking a Hand in the Deal").
+
 #### Feature: self_inventory core-file checklist and holdings counts
 
 - New `vault.coreFiles` sub-section of `self_inventory`: the nine core files of the character's vault (`SINGLE_FILE_OVERLAY_PATHS`, in overlay order), each with its path as found (matched case-insensitively), whether it exists, its size, its named `qtap://` URI, and a one-line summary of what belongs in it. Bare `vault` now includes it. Summaries live in `CORE_VAULT_FILE_SUMMARIES` (`lib/services/character-field-semantics.ts`), keyed by the overlay path type so a new core file fails to compile until it is described.
