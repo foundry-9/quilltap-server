@@ -11,6 +11,9 @@
  * - **The ledger** ({@link buildReferentLedger}) lists the people named in the
  *   last few spoken lines, most recent first, with their pronouns, whether they
  *   are in the room, who last named them and the sentence they were named in.
+ *   Anyone listed who is not in the room brings their card — name, aliases,
+ *   pronouns and identity — which is the only place the model now meets it:
+ *   the Host's "spoken of" introduction in the Salon is record-only.
  *   Deterministic: a name/alias scan, no LLM call. The responder ("you") and
  *   the author of the latest line ("I") are left out — they are not who a
  *   third-person pronoun in that line points at.
@@ -64,6 +67,11 @@ export interface ReferentLedgerPerson {
   pronouns?: { subject: string; object: string; possessive: string } | null
   /** Seated (not removed) in this chat. */
   inRoom: boolean
+  /**
+   * The person's particulars (the Host's off-scene card), rendered only if
+   * they are listed. Given for people not in the room.
+   */
+  renderCard?: () => string
 }
 
 export interface BuildReferentLedgerInput {
@@ -192,20 +200,36 @@ export function buildReferentLedger(input: BuildReferentLedgerInput): string {
     return `- **${person.name}** (${pronouns}; ${room}) — last named ${whereNamed(lineIndex, lines)}: “${quote}”`
   })
 
+  const cards = ordered
+    .filter(m => !m.person.inRoom && m.person.renderCard)
+    .map(m => m.person.renderCard!())
+    // A card with nothing under its heading tells the model nothing.
+    .filter(card => card.trim().includes('\n'))
+
   logger.debug('[ReferentLedger] Ledger built', {
     context: CONTEXT,
     windowLines: lines.length,
     candidates: candidates.length,
     listed: ordered.map(m => m.person.name),
+    cards: cards.length,
   })
 
-  return [
+  const section = [
     '## Who is being spoken of',
     '',
     'The people named in the last few lines, most recently named first. When a he, she, they, him or her in the line you are answering does not point at someone in that same line, it most likely carries on from the most recently named of these whose pronouns fit — read it from what was just said, not from who is nearest in your memories.',
     '',
     ...entries,
-  ].join('\n')
+  ]
+  if (cards.length > 0) {
+    section.push(
+      '',
+      'Particulars of those not in the room — for accurate reference only. They are not present, cannot hear what is said here, and are not summoned by being named.',
+      '',
+      cards.join('\n\n'),
+    )
+  }
+  return section.join('\n')
 }
 
 export interface BuildClosingEchoInput {

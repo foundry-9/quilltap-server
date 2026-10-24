@@ -2,6 +2,7 @@
  * Chat summarization, title generation, and conversation utility tasks.
  */
 
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from './core-execution'
@@ -242,7 +243,7 @@ export function stripToolArtifacts(content: string): string | null {
  * @returns Clean ChatMessage[] with only user/assistant conversational text
  */
 export function extractVisibleConversation(
-  messages: Array<{ type?: string; role?: string; content?: string; systemKind?: string | null }>
+  messages: Array<{ type?: string; role?: string; content?: string; systemKind?: string | null; systemSender?: string | null }>
 ): ChatMessage[] {
   const result: ChatMessage[] = []
 
@@ -252,6 +253,9 @@ export function extractVisibleConversation(
 
     // Record-only: documents a delivery, is not part of the conversation.
     if (m.systemKind === 'inform') continue
+    // Record-only too: the Host's "spoken of" card. Folded into a compression
+    // summary it would come back into every prompt as system block 3.
+    if (isOffSceneMentionIntroduction(m)) continue
 
     // Skip entries without content (e.g., context-summary events)
     if (!m.content) continue

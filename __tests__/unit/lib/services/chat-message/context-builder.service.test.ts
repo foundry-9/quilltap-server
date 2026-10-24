@@ -47,6 +47,27 @@ describe('context-builder.service', () => {
       expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'nudge' })).toBe(false)
     })
 
+    it('strips the Host\'s "spoken of" cards, which ride in the referent ledger instead', () => {
+      expect(
+        isRecordOnlyMessage({
+          systemSender: 'host',
+          systemKind: 'off-scene-characters',
+          content: 'The Host begs leave to introduce a person spoken of in this conversation…',
+        }),
+      ).toBe(true)
+    })
+
+    it('keeps left-behind notices, old kind and new', () => {
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'off-scene-left-behind' })).toBe(false)
+      expect(
+        isRecordOnlyMessage({
+          systemSender: 'host',
+          systemKind: 'off-scene-characters',
+          content: 'The Host observes that one member of the previous company did not make the journey.',
+        }),
+      ).toBe(false)
+    })
+
     it('strips Commonplace Book recall whispers, which are recomputed per turn', () => {
       expect(isRecordOnlyMessage({ systemSender: 'commonplaceBook', systemKind: 'relevant-memories' })).toBe(true)
       expect(isRecordOnlyMessage({ systemSender: 'commonplaceBook', systemKind: 'memory-recap' })).toBe(true)

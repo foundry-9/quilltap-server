@@ -5,6 +5,7 @@
  * including message formatting, file attachments, and context management.
  */
 
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { PreRecall } from '@/lib/memory/recall/assemble'
@@ -811,7 +812,7 @@ export function applyMultiCharacterTurnAnchor(
 
 /**
  * Record-only: a transcript row that exists for the operator and must never
- * reach a model. Two kinds qualify, for different reasons.
+ * reach a model. Three kinds qualify, for different reasons.
  *
  * 1. **Persisted Commonplace Book whispers.** Recall is recomputed per turn and
  *    inlined into the new user message body, so past whispers piling up across
@@ -827,15 +828,23 @@ export function applyMultiCharacterTurnAnchor(
  *    forever. It wears `role: 'ASSISTANT'`, so a role filter alone lets it past
  *    — this predicate is what stops it.
  *
+ * 3. **The Host's "spoken of" introductions** (`isOffSceneMentionIntroduction`).
+ *    Absent people now reach the model through the referent ledger's trailing
+ *    section, card and all, on every turn they are named. Left in the history,
+ *    the card landed between a line and the reply that leaned on it ("…how
+ *    she documents." / Greg's card / "When she's not scolding Vergil") and the
+ *    pronoun lost its antecedent. Left-behind notices are not records.
+ *
  * Deliberately blind to system transparency, roster size and whether the turn
  * is a fresh generation or a swipe: every generation routes through
  * `buildMessageContext`, and there is exactly one call site, so there is no
  * dimension along which a record could slip through on one path and not another.
  */
 export function isRecordOnlyMessage(
-  m: { systemSender?: string | null; systemKind?: string | null },
+  m: { systemSender?: string | null; systemKind?: string | null; content?: string | null },
 ): boolean {
   if (m.systemKind === 'inform') return true
+  if (isOffSceneMentionIntroduction(m)) return true
   return m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
 }
 

@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Change: absent-character cards move from the history to the referent ledger
+
+- The Host's "spoken of" introduction (the card posted the first time an absent workspace character is named) no longer reaches the model. It is record-only: `isRecordOnlyMessage` (`buildMessageContext`) and `extractVisibleConversation` (cheap-LLM tasks, including compression) strip it, and the context builder no longer pushes the new card into the turn. It is still posted to the Salon for the operator.
+- The referent ledger now carries the card of each listed person not in the room, rendered by the Host's `renderOffSceneCard` (now exported), after the entry list. Cards with nothing under the heading are skipped. Cost: absent people named in the last 6 lines are re-sent each turn on the uncached tail; anyone named earlier than that is not sent.
+- An unseated persona counts as in the room wherever the operator speaks without a seat (`operatorSpeaksWithoutSeat`), so it gets no card and is not called absent; in an autonomous room it is absent, as in bug 172.
+- Left-behind notices (Continue Elsewhere) now post with their own `systemKind`, `off-scene-left-behind`, and stay in the history. Older left-behind rows keep `off-scene-characters` and are told apart by their opening (`LEFT_BEHIND_INTRO_PREFIX`). `findIntroducedOffSceneCharacterIds` reads both kinds. Kinds and the predicate live in `lib/services/host-notifications/off-scene-kinds.ts`.
+- The Courier transport is unchanged: it builds its own transcript, has no ledger, and still passes the cards.
+- Docs: `PROMPT_ARCHITECTURE.md` §2 and §9; help `help/salon-host-introductions.md`.
+
 #### Feature: referent ledger and closing echo in the trailing context
 
 - Characters lost track of who a pronoun meant. On `Friday` (chat `c277aef9…`, glm-5.3-flash) Friday ended a turn with "…Abigail will absolutely make that a formal finding. You've seen how she documents." Charlie replied "When she's not scolding Vergil for his bedside manner." Friday answered as if "she" were herself. In the request, a Host card for Greg sat between the two lines, and Charlie's 50-character line was followed by about 21 KB of scene state and recall.

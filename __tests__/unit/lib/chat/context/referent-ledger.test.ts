@@ -118,6 +118,37 @@ describe('buildReferentLedger', () => {
   })
 })
 
+describe('buildReferentLedger cards', () => {
+  const withCards: ReferentLedgerPerson[] = people.map(p => ({
+    ...p,
+    renderCard: p.inRoom ? undefined : jest.fn(() => `### ${p.name}\nCard for ${p.name}.`),
+  }))
+
+  it('carries the cards of listed people who are not in the room, and only theirs', () => {
+    const ledger = buildReferentLedger({
+      responderId: 'friday',
+      people: withCards,
+      lines: [{ speaker: 'Asa', isResponder: false, content: 'Charlie and Abigail went to find Vergil.' }],
+    })
+    expect(ledger).toContain('Particulars of those not in the room')
+    expect(ledger).toContain('### Abigail\nCard for Abigail.')
+    expect(ledger).toContain('### Vergil\nCard for Vergil.')
+    expect(ledger).not.toContain('### Charlie')
+    const greg = withCards.find(p => p.id === 'greg')!
+    expect(greg.renderCard).not.toHaveBeenCalled()
+  })
+
+  it('has no particulars block when everyone listed is in the room', () => {
+    const ledger = buildReferentLedger({
+      responderId: 'friday',
+      people: withCards,
+      lines: [{ speaker: 'Asa', isResponder: false, content: 'Charlie is here.' }],
+    })
+    expect(ledger).toContain('**Charlie**')
+    expect(ledger).not.toContain('Particulars')
+  })
+})
+
 describe('buildClosingEcho', () => {
   it('quotes the whole line under a header naming the speaker', () => {
     const echo = buildClosingEcho({ newUserMessage: '"When she\'s not scolding Vergil."\n\nI grin.', speakerName: 'Charlie' })

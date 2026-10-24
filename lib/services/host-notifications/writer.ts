@@ -15,6 +15,11 @@
  * announcement couldn't be written.
  */
 
+import {
+  HOST_KIND_OFF_SCENE_CHARACTERS,
+  HOST_KIND_OFF_SCENE_LEFT_BEHIND,
+  LEFT_BEHIND_INTRO_PREFIX,
+} from './off-scene-kinds';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
@@ -818,7 +823,6 @@ export async function postHostTimestampAnnouncement(
 // never been introduced — and pass only that delta in.
 // ---------------------------------------------------------------------------
 
-const HOST_KIND_OFF_SCENE_CHARACTERS = 'off-scene-characters';
 
 export interface OffSceneCharacterCard {
   id: string;
@@ -833,7 +837,7 @@ export interface OffSceneCharacterCard {
  * Compose a Host announcement introducing one or more off-scene characters.
  * Sorted alphabetically for deterministic, cache-friendly output.
  */
-function renderOffSceneCard(
+export function renderOffSceneCard(
   c: OffSceneCharacterCard,
   userCharacterName?: string | null,
 ): string {
@@ -874,8 +878,8 @@ export function buildOffSceneCharactersContent(
   if (reason === 'left-behind') {
     intro =
       sorted.length === 1
-        ? `The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`
-        : `The Host observes that certain members of the previous company did not make the journey. These persons remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`;
+        ? `${LEFT_BEHIND_INTRO_PREFIX} one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`
+        : `${LEFT_BEHIND_INTRO_PREFIX} certain members of the previous company did not make the journey. These persons remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`;
   } else {
     intro =
       sorted.length === 1
@@ -916,7 +920,7 @@ export function buildOffSceneCharactersOpaqueContent(
  * compute the announcement delta.
  *
  * The scan looks at message metadata — specifically `systemSender === 'host'`
- * with `systemKind === 'off-scene-characters'` — and reads the character IDs
+ * with `systemKind` `off-scene-characters` or `off-scene-left-behind` — and reads the character IDs
  * from the message's `hostEvent.introducedCharacterIds` field, which the
  * announcement writer stamps at post time.
  */
@@ -935,7 +939,8 @@ export function findIntroducedOffSceneCharacterIds(
     if (
       msg.type === 'message' &&
       msg.systemSender === 'host' &&
-      msg.systemKind === HOST_KIND_OFF_SCENE_CHARACTERS &&
+      (msg.systemKind === HOST_KIND_OFF_SCENE_CHARACTERS ||
+        msg.systemKind === HOST_KIND_OFF_SCENE_LEFT_BEHIND) &&
       msg.hostEvent &&
       typeof msg.hostEvent === 'object'
     ) {
@@ -1001,7 +1006,7 @@ export async function postHostOffSceneCharactersAnnouncement(
       createdAt: now,
       participantId: null,
       systemSender: 'host',
-      systemKind: HOST_KIND_OFF_SCENE_CHARACTERS,
+      systemKind: reason === 'left-behind' ? HOST_KIND_OFF_SCENE_LEFT_BEHIND : HOST_KIND_OFF_SCENE_CHARACTERS,
       hostEvent: { introducedCharacterIds },
     };
 

@@ -8,7 +8,7 @@ url: /salon/:id
 
 In any properly run Salon, conversation has a way of straying — names crop up that nobody present has actually met, and the company can feel suddenly outnumbered by absent acquaintances. The Host, ever observant, takes it upon herself to keep the proceedings honest.
 
-When a character belonging to your workspace is mentioned in a chat — but is not, at the moment, a participant — the Host steps forward and introduces them, once. Their card joins the conversation as a public message, visible to you and to every character in the room.
+When a character belonging to your workspace is mentioned in a chat — but is not, at the moment, a participant — the Host steps forward and introduces them, once. Their card appears in the Salon as a message for *your* benefit. The characters do not read it there; they are handed the same particulars privately, every turn the absentee is spoken of (see [Keeping Track of Who Is Meant](#keeping-track-of-who-is-meant) below).
 
 ## What Triggers an Introduction
 
@@ -22,13 +22,11 @@ The introduction is published as a regular Salon message authored by the Host. I
 
 The phrasing makes the Host's intent plain: *for accurate reference only; not a summons to the scene.* The character has not joined the chat. They are simply being identified, so that anyone speaking of them does so with their proper particulars in hand.
 
-## Why Once, and Only Once
+## Why Once, and Only Once (For You)
 
-In earlier days, Quilltap re-injected absent-character cards into every single response, every turn — silently, behind the scenes. That meant the same character description was sent to the model dozens or hundreds of times in a long conversation, eating tokens for breakfast and confusing the model's prompt cache.
+The card in the feed is posted once. If the same workspace character is named twice, three times, fifty times across a long conversation, the Host introduces them to *you* precisely once.
 
-Now, the introduction lives in the chat history once. From that moment on, every character — and you — can refer back to it just as you would any other message. The Host does not repeat herself.
-
-If the same workspace character is named twice, three times, fifty times across a long conversation, the Host introduces them precisely once. Subsequent mentions cost nothing.
+The characters are another matter. A card wedged into the conversation itself had a habit of landing between a remark and the reply that leaned on it, so that a "she" in the reply lost track of whom it meant. The characters therefore never see the card in the conversation. Instead, the particulars of any absent person named in the last few lines are tucked in after the rest of the turn's notes, which is late enough not to disturb the house's cached preliminaries, and early enough to be read.
 
 ## What This Looks Like in the Salon
 
@@ -56,10 +54,12 @@ An introduction is made once, and a long conversation soon leaves it behind. Tha
 
 So on every turn the Host slips a short, private note to the character about to answer, which you never see in the feed:
 
-- **Who is being spoken of.** Everyone named in the last few lines, the most recently named first, each with their pronouns, whether they are in the room, who last named them and the very sentence in which they did. The character answering is left off (it is "you"), and so is whoever wrote the latest line (that is "I"). Nobody named, no note.
+- **Who is being spoken of.** Everyone named in the last few lines, the most recently named first, each with their pronouns, whether they are in the room, who last named them and the very sentence in which they did. The character answering is left off (it is "you"), and so is whoever wrote the latest line (that is "I"). Anyone on the list who is *not* in the room brings their card along: name, aliases, pronouns and description, just as the Host introduced them. Nobody named, no note.
 - **The line being answered.** Your latest message, repeated at the very end, after the scene and the memories have had their say, so that the last thing the character reads is what you actually said. A very long message is repeated by its closing paragraphs only.
 
-Neither costs a thing in extra calls to a model, and neither is kept in the chat history.
+Neither costs a thing in extra calls to a model, and neither is kept in the chat history. Someone last named longer ago than the last few lines drops off the note until they are named again.
+
+The Host's notice about those **left behind** by Continue Elsewhere is different: it marks where the old company parted, so it stays in the conversation, where the characters read it.
 
 ## What This Doesn't Do
 

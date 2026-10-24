@@ -164,6 +164,7 @@ import {
   buildTimestampContent,
   postHostOffSceneCharactersAnnouncement,
   findIntroducedOffSceneCharacterIds,
+  renderOffSceneCard,
 } from '@/lib/services/host-notifications/writer'
 import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import {
@@ -782,17 +783,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Off-scene character introductions: scan the conversation for workspace
   // characters who are NOT current participants but get name-dropped in
   // history. The first time each one is named, the Host introduces them with
-  // a public chat message — visible to the user, surfaced to every
-  // character's LLM context via normal history. Subsequent turns recall the
-  // particulars from history without re-injecting cards into the system
-  // prompt every turn (which used to bisect provider prompt caching).
+  // a public chat message — for the operator only: it is record-only
+  // (`isOffSceneMentionIntroduction`) and never reaches a model. The model
+  // hears about absent people from the referent ledger, a trailing section
+  // after the cached prefix that carries their cards on every turn they are
+  // named (below). The card used to ride in the history, where it could land
+  // between a line and the reply leaning on it and cost the pronoun its
+  // antecedent.
   //
   // Idempotent per character: prior Host announcements stamp the introduced
   // IDs onto `hostEvent.introducedCharacterIds`, so repeated mentions of
   // already-introduced characters are no-ops.
   //
   // Failures here must never break prompt assembly — log and skip on error.
-  let pendingOffSceneAnnouncement: { content: string } | null = null
   // Kept for the referent ledger further down, so it need not read either again.
   let ledgerCharacters: Character[] | null = null
   let ledgerChatMessages: unknown[] | null = null
@@ -891,7 +894,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
         if (newcomerIds.size > 0) {
           const newcomers = candidates.filter(c => newcomerIds.has(c.id))
-          const announcement = await postHostOffSceneCharactersAnnouncement({
+          await postHostOffSceneCharactersAnnouncement({
             chatId: chat.id,
             characters: newcomers.map(c => ({
               id: c.id,
@@ -902,12 +905,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               description: c.description ?? undefined,
             })),
           })
-          if (announcement) {
-            // Surface the announcement to THIS turn's LLM context so the
-            // responding character sees the intro without a one-turn lag.
-            // (It's already persisted to the chat for future turns.)
-            pendingOffSceneAnnouncement = { content: announcement.content }
-          }
         } else {
         }
       } else {
@@ -1004,12 +1001,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     finalSystemPrompt = truncateToTokenLimit(systemPrompt, budget.systemPromptBudget, provider)
   }
 
-  // Off-scene character cards are no longer spliced into the system prompt
-  // (they used to live here and broke prompt-cache prefixes whenever a new
-  // workspace character got name-dropped). They now ride as Host
-  // introductions in chat history; the per-turn announcement (when there's a
-  // newcomer) is appended to `pendingOffSceneAnnouncement` above and pushed
-  // into this turn's contextMessages alongside the timestamp whisper.
+  // Off-scene character cards are not spliced into the system prompt (they
+  // used to live here and broke prompt-cache prefixes whenever a new workspace
+  // character got name-dropped). They ride in the referent ledger, a trailing
+  // section on the uncached tail.
 
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
@@ -1858,25 +1853,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     if (isSummaryHead) summaryBreakpointPlaced = true
   }
 
-  // Off-scene character introduction: when a workspace character is
-  // name-dropped for the first time in this chat, the Host posts a public
-  // introduction. The announcement is persisted to chat history (above) and
-  // surfaced to THIS turn's LLM context here so the responding character
-  // sees the intro without a one-turn lag.
-  if (pendingOffSceneAnnouncement) {
-    // Push as 'user' rather than 'assistant': this is a Host voice (external
-    // annotation to the responding character), and Anthropic Sonnet 4.6+
-    // rejects requests whose final message is role=assistant ("does not
-    // support assistant message prefill"). In continue/nudge mode there's
-    // no trailing user message to bury this behind, so role mismatch here
-    // becomes the prefill 400. Matches the systemSender role-flip in
-    // buildMessageContext for the same reason.
-    contextMessages.push({
-      role: 'user',
-      content: pendingOffSceneAnnouncement.content,
-    })
-  }
-
   // Phase G: timestamp whisper. When `timestampConfig.autoPrepend` is set and
   // the mode says to inject this turn (`START_ONLY` + isInitialMessage, or
   // `EVERY_MESSAGE`), the Host narrates the current time. The whisper is
@@ -2325,15 +2301,40 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         .filter(p => p.status !== 'removed' && p.characterId)
         .map(p => p.characterId as string),
     )
+    // An unseated persona is the voice of the user's lines wherever the
+    // operator speaks without a seat, so it is in the room, not absent; in an
+    // autonomous room nobody speaks as them and they are absent like anyone
+    // (the same rule the off-scene scan keeps, bug 172).
+    const personaInRoomName = operatorSpeaksWithoutSeat(chat.chatType)
+      ? userCharacter?.name?.trim().toLowerCase()
+      : undefined
     referentLedger = buildReferentLedger({
       lines: spoken,
-      people: (ledgerCharacters ?? (await getRepositories().characters.findByUserId(userId))).map(c => ({
-        id: c.id,
-        name: c.name,
-        aliases: c.aliases ?? null,
-        pronouns: c.pronouns ?? null,
-        inRoom: seated.has(c.id),
-      })),
+      people: (ledgerCharacters ?? (await getRepositories().characters.findByUserId(userId))).map(c => {
+        const inRoom = seated.has(c.id) || (!!personaInRoomName && c.name.trim().toLowerCase() === personaInRoomName)
+        return {
+          id: c.id,
+          name: c.name,
+          aliases: c.aliases ?? null,
+          pronouns: c.pronouns ?? null,
+          inRoom,
+          // Absent people bring their card: the same one the Host posts for
+          // the operator, which the model no longer sees in the history.
+          renderCard: inRoom
+            ? undefined
+            : () => renderOffSceneCard(
+                {
+                  id: c.id,
+                  name: c.name,
+                  aliases: c.aliases ?? undefined,
+                  pronouns: c.pronouns ?? undefined,
+                  identity: c.identity ?? undefined,
+                  description: c.description ?? undefined,
+                },
+                userCharacter?.name,
+              ),
+        }
+      }),
       responderId: character.id,
     })
     closingEcho = buildClosingEcho({ newUserMessage, speakerName: userSpeaker })
