@@ -17,6 +17,8 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
+import { readCharacterVaultPhysicalPrompts } from '@/lib/database/repositories/vault-overlay/vault-readers';
+import { recompileCharacterSeats } from '@/lib/services/system-prompt-compiler/character-fanout';
 
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -195,6 +197,16 @@ async function handleUpdateCharacter(
     }
   }
 
+  // The Humanoid flag is baked into every chat's cached identity stack for
+  // this character, which a character edit does not otherwise invalidate.
+  // Read the vault's current value so a flip can be fanned out below.
+  const incomingHumanoid = rawPhysical ? rawPhysical.humanoid : undefined;
+  let previousHumanoid: boolean | undefined;
+  if (incomingHumanoid !== undefined && existingCharacter.characterDocumentMountPointId) {
+    const current = await readCharacterVaultPhysicalPrompts(existingCharacter.characterDocumentMountPointId, id);
+    previousHumanoid = current?.humanoid ?? true;
+  }
+
   // A PUT carrying nothing but the default prompt leaves an empty payload, and
   // an empty patch is not a write anyone asked for — the archive guard reads one
   // as an unsanctioned edit.
@@ -209,6 +221,15 @@ async function handleUpdateCharacter(
       return badRequest('System prompt not found on this character');
     }
     character = updated;
+  }
+
+  if (previousHumanoid !== undefined && previousHumanoid !== incomingHumanoid) {
+    const fanout = await recompileCharacterSeats(id, { reason: 'humanoid flag changed' });
+    logger.debug('[Characters v1] Humanoid flag changed; identity stacks recompiled', {
+      characterId: id,
+      humanoid: incomingHumanoid,
+      ...fanout,
+    });
   }
 
   revalidatePath('/');

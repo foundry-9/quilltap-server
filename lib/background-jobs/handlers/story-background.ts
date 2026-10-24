@@ -54,13 +54,9 @@ import {
 } from '@/lib/services/dangerous-content/retry-uncensored';
 import { isUncensoredImageProfile, type ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
-import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
+import { figureGenderPrefix } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
-import {
-  isHumanoid,
-  NON_HUMANOID_IMAGE_DIRECTION,
-  pickPhysicalDescription,
-} from '@/lib/characters/physical-description';
+import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -68,9 +64,14 @@ function escapeRegex(s: string): string {
 
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
-  const desc = pickPhysicalDescription(primary, 'scene') || char.name;
-  if (!isHumanoid(primary)) return `${desc}. ${NON_HUMANOID_IMAGE_DIRECTION}`.trim();
-  return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
+  return sceneDescriptionParts(
+    {
+      physicalDescription: pickPhysicalDescription(primary, 'scene') || char.name,
+      clothingDescription: '',
+      humanoid: isHumanoid(primary),
+    },
+    figureGenderPrefix(char),
+  ).join('. ').trim();
 }
 
 /**
@@ -482,8 +483,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const characterDescriptions = validCharacters.map(char => {
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
-    // Derive a gender prefix from standard pronouns so image generators know the character's sex
-    const genderPrefix = genderPrefixFromPronouns(char!.pronouns);
+    // Derive a gender prefix from standard pronouns so image generators know
+    // the character's sex ('' for a non-humanoid character).
+    const genderPrefix = figureGenderPrefix(char!);
 
     if (resolved) {
       const descParts = sceneDescriptionParts(resolved, genderPrefix);
@@ -501,12 +503,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       };
     }
 
-    // Fallback: simple first-description logic. A non-humanoid character
-    // takes no gender prefix and carries the non-humanoid direction.
+    // Fallback: simple first-description logic.
     const primary = char!.physicalDescription;
-    const humanoid = isHumanoid(primary);
-    const descParts = [(humanoid ? genderPrefix : '') + (pickPhysicalDescription(primary, 'scene') || char!.name)];
-    if (!humanoid) descParts.push(NON_HUMANOID_IMAGE_DIRECTION);
+    const descParts = sceneDescriptionParts(
+      {
+        physicalDescription: pickPhysicalDescription(primary, 'scene') || char!.name,
+        clothingDescription: '',
+        humanoid: isHumanoid(primary),
+      },
+      genderPrefix,
+    );
     return {
       name: char!.name,
       description: descParts.join('. '),

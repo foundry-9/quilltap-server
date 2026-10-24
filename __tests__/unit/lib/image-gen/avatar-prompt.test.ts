@@ -253,6 +253,13 @@ describe('buildCharacterAvatarPrompt', () => {
       expect(prompt).not.toMatch(/naked|unadorned|collarbone/)
     })
 
+    it('still builds a prompt with no prompt text and nothing equipped', async () => {
+      const bare = { ...spheres, physicalDescription: { id: 'pd-3', humanoid: false } } as unknown as Character
+      const { prompt, hasAppearance } = await buildCharacterAvatarPrompt(repos, bare)
+      expect(hasAppearance).toBe(true)
+      expect(prompt).toMatch(/Not humanoid: no head/)
+    })
+
     it('adds no outfit text when nothing is equipped', async () => {
       mockResolve.mockReturnValue({
         leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },

@@ -23,7 +23,7 @@ import {
 } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
-import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
+import { figureGenderNoun } from '@/lib/characters/pronoun-gender';
 import {
   isHumanoid,
   NON_HUMANOID_IMAGE_DIRECTION,
@@ -112,7 +112,7 @@ export function buildFigureIdentityBlock(
   // don't give it a body.
   const humanoid = isHumanoid(character.physicalDescription);
   const subjectNoun = humanoid
-    ? genderNounFromPronouns(character.pronouns) ?? 'person'
+    ? figureGenderNoun(character) ?? 'person'
     : NON_HUMANOID_SUBJECT_NOUN;
 
   // Strip any trailing terminal punctuation off the physical description so
@@ -187,83 +187,80 @@ export async function buildCharacterAvatarPrompt(
   // Whether the character's upper body is bare (no item bubbles up into the
   // top slot). Drives a tighter crop below so a bare chest is never in frame.
   let topIsBare = false;
-  if (equippedSlots && !humanoid) {
-    // No head, shoulders or torso to crop to, so no slot is cut off at the
-    // frame and no bare-chest framing applies: whatever it has on is listed,
-    // empty slots omitted. Nothing on at all → no outfit text, never
-    // describeOutfit's "completely naked" fallback for a thing with no body.
-    const resolved = resolveEquippedOutfitForCharacter(
-      await loadWearablePool(repos, character.id, projectMountPointIds ?? []),
-      equippedSlots,
-    );
-    const slotValues = buildOutfitSlotValues((slot) =>
-      decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
-    );
-    const omit = WARDROBE_SLOT_TYPES.filter((slot) => slotValues[slot].length === 0);
-    if (omit.length < WARDROBE_SLOT_TYPES.length) {
-      outfitText = describeOutfit(slotValues, { omit }).trimEnd();
-    }
-    for (const slot of WARDROBE_SLOT_TYPES) {
-      leafCounts[slot] = resolved.leafItemsBySlot[slot].length;
-    }
-  } else if (equippedSlots) {
-    // Avatars are head-and-shoulders only. We pass the FULL equipped slots in
-    // so the resolver can route coverage by each leaf's own `types` — an item
-    // sitting in slots.bottom whose types include "top" still bubbles up into
-    // the rendered top. We then `omit` bottom/footwear at render time so the
-    // image generator doesn't paste shoes/pants onto a cropped torso.
+  if (equippedSlots) {
+    // We pass the FULL equipped slots in so the resolver can route coverage
+    // by each leaf's own `types` — an item sitting in slots.bottom whose types
+    // include "top" still bubbles up into the rendered top.
     // No project context reads as no project tier — never a chat lookup.
     const resolved = resolveEquippedOutfitForCharacter(
       await loadWearablePool(repos, character.id, projectMountPointIds ?? []),
       equippedSlots,
     );
-
-    topIsBare = resolved.leafItemsBySlot.top.length === 0;
-    const accessories = decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true });
-    // A hairdo is the most visible thing in a head-and-shoulders portrait, so
-    // it rides along on BOTH branches below.
-    const hair = decorateOutfitItems(resolved.leafItemsBySlot.hair, { titleOnly: true });
-
-    if (topIsBare) {
-      // Bare-topped character. We deliberately do NOT emit "topless"/"naked"
-      // wardrobe language: it trips SFW image-provider moderation and implies
-      // breasts in frame. The tighter collarbone crop in the intro conveys the
-      // exposure honestly (bare shoulders, chest out of frame); here we only
-      // list any accessories that sit at or above the collar, plus a styled
-      // hairdo. We also avoid describeOutfit's "completely naked and unadorned"
-      // fallback, which would fire (and reintroduce nudity language) when
-      // accessories AND hair are both empty.
-      outfitText = accessories.length > 0 || hair.length > 0
-        ? describeOutfit(
-            buildOutfitSlotValues((slot) =>
-              slot === 'accessories' ? accessories : slot === 'hair' ? hair : [],
-            ),
-            { omit: ['top', 'bottom', 'footwear'] },
-          ).trimEnd()
-        : '';
-    } else {
-      outfitText = describeOutfit(
-        buildOutfitSlotValues((slot) =>
-          slot === 'accessories'
-            ? accessories
-            : slot === 'hair'
-              ? hair
-              : decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
-        ),
-        // Hair is deliberately NOT omitted — the hairdo belongs in a portrait.
-        { omit: ['bottom', 'footwear'] },
-      ).trimEnd();
-    }
-
     for (const slot of WARDROBE_SLOT_TYPES) {
       leafCounts[slot] = resolved.leafItemsBySlot[slot].length;
+    }
+
+    if (!humanoid) {
+      // No head, shoulders or torso to crop to, so no slot is cut off at the
+      // frame and no bare-chest framing applies: whatever it has on is listed,
+      // empty slots omitted. Nothing on at all → no outfit text, never
+      // describeOutfit's "completely naked" fallback for a thing with no body.
+      const slotValues = buildOutfitSlotValues((slot) =>
+        decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+      );
+      const omit = WARDROBE_SLOT_TYPES.filter((slot) => slotValues[slot].length === 0);
+      if (omit.length < WARDROBE_SLOT_TYPES.length) {
+        outfitText = describeOutfit(slotValues, { omit }).trimEnd();
+      }
+    } else {
+      // Avatars are head-and-shoulders only: bottom/footwear are omitted at
+      // render time so the image generator doesn't paste shoes/pants onto a
+      // cropped torso.
+      topIsBare = resolved.leafItemsBySlot.top.length === 0;
+      const accessories = decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true });
+      // A hairdo is the most visible thing in a head-and-shoulders portrait, so
+      // it rides along on BOTH branches below.
+      const hair = decorateOutfitItems(resolved.leafItemsBySlot.hair, { titleOnly: true });
+
+      if (topIsBare) {
+        // Bare-topped character. We deliberately do NOT emit "topless"/"naked"
+        // wardrobe language: it trips SFW image-provider moderation and implies
+        // breasts in frame. The tighter collarbone crop in the intro conveys the
+        // exposure honestly (bare shoulders, chest out of frame); here we only
+        // list any accessories that sit at or above the collar, plus a styled
+        // hairdo. We also avoid describeOutfit's "completely naked and unadorned"
+        // fallback, which would fire (and reintroduce nudity language) when
+        // accessories AND hair are both empty.
+        outfitText = accessories.length > 0 || hair.length > 0
+          ? describeOutfit(
+              buildOutfitSlotValues((slot) =>
+                slot === 'accessories' ? accessories : slot === 'hair' ? hair : [],
+              ),
+              { omit: ['top', 'bottom', 'footwear'] },
+            ).trimEnd()
+          : '';
+      } else {
+        outfitText = describeOutfit(
+          buildOutfitSlotValues((slot) =>
+            slot === 'accessories'
+              ? accessories
+              : slot === 'hair'
+                ? hair
+                : decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+          ),
+          // Hair is deliberately NOT omitted — the hairdo belongs in a portrait.
+          { omit: ['bottom', 'footwear'] },
+        ).trimEnd();
+      }
     }
   }
 
   const carryingText = options.carrying?.trim()
     ? `${options.carrying.trim().charAt(0).toUpperCase()}${options.carrying.trim().slice(1).replace(/[.!?]+$/, '')}.`
     : '';
-  const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
+  // A non-humanoid character always has something to say — that it is not
+  // humanoid — even before any prompt text or outfit exists.
+  const hasAppearance = Boolean(physicalText) || Boolean(outfitText) || !humanoid;
   let prompt = '';
   if (hasAppearance) {
     const { subjectNoun } = figure;

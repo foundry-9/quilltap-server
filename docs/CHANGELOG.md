@@ -12,6 +12,10 @@
 - Wardrobe worn picture, Lantern scene descriptions (`sceneDescriptionParts`, story-background fallbacks), image-tool expansion (`nonHumanoid` placeholder flag, no gender hint) and the scene-state baseline all carry the direction and drop the gender anchor.
 - The character's own Physical Appearance section adds a "no humanoid body" line (only when the flag is false, so existing identity stacks are byte-identical); the line is sent even when no description text exists yet.
 - The vault parser reads `humanoid` leniently (`"false"`/`"true"` strings count; `null` or anything else reads as absent), so a hand-edited flag can't fail validation and drop every prompt tier.
+- Changing the flag through the character PUT recompiles that character's cached identity stack in every chat (`recompileCharacterSeats`, `lib/services/system-prompt-compiler/character-fanout.ts`); the subprompt fan-out now runs on the same helper.
+- Image-side gender anchors go through `figureGender` / `figureGenderNoun` / `figureGenderPrefix` (`lib/characters/pronoun-gender.ts`), which take the physical description and return no gender for a non-humanoid character. Story-background enumerations render through `sceneDescriptionParts`, which also strips a trailing period before the non-humanoid direction.
+- The scene-state tracker and the appearance resolver LLM are told a character is non-humanoid on a separate line; the direction is no longer baked into the scene-state appearance text.
+- A non-humanoid avatar with no prompt text and nothing equipped still gets a prompt.
 - The optimizer's appearance pass is told not to suggest a head-and-shoulders prompt. The head-and-shoulders backfill skips non-humanoid characters.
 
 #### Feature: name chips for absent characters replace the Host's introduction cards

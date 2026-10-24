@@ -25,6 +25,13 @@ describe('non-humanoid characters in scene prompts', () => {
     expect(parts).toEqual(['seven interlocking brass spheres', NON_HUMANOID_IMAGE_DIRECTION])
   })
 
+  it('never doubles the period before the direction', () => {
+    const parts = sceneDescriptionParts(
+      { physicalDescription: 'spheres.', clothingDescription: 'a silver chain', humanoid: false },
+    )
+    expect(parts.join('. ')).toBe(`spheres. ${NON_HUMANOID_IMAGE_DIRECTION}. Wearing: a silver chain`)
+  })
+
   it('a humanoid (or unflagged) character is unchanged', () => {
     expect(sceneDescriptionParts({ physicalDescription: 'a tall man', clothingDescription: '' }, 'A man. '))
       .toEqual(['A man. a tall man'])

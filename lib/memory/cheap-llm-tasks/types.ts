@@ -180,6 +180,12 @@ export interface SceneStateInput {
     physicalDescription: string
     clothingDescription: string
     scenario?: string
+    /**
+     * True when the character has no humanoid body. The tracker is told so
+     * on its own line; the direction is never baked into `physicalDescription`
+     * (the image side adds it once, from the character's own flag).
+     */
+    nonHumanoid?: boolean
   }>
   /** Messages since last scene state update (or all messages for first turn) */
   recentMessages: ChatMessage[]
@@ -249,6 +255,11 @@ export interface AppearanceResolutionItem {
 export interface CharacterAppearanceInput {
   characterId: string
   characterName: string
+  /**
+   * True when the character has no humanoid body; the resolver is told so
+   * and must not write clothing onto body parts it lacks.
+   */
+  nonHumanoid?: boolean
   physicalDescriptions: Array<{
     id: string
     name: string

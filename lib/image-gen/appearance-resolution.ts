@@ -355,6 +355,7 @@ async function resolveAppearancesWithoutInventory(
   const llmInput: CharacterAppearanceInput[] = characters.map(char => ({
     characterId: char.characterId,
     characterName: char.characterName,
+    ...(isHumanoid(char.physicalDescription) ? {} : { nonHumanoid: true }),
     physicalDescriptions: char.physicalDescription
       ? [{
           id: char.physicalDescription.id,
@@ -587,8 +588,22 @@ export function sceneDescriptionParts(
   genderPrefix = '',
 ): string[] {
   const humanoid = resolved.humanoid !== false
-  const parts = [(humanoid ? genderPrefix : '') + resolved.physicalDescription]
-  if (!humanoid) parts.push(NON_HUMANOID_IMAGE_DIRECTION)
+  if (!humanoid) {
+    // Trailing punctuation off, so the caller's `. ` join can't make "spheres..".
+    return [
+      resolved.physicalDescription.trim().replace(/[.!?]+$/, ''),
+      NON_HUMANOID_IMAGE_DIRECTION,
+      ...sceneDescriptionTail(resolved),
+    ].filter(Boolean)
+  }
+  return [genderPrefix + resolved.physicalDescription, ...sceneDescriptionTail(resolved)]
+}
+
+/** What a resolved character wears and carries, as sentence-fragments. */
+function sceneDescriptionTail(
+  resolved: Pick<ResolvedCharacterAppearance, 'clothingDescription' | 'carryingDescription'>,
+): string[] {
+  const parts: string[] = []
   if (resolved.clothingDescription) parts.push(`Wearing: ${resolved.clothingDescription}`)
   const carrying = resolved.carryingDescription?.trim()
   if (carrying) parts.push(carrying.charAt(0).toUpperCase() + carrying.slice(1))

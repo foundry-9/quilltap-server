@@ -727,8 +727,13 @@ export async function updateSceneState(
   // Build character baseline section
   const characterBaselines = input.characters
     .map(char => {
+      // A non-humanoid character's flag rides on its own line, so the
+      // appearance snapshot never has to carry (and later re-carry) it.
+      const form = char.nonHumanoid
+        ? `\n  - Form: NOT HUMANOID — no head, face, shoulders, torso or limbs; never describe a body part it lacks`
+        : ''
       return `${char.characterName} (ID: ${char.characterId}):
-  - Appearance: ${char.physicalDescription}
+  - Appearance: ${char.physicalDescription}${form}
   - Clothing: ${char.clothingDescription}${char.scenario ? `\n  - Scenario context: ${char.scenario}` : ''}`
     })
     .join('\n\n')
@@ -942,7 +947,10 @@ export async function resolveAppearance(
       wardrobeSection = `\n  Equipped Wardrobe (stored items the character currently has on — summarize as a brief visual sentence):\n${outfitDescription}`
     }
 
-    return `  Character: ${char.characterName} (ID: ${char.characterId})
+    const form = char.nonHumanoid
+      ? ` [not humanoid]\n  Form: NOT HUMANOID — no head, face, neck, shoulders, torso or limbs. Describe anything it wears or bears without naming a body part it lacks.`
+      : ''
+    return `  Character: ${char.characterName} (ID: ${char.characterId})${form}
   Physical Descriptions:
 ${descParts.length > 0 ? descParts.join('\n') : '    (none)'}${wardrobeSection}`
   }).join('\n\n')

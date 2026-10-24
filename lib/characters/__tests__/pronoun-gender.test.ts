@@ -3,6 +3,9 @@
  */
 
 import {
+  figureGender,
+  figureGenderNoun,
+  figureGenderPrefix,
   genderFromPronouns,
   genderNounFromPronouns,
   genderPrefixFromPronouns,
@@ -46,3 +49,21 @@ describe('pronoun-gender helpers', () => {
     });
   });
 });
+
+describe('figure* gender helpers', () => {
+  const he = { subject: 'he', object: 'him', possessive: 'his' }
+
+  it('answer as the pronoun helpers for a humanoid (or unflagged) character', () => {
+    expect(figureGender({ pronouns: he })).toBe('male')
+    expect(figureGenderNoun({ pronouns: he, physicalDescription: { humanoid: true } })).toBe('man')
+    expect(figureGenderPrefix({ pronouns: he, physicalDescription: null })).toBe('A man. ')
+  })
+
+  it('answer no gender for a non-humanoid character, whatever its pronouns', () => {
+    const spheres = { pronouns: he, physicalDescription: { humanoid: false } }
+    expect(figureGender(spheres)).toBeNull()
+    expect(figureGenderNoun(spheres)).toBeNull()
+    expect(figureGenderPrefix(spheres)).toBe('')
+  })
+})
+

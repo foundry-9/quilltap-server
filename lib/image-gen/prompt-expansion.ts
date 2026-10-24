@@ -8,8 +8,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
 import type { Pronouns } from '@/lib/schemas/character.types';
-import { genderFromPronouns } from '@/lib/characters/pronoun-gender';
-import { isHumanoid } from '@/lib/characters/physical-description';
+import { figureGender } from '@/lib/characters/pronoun-gender';
 import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
@@ -310,15 +309,16 @@ export function buildExpansionContext(
 
     // A character with no humanoid body takes no gender hint — its pronouns
     // don't give it a man's or a woman's body — and is flagged instead.
-    const humanoid = resolved
-      ? resolved.humanoid !== false
-      : isHumanoid(placeholder.descriptions?.[0]);
-    const nonHumanoid = humanoid ? undefined : true;
+    const figure = {
+      pronouns: placeholder.pronouns,
+      physicalDescription: resolved
+        ? (resolved.humanoid === false ? { humanoid: false } : null)
+        : placeholder.descriptions?.[0],
+    };
+    const nonHumanoid = figure.physicalDescription?.humanoid === false ? true : undefined;
 
     // Derive gender hint from standard pronouns
-    const gender: string | undefined = humanoid
-      ? genderFromPronouns(placeholder.pronouns) ?? undefined
-      : undefined;
+    const gender: string | undefined = figureGender(figure) ?? undefined;
 
     if (resolved) {
       // Use the single resolved appearance instead of all tiers/clothing
