@@ -254,6 +254,9 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
       : '\nYou have no humanoid body: no head, face, shoulders, hands or limbs. Never describe yourself as having or using one.'
     if (descText) {
       parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}${formNote}`)
+    } else if (formNote) {
+      // Flag set before any prompt is written: the reminder still goes out.
+      parts.push(`\n## Physical Appearance${formNote}`)
     }
   }
 

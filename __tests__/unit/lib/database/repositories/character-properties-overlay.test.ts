@@ -1411,6 +1411,25 @@ describe('readCharacterVaultPhysicalPrompts', () => {
     expect(result).toEqual({ short: null, medium: null, long: null, complete: null });
   });
 
+  it.each([
+    [false, false],
+    ['false', false],
+    [true, true],
+    ['true', true],
+    [null, undefined],
+    ['nope', undefined],
+  ])('reads a hand-edited humanoid of %p as %p without discarding the prompts', async (raw, expected) => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: raw }),
+      mtime: 0,
+      size: 100,
+    });
+    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
+    expect(result).not.toBeNull();
+    expect(result!.short).toBe(VALID_VAULT_PHYSICAL_PROMPTS.short);
+    expect(result!.humanoid).toBe(expected);
+  });
+
   it('returns null on malformed JSON', async () => {
     readDatabaseDocumentMock.mockResolvedValue({ content: 'not json', mtime: 0, size: 10 });
     const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');

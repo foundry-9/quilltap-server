@@ -10,7 +10,9 @@
 - `isHumanoid` and `NON_HUMANOID_IMAGE_DIRECTION` (`lib/characters/physical-description.ts`) are the one reader and the one instruction. For `humanoid: false`, `pickPhysicalDescription(..., 'head-and-shoulders')` skips the head-and-shoulders prompt and leads with medium.
 - Avatar prompt: no head-and-shoulders crop, no pronoun-derived "man"/"woman" (subject is "non-humanoid entity"), the non-humanoid direction, whole form in frame, equipped items listed without slot cropping or nudity fallback.
 - Wardrobe worn picture, Lantern scene descriptions (`sceneDescriptionParts`, story-background fallbacks), image-tool expansion (`nonHumanoid` placeholder flag, no gender hint) and the scene-state baseline all carry the direction and drop the gender anchor.
-- The character's own Physical Appearance section adds a "no humanoid body" line (only when the flag is false, so existing identity stacks are byte-identical). The optimizer's appearance pass is told not to suggest a head-and-shoulders prompt. The head-and-shoulders backfill skips non-humanoid characters.
+- The character's own Physical Appearance section adds a "no humanoid body" line (only when the flag is false, so existing identity stacks are byte-identical); the line is sent even when no description text exists yet.
+- The vault parser reads `humanoid` leniently (`"false"`/`"true"` strings count; `null` or anything else reads as absent), so a hand-edited flag can't fail validation and drop every prompt tier.
+- The optimizer's appearance pass is told not to suggest a head-and-shoulders prompt. The head-and-shoulders backfill skips non-humanoid characters.
 
 #### Feature: name chips for absent characters replace the Host's introduction cards
 
