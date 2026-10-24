@@ -21,7 +21,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { enqueueCharacterHeadShouldersBackfill } from '@/lib/background-jobs/queue-service';
-import { hasPhysicalDescription } from '@/lib/characters/physical-description';
+import { hasPhysicalDescription, isHumanoid } from '@/lib/characters/physical-description';
 
 const logger = createServiceLogger('Startup:HeadShouldersBackfill');
 
@@ -67,7 +67,8 @@ export async function enqueueHeadShouldersBackfill(): Promise<HeadShouldersBackf
       result.skipped++;
       continue;
     }
-    if (pd.headAndShouldersPrompt && pd.headAndShouldersPrompt.trim()) {
+    // No head and shoulders to describe on a non-humanoid character.
+    if (!isHumanoid(pd) || (pd.headAndShouldersPrompt && pd.headAndShouldersPrompt.trim())) {
       result.skipped++;
       continue;
     }

@@ -33,7 +33,7 @@ import {
   HEAD_AND_SHOULDERS_PHYSICAL_PROMPT,
 } from '@/lib/services/character-wizard.service';
 import type { CharacterHeadShouldersBackfillPayload } from '../queue-service';
-import { pickPhysicalDescription } from '@/lib/characters/physical-description';
+import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const CONTEXT = 'background-jobs.headshoulders-backfill';
 
@@ -53,6 +53,17 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
 
   const pd = character.physicalDescription;
   if (!pd) {
+    return;
+  }
+
+  // A non-humanoid character has no head and shoulders to describe, and the
+  // avatar never reads this variant for one (`pickPhysicalDescription`).
+  if (!isHumanoid(pd)) {
+    logger.debug('[HeadShouldersBackfill] Character is not humanoid, skipping', {
+      context: CONTEXT,
+      jobId: job.id,
+      characterId: payload.characterId,
+    });
     return;
   }
 

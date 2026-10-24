@@ -53,6 +53,8 @@ export interface CharacterPhysicalDescription {
   longPrompt?: string | null
   completePrompt?: string | null
   fullDescription?: string | null
+  /** Absent means true; false = no humanoid body for the image pipelines. */
+  humanoid?: boolean
   createdAt?: string
   updatedAt?: string
 }

@@ -103,7 +103,7 @@ describe('scaffoldCharacterMount', () => {
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'example-dialogues.md', '');
   });
 
-  it('writes physical-prompts.json with null short/medium/long/complete for a fresh scaffold', async () => {
+  it('writes physical-prompts.json with null short/medium/long/complete and humanoid true for a fresh scaffold', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
@@ -112,7 +112,7 @@ describe('scaffoldCharacterMount', () => {
     const call = writeDatabaseDocumentMock.mock.calls.find(c => c[1] === 'physical-prompts.json');
     expect(call).toBeDefined();
     const parsed = JSON.parse(call![2] as string);
-    expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null });
+    expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null, humanoid: true });
   });
 
   it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit', async () => {

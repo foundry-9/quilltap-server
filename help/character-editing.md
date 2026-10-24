@@ -142,7 +142,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
-| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys) |
+| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys), plus the **Humanoid** setting as `humanoid` (`true` or `false`; absent reads as `true`) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
 | `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context. An optional YAML frontmatter block above the heading may carry `description` and `archived: true`; both are omitted for an ordinary, in-circulation scene |
 | `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, an optional `imagePrompt`, an optional `componentItems` list (for a composite ensemble), `appropriateness`, the `default` and `replace` flags, and timestamps; the body beneath is the freeform description |
@@ -318,6 +318,19 @@ Physical descriptions help:
 1. Click **Appearance** tab
 2. See current descriptions (different lengths)
 3. Edit manually or use AI to regenerate
+
+### Humanoid, or Otherwise
+
+Above the prompts sits a **Humanoid** checkbox, ticked by default. Untick it for a character who has no body to speak of — no head, no shoulders, no limbs — such as a clockwork of interlocking spheres or a drifting lattice of light. Once it is unticked:
+
+- **Avatars** are painted with the whole of the creature's form in frame rather than a head-and-shoulders crop, and the portraitist is told plainly that there is no head, face, neck, shoulders, torso or limbs to be had and nothing is to be anthropomorphised. The avatar takes its description from the **Medium** prompt (then Long, Short, Complete, Full); the Head & Shoulders prompt is ignored, and the overnight errand that writes one for each character passes this character by.
+- **Pronouns stop deciding the figure.** A non-humanoid "he" is no longer painted as "a man"; every image prompt calls it a non-humanoid entity instead.
+- **Wardrobe pictures** show any worn item resting upon the creature's form — never a full-length figure standing on legs it hasn't got.
+- **The Lantern's scenes** and **the image tool** carry the same instruction for this character whenever it appears among a cast.
+- **In chat**, the character's own Physical Appearance section reminds it that it has no humanoid body, lest it shrug shoulders it does not possess.
+- **The Character Optimizer** will not suggest a Head & Shoulders prompt for it, nor give any variant a body part it lacks.
+
+The setting lives in the vault's `physical-prompts.json` as `"humanoid": false`; a file without the key reads as humanoid. Regenerating the descriptions with the AI Wizard or the Optimizer leaves the setting as you left it.
 
 ### Physical Description Types
 

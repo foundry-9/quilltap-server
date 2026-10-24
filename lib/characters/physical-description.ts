@@ -19,7 +19,7 @@ import type { PhysicalDescription } from '@/lib/schemas/character.types';
 /** The variant fields a reader may choose between. */
 export type PhysicalDescriptionVariants = Partial<Pick<
   PhysicalDescription,
-  'headAndShouldersPrompt' | 'shortPrompt' | 'mediumPrompt' | 'longPrompt' | 'completePrompt' | 'fullDescription'
+  'headAndShouldersPrompt' | 'shortPrompt' | 'mediumPrompt' | 'longPrompt' | 'completePrompt' | 'fullDescription' | 'humanoid'
 >>;
 
 /**
@@ -46,7 +46,7 @@ export type PhysicalDescriptionProfile =
   | 'self-image'
   | 'fullest';
 
-type VariantKey = keyof PhysicalDescriptionVariants;
+type VariantKey = Exclude<keyof PhysicalDescriptionVariants, 'humanoid'>;
 
 const ORDER: Record<PhysicalDescriptionProfile, readonly VariantKey[]> = {
   'head-and-shoulders': ['headAndShouldersPrompt', 'mediumPrompt', 'shortPrompt', 'longPrompt', 'completePrompt', 'fullDescription'],
@@ -55,6 +55,34 @@ const ORDER: Record<PhysicalDescriptionProfile, readonly VariantKey[]> = {
   'self-image': ['shortPrompt', 'mediumPrompt', 'longPrompt', 'completePrompt', 'fullDescription'],
   fullest: ['fullDescription', 'completePrompt', 'longPrompt', 'mediumPrompt', 'shortPrompt'],
 };
+
+/**
+ * The order for a character with no humanoid body (`humanoid: false`). There
+ * is no head and no shoulders to crop to, so the head-and-shoulders prompt is
+ * never read — a stale one would only describe a body the character lacks —
+ * and a portrait takes the mid-length prompt of the whole form instead.
+ */
+const NON_HUMANOID_HEAD_AND_SHOULDERS_ORDER: readonly VariantKey[] =
+  ['mediumPrompt', 'longPrompt', 'shortPrompt', 'completePrompt', 'fullDescription'];
+
+/**
+ * Whether the character can be drawn as a body — head, shoulders, torso,
+ * limbs. `humanoid` is optional and absent means true; only an explicit
+ * `false` (set in the vault's `physical-prompts.json`) marks a character such
+ * as a cluster of interlocking spheres. Every image reader asks this rather
+ * than reading the field.
+ */
+export function isHumanoid(desc: Pick<PhysicalDescriptionVariants, 'humanoid'> | null | undefined): boolean {
+  return desc?.humanoid !== false;
+}
+
+/**
+ * The direction every image prompt carries for a non-humanoid character, so
+ * no provider gives it a face, a head or a pair of shoulders. One sentence,
+ * shared by the avatar, the wardrobe picture and the Lantern's scenes.
+ */
+export const NON_HUMANOID_IMAGE_DIRECTION =
+  'Not humanoid: no head, face, neck, shoulders, torso, arms, legs or any human or humanoid body; depict its form exactly as described and do not anthropomorphize it';
 
 /**
  * The first non-blank variant in the profile's order, trimmed; `''` when the
@@ -66,7 +94,10 @@ export function pickPhysicalDescription(
   profile: PhysicalDescriptionProfile,
 ): string {
   if (!desc) return '';
-  for (const key of ORDER[profile]) {
+  const order = profile === 'head-and-shoulders' && !isHumanoid(desc)
+    ? NON_HUMANOID_HEAD_AND_SHOULDERS_ORDER
+    : ORDER[profile];
+  for (const key of order) {
     const text = desc[key]?.trim();
     if (text) return text;
   }

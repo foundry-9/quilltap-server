@@ -29,7 +29,11 @@ import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
-import { pickPhysicalDescription } from '@/lib/characters/physical-description'
+import {
+  isHumanoid,
+  NON_HUMANOID_IMAGE_DIRECTION,
+  pickPhysicalDescription,
+} from '@/lib/characters/physical-description'
 
 // ============================================================================
 // TYPES
@@ -55,6 +59,12 @@ export interface ResolvedCharacterAppearance {
   physicalDescription: string
   /** The selected physical description's name (for logging) */
   physicalDescriptionName: string
+  /**
+   * False when the character has no humanoid body (`isHumanoid` on its
+   * physical description). {@link sceneDescriptionParts} then drops the
+   * gender prefix and adds the non-humanoid direction. Absent means true.
+   */
+  humanoid?: boolean
   /** What the character is currently wearing */
   clothingDescription: string
   /** How clothing was determined */
@@ -185,6 +195,7 @@ function buildDefaultAppearances(
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: primary?.name || 'default',
+      ...(isHumanoid(primary) ? {} : { humanoid: false }),
       clothingDescription: hasWardrobe
         ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
         : '',
@@ -218,6 +229,7 @@ function mapResolutionResults(
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: selectedDesc?.name || 'default',
+      ...(isHumanoid(selectedDesc) ? {} : { humanoid: false }),
       clothingDescription: resolved?.clothingDescription || '',
       clothingSource: resolved?.clothingSource || 'default',
       wasSanitized: false,
@@ -313,6 +325,7 @@ async function resolveAppearancesWithoutInventory(
         characterName: char.characterName,
         physicalDescription: physDesc,
         physicalDescriptionName: primary?.name || 'scene-state',
+        ...(isHumanoid(primary) ? {} : { humanoid: false }),
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
         // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
         // If the character wasn't found in scene state at all, leave clothing empty.
@@ -342,6 +355,7 @@ async function resolveAppearancesWithoutInventory(
   const llmInput: CharacterAppearanceInput[] = characters.map(char => ({
     characterId: char.characterId,
     characterName: char.characterName,
+    ...(isHumanoid(char.physicalDescription) ? {} : { nonHumanoid: true }),
     physicalDescriptions: char.physicalDescription
       ? [{
           id: char.physicalDescription.id,
@@ -565,13 +579,31 @@ function sanitizableAppearanceText(
 /**
  * The Lantern's description of one resolved character: the (gender-prefixed)
  * physical description, what they wear, and what they carry — each a
- * sentence-fragment the caller joins with `. `. Pure.
+ * sentence-fragment the caller joins with `. `. A non-humanoid character
+ * takes no gender prefix (pronouns don't give it a body) and gets the
+ * non-humanoid direction right after its description. Pure.
  */
 export function sceneDescriptionParts(
-  resolved: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription'>,
+  resolved: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription' | 'humanoid'>,
   genderPrefix = '',
 ): string[] {
-  const parts = [genderPrefix + resolved.physicalDescription]
+  const humanoid = resolved.humanoid !== false
+  if (!humanoid) {
+    // Trailing punctuation off, so the caller's `. ` join can't make "spheres..".
+    return [
+      resolved.physicalDescription.trim().replace(/[.!?]+$/, ''),
+      NON_HUMANOID_IMAGE_DIRECTION,
+      ...sceneDescriptionTail(resolved),
+    ].filter(Boolean)
+  }
+  return [genderPrefix + resolved.physicalDescription, ...sceneDescriptionTail(resolved)]
+}
+
+/** What a resolved character wears and carries, as sentence-fragments. */
+function sceneDescriptionTail(
+  resolved: Pick<ResolvedCharacterAppearance, 'clothingDescription' | 'carryingDescription'>,
+): string[] {
+  const parts: string[] = []
   if (resolved.clothingDescription) parts.push(`Wearing: ${resolved.clothingDescription}`)
   const carrying = resolved.carryingDescription?.trim()
   if (carrying) parts.push(carrying.charAt(0).toUpperCase() + carrying.slice(1))

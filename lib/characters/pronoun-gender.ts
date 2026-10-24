@@ -7,12 +7,15 @@
  * neopronouns, empty, or unset pronouns return `null`/`''` so we never force a
  * binary presentation onto a character who hasn't declared one.
  *
- * Used by the avatar prompt builder (`lib/image-gen/avatar-prompt.ts`), the
- * story-background prompt builder (`lib/background-jobs/handlers/story-background.ts`),
- * and the manual image-prompt expander (`lib/image-gen/prompt-expansion.ts`).
+ * Image-prompt builders ask through the `figure*` functions below, which
+ * take the character's physical description as well: a non-humanoid character
+ * (`humanoid: false`) has no man's or woman's body to anchor, whatever its
+ * pronouns, so they answer no gender for one. The pronoun-only functions are
+ * the mapping those are built on; a new image pipeline uses the `figure*` ones.
  */
 
-import type { Pronouns } from '@/lib/schemas/character.types';
+import type { PhysicalDescription, Pronouns } from '@/lib/schemas/character.types';
+import { isHumanoid } from '@/lib/characters/physical-description';
 
 export type BinaryGender = 'male' | 'female';
 
@@ -46,4 +49,25 @@ export function genderNounFromPronouns(pronouns: Pronouns | null | undefined): '
 export function genderPrefixFromPronouns(pronouns: Pronouns | null | undefined): string {
   const noun = genderNounFromPronouns(pronouns);
   return noun ? `A ${noun}. ` : '';
+}
+
+/** What the `figure*` functions need to know about a character. */
+export interface FigureGenderSource {
+  pronouns?: Pronouns | null;
+  physicalDescription?: Pick<PhysicalDescription, 'humanoid'> | null;
+}
+
+/** {@link genderFromPronouns}, or `null` for a non-humanoid character. */
+export function figureGender(figure: FigureGenderSource): BinaryGender | null {
+  return isHumanoid(figure.physicalDescription) ? genderFromPronouns(figure.pronouns) : null;
+}
+
+/** {@link genderNounFromPronouns}, or `null` for a non-humanoid character. */
+export function figureGenderNoun(figure: FigureGenderSource): 'man' | 'woman' | null {
+  return isHumanoid(figure.physicalDescription) ? genderNounFromPronouns(figure.pronouns) : null;
+}
+
+/** {@link genderPrefixFromPronouns}, or `''` for a non-humanoid character. */
+export function figureGenderPrefix(figure: FigureGenderSource): string {
+  return isHumanoid(figure.physicalDescription) ? genderPrefixFromPronouns(figure.pronouns) : '';
 }

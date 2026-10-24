@@ -52,6 +52,15 @@ export const CharacterVaultPhysicalPromptsSchema = z.object({
   medium: z.string().nullable(),
   long: z.string().nullable(),
   complete: z.string().nullable(),
+  // Optional for the same reason: absent means humanoid. `false` marks a
+  // character with no humanoid body for every image pipeline. Hand-edited, so
+  // lenient: "false"/"true" strings count, and anything else (null, a typo)
+  // reads as absent rather than failing the strict parse and wiping every
+  // prompt tier above.
+  humanoid: z.preprocess(
+    (v) => (v === false || v === 'false' ? false : v === true || v === 'true' ? true : undefined),
+    z.boolean().optional(),
+  ),
 });
 
 export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysicalPromptsSchema>;

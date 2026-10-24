@@ -151,6 +151,7 @@ export async function readCharacterVaultManagedFields(
             patched.mediumPrompt = physPromptsJson.medium;
             patched.longPrompt = physPromptsJson.long;
             patched.completePrompt = physPromptsJson.complete;
+            patched.humanoid = physPromptsJson.humanoid ?? true;
           }
           patched.updatedAt = nowIso;
           snapshot.physicalDescription = patched;
@@ -485,6 +486,20 @@ export async function applyDocumentStoreWriteOverlay(
           // Clearing physicalDescription is a DB-side concern; leave vault file alone.
           break;
         }
+        // `humanoid` is a setting, not generated text: a writer that doesn't
+        // name it (the AI Wizard, the optimizer, the head-and-shoulders
+        // backfill) keeps whatever the vault already says rather than
+        // resetting a non-humanoid character to humanoid.
+        let humanoid = incoming.humanoid;
+        if (humanoid === undefined) {
+          const current = await readCharacterVaultPhysicalPrompts(mountPointId, characterId);
+          humanoid = current?.humanoid;
+          logger.debug('[VaultOverlay] Physical write carries no humanoid flag; keeping the vault\'s', {
+            characterId,
+            mountPointId,
+            humanoid: humanoid ?? true,
+          });
+        }
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
@@ -493,7 +508,7 @@ export async function applyDocumentStoreWriteOverlay(
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
-          renderPhysicalPromptsJson(incoming),
+          renderPhysicalPromptsJson({ ...incoming, humanoid }),
         );
         // Vault owns the physicalDescription post-cutover; nothing flows back to
         // the (now nonexistent) DB column.

@@ -3,7 +3,7 @@
  * place a reader's preferred physical-description variant order lives.
  */
 
-import { hasPhysicalDescription, pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { hasPhysicalDescription, isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 const all = {
   headAndShouldersPrompt: 'H&S',
@@ -41,5 +41,22 @@ describe('pickPhysicalDescription', () => {
     expect(pickPhysicalDescription(null, 'scene')).toBe('')
     expect(pickPhysicalDescription(undefined, 'self-image')).toBe('')
     expect(hasPhysicalDescription({ fullDescription: 'prose' }, 'scene')).toBe(true)
+  })
+})
+
+describe('isHumanoid', () => {
+  it('reads absent as humanoid; only an explicit false is not', () => {
+    expect(isHumanoid(null)).toBe(true)
+    expect(isHumanoid(undefined)).toBe(true)
+    expect(isHumanoid({})).toBe(true)
+    expect(isHumanoid({ humanoid: true })).toBe(true)
+    expect(isHumanoid({ humanoid: false })).toBe(false)
+  })
+
+  it('never reads the head-and-shoulders prompt for a non-humanoid portrait', () => {
+    expect(pickPhysicalDescription({ ...all, humanoid: false }, 'head-and-shoulders')).toBe('MEDIUM')
+    expect(pickPhysicalDescription({ headAndShouldersPrompt: 'H&S', humanoid: false }, 'head-and-shoulders')).toBe('')
+    // Other profiles are unchanged.
+    expect(pickPhysicalDescription({ ...all, humanoid: false }, 'full-length')).toBe('COMPLETE')
   })
 })
