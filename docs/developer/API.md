@@ -2240,7 +2240,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 - `GET ?action=archetypes` — `{ items }`, the archetypes reachable from this tier (a character's with `?projectId=` / `?chatId=`), for the instantiate picker.
 - `POST` — create a standalone object, archetype or kit (`createInventorySchema`: `name`, `title`, `description`, `imageDescription`, `equippedByDefault`, `maxEquipped`, `canCopy`, `isArchetype`, `kind`, `itemIds`, `emoji`, `svg`, `metadata`, `folder`). A kit's members must resolve from this tier, never a kit. `svg` is sanitised (≤ 16 KB). Answers `201 { item }`.
 - `POST ?action=instantiate` — `{ archetypeId, folder?, overrides?, projectId?, chatId? }`: a sparse instance of a reachable archetype. Answers `201 { item }`.
-- `POST ?action=duplicate` — `{ itemId }`: a copy beside the original, titled "(copy)", keeping its name (kin); `NOT_COPYABLE` when `canCopy` is false.
+- `POST ?action=duplicate` — `{ itemId }` (`duplicateInventorySchema`; a missing `itemId` is a `400`): a copy beside the original, titled "(copy)", keeping its name (kin); `NOT_COPYABLE` when `canCopy` is false.
 - `POST ?action=create-folder` / `rename-folder` / `delete-folder` — the wardrobe's folder rules (`{ path }`, `{ path, name }`).
 - `POST ?action=move-items` / `copy-items` — `{ itemIds, folder }`; a copy refuses any object with `canCopy: false`.
 

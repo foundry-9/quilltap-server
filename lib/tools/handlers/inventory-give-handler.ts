@@ -16,9 +16,8 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { publishRealtime } from '@/lib/realtime/bus';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
-import { dropCarriedEverywhere } from '@/lib/inventory/equip';
+import { dropCarriedEverywhere, loadEquipChat, seatedCharacterIds, type EquipChat } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 import { transferInventoryItem } from '@/lib/inventory/transfers';
@@ -28,7 +27,7 @@ import {
   characterChangeContext,
   errorMessageOf,
   inventoryNotFoundMessage,
-  loadToolChat,
+  loadOwnRecord,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -41,14 +40,12 @@ import {
 /** The receiver among the chat's live participants, by id or name; or why not. */
 async function resolveReceiver(
   repos: InventoryRepos,
-  participants: ReadonlyArray<{ characterId?: string | null; status?: string | null }>,
+  chat: EquipChat,
   giverId: string,
   to: string,
 ): Promise<{ id: string; name: string } | { error: string }> {
   const wanted = to.trim().toLowerCase();
-  const seated = participants
-    .filter((p) => !!p.characterId && p.status !== 'removed')
-    .map((p) => p.characterId as string);
+  const seated = seatedCharacterIds(chat);
   // An id names the receiver without loading anyone else; a name loads the
   // cast at once rather than one after another.
   const byId = seated.find((id) => id.toLowerCase() === wanted);
@@ -80,7 +77,7 @@ export async function executeInventoryGiveTool(
     return { success: false, error };
   };
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return refuse('This chat could not be found.');
     const matches = resolveToolRef(ctx, parsed.ref);
     if (matches.length === 0) return refuse(inventoryNotFoundMessage(parsed.ref));
@@ -89,25 +86,22 @@ export async function executeInventoryGiveTool(
     const { item } = match;
     if (item.kind === 'kit') return refuse(`"${inventoryLabel(item)}" is a kit; give its objects one by one.`, [item.id]);
 
-    const receiver = await resolveReceiver(repos, chat.participants ?? [], context.characterId, parsed.to);
+    const receiver = await resolveReceiver(repos, chat, context.characterId, parsed.to);
     if ('error' in receiver) return refuse(receiver.error, [item.id]);
 
-    const source = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
+    const own = await loadOwnRecord(repos, context, item.id);
+    if (!own) return refuse(inventoryNotFoundMessage(parsed.ref), [item.id]);
     const destination = await resolveInventoryLocation('character', receiver.id, repos, context.userId, { ensure: true });
-    const record = source ? await source.findItem(item.id) : null;
-    if (!source || !record) return refuse(inventoryNotFoundMessage(parsed.ref), [item.id]);
     if (!destination) return refuse(`${receiver.name} has no vault to receive it.`, [item.id]);
 
     const { item: moved } = await transferInventoryItem(repos, {
       action: 'move',
-      source,
+      source: own.vault,
       destination,
-      record,
+      record: own.record,
       userId: context.userId,
     });
-    publishRealtime('inventory');
     await dropCarriedEverywhere(repos, context.characterId, item.id, [context.chatId]);
-    publishRealtime('chats', context.chatId);
     await notifyInventoryChanged(
       repos,
       { id: context.chatId },

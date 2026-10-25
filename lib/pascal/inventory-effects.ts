@@ -36,7 +36,8 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { loadInventoryContext, type InventoryContext } from '@/lib/inventory/context';
-import { equipItems, pickUpItems, unequipItems, type EquipChat, type InventoryChangeContext } from '@/lib/inventory/equip';
+import { equipItems, loadEquipChat, pickUpItems, unequipItems, type EquipChat } from '@/lib/inventory/equip';
+import { inventoryChangeContext } from '@/lib/inventory/equip-effects';
 import { pickForGesture, resolveInventoryRef, type ResolvedInventoryPool } from '@/lib/inventory/refs';
 import { inventoryLabel } from '@/lib/inventory/resolve';
 import type { WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
@@ -98,7 +99,7 @@ export async function applyInventoryEffects(params: ApplyInventoryEffectsParams)
   let chat: EquipChat | null;
   try {
     ctx = isLoaded(params.inventory) ? params.inventory : await loadInventoryContext(repos, characterId, chatId);
-    chat = (await repos.chats.findById(chatId)) as EquipChat | null;
+    chat = await loadEquipChat(repos, chatId);
   } catch (error) {
     logger.warn('Custom tool inventory effects skipped — the inventory could not be read', {
       context: CONTEXT,
@@ -114,12 +115,7 @@ export async function applyInventoryEffects(params: ApplyInventoryEffectsParams)
     return [];
   }
 
-  const changeCtx: InventoryChangeContext = {
-    userId,
-    provenance: 'pascal',
-    announce: true,
-    ...(params.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: params.pendingInventoryAnnouncements } : {}),
-  };
+  const changeCtx = inventoryChangeContext(userId, 'pascal', params);
 
   const skip = (index: number, reason: string, detail: Record<string, unknown> = {}): void => {
     logger.debug('Custom tool inventory effect not applied', {
@@ -175,9 +171,7 @@ export async function applyInventoryEffects(params: ApplyInventoryEffectsParams)
         const ids: string[] = [];
         for (const ref of gesture.items) {
           const matches = resolveInventoryRef(ref, ctx.pool, ctx.equippedIds);
-          const pick = gesture.action === 'equip'
-            ? pickForGesture(matches, 'equip')
-            : pickForGesture(matches, 'unequip') ?? matches.find((m) => m.item.kind === 'kit') ?? null;
+          const pick = pickForGesture(matches, gesture.action);
           if (!pick) {
             skip(index, matches.length === 0 ? 'no object by that reference' : `nothing to ${gesture.action}`, { reference: ref });
             continue;

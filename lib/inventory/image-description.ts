@@ -2,9 +2,9 @@
  * The Inventory's image phrase — what a character carries, as rendering
  * hints for the image pipelines.
  *
- * `describeEquippedInventoryForImages` joins the equipped objects'
- * `imageDescription`s into one noun-phrase list ("carrying a longsword with a
- * jewelled pommel, a brass signet ring on the left hand"). An object with no
+ * `renderCarryingPhrase` joins the equipped objects' `imageDescription`s into
+ * one noun-phrase list ("carrying a longsword with a jewelled pommel, a brass
+ * signet ring on the left hand"). An object with no
  * `imageDescription` is not depicted; a kit never is (its members are). The
  * phrase reaches the pictures through the appearance resolver
  * (`resolveCharacterAppearances`, the Lantern and the image tool) and the
@@ -19,8 +19,7 @@
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { equippedIdsOf, readEquippedSet } from '@/lib/inventory/equipped-set';
-import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
+import { loadEquippedSet } from '@/lib/inventory/equipped-set';
 import { inventoryLabel } from '@/lib/inventory/resolve';
 
 /** Render the phrase from resolved objects, or null when none is depicted. Pure. */
@@ -32,15 +31,6 @@ export function renderCarryingPhrase(items: readonly ResolvedInventoryItem[]): s
   return phrases.length > 0 ? `carrying ${phrases.join(', ')}` : null;
 }
 
-/** The phrase for one character in a chat, against a pool already loaded. */
-export function describeEquippedInventoryForImages(
-  chat: { id?: string; equippedInventory?: unknown },
-  characterId: string,
-  pool: InventoryPool,
-): string | null {
-  return renderCarryingPhrase(readEquippedSet(chat, characterId, pool));
-}
-
 /**
  * Load the pool and build the phrase for one character in a chat; null when
  * nothing carried is depicted. Never throws.
@@ -50,10 +40,11 @@ export async function loadCarryingPhrase(
   chat: { id: string; projectId?: string | null; equippedInventory?: unknown },
   characterId: string,
 ): Promise<string | null> {
-  if (equippedIdsOf(chat, characterId).length === 0) return null;
   try {
-    const pool = await loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
-    const phrase = describeEquippedInventoryForImages(chat, characterId, pool);
+    // Nothing stored reads no pool at all (`loadEquippedSet`); nothing to log either.
+    const carried = await loadEquippedSet(repos, chat, characterId);
+    if (carried.length === 0) return null;
+    const phrase = renderCarryingPhrase(carried);
     logger.debug('[InventoryImages] Built the carrying phrase', {
       chatId: chat.id,
       characterId,

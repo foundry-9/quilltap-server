@@ -73,8 +73,12 @@ export interface ItemFolderTree<T extends FiledItem> {
   read(mount: VaultFolderMount): Promise<T[]>;
   /** Re-project the folder from an authoritative list. */
   reproject(mount: VaultFolderMount, items: readonly T[]): Promise<void>;
-  /** Re-file items with one projection; the caller is already on the chain. */
-  refile(mount: VaultFolderMount, patches: Array<{ id: string; folder: string }>): Promise<unknown>;
+  /**
+   * Re-file items with one projection; the caller is already on the chain.
+   * `current` is the list `read` just returned on this chain, so a tier that
+   * keeps its read beside the items can write from it without reading again.
+   */
+  refile(mount: VaultFolderMount, patches: Array<{ id: string; folder: string }>, current: readonly T[]): Promise<unknown>;
   errors: {
     path(message: string): Error;
     notFound(folder: string): Error;
@@ -379,6 +383,7 @@ export async function deleteFolderIn<T extends FiledItem>(
       await tree.refile(
         mount,
         moving.map((item) => ({ id: item.id, folder: rebaseFolder(item.folder ?? '', from, parent) })),
+        items,
       );
     }
 

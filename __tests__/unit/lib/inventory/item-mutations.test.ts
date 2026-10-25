@@ -134,6 +134,23 @@ describe('archetypes and instances', () => {
     }
   })
 
+  it('a forced delete skips a vault that can no longer be reached, before writing anything, and still deletes', async () => {
+    const project = await loc('project', 'project-1')
+    const bow = await createInventoryItem(repos(), project, body({ name: 'magic bow', description: 'Never misses.', isArchetype: true }))
+    await instantiate(repos(), await loc('character', 'c-vivienne'), bow.id, { pool: await loadInventoryPool(repos(), { characterId: 'c-vivienne', projectId: 'project-1' }) })
+    await instantiate(repos(), await loc('character', 'c-bertie'), bow.id, { pool: await loadInventoryPool(repos(), { characterId: 'c-bertie', projectId: 'project-1' }) })
+    // Bertie's vault is still found by its mount, but the character no longer resolves by id.
+    const findByIdRaw = getFakeRepos().characters.findByIdRaw
+    const real = findByIdRaw.getMockImplementation()!
+    findByIdRaw.mockImplementation(async (id: string) => (id === 'c-bertie' ? null : real(id)))
+
+    const result = await deleteInventoryItem(getFakeRepos() as never, project, bow, { force: true })
+    expect(result).toEqual({ deleted: true, detached: 1 })
+    expect(objectsIn('mp-c-vivienne')[0]).toMatchObject({ parentId: null, description: 'Never misses.' })
+    expect(objectsIn('mp-c-bertie')[0]).toMatchObject({ parentId: bow.id })
+    findByIdRaw.mockImplementation(real)
+  })
+
   it('a forced delete is refused, naming the character, while an archived character holds an instance', async () => {
     const project = await loc('project', 'project-1')
     const bow = await createInventoryItem(repos(), project, body({ name: 'magic bow', isArchetype: true }))

@@ -23,15 +23,15 @@
  * @module lib/pascal/inventory-subjects
  */
 
-import type { InventoryContext, InventoryState } from '@/lib/inventory/refs';
+import { INVENTORY_STATES, type InventoryContext, type InventoryState } from '@/lib/inventory/refs';
 import { splitInventoryReference } from './placeholders';
 import { compareOrdered } from './metadata-match';
 import { gateGroups, type ToolGate } from './custom-tool.types';
 
 export type { InventoryContext, InventoryState } from '@/lib/inventory/refs';
 
-/** The four states, as the schema's enum spells them. */
-export const INVENTORY_STATE_VALUES = ['equipped', 'carried', 'reachable', 'absent'] as const;
+/** The four states, as the schema's enum spells them (the one list is `refs.ts`'s). */
+export const INVENTORY_STATE_VALUES = INVENTORY_STATES;
 
 /** The parts of a `$inventory` operand: `<ref>.metadata.<key>`, split at the first `.metadata.`. */
 export function parseInventoryOperand(path: string): { ref: string; key: string } | null {

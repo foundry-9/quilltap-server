@@ -40,7 +40,8 @@ import {
   NoInventoryImageProfileError,
   generateInventoryItemImage,
 } from '@/lib/inventory/item-image-generation';
-import { inventoryErrorResponse } from '@/lib/inventory/routes/responses';
+import { inventoryErrorResponse, withInventoryErrors } from '@/lib/inventory/routes/responses';
+import { InventoryScopeSchema } from '@/lib/schemas/inventory.types';
 import { saveImageToAlbum, SaveImageToAlbumError, SaveImageRequestSchema } from '@/lib/photos/save-image-to-album';
 import { savedImageResponse, saveImageErrorResponse } from '@/lib/photos/save-image-response';
 import { listAllPhotoAlbumOptions } from '@/lib/photos/photo-album-options';
@@ -50,7 +51,7 @@ type Params = { itemId: string };
 const LOG_TAG = '[Inventory Images v1]';
 
 const containerQuerySchema = z
-  .object({ scope: z.enum(['character', 'project', 'group', 'general']), id: z.string().min(1).optional() })
+  .object({ scope: InventoryScopeSchema, id: z.string().min(1).optional() })
   .refine((q) => q.scope === 'general' || !!q.id, { message: 'id is required for this scope' });
 const generateBodySchema = z.object({ imageProfileId: z.string().min(1).nullable().optional() });
 const fileIdBodySchema = z.object({ fileId: z.string().min(1, 'fileId is required') });
@@ -141,43 +142,31 @@ async function handleUpload(req: NextRequest, ctx: RequestContext, { itemId }: P
   }
   const kind = uploadKindSchema.safeParse(form.get('kind') ?? undefined);
   if (!kind.success) return badRequest('kind must be "uploaded" or "imported"');
-  try {
-    const converted = await convertToWebP(Buffer.from(await file.arrayBuffer()), file.type, file.name);
-    const { file: stored } = await addInventoryItemImage(ctx.repos, found.home, {
-      userId: ctx.user.id,
-      kind: kind.data,
-      content: converted.buffer,
-      contentType: converted.mimeType,
-      width: converted.width ?? null,
-      height: converted.height ?? null,
-    });
-    logger.info(`${LOG_TAG} Uploaded object image`, { itemId, fileId: stored.id, context: 'inventory' });
-    return created({ image: toWardrobeImageSummary(stored), current: stored.id });
-  } catch (error) {
-    return inventoryErrorResponse(error);
-  }
+  const converted = await convertToWebP(Buffer.from(await file.arrayBuffer()), file.type, file.name);
+  const { file: stored } = await addInventoryItemImage(ctx.repos, found.home, {
+    userId: ctx.user.id,
+    kind: kind.data,
+    content: converted.buffer,
+    contentType: converted.mimeType,
+    width: converted.width ?? null,
+    height: converted.height ?? null,
+  });
+  logger.info(`${LOG_TAG} Uploaded object image`, { itemId, fileId: stored.id, context: 'inventory' });
+  return created({ image: toWardrobeImageSummary(stored), current: stored.id });
 }
 
 async function handleSetCurrent(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
   const found = await findHome(req, ctx, itemId);
   if (!found.ok) return found.response;
-  try {
-    const { fileId } = fileIdBodySchema.parse(await req.json());
-    return successResponse({ current: await setCurrentInventoryItemImage(ctx.repos, found.home, fileId) });
-  } catch (error) {
-    return inventoryErrorResponse(error);
-  }
+  const { fileId } = fileIdBodySchema.parse(await req.json());
+  return successResponse({ current: await setCurrentInventoryItemImage(ctx.repos, found.home, fileId) });
 }
 
 async function handleDeleteImage(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
   const found = await findHome(req, ctx, itemId);
   if (!found.ok) return found.response;
-  try {
-    const { fileId } = fileIdBodySchema.parse(await req.json());
-    return successResponse({ current: await deleteInventoryItemImage(ctx.repos, found.home, fileId) });
-  } catch (error) {
-    return inventoryErrorResponse(error);
-  }
+  const { fileId } = fileIdBodySchema.parse(await req.json());
+  return successResponse({ current: await deleteInventoryItemImage(ctx.repos, found.home, fileId) });
 }
 
 async function handleSaveTargets(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
@@ -222,9 +211,9 @@ export const GET = createContextParamsHandler<Params>(
 export const POST = createContextParamsHandler<Params>(
   withActionDispatch<Params>({
     generate: handleGenerate,
-    upload: handleUpload,
-    'set-current': handleSetCurrent,
-    'delete-image': handleDeleteImage,
+    upload: withInventoryErrors(handleUpload),
+    'set-current': withInventoryErrors(handleSetCurrent),
+    'delete-image': withInventoryErrors(handleDeleteImage),
     'save-to-store': handleSaveToStore,
   }),
 );

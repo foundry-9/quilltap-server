@@ -6,8 +6,8 @@
  * General). Each mutation reads the folder's records, applies the change in
  * memory and re-projects the whole folder through
  * `projectArrayIntoVaultFolder` (`.json`, recursive, `images/` excluded,
- * sweeping only files {@link isInventoryItemDocument} owns), serialised per
- * folder. The folder operations are the wardrobe's, through the shared
+ * sweeping only the files the folder's scan parsed into records), serialised
+ * per folder; each write parses the folder once. The folder operations are the wardrobe's, through the shared
  * `item-folder-ops.ts` descriptor.
  *
  * Records are stored as read: an instance's file stays sparse. Callers reach
@@ -36,8 +36,9 @@ import {
   hasStableInventoryItemId,
   inventoryFileNameFor,
   isInventoryItemDocument,
-  readDuplicateInventoryPaths,
   readInventoryRecords,
+  scanInventoryFolder,
+  type InventoryFolderScan,
 } from './inventory-readers';
 import {
   chainKey,
@@ -101,15 +102,21 @@ function safeFolder(folder: string | null | undefined): string {
 }
 
 /**
- * Re-project the folder from an authoritative record list. A file the reader
- * skipped as a duplicate id is not owned, so the sweep leaves it in place.
+ * Re-project the folder from an authoritative record list. Only the files
+ * the scan turned into records are swept; a file it skipped (a duplicate id,
+ * a note, a broken file) is not owned and stays where it is. A writer passes
+ * the scan its records came from, so the folder is parsed once per write.
  */
-async function projectMountInventory(mount: InventoryMount, records: readonly InventoryRecord[]): Promise<void> {
-  const duplicates = await readDuplicateInventoryPaths(mount.mountPointId);
-  if (duplicates.size > 0) {
+async function projectMountInventory(
+  mount: InventoryMount,
+  records: readonly InventoryRecord[],
+  scan?: InventoryFolderScan,
+): Promise<void> {
+  const { duplicatePaths, ownedPaths } = scan ?? (await scanInventoryFolder(mount.mountPointId));
+  if (duplicatePaths.size > 0) {
     logger.debug('Inventory projection leaving duplicate-id files alone', {
       mountPointId: mount.mountPointId,
-      paths: Array.from(duplicates),
+      paths: Array.from(duplicatePaths),
       context: 'inventory',
     });
   }
@@ -121,9 +128,9 @@ async function projectMountInventory(mount: InventoryMount, records: readonly In
     mount.characterId ?? mount.mountPointId,
     {
       recursive: { excludeSubfolders: INVENTORY_RESERVED_FOLDER_SEGMENTS },
-      ownsFile: (doc) => !duplicates.has(doc.relativePath) && isInventoryItemDocument(doc),
+      ownsFile: (doc) => ownedPaths.has(doc.relativePath),
       // Claimed so no projected object is written over one.
-      preserveFileNames: Array.from(duplicates, (path) => path.slice(path.lastIndexOf('/') + 1)),
+      preserveFileNames: Array.from(duplicatePaths, (path) => path.slice(path.lastIndexOf('/') + 1)),
       ext: '.json',
     },
   );
@@ -132,9 +139,9 @@ async function projectMountInventory(mount: InventoryMount, records: readonly In
 /** Create a record in the folder. */
 export async function createInventoryInMount(mount: InventoryMount, record: InventoryRecord): Promise<InventoryRecord> {
   return runSerialized(mount.mountPointId, async () => {
-    const current = await readMountInventory(mount);
+    const scan = await scanInventoryFolder(mount.mountPointId);
     const stored: InventoryRecord = { ...record, folder: safeFolder(record.folder) };
-    await projectMountInventory(mount, [...current, stored]);
+    await projectMountInventory(mount, [...scan.records, stored], scan);
     logger.debug('Inventory object created in folder', {
       scope: mount.scope,
       mountPointId: mount.mountPointId,
@@ -158,31 +165,16 @@ export interface InventoryRecordPatch {
 }
 
 /**
- * Patch several records with one read and one projection; the updated
- * records in patch order. A missing id is skipped, or with `requireAll`
- * refuses the batch before anything is written.
+ * Apply patches to a record list in memory: identity and `createdAt` are the
+ * record's own, `updatedAt` is now, `remove` drops stored keys. Returns the
+ * new list and the ids that matched, in patch order.
  */
-export async function updateInventoryManyInMount(
-  mount: InventoryMount,
+function applyPatches(
+  records: readonly InventoryRecord[],
   patches: readonly InventoryRecordPatch[],
-  opts: { requireAll?: boolean } = {},
-): Promise<InventoryRecord[]> {
-  if (patches.length === 0) return [];
-  return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches, opts));
-}
-
-async function updateManyUnserialized(
-  mount: InventoryMount,
-  patches: readonly InventoryRecordPatch[],
-  opts: { requireAll?: boolean } = {},
-): Promise<InventoryRecord[]> {
-  const current = await readMountInventory(mount);
-  const indexById = new Map(current.map((record, idx) => [record.id, idx]));
-  if (opts.requireAll) {
-    const missing = patches.map((p) => p.id).filter((id) => !indexById.has(id));
-    if (missing.length > 0) throw new InventoryItemNotInLocationError(Array.from(new Set(missing)));
-  }
-  const next = current.slice();
+): { next: InventoryRecord[]; updatedIds: string[]; indexById: Map<string, number> } {
+  const indexById = new Map(records.map((record, idx) => [record.id, idx]));
+  const next = records.slice();
   const now = new Date().toISOString();
   const updatedIds: string[] = [];
   for (const { id, patch, remove } of patches) {
@@ -201,8 +193,38 @@ async function updateManyUnserialized(
     next[idx] = merged as InventoryRecord;
     updatedIds.push(id);
   }
+  return { next, updatedIds, indexById };
+}
+
+/**
+ * Patch several records with one read and one projection; the updated
+ * records in patch order. A missing id is skipped, or with `requireAll`
+ * refuses the batch before anything is written.
+ */
+export async function updateInventoryManyInMount(
+  mount: InventoryMount,
+  patches: readonly InventoryRecordPatch[],
+  opts: { requireAll?: boolean } = {},
+): Promise<InventoryRecord[]> {
+  if (patches.length === 0) return [];
+  return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches, opts));
+}
+
+async function updateManyUnserialized(
+  mount: InventoryMount,
+  patches: readonly InventoryRecordPatch[],
+  opts: { requireAll?: boolean } = {},
+  scanned?: InventoryFolderScan,
+): Promise<InventoryRecord[]> {
+  const scan = scanned ?? (await scanInventoryFolder(mount.mountPointId));
+  if (opts.requireAll) {
+    const present = new Set(scan.records.map((record) => record.id));
+    const missing = patches.map((p) => p.id).filter((id) => !present.has(id));
+    if (missing.length > 0) throw new InventoryItemNotInLocationError(Array.from(new Set(missing)));
+  }
+  const { next, updatedIds, indexById } = applyPatches(scan.records, patches);
   if (updatedIds.length === 0) return [];
-  await projectMountInventory(mount, next);
+  await projectMountInventory(mount, next, scan);
   logger.debug('Inventory objects updated in folder', {
     scope: mount.scope,
     mountPointId: mount.mountPointId,
@@ -226,20 +248,14 @@ export async function deleteInventoryInMount(
 ): Promise<string[]> {
   return runSerialized(mount.mountPointId, async () => {
     const doomed = new Set(ids);
-    const current = await readMountInventory(mount);
+    const scan = await scanInventoryFolder(mount.mountPointId);
+    const current = scan.records;
     const deleted = current.filter((record) => doomed.has(record.id)).map((record) => record.id);
     if (deleted.length === 0) return [];
-    let remaining = current.filter((record) => !doomed.has(record.id));
-    const patches = followOn(remaining);
-    if (patches.length > 0) {
-      const byId = new Map(patches.map((p) => [p.id, p]));
-      const now = new Date().toISOString();
-      remaining = remaining.map((record) => {
-        const p = byId.get(record.id);
-        return p ? ({ ...record, ...p.patch, id: record.id, updatedAt: now } as InventoryRecord) : record;
-      });
-    }
-    await projectMountInventory(mount, remaining);
+    const survivors = current.filter((record) => !doomed.has(record.id));
+    const patches = followOn(survivors);
+    const remaining = patches.length > 0 ? applyPatches(survivors, patches).next : survivors;
+    await projectMountInventory(mount, remaining, scan);
     logger.debug('Inventory objects deleted from folder', {
       scope: mount.scope,
       mountPointId: mount.mountPointId,
@@ -256,16 +272,36 @@ export async function deleteInventoryInMount(
 // Folders — the shared folder operations over the Inventory's tree
 // ============================================================================
 
+/**
+ * The scan behind each record list the folder operations read, keyed by that
+ * exact array. A folder operation reads, then reprojects or refiles from what
+ * it read on the same chain, so the write reuses the scan instead of parsing
+ * the folder again. Only the array `read` returned finds its scan; anything
+ * else reads afresh.
+ */
+const treeScans = new WeakMap<readonly InventoryRecord[], InventoryFolderScan>();
+
+async function readForTree(mount: InventoryMount): Promise<InventoryRecord[]> {
+  const scan = await scanInventoryFolder(mount.mountPointId);
+  treeScans.set(scan.records, scan);
+  return scan.records;
+}
+
 const INVENTORY_TREE: ItemFolderTree<InventoryRecord> = {
   rules: INVENTORY_FOLDER_RULES,
   ext: '.json',
   context: 'inventory',
   isItemDocument: isInventoryItemDocument,
   hasStableId: hasStableInventoryItemId,
-  read: readMountInventory,
-  reproject: projectMountInventory,
-  refile: (mount, patches) =>
-    updateManyUnserialized(mount, patches.map(({ id, folder }) => ({ id, patch: { folder } }))),
+  read: readForTree,
+  reproject: (mount, records) => projectMountInventory(mount, records, treeScans.get(records)),
+  refile: (mount, patches, current) =>
+    updateManyUnserialized(
+      mount,
+      patches.map(({ id, folder }) => ({ id, patch: { folder } })),
+      {},
+      treeScans.get(current),
+    ),
   errors: {
     path: (message) => new InventoryFolderPathError(message),
     notFound: (folder) => new InventoryFolderNotFoundError(folder),

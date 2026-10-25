@@ -45,6 +45,24 @@ export interface InventoryChangeContext extends Pick<WardrobeTurnContainers, 'pe
   announce: boolean;
 }
 
+/**
+ * The change context for a gesture: announced unless said otherwise, and
+ * joined to the turn's pending announcements when there is a turn. The one
+ * way a caller builds an {@link InventoryChangeContext}.
+ */
+export function inventoryChangeContext(
+  userId: string,
+  provenance: InventoryChangeProvenance,
+  opts: { announce?: boolean } & Partial<Pick<WardrobeTurnContainers, 'pendingInventoryAnnouncements'>> = {},
+): InventoryChangeContext {
+  return {
+    userId,
+    provenance,
+    announce: opts.announce ?? true,
+    ...(opts.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: opts.pendingInventoryAnnouncements } : {}),
+  };
+}
+
 /** One change: what was taken up and what was set down. */
 export interface InventoryChange {
   equipped: readonly ResolvedInventoryItem[];
@@ -235,7 +253,7 @@ export async function flushPendingInventoryAnnouncements(
       { id: entry.chatId },
       entry.characterId,
       { equipped: entry.equipped, unequipped: entry.unequipped, pickedUp: entry.pickedUp },
-      { userId: entry.userId, provenance: entry.provenances[0] ?? 'character', announce: true },
+      inventoryChangeContext(entry.userId, entry.provenances[0] ?? 'character'),
     );
   }
   logger.debug('[InventoryEffects] Drained the turn\'s Inventory announcements', {

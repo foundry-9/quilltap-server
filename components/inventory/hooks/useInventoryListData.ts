@@ -13,7 +13,7 @@
 import { useCallback } from 'react'
 import { useInventoryList } from '@/lib/hooks/use-inventory'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
-import type { InventoryContainer } from '@/lib/inventory/container'
+import { isInContainer, type InventoryContainer } from '@/lib/inventory/container'
 
 export function useInventoryListData(
   container: InventoryContainer | null,
@@ -27,11 +27,7 @@ export function useInventoryListData(
 
   /** True when the object lives in the tier being browsed. */
   const canManage = useCallback(
-    (item: ResolvedInventoryItem): boolean => {
-      if (!container) return false
-      if (container.scope !== 'character') return true
-      return !item.origin || (item.origin.scope === 'character' && item.origin.id === container.id)
-    },
+    (item: ResolvedInventoryItem): boolean => container !== null && isInContainer(item, container),
     [container],
   )
 

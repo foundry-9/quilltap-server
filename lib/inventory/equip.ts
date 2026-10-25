@@ -1,6 +1,7 @@
 /**
- * Equip and unequip — the chokepoints a gesture in the Salon (and, later, a
- * tool) calls to change what a character carries in one chat.
+ * Equip and unequip — the chokepoints every gesture calls to change what a
+ * character carries in one chat: the operator's in the Salon, a character's
+ * `inventory_*` tool, a custom tool's `inventory` effect, arrival.
  *
  * Plan, then write (spec §5.6):
  *
@@ -14,7 +15,7 @@
  *      (`NOT_EQUIPPABLE`), and check the cap: `count(equipped kin) + planned
  *      kin + 1 ≤ maxEquipped`, or the whole call fails (`CAP_EXCEEDED`) with
  *      nothing written — instantiations included.
- *   4. Write the instances, then one `setEquippedInventory`, then
+ *   4. Write the instances, then one carried-set write, then
  *      `notifyInventoryChanged`.
  *
  * Unequip never fails on state: ids not carried are reported. A kit
@@ -22,7 +23,8 @@
  * members) and keeps the instances.
  *
  * Writes for one chat are serialised, so two gestures cannot each read a
- * stale set. Plain async functions, so the tools and Pascal's effects call
+ * stale set, and every carried-set write goes through {@link writeCarriedSet},
+ * which publishes the chat's realtime topic. Plain async functions, so the tools and Pascal's effects call
  * them.
  *
  * {@link pickUpItems} is the third gesture (a character's `inventory_pick_up`
@@ -44,14 +46,15 @@ import { runSerialized } from '@/lib/database/repositories/vault-overlay/item-fo
 import {
   InventoryCapExceededError,
   InventoryInvalidParentError,
+  InventoryNotAParticipantError,
   InventoryNotEquippableError,
   InventoryOffRosterError,
-  InventoryRefusal,
+  type InventoryRefusal,
 } from '@/lib/inventory/errors';
 import { notifyInventoryChanged, type InventoryChangeContext } from '@/lib/inventory/equip-effects';
 import { readEquippedSet } from '@/lib/inventory/equipped-set';
 import { instantiate } from '@/lib/inventory/item-mutations';
-import { resolveInventoryLocation } from '@/lib/inventory/location';
+import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
 import { isKin } from '@/lib/inventory/resolve';
 import { isCharacterGesture, isOnClosedShelf, projectShelfOpenTo } from '@/lib/inventory/roster-gate';
@@ -87,22 +90,53 @@ export interface UnequipResult {
 
 type Repos = RepositoryContainer;
 
-/** The character is not seated in the chat (a 400). */
-export class InventoryNotAParticipantError extends InventoryRefusal {
-  constructor(characterId: string) {
-    super('NOT_A_PARTICIPANT', `Character ${characterId} is not a participant of this chat`, 400, { characterId });
-    this.name = 'InventoryNotAParticipantError';
-  }
+/** The chat as the equip chokepoints take it, or null when there is no such chat. */
+export async function loadEquipChat(
+  repos: Pick<RepositoryContainer, 'chats'>,
+  chatId: string,
+): Promise<EquipChat | null> {
+  return ((await repos.chats.findById(chatId)) as EquipChat | null) ?? null;
+}
+
+/** Re-read the chat so a serialised write sees the set as it is now. */
+async function freshChat(repos: Repos, chat: EquipChat): Promise<EquipChat> {
+  return (await loadEquipChat(repos, chat.id)) ?? chat;
+}
+
+/** The characters seated in a chat: every participant with a character who has not been removed. */
+export function seatedCharacterIds(chat: Pick<EquipChat, 'participants'>): string[] {
+  return Array.from(new Set(
+    (chat.participants ?? [])
+      .filter((p) => p.characterId && p.status !== 'removed')
+      .map((p) => p.characterId as string),
+  ));
+}
+
+/** Log a refusal at `info` and throw it. */
+function refuse(error: InventoryRefusal, meta: Record<string, unknown>): never {
+  logger.info('[InventoryEquip] Refused', { code: error.code, ...meta, context: 'inventory' });
+  throw error;
 }
 
 function assertParticipant(chat: EquipChat, characterId: string): void {
-  const seated = (chat.participants ?? []).some(
-    (p) => p.characterId === characterId && p.status !== 'removed',
-  );
-  if (!seated) {
-    logger.info('[InventoryEquip] Refused', { code: 'NOT_A_PARTICIPANT', chatId: chat.id, characterId, context: 'inventory' });
-    throw new InventoryNotAParticipantError(characterId);
+  if (!seatedCharacterIds(chat).includes(characterId)) {
+    refuse(new InventoryNotAParticipantError(characterId), { chatId: chat.id, characterId });
   }
+}
+
+/**
+ * Write one character's carried set in a chat — the one place this module
+ * writes `chats.equippedInventory` — and tell the open Salon. `null` clears
+ * the entry. The caller holds the chat's lock.
+ */
+export async function writeCarriedSet(
+  repos: Pick<RepositoryContainer, 'chats'>,
+  chatId: string,
+  characterId: string,
+  ids: readonly string[] | null,
+): Promise<void> {
+  await repos.chats.setEquippedInventory(chatId, characterId, ids);
+  publishRealtime('chats', chatId);
 }
 
 /**
@@ -119,34 +153,67 @@ async function assertShelfReach(
   if (!isCharacterGesture(ctx.provenance)) return;
   const fromShelf = items.filter((item) => isOnClosedShelf(item, NOTHING_CARRIED));
   if (fromShelf.length === 0 || (await projectShelfOpenTo(chat.projectId, characterId))) return;
-  const error = new InventoryOffRosterError(fromShelf.map((item) => item.title || item.name));
-  logger.info('[InventoryEquip] Refused', {
-    code: error.code,
+  refuse(new InventoryOffRosterError(fromShelf.map((item) => item.title || item.name)), {
     chatId: chat.id,
     characterId,
     projectId: chat.projectId ?? null,
     itemIds: fromShelf.map((item) => item.id),
     provenance: ctx.provenance,
-    context: 'inventory',
   });
-  throw error;
 }
 
 const NOTHING_CARRIED: ReadonlySet<string> = new Set();
 
-/** Re-read the chat so a serialised write sees the set as it is now. */
-async function freshChat(repos: Repos, chat: EquipChat): Promise<EquipChat> {
-  return ((await repos.chats.findById(chat.id)) as EquipChat | null) ?? chat;
+/**
+ * The cap, checked over a whole plan before anything is written: walking the
+ * plan in order, each subject needs `count(carried kin) + planned kin + 1 ≤
+ * maxEquipped`. An instance-to-be counts as its archetype (same name and
+ * cap). Returns the plans that fit; a breach throws `CAP_EXCEEDED`, or with
+ * `lenient` (arrival) drops that plan with a `warn`.
+ */
+function fitToCaps<T>(
+  plans: readonly T[],
+  subjectOf: (plan: T) => ResolvedInventoryItem,
+  current: readonly ResolvedInventoryItem[],
+  meta: { op: string; chatId: string; characterId: string },
+  lenient = false,
+): T[] {
+  const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];
+  const accepted: T[] = [];
+  for (const plan of plans) {
+    const subject = subjectOf(plan);
+    const kin = counted.filter((other) => isKin(other, subject)).length;
+    if (kin + 1 > subject.maxEquipped) {
+      const breach = { ...meta, itemId: subject.id, cap: subject.maxEquipped };
+      if (lenient) {
+        logger.warn('[InventoryEquip] Arrival dropped an object over its cap', { ...breach, context: 'inventory' });
+        continue;
+      }
+      refuse(new InventoryCapExceededError(subject.id, subject.title || subject.name, subject.maxEquipped), breach);
+    }
+    counted.push(subject);
+    accepted.push(plan);
+  }
+  return accepted;
 }
 
 function poolFor(repos: Repos, chat: EquipChat, characterId: string): Promise<InventoryPool> {
   return loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
 }
 
+/** The character's own vault, where a kit's or a pick-up's instances land. */
+async function holderVault(repos: Repos, characterId: string, userId: string, why: string): Promise<InventoryLocation> {
+  const vault = await resolveInventoryLocation('character', characterId, repos, userId);
+  if (!vault) throw new Error(`Character ${characterId} has no vault to hold ${why}`);
+  return vault;
+}
+
 /** One planned object: an existing one, or an archetype to instantiate. */
 type Planned =
   | { kind: 'existing'; item: ResolvedInventoryItem }
   | { kind: 'instantiate'; archetype: ResolvedInventoryItem; kitFolder: string | null };
+
+const subjectOfPlan = (plan: Planned): ResolvedInventoryItem => (plan.kind === 'existing' ? plan.item : plan.archetype);
 
 interface EquipOptions {
   /**
@@ -161,6 +228,11 @@ interface EquipOptions {
    * readable). Looked up after the pool.
    */
   known?: readonly ResolvedInventoryItem[];
+  /**
+   * The character's pool, already loaded under the chat's lock (arrival reads
+   * it to find the defaults). Only for a caller inside the lock.
+   */
+  pool?: InventoryPool;
 }
 
 /**
@@ -197,7 +269,10 @@ export async function dropCarriedEverywhere(
     const wrote = await withChatInventoryLock(chatId, () =>
       repos.chats.removeEquippedInventoryId(chatId, characterId, itemId),
     );
-    if (wrote) changed++;
+    if (wrote) {
+      changed++;
+      publishRealtime('chats', chatId);
+    }
   }
   logger.debug('[InventoryEquip] Dropped an object from every carried set', {
     characterId,
@@ -210,7 +285,7 @@ export async function dropCarriedEverywhere(
 }
 
 /** {@link equipItems} for a caller already inside {@link withChatInventoryLock}. */
-export function equipItemsHoldingLock(
+export async function equipItemsHoldingLock(
   repos: Repos,
   chat: EquipChat,
   characterId: string,
@@ -226,7 +301,7 @@ export function equipItemsHoldingLock(
  * Equip objects (and kits) for one character in one chat. See the module
  * header for the plan-then-write contract.
  */
-export function equipItems(
+export async function equipItems(
   repos: Repos,
   chat: EquipChat,
   characterId: string,
@@ -247,7 +322,7 @@ async function equipUnserialized(
   opts: EquipOptions,
 ): Promise<EquipResult> {
   const chat = await freshChat(repos, staleChat);
-  const pool = await poolFor(repos, chat, characterId);
+  const pool = opts.pool ?? (await poolFor(repos, chat, characterId));
   const current = readEquippedSet(chat, characterId, pool);
   const currentIds = new Set(current.map((item) => item.id));
   const carriedParents = new Set(current.map((item) => item.parentId).filter((id): id is string => !!id));
@@ -282,8 +357,7 @@ async function equipUnserialized(
         logger.debug('[InventoryEquip] Arrival skipped an object that cannot be carried', { chatId: chat.id, characterId, itemId: id, reason, context: 'inventory' });
         continue;
       }
-      logger.info('[InventoryEquip] Refused', { code: 'NOT_EQUIPPABLE', chatId: chat.id, characterId, itemId: id, reason, context: 'inventory' });
-      throw new InventoryNotEquippableError(id, reason);
+      refuse(new InventoryNotEquippableError(id, reason), { chatId: chat.id, characterId, itemId: id, reason });
     }
     if (item.kind !== 'kit') {
       planExisting(item);
@@ -316,33 +390,9 @@ async function equipUnserialized(
   // A character's own gesture cannot take from the project's shelf when the
   // roster does not admit them (`roster-gate.ts`); checked before the cap so
   // nothing is written. What they already carry was never planned.
-  await assertShelfReach(chat, characterId, planned.map((plan) => (plan.kind === 'existing' ? plan.item : plan.archetype)), ctx);
+  await assertShelfReach(chat, characterId, planned.map(subjectOfPlan), ctx);
 
-  // The cap, checked over the whole plan before anything is written. An
-  // instance-to-be has its archetype's name and cap.
-  const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];
-  const accepted: Planned[] = [];
-  for (const plan of planned) {
-    const subject = plan.kind === 'existing' ? plan.item : plan.archetype;
-    const kin = counted.filter((other) => isKin(other, subject)).length;
-    if (kin + 1 > subject.maxEquipped) {
-      const error = new InventoryCapExceededError(subject.id, subject.title || subject.name, subject.maxEquipped);
-      if (opts.lenient) {
-        logger.warn('[InventoryEquip] Arrival dropped an object over its cap', {
-          chatId: chat.id,
-          characterId,
-          itemId: subject.id,
-          cap: subject.maxEquipped,
-          context: 'inventory',
-        });
-        continue;
-      }
-      logger.info('[InventoryEquip] Refused', { code: error.code, chatId: chat.id, characterId, itemId: subject.id, cap: subject.maxEquipped, context: 'inventory' });
-      throw error;
-    }
-    counted.push(subject);
-    accepted.push(plan);
-  }
+  const accepted = fitToCaps(planned, subjectOfPlan, current, { op: 'equip', chatId: chat.id, characterId }, opts.lenient);
 
   if (accepted.length === 0) {
     logger.debug('[InventoryEquip] Nothing new to carry', { chatId: chat.id, characterId, alreadyEquipped: result.alreadyEquipped, skipped: result.skipped, context: 'inventory' });
@@ -351,8 +401,7 @@ async function equipUnserialized(
 
   // Writes: instances first, then the one set write.
   if (accepted.some((plan) => plan.kind === 'instantiate')) {
-    const vault = await resolveInventoryLocation('character', characterId, repos, ctx.userId);
-    if (!vault) throw new Error(`Character ${characterId} has no vault to hold a kit's instances`);
+    const vault = await holderVault(repos, characterId, ctx.userId, "a kit's instances");
     for (const plan of accepted) {
       if (plan.kind !== 'instantiate') continue;
       const { item } = await instantiate(repos, vault, plan.archetype.id, { folder: plan.kitFolder ?? undefined, pool });
@@ -362,11 +411,10 @@ async function equipUnserialized(
   }
   for (const plan of accepted) if (plan.kind === 'existing') result.equipped.push(plan.item);
 
-  await repos.chats.setEquippedInventory(chat.id, characterId, [
+  await writeCarriedSet(repos, chat.id, characterId, [
     ...current.map((item) => item.id),
     ...result.equipped.map((item) => item.id),
   ]);
-  publishRealtime('chats', chat.id);
   logger.debug('[InventoryEquip] Equipped', {
     op: 'equip',
     chatId: chat.id,
@@ -382,7 +430,7 @@ async function equipUnserialized(
 }
 
 /** Unequip objects (and kits) for one character in one chat. Never fails on state. */
-export function unequipItems(
+export async function unequipItems(
   repos: Repos,
   chat: EquipChat,
   characterId: string,
@@ -413,12 +461,12 @@ export function unequipItems(
 
     const unequipped = current.filter((item) => removing.has(item.id));
     if (unequipped.length > 0) {
-      await repos.chats.setEquippedInventory(
+      await writeCarriedSet(
+        repos,
         fresh.id,
         characterId,
         current.filter((item) => !removing.has(item.id)).map((item) => item.id),
       );
-      publishRealtime('chats', fresh.id);
     }
     logger.debug('[InventoryEquip] Unequipped', {
       op: 'unequip',
@@ -448,7 +496,7 @@ export interface PickUpResult {
  * `count(equipped kin) + planned kin + 1 ≤ maxEquipped` — and a breach throws
  * `CAP_EXCEEDED` with nothing written. A non-archetype is `INVALID_PARENT`.
  */
-export function pickUpItems(
+export async function pickUpItems(
   repos: Repos,
   chat: EquipChat,
   characterId: string,
@@ -467,34 +515,23 @@ export function pickUpItems(
     for (const id of archetypeIds) {
       const archetype = pool.resolveId(id);
       if (!archetype || !archetype.isArchetype || archetype.archivedAt) {
-        const error = new InventoryInvalidParentError(
-          archetype && !archetype.isArchetype
-            ? `"${archetype.title || archetype.name}" is not an archetype; equip it instead`
-            : 'The parent must be an archetype this character can reach',
-          { archetypeId: id },
+        refuse(
+          new InventoryInvalidParentError(
+            archetype && !archetype.isArchetype
+              ? `"${archetype.title || archetype.name}" is not an archetype; equip it instead`
+              : 'The parent must be an archetype this character can reach',
+            { archetypeId: id },
+          ),
+          { op: 'pick-up', chatId: fresh.id, characterId, archetypeId: id },
         );
-        logger.info('[InventoryEquip] Refused', { code: error.code, chatId: fresh.id, characterId, archetypeId: id, context: 'inventory' });
-        throw error;
       }
       archetypes.push(archetype);
     }
     await assertShelfReach(fresh, characterId, archetypes, ctx);
 
-    if (equip) {
-      const counted: Array<Pick<ResolvedInventoryItem, 'name'>> = [...current];
-      for (const archetype of archetypes) {
-        const kin = counted.filter((other) => isKin(other, archetype)).length;
-        if (kin + 1 > archetype.maxEquipped) {
-          const error = new InventoryCapExceededError(archetype.id, archetype.title || archetype.name, archetype.maxEquipped);
-          logger.info('[InventoryEquip] Refused', { code: error.code, op: 'pick-up', chatId: fresh.id, characterId, itemId: archetype.id, cap: archetype.maxEquipped, context: 'inventory' });
-          throw error;
-        }
-        counted.push(archetype);
-      }
-    }
+    if (equip) fitToCaps(archetypes, (archetype) => archetype, current, { op: 'pick-up', chatId: fresh.id, characterId });
 
-    const vault = await resolveInventoryLocation('character', characterId, repos, ctx.userId);
-    if (!vault) throw new Error(`Character ${characterId} has no vault to pick an object up into`);
+    const vault = await holderVault(repos, characterId, ctx.userId, 'a picked-up object');
     const created: ResolvedInventoryItem[] = [];
     const title = opts.title?.trim();
     for (const archetype of archetypes) {
@@ -504,14 +541,12 @@ export function pickUpItems(
       });
       created.push(item);
     }
-    publishRealtime('inventory');
 
     if (equip && created.length > 0) {
-      await repos.chats.setEquippedInventory(fresh.id, characterId, [
+      await writeCarriedSet(repos, fresh.id, characterId, [
         ...current.map((item) => item.id),
         ...created.map((item) => item.id),
       ]);
-      publishRealtime('chats', fresh.id);
     }
     logger.debug('[InventoryEquip] Picked up', {
       op: 'pick-up',

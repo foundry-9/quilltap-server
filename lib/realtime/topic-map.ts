@@ -35,6 +35,8 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.memories.all,
   queryKeys.inventory.lists,
   queryKeys.inventory.folderLists,
+  queryKeys.inventory.archetypeLists,
+  queryKeys.inventory.equippedLists,
   // Held custom-tool runs (operator intervention). Also under the custom-tools
   // namespace the popup reads, which a reconnect may as well refresh too.
   queryKeys.customTools.all,
@@ -130,9 +132,18 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
       return id ? [queryKeys.memories.chatCount(id)] : [queryKeys.memories.all]
 
     case 'inventory':
-      // A character's inventory_* tool or a Pascal pick-up wrote an object
-      // file; an open Inventory dialog's lists and folders re-read.
-      return [queryKeys.inventory.lists, queryKeys.inventory.folderLists]
+      // An object file was written — through any Inventory location (the
+      // operator's dialog, a character's inventory_* tool, a Pascal effect),
+      // or by a job child's buffered write; an open dialog's lists, folders
+      // and archetype pickers re-read, and so does every Carrying-now pane,
+      // which shows the objects resolved. The dialog leaves its own writes'
+      // refresh to this (`lib/hooks/use-inventory.ts`).
+      return [
+        queryKeys.inventory.lists,
+        queryKeys.inventory.folderLists,
+        queryKeys.inventory.archetypeLists,
+        queryKeys.inventory.equippedLists,
+      ]
 
     case 'mountPoints':
       // No per-store detail key exists yet; the namespace prefix is the

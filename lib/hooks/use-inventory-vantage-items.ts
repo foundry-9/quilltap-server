@@ -19,7 +19,7 @@
 
 import { useMemo } from 'react'
 import { useInventoryList } from '@/lib/hooks/use-inventory'
-import type { InventoryContainer } from '@/lib/inventory/container'
+import { isInContainer, type InventoryContainer } from '@/lib/inventory/container'
 import type { ResolvedInventoryPool } from '@/lib/inventory/refs'
 import type { WardrobeVantage } from '@/lib/pascal/tool-draft'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
@@ -35,23 +35,18 @@ export interface UseInventoryVantageItemsResult {
 
 /** Load the vantage's Inventory. `null` (or the `none` vantage) reads nothing. */
 export function useInventoryVantageItems(vantage: WardrobeVantage | null): UseInventoryVantageItemsResult {
-  const container: InventoryContainer | null =
-    vantage?.kind === 'character'
-      ? { scope: 'character', id: vantage.characterId }
-      : vantage?.kind === 'container'
-        ? vantage.container
-        : null
-  const list = useInventoryList(container, { includeArchived: true, shared: vantage?.kind === 'character' })
-  const scope = container?.scope ?? null
+  const characterId = vantage?.kind === 'character' ? vantage.characterId : null
+  const shelf = vantage?.kind === 'container' ? vantage.container : null
+  const container = useMemo<InventoryContainer | null>(
+    () => (characterId ? { scope: 'character', id: characterId } : shelf),
+    [characterId, shelf],
+  )
+  const list = useInventoryList(container, { includeArchived: true, shared: characterId !== null })
 
   const pool = useMemo<ResolvedInventoryPool>(() => {
-    const own = new Set(
-      list.items
-        .filter((item) => (item.origin ? item.origin.scope === scope : true))
-        .map((item) => item.id),
-    )
+    const own = new Set(container ? list.items.filter((item) => isInContainer(item, container)).map((item) => item.id) : [])
     return { items: list.items, owns: (id) => own.has(id) }
-  }, [list.items, scope])
+  }, [list.items, container])
 
   return { items: list.items, pool, loading: list.loading, fetched: container !== null && !list.loading }
 }

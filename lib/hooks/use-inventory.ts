@@ -2,12 +2,13 @@
 
 /**
  * The Inventory's client data: one tier's objects and folders, the
- * archetypes a tier can reach, an archetype's dependents, an object's
- * pictures, and what a chat's cast carries — each a TanStack Query read under
- * `queryKeys.inventory`, with the writes as mutations that invalidate what
- * they change. No polling: the chat read refetches on the `chats` realtime
- * topic (`lib/realtime/topic-map.ts`), the browser's reads on open and after
- * their own mutations.
+ * archetypes a tier can reach, an object's pictures, and what a chat's cast
+ * carries — each a TanStack Query read under `queryKeys.inventory`, with the
+ * writes as mutations. No polling: the chat read refetches on the `chats`
+ * realtime topic and the lists, folders, archetype pickers and carried sets on
+ * the `inventory` topic, which every object write publishes
+ * (`lib/realtime/topic-map.ts`). A write refreshes what it changed itself only
+ * while the socket is down ({@link refreshUnlessRealtime}).
  *
  * Every write throws an {@link InventoryRequestError} carrying the server's
  * refusal `code` (`ARCHETYPE_IN_USE`, `CAP_EXCEEDED`, …) so a surface can
@@ -17,11 +18,11 @@
  */
 
 import { useCallback } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { getRealtimeStatus } from '@/lib/realtime/client'
 import { queryKeys } from '@/lib/query/keys'
 import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import type { InventoryFolder } from '@/lib/inventory/folders'
-import type { InventoryDependent } from '@/lib/inventory/dependents'
 import type { InventoryImageSummary } from '@/lib/inventory/item-images'
 import type {
   InventoryInheritableField,
@@ -149,24 +150,6 @@ export function useInventoryArchetypes(container: InventoryContainer | null, pro
   return { archetypes: query.data ?? EMPTY_ITEMS, loading: query.isLoading }
 }
 
-/** An archetype's instances, everywhere. */
-export function useInventoryDependents(container: InventoryContainer | null, itemId: string | null) {
-  // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
-  const query = useQuery({
-    queryKey: queryKeys.inventory.dependents(itemId ?? 'none'),
-    queryFn: async ({ signal }) => {
-      const data = await apiFetch<{ dependents?: InventoryDependent[] }>(
-        `${inventoryItemUrl(container as InventoryContainer, itemId as string)}?action=dependents`,
-        { signal },
-      )
-      return data?.dependents ?? []
-    },
-    enabled: container !== null && itemId !== null,
-  })
-  return { dependents: query.data ?? [], loading: query.isLoading }
-}
-
 /** One object's pictures (an instance with none shows its archetype's). */
 export function useInventoryImages(container: InventoryContainer | null, itemId: string | null) {
   // The URL is a pure function of the container (and object), which the key encodes.
@@ -205,6 +188,18 @@ export type InventoryItemBody = Partial<
   >
 > & { archived?: boolean }
 
+/**
+ * After this tab's own write: refresh `keys` only while the realtime socket
+ * is down. While it is up, the server's publish for that write refreshes the
+ * same keys (`lib/realtime/topic-map.ts`), and refreshing here as well would
+ * fetch everything twice. A socket that drops before the hint arrives
+ * re-reads every realtime key when it reconnects (`RealtimeProvider`).
+ */
+function refreshUnlessRealtime(queryClient: QueryClient, keys: readonly QueryKey[]): Promise<unknown> {
+  if (getRealtimeStatus() === 'connected') return Promise.resolve()
+  return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
+}
+
 /** A collection or item URL with the project context a kit's pool reads. */
 function withProjectContext(url: string, projectId?: string | null): string {
   return projectId ? `${url}?projectId=${encodeURIComponent(projectId)}` : url
@@ -216,14 +211,15 @@ function withProjectContext(url: string, projectId?: string | null): string {
  */
 export function useInventoryMutations() {
   const queryClient = useQueryClient()
+  // Every object or folder write publishes `inventory`, which refreshes the
+  // lists, folders, archetype pickers and carried sets (`topic-map.ts`).
   const invalidate = useCallback(
     () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.folderLists }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.archetypeLists }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dependentLists }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.equippedLists }),
+      refreshUnlessRealtime(queryClient, [
+        queryKeys.inventory.lists,
+        queryKeys.inventory.folderLists,
+        queryKeys.inventory.archetypeLists,
+        queryKeys.inventory.equippedLists,
       ]),
     [queryClient],
   )
@@ -300,12 +296,10 @@ export function useChatInventory(chatId: string | null) {
   const mutation = useMutation({
     mutationFn: ({ action, body }: { action: string; body: unknown }) =>
       inventoryRequest<Record<string, unknown>>(`/api/v1/chats/${chatId}?action=${action}`, 'POST', body),
+    // A carried-set write publishes `chats` (this chat's carried set); a kit's
+    // archetype members instantiated into the vault publish `inventory`.
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.equipped(chatId ?? 'none') }),
-        // A kit's archetype members are instantiated into the vault.
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists }),
-      ]),
+      refreshUnlessRealtime(queryClient, [queryKeys.inventory.equipped(chatId ?? 'none'), queryKeys.inventory.lists]),
   })
   const run = mutation.mutateAsync
   const inventory = query.data?.inventory ?? {}

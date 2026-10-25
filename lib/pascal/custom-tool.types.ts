@@ -38,6 +38,7 @@ import { parsePath } from '@/lib/state/state-paths';
 import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
 import { scanPlaceholders as scanPlaceholdersInText, splitInventoryReference } from './placeholders';
 import { parseAggregateKey } from './inventory-aggregate';
+import { INVENTORY_STATES } from '@/lib/inventory/refs';
 import { WardrobeItemTypeEnum, type WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 export { MAX_EFFECT_EXPRESSION_LENGTH };
@@ -519,7 +520,7 @@ const INVENTORY_AGGREGATE_DESCRIPTION =
   'ncontains likewise; ordering needs a fold. With no character or chat, every test declines.';
 
 /** The four states an `inventory` test compares against. */
-export const InventoryStateValueSchema = z.enum(['equipped', 'carried', 'reachable', 'absent']);
+export const InventoryStateValueSchema = z.enum(INVENTORY_STATES);
 export type InventoryStateValue = z.infer<typeof InventoryStateValueSchema>;
 
 /**

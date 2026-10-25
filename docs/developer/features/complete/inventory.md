@@ -297,3 +297,11 @@ Shipped in phases A–I on branch `claude/bold-lamport-temetc` (4.11.0-dev.21 �
 - **Restore.** A new-account restore re-keys `chats.equippedInventory` to the remapped character ids, keeps object ids verbatim (they live in the files), keeps picture `files` rows linked to their object, and repoints each object's `imageFileId` after the vaults land (`planInventoryImagePointerFixes`, step 22f-quater). The chat column is written by `chats.create` (patch-only fields are skipped only on `update`). Noticed in passing: the same restore does not re-key `chats.equippedOutfit`, which is keyed the same way; that is the wardrobe's and was left alone.
 - **Tests.** `__tests__/unit/lib/inventory/` (files, svg, resolve, item-mutations, equip, delivery, routes) over an in-memory store (`__tests__/helpers/inventory-fake-store.ts`); the migration; `appearance-carrying.test.ts`; `inventory-ui.test.tsx`; `inventory-backup.test.ts`; and the additions to the patch-only, archive-prune, merge, context-management, topic-map and LLM-log suites.
 
+### Refactor (2026-10-25)
+
+A consolidation pass after the tools landed; behaviour is unchanged except where noted.
+
+- **Writes.** A write parses its folder once (`scanInventoryFolder`), and the projection sweeps only the paths that scan turned into records. Every write through a location that changes something publishes the `inventory` realtime topic, which now also refreshes the archetype pickers and the carried sets. That replaces the "refetch on open and after their own mutations" of §2's *Realtime* row: the dialog refreshes after its own writes only while the socket is down, and otherwise leaves it to the topic.
+- **Carried sets.** `writeCarriedSet` (`equip.ts`) is the one writer of a carried set outside the repository and publishes the chat's topic; `dropCarriedEverywhere` publishes each chat it changes. Equip and pick-up share one cap check (`fitToCaps`).
+- **Shared builders.** `loadEquipChat`, `seatedCharacterIds`, `inventoryChangeContext`, `loadEquippedSet`, `mountOwnerResolver`, `withInventoryErrors` and `isInContainer` replace copies that had grown at the call sites. `pickForGesture(…, 'unequip')` includes the kit fallback.
+- **Image phrase.** §5.7's `describeEquippedInventoryForImages` is gone: the phrase is `renderCarryingPhrase(await loadEquippedSet(…))`, reached through `loadCarryingPhrase`.

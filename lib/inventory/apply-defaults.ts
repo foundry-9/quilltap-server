@@ -25,7 +25,15 @@
 
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { equipItemsHoldingLock, withChatInventoryLock, type EquipChat, type EquipResult } from '@/lib/inventory/equip';
+import { inventoryChangeContext } from '@/lib/inventory/equip-effects';
+import {
+  equipItemsHoldingLock,
+  loadEquipChat,
+  withChatInventoryLock,
+  writeCarriedSet,
+  type EquipChat,
+  type EquipResult,
+} from '@/lib/inventory/equip';
 import { equippedIdsOf, hasEquippedEntry } from '@/lib/inventory/equipped-set';
 import { loadInventoryPool } from '@/lib/inventory/pool';
 
@@ -38,25 +46,29 @@ export interface ApplyInventoryDefaultsOptions {
   sourceChatId?: string | null;
 }
 
-/** The ids a character's defaults name, kits included (equip expands them). */
-async function defaultIdsFor(repos: RepositoryContainer, chat: EquipChat, characterId: string): Promise<string[]> {
-  const pool = await loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
-  return pool
-    .resolved()
-    .filter((item) => item.equippedByDefault && !item.isArchetype && !item.archivedAt)
-    .map((item) => item.id);
-}
-
-/** Equip a character's defaults leniently and silently. The caller holds the chat's lock. */
+/**
+ * Equip a character's defaults — every reachable object flagged
+ * `equippedByDefault` that is not an archetype (kits included; equip expands
+ * them) — leniently and silently. The caller holds the chat's lock, so the
+ * pool read here is the one equip plans against. Records an empty entry when
+ * nothing was carried, so a later re-seat does not apply defaults again.
+ */
 async function equipDefaults(
   repos: RepositoryContainer,
   chat: EquipChat,
   characterId: string,
   userId: string,
 ): Promise<EquipResult | null> {
-  const ids = await defaultIdsFor(repos, chat, characterId);
-  if (ids.length === 0) return null;
-  return equipItemsHoldingLock(repos, chat, characterId, ids, { userId, provenance: 'operator', announce: false }, { lenient: true });
+  const pool = await loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
+  const ids = pool
+    .resolved()
+    .filter((item) => item.equippedByDefault && !item.isArchetype)
+    .map((item) => item.id);
+  const result = ids.length > 0
+    ? await equipItemsHoldingLock(repos, chat, characterId, ids, inventoryChangeContext(userId, 'operator', { announce: false }), { lenient: true, pool })
+    : null;
+  if (!result || result.equipped.length === 0) await writeCarriedSet(repos, chat.id, characterId, []);
+  return result;
 }
 
 /** Apply arrival defaults for each character. */
@@ -84,12 +96,12 @@ async function applyDefaultsUnguarded(
   characterIds: readonly string[],
   opts: ApplyInventoryDefaultsOptions,
 ): Promise<void> {
-  const chat = (await repos.chats.findById(chatId)) as EquipChat | null;
+  const chat = await loadEquipChat(repos, chatId);
   if (!chat) {
     logger.debug('[InventoryArrival] No such chat; nothing to apply', { chatId, source: opts.source, context: 'inventory' });
     return;
   }
-  const sourceChat = opts.sourceChatId ? ((await repos.chats.findById(opts.sourceChatId)) as EquipChat | null) : null;
+  const sourceChat = opts.sourceChatId ? await loadEquipChat(repos, opts.sourceChatId) : null;
 
   for (const characterId of Array.from(new Set(characterIds))) {
     try {
@@ -117,7 +129,7 @@ async function arriveUnderLock(
 ): Promise<void> {
   const chatId = chat.id;
   // Read inside the lock: an earlier character's write, or an equip, changed it.
-  const current = ((await repos.chats.findById(chatId)) as EquipChat | null) ?? chat;
+  const current = (await loadEquipChat(repos, chatId)) ?? chat;
   if (hasEquippedEntry(current, characterId)) {
     logger.debug('[InventoryArrival] Character already has an entry; defaults not revisited', {
       chatId,
@@ -129,7 +141,7 @@ async function arriveUnderLock(
   }
   if (sourceChat && hasEquippedEntry(sourceChat, characterId)) {
     const ids = equippedIdsOf(sourceChat, characterId);
-    await repos.chats.setEquippedInventory(chatId, characterId, ids);
+    await writeCarriedSet(repos, chatId, characterId, ids);
     logger.debug('[InventoryArrival] Copied the source chat\'s carried objects', {
       op: 'arrival',
       chatId,
@@ -142,10 +154,6 @@ async function arriveUnderLock(
     return;
   }
   const result = await equipDefaults(repos, current, characterId, opts.userId);
-  if (!result || result.equipped.length === 0) {
-    // Record the arrival, so a later re-seat does not apply defaults again.
-    await repos.chats.setEquippedInventory(chatId, characterId, []);
-  }
   logger.debug('[InventoryArrival] Applied arrival defaults', {
     op: 'arrival',
     chatId,
@@ -180,11 +188,10 @@ async function resetUnderLock(
   characterId: string,
   userId: string,
 ): Promise<string[]> {
-  await repos.chats.setEquippedInventory(chat.id, characterId, null);
-  const fresh = ((await repos.chats.findById(chat.id)) as EquipChat | null) ?? chat;
-  const result = await equipDefaults(repos, fresh, characterId, userId);
-  if (!result || result.equipped.length === 0) await repos.chats.setEquippedInventory(chat.id, characterId, []);
-  const after = ((await repos.chats.findById(chat.id)) as EquipChat | null) ?? fresh;
+  await writeCarriedSet(repos, chat.id, characterId, null);
+  const fresh = (await loadEquipChat(repos, chat.id)) ?? chat;
+  await equipDefaults(repos, fresh, characterId, userId);
+  const after = (await loadEquipChat(repos, chat.id)) ?? fresh;
   logger.debug('[InventoryArrival] Reset to defaults', {
     op: 'reset-defaults',
     chatId: chat.id,

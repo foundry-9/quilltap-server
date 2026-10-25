@@ -18,6 +18,8 @@ The Inventory is not the [Wardrobe](wardrobe.md). The Wardrobe dresses a charact
 
 At the top of the dialog a single dropdown chooses which inventory you are looking at: a **character**, **Quilltap General**, a **project** or a **group**.
 
+The dialog keeps itself current without being asked. Should a shelf be rearranged while it is open — by your own hand in another window, by a character rummaging through their pockets, or by one of Pascal's tools — the lists, the folders and the archetype pickers simply rearrange themselves to match, and the **Carrying now** pane does the same whenever anything is taken up or set down in the chat.
+
 ## Where items are kept
 
 An item lives on one of four shelves. Each is an `Inventory/` folder in a document store, one `.json` file per item, so every item may also be read and edited in [the Scriptorium](scriptorium.md) like any other file.

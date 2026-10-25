@@ -4,6 +4,25 @@
 
 ### 4.11-dev
 
+#### Refactor: Inventory chokepoints
+
+- Inventory writes parse a tier's `Inventory/` folder once per write instead of up to three times. `scanInventoryFolder` (`vault-overlay/inventory-readers.ts`) returns the records, the duplicate-id paths and the owned paths together; the projection sweeps only the owned paths. Folder operations hand the scan they read back to the write that follows it (`ItemFolderTree.refile` takes the list `read` returned), so delete-folder no longer parses the folder twice. `readDuplicateInventoryPaths` is gone.
+- Every write through an `InventoryLocation` that changes something publishes the `inventory` realtime topic (a batch that matched nothing publishes nothing), so an open Inventory dialog refreshes after operator changes in another window too. The per-handler `publishRealtime('inventory')` calls in the tool handlers and `pickUpItems` are removed. The topic now also invalidates `queryKeys.inventory.archetypeLists` and `equippedLists` (a Carrying-now pane shows objects resolved, so an edit to a carried object changes it).
+- `useInventoryMutations` and `useChatInventory` refresh after their own writes only while the realtime socket is down (`refreshUnlessRealtime` in `lib/hooks/use-inventory.ts`); while it is up the server's `inventory` / `chats` publish does it, so a write no longer fetches its lists twice.
+- Carried-set writes in `equip.ts` and `apply-defaults.ts` go through `writeCarriedSet`, which publishes the chat topic. `dropCarriedEverywhere` now publishes every chat it changed (it used to rely on the caller, which published only the current chat).
+- `equip.ts`: one cap check (`fitToCaps`) for equip and pick-up; refusals logged through one `refuse` helper; `loadEquipChat` replaces the copies in the chat actions, tool handlers, Pascal's effects and arrival, and `seatedCharacterIds` the seated-cast filters in the chat actions, `assertParticipant` and `inventory_give`; `equipItems` / `unequipItems` / `pickUpItems` are `async`, so a not-a-participant refusal rejects instead of throwing synchronously. `InventoryNotAParticipantError` moved to `errors.ts`.
+- Arrival defaults pass the pool they already loaded into equip instead of reading it twice.
+- `inventoryChangeContext` (`equip-effects.ts`) is the one builder for an `InventoryChangeContext`; the chat actions, tool handlers, Pascal's effects, arrival and the turn flush use it.
+- `pickForGesture(…, 'unequip')` falls back to a kit match itself; the unequip tool and Pascal's effects no longer add that fallback by hand. `INVENTORY_STATES` (`refs.ts`) is the one list of states; `INVENTORY_STATE_VALUES` and `InventoryStateValueSchema` derive from it.
+- `item-mutations.ts`: a `lintedWrite` helper replaces seven copies of lint → write → log rows; `detachAll` writes through locations instead of raw mounts, resolving every mount before writing any and skipping a vault that is no longer linked.
+- `dependents.ts`: `mountOwnerResolver` memoises mount-owner lookups per operation and reads the project and group lists once, instead of once per mount.
+- The pool no longer tags out-of-pool archetypes with a made-up `project` origin and reads tiers by mount id.
+- Routes: `withInventoryErrors` (`lib/inventory/routes/responses.ts`) replaces the repeated try/catch in the route factory, the images route, the transfers route and the chat equip action. `?action=duplicate` validates its body with `duplicateInventorySchema` (a missing `itemId` is now a 400, not a 404). The images route reads its scope with `InventoryScopeSchema`.
+- `loadEquippedSet` (`equipped-set.ts`) is the one "load the pool only if something is stored" reader, and the only place that shortcut is decided, for the prompt section and the image phrase.
+- Tool handlers share `loadOwnRecord` and call `loadEquipChat` directly (the `loadToolChat` alias is gone); `inventory_update` resolves the written record against the pool it already holds instead of reloading the whole context.
+- Client: `isInContainer` (`lib/inventory/container.ts`) is the one tier-membership test for the browser and the Workbench vantage.
+- Removed dead code: `kinOf`, `normalizeInventoryFolderPath`, `inventoryFolderStorePath`, `describeEquippedInventoryForImages`, `useInventoryDependents` and the unused `queryKeys.inventory.item` / `dependents` / `dependentLists` keys.
+
 #### Docs: 4.11.0 release notes corrections
 
 - Keystones: notes now say keystones are recalled for the character and for everyone present or in her inner circle, not "every turn they are relevant."

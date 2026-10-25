@@ -8,7 +8,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { equipItems } from '@/lib/inventory/equip';
+import { equipItems, loadEquipChat } from '@/lib/inventory/equip';
 import { inventoryLabel } from '@/lib/inventory/resolve';
 import { pickForGesture } from '@/lib/inventory/refs';
 import type { InventoryEquipToolOutput } from '../inventory-equip-tool';
@@ -19,7 +19,6 @@ import {
   formatSummary,
   closedShelfMessage,
   inventoryNotFoundMessage,
-  loadToolChat,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -43,7 +42,7 @@ export async function executeInventoryEquipTool(
   }
   const repos = getRepositories();
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return failure('This chat could not be found.');
 
     const output: InventoryEquipToolOutput = { success: true, equipped: [], created: [], already_equipped: [], skipped: [] };

@@ -44,6 +44,17 @@ describe('queryKeysForTopic', () => {
     ]);
   });
 
+  it('refreshes the Inventory dialog\'s lists, folders, archetype pickers and carried sets on the inventory topic', () => {
+    // Every write through an Inventory location publishes it, and the dialog
+    // leaves its own writes' refresh to it while the socket is up.
+    expect(queryKeysForTopic('inventory')).toEqual([
+      queryKeys.inventory.lists,
+      queryKeys.inventory.folderLists,
+      queryKeys.inventory.archetypeLists,
+      queryKeys.inventory.equippedLists,
+    ]);
+  });
+
   it('refreshes what the cast carries on the chats topic (the Inventory)', () => {
     // An equip posts Pascal's line and publishes `chats`, so the Carrying-now
     // pane stays honest without a poll of its own.

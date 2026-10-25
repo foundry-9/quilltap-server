@@ -21,9 +21,7 @@ import {
   isItemDocumentPath,
   isSafeItemFolderPath,
   isValidItemFolderPath,
-  itemFolderStorePath,
   normalizeItemFolderName,
-  normalizeItemFolderPath,
   normalizeItemFolderPathOrRoot,
   resolveItemFolder,
   type ItemFolder,
@@ -95,11 +93,6 @@ export type InventoryFolder = ItemFolder;
 
 const pathError = (message: string) => new InventoryFolderPathError(message);
 
-/** Normalise an operator-typed folder path. */
-export function normalizeInventoryFolderPath(input: string | null | undefined): string {
-  return normalizeItemFolderPath(INVENTORY_FOLDER_RULES, input, pathError);
-}
-
 /** A folder an existing object carries, in normal form or the root. */
 export function normalizeInventoryFolderPathOrRoot(input: string | null | undefined): string {
   return normalizeItemFolderPathOrRoot(INVENTORY_FOLDER_RULES, input);
@@ -128,11 +121,6 @@ export function isValidInventoryFolderPath(path: string): boolean {
 /** The folder an `Inventory/` document lives in: `Inventory/A/B/x.json` → `A/B`. */
 export function folderOfInventoryPath(relativePath: string): string {
   return folderOfItemPath(INVENTORY_FOLDER_RULES, relativePath);
-}
-
-/** The store path of an Inventory folder: `''` → `Inventory`, `A/B` → `Inventory/A/B`. */
-export function inventoryFolderStorePath(folder: string): string {
-  return itemFolderStorePath(INVENTORY_FOLDER_RULES, folder);
 }
 
 /**

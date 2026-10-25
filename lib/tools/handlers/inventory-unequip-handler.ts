@@ -1,13 +1,13 @@
 /**
  * Unequip Inventory Objects Tool Handler
  *
- * Resolves each ref (`pickForGesture(…, 'unequip')`, or the kit itself so it
- * sets down whatever members it holds), then one `unequipItems` call. Never
- * fails on state.
+ * Resolves each ref (`pickForGesture(…, 'unequip')`: the carried match, or a
+ * kit so it sets down whatever members it holds), then one `unequipItems`
+ * call. Never fails on state.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { unequipItems } from '@/lib/inventory/equip';
+import { loadEquipChat, unequipItems } from '@/lib/inventory/equip';
 import { pickForGesture } from '@/lib/inventory/refs';
 import type { InventoryUnequipToolOutput } from '../inventory-unequip-tool';
 import { validateInventoryUnequipInput } from '../inventory-unequip-tool';
@@ -15,7 +15,6 @@ import {
   characterChangeContext,
   errorMessageOf,
   formatSummary,
-  loadToolChat,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -34,13 +33,13 @@ export async function executeInventoryUnequipTool(
   }
   const repos = getRepositories();
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return { success: false, unequipped: [], not_equipped: [], error: 'This chat could not be found.' };
     const ids: string[] = [];
     const notEquipped: string[] = [];
     for (const ref of parsed.refs) {
       const matches = resolveToolRef(ctx, ref);
-      const pick = pickForGesture(matches, 'unequip') ?? matches.find((m) => m.item.kind === 'kit') ?? null;
+      const pick = pickForGesture(matches, 'unequip');
       if (!pick) {
         notEquipped.push(ref);
         continue;

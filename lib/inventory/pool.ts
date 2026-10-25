@@ -14,8 +14,10 @@
  * wherever it is looked at; only a parent that exists nowhere resolves as
  * `parentMissing`.
  *
- * The v1 Inventory is the operator's alone, so no project roster gate applies
- * (the wardrobe's applies only to a character's own tool calls).
+ * The pool itself is never roster-gated: what a closed project shelf hides
+ * from a character's own reach is filtered by its readers
+ * (`lib/inventory/roster-gate.ts`), so the carried set is never rewritten
+ * without an object the operator handed over.
  *
  * Server-only.
  *
@@ -28,12 +30,12 @@ import {
   resolveGroupMountsForCharacter,
   resolveProjectMountPointIds,
 } from '@/lib/mount-index/tiered-mount-pool';
-import { readMountInventory } from '@/lib/database/repositories/vault-overlay/inventory-writes';
+import { readInventoryRecords } from '@/lib/database/repositories/vault-overlay/inventory-readers';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryOrigin, InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { findRecordsAnywhere } from '@/lib/inventory/dependents';
 import { GENERAL_INVENTORY_ORIGIN, type InventoryLocation } from '@/lib/inventory/location';
-import { isKin, resolveItem, type InventoryRecordWithOrigin } from '@/lib/inventory/resolve';
+import { resolveItem, type InventoryRecordWithOrigin } from '@/lib/inventory/resolve';
 
 export interface InventoryTierMounts {
   groupMountPointIds: string[];
@@ -87,7 +89,8 @@ export function buildInventoryPool(
   characterId: string | null,
   tiers: InventoryTierMounts,
   layers: { own: Layer; group: Layer; project: Layer; general: Layer },
-  externalParents: ReadonlyMap<string, InventoryRecordWithOrigin> = new Map(),
+  /** Archetypes outside these tiers that instances in them name; consulted only to resolve. */
+  externalParents: ReadonlyMap<string, InventoryRecord> = new Map(),
   unreadMounts: readonly UnreadInventoryMount[] = [],
   consultedMounts: readonly string[] = [],
 ): InventoryPool {
@@ -151,7 +154,7 @@ async function readTier(
   for (const mountPointId of mountPointIds) {
     consulted.push(mountPointId);
     try {
-      const records = await readMountInventory({ mountPointId, scope: 'project', characterId: null });
+      const records = await readInventoryRecords(mountPointId);
       out.push(...records.map((record) => ({ ...record, origin: originOf(mountPointId), mountPointId })));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -166,10 +169,11 @@ async function readTier(
   return out;
 }
 
-/** The archetypes instances in the pool name that the pool itself cannot see. */
-async function fetchExternalParents(
-  layers: readonly Layer[],
-): Promise<Map<string, InventoryRecordWithOrigin>> {
+/**
+ * The archetypes instances in the pool name that the pool itself cannot see.
+ * They only fill instances in, never join the pool, so they carry no origin.
+ */
+async function fetchExternalParents(layers: readonly Layer[]): Promise<Map<string, InventoryRecord>> {
   const known = new Set(layers.flatMap((layer) => layer.map((record) => record.id)));
   const missing = new Set<string>();
   for (const layer of layers) {
@@ -179,10 +183,7 @@ async function fetchExternalParents(
   }
   if (missing.size === 0) return new Map();
   const found = await findRecordsAnywhere(Array.from(missing));
-  const out = new Map<string, InventoryRecordWithOrigin>();
-  for (const [id, { record, mountPointId }] of found) {
-    out.set(id, { ...record, origin: { scope: 'project', id: null, name: 'Elsewhere' }, mountPointId });
-  }
+  const out = new Map(Array.from(found, ([id, { record }]) => [id, record] as const));
   logger.debug('[InventoryPool] Fetched archetypes outside the pool', {
     wanted: missing.size,
     found: out.size,
@@ -343,9 +344,4 @@ export async function loadCastInventoryPools(
     ),
   );
   return new Map(characterIds.map((id, i) => [id, pools[i]]));
-}
-
-/** Reachable, equippable kin of `name` in the pool (resolved). */
-export function kinOf(name: string, pool: InventoryPool): ResolvedInventoryItem[] {
-  return pool.resolved().filter((item) => !item.isArchetype && item.kind !== 'kit' && isKin(item, { name }));
 }

@@ -47,12 +47,6 @@ import {
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
 import {
-  readMountInventory,
-  updateInventoryManyInMount,
-  type InventoryMount,
-} from '@/lib/database/repositories/vault-overlay/inventory-writes';
-import { resolveVaultFolderMount } from '@/lib/database/repositories/vault-overlay/item-folder-ops';
-import {
   InventoryFolderPathError,
   InventoryItemNotInLocationError,
   isSameFolder,
@@ -69,12 +63,18 @@ import {
   InventoryRefusal,
   InventoryShapeError,
 } from '@/lib/inventory/errors';
-import type { InventoryLocation } from '@/lib/inventory/location';
+import { resolveInventoryMount } from '@/lib/database/repositories/vault-overlay/inventory-writes';
+import { inventoryLocationForMount, type InventoryLocation } from '@/lib/inventory/location';
 import { loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
 import { resolveItem, withInventoryDefaults } from '@/lib/inventory/resolve';
 import { sanitizeInventorySvg } from '@/lib/inventory/svg';
 import { cleanupInventoryItemImages } from '@/lib/inventory/item-images';
-import { lintInventoryTitle, writeTitleLintRows } from '@/lib/inventory/title-lint';
+import {
+  lintInventoryTitle,
+  writeTitleLintRows,
+  type TitleLintOptions,
+  type TitleLintRequest,
+} from '@/lib/inventory/title-lint';
 
 type Repos = Pick<RepositoryContainer, 'characters' | 'chats'>;
 
@@ -82,6 +82,29 @@ type Repos = Pick<RepositoryContainer, 'characters' | 'chats'>;
 function refuse(error: InventoryRefusal, meta: Record<string, unknown>): never {
   logger.info('[InventoryMutations] Refused', { code: error.code, message: error.message, ...meta, context: 'inventory' });
   throw error;
+}
+
+/**
+ * Lint a write's title change (`title-lint.ts`), run the write, and ring the
+ * verdict's rows once it has landed. `request: null` skips the lint (a
+ * transfer's `preserve`, an instance inheriting a title already linted).
+ */
+async function lintedWrite<T extends { id: string } | null>(
+  repos: Repos,
+  location: InventoryLocation,
+  request: TitleLintRequest | null,
+  write: () => Promise<T>,
+  opts?: TitleLintOptions,
+): Promise<T> {
+  const verdict = request ? await lintInventoryTitle(repos, location, request, opts) : null;
+  const written = await write();
+  if (verdict && written) writeTitleLintRows(verdict, written.id, location);
+  return written;
+}
+
+/** A folder path as an operator sends it, slashes trimmed (the location normalises the rest). */
+function trimFolderPath(path: string): string {
+  return path.trim().replace(/^\/+|\/+$/g, '');
 }
 
 function logOp(op: string, location: InventoryLocation, meta: Record<string, unknown>): void {
@@ -167,11 +190,13 @@ export async function createInventoryItem(
     imageFileId: opts.preserve?.imageFileId ?? null,
     folder: folder ? await location.resolveFolder(folder) : '',
   };
-  const verdict = opts.preserve
-    ? null
-    : await lintInventoryTitle(repos, location, { door: 'create', before: null, after: record }, { pool });
-  const stored = await location.create(record);
-  if (verdict) writeTitleLintRows(verdict, stored.id, location);
+  const stored = await lintedWrite(
+    repos,
+    location,
+    opts.preserve ? null : { door: 'create', before: null, after: record },
+    () => location.create(record),
+    { pool },
+  );
   logOp('Created object', location, { itemId: stored.id, kind: stored.kind, isArchetype: stored.isArchetype, folder: stored.folder });
   return stored;
 }
@@ -225,9 +250,13 @@ export async function instantiate(
   };
   // Only a title of the instance's own is new; an inherited one was linted on the archetype.
   const ownTitle = typeof overrides.title === 'string' && overrides.title.trim() !== '';
-  const verdict = ownTitle ? await lintInventoryTitle(repos, location, { door: 'create', before: null, after: record }, { pool }) : null;
-  const stored = await location.create(record);
-  if (verdict) writeTitleLintRows(verdict, stored.id, location);
+  const stored = await lintedWrite(
+    repos,
+    location,
+    ownTitle ? { door: 'create', before: null, after: record } : null,
+    () => location.create(record),
+    { pool },
+  );
   const item = resolveItem(stored, (id) => (id === archetypeId ? archetype : pool.get(id)));
   logOp('Instantiated archetype', location, { itemId: stored.id, archetypeId, overrides: Object.keys(overrides) });
   return { record: stored, item };
@@ -292,14 +321,13 @@ export async function updateInventoryItem(
     if (stamp) patch.archivedAt = stamp.archivedAt;
   }
 
-  const verdict = await lintInventoryTitle(
+  const updated = await lintedWrite(
     repos,
     location,
     { door: 'update', before: current, after: { ...current, ...patch } },
+    () => location.update(current.id, patch),
     { context },
   );
-  const updated = await location.update(current.id, patch);
-  if (updated) writeTitleLintRows(verdict, current.id, location);
   logOp('Updated object', location, { itemId: current.id, fields: Object.keys(patch), found: updated !== null });
   return updated;
 }
@@ -315,9 +343,12 @@ export async function clearOverrides(
   // Clearing a title override hands the instance its archetype's title: an entering title like any other.
   const after: Record<string, unknown> = { ...current };
   for (const field of fields) delete after[field];
-  const verdict = await lintInventoryTitle(getRepositories(), location, { door: 'update', before: current, after: after as InventoryRecord });
-  const updated = await location.update(current.id, {}, fields);
-  if (updated) writeTitleLintRows(verdict, current.id, location);
+  const updated = await lintedWrite(
+    getRepositories(),
+    location,
+    { door: 'update', before: current, after: after as InventoryRecord },
+    () => location.update(current.id, {}, fields),
+  );
   logOp('Cleared overrides', location, { itemId: current.id, fields });
   return updated;
 }
@@ -331,9 +362,12 @@ export async function setInventoryItemArchived(
   const stamp = archivedPatch(current.archivedAt, archived, new Date().toISOString());
   if (!stamp) return { item: current, changed: false };
   // Archiving takes a title out of the pool (the bell); restoring brings it back (the lint).
-  const verdict = await lintInventoryTitle(getRepositories(), location, { door: 'archive', before: current, after: { ...current, ...stamp } });
-  const item = await location.update(current.id, stamp);
-  if (item) writeTitleLintRows(verdict, current.id, location);
+  const item = await lintedWrite(
+    getRepositories(),
+    location,
+    { door: 'archive', before: current, after: { ...current, ...stamp } },
+    () => location.update(current.id, stamp),
+  );
   logOp('Archive state changed', location, { itemId: current.id, archivedAt: stamp.archivedAt });
   return { item, changed: item !== null };
 }
@@ -382,6 +416,22 @@ function holdersOf(dependents: readonly InventoryDependent[]) {
 }
 
 /**
+ * The location a dependent lives in, addressed by its mount; a store no tier
+ * owns is written as a shared one. A character's vault resolves through the
+ * tombstone-checked mount resolver, and null (no linked vault any more) means
+ * the dependent cannot be written and is skipped.
+ */
+async function dependentLocation(dependent: InventoryDependent): Promise<InventoryLocation | null> {
+  const scope = dependent.scope === 'unknown' ? 'project' : dependent.scope;
+  const origin = { scope, id: dependent.ownerId, name: dependent.ownerName ?? '' };
+  if (scope === 'character') {
+    const mount = await resolveInventoryMount(dependent.ownerId);
+    return mount ? inventoryLocationForMount(mount, dependent.ownerId, origin) : null;
+  }
+  return inventoryLocationForMount({ mountPointId: dependent.mountPointId, scope, characterId: null }, dependent.ownerId, origin);
+}
+
+/**
  * Detach every instance of an archetype, wherever it lives — one write per
  * mount. Refused (`ARCHIVED_DEPENDENTS`) when any instance lives in an
  * archived character's vault. Returns how many were baked.
@@ -400,16 +450,25 @@ export async function detachAll(archetypeId: string): Promise<number> {
   const byMount = new Map<string, InventoryDependent[]>();
   for (const d of dependents) byMount.set(d.mountPointId, [...(byMount.get(d.mountPointId) ?? []), d]);
 
-  let baked = 0;
+  // Every mount is resolved before any is written, so a dependent that cannot
+  // be reached is skipped rather than failing the bake halfway.
+  const targets: Array<{ mountPointId: string; group: InventoryDependent[]; location: InventoryLocation }> = [];
   for (const [mountPointId, group] of byMount) {
-    const first = group[0];
-    // A character's vault is re-resolved so the tombstone check sees it now.
-    const mount: InventoryMount | null =
-      first.scope === 'character'
-        ? await resolveVaultFolderMount(first.ownerId)
-        : { mountPointId, scope: first.scope === 'unknown' ? 'project' : first.scope, characterId: null };
-    if (!mount) continue;
-    const records = new Map((await readMountInventory(mount)).map((r) => [r.id, r]));
+    const location = await dependentLocation(group[0]);
+    if (location) targets.push({ mountPointId, group, location });
+    else logger.warn('[InventoryMutations] Skipped instances whose vault is no longer linked', {
+      op: 'detach-all',
+      mountPointId,
+      itemId: archetypeId,
+      ownerId: group[0].ownerId,
+      count: group.length,
+      context: 'inventory',
+    });
+  }
+
+  let baked = 0;
+  for (const { mountPointId, group, location } of targets) {
+    const records = new Map((await location.readItems(true)).map((r) => [r.id, r]));
     const patches = group
       .map((d) => records.get(d.id))
       .filter((r): r is InventoryRecord => !!r)
@@ -417,12 +476,12 @@ export async function detachAll(archetypeId: string): Promise<number> {
         id: record.id,
         patch: bakedFields(record, resolveItem(record, (id) => (id === archetypeId ? archetype : undefined))),
       }));
-    const written = await updateInventoryManyInMount(mount, patches);
+    const written = await location.updateMany(patches);
     baked += written.length;
     logger.debug('[InventoryMutations] Baked instances in one mount', {
       op: 'detach-all',
       mountPointId,
-      scope: mount.scope,
+      scope: location.scope,
       itemId: archetypeId,
       count: written.length,
       context: 'inventory',
@@ -512,9 +571,7 @@ export async function duplicateInventoryItem(
   assertCopyable([resolved], { itemId: current.id, op: 'duplicate' });
   const titles = (await location.readItems(true)).map((r) => r.title || r.name || '').filter(Boolean);
   const copy = copyRecord(current, current.folder ?? '', nextCopyTitle(resolved.title || resolved.name, titles));
-  const verdict = await lintInventoryTitle(repos, location, { door: 'create', before: null, after: copy }, { pool });
-  const stored = await location.create(copy);
-  writeTitleLintRows(verdict, stored.id, location);
+  const stored = await lintedWrite(repos, location, { door: 'create', before: null, after: copy }, () => location.create(copy), { pool });
   logOp('Duplicated object', location, { itemId: current.id, copyId: stored.id });
   return stored;
 }
@@ -551,9 +608,7 @@ export async function copyInventoryItemsToFolder(
   for (const source of sources) {
     // A copy keeps its source's title: a second object answering to it, linted as it enters.
     const copy = copyRecord(source, target);
-    const verdict = await lintInventoryTitle(repos, location, { door: 'create', before: null, after: copy }, { pool });
-    copies.push(await location.create(copy));
-    writeTitleLintRows(verdict, copy.id, location);
+    copies.push(await lintedWrite(repos, location, { door: 'create', before: null, after: copy }, () => location.create(copy), { pool }));
   }
   logOp('Copied objects to folder', location, { folder: target, count: copies.length });
   return copies;
@@ -574,7 +629,7 @@ export async function createInventoryFolder(location: InventoryLocation, path: s
 
 /** Rename a folder in place; its objects follow because the path is the truth. */
 export async function renameInventoryFolder(location: InventoryLocation, path: string, name: string): Promise<InventoryFolder> {
-  const from = path.trim().replace(/^\/+|\/+$/g, '');
+  const from = trimFolderPath(path);
   const folder = await location.renameFolder(from, normalizeInventoryFolderName(name));
   logOp('Renamed folder', location, { from, to: folder.path });
   return folder;
@@ -585,7 +640,7 @@ export async function deleteInventoryFolder(
   location: InventoryLocation,
   path: string,
 ): Promise<{ movedItems: number; movedFolders: number }> {
-  const folder = path.trim().replace(/^\/+|\/+$/g, '');
+  const folder = trimFolderPath(path);
   const { movedItems, movedFolders, parent } = await location.deleteFolder(folder);
   logOp('Deleted folder', location, { folder, parent, movedItems, movedFolders });
   return { movedItems, movedFolders };

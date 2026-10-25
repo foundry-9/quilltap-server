@@ -19,8 +19,9 @@
  * (`archived` archives), `?action=clear-override`, `?action=detach`;
  * `DELETE` (`?force=true` bakes an archetype's instances first).
  *
- * Every refusal maps through `inventoryErrorResponse` (a `409` with its
- * `code`, or a `400`); an archived character's vault answers `409`.
+ * Every writing handler is wrapped in `withInventoryErrors`, so a refusal
+ * answers through `inventoryErrorResponse` (a `409` with its `code`, or a
+ * `400`); an archived character's vault answers `409`.
  *
  * @module lib/inventory/routes/inventory-route-factory
  */
@@ -34,6 +35,7 @@ import { readIncludeArchived } from '@/lib/api/query-params';
 import {
   clearInventoryOverrideSchema,
   createInventorySchema,
+  duplicateInventorySchema,
   fileInventoryItemsSchema,
   instantiateInventorySchema,
   inventoryFolderPathBodySchema,
@@ -61,10 +63,9 @@ import {
 } from '@/lib/inventory/item-mutations';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
-import { inventoryErrorResponse } from '@/lib/inventory/routes/responses';
+import { withInventoryErrors } from '@/lib/inventory/routes/responses';
 
 type Params = Record<string, string>;
-type Repos = RequestContext['repos'];
 
 export interface InventoryRouteConfig<P extends Params> {
   scope: InventoryScope;
@@ -183,21 +184,17 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     const resolved = await resolveLocation(ctx, params, true);
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
-    try {
-      const pool = body.kind === 'kit' ? await loadPoolForLocation(ctx.repos, location, projectContextOf(req)) : undefined;
-      const record = await createInventoryItem(ctx.repos, location, body, { pool });
-      logger.info(`${logTag} Created inventory object`, {
-        [logIdKey]: location.id,
-        userId: ctx.user.id,
-        mountPointId: location.mountPointId,
-        itemId: record.id,
-        kind: record.kind,
-        context: 'inventory',
-      });
-      return created({ item: serialize(pool ?? (await loadPoolForLocation(ctx.repos, location)), location, record) });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    const pool = body.kind === 'kit' ? await loadPoolForLocation(ctx.repos, location, projectContextOf(req)) : undefined;
+    const record = await createInventoryItem(ctx.repos, location, body, { pool });
+    logger.info(`${logTag} Created inventory object`, {
+      [logIdKey]: location.id,
+      userId: ctx.user.id,
+      mountPointId: location.mountPointId,
+      itemId: record.id,
+      kind: record.kind,
+      context: 'inventory',
+    });
+    return created({ item: serialize(pool ?? (await loadPoolForLocation(ctx.repos, location)), location, record) });
   }
 
   async function handleInstantiate(req: NextRequest, ctx: RequestContext, params: P) {
@@ -205,60 +202,44 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     const resolved = await resolveLocation(ctx, params, true);
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
-    try {
-      const pool = await loadPoolForLocation(ctx.repos, location, {
-        projectId: body.projectId ?? null,
-        chatId: body.chatId ?? null,
-      });
-      const { record, item } = await instantiate(ctx.repos, location, body.archetypeId, {
-        folder: body.folder,
-        overrides: body.overrides,
-        pool,
-      });
-      logger.info(`${logTag} Instantiated archetype`, {
-        [logIdKey]: location.id,
-        userId: ctx.user.id,
-        itemId: record.id,
-        archetypeId: body.archetypeId,
-        context: 'inventory',
-      });
-      return created({ item: { ...item, origin: location.origin } });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    const pool = await loadPoolForLocation(ctx.repos, location, {
+      projectId: body.projectId ?? null,
+      chatId: body.chatId ?? null,
+    });
+    const { record, item } = await instantiate(ctx.repos, location, body.archetypeId, {
+      folder: body.folder,
+      overrides: body.overrides,
+      pool,
+    });
+    logger.info(`${logTag} Instantiated archetype`, {
+      [logIdKey]: location.id,
+      userId: ctx.user.id,
+      itemId: record.id,
+      archetypeId: body.archetypeId,
+      context: 'inventory',
+    });
+    return created({ item: { ...item, origin: location.origin } });
   }
 
   async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
     const body = inventoryFolderPathBodySchema.parse(await req.json());
     const resolved = await resolveLocation(ctx, params, true);
     if (!resolved.ok) return resolved.response;
-    try {
-      return successResponse({ folder: await createInventoryFolder(resolved.location, body.path) });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    return successResponse({ folder: await createInventoryFolder(resolved.location, body.path) });
   }
 
   async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
     const body = renameInventoryFolderSchema.parse(await req.json());
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved.response;
-    try {
-      return successResponse({ folder: await renameInventoryFolder(resolved.location, body.path, body.name) });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    return successResponse({ folder: await renameInventoryFolder(resolved.location, body.path, body.name) });
   }
 
   async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
     const body = inventoryFolderPathBodySchema.parse(await req.json());
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved.response;
-    try {
-      return successResponse(await deleteInventoryFolder(resolved.location, body.path));
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    return successResponse(await deleteInventoryFolder(resolved.location, body.path));
   }
 
   async function handleFileItems(action: 'move' | 'copy', req: NextRequest, ctx: RequestContext, params: P) {
@@ -266,40 +247,31 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
-    try {
-      const records = action === 'move'
-        ? await moveInventoryItemsToFolder(location, body.itemIds, body.folder)
-        : await copyInventoryItemsToFolder(ctx.repos, location, body.itemIds, body.folder);
-      const pool = await loadPoolForLocation(ctx.repos, location);
-      logger.info(`${logTag} ${action === 'move' ? 'Moved' : 'Copied'} inventory objects to folder`, {
-        [logIdKey]: location.id,
-        userId: ctx.user.id,
-        folder: body.folder,
-        count: records.length,
-        context: 'inventory',
-      });
-      return successResponse({ items: records.map((record) => serialize(pool, location, record)) });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    const records = action === 'move'
+      ? await moveInventoryItemsToFolder(location, body.itemIds, body.folder)
+      : await copyInventoryItemsToFolder(ctx.repos, location, body.itemIds, body.folder);
+    const pool = await loadPoolForLocation(ctx.repos, location);
+    logger.info(`${logTag} ${action === 'move' ? 'Moved' : 'Copied'} inventory objects to folder`, {
+      [logIdKey]: location.id,
+      userId: ctx.user.id,
+      folder: body.folder,
+      count: records.length,
+      context: 'inventory',
+    });
+    return successResponse({ items: records.map((record) => serialize(pool, location, record)) });
   }
 
   /** `{ itemId }`: a copy beside the original, titled "(copy)"; refused when not copyable. */
   async function handleDuplicate(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = (await req.json()) as { itemId?: unknown };
-    if (typeof body.itemId !== 'string' || !body.itemId) return notFound('Inventory object');
+    const body = duplicateInventorySchema.parse(await req.json());
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
     const current = await location.findItem(body.itemId);
     if (!current) return notFound('Inventory object');
-    try {
-      const record = await duplicateInventoryItem(ctx.repos, location, current);
-      logger.info(`${logTag} Duplicated inventory object`, { [logIdKey]: location.id, itemId: current.id, copyId: record.id, context: 'inventory' });
-      return created({ item: serialize(await loadPoolForLocation(ctx.repos, location), location, record) });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    const record = await duplicateInventoryItem(ctx.repos, location, current);
+    logger.info(`${logTag} Duplicated inventory object`, { [logIdKey]: location.id, itemId: current.id, copyId: record.id, context: 'inventory' });
+    return created({ item: serialize(await loadPoolForLocation(ctx.repos, location), location, record) });
   }
 
   const GET = createContextParamsHandler<P>(
@@ -309,15 +281,15 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
   const POST = createContextParamsHandler<P>(
     withActionDispatch<P>(
       {
-        instantiate: handleInstantiate,
-        'create-folder': handleCreateFolder,
-        'rename-folder': handleRenameFolder,
-        'delete-folder': handleDeleteFolder,
-        'move-items': (req, ctx, params) => handleFileItems('move', req, ctx, params),
-        'copy-items': (req, ctx, params) => handleFileItems('copy', req, ctx, params),
-        duplicate: handleDuplicate,
+        instantiate: withInventoryErrors(handleInstantiate),
+        'create-folder': withInventoryErrors(handleCreateFolder),
+        'rename-folder': withInventoryErrors(handleRenameFolder),
+        'delete-folder': withInventoryErrors(handleDeleteFolder),
+        'move-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('move', req, ctx, params)),
+        'copy-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('copy', req, ctx, params)),
+        duplicate: withInventoryErrors(handleDuplicate),
       },
-      handleCreate,
+      withInventoryErrors(handleCreate),
     ),
   );
 
@@ -345,7 +317,7 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
 
   async function respondWith(ctx: RequestContext, location: InventoryLocation, record: InventoryRecord | null) {
     if (!record) return notFound('Inventory object');
-    const pool = await loadPoolForLocation(ctx.repos as Repos, location);
+    const pool = await loadPoolForLocation(ctx.repos, location);
     return successResponse({ item: serialize(pool, location, record) });
   }
 
@@ -372,70 +344,57 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
     const found = await findRecord(ctx, params);
     if (!found.ok) return found.response;
     const body = updateInventorySchema.parse(await req.json());
-    try {
-      if (body.imageFileId !== undefined) await assertInventoryImageChoice(ctx.repos, found.record.id, body.imageFileId);
-      const record = await updateInventoryItem(ctx.repos, found.location, found.record, body, projectContextOf(req));
-      logger.info(`${logTag} Updated inventory object`, {
-        [logIdKey]: found.location.id,
-        userId: ctx.user.id,
-        itemId: found.record.id,
-        context: 'inventory',
-      });
-      return respondWith(ctx, found.location, record);
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    if (body.imageFileId !== undefined) await assertInventoryImageChoice(ctx.repos, found.record.id, body.imageFileId);
+    const record = await updateInventoryItem(ctx.repos, found.location, found.record, body, projectContextOf(req));
+    logger.info(`${logTag} Updated inventory object`, {
+      [logIdKey]: found.location.id,
+      userId: ctx.user.id,
+      itemId: found.record.id,
+      context: 'inventory',
+    });
+    return respondWith(ctx, found.location, record);
   }
 
   async function handleClearOverride(req: NextRequest, ctx: RequestContext, params: P) {
     const found = await findRecord(ctx, params);
     if (!found.ok) return found.response;
     const body = clearInventoryOverrideSchema.parse(await req.json());
-    try {
-      return respondWith(ctx, found.location, await clearOverrides(found.location, found.record, body.fields));
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    return respondWith(ctx, found.location, await clearOverrides(found.location, found.record, body.fields));
   }
 
   async function handleDetach(_req: NextRequest, ctx: RequestContext, params: P) {
     const found = await findRecord(ctx, params);
     if (!found.ok) return found.response;
-    try {
-      const record = await detach(ctx.repos, found.location, found.record);
-      logger.info(`${logTag} Detached instance`, { [logIdKey]: found.location.id, itemId: found.record.id, context: 'inventory' });
-      return respondWith(ctx, found.location, record);
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
+    const record = await detach(ctx.repos, found.location, found.record);
+    logger.info(`${logTag} Detached instance`, { [logIdKey]: found.location.id, itemId: found.record.id, context: 'inventory' });
+    return respondWith(ctx, found.location, record);
   }
 
   const GET = createContextParamsHandler<P>(withActionDispatch<P>({ dependents: handleGetDependents }, handleGetOne));
 
   const PUT = createContextParamsHandler<P>(
-    withActionDispatch<P>({ 'clear-override': handleClearOverride, detach: handleDetach }, handleUpdate),
+    withActionDispatch<P>(
+      { 'clear-override': withInventoryErrors(handleClearOverride), detach: withInventoryErrors(handleDetach) },
+      withInventoryErrors(handleUpdate),
+    ),
   );
 
-  const DELETE = createContextParamsHandler<P>(async (req, ctx, params) => {
+  const DELETE = createContextParamsHandler<P>(withInventoryErrors(async (req: NextRequest, ctx: RequestContext, params: P) => {
     const found = await findRecord(ctx, params);
     if (!found.ok) return found.response;
     const force = new URL(req.url).searchParams.get('force') === 'true';
-    try {
-      const result = await deleteInventoryItem(ctx.repos, found.location, found.record, { force });
-      if (!result.deleted) return notFound('Inventory object');
-      logger.info(`${logTag} Deleted inventory object`, {
-        [logIdKey]: found.location.id,
-        userId: ctx.user.id,
-        itemId: found.record.id,
-        force,
-        detached: result.detached,
-        context: 'inventory',
-      });
-      return successResponse({ success: true, detached: result.detached });
-    } catch (error) {
-      return inventoryErrorResponse(error);
-    }
-  });
+    const result = await deleteInventoryItem(ctx.repos, found.location, found.record, { force });
+    if (!result.deleted) return notFound('Inventory object');
+    logger.info(`${logTag} Deleted inventory object`, {
+      [logIdKey]: found.location.id,
+      userId: ctx.user.id,
+      itemId: found.record.id,
+      force,
+      detached: result.detached,
+      context: 'inventory',
+    });
+    return successResponse({ success: true, detached: result.detached });
+  }));
 
   return { GET, PUT, DELETE };
 }
