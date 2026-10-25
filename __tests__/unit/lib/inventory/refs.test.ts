@@ -111,6 +111,13 @@ describe('pickForGesture', () => {
     expect(pickForGesture(resolveInventoryRef('sword', p, new Set(['b'])), 'unequip')?.item.id).toBe('b')
     expect(pickForGesture(resolveInventoryRef('sword', p, new Set()), 'unequip')).toBeNull()
   })
+
+  it('unequip falls back to a kit, which sets down whatever members it holds', () => {
+    const kit = obj('kit', { kind: 'kit', name: 'loadout', itemIds: ['a', 'b'] })
+    const withKit = pool([a, b, kit], ['a', 'kit'])
+    // Only one member carried: the kit is not "equipped", yet unequip acts on it.
+    expect(pickForGesture(resolveInventoryRef('loadout', withKit, new Set(['a'])), 'unequip')?.item.id).toBe('kit')
+  })
 })
 
 describe('inventoryContextFrom', () => {

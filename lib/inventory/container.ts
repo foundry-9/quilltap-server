@@ -70,6 +70,17 @@ export function containerOfOrigin(origin: InventoryOrigin | null | undefined, fa
   return origin.id ? { scope: origin.scope, id: origin.id } : fallback;
 }
 
+/**
+ * True when an object lives in the tier being browsed. A shared tier lists
+ * only its own objects; a character's merged view also lists what it borrows
+ * from groups, the project and General, tagged with their origin.
+ */
+export function isInContainer(item: { origin?: InventoryOrigin | null }, container: InventoryContainer): boolean {
+  if (!item.origin) return true;
+  if (container.scope !== 'character') return item.origin.scope === container.scope;
+  return item.origin.scope === 'character' && item.origin.id === container.id;
+}
+
 /** A short label for the tier an object came from. */
 export function inventoryOriginLabel(origin: InventoryOrigin | null | undefined): string | null {
   if (!origin) return null;

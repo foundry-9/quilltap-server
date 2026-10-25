@@ -1,7 +1,8 @@
 /**
- * The Inventory routes' shared answers: one mapping from every refusal the
+ * The Inventory routes' shared answer: one mapping from every refusal the
  * Inventory can raise to its HTTP response (with the refusal's `code` in
- * `details`), and the one serialiser for objects on the wire.
+ * `details`), and {@link withInventoryErrors}, which applies it to a whole
+ * handler.
  *
  * Server-only.
  *
@@ -38,4 +39,21 @@ export function inventoryErrorResponse(error: unknown): NextResponse {
     return conflict("An archived character's inventory cannot be changed");
   }
   throw error;
+}
+
+/**
+ * Wrap a route handler so any Inventory refusal it throws answers through
+ * {@link inventoryErrorResponse}. Anything else (a body that fails its Zod
+ * schema, an unexpected error) propagates to the middleware as before.
+ */
+export function withInventoryErrors<A extends unknown[]>(
+  handler: (...args: A) => Promise<NextResponse>,
+): (...args: A) => Promise<NextResponse> {
+  return async (...args) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      return inventoryErrorResponse(error);
+    }
+  };
 }

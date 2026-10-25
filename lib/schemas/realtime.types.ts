@@ -44,8 +44,9 @@ export const REALTIME_TOPICS = [
   'memories',
   /**
    * Inventory objects: a file created, instantiated, edited, archived or
-   * moved. Collection-wide (lists and folders). What a chat carries is the
-   * `chats` topic's.
+   * moved — published by every write through an Inventory location.
+   * Collection-wide (lists, folders, archetype pickers). What a chat carries
+   * is the `chats` topic's.
    */
   'inventory',
   /**

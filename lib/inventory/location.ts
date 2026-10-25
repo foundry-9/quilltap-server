@@ -9,6 +9,12 @@
  * writable mount. Routes, transfers, pictures and equip address a tier
  * through this; nobody switches on scope to pick a writer.
  *
+ * Every write through a location publishes the `inventory` realtime topic
+ * once it lands, so an open Inventory dialog re-reads whoever made the change
+ * (the operator in another window, a character's tool, Pascal). In the job
+ * child the publish is a no-op and the commit hook names the topic instead
+ * (`lib/realtime/job-topics.ts`).
+ *
  * `ensure: true` provisions a missing project/group store and its
  * `Inventory/` folder, for callers about to write; a read probe passes
  * `false` and gets null for a store that does not exist yet. An archived
@@ -21,6 +27,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   createInventoryFolderInMount,
@@ -91,7 +98,7 @@ export function locationKey(loc: Pick<InventoryLocation, 'scope' | 'mountPointId
 }
 
 /** Idempotent: ensure a mount's `Inventory/` folder exists; failure is logged, not thrown. */
-export async function ensureInventoryFolder(mountPointId: string): Promise<void> {
+async function ensureInventoryFolder(mountPointId: string): Promise<void> {
   try {
     await ensureFolderPath(mountPointId, INVENTORY_FOLDER);
   } catch (error) {
@@ -128,11 +135,16 @@ export function inventoryLocationForMount(
     return current;
   };
 
-  const updateMany: InventoryLocation['updateMany'] = async (patches, opts) =>
-    updateInventoryManyInMount(
-      await writableMount(),
-      patches.map((p) => ({ ...p, patch: cleanPatch(p.patch) })),
-      opts,
+  /** Run a write against the current writable mount, then tell the open dialogs. */
+  const write = async <T>(fn: (target: InventoryMount) => Promise<T>): Promise<T> => {
+    const result = await fn(await writableMount());
+    publishRealtime('inventory');
+    return result;
+  };
+
+  const updateMany: InventoryLocation['updateMany'] = (patches, opts) =>
+    write((target) =>
+      updateInventoryManyInMount(target, patches.map((p) => ({ ...p, patch: cleanPatch(p.patch) })), opts),
     );
 
   return {
@@ -148,17 +160,13 @@ export function inventoryLocationForMount(
     async findItem(itemId) {
       return (await readMountInventory(mount)).find((record) => record.id === itemId) ?? null;
     },
-    async create(record) {
-      return createInventoryInMount(await writableMount(), record);
-    },
+    create: (record) => write((target) => createInventoryInMount(target, record)),
     async update(itemId, patch, remove) {
       const [updated] = await updateMany([{ id: itemId, patch, remove }]);
       return updated ?? null;
     },
     updateMany,
-    async delete(ids, followOn) {
-      return deleteInventoryInMount(await writableMount(), ids, followOn);
-    },
+    delete: (ids, followOn) => write((target) => deleteInventoryInMount(target, ids, followOn)),
     async listFolders() {
       return listInventoryFoldersInMount(mount);
     },
@@ -166,15 +174,9 @@ export function inventoryLocationForMount(
       if (!requested || !requested.trim()) return '';
       return resolveInventoryFolder(await listInventoryFolderPathsInMount(mount), requested);
     },
-    async createFolder(path) {
-      return createInventoryFolderInMount(await writableMount(), path);
-    },
-    async renameFolder(path, newName) {
-      return renameInventoryFolderInMount(await writableMount(), path, newName);
-    },
-    async deleteFolder(path) {
-      return deleteInventoryFolderInMount(await writableMount(), path);
-    },
+    createFolder: (path) => write((target) => createInventoryFolderInMount(target, path)),
+    renameFolder: (path, newName) => write((target) => renameInventoryFolderInMount(target, path, newName)),
+    deleteFolder: (path) => write((target) => deleteInventoryFolderInMount(target, path)),
     async writableMountPointId() {
       return (await writableMount()).mountPointId;
     },

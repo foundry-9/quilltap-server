@@ -28,8 +28,7 @@
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { equippedIdsOf, readEquippedSet } from '@/lib/inventory/equipped-set';
-import { loadInventoryPool } from '@/lib/inventory/pool';
+import { equippedIdsOf, loadEquippedSet } from '@/lib/inventory/equipped-set';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 
 /** The section's heading. */
@@ -57,8 +56,7 @@ export async function buildInventorySection(params: BuildInventorySectionParams)
   // Nothing stored: no pool read at all, which is the common case.
   if (equippedIdsOf(chat, characterId).length === 0) return null;
   try {
-    const pool = await loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
-    const section = renderInventorySection(readEquippedSet(chat, characterId, pool));
+    const section = renderInventorySection(await loadEquippedSet(repos, chat, characterId));
     logger.debug('[InventorySection] Built the carried-objects section', {
       chatId: chat.id,
       characterId,

@@ -355,16 +355,10 @@ export const queryKeys = {
     /** Prefix of every `folders(...)` key — invalidate after folder or object writes. */
     folderLists: ['inventory', 'folders'] as const,
     folders: (tierKey: string) => ['inventory', 'folders', tierKey] as const,
-    /** One object (`GET …/inventory/[itemId]`). */
-    item: (itemId: string) => ['inventory', 'item', itemId] as const,
     /** Prefix of every `archetypes(...)` key. */
     archetypeLists: ['inventory', 'archetypes'] as const,
     /** The archetypes a tier can reach, for the instantiate picker. */
     archetypes: (tierKey: string, projectId?: string | null) => ['inventory', 'archetypes', tierKey, projectId ?? null] as const,
-    /** Prefix of every `dependents(...)` key. */
-    dependentLists: ['inventory', 'dependents'] as const,
-    /** An archetype's instances, everywhere. */
-    dependents: (itemId: string) => ['inventory', 'dependents', itemId] as const,
     /** One object's pictures. */
     images: (itemId: string) => ['inventory', 'images', itemId] as const,
     /** Prefix of every `equipped(...)` key. */

@@ -8,7 +8,6 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { publishRealtime } from '@/lib/realtime/bus';
 import { createInventorySchema } from '@/lib/schemas/inventory.types';
 import { createInventoryItem } from '@/lib/inventory/item-mutations';
 import { equipItems } from '@/lib/inventory/equip';
@@ -53,7 +52,6 @@ export async function executeInventoryCreateTool(
       equippedByDefault: false,
     });
     const record = await createInventoryItem(repos, vault, body);
-    publishRealtime('inventory');
     const item = resolveItem({ ...record, origin: vault.origin, mountPointId: vault.mountPointId }, () => undefined);
 
     let equipped = false;

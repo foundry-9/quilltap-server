@@ -19,7 +19,7 @@
 
 import { useMemo } from 'react'
 import { useInventoryList } from '@/lib/hooks/use-inventory'
-import type { InventoryContainer } from '@/lib/inventory/container'
+import { isInContainer, type InventoryContainer } from '@/lib/inventory/container'
 import type { ResolvedInventoryPool } from '@/lib/inventory/refs'
 import type { WardrobeVantage } from '@/lib/pascal/tool-draft'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
@@ -43,15 +43,16 @@ export function useInventoryVantageItems(vantage: WardrobeVantage | null): UseIn
         : null
   const list = useInventoryList(container, { includeArchived: true, shared: vantage?.kind === 'character' })
   const scope = container?.scope ?? null
+  const containerId = container?.id ?? null
 
   const pool = useMemo<ResolvedInventoryPool>(() => {
     const own = new Set(
-      list.items
-        .filter((item) => (item.origin ? item.origin.scope === scope : true))
-        .map((item) => item.id),
+      scope
+        ? list.items.filter((item) => isInContainer(item, { scope, id: containerId } as InventoryContainer)).map((item) => item.id)
+        : [],
     )
     return { items: list.items, owns: (id) => own.has(id) }
-  }, [list.items, scope])
+  }, [list.items, scope, containerId])
 
   return { items: list.items, pool, loading: list.loading, fetched: container !== null && !list.loading }
 }

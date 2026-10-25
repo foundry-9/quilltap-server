@@ -36,6 +36,14 @@ export class InventoryRefusal extends Error {
   }
 }
 
+/** The character is not seated in the chat (a 400). */
+export class InventoryNotAParticipantError extends InventoryRefusal {
+  constructor(readonly characterId: string) {
+    super('NOT_A_PARTICIPANT', `Character ${characterId} is not a participant of this chat`, 400, { characterId });
+    this.name = 'InventoryNotAParticipantError';
+  }
+}
+
 /**
  * A character's own gesture (a tool call, a custom tool's effect) reached for
  * an object on the project's shelf while the project's roster does not admit

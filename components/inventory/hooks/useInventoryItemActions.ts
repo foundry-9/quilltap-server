@@ -37,6 +37,13 @@ export interface InventoryItemActionsOptions {
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
+/** The archived characters an `ARCHIVED_DEPENDENTS` refusal names, as one line. */
+function archivedHolderNames(error: InventoryRequestError): string {
+  return ((error.details.characters as Array<{ name?: string | null }> | undefined) ?? [])
+    .map((c) => c.name ?? 'an archived character')
+    .join(', ')
+}
+
 /** The words for a refusal the server answered with a code. */
 export function describeInventoryRefusal(error: unknown, fallback: string): string {
   if (error instanceof InventoryRequestError) {
@@ -106,11 +113,8 @@ export function useInventoryItemActions({ container, requestConfirmation, reques
           return
         }
         if (error.code === 'ARCHIVED_DEPENDENTS') {
-          const names = ((error.details.characters as Array<{ name?: string | null }> | undefined) ?? [])
-            .map((c) => c.name ?? 'an archived character')
-            .join(', ')
           await requestAlert(
-            `"${label}" cannot be deleted while archived characters hold instances of it: ${names}. Their vaults are sealed; restore them first.`,
+            `"${label}" cannot be deleted while archived characters hold instances of it: ${archivedHolderNames(error)}. Their vaults are sealed; restore them first.`,
             ['Understood'],
           )
           return
@@ -133,11 +137,8 @@ export function useInventoryItemActions({ container, requestConfirmation, reques
           showSuccessToast(`"${label}" is gone; ${plural(count, 'object')} now stand on their own`)
         } catch (forcedError) {
           if (forcedError instanceof InventoryRequestError && forcedError.code === 'ARCHIVED_DEPENDENTS') {
-            const names = ((forcedError.details.characters as Array<{ name?: string | null }> | undefined) ?? [])
-              .map((c) => c.name ?? 'an archived character')
-              .join(', ')
             await requestAlert(
-              `"${label}" cannot be deleted while archived characters hold instances of it: ${names}.`,
+              `"${label}" cannot be deleted while archived characters hold instances of it: ${archivedHolderNames(forcedError)}.`,
               ['Understood'],
             )
             return

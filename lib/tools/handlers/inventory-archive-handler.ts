@@ -8,11 +8,9 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { publishRealtime } from '@/lib/realtime/bus';
 import { setInventoryItemArchived } from '@/lib/inventory/item-mutations';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
 import { dropCarriedEverywhere } from '@/lib/inventory/equip';
-import { resolveInventoryLocation } from '@/lib/inventory/location';
 import type { InventoryArchiveToolOutput } from '../inventory-archive-tool';
 import { validateInventoryArchiveInput } from '../inventory-archive-tool';
 import {
@@ -20,6 +18,7 @@ import {
   errorMessageOf,
   formatSummary,
   inventoryNotFoundMessage,
+  loadOwnRecord,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -47,17 +46,14 @@ export async function executeInventoryArchiveTool(
       logInventoryTool('inventory_archive', context, { refs: [parsed.ref], resolved: [matches[0].item.id], outcome: 'refused: shared' }, 'info');
       return { success: false, error: sharedInventoryItemReadOnlyMessage(matches[0].item, 'archived') };
     }
-    const vault = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
-    const record = vault ? await vault.findItem(match.item.id) : null;
-    if (!vault || !record) return { success: false, error: inventoryNotFoundMessage(parsed.ref) };
+    const own = await loadOwnRecord(repos, context, match.item.id);
+    if (!own) return { success: false, error: inventoryNotFoundMessage(parsed.ref) };
+    const { vault, record } = own;
 
     const { changed } = await setInventoryItemArchived(vault, record, parsed.archived);
-    if (changed) {
-      publishRealtime('inventory');
-      if (parsed.archived && (await dropCarriedEverywhere(repos, context.characterId, record.id, [context.chatId])) > 0) {
-        publishRealtime('chats', context.chatId);
-      }
-      if (parsed.archived && match.equipped) {
+    if (changed && parsed.archived) {
+      await dropCarriedEverywhere(repos, context.characterId, record.id, [context.chatId]);
+      if (match.equipped) {
         await notifyInventoryChanged(repos, { id: context.chatId }, context.characterId, { equipped: [], unequipped: [match.item] }, characterChangeContext(context));
       }
     }

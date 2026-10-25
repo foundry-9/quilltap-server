@@ -7,15 +7,20 @@
  * at `debug`. Nothing is written: a dropped id leaves the column at the next
  * equip write (`equip.ts` prunes it).
  *
- * Server-only (logging); otherwise pure.
+ * {@link loadEquippedSet} is the readers' door (the prompt section, the image
+ * phrase): it answers an empty set without reading any pool when the chat
+ * stores nothing for the character, which is the common case.
+ *
+ * Server-only.
  *
  * @module lib/inventory/equipped-set
  */
 
 import { logger } from '@/lib/logger';
 import { normalizeEquippedInventory } from '@/lib/database/repositories/chats.repository';
+import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import type { InventoryPool } from '@/lib/inventory/pool';
+import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
 import { isEquippable } from '@/lib/inventory/resolve';
 
 export { kitState } from '@/lib/inventory/resolve';
@@ -52,4 +57,19 @@ export function readEquippedSet(
     out.push(item);
   }
   return out;
+}
+
+/**
+ * What a character carries in a chat, loading their pool only when the chat
+ * stores something for them. Throws what the pool read throws; the callers
+ * fail soft.
+ */
+export async function loadEquippedSet(
+  repos: Pick<RepositoryContainer, 'characters' | 'chats'>,
+  chat: { id: string; projectId?: string | null; equippedInventory?: unknown },
+  characterId: string,
+): Promise<ResolvedInventoryItem[]> {
+  if (equippedIdsOf(chat, characterId).length === 0) return [];
+  const pool = await loadInventoryPool(repos, { characterId, chatId: chat.id, projectId: chat.projectId ?? null });
+  return readEquippedSet(chat, characterId, pool);
 }

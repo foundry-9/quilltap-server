@@ -17,29 +17,22 @@ import { logger } from '@/lib/logger';
 import { notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { chatInventoryEquipSchema, chatInventoryResetSchema, type KitState, type ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { equipItems, InventoryNotAParticipantError, unequipItems, type EquipChat } from '@/lib/inventory/equip';
+import { equipItems, loadEquipChat, seatedCharacterIds, unequipItems } from '@/lib/inventory/equip';
+import { inventoryChangeContext } from '@/lib/inventory/equip-effects';
+import { InventoryNotAParticipantError } from '@/lib/inventory/errors';
 import { resetInventoryToDefaults } from '@/lib/inventory/apply-defaults';
 import { readEquippedSet } from '@/lib/inventory/equipped-set';
 import { loadCastInventoryPools } from '@/lib/inventory/pool';
 import { kitState } from '@/lib/inventory/resolve';
-import { inventoryErrorResponse } from '@/lib/inventory/routes/responses';
+import { inventoryErrorResponse, withInventoryErrors } from '@/lib/inventory/routes/responses';
 
-const OPERATOR = (userId: string) => ({ userId, provenance: 'operator' as const, announce: true });
-
-/** The cast whose Inventory the chat shows: every seated character. */
-function castOf(chat: EquipChat): string[] {
-  return Array.from(new Set(
-    (chat.participants ?? [])
-      .filter((p) => p.type === 'CHARACTER' && p.characterId && p.status !== 'removed')
-      .map((p) => p.characterId as string),
-  ));
-}
+const OPERATOR = (userId: string) => inventoryChangeContext(userId, 'operator');
 
 /** GET ?action=inventory */
 export async function handleGetInventory(chatId: string, { repos }: RequestContext): Promise<NextResponse> {
-  const chat = (await repos.chats.findById(chatId)) as EquipChat | null;
+  const chat = await loadEquipChat(repos, chatId);
   if (!chat) return notFound('Chat');
-  const cast = castOf(chat);
+  const cast = seatedCharacterIds(chat);
   const pools = await loadCastInventoryPools(repos, chat, cast);
   const inventory: Record<string, { equipped: ResolvedInventoryItem[]; kits: Record<string, KitState> }> = {};
   for (const characterId of cast) {
@@ -62,25 +55,21 @@ export async function handleGetInventory(chatId: string, { repos }: RequestConte
 }
 
 /** POST ?action=inventory-equip / inventory-unequip */
-export async function handleInventoryEquip(
+export const handleInventoryEquip = withInventoryErrors(async (
   req: NextRequest,
   chatId: string,
   { repos, user }: RequestContext,
   mode: 'equip' | 'unequip',
-): Promise<NextResponse> {
+): Promise<NextResponse> => {
   const body = chatInventoryEquipSchema.parse(await req.json());
-  const chat = (await repos.chats.findById(chatId)) as EquipChat | null;
+  const chat = await loadEquipChat(repos, chatId);
   if (!chat) return notFound('Chat');
-  try {
-    const result = mode === 'equip'
-      ? await equipItems(repos, chat, body.characterId, body.ids, OPERATOR(user.id))
-      : await unequipItems(repos, chat, body.characterId, body.ids, OPERATOR(user.id));
-    logger.info(`[Chats v1] Inventory ${mode}`, { chatId, characterId: body.characterId, ids: body.ids, context: 'inventory' });
-    return successResponse(result);
-  } catch (error) {
-    return inventoryErrorResponse(error);
-  }
-}
+  const result = mode === 'equip'
+    ? await equipItems(repos, chat, body.characterId, body.ids, OPERATOR(user.id))
+    : await unequipItems(repos, chat, body.characterId, body.ids, OPERATOR(user.id));
+  logger.info(`[Chats v1] Inventory ${mode}`, { chatId, characterId: body.characterId, ids: body.ids, context: 'inventory' });
+  return successResponse(result);
+});
 
 /** POST ?action=inventory-reset-defaults */
 export async function handleInventoryResetDefaults(
@@ -89,9 +78,9 @@ export async function handleInventoryResetDefaults(
   { repos, user }: RequestContext,
 ): Promise<NextResponse> {
   const body = chatInventoryResetSchema.parse(await req.json());
-  const chat = (await repos.chats.findById(chatId)) as EquipChat | null;
+  const chat = await loadEquipChat(repos, chatId);
   if (!chat) return notFound('Chat');
-  if (!castOf(chat).includes(body.characterId)) {
+  if (!seatedCharacterIds(chat).includes(body.characterId)) {
     return inventoryErrorResponse(new InventoryNotAParticipantError(body.characterId));
   }
   const equipped = await resetInventoryToDefaults(repos, chat, body.characterId, user.id);

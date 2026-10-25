@@ -164,28 +164,35 @@ export function hasStableInventoryItemId(content: string | null | undefined): bo
 }
 
 /**
- * Every object record in a mount's `Inventory/`, at any depth, archived
- * included, sorted by path. A second file claiming an id already seen is
- * skipped with a `warn` (the first by path wins) and never swept by a write
- * (see {@link readDuplicateInventoryPaths}).
+ * One read of a mount's `Inventory/`: every object record (at any depth,
+ * archived included, sorted by path), the files skipped because an earlier
+ * one claims the same id, and the paths the Inventory owns — what a
+ * projection may sweep. A writer takes all three from one scan rather than
+ * parsing the folder again for each question.
+ */
+export interface InventoryFolderScan {
+  records: InventoryRecord[];
+  /**
+   * Files that parse as objects but lose to another file claiming the same
+   * id. The projection must leave these alone: they are the operator's (a
+   * copy made in the Scriptorium, say), and sweeping them would delete them
+   * silently.
+   */
+  duplicatePaths: Set<string>;
+  /** The files that became {@link InventoryFolderScan.records}: the only ones a projection may sweep. */
+  ownedPaths: Set<string>;
+}
+
+/**
+ * Every object record in a mount's `Inventory/`. A second file claiming an id
+ * already seen is skipped with a `warn` and never swept by a write.
  */
 export async function readInventoryRecords(mountPointId: string): Promise<InventoryRecord[]> {
   return (await scanInventoryFolder(mountPointId)).records;
 }
 
-/**
- * The paths of the files in a mount's `Inventory/` that parse as objects but
- * were skipped because an earlier file (by path) claims the same id. The
- * projection must leave these alone: they are the operator's (a copy made in
- * the Scriptorium, say), and sweeping them would delete them silently.
- */
-export async function readDuplicateInventoryPaths(mountPointId: string): Promise<Set<string>> {
-  return (await scanInventoryFolder(mountPointId)).duplicatePaths;
-}
-
-async function scanInventoryFolder(
-  mountPointId: string,
-): Promise<{ records: InventoryRecord[]; duplicatePaths: Set<string> }> {
+/** Read and parse a mount's `Inventory/` once (see {@link InventoryFolderScan}). */
+export async function scanInventoryFolder(mountPointId: string): Promise<InventoryFolderScan> {
   const docs = await getRepositories().docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     INVENTORY_FOLDER,
@@ -214,9 +221,11 @@ async function scanInventoryFolder(
   }
   const records: InventoryRecord[] = [];
   const duplicatePaths = new Set<string>();
+  const ownedPaths = new Set<string>();
   for (const { path, record } of parsed) {
     if (winnerPath.get(record.id) === path) {
       records.push(record);
+      ownedPaths.add(path);
       continue;
     }
     logger.warn('Two Inventory files claim one id; this one is skipped and left alone', {
@@ -236,5 +245,5 @@ async function scanInventoryFolder(
     op: 'read',
     context: 'inventory',
   });
-  return { records, duplicatePaths };
+  return { records, duplicatePaths, ownedPaths };
 }

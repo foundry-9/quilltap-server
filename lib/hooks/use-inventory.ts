@@ -2,12 +2,12 @@
 
 /**
  * The Inventory's client data: one tier's objects and folders, the
- * archetypes a tier can reach, an archetype's dependents, an object's
- * pictures, and what a chat's cast carries — each a TanStack Query read under
- * `queryKeys.inventory`, with the writes as mutations that invalidate what
- * they change. No polling: the chat read refetches on the `chats` realtime
- * topic (`lib/realtime/topic-map.ts`), the browser's reads on open and after
- * their own mutations.
+ * archetypes a tier can reach, an object's pictures, and what a chat's cast
+ * carries — each a TanStack Query read under `queryKeys.inventory`, with the
+ * writes as mutations that invalidate what they change. No polling: the chat
+ * read refetches on the `chats` realtime topic and the lists and folders on
+ * the `inventory` topic, which every object write publishes
+ * (`lib/realtime/topic-map.ts`).
  *
  * Every write throws an {@link InventoryRequestError} carrying the server's
  * refusal `code` (`ARCHETYPE_IN_USE`, `CAP_EXCEEDED`, …) so a surface can
@@ -21,7 +21,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import type { InventoryFolder } from '@/lib/inventory/folders'
-import type { InventoryDependent } from '@/lib/inventory/dependents'
 import type { InventoryImageSummary } from '@/lib/inventory/item-images'
 import type {
   InventoryInheritableField,
@@ -149,24 +148,6 @@ export function useInventoryArchetypes(container: InventoryContainer | null, pro
   return { archetypes: query.data ?? EMPTY_ITEMS, loading: query.isLoading }
 }
 
-/** An archetype's instances, everywhere. */
-export function useInventoryDependents(container: InventoryContainer | null, itemId: string | null) {
-  // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
-  const query = useQuery({
-    queryKey: queryKeys.inventory.dependents(itemId ?? 'none'),
-    queryFn: async ({ signal }) => {
-      const data = await apiFetch<{ dependents?: InventoryDependent[] }>(
-        `${inventoryItemUrl(container as InventoryContainer, itemId as string)}?action=dependents`,
-        { signal },
-      )
-      return data?.dependents ?? []
-    },
-    enabled: container !== null && itemId !== null,
-  })
-  return { dependents: query.data ?? [], loading: query.isLoading }
-}
-
 /** One object's pictures (an instance with none shows its archetype's). */
 export function useInventoryImages(container: InventoryContainer | null, itemId: string | null) {
   // The URL is a pure function of the container (and object), which the key encodes.
@@ -222,7 +203,6 @@ export function useInventoryMutations() {
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists }),
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.folderLists }),
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.archetypeLists }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dependentLists }),
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.equippedLists }),
       ]),
     [queryClient],

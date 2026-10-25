@@ -16,7 +16,6 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { publishRealtime } from '@/lib/realtime/bus';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
 import { dropCarriedEverywhere } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
@@ -28,6 +27,7 @@ import {
   characterChangeContext,
   errorMessageOf,
   inventoryNotFoundMessage,
+  loadOwnRecord,
   loadToolChat,
   loadToolInventory,
   logInventoryTool,
@@ -92,22 +92,19 @@ export async function executeInventoryGiveTool(
     const receiver = await resolveReceiver(repos, chat.participants ?? [], context.characterId, parsed.to);
     if ('error' in receiver) return refuse(receiver.error, [item.id]);
 
-    const source = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
+    const own = await loadOwnRecord(repos, context, item.id);
+    if (!own) return refuse(inventoryNotFoundMessage(parsed.ref), [item.id]);
     const destination = await resolveInventoryLocation('character', receiver.id, repos, context.userId, { ensure: true });
-    const record = source ? await source.findItem(item.id) : null;
-    if (!source || !record) return refuse(inventoryNotFoundMessage(parsed.ref), [item.id]);
     if (!destination) return refuse(`${receiver.name} has no vault to receive it.`, [item.id]);
 
     const { item: moved } = await transferInventoryItem(repos, {
       action: 'move',
-      source,
+      source: own.vault,
       destination,
-      record,
+      record: own.record,
       userId: context.userId,
     });
-    publishRealtime('inventory');
     await dropCarriedEverywhere(repos, context.characterId, item.id, [context.chatId]);
-    publishRealtime('chats', context.chatId);
     await notifyInventoryChanged(
       repos,
       { id: context.chatId },

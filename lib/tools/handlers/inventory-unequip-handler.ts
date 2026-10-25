@@ -1,9 +1,9 @@
 /**
  * Unequip Inventory Objects Tool Handler
  *
- * Resolves each ref (`pickForGesture(…, 'unequip')`, or the kit itself so it
- * sets down whatever members it holds), then one `unequipItems` call. Never
- * fails on state.
+ * Resolves each ref (`pickForGesture(…, 'unequip')`: the carried match, or a
+ * kit so it sets down whatever members it holds), then one `unequipItems`
+ * call. Never fails on state.
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
@@ -40,7 +40,7 @@ export async function executeInventoryUnequipTool(
     const notEquipped: string[] = [];
     for (const ref of parsed.refs) {
       const matches = resolveToolRef(ctx, ref);
-      const pick = pickForGesture(matches, 'unequip') ?? matches.find((m) => m.item.kind === 'kit') ?? null;
+      const pick = pickForGesture(matches, 'unequip');
       if (!pick) {
         notEquipped.push(ref);
         continue;

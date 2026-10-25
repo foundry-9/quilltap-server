@@ -249,6 +249,11 @@ export const instantiateInventorySchema = z.object({
   })).optional(),
 });
 
+/** `POST …/inventory?action=duplicate` body. */
+export const duplicateInventorySchema = z.object({
+  itemId: z.string().min(1, 'itemId is required'),
+});
+
 /** `POST …/inventory?action=create-folder` / `delete-folder` body. */
 export const inventoryFolderPathBodySchema = z.object({
   path: InventoryFolderInputSchema.min(1, 'A folder path is required'),

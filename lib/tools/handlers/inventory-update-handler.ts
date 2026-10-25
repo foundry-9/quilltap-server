@@ -8,16 +8,15 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { publishRealtime } from '@/lib/realtime/bus';
 import type { InventoryUpdateBody } from '@/lib/schemas/inventory.types';
 import { updateInventoryItem } from '@/lib/inventory/item-mutations';
-import { resolveInventoryLocation } from '@/lib/inventory/location';
 import type { InventoryUpdateToolOutput } from '../inventory-update-tool';
 import { validateInventoryUpdateInput } from '../inventory-update-tool';
 import {
   errorMessageOf,
   formatSummary,
   inventoryNotFoundMessage,
+  loadOwnRecord,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -45,9 +44,9 @@ export async function executeInventoryUpdateTool(
       logInventoryTool('inventory_update', context, { refs: [parsed.ref], resolved: [matches[0].item.id], outcome: 'refused: shared' }, 'info');
       return { success: false, error: sharedInventoryItemReadOnlyMessage(matches[0].item, 'changed') };
     }
-    const vault = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
-    const record = vault ? await vault.findItem(match.item.id) : null;
-    if (!vault || !record) return { success: false, error: inventoryNotFoundMessage(parsed.ref) };
+    const own = await loadOwnRecord(repos, context, match.item.id);
+    if (!own) return { success: false, error: inventoryNotFoundMessage(parsed.ref) };
+    const { vault, record } = own;
 
     const patch: InventoryUpdateBody = {};
     if (parsed.name !== undefined) patch.name = parsed.name.trim();
@@ -67,9 +66,8 @@ export async function executeInventoryUpdateTool(
 
     const updated = await updateInventoryItem(repos, vault, record, patch, { chatId: context.chatId });
     if (!updated) return { success: false, error: `Failed to change "${parsed.ref}".` };
-    publishRealtime('inventory');
-    const after = (await loadToolInventory(repos, context)).pool.items.find((item) => item.id === record.id)
-      ?? { ...match.item, ...patch, metadata: patch.metadata ?? match.item.metadata } as typeof match.item;
+    // Resolved against the pool already in hand: the edit changed this object, not its archetype.
+    const after = ctx.serverPool.resolve({ ...updated, origin: vault.origin, mountPointId: vault.mountPointId });
     const fields = Object.keys(patch);
     logInventoryTool('inventory_update', context, { refs: [parsed.ref], resolved: [record.id], outcome: 'updated', fields });
     return { success: true, item: summarize(after, true, match.equipped), fields };

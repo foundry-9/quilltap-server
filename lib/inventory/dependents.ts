@@ -41,7 +41,7 @@ export interface InventoryDependent {
 }
 
 /** Every Inventory record in every mount, unresolved. */
-export async function readAllInventoryRecords(): Promise<MountedInventoryRecord[]> {
+async function readAllInventoryRecords(): Promise<MountedInventoryRecord[]> {
   const repos = getRepositories();
   const mounts = await repos.docMountPoints.findAll();
   if (mounts.length === 0) return [];
@@ -99,30 +99,55 @@ export async function findRecordsAnywhere(ids: readonly string[]): Promise<Map<s
   return found;
 }
 
-/** Who owns a mount: a character vault, a group or project store, or General. */
-async function describeMount(
-  mountPointId: string,
-  generalMountPointId: string | null,
-): Promise<Pick<InventoryDependent, 'scope' | 'ownerId' | 'ownerName' | 'ownerArchived'>> {
-  if (mountPointId === generalMountPointId) {
-    return { scope: 'general', ownerId: null, ownerName: 'Quilltap General', ownerArchived: false };
-  }
+type MountOwner = Pick<InventoryDependent, 'scope' | 'ownerId' | 'ownerName' | 'ownerArchived'>;
+
+/** Answers "who owns this mount?" for one operation; see {@link mountOwnerResolver}. */
+export type MountOwnerResolver = (mountPointId: string) => Promise<MountOwner>;
+
+/**
+ * Who owns a mount — a character vault, a group or project store, or General
+ * — memoised for one operation. The project and group lists are read once,
+ * on first need, however many mounts are asked about.
+ */
+export function mountOwnerResolver(): MountOwnerResolver {
   const repos = getRepositories();
-  const character = await repos.characters.findByDocumentMountPointIdRaw(mountPointId);
-  if (character) {
-    return { scope: 'character', ownerId: character.id, ownerName: character.name, ownerArchived: !!character.archivedAt };
-  }
-  const project = (await repos.projects.findAll()).find((p) => p.officialMountPointId === mountPointId);
-  if (project) return { scope: 'project', ownerId: project.id, ownerName: project.name, ownerArchived: false };
-  const group = (await repos.groups.findAll()).find((g) => g.officialMountPointId === mountPointId);
-  if (group) return { scope: 'group', ownerId: group.id, ownerName: group.name, ownerArchived: false };
-  const mount = await repos.docMountPoints.findById(mountPointId);
-  return { scope: 'unknown', ownerId: null, ownerName: mount?.name ?? null, ownerArchived: false };
+  const owners = new Map<string, Promise<MountOwner>>();
+  let general: Promise<string | null> | null = null;
+  let projects: ReturnType<typeof repos.projects.findAll> | null = null;
+  let groups: ReturnType<typeof repos.groups.findAll> | null = null;
+
+  const describe = async (mountPointId: string): Promise<MountOwner> => {
+    if (mountPointId === (await (general ??= getGeneralMountPointId()))) {
+      return { scope: 'general', ownerId: null, ownerName: 'Quilltap General', ownerArchived: false };
+    }
+    const character = await repos.characters.findByDocumentMountPointIdRaw(mountPointId);
+    if (character) {
+      return { scope: 'character', ownerId: character.id, ownerName: character.name, ownerArchived: !!character.archivedAt };
+    }
+    const project = (await (projects ??= repos.projects.findAll())).find((p) => p.officialMountPointId === mountPointId);
+    if (project) return { scope: 'project', ownerId: project.id, ownerName: project.name, ownerArchived: false };
+    const group = (await (groups ??= repos.groups.findAll())).find((g) => g.officialMountPointId === mountPointId);
+    if (group) return { scope: 'group', ownerId: group.id, ownerName: group.name, ownerArchived: false };
+    const mount = await repos.docMountPoints.findById(mountPointId);
+    return { scope: 'unknown', ownerId: null, ownerName: mount?.name ?? null, ownerArchived: false };
+  };
+
+  return (mountPointId) => {
+    let owner = owners.get(mountPointId);
+    if (!owner) {
+      owner = describe(mountPointId);
+      owners.set(mountPointId, owner);
+    }
+    return owner;
+  };
 }
 
 /** Which tier a mount is, or null when it belongs to no Inventory owner. */
-export async function mountScopeOf(mountPointId: string): Promise<InventoryScope | null> {
-  const owner = await describeMount(mountPointId, await getGeneralMountPointId());
+export async function mountScopeOf(
+  mountPointId: string,
+  ownerOf: MountOwnerResolver = mountOwnerResolver(),
+): Promise<InventoryScope | null> {
+  const owner = await ownerOf(mountPointId);
   return owner.scope === 'unknown' ? null : owner.scope;
 }
 
@@ -135,9 +160,10 @@ export async function mountScopeOf(mountPointId: string): Promise<InventoryScope
 export async function isReachableFromKitTier(
   kitMountPointId: string,
   target: { mountPointId: string; scope: InventoryScope },
+  ownerOf: MountOwnerResolver = mountOwnerResolver(),
 ): Promise<boolean> {
   if (target.mountPointId === kitMountPointId || target.scope === 'general') return true;
-  const owner = await describeMount(kitMountPointId, await getGeneralMountPointId());
+  const owner = await ownerOf(kitMountPointId);
   if (owner.scope !== 'character' || !owner.ownerId) return false;
   if (target.scope === 'project') return true;
   if (target.scope !== 'group') return false;
@@ -154,14 +180,14 @@ export async function findKitsStrandedByMove(
   target: { mountPointId: string; scope: InventoryScope },
 ): Promise<Array<{ id: string; name: string | null; ownerName: string | null; mountPointId: string }>> {
   const docs = await getRepositories().docMountDocuments.findManyInFolderContaining(INVENTORY_FOLDER, '.json', [itemId]);
-  const generalMountPointId = await getGeneralMountPointId();
+  const ownerOf = mountOwnerResolver();
   const out: Array<{ id: string; name: string | null; ownerName: string | null; mountPointId: string }> = [];
   for (const doc of docs) {
     if (!isInventoryItemDocumentPath(doc.relativePath)) continue;
     const kit = parseInventoryItemFile(doc, { quiet: true });
     if (!kit || kit.kind !== 'kit' || kit.archivedAt || !(kit.itemIds ?? []).includes(itemId)) continue;
-    if (await isReachableFromKitTier(doc.mountPointId, target)) continue;
-    const owner = await describeMount(doc.mountPointId, generalMountPointId);
+    if (await isReachableFromKitTier(doc.mountPointId, target, ownerOf)) continue;
+    const owner = await ownerOf(doc.mountPointId);
     out.push({ id: kit.id, name: kit.title || kit.name || null, ownerName: owner.ownerName, mountPointId: doc.mountPointId });
   }
   logger.debug('[InventoryDependents] Checked kits a move would strand', {
@@ -179,17 +205,15 @@ export async function findKitsStrandedByMove(
 /** Every instance of `archetypeId`, in every mount, tagged with its holder. */
 export async function findDependents(archetypeId: string): Promise<InventoryDependent[]> {
   const dependents = (await readAllInventoryRecords()).filter(({ record }) => record.parentId === archetypeId);
-  const generalMountPointId = await getGeneralMountPointId();
-  const owners = new Map<string, Awaited<ReturnType<typeof describeMount>>>();
+  const ownerOf = mountOwnerResolver();
   const out: InventoryDependent[] = [];
   for (const { record, mountPointId } of dependents) {
-    if (!owners.has(mountPointId)) owners.set(mountPointId, await describeMount(mountPointId, generalMountPointId));
     out.push({
       id: record.id,
       name: record.name ?? null,
       title: record.title ?? null,
       mountPointId,
-      ...(owners.get(mountPointId) as Awaited<ReturnType<typeof describeMount>>),
+      ...(await ownerOf(mountPointId)),
     });
   }
   logger.debug('[InventoryDependents] Found dependents', {

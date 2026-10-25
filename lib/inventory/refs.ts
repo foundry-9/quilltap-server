@@ -25,10 +25,10 @@ import { isKin, kitState } from '@/lib/inventory/resolve';
 import type { AggregateObject, AggregateScope } from '@/lib/pascal/inventory-aggregate';
 
 /** Where an object stands for the rolling character in this chat. */
-export type InventoryState = 'equipped' | 'carried' | 'reachable' | 'absent';
+export type InventoryState = (typeof INVENTORY_STATES)[number];
 
-/** The four states, best first. */
-export const INVENTORY_STATES: readonly InventoryState[] = ['equipped', 'carried', 'reachable', 'absent'];
+/** The four states, best first — the one spelling, which the custom-tool schema's enum reads. */
+export const INVENTORY_STATES = ['equipped', 'carried', 'reachable', 'absent'] as const;
 
 /** The resolved objects a character can reach, and which of them are their own. */
 export interface ResolvedInventoryPool {
@@ -149,15 +149,16 @@ export function equippedKinCount(
 }
 
 /**
- * For a gesture: the match to act on — the first equipped one for unequip,
- * the first unequipped, carriable one for equip (kits allowed), own tier
- * before shared. Null when none qualifies.
+ * For a gesture: the match to act on, own tier before shared. Equip takes the
+ * first unequipped, carriable one (kits allowed). Unequip takes the first
+ * equipped one, else a kit — a kit sets down whatever members it holds even
+ * when not all are carried. Null when none qualifies.
  */
 export function pickForGesture(
   matches: readonly InventoryRefMatch[],
   action: 'equip' | 'unequip',
 ): InventoryRefMatch | null {
-  if (action === 'unequip') return matches.find((m) => m.equipped) ?? null;
+  if (action === 'unequip') return matches.find((m) => m.equipped) ?? matches.find((m) => m.item.kind === 'kit') ?? null;
   return matches.find((m) => !m.equipped && !m.item.isArchetype && !m.item.archivedAt) ?? null;
 }
 

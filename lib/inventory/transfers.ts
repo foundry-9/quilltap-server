@@ -26,7 +26,13 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { normalizeInventoryFolderPathOrRoot } from '@/lib/inventory/folders';
 import { assertCopyable, assertKitMembers } from '@/lib/inventory/item-mutations';
-import { findKitsStrandedByMove, findRecordsAnywhere, isReachableFromKitTier, mountScopeOf } from '@/lib/inventory/dependents';
+import {
+  findKitsStrandedByMove,
+  findRecordsAnywhere,
+  isReachableFromKitTier,
+  mountOwnerResolver,
+  mountScopeOf,
+} from '@/lib/inventory/dependents';
 import { InventoryKitStrandedError, InventoryShapeError } from '@/lib/inventory/errors';
 import { carryInventoryItemImages, commitMovedInventoryImages } from '@/lib/inventory/item-images';
 import { locationKey, type InventoryLocation } from '@/lib/inventory/location';
@@ -75,10 +81,11 @@ export async function transferInventoryItem(
     const unseen = (record.itemIds ?? []).filter((id) => !destinationPool.get(id));
     const contextual = new Set<string>();
     if (unseen.length > 0) {
+      const ownerOf = mountOwnerResolver();
       const homes = await findRecordsAnywhere(unseen);
       for (const [id, { mountPointId }] of homes) {
-        const home = await mountScopeOf(mountPointId);
-        if (home && (await isReachableFromKitTier(destination.mountPointId, { mountPointId, scope: home }))) contextual.add(id);
+        const home = await mountScopeOf(mountPointId, ownerOf);
+        if (home && (await isReachableFromKitTier(destination.mountPointId, { mountPointId, scope: home }, ownerOf))) contextual.add(id);
       }
     }
     assertKitMembers(destinationPool, record.itemIds ?? [], meta, contextual);

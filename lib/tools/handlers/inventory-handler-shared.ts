@@ -12,10 +12,12 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
+import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { InventoryOffRosterError, InventoryRefusal } from '@/lib/inventory/errors';
 import { loadInventoryContext, type LoadedInventoryContext } from '@/lib/inventory/context';
-import type { EquipChat, InventoryChangeContext } from '@/lib/inventory/equip';
+import { loadEquipChat, type EquipChat, type InventoryChangeContext } from '@/lib/inventory/equip';
+import { inventoryChangeContext } from '@/lib/inventory/equip-effects';
+import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 import { resolveInventoryRef, type InventoryRefMatch, type InventoryState } from '@/lib/inventory/refs';
 import type { WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
@@ -94,19 +96,29 @@ export function loadToolInventory(repos: InventoryRepos, context: InventoryToolC
   return loadInventoryContext(repos, context.characterId, context.chatId);
 }
 
+/**
+ * The caller's own vault and the stored record of one of its objects — what
+ * a change to an own object writes through. Null when the vault or the
+ * record is gone (moved or deleted since the context was read).
+ */
+export async function loadOwnRecord(
+  repos: InventoryRepos,
+  context: InventoryToolContext,
+  itemId: string,
+): Promise<{ vault: InventoryLocation; record: InventoryRecord } | null> {
+  const vault = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
+  const record = vault ? await vault.findItem(itemId) : null;
+  return vault && record ? { vault, record } : null;
+}
+
 /** The chat as the equip chokepoints take it, or null. */
-export async function loadToolChat(repos: InventoryRepos, chatId: string): Promise<EquipChat | null> {
-  return ((await repos.chats.findById(chatId)) as EquipChat | null) ?? null;
+export function loadToolChat(repos: InventoryRepos, chatId: string): Promise<EquipChat | null> {
+  return loadEquipChat(repos, chatId);
 }
 
 /** The change context for a character's own gesture: announced, joined to the turn. */
 export function characterChangeContext(context: InventoryToolContext): InventoryChangeContext {
-  return {
-    userId: context.userId,
-    provenance: 'character',
-    announce: true,
-    ...(context.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: context.pendingInventoryAnnouncements } : {}),
-  };
+  return inventoryChangeContext(context.userId, 'character', context);
 }
 
 /** Resolve a ref over the call's context. */
