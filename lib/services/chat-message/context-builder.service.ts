@@ -157,6 +157,29 @@ export interface FileProcessingResult {
 }
 
 /**
+ * The operator's uploads named by a send, as the chat's own file records: only
+ * ids that are actually linked to this chat count, so a stale or foreign id is
+ * dropped rather than linked to the new message.
+ */
+export async function findAttachedFiles(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  fileIds?: string[]
+): Promise<AttachedFile[]> {
+  if (!fileIds || fileIds.length === 0) return []
+  const chatFiles = await repos.files.findByLinkedTo(chatId)
+  return chatFiles
+    .filter(file => fileIds.includes(file.id))
+    .map(file => ({
+      id: file.id,
+      filepath: `api/files/${file.id}`,
+      filename: file.originalFilename,
+      mimeType: file.mimeType,
+      size: file.size,
+    }))
+}
+
+/**
  * Load and process attached files for a message
  */
 export async function loadAndProcessFiles(
@@ -176,17 +199,7 @@ export async function loadAndProcessFiles(
     }
   }
 
-  // Use the repository to find files linked to the chat
-  const chatFiles = await repos.files.findByLinkedTo(chatId)
-  const matched = chatFiles.filter(file => fileIds.includes(file.id))
-
-  const attachedFiles: AttachedFile[] = matched.map(file => ({
-    id: file.id,
-    filepath: `api/files/${file.id}`,
-    filename: file.originalFilename,
-    mimeType: file.mimeType,
-    size: file.size,
-  }))
+  const attachedFiles = await findAttachedFiles(repos, chatId, fileIds)
 
   // Load file data for LLM with provider-aware image resizing
   const fileAttachments = await loadChatFilesForLLM(

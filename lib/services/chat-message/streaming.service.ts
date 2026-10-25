@@ -154,26 +154,6 @@ function isToolDisabled(
   return false
 }
 
-/**
- * Surface-specific narrowing for `buildTools`. Every field only ever removes
- * tools relative to the positional flags and the profile.
- */
-export interface BuildToolsExtras {
-  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
-  pluginToolAllowlist?: string[]
-  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
-  documentsOnlySearch?: boolean
-  /** `false` withholds `search_web` even when the profile allows it. */
-  webSearch?: boolean
-  /**
-   * The turn's effect ceiling (a storyteller turn). A tool whose static effect
-   * is above it is dropped; a tool whose effect depends on its input stays
-   * listed with one line saying which uses this turn allows. The executor's
-   * check is the guarantee; this only spares the model offers it can't use.
-   */
-  effectCeiling?: ToolEffect
-}
-
 /** Name and description slots of a provider-format tool, whichever shape it takes. */
 function toolNameOf(tool: unknown): string | undefined {
   const toolObj = tool as { function?: { name?: string }; name?: string }
@@ -181,10 +161,9 @@ function toolNameOf(tool: unknown): string | undefined {
 }
 
 /**
- * Apply an effect ceiling to a built tool list (see `BuildToolsExtras.effectCeiling`).
- * Exported for the storyteller bid, which lists the same tools.
+ * Apply an effect ceiling to a built tool list (see `BuildToolsOptions.effectCeiling`).
  */
-export function applyEffectCeilingToTools(
+function applyEffectCeilingToTools(
   tools: unknown[],
   ceiling: ToolEffect,
   ctx: ToolEffectContext
@@ -220,57 +199,59 @@ export function applyEffectCeilingToTools(
 }
 
 /**
- * Build tools for the provider
+ * What a surface asks `buildTools` for. Every flag is opt-in except the three
+ * wardrobe / inventory capabilities, which a character holds unless it is
+ * explicitly denied (`false`) — the same reading the character columns get.
  */
-export async function buildTools(
-  connectionProfile: ConnectionProfile,
-  imageProfileId: string | null,
-  imageProfile: ImageProfile | null,
-  userId: string,
+export interface BuildToolsOptions {
+  connectionProfile: ConnectionProfile
+  userId: string
+  imageProfileId?: string | null
+  imageProfile?: ImageProfile | null
   /** Project ID if chat is associated with a project (enables project_info tool) */
-  projectId?: string | null,
+  projectId?: string | null
   /** Whether context compression is enabled (enables request_full_context tool) */
-  requestFullContext?: boolean,
-  /** List of tool IDs to disable (or undefined to return empty tools for this message) */
-  disabledTools?: string[],
-  /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
-  disabledToolGroups?: string[],
+  requestFullContext?: boolean
+  /** Tool IDs to withhold */
+  disabledTools?: string[]
+  /** Disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups?: string[]
   /** Whether agent mode is enabled (enables submit_final_response tool) */
-  agentModeEnabled?: boolean,
+  agentModeEnabled?: boolean
   /** Whether this is a multi-character chat (enables whisper tool) */
-  isMultiCharacter?: boolean,
-  /** Whether help tools are enabled for this character (enables help_search and help_settings) */
-  helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off, wardrobe_rollback, and wardrobe_history) */
-  canDressThemselves?: boolean,
-  /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
-  canCreateOutfits?: boolean,
-  /** Whether this character can manage their inventory (enables the nine inventory_* tools; null/undefined = on) */
-  canManageInventory?: boolean,
+  isMultiCharacter?: boolean
+  /** Whether help tools are enabled for this character (enables help_search, help_settings, help_navigate) */
+  helpToolsEnabled?: boolean
+  /** wardrobe_list / _read / _wear / _take_off / _rollback / _history (default on) */
+  canDressThemselves?: boolean
+  /** wardrobe_create / _update / _archive (default on) */
+  canCreateOutfits?: boolean
+  /** The nine inventory_* tools (default on) */
+  canManageInventory?: boolean
   /**
    * Which `doc_*` tools to build: `'full'` (the whole family — chat surfaces
    * with linked stores, the Brahma Console), `'read'` (the read-only five — the
-   * Scenario Builder), or `'off'`.
+   * Scenario Builder), or `'off'` (the default).
    */
-  docToolsMode?: DocToolsMode,
+  docToolsMode?: DocToolsMode
   /** Whether the ask_carina tool is enabled for this character */
-  askCarinaEnabled?: boolean,
+  askCarinaEnabled?: boolean
   /**
    * Whether to include the always-on "workspace" tool set (mail, annotations,
    * terminal, conversation reading, self-inventory, RNG/state). Defaults to
    * true. The Brahma Console passes false to strip them.
    */
-  includeWorkspaceTools?: boolean,
+  includeWorkspaceTools?: boolean
   /**
    * When true, the `search` tool is built from its Brahma variant whose schema
    * omits the `memories` source (Brahma Console has no memory access).
    */
-  excludeMemorySearch?: boolean,
+  excludeMemorySearch?: boolean
   /**
    * When true, include the read-only `run_sql` tool (Brahma Console only).
    * Execution is additionally gated on `operatorSurface` in the tool executor.
    */
-  sqlAccess?: boolean,
+  sqlAccess?: boolean
   /**
    * Pascal's custom-tool roster perspective — the RESPONDING character's, since
    * a character-tier store shadows the farther tiers. Pass it to offer
@@ -278,16 +259,31 @@ export async function buildTools(
    * surface has no roster at all) and the tool is never built.
    *
    * The roster is resolved here rather than by the caller so the work happens
-   * only once tools are actually being built — a Courier turn, a profile with
-   * `allowToolUse: false`, or the legacy `disabledTools === undefined` bail all
-   * return before a single mount is listed. Deliberately NOT cached across
-   * turns: a `.tool.json` edited mid-chat must be live on the next call (see
-   * the freshness note atop `lib/pascal/custom-tools.ts`).
+   * only once tools are actually being built — a Courier turn or a profile with
+   * `allowToolUse: false` returns before a single mount is listed. Deliberately
+   * NOT cached across turns: a `.tool.json` edited mid-chat must be live on the
+   * next call (see the freshness note atop `lib/pascal/custom-tools.ts`).
    */
-  customToolContext?: RosterContext | null,
-  /** Surface-specific narrowing, applied at construction (never a post-filter). */
-  extras?: BuildToolsExtras
-): Promise<{
+  customToolContext?: RosterContext | null
+  // Surface-specific narrowing, applied at construction (never a post-filter).
+  // Each only ever removes tools relative to the flags above and the profile.
+  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
+  pluginToolAllowlist?: string[]
+  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
+  documentsOnlySearch?: boolean
+  /** `false` withholds `search_web` even when the profile allows it. */
+  webSearch?: boolean
+  /**
+   * The turn's effect ceiling (a storyteller turn, an autonomous room without
+   * destructive permission). A tool whose static effect is above it is
+   * dropped; a tool whose effect depends on its input stays listed with one
+   * line saying which uses this turn allows. The executor's check is the
+   * guarantee; this only spares the model offers it can't use.
+   */
+  effectCeiling?: ToolEffect
+}
+
+export interface BuiltTools {
   tools: unknown[]
   modelSupportsNativeTools: boolean
   useNativeWebSearch: boolean
@@ -295,7 +291,38 @@ export async function buildTools(
   customToolEffects: Map<string, ToolEffect>
   /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
   pluginToolEffects: Map<string, ToolEffect>
-}> {
+}
+
+/**
+ * Build tools for the provider
+ */
+export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools> {
+  const {
+    connectionProfile,
+    userId,
+    imageProfileId,
+    imageProfile,
+    projectId,
+    requestFullContext,
+    disabledTools = [],
+    disabledToolGroups = [],
+    agentModeEnabled,
+    isMultiCharacter,
+    helpToolsEnabled,
+    canDressThemselves,
+    canCreateOutfits,
+    canManageInventory,
+    docToolsMode,
+    askCarinaEnabled,
+    includeWorkspaceTools,
+    excludeMemorySearch,
+    sqlAccess,
+    customToolContext,
+    pluginToolAllowlist,
+    documentsOnlySearch,
+    webSearch,
+    effectCeiling,
+  } = options
   const customToolEffects = new Map<string, ToolEffect>()
   let pluginToolEffects = new Map<string, ToolEffect>()
   const provider = await createLLMProvider(
@@ -335,12 +362,6 @@ export async function buildTools(
     })
   }
 
-  // If disabledTools is undefined (not an array), skip tools entirely for this message
-  // This is a legacy fallback - tools are now always sent with every prompt
-  if (disabledTools === undefined) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
-  }
-
   // Pascal's custom pseudo-tools. Resolved once per turn, at the last possible
   // moment (every early return above skips it entirely). A roster that comes
   // back empty leaves `run_custom` unbuilt — the tool list stays stable for
@@ -370,7 +391,7 @@ export async function buildTools(
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     // A surface may narrow web search further (never widen it past the profile).
-    webSearch: !!connectionProfile.allowWebSearch && extras?.webSearch !== false,
+    webSearch: !!connectionProfile.allowWebSearch && webSearch !== false,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
@@ -389,8 +410,8 @@ export async function buildTools(
     ...inventoryToolFlags(canManageInventory),
     whisper: !!isMultiCharacter,
     docToolsMode: docToolsMode ?? 'off',
-    pluginToolAllowlist: extras?.pluginToolAllowlist,
-    documentsOnlySearch: !!extras?.documentsOnlySearch,
+    pluginToolAllowlist,
+    documentsOnlySearch: !!documentsOnlySearch,
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
@@ -404,7 +425,7 @@ export async function buildTools(
 
   // Filter out disabled tools (individual IDs and group patterns)
   const hasDisabledTools = disabledTools.length > 0
-  const hasDisabledGroups = disabledToolGroups && disabledToolGroups.length > 0
+  const hasDisabledGroups = disabledToolGroups.length > 0
 
   if (hasDisabledTools || hasDisabledGroups) {
     // Build a map of tool name -> source metadata for group filtering
@@ -449,7 +470,7 @@ export async function buildTools(
       return !isToolDisabled(
         toolName,
         disabledTools,
-        disabledToolGroups || [],
+        disabledToolGroups,
         sourceMetadata
       )
     })
@@ -466,8 +487,8 @@ export async function buildTools(
     })
   }
 
-  if (extras?.effectCeiling) {
-    tools = applyEffectCeilingToTools(tools, extras.effectCeiling, { customToolEffects, pluginToolEffects })
+  if (effectCeiling) {
+    tools = applyEffectCeilingToTools(tools, effectCeiling, { customToolEffects, pluginToolEffects })
   }
 
   return { tools, modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
@@ -796,62 +817,84 @@ export function flushReasoningSegment(streaming: StreamingState): void {
 }
 
 /**
+ * The payload of the done event
+ */
+export interface DoneEventData {
+  messageId: string | null
+  participantId?: string | null
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
+  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
+  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
+  toolsExecuted: boolean
+  turn?: {
+    nextSpeakerId: string | null
+    reason: string
+    cycleComplete: boolean
+    isUsersTurn: boolean
+  }
+  emptyResponse?: boolean
+  emptyResponseReason?: string
+  provider?: string
+  modelName?: string
+  /** The turn's route trail — every profile tried, in order — so the client's
+   *  optimistic assistant push carries it without a refetch. Null (the common
+   *  case) when nothing failed. */
+  routeTrail?: RouteAttempt[] | null
+  isSilentMessage?: boolean
+  /** The Courier: signals that this done event closes a parked placeholder turn,
+   * not an actual streamed response. The Salon should skip its optimistic
+   * assistant-message push and rely on the prior fetchChat() refresh. */
+  pendingExternalTurn?: boolean
+  /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
+   * client's optimistic assistant-message push carry thinking without a refetch. */
+  reasoningContent?: string | null
+  /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
+  reasoningSegments?: ReasoningSegment[] | null
+  /**
+   * "Nothing to add" turn-skipping: this turn was passed. The client resets
+   * its streaming buffer without appending a bubble or toasting (the Host
+   * turn-pass announcement already carries the visible note).
+   */
+  skipped?: boolean
+  /** Participant ID of the character who passed (set when `skipped` is true). */
+  skippedParticipantId?: string | null
+  /**
+   * Raised hand: this character yielded the floor. Rides with `skipped` on a
+   * bare yield (no bubble to append — the Host announcement is the note).
+   */
+  yielded?: boolean
+  /**
+   * The operator hard-stopped the turn before any prose streamed. Like
+   * `skipped`, the client resets its buffer without a bubble or a toast.
+   */
+  stopped?: boolean
+}
+
+/**
  * Encode the done event
  */
-export function encodeDoneEvent(
-  encoder: TextEncoder,
-  data: {
-    messageId: string | null
-    participantId?: string | null
-    usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-    cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-    attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-    toolsExecuted: boolean
-    turn?: {
-      nextSpeakerId: string | null
-      reason: string
-      cycleComplete: boolean
-      isUsersTurn: boolean
-    }
-    emptyResponse?: boolean
-    emptyResponseReason?: string
-    provider?: string
-    modelName?: string
-    /** The turn's route trail — every profile tried, in order — so the client's
-     *  optimistic assistant push carries it without a refetch. Null (the common
-     *  case) when nothing failed. */
-    routeTrail?: RouteAttempt[] | null
-    isSilentMessage?: boolean
-    /** The Courier: signals that this done event closes a parked placeholder turn,
-     * not an actual streamed response. The Salon should skip its optimistic
-     * assistant-message push and rely on the prior fetchChat() refresh. */
-    pendingExternalTurn?: boolean
-    /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
-     * client's optimistic assistant-message push carry thinking without a refetch. */
-    reasoningContent?: string | null
-    /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
-    reasoningSegments?: ReasoningSegment[] | null
-    /**
-     * "Nothing to add" turn-skipping: this turn was passed. The client resets
-     * its streaming buffer without appending a bubble or toasting (the Host
-     * turn-pass announcement already carries the visible note).
-     */
-    skipped?: boolean
-    /** Participant ID of the character who passed (set when `skipped` is true). */
-    skippedParticipantId?: string | null
-    /**
-     * Raised hand: this character yielded the floor. Rides with `skipped` on a
-     * bare yield (no bubble to append — the Host announcement is the note).
-     */
-    yielded?: boolean
-    /**
-     * The operator hard-stopped the turn before any prose streamed. Like
-     * `skipped`, the client resets its buffer without a bubble or a toast.
-     */
-    stopped?: boolean
-  }
-): Uint8Array {
+export function encodeDoneEvent(encoder: TextEncoder, data: DoneEventData): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode the done event of a Salon turn that reached the provider: the usage,
+ * attachment results and answering model come from the turn's streaming state,
+ * so every way a turn closes reports them the same way.
+ */
+export function encodeTurnDoneEvent(
+  encoder: TextEncoder,
+  streaming: StreamingState,
+  data: Omit<DoneEventData, 'usage' | 'cacheUsage' | 'attachmentResults' | 'provider' | 'modelName'>
+): Uint8Array {
+  return encodeDoneEvent(encoder, {
+    usage: streaming.usage,
+    cacheUsage: streaming.cacheUsage,
+    attachmentResults: streaming.attachmentResults,
+    provider: streaming.effectiveProfile.provider,
+    modelName: streaming.effectiveProfile.modelName,
+    ...data,
+  })
 }
 
 /**
@@ -907,6 +950,28 @@ export function encodeStatusEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+}
+
+/** Emits one status line for the character whose turn is being built. */
+export type TurnStatusEmitter = (stage: string, message: string) => void
+
+/**
+ * A status emitter bound to one turn's stream and (once it is known) its
+ * responding character, so every line the Salon shows above the composer is
+ * attributed the same way.
+ */
+export function createTurnStatusEmitter(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  character?: { id: string; name: string }
+): TurnStatusEmitter {
+  return (stage, message) => {
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage,
+      message,
+      ...(character ? { characterName: character.name, characterId: character.id } : {}),
+    }))
+  }
 }
 
 /**

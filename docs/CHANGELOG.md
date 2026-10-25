@@ -4,6 +4,26 @@
 
 ### 4.11-dev
 
+#### Refactor: Salon turn pipeline
+
+- `processMessage` (`lib/services/chat-message/orchestrator.service.ts`) is now a sequence of phase calls; the file is 1,170 lines, down from 2,840. New modules under `lib/services/chat-message/`:
+  - `turn-stream.ts`: `openTurnStream` (turn control, keep-alives, the error frame) shared by the send path and the storyteller run; `SubmissionLedger` and `handleStreamError` moved here.
+  - `turn-holds.service.ts`: `resolveTurnHold` (paused / storyteller, pure), `qualifiesForFairRotationCheck` (pure), `maybePauseForUserSeatTurn`, and `finishHeldPost`, which replaces `finishHeldUserTurn` and the inline storyteller hold.
+  - `operator-post.service.ts`: `recordOperatorPost`, the one function that records an operator's post: staged tool results, auto-detected dice, the USER row, attachment links, the Librarian upload note, danger flags, Pascal trigger phrases and Carina. Attachment links now fail soft with a warning instead of failing the turn.
+  - `turn-preparation.service.ts`: `resolveTurnApiKey`, `resolveContextCompressionSettings` (defaults come from `ContextCompressionSettingsSchema` instead of a copied literal), `spendFullContextRequest`, `selectTurnCheapLLM`, `resolveTurnSkipOffer`, `reinjectProsperoContext`.
+  - `turn-tools.service.ts`: `resolveTurnToolSlate` (tool build, effect ceiling, tool mode, tool instructions, stop sequences, the `forceToolsOnNextMessage` flag), `resolveTurnEffectCeiling`, `buildTurnToolContext`, and `runTurnTextToolPasses`, which replaces three near-identical `runTextToolPass` calls.
+  - `turn-outcome.service.ts`: `resolveTurnOutcome` (pure: bare yield, pass, reply, tools-only, stopped, empty) and `settleTurn`, which carries it out; `handleTurnSkip` / `handleTurnYield` / `announceTurnYield` moved here.
+- `turn-extras.ts`: `spliceTurnExtras` places the tool-change notice and agent-mode instructions.
+- `buildTools` (`streaming.service.ts`) takes one options object (`BuildToolsOptions`) instead of 21 positional arguments; `BuildToolsExtras` is merged into it. All six callers updated. The legacy "`disabledTools` undefined means no tools" bail is removed (no caller used it). The orchestrator now passes the turn's effect ceiling to `buildTools` instead of filtering the list afterwards; `applyEffectCeilingToTools` is private.
+- `encodeTurnDoneEvent` fills a done frame's usage, cache usage, attachment results and model from the turn's `StreamingState`; `createTurnStatusEmitter` binds status lines to a turn's character. Done and debug frames on the turn path use `safeEnqueue` throughout (some used `controller.enqueue`, which throws once the client has gone).
+- `triggerAfterTurnsHousekeeping` (`memory-trigger.service.ts`) runs scene tracking and the Scriptorium render after a stream's turns, for both the send path and the storyteller run.
+- `findAttachedFiles` (`context-builder.service.ts`) is the one lookup of a send's uploads among the chat's files.
+- The autonomous-room effect ceiling reads the chat settings already loaded for the turn instead of reading them again.
+- Dead code removed: `MessageServiceContext`.
+- Fixed bug 262: in a room where the operator drives two seats, a post that handed the floor to the other seat was recorded by the fair-rotation pause's own write, which dropped staged tool results and skipped the dice, Pascal trigger phrases and the Librarian upload note. It now goes through `recordOperatorPost`.
+- Tests: new `turn-outcome`, `turn-holds`, `operator-post`, `turn-preparation`, `turn-tools` and `turn-stream` suites; `turn-extras` covers the splice; the Brahma one-shot and Scenario Builder tests read `buildTools` options by name.
+- `docs/developer/SYSTEM_FLOWCHARTS.md` has a new Salon Turn Pipeline section.
+
 #### Refactor: Inventory chokepoints
 
 - Inventory writes parse a tier's `Inventory/` folder once per write instead of up to three times. `scanInventoryFolder` (`vault-overlay/inventory-readers.ts`) returns the records, the duplicate-id paths and the owned paths together; the projection sweeps only the owned paths. Folder operations hand the scan they read back to the write that follows it (`ItemFolderTree.refile` takes the list `read` returned), so delete-folder no longer parses the folder twice. `readDuplicateInventoryPaths` is gone.

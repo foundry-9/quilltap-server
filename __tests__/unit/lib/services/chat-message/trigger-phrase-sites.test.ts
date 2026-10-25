@@ -95,8 +95,8 @@ describe('the sites run after the words are persisted', () => {
   const source = (file: string) =>
     readFileSync(join(process.cwd(), 'lib/services/chat-message', file), 'utf8')
 
-  it('orchestrator: after the user message is persisted', () => {
-    const text = source('orchestrator.service.ts')
+  it('operator post: after the user message is persisted', () => {
+    const text = source('operator-post.service.ts')
     const persisted = text.indexOf('ledger.userMessagePersisted = true')
     const site = text.indexOf('await runUserMessageTriggers(')
     expect(persisted).toBeGreaterThan(0)

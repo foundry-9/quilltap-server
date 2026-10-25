@@ -226,7 +226,7 @@ async function buildCourierDeltaEvents(
   const { repos, chatId, checkpoint, chat, participantCharacters, respondingCharacter, respondingParticipantId, resolvedIdentityName } = input
 
   // Re-fetch messages so we pick up the user-message + tool-results that
-  // were saved earlier in processMessage but never pushed into the
+  // were recorded earlier by recordOperatorPost but never pushed into the
   // existingMessages snapshot.
   const freshMessages = await repos.chats.getMessages(chatId)
 
