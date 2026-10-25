@@ -44,12 +44,14 @@ describe('queryKeysForTopic', () => {
     ]);
   });
 
-  it('refreshes the Inventory dialog\'s lists, folders and archetype pickers on the inventory topic', () => {
-    // Every write through an Inventory location publishes it.
+  it('refreshes the Inventory dialog\'s lists, folders, archetype pickers and carried sets on the inventory topic', () => {
+    // Every write through an Inventory location publishes it, and the dialog
+    // leaves its own writes' refresh to it while the socket is up.
     expect(queryKeysForTopic('inventory')).toEqual([
       queryKeys.inventory.lists,
       queryKeys.inventory.folderLists,
       queryKeys.inventory.archetypeLists,
+      queryKeys.inventory.equippedLists,
     ]);
   });
 
