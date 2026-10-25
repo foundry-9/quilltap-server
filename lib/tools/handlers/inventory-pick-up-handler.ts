@@ -9,7 +9,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { pickUpItems } from '@/lib/inventory/equip';
+import { loadEquipChat, pickUpItems } from '@/lib/inventory/equip';
 import { InventoryInvalidParentError } from '@/lib/inventory/errors';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 import type { InventoryPickUpToolOutput } from '../inventory-pick-up-tool';
@@ -20,7 +20,6 @@ import {
   formatSummary,
   closedShelfMessage,
   inventoryNotFoundMessage,
-  loadToolChat,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -39,7 +38,7 @@ export async function executeInventoryPickUpTool(
   }
   const repos = getRepositories();
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return { success: false, error: 'This chat could not be found.' };
     const matches = resolveToolRef(ctx, parsed.ref, { includeArchetypes: true });
     const archetype = matches.find((m) => m.item.isArchetype)?.item;

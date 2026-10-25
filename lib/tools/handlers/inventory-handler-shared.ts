@@ -15,7 +15,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { InventoryOffRosterError, InventoryRefusal } from '@/lib/inventory/errors';
 import { loadInventoryContext, type LoadedInventoryContext } from '@/lib/inventory/context';
-import { loadEquipChat, type EquipChat, type InventoryChangeContext } from '@/lib/inventory/equip';
+import type { InventoryChangeContext } from '@/lib/inventory/equip';
 import { inventoryChangeContext } from '@/lib/inventory/equip-effects';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
@@ -109,11 +109,6 @@ export async function loadOwnRecord(
   const vault = await resolveInventoryLocation('character', context.characterId, repos, context.userId);
   const record = vault ? await vault.findItem(itemId) : null;
   return vault && record ? { vault, record } : null;
-}
-
-/** The chat as the equip chokepoints take it, or null. */
-export function loadToolChat(repos: InventoryRepos, chatId: string): Promise<EquipChat | null> {
-  return loadEquipChat(repos, chatId);
 }
 
 /** The change context for a character's own gesture: announced, joined to the turn. */

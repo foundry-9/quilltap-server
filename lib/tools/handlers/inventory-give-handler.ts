@@ -17,7 +17,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
-import { dropCarriedEverywhere } from '@/lib/inventory/equip';
+import { dropCarriedEverywhere, loadEquipChat } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 import { transferInventoryItem } from '@/lib/inventory/transfers';
@@ -28,7 +28,6 @@ import {
   errorMessageOf,
   inventoryNotFoundMessage,
   loadOwnRecord,
-  loadToolChat,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -80,7 +79,7 @@ export async function executeInventoryGiveTool(
     return { success: false, error };
   };
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return refuse('This chat could not be found.');
     const matches = resolveToolRef(ctx, parsed.ref);
     if (matches.length === 0) return refuse(inventoryNotFoundMessage(parsed.ref));

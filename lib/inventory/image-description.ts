@@ -19,7 +19,7 @@
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { equippedIdsOf, loadEquippedSet } from '@/lib/inventory/equipped-set';
+import { loadEquippedSet } from '@/lib/inventory/equipped-set';
 import { inventoryLabel } from '@/lib/inventory/resolve';
 
 /** Render the phrase from resolved objects, or null when none is depicted. Pure. */
@@ -40,9 +40,11 @@ export async function loadCarryingPhrase(
   chat: { id: string; projectId?: string | null; equippedInventory?: unknown },
   characterId: string,
 ): Promise<string | null> {
-  if (equippedIdsOf(chat, characterId).length === 0) return null;
   try {
-    const phrase = renderCarryingPhrase(await loadEquippedSet(repos, chat, characterId));
+    // Nothing stored reads no pool at all (`loadEquippedSet`); nothing to log either.
+    const carried = await loadEquippedSet(repos, chat, characterId);
+    if (carried.length === 0) return null;
+    const phrase = renderCarryingPhrase(carried);
     logger.debug('[InventoryImages] Built the carrying phrase', {
       chatId: chat.id,
       characterId,

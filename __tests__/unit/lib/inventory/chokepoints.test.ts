@@ -86,6 +86,16 @@ describe('a location write', () => {
     expect(published('inventory')).toBe(3)
   })
 
+  it('publishes nothing for a batch that matched nothing', async () => {
+    const loc = await project()
+    await createInventoryItem(repos(), loc, body({ name: 'lantern' }))
+    ;(publishRealtime as jest.Mock).mockClear()
+    const stale = '00000000-0000-4000-8000-0000000000ff'
+    expect(await loc.update(stale, { description: 'gone' })).toBeNull()
+    expect(await loc.delete([stale])).toEqual([])
+    expect(published('inventory')).toBe(0)
+  })
+
   it('publishes for a folder operation too', async () => {
     const loc = await project()
     await loc.createFolder('Weapons')

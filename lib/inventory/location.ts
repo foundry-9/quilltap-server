@@ -9,8 +9,8 @@
  * writable mount. Routes, transfers, pictures and equip address a tier
  * through this; nobody switches on scope to pick a writer.
  *
- * Every write through a location publishes the `inventory` realtime topic
- * once it lands, so an open Inventory dialog re-reads whoever made the change
+ * Every write through a location that changes something publishes the
+ * `inventory` realtime topic once it lands, so an open Inventory dialog re-reads whoever made the change
  * (the operator in another window, a character's tool, Pascal). In the job
  * child the publish is a no-op and the commit hook names the topic instead
  * (`lib/realtime/job-topics.ts`).
@@ -135,16 +135,25 @@ export function inventoryLocationForMount(
     return current;
   };
 
-  /** Run a write against the current writable mount, then tell the open dialogs. */
-  const write = async <T>(fn: (target: InventoryMount) => Promise<T>): Promise<T> => {
+  /**
+   * Run a write against the current writable mount, then tell the open
+   * dialogs — only when something landed (`landed`, default always; a batch
+   * that matched nothing changed nothing).
+   */
+  const write = async <T>(
+    fn: (target: InventoryMount) => Promise<T>,
+    landed: (result: T) => boolean = () => true,
+  ): Promise<T> => {
     const result = await fn(await writableMount());
-    publishRealtime('inventory');
+    if (landed(result)) publishRealtime('inventory');
     return result;
   };
+  const nonEmpty = (result: readonly unknown[]) => result.length > 0;
 
   const updateMany: InventoryLocation['updateMany'] = (patches, opts) =>
-    write((target) =>
-      updateInventoryManyInMount(target, patches.map((p) => ({ ...p, patch: cleanPatch(p.patch) })), opts),
+    write(
+      (target) => updateInventoryManyInMount(target, patches.map((p) => ({ ...p, patch: cleanPatch(p.patch) })), opts),
+      nonEmpty,
     );
 
   return {
@@ -166,7 +175,7 @@ export function inventoryLocationForMount(
       return updated ?? null;
     },
     updateMany,
-    delete: (ids, followOn) => write((target) => deleteInventoryInMount(target, ids, followOn)),
+    delete: (ids, followOn) => write((target) => deleteInventoryInMount(target, ids, followOn), nonEmpty),
     async listFolders() {
       return listInventoryFoldersInMount(mount);
     },

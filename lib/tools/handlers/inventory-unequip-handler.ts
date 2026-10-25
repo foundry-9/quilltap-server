@@ -7,7 +7,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { unequipItems } from '@/lib/inventory/equip';
+import { loadEquipChat, unequipItems } from '@/lib/inventory/equip';
 import { pickForGesture } from '@/lib/inventory/refs';
 import type { InventoryUnequipToolOutput } from '../inventory-unequip-tool';
 import { validateInventoryUnequipInput } from '../inventory-unequip-tool';
@@ -15,7 +15,6 @@ import {
   characterChangeContext,
   errorMessageOf,
   formatSummary,
-  loadToolChat,
   loadToolInventory,
   logInventoryTool,
   resolveToolRef,
@@ -34,7 +33,7 @@ export async function executeInventoryUnequipTool(
   }
   const repos = getRepositories();
   try {
-    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadToolChat(repos, context.chatId)]);
+    const [ctx, chat] = await Promise.all([loadToolInventory(repos, context), loadEquipChat(repos, context.chatId)]);
     if (!chat) return { success: false, unequipped: [], not_equipped: [], error: 'This chat could not be found.' };
     const ids: string[] = [];
     const notEquipped: string[] = [];

@@ -10,7 +10,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { createInventorySchema } from '@/lib/schemas/inventory.types';
 import { createInventoryItem } from '@/lib/inventory/item-mutations';
-import { equipItems } from '@/lib/inventory/equip';
+import { equipItems, loadEquipChat } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { resolveItem } from '@/lib/inventory/resolve';
 import type { InventoryCreateToolOutput } from '../inventory-create-tool';
@@ -19,7 +19,6 @@ import {
   characterChangeContext,
   errorMessageOf,
   formatSummary,
-  loadToolChat,
   logInventoryTool,
   summarize,
   type InventoryToolContext,
@@ -56,7 +55,7 @@ export async function executeInventoryCreateTool(
 
     let equipped = false;
     if (parsed.equip) {
-      const chat = await loadToolChat(repos, context.chatId);
+      const chat = await loadEquipChat(repos, context.chatId);
       if (chat) {
         const result = await equipItems(repos, chat, context.characterId, [item.id], characterChangeContext(context), { known: [item] });
         equipped = result.equipped.some((e) => e.id === item.id) || result.alreadyEquipped.includes(item.id);

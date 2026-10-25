@@ -63,6 +63,7 @@ import {
   InventoryRefusal,
   InventoryShapeError,
 } from '@/lib/inventory/errors';
+import { resolveInventoryMount } from '@/lib/database/repositories/vault-overlay/inventory-writes';
 import { inventoryLocationForMount, type InventoryLocation } from '@/lib/inventory/location';
 import { loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
 import { resolveItem, withInventoryDefaults } from '@/lib/inventory/resolve';
@@ -415,17 +416,19 @@ function holdersOf(dependents: readonly InventoryDependent[]) {
 }
 
 /**
- * The location a dependent lives in, addressed by its mount. A character's
- * vault re-resolves at write time, so the tombstone check sees the character
- * as it is now; a store no tier owns is written as a shared one.
+ * The location a dependent lives in, addressed by its mount; a store no tier
+ * owns is written as a shared one. A character's vault resolves through the
+ * tombstone-checked mount resolver, and null (no linked vault any more) means
+ * the dependent cannot be written and is skipped.
  */
-function dependentLocation(dependent: InventoryDependent): InventoryLocation {
+async function dependentLocation(dependent: InventoryDependent): Promise<InventoryLocation | null> {
   const scope = dependent.scope === 'unknown' ? 'project' : dependent.scope;
-  return inventoryLocationForMount(
-    { mountPointId: dependent.mountPointId, scope, characterId: scope === 'character' ? dependent.ownerId : null },
-    dependent.ownerId,
-    { scope, id: dependent.ownerId, name: dependent.ownerName ?? '' },
-  );
+  const origin = { scope, id: dependent.ownerId, name: dependent.ownerName ?? '' };
+  if (scope === 'character') {
+    const mount = await resolveInventoryMount(dependent.ownerId);
+    return mount ? inventoryLocationForMount(mount, dependent.ownerId, origin) : null;
+  }
+  return inventoryLocationForMount({ mountPointId: dependent.mountPointId, scope, characterId: null }, dependent.ownerId, origin);
 }
 
 /**
@@ -447,9 +450,24 @@ export async function detachAll(archetypeId: string): Promise<number> {
   const byMount = new Map<string, InventoryDependent[]>();
   for (const d of dependents) byMount.set(d.mountPointId, [...(byMount.get(d.mountPointId) ?? []), d]);
 
-  let baked = 0;
+  // Every mount is resolved before any is written, so a dependent that cannot
+  // be reached is skipped rather than failing the bake halfway.
+  const targets: Array<{ mountPointId: string; group: InventoryDependent[]; location: InventoryLocation }> = [];
   for (const [mountPointId, group] of byMount) {
-    const location = dependentLocation(group[0]);
+    const location = await dependentLocation(group[0]);
+    if (location) targets.push({ mountPointId, group, location });
+    else logger.warn('[InventoryMutations] Skipped instances whose vault is no longer linked', {
+      op: 'detach-all',
+      mountPointId,
+      itemId: archetypeId,
+      ownerId: group[0].ownerId,
+      count: group.length,
+      context: 'inventory',
+    });
+  }
+
+  let baked = 0;
+  for (const { mountPointId, group, location } of targets) {
     const records = new Map((await location.readItems(true)).map((r) => [r.id, r]));
     const patches = group
       .map((d) => records.get(d.id))
