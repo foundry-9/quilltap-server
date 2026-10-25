@@ -116,6 +116,18 @@ describe('a location write', () => {
     expect(finder).toHaveBeenCalledTimes(2)
   })
 
+  it('a folder delete reuses its own read for the write, so the whole folder is scanned once', async () => {
+    const loc = await project()
+    await createInventoryItem(repos(), loc, body({ name: 'sword', folder: 'Weapons' }))
+    const finder = getFakeRepos().docMountDocuments.findManyByMountPointsInFolder as jest.Mock
+    finder.mockClear()
+    await loc.deleteFolder('Weapons')
+    // One scan of `Inventory/` for the read, one listing inside the projection.
+    const wholeFolder = finder.mock.calls.filter(([, folder]) => folder === 'Inventory')
+    expect(wholeFolder).toHaveLength(2)
+    expect(JSON.parse(state.docs.get(`${PROJECT_MP}::Inventory/sword.json`) as string).name).toBe('sword')
+  })
+
   it('still sweeps only what the scan parsed: a note and a duplicate-id copy survive', async () => {
     const loc = await project()
     const rope = await createInventoryItem(repos(), loc, body({ name: 'rope' }))

@@ -17,7 +17,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory';
 import { notifyInventoryChanged } from '@/lib/inventory/equip-effects';
-import { dropCarriedEverywhere, loadEquipChat } from '@/lib/inventory/equip';
+import { dropCarriedEverywhere, loadEquipChat, seatedCharacterIds, type EquipChat } from '@/lib/inventory/equip';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 import { inventoryDisplayName, inventoryLabel } from '@/lib/inventory/resolve';
 import { transferInventoryItem } from '@/lib/inventory/transfers';
@@ -40,14 +40,12 @@ import {
 /** The receiver among the chat's live participants, by id or name; or why not. */
 async function resolveReceiver(
   repos: InventoryRepos,
-  participants: ReadonlyArray<{ characterId?: string | null; status?: string | null }>,
+  chat: EquipChat,
   giverId: string,
   to: string,
 ): Promise<{ id: string; name: string } | { error: string }> {
   const wanted = to.trim().toLowerCase();
-  const seated = participants
-    .filter((p) => !!p.characterId && p.status !== 'removed')
-    .map((p) => p.characterId as string);
+  const seated = seatedCharacterIds(chat);
   // An id names the receiver without loading anyone else; a name loads the
   // cast at once rather than one after another.
   const byId = seated.find((id) => id.toLowerCase() === wanted);
@@ -88,7 +86,7 @@ export async function executeInventoryGiveTool(
     const { item } = match;
     if (item.kind === 'kit') return refuse(`"${inventoryLabel(item)}" is a kit; give its objects one by one.`, [item.id]);
 
-    const receiver = await resolveReceiver(repos, chat.participants ?? [], context.characterId, parsed.to);
+    const receiver = await resolveReceiver(repos, chat, context.characterId, parsed.to);
     if ('error' in receiver) return refuse(receiver.error, [item.id]);
 
     const own = await loadOwnRecord(repos, context, item.id);

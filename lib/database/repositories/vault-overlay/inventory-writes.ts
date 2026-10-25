@@ -214,8 +214,9 @@ async function updateManyUnserialized(
   mount: InventoryMount,
   patches: readonly InventoryRecordPatch[],
   opts: { requireAll?: boolean } = {},
+  scanned?: InventoryFolderScan,
 ): Promise<InventoryRecord[]> {
-  const scan = await scanInventoryFolder(mount.mountPointId);
+  const scan = scanned ?? (await scanInventoryFolder(mount.mountPointId));
   if (opts.requireAll) {
     const present = new Set(scan.records.map((record) => record.id));
     const missing = patches.map((p) => p.id).filter((id) => !present.has(id));
@@ -271,16 +272,36 @@ export async function deleteInventoryInMount(
 // Folders — the shared folder operations over the Inventory's tree
 // ============================================================================
 
+/**
+ * The scan behind each record list the folder operations read, keyed by that
+ * exact array. A folder operation reads, then reprojects or refiles from what
+ * it read on the same chain, so the write reuses the scan instead of parsing
+ * the folder again. Only the array `read` returned finds its scan; anything
+ * else reads afresh.
+ */
+const treeScans = new WeakMap<readonly InventoryRecord[], InventoryFolderScan>();
+
+async function readForTree(mount: InventoryMount): Promise<InventoryRecord[]> {
+  const scan = await scanInventoryFolder(mount.mountPointId);
+  treeScans.set(scan.records, scan);
+  return scan.records;
+}
+
 const INVENTORY_TREE: ItemFolderTree<InventoryRecord> = {
   rules: INVENTORY_FOLDER_RULES,
   ext: '.json',
   context: 'inventory',
   isItemDocument: isInventoryItemDocument,
   hasStableId: hasStableInventoryItemId,
-  read: readMountInventory,
-  reproject: projectMountInventory,
-  refile: (mount, patches) =>
-    updateManyUnserialized(mount, patches.map(({ id, folder }) => ({ id, patch: { folder } }))),
+  read: readForTree,
+  reproject: (mount, records) => projectMountInventory(mount, records, treeScans.get(records)),
+  refile: (mount, patches, current) =>
+    updateManyUnserialized(
+      mount,
+      patches.map(({ id, folder }) => ({ id, patch: { folder } })),
+      {},
+      treeScans.get(current),
+    ),
   errors: {
     path: (message) => new InventoryFolderPathError(message),
     notFound: (folder) => new InventoryFolderNotFoundError(folder),
