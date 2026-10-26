@@ -12,6 +12,10 @@
 - Help: `help/system-backup-restore.md` lists the Log under *Logs & History* and open Storyteller rounds under *Not Included*; `help/the-log.md` no longer says the Log, or the LLM logs, stay out of backups.
 - Tests: a 4.11 block in `restore-field-fidelity.test.ts` pins this cycle's additions through restore (`chats.turnMode` / `storytellerInviteFilter` / `equippedInventory`, `chat_messages.storytellerBid`, `pascalMeta` trigger and intervention keys, `memories.keystone`, the three new `chat_settings` columns and `smartTypographySettings.punctuationWarnings`, `roleplay_templates.unmarkedStyle` / `markdownAsterisks`, `llm_logs.storytellerRoundId`, and the Log). Also new: a Log remap case in `uuid-remapper.test.ts`, a replace-mode clear in `delete-service.test.ts`, and whole-table read, round-trip and wipe cases in `log-entries-repository.test.ts`.
 
+#### Docs: CLI README lists `memories keystone` among server-backed verbs
+
+- `packages/quilltap/README.md` still said only `maintain` and `validate --repair --write` ask the running server to write, and omitted `keystone --write` from the verbs that take `--port`. Both lines now include it.
+
 #### Fix: `quilltap db --count` printed ANSI color codes under `FORCE_COLOR`
 
 - `--count` passed the bare number to `console.log`, which colors numbers when `FORCE_COLOR` is set. Jest workers set it when run from a TTY, so `db-raw-sql-qt-text.integration.test.js` received `\x1b[33m2\x1b[39m` and failed with "Expected: "2", Received: "2"". The count is now stringified before printing, so the output is plain text regardless of color settings.
