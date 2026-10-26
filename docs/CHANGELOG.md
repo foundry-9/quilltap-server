@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: diagram dependencies restored after merge
+
+- The merge of origin/main into the diagrams feature (`5e18ede6a`) took origin's `package.json` and `package-lock.json`, dropping `mermaid`, `@hpcc-js/wasm-graphviz`, `dompurify` and `svg2roughjs`. The release build failed with `Module not found` in `components/chat/diagrams/`. Both files are restored from the feature commit; no other changes.
+
 #### Feature: diagrams in the Salon
 
 - A closed ` ```mermaid `, ` ```dot ` / ` ```graphviz ` or ` ```svg ` fence in a Salon message renders as an inline SVG instead of a code block. The message keeps the source text; nothing new is stored. Other surfaces (help, Document Mode, file previews, the Brahma console, the help chat) still show these fences as code.
