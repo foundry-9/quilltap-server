@@ -476,6 +476,29 @@ describe('remapBackupData() - project FK remapping', () => {
     llmLogs: [],
   })
 
+  it("remaps a Log line's chat and character with the rows they name, keeping a null character", () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      characters: [{ id: 'char-old', name: 'Friday' }] as unknown as BackupData['characters'],
+      chats: [{ id: 'chat-old', participants: [], messages: [], tags: [] }] as unknown as BackupData['chats'],
+      logEntries: [
+        { id: 'entry-1', message: 'Wrote it down.', chatId: 'chat-old', characterId: 'char-old', createdAt: 'a', updatedAt: 'a' },
+        { id: 'entry-2', message: 'The operator, unseated.', chatId: 'chat-old', characterId: null, createdAt: 'b', updatedAt: 'b' },
+      ],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const [seated, unseated] = result.logEntries ?? []
+
+    expect(seated.id).not.toBe('entry-1')
+    expect(seated.chatId).toBe(result.chats[0].id)
+    expect(seated.characterId).toBe(result.characters[0].id)
+    expect(seated.message).toBe('Wrote it down.')
+    expect(unseated.chatId).toBe(result.chats[0].id)
+    expect(unseated.characterId).toBeNull()
+  })
+
   it('remaps every store pointer in lockstep with the store row it names (bug 185)', () => {
     const remapper = new UuidRemapper()
     const data: BackupData = {

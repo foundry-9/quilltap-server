@@ -38,7 +38,7 @@ A [custom tool](custom-tools.md#writing-to-the-log) may carry a **log** effect: 
 
 ## How long it is kept
 
-Lines are pruned with the LLM logs: anything older than the retention period in Chat Settings (30 days by default; 0 keeps everything) is swept away by the nightly tidy-up, even if LLM logging itself is switched off. See [LLM Logs](system-llm-logs.md#log-retention--storage). The Log is not included in `.qtap` exports or backups, any more than the LLM logs are.
+Lines are pruned with the LLM logs: anything older than the retention period in Chat Settings (30 days by default; 0 keeps everything) is swept away by the nightly tidy-up, even if LLM logging itself is switched off. See [LLM Logs](system-llm-logs.md#log-retention--storage). The Log travels in a full backup, alongside the LLM logs, and comes home again on restore; it is not carried in `.qtap` exports, any more than the LLM logs are.
 
 ## In-Chat Navigation
 
