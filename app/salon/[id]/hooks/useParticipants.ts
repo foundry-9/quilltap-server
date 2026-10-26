@@ -130,6 +130,9 @@ export function useParticipants({
           // tombstone has to be carried explicitly or the sidebar's Archived
           // badge can never light, however well the payload carries it.
           archivedAt: p.character.archivedAt ?? null,
+          // Same field-by-field trap: without this every diagram in the
+          // chat is drawn in the default hand, whatever its author's style.
+          diagramStyle: p.character.diagramStyle,
         } : null,
         // User-controlled characters use the same .character field as LLM characters
         connectionProfile: p.connectionProfile,

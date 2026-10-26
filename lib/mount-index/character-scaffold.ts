@@ -46,6 +46,8 @@ const PROPERTIES_JSON = {
   firstMessage: '',
   talkativeness: 0.5,
   canChooseOutfit: false,
+  canDrawDiagrams: false,
+  diagramStyle: 'handDrawn',
 };
 
 /**

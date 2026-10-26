@@ -8,6 +8,12 @@ import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { CharacterData } from '../types'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
+/**
+ * A reply still arriving shows its diagram fences as code; the drawing swaps
+ * in when the settled message replaces this one. The style is moot here.
+ */
+const STREAMING_DIAGRAMS = { style: 'clean', streaming: true } as const
+
 interface StreamingMessageProps {
   streaming: boolean
   streamingContent: string
@@ -123,7 +129,7 @@ export function StreamingMessage({
                 const standaloneIndicator = part.text.length === 0 && parts[idx - 1]?.kind === 'tools'
                 return (
                   <Fragment key={`seg-${idx}`}>
-                    <MessageContent content={part.text} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
+                    <MessageContent content={part.text} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} diagrams={STREAMING_DIAGRAMS} />
                     {idx === lastTextIdx && (
                       standaloneIndicator ? (
                         <div className="mt-3">

@@ -13,6 +13,7 @@ import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/charact
 import { JsonSchema } from '@/lib/schemas/common.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
+import { DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -71,6 +72,9 @@ const updateCharacterSchema = z.object({
   // Vault-managed (properties.json) plain boolean — named here or the parse
   // below would strip it before update() could route it to the vault.
   canChooseOutfit: z.boolean().optional(),
+  // Diagrams in the Salon — vault-managed (properties.json) for the same reason.
+  canDrawDiagrams: z.boolean().optional(),
+  diagramStyle: z.enum(DIAGRAM_STYLES).optional(),
   // Wardrobe-permission tri-states (null = inherit global, true/false = override).
   // Real DB columns, not vault-managed — omitting them here strips the key before
   // it reaches update(), so the editor toggles would silently never persist.

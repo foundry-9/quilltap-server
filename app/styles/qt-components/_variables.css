@@ -601,6 +601,23 @@
   --qt-code-font: var(--font-mono);
 
   /* ==========================================================================
+     DIAGRAM VARIABLES
+     ========================================================================== */
+  --qt-diagram-radius: var(--radius-md);
+  --qt-diagram-bg: var(--color-card);
+  --qt-diagram-fg: var(--color-foreground);
+  --qt-diagram-border: var(--color-border);
+  --qt-diagram-muted-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-hover-bg: var(--color-muted);
+  --qt-diagram-error-fg: var(--color-muted-foreground);
+  --qt-diagram-placeholder-height: 8rem;
+  /* The face diagrams are lettered in, and the hand a hand-drawn one is
+     lettered in (Mermaid's hand-drawn look and sketched Graphviz alike). */
+  --qt-diagram-font: var(--font-sans);
+  --qt-diagram-hand-font: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Marker Felt", cursive;
+
+  /* ==========================================================================
      LINK VARIABLES
      ========================================================================== */
   --qt-link-color: var(--color-primary);

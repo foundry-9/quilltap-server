@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/icon'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
+import { CanDrawDiagramsToggle } from '@/components/characters/CanDrawDiagramsToggle'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import LLMLogsSection from '@/components/characters/LLMLogsSection'
@@ -78,6 +79,8 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     handleCoreWhisperEnabledChange,
     handleSaveCanChooseOutfit,
     savingCanChooseOutfit,
+    handleSaveDiagramSettings,
+    savingDiagramSettings,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -236,18 +239,29 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
             switch (activeTab) {
               case 'details':
                 return (
-                  <CharacterBasicInfo
-                    characterId={id}
-                    formData={formData}
-                    externalUpdateCount={externalUpdateCount}
-                    onChange={handleChange}
-                    onAliasesChange={handleAliasesChange}
-                    onPronounsChange={handlePronounsChange}
-                    onScenariosChange={handleScenariosChange}
-                    onSystemTransparencyChange={handleSystemTransparencyChange}
-                    onCanBeCarinaChange={handleCanBeCarinaChange}
-                    onCoreWhisperEnabledChange={handleCoreWhisperEnabledChange}
-                  />
+                  <div className="space-y-6">
+                    <CharacterBasicInfo
+                      characterId={id}
+                      formData={formData}
+                      externalUpdateCount={externalUpdateCount}
+                      onChange={handleChange}
+                      onAliasesChange={handleAliasesChange}
+                      onPronounsChange={handlePronounsChange}
+                      onScenariosChange={handleScenariosChange}
+                      onSystemTransparencyChange={handleSystemTransparencyChange}
+                      onCanBeCarinaChange={handleCanBeCarinaChange}
+                      onCoreWhisperEnabledChange={handleCoreWhisperEnabledChange}
+                    />
+                    {/* Saved on change, not with the form. */}
+                    <CanDrawDiagramsToggle
+                      checked={character?.canDrawDiagrams ?? false}
+                      style={character?.diagramStyle ?? 'handDrawn'}
+                      saving={savingDiagramSettings}
+                      disabled={!character}
+                      onChange={(enabled) => handleSaveDiagramSettings({ canDrawDiagrams: enabled })}
+                      onStyleChange={(diagramStyle) => handleSaveDiagramSettings({ diagramStyle })}
+                    />
+                  </div>
                 )
 
               case 'system-prompts':

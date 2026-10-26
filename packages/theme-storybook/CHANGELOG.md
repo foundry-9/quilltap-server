@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.84] - 2026-10-25
+
+### Added
+- The `qt-diagram*` family in `qt-components.css`, mirroring the app's `_content.css`: the frame around a diagram drawn in the Salon (`.qt-diagram`), its toolbar (`.qt-diagram-toolbar`, `-toolbar-button`, with hover / pressed / focus states), the drawing (`.qt-diagram-canvas`), the loading placeholder (`.qt-diagram-placeholder`), the offscreen scratch space (`.qt-diagram-stage`) and the could-not-draw fallback (`.qt-diagram-error`, `-error-note`, `-error-details`). Colours, radius and fonts read new `--qt-diagram-*` variables, including `--qt-diagram-hand-font` for hand-drawn diagrams.
+
 ## [1.0.78] - 2026-10-22
 
 ### Added

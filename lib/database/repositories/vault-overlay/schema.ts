@@ -13,6 +13,7 @@ import { z } from 'zod';
 import type { Character } from '@/lib/schemas/types';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { JsonSchema } from '@/lib/schemas/common.types';
+import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES, diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 import {
   WardrobeItemSchema,
   type WardrobeItem,
@@ -39,6 +40,17 @@ export const CharacterVaultPropertiesSchema = z.object({
   // hydrate as false, rather than failing validation and falling back to the
   // DB for every managed field. "Absent means false" is the intended default.
   canChooseOutfit: z.boolean().optional().default(false),
+  // Diagrams in the Salon. Optional-with-default for the same reason as
+  // `canChooseOutfit`: absent means the character may not draw.
+  canDrawDiagrams: z.boolean().optional().default(false),
+  // How this character's diagrams look. Hand-editable, so lenient like
+  // physical-prompts.json's `humanoid`: an unrecognized value (a typo, null)
+  // reads as the default instead of failing the strict parse and hollowing
+  // every field this file owns.
+  diagramStyle: z.preprocess(
+    diagramStyleOrDefault,
+    z.enum(DIAGRAM_STYLES).optional().default(DEFAULT_DIAGRAM_STYLE),
+  ),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -225,6 +237,8 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'firstMessage',
   'talkativeness',
   'canChooseOutfit',
+  'canDrawDiagrams',
+  'diagramStyle',
   'physicalDescription',
   'systemPrompts',
   'scenarios',

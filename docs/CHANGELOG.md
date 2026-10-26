@@ -4,6 +4,24 @@
 
 ### 4.11-dev
 
+#### Feature: diagrams in the Salon
+
+- A closed ` ```mermaid `, ` ```dot ` / ` ```graphviz ` or ` ```svg ` fence in a Salon message renders as an inline SVG instead of a code block. The message keeps the source text; nothing new is stored. Other surfaces (help, Document Mode, file previews, the Brahma console, the help chat) still show these fences as code.
+- `lib/markdown/diagrams.ts` is the one list of diagram fence languages (`DIAGRAM_LANGUAGES`, `diagramEngineFor`) and of diagram styles (`DIAGRAM_STYLES`, `diagramStyleOrDefault`). `hasDiagramFence` detects a closed diagram fence (unterminated fences, fences quoted inside another fence and inline code don't count).
+- New `components/chat/diagrams/`: `DiagramBlock` (dispatch, placeholder, error fallback, toolbar with View source / Copy source / Copy SVG / Download SVG, a 64-entry render cache keyed by engine, style, theme and source so a virtualized row that remounts shows its drawing at once), `render-mermaid.ts` (Mermaid 12, `securityLevel: 'strict'`, `htmlLabels: false`, `theme: 'base'` with `themeVariables` read from the active theme's CSS variables), `render-graphviz.ts` (`@hpcc-js/wasm-graphviz`; black/white defaults re-pointed at `currentColor`; hand-drawn style re-sketched with svg2roughjs), `render-svg.ts` (raw SVG, root must be `<svg>`, sized to fit), `render-queue.ts` (serializes renders; source-hash seed for hand-drawn output), `sanitize-svg.ts` (the one DOMPurify call site: strips script, event handlers, `foreignObject`, `style`, `image`, every non-`#fragment` href and every external `url(...)`; allows `<use>` with fragment hrefs), and `diagram-theme.ts`.
+- `MessageContent` takes an optional `diagrams` prop (`{ style, streaming? }`); without it, fences render as code as before. `LazyMessageContent` passes it and skips the pre-rendered HTML fast path when `hasDiagramFence` is true. The streaming message and an in-progress regeneration pass `streaming: true`, so a fence shows as code until the message settles.
+- `CodeBlockWithCopy` moved out of `MessageContent.tsx` into `components/chat/CodeBlockWithCopy.tsx` (no change in behavior).
+- Two new keys in the character vault's `properties.json`: `canDrawDiagrams` (boolean, absent = `false`) and `diagramStyle` (`'handDrawn'` | `'clean'`, absent or unrecognized = `'handDrawn'`). Both are vault-managed fields (added to `MANAGED_FIELDS`, the read overlay, the full and patch writers, and the scaffold). No DB column, no migration. Character PUT accepts both; the character list GET returns both. v5: this is a v4 data-shape change the v5 vault reader must follow.
+- The system prompt adds `DIAGRAM_FORMATTING_INSTRUCTION` (`[FORMATTING: DIAGRAMS]`) directly after the math note, only when `character.canDrawDiagrams` is true. It is not part of the identity stack; `IDENTITY_STACK_BUILDER_VERSION` and the goldens are unchanged, and a prompt without the flag is byte-identical to before.
+- Diagram style follows the message's author: a character's line uses that character's `diagramStyle`; the operator speaking as no one and Staff senders use `clean` (`resolveMessageDiagramStyle`, `app/salon/[id]/components/message-row/helpers.ts`). The chat participant enrichment (`getCharacterDetail`, `getEnrichedCharacter`) and `useParticipants` carry `diagramStyle`.
+- Aurora: new `CanDrawDiagramsToggle` (`components/characters/`) on the Details tab of both the character view and edit pages, with a Hand-drawn / Clean choice that is disabled (not hidden) while the toggle is off. Saves are immediate PUTs (`app/aurora/shared/save-diagram-settings.ts`) with an optimistic update and a refetch on failure.
+- "Salon Images" quick-hide does not hide diagrams (they are inline SVG, never `<img>`).
+- New `qt-diagram*` component classes and `--qt-diagram-*` variables (including `--qt-diagram-hand-font`), mirrored to theme-storybook (1.0.84).
+- New dependencies: `mermaid` 12, `@hpcc-js/wasm-graphviz`, `dompurify`, `svg2roughjs`. All client-only and loaded on first use.
+- `.qtap` export schema documents both new keys.
+- New help page `help/diagrams.md`; `help/character-editing.md` and `help/quick-hide.md` mention the toggle and the quick-hide exemption.
+- Tests: `lib/markdown/diagrams`, the SVG sanitizer against a hostile corpus, the raw-SVG renderer, `DiagramBlock` (routing, streaming, fallback, toolbar, cache, quick-hide), the `LazyMessageContent` fast-path bypass, the per-author style resolver, the prompt note's gating and placement, and the `properties.json` defaults, lenient style read and single-key patches.
+
 #### Refactor: Salon turn pipeline
 
 - `processMessage` (`lib/services/chat-message/orchestrator.service.ts`) is now a sequence of phase calls; the file is 1,170 lines, down from 2,840. New modules under `lib/services/chat-message/`:

@@ -15,6 +15,7 @@ import {
 import { applyCharacterFieldUpdates } from '@/components/characters/apply-character-field-updates'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import { saveDiagramSettings, type DiagramSettingsPatch } from '../../../shared/save-diagram-settings'
 import {
   Character,
   Tag,
@@ -50,6 +51,7 @@ interface UseCharacterViewReturn {
   savingCanCreateOutfits: boolean
   savingCanManageInventory: boolean
   savingCanChooseOutfit: boolean
+  savingDiagramSettings: boolean
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
   savingDefaultSystemPrompt: boolean
@@ -75,6 +77,7 @@ interface UseCharacterViewReturn {
   handleSaveCanCreateOutfits: (enabled: boolean | null) => Promise<void>
   handleSaveCanManageInventory: (enabled: boolean | null) => Promise<void>
   handleSaveCanChooseOutfit: (enabled: boolean) => Promise<void>
+  handleSaveDiagramSettings: (patch: DiagramSettingsPatch) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
   handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
@@ -123,6 +126,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingCanCreateOutfits, setSavingCanCreateOutfits] = useState(false)
   const [savingCanManageInventory, setSavingCanManageInventory] = useState(false)
   const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
+  const [savingDiagramSettings, setSavingDiagramSettings] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
   const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
@@ -574,6 +578,25 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  /**
+   * Persist the diagram ability and/or style (vault properties.json).
+   * Optimistic: the local character changes first, and a failure re-fetches
+   * to snap the controls back to server truth.
+   */
+  const handleSaveDiagramSettings = async (patch: DiagramSettingsPatch) => {
+    setSavingDiagramSettings(true)
+    if (character) setCharacter({ ...character, ...patch })
+    try {
+      await saveDiagramSettings(characterId, patch)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update diagram settings')
+      console.error('Failed to save diagram settings', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingDiagramSettings(false)
+    }
+  }
+
   const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
     setSavingTimestampConfig(true)
     try {
@@ -809,6 +832,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingCanCreateOutfits,
     savingCanManageInventory,
     savingCanChooseOutfit,
+    savingDiagramSettings,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -834,6 +858,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveCanCreateOutfits,
     handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
+    handleSaveDiagramSettings,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,

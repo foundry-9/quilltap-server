@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback, ReactNode } from 'react'
+import { useMemo, ReactNode } from 'react'
 import Link from 'next/link'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,8 +11,9 @@ import remarkSmartypants from 'remark-smartypants'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { CodeBlockWithCopy } from '@/components/chat/CodeBlockWithCopy'
+import { DiagramBlock } from '@/components/chat/diagrams/DiagramBlock'
+import { diagramEngineFor, type DiagramStyle } from '@/lib/markdown/diagrams'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import {
@@ -44,100 +45,6 @@ function isInternalHref(href: string | undefined): href is string {
   return typeof href === 'string' && href.startsWith('/') && !href.startsWith('//')
 }
 
-/**
- * Code block with copy button component
- */
-function CodeBlockWithCopy({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [code])
-
-  return (
-    <div
-      className="qt-code-block-container"
-      style={{
-        position: 'relative',
-        width: '100%',
-        maxWidth: '100%',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        borderRadius: '0.375rem',
-        marginTop: '0.5rem',
-        marginBottom: '0.5rem',
-      }}
-    >
-      <button
-        onClick={handleCopy}
-        className={`qt-copy-button qt-code-block-copy ${copied ? 'qt-copy-button-success' : ''}`}
-        title={copied ? 'Copied!' : 'Copy to clipboard'}
-      >
-        {copied ? '✓' : '📋'}
-        <span className="qt-copy-button-text">{copied ? 'Copied' : 'Copy'}</span>
-      </button>
-      {language === 'text' ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: '1rem',
-            paddingTop: '2.5rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-            background: 'rgb(40, 44, 52)',
-            color: '#abb2bf',
-            fontFamily: 'var(--qt-code-font, monospace)',
-            fontSize: '0.875rem',
-            lineHeight: '1.5',
-          }}
-        >
-          <code>{code.replace(/\n$/, '')}</code>
-        </pre>
-      ) : (
-        <SyntaxHighlighter
-          style={oneDark}
-          language={language}
-          PreTag="div"
-          wrapLines={true}
-          wrapLongLines={true}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            paddingTop: '2.5rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-          }}
-          codeTagProps={{
-            style: {
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-            },
-          }}
-        >
-          {code.replace(/\n$/, '')}
-        </SyntaxHighlighter>
-      )}
-    </div>
-  )
-}
-
 interface MessageContentProps {
   content: string
   className?: string
@@ -157,6 +64,14 @@ interface MessageContentProps {
    * occurrence becomes a chip with their card on hover (the Salon only).
    */
   mentions?: ReadonlyArray<AbsentMentionChip>
+  /**
+   * Draw closed diagram fences (```mermaid / ```dot / ```graphviz / ```svg)
+   * as diagrams rather than code. Only the Salon passes this; every other
+   * surface keeps showing them as code blocks. `style` is the authoring
+   * character's `diagramStyle`; `streaming` keeps fences as code until the
+   * message stops arriving.
+   */
+  diagrams?: { style: DiagramStyle; streaming?: boolean }
 }
 
 /**
@@ -349,6 +264,7 @@ export default function MessageContent({
   dialogueDetection,
   blobMountPointId,
   mentions,
+  diagrams,
 }: MessageContentProps) {
   // Use provided patterns or fall back to defaults
   const patterns = renderingPatterns && renderingPatterns.length > 0
@@ -414,6 +330,10 @@ export default function MessageContent({
     [content, patterns]
   )
 
+  // Primitives, so the components map below is rebuilt only when they change.
+  const diagramStyle = diagrams?.style
+  const diagramsStreaming = diagrams?.streaming ?? false
+
   const components: Components = useMemo(() => ({
     // Fenced code blocks - handled by pre component since they're <pre><code>
     // This ensures ALL fenced code blocks get block styling, regardless of language
@@ -428,6 +348,19 @@ export default function MessageContent({
       const codeString = typeof codeChildren === 'string' || typeof codeChildren === 'number'
         ? String(codeChildren)
         : ''
+
+      const diagramEngine = diagramStyle ? diagramEngineFor(language) : null
+      if (diagramStyle && diagramEngine) {
+        return (
+          <DiagramBlock
+            engine={diagramEngine}
+            language={language}
+            source={codeString.replace(/\n$/, '')}
+            style={diagramStyle}
+            streaming={diagramsStreaming}
+          />
+        )
+      }
 
       return <CodeBlockWithCopy code={codeString} language={language} />
     },
@@ -547,7 +480,7 @@ export default function MessageContent({
       }
       return <img src={resolvedSrc} alt={alt || ''} title={title} {...props} />
     },
-  }), [compiledRules, dialogueConfig, blobMountPointId, imagesHidden])
+  }), [compiledRules, dialogueConfig, blobMountPointId, imagesHidden, diagramStyle, diagramsStreaming])
 
   return (
     <>

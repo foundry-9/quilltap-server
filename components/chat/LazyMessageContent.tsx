@@ -5,6 +5,7 @@ import MessageContent from './MessageContent'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import type { AbsentMentionChip } from './MentionChip'
+import { hasDiagramFence, type DiagramStyle } from '@/lib/markdown/diagrams'
 
 interface LazyMessageContentProps {
   content: string
@@ -22,6 +23,12 @@ interface LazyMessageContentProps {
   renderedHtml?: string | null
   /** Name chips for absent characters first named here (see MessageContent) */
   mentions?: ReadonlyArray<AbsentMentionChip>
+  /**
+   * The authoring character's diagram style; `clean` for the operator and the
+   * Staff. Diagram fences are drawn on every LazyMessageContent (it is the
+   * Salon's renderer), so this only chooses the look.
+   */
+  diagramStyle?: DiagramStyle
 }
 
 /**
@@ -43,6 +50,7 @@ function LazyMessageContentInner({
   dialogueDetection,
   renderedHtml,
   mentions,
+  diagramStyle = 'clean',
 }: LazyMessageContentProps) {
   const hasQtapUri = content.includes('qtap://')
   // Quick-hide "Salon Images": pre-rendered HTML carries its <img> tags
@@ -58,7 +66,11 @@ function LazyMessageContentInner({
   // A message carrying a name chip takes the full render too: the chip is a
   // React component with a hover card.
   const hasMentions = !!mentions && mentions.length > 0
-  if (renderedHtml && !hasQtapUri && !hasMentions && !(imagesHidden && htmlHasImage)) {
+  // A closed diagram fence must reach the React renderer: the server's HTML
+  // shows it as a highlighted code block. Checked here (not only on the
+  // server) because rows cached before diagrams existed carry that HTML too.
+  const hasDiagram = !!renderedHtml && hasDiagramFence(content)
+  if (renderedHtml && !hasQtapUri && !hasMentions && !hasDiagram && !(imagesHidden && htmlHasImage)) {
     return (
       <div
         className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto ${className}`}
@@ -75,6 +87,7 @@ function LazyMessageContentInner({
       renderingPatterns={renderingPatterns}
       dialogueDetection={dialogueDetection}
       mentions={mentions}
+      diagrams={{ style: diagramStyle }}
     />
   )
 }
@@ -91,7 +104,8 @@ const LazyMessageContent = memo(LazyMessageContentInner, (prev, next) => {
     prev.renderingPatterns === next.renderingPatterns &&
     prev.dialogueDetection === next.dialogueDetection &&
     prev.renderedHtml === next.renderedHtml &&
-    prev.mentions === next.mentions
+    prev.mentions === next.mentions &&
+    prev.diagramStyle === next.diagramStyle
   )
 })
 

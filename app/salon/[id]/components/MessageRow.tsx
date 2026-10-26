@@ -23,7 +23,7 @@ import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
-import { getImageAttachments } from './message-row/helpers'
+import { getImageAttachments, resolveMessageDiagramStyle } from './message-row/helpers'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, ConciergeSettings, CharacterData } from '../types'
@@ -207,6 +207,11 @@ function MessageRowInner({
   // Name chips: absent characters whose first mention in the chat is here.
   const mentions = useAbsentMentions(chatId, message.id)
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
+  // Diagrams are drawn in their author's hand (see resolveMessageDiagramStyle).
+  const diagramStyle = useMemo(
+    () => resolveMessageDiagramStyle(message, participantData),
+    [message, participantData],
+  )
 
   // Silent message styling is based solely on the persisted flag set when the message
   // was generated — NOT the participant's current status. Changing a character to silent
@@ -403,6 +408,7 @@ function MessageRowInner({
                           renderingPatterns={renderingPatterns}
                           dialogueDetection={dialogueDetection}
                           forceRender
+                          diagramStyle={diagramStyle}
                         />
                       </div>
                       <div className="qt-chat-regenerating-plate" role="status" aria-live="polite">
@@ -428,6 +434,7 @@ function MessageRowInner({
                         content={regeneration.content}
                         renderingPatterns={renderingPatterns}
                         dialogueDetection={dialogueDetection}
+                        diagrams={{ style: diagramStyle, streaming: true }}
                       />
                       <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
                     </>
@@ -454,6 +461,7 @@ function MessageRowInner({
                         dialogueDetection={dialogueDetection}
                         forceRender={forceRender}
                         mentions={partMentions?.[idx]}
+                        diagramStyle={diagramStyle}
                       />
                     ) : part.kind === 'reasoning' ? (
                       <ThinkingBlock
@@ -482,7 +490,7 @@ function MessageRowInner({
                     )
                   )
                 ) : (
-                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} mentions={mentions} />
+                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} mentions={mentions} diagramStyle={diagramStyle} />
                 )}
               </DangerContentWrapper>
               )}

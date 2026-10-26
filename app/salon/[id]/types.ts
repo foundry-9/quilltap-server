@@ -1,5 +1,6 @@
 import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 
 export interface MessageAttachment {
   id: string
@@ -186,6 +187,8 @@ export interface CharacterData {
     name: string
     isDefault?: boolean
   }>
+  /** How the character's diagrams look in the Salon (absent = hand-drawn). */
+  diagramStyle?: DiagramStyle
 }
 
 export interface ConnectionProfileData {

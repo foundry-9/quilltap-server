@@ -484,6 +484,15 @@
           "type": "boolean",
           "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
         },
+        "canDrawDiagrams": {
+          "type": "boolean",
+          "description": "When true, the character's system prompt tells it that fenced ```mermaid, ```dot/```graphviz and ```svg blocks render as diagrams in the Salon. Absent/false means the character hears nothing about diagrams (any diagram fence still renders). Stored in the vault's properties.json."
+        },
+        "diagramStyle": {
+          "type": "string",
+          "enum": ["handDrawn", "clean"],
+          "description": "How the character's Mermaid and Graphviz diagrams look: 'handDrawn' (sketched) or 'clean' (as the engine drew them). Absent or unrecognized reads as 'handDrawn'. Rendering only; never sent to a model. Stored in the vault's properties.json."
+        },
         "systemTransparency": {
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."

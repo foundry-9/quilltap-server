@@ -14,6 +14,7 @@ import {
   JsonSchema,
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
+import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -246,6 +247,21 @@ export const CharacterSchema = z.object({
    * `properties.json`, not a DB column.
    */
   canChooseOutfit: z.boolean().default(false),
+
+  /**
+   * When true, this character is told it may draw diagrams — fenced
+   * ```mermaid / ```dot / ```svg blocks that the Salon renders as pictures.
+   * Gates only the system-prompt note; any diagram fence renders regardless.
+   * Lives in the vault's `properties.json`, not a DB column.
+   */
+  canDrawDiagrams: z.boolean().default(false),
+
+  /**
+   * How this character's Mermaid and Graphviz diagrams look (`handDrawn` or
+   * `clean`). A rendering choice only — the model never hears it. Kept even
+   * while `canDrawDiagrams` is off. Lives in the vault's `properties.json`.
+   */
+  diagramStyle: z.enum(DIAGRAM_STYLES).default(DEFAULT_DIAGRAM_STYLE),
 
   /**
    * When true, this character may inspect and access "the Staff" of personified

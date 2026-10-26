@@ -115,7 +115,7 @@ describe('scaffoldCharacterMount', () => {
     expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null, humanoid: true });
   });
 
-  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit', async () => {
+  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit and the diagram settings', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
@@ -131,6 +131,8 @@ describe('scaffoldCharacterMount', () => {
       firstMessage: '',
       talkativeness: 0.5,
       canChooseOutfit: false,
+      canDrawDiagrams: false,
+      diagramStyle: 'handDrawn',
     });
   });
 

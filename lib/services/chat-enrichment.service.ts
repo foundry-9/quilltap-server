@@ -29,6 +29,7 @@ import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 import { deriveScriptoriumStatus, type ScriptoriumStatus } from '@/lib/scriptorium/status'
+import { diagramStyleOrDefault, type DiagramStyle } from '@/lib/markdown/diagrams'
 
 type Repos = RepositoryContainer
 
@@ -113,6 +114,8 @@ export interface EnrichedCharacterDetail extends EnrichedCharacterBase {
    *  (character-archive spec §5.2). Mirrors the enrichment in
    *  `app/api/v1/chats/[id]/helpers.ts`. */
   archivedAt: string | null
+  /** How the character's diagrams look in the Salon (vault `diagramStyle`). */
+  diagramStyle: DiagramStyle
 }
 
 
@@ -340,6 +343,7 @@ export async function getCharacterDetail(
           talkativeness: character.talkativeness ?? 0.5,
           systemPrompts,
           archivedAt: character.archivedAt ?? null,
+          diagramStyle: diagramStyleOrDefault(character.diagramStyle),
         }
       }
     }
@@ -368,6 +372,7 @@ export async function getCharacterDetail(
     // Bug 66: the chat GET renders the sidebar, so the archive badge needs
     // this projection here too — not only in the participants/PUT enrichment.
     archivedAt: character.archivedAt ?? null,
+    diagramStyle: diagramStyleOrDefault(character.diagramStyle),
   }
 }
 

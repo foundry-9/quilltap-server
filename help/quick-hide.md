@@ -166,6 +166,7 @@ There are moments — a crowded railway carriage, a colleague with a wandering e
 - **Avatars** beside each message, on the speaking-as portrait by the composer, in the participant sidebar, beside the character names in the header, and in the Salon's own dialogues (announcements, informs, the impersonation voice) give way to each party's initial or a plain disc
 - **Attached images** and images produced by tools become a modest grey tile bearing a closed eye; click the tile and the image opens in the viewer as usual, should you decide the coast is clear
 - **Images embedded in a message's text** are replaced by a small "Image hidden" label
+- **Diagrams** are left exactly where they are — they are drawn on the page rather than hung on it as pictures (see [Diagrams](diagrams.md))
 
 Particulars:
 

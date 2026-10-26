@@ -35,7 +35,7 @@ The edit interface has multiple tabs for different aspects of character:
 
 | Tab | Purpose | When to Use |
 |-----|---------|-----------|
-| **Details** | Name, description, personality, scenarios, first message | Modify core character info |
+| **Details** | Name, description, personality, scenarios, first message, whether they draw diagrams | Modify core character info |
 | **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
 | **Appearance** | Physical descriptions and clothing records | Add visual and outfit information |
 | **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
@@ -121,6 +121,13 @@ The assembled system prompt addresses the character directly throughout, and eac
 - Edit to add more examples
 - Remove ones that no longer fit
 - Improve examples that weren't clear
+
+**Draws diagrams**
+
+- A card at the foot of the Details tab, saved the moment you change it (no need to press **Save**)
+- Tick **Draws diagrams** and the character is told they may sketch flowcharts, graphs and freeform drawings into the conversation; untick it and they hear nothing of the sort
+- **Drawing style** beneath it chooses **Hand-drawn** (the default) or **Clean** for their diagrams; it is greyed out, but remembered, while the pen is withheld
+- The same card appears on the character's view page. See [Diagrams](diagrams.md) for the particulars
 
 ### Making Bulk Changes
 
@@ -710,6 +717,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character Creation](character-creation.md) — Creating new characters
 - [Character System Prompts](character-system-prompts.md) — Deep dive on prompts
+- [Diagrams](diagrams.md) — Letting a character draw in the Salon
 - [Progressions](character-progressions.md) — Timed spans a character carries, reported each turn
 - [Organizing Characters](character-organization.md) — Tags and management
 - [Chats](chats.md) — Testing character in conversations

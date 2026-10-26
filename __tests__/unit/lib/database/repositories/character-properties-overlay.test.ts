@@ -148,6 +148,8 @@ const VALID_VAULT_PROPS = {
   firstMessage: 'vault-first',
   talkativeness: 0.8,
   canChooseOutfit: false,
+  canDrawDiagrams: false,
+  diagramStyle: 'handDrawn',
 };
 
 const VALID_VAULT_PHYSICAL_PROMPTS = {
@@ -1686,6 +1688,86 @@ describe('applyDocumentStoreWriteOverlay — corrupt properties.json (Bug 8)', (
   });
 });
 
+describe('properties.json — diagram settings (canDrawDiagrams, diagramStyle)', () => {
+  const CHAR_ID = 'char-sketch';
+  const MOUNT_ID = 'mount-sketch';
+
+  // A properties.json written before diagrams existed: no diagram keys at all.
+  const { canDrawDiagrams: _c, diagramStyle: _s, ...LEGACY_PROPS } = VALID_VAULT_PROPS;
+
+  function propsWrite() {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === CHARACTER_PROPERTIES_JSON_PATH,
+    );
+    return call ? JSON.parse(call[2] as string) : undefined;
+  }
+
+  function serve(props: Record<string, unknown>) {
+    readDatabaseDocumentMock.mockResolvedValue({ content: JSON.stringify(props), mtime: 0, size: 120 });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Sketcher',
+          characterDocumentMountPointId: MOUNT_ID,
+        }),
+      },
+    });
+  });
+
+  it('parses a file without the keys as false / handDrawn, hollowing nothing', async () => {
+    serve(LEGACY_PROPS);
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).toEqual({ ...LEGACY_PROPS, canDrawDiagrams: false, diagramStyle: 'handDrawn' });
+  });
+
+  it('reads an unrecognized diagramStyle as handDrawn instead of failing the parse', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'crayon' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).not.toBeNull();
+    expect(result!.diagramStyle).toBe('handDrawn');
+    expect(result!.canDrawDiagrams).toBe(true);
+    // The other fields survive the odd value.
+    expect(result!.title).toBe(VALID_VAULT_PROPS.title);
+  });
+
+  it('keeps a valid clean style', async () => {
+    serve({ ...VALID_VAULT_PROPS, diagramStyle: 'clean' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result!.diagramStyle).toBe('clean');
+  });
+
+  it('a canDrawDiagrams patch writes only that key and keeps every other', async () => {
+    serve({ ...VALID_VAULT_PROPS, diagramStyle: 'clean' });
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { canDrawDiagrams: true });
+    expect('canDrawDiagrams' in dbPatch).toBe(false);
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+  });
+
+  it('a diagramStyle patch writes only that key and keeps the ability', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true });
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { diagramStyle: 'clean' });
+    expect('diagramStyle' in dbPatch).toBe(false);
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+  });
+
+  it('keeps the style while the ability is switched off', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { canDrawDiagrams: false });
+    expect(propsWrite()).toMatchObject({ canDrawDiagrams: false, diagramStyle: 'clean' });
+  });
+
+  it('an unrelated patch over a legacy file writes the defaults for the new keys', async () => {
+    serve(LEGACY_PROPS);
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Renamed' });
+    expect(propsWrite()).toEqual({ ...LEGACY_PROPS, title: 'Renamed', canDrawDiagrams: false, diagramStyle: 'handDrawn' });
+  });
+});
+
 describe('applyDocumentStoreWriteOverlay — physical-prompts.json humanoid flag', () => {
   const CHAR_ID = 'char-spheres';
   const MOUNT_ID = 'mount-spheres';
@@ -1798,6 +1880,8 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
       canChooseOutfit: false,
+      canDrawDiagrams: false,
+      diagramStyle: 'handDrawn',
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1858,6 +1942,14 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(getWrite(CHARACTER_METADATA_JSON_PATH)).toBeUndefined();
   });
 
+  it('projects the diagram settings a character carries (provisioning, import)', async () => {
+    const character = makeCharacter({ id: 'char-drawer', canDrawDiagrams: true, diagramStyle: 'clean' });
+    await writeCharacterVaultManagedFields('mount-3', { character });
+    const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
+    expect(props.canDrawDiagrams).toBe(true);
+    expect(props.diagramStyle).toBe('clean');
+  });
+
   it('writes empty strings / nulls through for characters with sparse fields', async () => {
     const character = makeCharacter({
       id: 'char-sparse',
@@ -1891,6 +1983,8 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: null,
       talkativeness: 0.5,
       canChooseOutfit: false,
+      canDrawDiagrams: false,
+      diagramStyle: 'handDrawn',
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

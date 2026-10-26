@@ -9,6 +9,7 @@
  * from the vault file on every save.
  */
 import type { CharacterScenario } from '@/lib/schemas/character.types'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 
 export type { CharacterScenario }
 
@@ -35,6 +36,8 @@ export interface Character {
   coreWhisperEnabled?: boolean | null
   canBeCarina?: boolean | null
   canChooseOutfit?: boolean
+  canDrawDiagrams?: boolean
+  diagramStyle?: DiagramStyle
   defaultImage?: {
     id: string
     filepath: string

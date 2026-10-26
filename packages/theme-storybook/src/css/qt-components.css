@@ -460,6 +460,19 @@
   --qt-code-border: var(--color-border);
   --qt-code-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
+  /* Diagram variables */
+  --qt-diagram-radius: var(--radius-md);
+  --qt-diagram-bg: var(--color-card);
+  --qt-diagram-fg: var(--color-foreground);
+  --qt-diagram-border: var(--color-border);
+  --qt-diagram-muted-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-hover-bg: var(--color-muted);
+  --qt-diagram-error-fg: var(--color-muted-foreground);
+  --qt-diagram-placeholder-height: 8rem;
+  --qt-diagram-font: var(--font-sans);
+  --qt-diagram-hand-font: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Marker Felt", cursive;
+
   /* Link variables */
   --qt-link-color: var(--color-primary);
   --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, black);
@@ -4084,6 +4097,126 @@
   top: 0.5rem;
   right: 0.5rem;
   z-index: 10;
+}
+
+/* ==========================================================================
+   DIAGRAMS
+   Closed ```mermaid / ```dot / ```graphviz / ```svg fences drawn in the
+   Salon (components/chat/diagrams/DiagramBlock.tsx).
+   ========================================================================== */
+
+/* The frame around one drawn diagram. */
+.qt-diagram {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: var(--qt-diagram-radius);
+  background: var(--qt-diagram-bg);
+  border: 1px solid var(--qt-diagram-border);
+  color: var(--qt-diagram-fg);
+}
+
+/* View source / Copy source / Copy SVG / Download SVG. */
+.qt-diagram-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.qt-diagram-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--qt-diagram-toolbar-fg);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.qt-diagram-toolbar-button:hover,
+.qt-diagram-toolbar-button[aria-pressed="true"] {
+  background: var(--qt-diagram-toolbar-hover-bg);
+  border-color: var(--qt-diagram-border);
+  color: var(--qt-diagram-fg);
+}
+
+.qt-diagram-toolbar-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* The drawing itself. A wide diagram scrolls here; it never widens the bubble. */
+.qt-diagram-canvas {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.qt-diagram-canvas > svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Fixed height while a diagram is drawn, so the transcript doesn't jump. */
+.qt-diagram-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--qt-diagram-placeholder-height);
+  color: var(--qt-diagram-muted-fg);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Zero-size scratch space a renderer lays a drawing out in, offscreen. */
+.qt-diagram-stage {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+/* A fence that could not be drawn: a note, the engine's words, the code. */
+.qt-diagram-error {
+  margin: 0.5rem 0;
+}
+
+.qt-diagram-error-note {
+  margin: 0 0 0.25rem;
+  color: var(--qt-diagram-error-fg);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.qt-diagram-error-details {
+  margin-bottom: 0.25rem;
+  color: var(--qt-diagram-muted-fg);
+  font-size: 0.75rem;
+}
+
+.qt-diagram-error-details > summary {
+  cursor: pointer;
+}
+
+.qt-diagram-error-details > pre {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--qt-code-bg);
+  color: var(--qt-code-fg);
+  font-family: var(--qt-code-font);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ==========================================================================

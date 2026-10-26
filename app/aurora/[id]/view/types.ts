@@ -1,6 +1,7 @@
 // TypeScript interfaces and types for character view page
 
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 
 export interface Tag {
   id: string
@@ -85,6 +86,8 @@ export interface Character {
   canCreateOutfits?: boolean | null
   canManageInventory?: boolean | null
   canChooseOutfit?: boolean
+  canDrawDiagrams?: boolean
+  diagramStyle?: DiagramStyle
   defaultTimestampConfig?: TimestampConfig | null
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null

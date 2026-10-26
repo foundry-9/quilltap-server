@@ -20,6 +20,7 @@ import { NewChatModal } from '@/components/new-chat'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
+import { CanDrawDiagramsToggle } from '@/components/characters/CanDrawDiagramsToggle'
 import { useCharacterView, useCharacterStats } from './hooks'
 import {
   CharacterHeader,
@@ -102,6 +103,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     handleSaveCanCreateOutfits,
     handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
+    handleSaveDiagramSettings,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,
@@ -122,6 +124,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     savingCanCreateOutfits,
     savingCanManageInventory,
     savingCanChooseOutfit,
+    savingDiagramSettings,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -222,18 +225,28 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     switch (activeTab) {
       case 'details':
         return (
-          <CharacterDetails
-            characterId={id}
-            character={character}
-            templateCounts={templateCounts}
-            literalCounts={literalCounts}
-            replacingTemplate={replacingTemplate}
-            reversingTemplate={reversingTemplate}
-            defaultPartnerName={defaultPartnerName}
-            userControlledCharacters={userControlledCharacters}
-            onTemplateReplace={handleTemplateReplace}
-            onReverseTemplate={handleReverseTemplate}
-          />
+          <div className="space-y-6">
+            <CharacterDetails
+              characterId={id}
+              character={character}
+              templateCounts={templateCounts}
+              literalCounts={literalCounts}
+              replacingTemplate={replacingTemplate}
+              reversingTemplate={reversingTemplate}
+              defaultPartnerName={defaultPartnerName}
+              userControlledCharacters={userControlledCharacters}
+              onTemplateReplace={handleTemplateReplace}
+              onReverseTemplate={handleReverseTemplate}
+            />
+            <CanDrawDiagramsToggle
+              checked={character?.canDrawDiagrams ?? false}
+              style={character?.diagramStyle ?? 'handDrawn'}
+              saving={savingDiagramSettings}
+              disabled={!character}
+              onChange={(enabled) => handleSaveDiagramSettings({ canDrawDiagrams: enabled })}
+              onStyleChange={(diagramStyle) => handleSaveDiagramSettings({ diagramStyle })}
+            />
+          </div>
         )
 
       case 'system-prompts':

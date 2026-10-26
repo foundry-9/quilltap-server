@@ -21,6 +21,7 @@ import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 import { SubpromptPicker } from '@/components/subprompts'
 
 // Special constant for user impersonation selection
@@ -42,6 +43,8 @@ export interface ParticipantData {
     /** Set when the character is archived — seat is absent until rehydration. */
     archivedAt?: string | null
     talkativeness: number
+    /** How this character's diagrams look in the Salon (absent = hand-drawn). */
+    diagramStyle?: DiagramStyle
     defaultImage?: {
       id: string
       filepath: string
