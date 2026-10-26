@@ -15,6 +15,7 @@ These diagrams use [Mermaid](https://mermaid.js.org/) syntax and render in GitHu
 5. [Story Background Generator (The Lantern)](#5-story-background-generator-the-lantern)
 6. [The Concierge: Content Routing Overview](#6-the-concierge-content-routing-overview)
 7. [Unified Message Lifecycle](#7-unified-message-lifecycle)
+8. [Salon Turn Pipeline](#8-salon-turn-pipeline)
 
 ---
 
@@ -526,7 +527,7 @@ flowchart TD
     FORMAT --> STREAM["STREAM TO LLM<br/><i>streaming.service.ts</i>"]
 
     STREAM --> RESPONSE[Receive streamed response]
-    RESPONSE --> SAVE[Save user + assistant<br/>messages to database]
+    RESPONSE --> SAVE[Save assistant message<br/><i>the user post was recorded<br/>before the call</i>]
 
     SAVE --> FINAL["MESSAGE FINALIZER<br/><i>message-finalizer.service.ts</i>"]
 
@@ -564,6 +565,41 @@ flowchart TD
 
 ---
 
+## 8. Salon Turn Pipeline
+
+How one character's turn is built and run inside `processMessage()` (`orchestrator.service.ts`). Each phase is its own module under `lib/services/chat-message/`; the orchestrator calls them in order. The stream around them (turn control, keep-alives, the error frame) is `openTurnStream()` in `turn-stream.ts`, and the chain after the first turn is `executeTurnChain()` in `turn-orchestrator.service.ts`.
+
+```mermaid
+flowchart TD
+    START["processMessage()"] --> HOLD["1. HOLD<br/>resolveTurnHold()<br/><i>turn-holds.service.ts</i>"]
+    HOLD --> FAIR{"Fair-rotation check<br/>qualifies?"}
+    FAIR -->|"next seat is another<br/>user-driven seat"| FAIRPAUSE["maybePauseForUserSeatTurn()<br/>record post, point the floor<br/>at that seat"]
+    FAIR -->|no| PREP
+    FAIRPAUSE --> DONE1([return: no reply])
+
+    PREP["2. PREPARE<br/>responder, API key, identity, agent mode,<br/>compression, cheap LLM, Concierge,<br/>cast, skip offer, raised hand, Prospero<br/><i>turn-preparation.service.ts</i>"]
+    PREP --> RECORD["3. RECORD<br/>recordOperatorPost()<br/>staged tools, dice, USER row, links,<br/>Librarian, danger flags, Pascal, Carina<br/><i>operator-post.service.ts</i>"]
+    RECORD --> HELD{"Held<br/>(paused / storyteller)?"}
+    HELD -->|yes| FINISH["finishHeldPost()"] --> DONE2([return: no reply])
+    HELD -->|no| TOOLS["4. TOOLS<br/>resolveTurnToolSlate()<br/>build, effect ceiling, tool mode,<br/>instructions, stop sequences<br/><i>turn-tools.service.ts</i>"]
+    TOOLS --> CONTEXT["5. CONTEXT<br/>runPreContextPreCompute() + buildMessageContext()<br/>then spliceTurnExtras()"]
+    CONTEXT --> SHORT{"Courier or<br/>storyteller bid?"}
+    SHORT -->|Courier| COURIER["dispatchCourierTransport()"]
+    SHORT -->|bid| BID["callForBid()"]
+    SHORT -->|no| GEN["6. GENERATE<br/>runPrimaryStream() → runNativeToolLoop()<br/>→ runTurnTextToolPasses()<br/>→ attemptEmptyResponseRecovery()"]
+    GEN --> SETTLE["7. SETTLE<br/>settleTurn() / resolveTurnOutcome()<br/><i>turn-outcome.service.ts</i>"]
+    SETTLE --> OUT{"outcome"}
+    OUT -->|reply| FINAL["finalizeMessageResponse()"]
+    OUT -->|tools-only| TOOLSAVE["save tool rows"]
+    OUT -->|pass| PASS["Host pass note,<br/>cycle advances"]
+    OUT -->|bare-yield| YIELD["Host yield note,<br/>chain stops"]
+    OUT -->|"stopped / empty"| QUIET["done event only"]
+```
+
+Every path that records an operator post — an answered turn, a paused chat, a storyteller round, the fair-rotation pause — goes through `recordOperatorPost()`, so a held post is the same post an answered one is.
+
+---
+
 ## File Reference Index
 
 | System | Key Files |
@@ -576,5 +612,6 @@ flowchart TD
 | **Story Backgrounds** | `lib/background-jobs/handlers/story-background.ts`, `lib/background-jobs/handlers/title-update.ts`, `lib/image-gen/appearance-resolution.ts` |
 | **The Concierge** | `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/services/dangerous-content/provider-routing.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `lib/background-jobs/scheduled-danger-scan.ts` |
 | **Background Jobs** | `lib/background-jobs/queue-service.ts`, `lib/background-jobs/processor.ts`, `lib/background-jobs/handlers/index.ts` |
+| **Salon Turn Pipeline** | `lib/services/chat-message/orchestrator.service.ts`, `turn-stream.ts`, `turn-holds.service.ts`, `turn-preparation.service.ts`, `operator-post.service.ts`, `turn-tools.service.ts`, `turn-extras.ts`, `turn-outcome.service.ts`, `turn-orchestrator.service.ts` (all in `lib/services/chat-message/`) |
 | **Streaming** | `lib/services/chat-message/streaming.service.ts` |
 | **Templates** | `lib/templates/processor.ts` |

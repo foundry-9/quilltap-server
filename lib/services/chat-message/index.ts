@@ -6,7 +6,6 @@
 
 // Types
 export type {
-  MessageServiceContext,
   SendMessageOptions,
   AttachedFile,
   ToolMessage,

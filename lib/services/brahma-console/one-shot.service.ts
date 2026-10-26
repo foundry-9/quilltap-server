@@ -86,27 +86,19 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   // Tools — identical to the standalone console: agent mode, doc read/write, the
   // read-only run_sql tool, search-without-memories; NO ask_carina (recursion
   // guard), NO workspace tools.
-  const built = await buildTools(
+  const built = await buildTools({
     connectionProfile,
-    null,   // imageProfileId
-    null,   // imageProfile
     userId,
-    null,   // projectId
-    false,  // requestFullContext
-    [],     // disabledTools
-    [],     // disabledToolGroups
-    true,   // agentModeEnabled
-    false,  // isMultiCharacter
-    false,  // helpToolsEnabled
-    false,  // canDressThemselves
-    false,  // canCreateOutfits
-    false,  // canManageInventory — no inventory_* tools here
-    'full', // docToolsMode
-    false,  // askCarinaEnabled — recursion guard
-    false,  // includeWorkspaceTools — stripped for the console
-    true,   // excludeMemorySearch — no memory source
-    true,   // sqlAccess — read-only run_sql
-  )
+    agentModeEnabled: true,
+    canDressThemselves: false,
+    canCreateOutfits: false,
+    canManageInventory: false, // no inventory_* tools here
+    docToolsMode: 'full',
+    askCarinaEnabled: false, // recursion guard
+    includeWorkspaceTools: false, // stripped for the console
+    excludeMemorySearch: true, // no memory source
+    sqlAccess: true, // read-only run_sql
+  })
 
   // Operator-set turn budget (Settings → Chat → Brahma Console); shared with the
   // standalone console. The loop's stuck-loop guard is independent of it.

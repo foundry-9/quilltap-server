@@ -626,23 +626,21 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       }
     }
 
-    const built = await buildTools(
+    const built = await buildTools({
       connectionProfile,
+      userId,
       imageProfileId,
       imageProfile,
-      userId,
-      chat.projectId ?? undefined,
-      false, // requestFullContext
-      chat.disabledTools ?? [],
-      chat.disabledToolGroups ?? [],
-      false, // agentModeEnabled
+      projectId: chat.projectId,
+      disabledTools: chat.disabledTools ?? [],
+      disabledToolGroups: chat.disabledToolGroups ?? [],
       isMultiCharacter,
-      answerer.defaultHelpToolsEnabled === true, // helpToolsEnabled
-      false, // canDressThemselves — Carina does not dress the answerer
-      false, // canCreateOutfits
-      false,  // canManageInventory — no inventory_* tools here
-      documentEditingEnabled ? 'full' : 'off',
-    );
+      helpToolsEnabled: answerer.defaultHelpToolsEnabled === true,
+      canDressThemselves: false, // Carina does not dress the answerer
+      canCreateOutfits: false,
+      canManageInventory: false, // no inventory_* tools here
+      docToolsMode: documentEditingEnabled ? 'full' : 'off',
+    });
     const tools = built.tools.filter((t) => {
       const name =
         (t as { function?: { name?: string }; name?: string }).function?.name ??

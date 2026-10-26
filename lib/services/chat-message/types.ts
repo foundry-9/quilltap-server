@@ -5,63 +5,14 @@
  */
 
 import type { StorytellerBidCallOutcome, StorytellerBidRequest, StorytellerTurnContext } from '@/lib/storyteller/types'
-import type { ChatMetadataBase, ChatParticipantBase, Character, ChatSettings, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
+import type { Character, ChatSettings, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
-import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
-
-/**
- * Context passed through the message handling pipeline
- */
-export interface MessageServiceContext {
-  /** Chat ID */
-  chatId: string
-  /** User ID */
-  userId: string
-  /** Repository access */
-  repos: ReturnType<typeof getRepositories>
-  /** Chat metadata */
-  chat: ChatMetadataBase
-  /** User participant (user-controlled character) */
-  userParticipant: ChatParticipantBase | null
-  /** Responding character participant */
-  characterParticipant: ChatParticipantBase
-  /** Character data */
-  character: Character
-  /** User character identity data (name and description of the user-controlled character) */
-  userCharacter: { name: string; description: string } | null
-  /** Connection profile for the LLM */
-  connectionProfile: ConnectionProfile
-  /** Decrypted API key (empty for providers that don't require it) */
-  apiKey: string
-  /** Image profile ID (if configured) */
-  imageProfileId: string | null
-  /** Whether this is a continue/nudge mode message */
-  isContinueMode: boolean
-  /** Whether this is a multi-character chat */
-  isMultiCharacter: boolean
-  /** All participants in multi-character chats */
-  allParticipants?: ChatParticipantBase[]
-  /** Map of character IDs to Character data */
-  participantCharacters?: Map<string, Character>
-  /** Timestamp configuration */
-  timestampConfig?: TimestampConfig | null
-  /** Chat settings */
-  chatSettings?: {
-    cheapLLMSettings?: {
-      embeddingProfileId?: string
-    }
-    defaultRoleplayTemplateId?: string
-    defaultTimestampConfig?: TimestampConfig | null
-  } | null
-  /** Roleplay template (if configured) */
-  roleplayTemplate?: { systemPrompt: string } | null
-}
 
 /**
  * Pending tool result from user-initiated tool calls (shown in composer before sending)

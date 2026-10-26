@@ -101,14 +101,16 @@ describe('runBrahmaQuery', () => {
 
   it('builds tools with the Brahma flags (no ask_carina / no workspace / no memory search / SQL on)', async () => {
     await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'q' })
-    const args = jest.mocked(buildTools).mock.calls[0]
-    expect(args[8]).toBe(true) // agentModeEnabled
-    expect(args[13]).toBe(false) // canManageInventory — no inventory_* tools
-    expect(args[14]).toBe('full') // docToolsMode
-    expect(args[15]).toBe(false) // askCarinaEnabled — recursion guard
-    expect(args[16]).toBe(false) // includeWorkspaceTools
-    expect(args[17]).toBe(true) // excludeMemorySearch
-    expect(args[18]).toBe(true) // sqlAccess
+    const [options] = jest.mocked(buildTools).mock.calls[0]
+    expect(options).toMatchObject({
+      agentModeEnabled: true,
+      canManageInventory: false, // no inventory_* tools
+      docToolsMode: 'full',
+      askCarinaEnabled: false, // recursion guard
+      includeWorkspaceTools: false,
+      excludeMemorySearch: true,
+      sqlAccess: true,
+    })
   })
 
   it('returns the accumulated answer when the model replies without tools', async () => {
