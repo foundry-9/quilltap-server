@@ -712,7 +712,6 @@ export function encodeDebugInfo(
       memoriesIncluded: builtContext.memoriesIncluded,
       messagesIncluded: builtContext.messagesIncluded,
       messagesTruncated: builtContext.messagesTruncated,
-      includedSummary: builtContext.includedSummary,
       debugMemories: builtContext.debugMemories,
       debugSummary: builtContext.debugSummary,
       debugSystemPrompt: builtContext.debugSystemPrompt,

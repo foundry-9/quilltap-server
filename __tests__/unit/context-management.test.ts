@@ -22,20 +22,19 @@ import {
   calculateRecentMessageCount,
 } from '@/lib/llm/model-context-data'
 
+import { calculateContextBudget, buildContext } from '@/lib/chat/context-manager'
 import {
-  calculateContextBudget,
   buildSystemPrompt,
-  formatSummaryForContext,
-  selectRecentMessages,
-  willExceedContextLimit,
+  buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
+} from '@/lib/chat/context/system-prompt-builder'
+import { selectRecentMessages } from '@/lib/chat/context/message-selector'
+import {
   filterMessagesByHistoryAccess,
   getParticipantName,
   attributeMessagesForCharacter,
-  buildOtherParticipantsInfo,
-  buildIdentityReinforcement,
-  buildContext,
   type MessageWithParticipant,
-} from '@/lib/chat/context-manager'
+} from '@/lib/chat/context/message-attribution'
 import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
 import { resetFrozenArchiveCacheForTests } from '@/lib/memory/recall/archive'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
@@ -367,7 +366,6 @@ describe('Context Manager', () => {
       expect(budget.totalLimit).toBe(200000)
       expect(budget.systemPromptBudget).toBeGreaterThan(0)
       expect(budget.memoryBudget).toBeGreaterThan(0)
-      expect(budget.summaryBudget).toBeGreaterThan(0)
       expect(budget.recentMessagesBudget).toBeGreaterThan(0)
       expect(budget.responseReserve).toBeGreaterThan(0)
     })
@@ -538,43 +536,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatSummaryForContext', () => {
-    it('should format summary with header', () => {
-      const summary = 'This is a conversation summary.'
-      const { content } = formatSummaryForContext(summary, 1000, 'OPENAI')
-      expect(content).toContain('## Previous Conversation Summary')
-      expect(content).toContain(summary)
-    })
-
-    it('should return empty for empty summary', () => {
-      const { content } = formatSummaryForContext('', 1000, 'OPENAI')
-      expect(content).toBe('')
-    })
-
-    it('should truncate long summaries', () => {
-      const longSummary = 'A'.repeat(10000)
-      const { tokenCount } = formatSummaryForContext(longSummary, 100, 'OPENAI')
-      expect(tokenCount).toBeLessThanOrEqual(100)
-    })
-
-    it('should truncate oversized summaries so content is shorter than the input — regression for dynamic-require bug', () => {
-      // Before fix(chat) ea152d27, formatSummaryForContext called
-      //   const { truncateToTokenLimit } = require('@/lib/tokens/token-counter')
-      // which silently returned undefined in the Next.js webpack ESM bundle,
-      // causing a TypeError mid-turn on any chat with accumulated summary text.
-      // This test exercises the truncation path and verifies that content is
-      // actually shortened, confirming truncateToTokenLimit is reachable.
-      const longSummary = 'word '.repeat(3000).trim() // ~3000 tokens
-      const { content, tokenCount } = formatSummaryForContext(longSummary, 200, 'OPENAI')
-      // The result must be shorter than the input
-      expect(content.length).toBeLessThan(longSummary.length)
-      // Token count must respect the budget
-      expect(tokenCount).toBeLessThanOrEqual(200)
-      // The header must still be present
-      expect(content).toContain('## Previous Conversation Summary')
-    })
-  })
-
   describe('selectRecentMessages', () => {
     const messages = [
       { role: 'user', content: 'Hello' },
@@ -604,27 +565,6 @@ describe('Context Manager', () => {
       const { messages: selected, truncated } = selectRecentMessages([], 1000, 'OPENAI')
       expect(selected.length).toBe(0)
       expect(truncated).toBe(false)
-    })
-  })
-
-  describe('willExceedContextLimit', () => {
-    it('should detect when context will exceed', () => {
-      const messages = Array(100).fill({ content: 'A'.repeat(1000) })
-      const result = willExceedContextLimit(messages, 'Hello', 'OLLAMA', 'phi3:mini')
-      expect(result.willExceed).toBe(true)
-    })
-
-    it('should return false for small context', () => {
-      const messages = [{ content: 'Hello' }]
-      const result = willExceedContextLimit(messages, 'Hi', 'ANTHROPIC', 'claude-sonnet-4-5-20250929')
-      expect(result.willExceed).toBe(false)
-    })
-
-    it('should calculate percentage used', () => {
-      const messages = [{ content: 'Hello' }]
-      const result = willExceedContextLimit(messages, 'Hi', 'OPENAI', 'gpt-4o')
-      expect(result.percentUsed).toBeGreaterThan(0)
-      expect(result.percentUsed).toBeLessThan(100)
     })
   })
 
@@ -1471,6 +1411,72 @@ describe('Context Manager', () => {
       expect(carrying.messages[carrying.messages.length - 1].content).toBe(
         `Ready for the next task?\n\n---\n\n## Carried and equipped\n- Excalibur (sword): Never dulled.\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`,
       )
+    })
+
+    // ------------------------------------------------------------------
+    // Bug 263: the history budget sees every part of the request.
+    // ------------------------------------------------------------------
+
+    describe('the history budget (bug 263)', () => {
+      const longHistory = Array.from({ length: 120 }, (_, i) => ({
+        role: i % 2 === 0 ? 'USER' : 'ASSISTANT',
+        content: `Line ${i}: ${'the conversation wanders on '.repeat(12)}`,
+        id: `h${i}`,
+      }))
+
+      const buildSmallWindow = (inventory: string | null) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+        ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce(inventory)
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            participants: [participantA],
+            title: 'Test Chat',
+            contextSummary: null,
+            tags: [],
+            messageCount: longHistory.length,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: longHistory,
+          newUserMessage: 'And then?',
+          skipMemories: true,
+          respondingParticipant: participantA,
+          connectionProfile: { maxContext: 8192, maxTokens: 1000 } as any,
+        } as any)
+      }
+
+      const payloadTokens = (messages: Array<{ content: string }>) =>
+        messages.reduce((sum, m) => sum + estimateTokens(m.content, 'OPENAI') + 4, 0)
+
+      it('packs history so the whole payload lands under safeInputLimit', async () => {
+        const bulky = `## Carried and equipped\n${'- A trunk of letters, each one heavier than the last.\n'.repeat(150)}`
+        const result = await buildSmallWindow(bulky)
+
+        // A trailing section the old budget could not see used to push the
+        // payload over the very ceiling the pre-send check warns about.
+        expect(payloadTokens(result.messages)).toBeLessThanOrEqual(result.budget.safeInputLimit)
+        expect(result.tokenUsage.total).toBeLessThanOrEqual(result.budget.safeInputLimit)
+        // The section rode, and so did some history — just less of it.
+        expect(result.messages[result.messages.length - 1].content).toContain('A trunk of letters')
+        expect(result.messagesTruncated).toBe(true)
+        expect(result.messagesIncluded).toBeGreaterThan(1)
+
+        const lean = await buildSmallWindow(null)
+        expect(result.messagesIncluded).toBeLessThan(lean.messagesIncluded)
+      })
     })
 
     // ------------------------------------------------------------------

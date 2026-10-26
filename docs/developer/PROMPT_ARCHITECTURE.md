@@ -166,8 +166,11 @@ Sections are appended to the new user message in this order, separated by `---`:
 7. Referent ledger, "Who is being spoken of" (`buildReferentLedger`, `lib/chat/context/referent-ledger.ts`) — everyone named in the last 6 spoken lines, most recent first, with pronouns, in the room or not, who last named them and the sentence; then the card of each listed person not in the room. Leaves out the responder and the latest line's author. Empty-is-absent.
 8. Closing echo, "The line you are answering" (`buildClosingEcho`) — the new user message repeated (its closing paragraphs past 1,500 characters), so the last thing the model reads about the conversation is what it is answering. New-user-message turns only.
 9. "Nothing to add" turn-skip note, then the raised-hand yield note
+10. The storyteller section (a bid's instructions or a speaking turn's plan), when there is one
 
-On continue / nudge / chained autonomous turns (and swipes) there is no new user message, so these sections (all but the echo), in the same order, are pushed as their own trailing `user` message.
+On continue / nudge / chained autonomous turns (and swipes) there is no new user message, so these sections (all but the echo), in the same order, are pushed as their own trailing `user` message, led by the chained-turn scene note when it applies. The order and both deliveries live in one function, `composeTrailingMessage` (`lib/chat/context/turn-trailing.ts`).
+
+**The sections are measured before history is packed.** `buildContext` builds every Staff whisper and trailing section first, then gives history what `safeInputLimit` leaves after system blocks 1–3, the timestamp line, the whole trailing message and the caller's `reservedOutgoingTokens`. A section added here is counted automatically; one built after history is chosen would not be ([bug 263](bugs/fixed/bug-263-budget-blind-to-trailing-sections.md)).
 
 **Character progressions** (§9a) are the newest of these and the only one derived from the wall clock.
 
@@ -264,7 +267,16 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | `lib/chat/context/system-prompt-builder.ts` | `buildIdentityStack`, `buildSystemPrompt`, `buildIdentityReinforcement`, `buildPublicIdentityCard`, `renderTabooSection` |
 | `lib/chat/context/standing-instructions.ts` | Resolve + render project/group `instructions` for the standing-instructions section |
 | `lib/services/system-prompt-compiler/compiler.ts` | Compile / cache / invalidate `chats.compiledIdentityStacks` |
-| `lib/chat/context-manager.ts` | `buildContext` — budget, memory, knowledge, scene state, whisper emission, final message assembly |
+| `lib/chat/context-manager.ts` | `buildContext` — the turn's phases in order (module header has the map); `calculateContextBudget`; the option and result types |
+| `lib/chat/context/turn-system-prompt.ts` | System block 1: compiled stack, fallback subprompts, Taboo, standing instructions, truncation |
+| `lib/chat/context/turn-compression.ts` | Budget-driven history compression (system block 3, the verbatim window) and memory compression |
+| `lib/chat/context/turn-scene-state.ts` | The `## Current State` section and its per-recipient emission cache |
+| `lib/chat/context/turn-recall.ts` | Recall assembly, knowledge retrieval, the recent-window query |
+| `lib/chat/context/turn-whispers.ts` | The Staff whispers a turn posts: Host time, Aurora's Core, the Commonplace Book, Suparṇā's mail |
+| `lib/chat/context/turn-trailing.ts` | `composeTrailingMessage` — the trailing sections' one order and delivery; turn notes; referent ledger |
+| `lib/chat/context/turn-history.ts` | History selection (both chat shapes, compression window, summary anchors) and system blocks 1–3 |
+| `lib/chat/context/turn-transcript.ts` | The build's one read of the chat's events |
+| `lib/chat/whisper-sweep.ts` | `sweepPriorWhispers` — removes a recipient's stale snapshot whispers after a fresh one posts |
 | `lib/services/chat-message/context-builder.service.ts` | History filtering, whisper role normalization, opaque body swap, multi-character anchoring |
 | `lib/services/chat-message/orchestrator.service.ts` | Tool mode + tool instructions, Prospero cadence, agent-mode and tool-change injections |
 | `lib/chat/context/message-attribution.ts` | `name` attribution, history-access and presence-window filtering, whisper visibility |

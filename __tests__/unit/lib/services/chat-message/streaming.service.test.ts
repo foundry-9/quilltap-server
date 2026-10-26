@@ -41,12 +41,11 @@ describe('streaming.service', () => {
     it('should encode debug info as SSE data event', () => {
       const debugInfo = {
         builtContext: {
-          tokenUsage: { total: 100, systemPrompt: 20, summary: 10, memories: 30, messages: 40 },
+          tokenUsage: { total: 100, systemPrompt: 20, memories: 30, knowledge: 10, recentMessages: 40 },
           budget: { totalLimit: 1000, responseReserve: 500 },
           memoriesIncluded: 5,
           messagesIncluded: 10,
           messagesTruncated: 0,
-          includedSummary: false,
           debugMemories: [],
           debugSummary: null,
           debugSystemPrompt: '',
@@ -81,12 +80,11 @@ describe('streaming.service', () => {
     it('should include tool info when tools are present', () => {
       const debugInfo = {
         builtContext: {
-          tokenUsage: { total: 100, systemPrompt: 20, summary: 10, memories: 30, messages: 40 },
+          tokenUsage: { total: 100, systemPrompt: 20, memories: 30, knowledge: 10, recentMessages: 40 },
           budget: { totalLimit: 1000, responseReserve: 500 },
           memoriesIncluded: 0,
           messagesIncluded: 1,
           messagesTruncated: 0,
-          includedSummary: false,
           debugMemories: [],
           debugSummary: null,
           debugSystemPrompt: '',

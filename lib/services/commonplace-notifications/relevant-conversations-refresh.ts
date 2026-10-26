@@ -24,7 +24,8 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { isParticipantPresent, type MessageEvent } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/types';
+import { sweepPriorWhispers } from '@/lib/chat/whisper-sweep';
 import { rampLimit } from '@/lib/memory/recall/recap';
 import {
   searchVaultConversationSummaries,
@@ -116,7 +117,13 @@ export async function refreshRelevantConversationsOnFold(
 
         // Sweep the character's prior relevant-conversations whisper(s) so only
         // the freshest one survives.
-        await sweepPriorRelevantConversationWhispers(chatId, posted.id, targetParticipantId);
+        await sweepPriorWhispers({
+          chatId,
+          keepId: posted.id,
+          targetParticipantId,
+          isSameKind: m => m.systemSender === 'commonplaceBook' && m.systemKind === 'relevant-conversations',
+          logTag: '[RelevantConversationsRefresh]',
+        });
       } catch (perCharacterError) {
         logger.warn('[RelevantConversationsRefresh] Failed for a participant', {
           context: 'commonplace-notifications.relevant-conversations-refresh',
@@ -130,47 +137,6 @@ export async function refreshRelevantConversationsOnFold(
     logger.warn('[RelevantConversationsRefresh] Refresh failed', {
       context: 'commonplace-notifications.relevant-conversations-refresh',
       chatId,
-      error: getErrorMessage(error),
-    });
-  }
-}
-
-/**
- * Remove every prior `relevant-conversations` whisper for the same target,
- * leaving the just-posted one (`keepId`). Matched on the same target scope the
- * consolidated sweep uses (null → untargeted; otherwise includes the target id).
- */
-async function sweepPriorRelevantConversationWhispers(
-  chatId: string,
-  keepId: string,
-  targetParticipantId: string | null,
-): Promise<void> {
-  try {
-    const repos = getRepositories();
-    const messages = await repos.chats.getMessages(chatId);
-    const stale = messages
-      .filter((m): m is MessageEvent => m.type === 'message')
-      .filter(
-        m =>
-          m.systemSender === 'commonplaceBook' &&
-          m.systemKind === 'relevant-conversations' &&
-          m.id !== keepId,
-      )
-      .filter(m => {
-        const ids = m.targetParticipantIds;
-        if (targetParticipantId === null) return ids === null || ids === undefined;
-        return Array.isArray(ids) && ids.includes(targetParticipantId);
-      })
-      .map(m => m.id);
-
-    if (stale.length > 0) {
-      await repos.chats.deleteMessagesByIds(chatId, stale);
-    }
-  } catch (error) {
-    logger.warn('[RelevantConversationsRefresh] Failed to sweep prior whispers', {
-      context: 'commonplace-notifications.relevant-conversations-refresh',
-      chatId,
-      targetParticipantId,
       error: getErrorMessage(error),
     });
   }
