@@ -8,9 +8,22 @@
 
 - `qtap-plugin-default-system-prompts` (1.1.27) and `qtap-plugin-openai-compatible` (1.0.50) marked `@quilltap/plugin-types` external on the belief that its imports were type-only. The bundled `@quilltap/plugin-utils` imports it at runtime, so each `index.js` carried a bare `require("@quilltap/plugin-types")` that resolved only by walking up to a host `node_modules`. The standalone tarball kept both plugins' whole `node_modules` trees to satisfy it. Both now bundle it like the other distributed plugins; the built output differs only by that removed `require`.
 
+#### Test: release-checklist regression gaps
+
+- `__tests__/unit/lib/toast-stacking.test.ts`: the toast container's z-index must exceed every `z-[N]` / `z-index` declared under `components/` and `app/` (below 9999) and stay under the startup gates. Fails on the old value of 50.
+- `lib/storyteller/__tests__/plan-run-order.test.ts`: `planStorytellerRun` sorts by rotation without `keepOrder`, keeps the operator's order with it (rotation never consulted), and orders an all-at-once round's Act tail by that order.
+
 #### Fix: Automation settings checkbox uses `qt-checkbox`
 
 - The per-row checkbox in `components/settings/chat-settings/AutomationSettings.tsx` used raw Tailwind (`h-4 w-4 rounded border-input text-primary focus:ring-primary`); it now uses `qt-checkbox`, so themes can restyle it. Found in release checklist 7 (`qt-*` classes). No other changes needed.
+
+#### Chore: prune diagram trace logging
+
+- Removed four per-event `console.debug` traces from the diagram components (render, Copy PNG start, lightbox open and close). Failure, fallback and summary logs stay.
+
+#### Chore: dead code sweep
+
+- Removed the unused `components/inventory/index.ts` barrel, `resolveMemoryMaintenance`, `isComputedTool` and `ProjectFileInfo`. Details in `docs/developer/DEAD-CODE-REPORT.md`.
 
 #### Feature: diagram lightbox and Copy PNG
 

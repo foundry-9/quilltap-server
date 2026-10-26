@@ -134,7 +134,6 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
     const frame = requestAnimationFrame(() => {
       const host = stageRef.current
       if (!host) return
-      console.debug('[diagrams] Rendering diagram', { engine, style, length: source.length })
       RENDERERS[engine](source, { style, host })
         .then(({ svg: drawn }) => {
           cacheSet(cacheKey, drawn)

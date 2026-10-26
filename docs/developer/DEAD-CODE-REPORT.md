@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-10-13
+**Last Updated**: 2026-10-26
 **Tool Used**: knip
-**Codebase**: Quilltap v4.10.0-dev.176
+**Codebase**: Quilltap v4.11-dev
 
 ---
 
@@ -12,12 +12,40 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Files | 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
 | Unused Dependencies | None flagged as of 2026-10-13 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Exports | 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
-| Duplicate Exports | 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+| Duplicate Exports | 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-10-26 — v4.11 release sweep (knip), scoped since the 4.10 sweep
+
+knip flagged **3 unused files**, **1338 unused exports**, **856 unused exported types**, 4 unused enum members and 78 duplicate exports (unused exports 1302 → 1338, types 915 → 856, duplicates 68 → 78 — the Inventory, Pascal intervention and Scenario surface); no unused or unlisted dependencies. The new file is `components/inventory/index.ts`.
+
+Method as on 2026-10-13: every flagged symbol was scored by identifier references outside its defining file across all tracked source, and those with none were read by hand. Run with `node_modules` present (`npm ci --ignore-scripts` suffices).
+
+### Removed
+
+| File | Removed | Why |
+|------|---------|-----|
+| `components/inventory/index.ts` | whole file | Barrel with no importers; every caller imports `inventory-control-dialog` / `InventoryBrowser` directly. |
+| `lib/memory/settings.ts` | `resolveMemoryMaintenance` | No callers; housekeeping reads through `resolveMemorySettings`. `withCapFor` stays (used by it). |
+| `lib/tools/effects.ts` | `isComputedTool` | No callers; `maxEffectOfTool` covers the question callers ask. |
+| `lib/tools/project-info-tool.ts` | `ProjectFileInfo` | Unused interface. |
+
+### Kept — with reason
+
+- **SVAR pair** (`components/files/svar/index.ts`, `SvarFilePicker.tsx`) — in-progress file-manager surface, unchanged.
+- **New `z.infer` aliases with no users** — `InventoryStateValue`, `CustomToolIntervention`, `EffectPinInput`, `InterventionDecisionInput`, `StorytellerBidStatus`, `StorytellerRoundStatus`, `EquippedInventory`, plus the standing schema/tool-input list. Standing schema rule.
+- **`stopMountWatchers`** (`lib/mount-index/watcher.ts`) — lifecycle pair with the live `startMountWatchers`. **`isMemoryMaintenanceSchedulerRunning`** — as 2026-10-13.
+- **Standing keeps** (registries, theme API, barrels, test hooks, used-in-file helpers, 4 `ErrorCode` members, duplicate exports) — unchanged in character.
+
+### Follow-up this round surfaced (not dead code)
+
+- **`ChatProvider`** (`components/providers/chat-context.tsx`) has no caller, so `useChatContext()` (used by `app/salon/[id]/SalonView.tsx`) always returns its empty fallback (no chat id, no tags). Either the provider was never mounted or its use was lost in a refactor; left for a deliberate decision rather than deleted.
 
 ---
 
