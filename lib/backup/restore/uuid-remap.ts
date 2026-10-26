@@ -52,6 +52,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import { bySlot } from '@/lib/schemas/wardrobe.types';
 import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
 import {
@@ -756,6 +757,12 @@ export function remapBackupData(
     };
   }) as ChatWardrobeHistoryRow[];
 
+  // The Log. Each line names the chat it was written from and the character
+  // who wrote it (nullable, which `remapFields` passes through).
+  const remappedLogEntries = (data.logEntries || []).map((entry) =>
+    remapper.remapFields(entry, ['id', 'chatId', 'characterId'])
+  ) as LogEntry[];
+
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
@@ -813,5 +820,6 @@ export function remapBackupData(
     textReplacementRules: data.textReplacementRules || [],
     wardrobeWear: remappedWardrobeWear,
     wardrobeHistory: remappedWardrobeHistory,
+    logEntries: remappedLogEntries,
   };
 }

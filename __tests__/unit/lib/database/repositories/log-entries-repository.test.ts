@@ -4,7 +4,8 @@
  * `LogEntriesRepository` and the `regexp()` SQL function, against a real
  * in-memory SQLite database standing in for the LLM logs file: the generated
  * table and its extra indexes, the filtered newest-first read, the regex
- * search (and its flags), and retention pruning.
+ * search (and its flags), retention pruning, and the backup's whole-table
+ * read and replace-mode wipe.
  */
 
 import path from 'path';
@@ -142,6 +143,32 @@ describe('LogEntriesRepository', () => {
       'Picked the lock on the north door',
     ]);
     expect(await repo.searchMessages('^The (vault|operator)', '', 1)).toHaveLength(1);
+  });
+
+  it('reads every entry oldest first for a backup, past any limit', async () => {
+    const rows = await repo.findAllEntries();
+    expect(rows.map((row) => row.message)).toEqual([
+      'Picked the lock on the north door',
+      'The vault is empty',
+      'Lockpick broke',
+      'The operator noted the hour',
+    ]);
+    expect(rows[3]).toMatchObject({ chatId: CHAT_B, characterId: null, createdAt: '2026-10-04T10:00:00.000Z' });
+  });
+
+  it('round-trips an entry under its own id and timestamps, as a restore writes it', async () => {
+    const [original] = await repo.findAllEntries();
+    await repo.deleteAll();
+
+    const { id, createdAt, updatedAt, ...data } = original;
+    await repo.create(data, { id, createdAt, updatedAt });
+
+    expect(await repo.findAllEntries()).toEqual([original]);
+  });
+
+  it('deletes every entry for a replace-mode restore', async () => {
+    expect(await repo.deleteAll()).toBe(4);
+    expect(await repo.findAllEntries()).toEqual([]);
   });
 
   it('prunes entries older than the retention window, and nothing at zero', async () => {

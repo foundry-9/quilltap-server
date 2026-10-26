@@ -1000,3 +1000,180 @@ describe('restore field fidelity — 4.10 data-model additions', () => {
     expect(tfidfCreate.mock.calls[0][0]).toMatchObject({ textShapeVersion: 2, userId: 'user-1' })
   })
 })
+
+describe('restore field fidelity — 4.11 data-model additions', () => {
+  const mockedIsLLMLogsDegraded = jest.requireMock('@/lib/database/backends/sqlite/llm-logs-client')
+    .isLLMLogsDegraded as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockedIsLLMLogsDegraded.mockReturnValue(true)
+  })
+
+  /** Columns added to chats in 4.11 (Storyteller mode, the Inventory). */
+  const NEW_411_CHAT_FIELDS = {
+    turnMode: 'storyteller',
+    storytellerInviteFilter: true,
+    equippedInventory: { 'char-1': ['lantern-1', 'pocketwatch-1'] },
+  }
+
+  /**
+   * `chat_messages.storytellerBid` is a new column; `pascalMeta` (a JSON
+   * column) grew `invokedBy: 'trigger'`, `triggerPhrase` and `intervention`.
+   */
+  const NEW_411_MESSAGE_FIELDS = {
+    storytellerBid: { roundId: 'round-1', tier: 'act', plan: 'Pick the lock.', toolsNamed: ['run_custom'] },
+    pascalMeta: {
+      toolName: 'lockpick',
+      invokedBy: 'trigger',
+      triggerPhrase: 'picks the lock',
+      intervention: { resolvedAt: '2026-10-20T00:00:00.000Z', decision: 'as-rolled', changed: [] },
+    },
+  }
+
+  /** Three new chat_settings columns, plus `punctuationWarnings` inside the `smartTypographySettings` JSON. */
+  const NEW_411_CHAT_SETTINGS_FIELDS = {
+    smartTypographySettings: { displayQuotes: false, dashes: true, ellipsis: true, punctuationWarnings: false },
+    customToolTriggers: true,
+    customToolIntervention: false,
+    composerSlashCommands: false,
+  }
+
+  it('carries every new 4.11 chats and chat_messages column through restore', async () => {
+    const { chatsCreate, addMessage } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Conversation',
+            participants: [],
+            tags: [],
+            ...NEW_411_CHAT_FIELDS,
+            messages: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello', ...NEW_411_MESSAGE_FIELDS }],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject(NEW_411_CHAT_FIELDS)
+    expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_411_MESSAGE_FIELDS)
+  })
+
+  it("carries a memory's keystone mark through restore", async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        memories: [
+          { id: 'mem-1', characterId: 'char-1', content: 'A standing fact.', tags: [], keywords: [], relatedMemoryIds: [], keystone: true },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ keystone: true })
+  })
+
+  it('carries every new 4.11 chat_settings column through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [{ id: 'settings-1', userId: 'old-user', ...NEW_411_CHAT_SETTINGS_FIELDS }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject(NEW_411_CHAT_SETTINGS_FIELDS)
+  })
+
+  it("carries a roleplay template's unmarked-text fields through restore", async () => {
+    buildRepoMocks()
+    const roleplayCreate = jest.fn().mockResolvedValue({})
+    const globalRepos = mockedGetRepositories() as unknown as Record<string, unknown>
+    mockedGetRepositories.mockReturnValue(
+      new Proxy(globalRepos, {
+        get(target, prop: string) {
+          if (prop === 'roleplayTemplates') return repoStub({ create: roleplayCreate })
+          return target[prop]
+        },
+      }) as never
+    )
+    const unmarked = { unmarkedStyle: { style: 'qt-chat-narration' }, markdownAsterisks: false }
+    primeArchive(
+      makeBackupData({
+        roleplayTemplates: [{ id: 'rt-1', userId: 'old-user', name: 'Plain Prose', ...unmarked }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(roleplayCreate.mock.calls[0][0]).toMatchObject({ ...unmarked, userId: 'user-1' })
+  })
+
+  it("carries an LLM log's storytellerRoundId and every Log entry through restore", async () => {
+    buildRepoMocks()
+    mockedIsLLMLogsDegraded.mockReturnValue(false)
+    const llmLogsCreate = jest.fn().mockResolvedValue({})
+    const logEntriesCreate = jest.fn().mockResolvedValue({})
+    const userRepos = mockedGetUserRepositories('user-1') as unknown as Record<string, unknown>
+    const globalRepos = mockedGetRepositories() as unknown as Record<string, unknown>
+    mockedGetUserRepositories.mockReturnValue(
+      new Proxy(userRepos, {
+        get(target, prop: string) {
+          if (prop === 'llmLogs') return repoStub({ create: llmLogsCreate })
+          return target[prop]
+        },
+      }) as never
+    )
+    mockedGetRepositories.mockReturnValue(
+      new Proxy(globalRepos, {
+        get(target, prop: string) {
+          if (prop === 'logEntries') return repoStub({ create: logEntriesCreate })
+          return target[prop]
+        },
+      }) as never
+    )
+    const entry = {
+      id: 'entry-1',
+      message: 'The lock gave on the third try.',
+      chatId: 'chat-1',
+      characterId: null,
+      createdAt: '2026-10-20T00:00:00.000Z',
+      updatedAt: '2026-10-20T00:00:00.000Z',
+    }
+    primeArchive(
+      makeBackupData({
+        llmLogs: [{ id: 'log-1', userId: 'user-1', type: 'STORYTELLER_BID', storytellerRoundId: 'round-1', createdAt: '2026-10-20T00:00:00.000Z' }],
+        logEntries: [entry],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(llmLogsCreate.mock.calls[0][0]).toMatchObject({ type: 'STORYTELLER_BID', storytellerRoundId: 'round-1' })
+    expect(logEntriesCreate).toHaveBeenCalledWith(
+      { message: entry.message, chatId: 'chat-1', characterId: null },
+      { id: 'entry-1', createdAt: entry.createdAt, updatedAt: entry.updatedAt }
+    )
+    expect(summary.logEntries).toBe(1)
+  })
+
+  it('skips the Log with a warning while the logs database is degraded', async () => {
+    buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        logEntries: [{ id: 'entry-1', message: 'x', chatId: 'chat-1', characterId: null, createdAt: 'a', updatedAt: 'a' }],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(summary.logEntries).toBe(0)
+    expect(summary.warnings).toContain('Log entries were not restored because the logs database is in degraded mode')
+  })
+})

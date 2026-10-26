@@ -75,6 +75,11 @@ async function clearFormat3Entities(): Promise<void> {
     }
   }
 
+  // The Log lives in the LLM logs database (no userId). Without this a
+  // replace-mode restore would collide on its preserved primary keys, and
+  // "delete all my data" would leave every line behind.
+  await getRepositories().logEntries.deleteAll();
+
   // instance_settings is special: we don't want to drop EVERYTHING since some
   // keys are written by startup migrations and aren't part of the backup. The
   // restore upserts each backup row by key, which is the right behavior. So

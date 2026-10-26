@@ -1228,6 +1228,33 @@ export async function restore(
       restored: wardrobeHistoryRestored,
     });
 
+    // 22n-quater. The Log. Lives in the LLM logs database, so it is skipped
+    // with the LLM logs when that database is degraded. Lines are written once
+    // and never edited, so each keeps its id and both timestamps.
+    let logEntriesRestored = 0;
+    const logEntryRows = data.logEntries || [];
+    if (logEntryRows.length > 0) {
+      if (isLLMLogsDegraded()) {
+        moduleLogger.warn('Skipping Log restore — logs database is in degraded mode', { rowCount: logEntryRows.length });
+        warnings.push('Log entries were not restored because the logs database is in degraded mode');
+      } else {
+        for (const entry of logEntryRows) {
+          try {
+            const { id, createdAt, updatedAt, ...entryData } = entry;
+            await globalRepos.logEntries.create(entryData, { id, createdAt, updatedAt });
+            logEntriesRestored++;
+          } catch (error) {
+            warnings.push(`Failed to restore Log entry: ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore Log entry', { entryId: entry.id, error });
+          }
+        }
+      }
+    }
+    moduleLogger.debug('Restored Log entries', {
+      total: logEntryRows.length,
+      restored: logEntriesRestored,
+    });
+
     // 22o. Instance settings — applied last because the mount-point keys
     // reference doc_mount_points that we just restored above. Upsert by key
     // so a fresh instance's auto-provisioned defaults get overwritten by the
@@ -1459,6 +1486,7 @@ export async function restore(
       textReplacementRules: textReplacementRulesRestored,
       wardrobeWear: wardrobeWearRestored,
       wardrobeHistory: wardrobeHistoryRestored,
+      logEntries: logEntriesRestored,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,

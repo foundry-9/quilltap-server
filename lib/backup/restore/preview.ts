@@ -72,6 +72,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       textReplacementRules: data.textReplacementRules?.length || 0,
       wardrobeWear: data.wardrobeWear?.length || 0,
       wardrobeHistory: data.wardrobeHistory?.length || 0,
+      logEntries: data.logEntries?.length || 0,
       warnings: [],
     };
   } finally {
