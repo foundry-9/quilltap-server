@@ -75,7 +75,7 @@ export function AutomationSettings({
                 checked={row.value}
                 onChange={(e) => { void row.onChange(e.target.checked) }}
                 disabled={disabled}
-                className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                className="qt-checkbox mt-1"
               />
               <div className="flex-1">
                 <div className="font-medium">{option.label}</div>

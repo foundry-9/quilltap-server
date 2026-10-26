@@ -290,7 +290,6 @@ export function DiagramLightbox({ svg, label, onClose }: DiagramLightboxProps) {
       || '#ffffff'
     const size = naturalRef.current ?? naturalSvgSize(live)
     const scale = safeExportScale(size, PNG_EXPORT_SCALE)
-    console.debug('[diagrams] Copying diagram as PNG', { transparent, scale })
 
     // Started now, inside the click: the clipboard is claimed before the
     // drawing is painted (see copyPngBlobToClipboard).

@@ -43,7 +43,6 @@ export function closeDiagramLightbox(): void {
   current.container.remove()
   current.restore()
   queueMicrotask(() => current.root.unmount())
-  console.debug('[diagrams] Closed diagram lightbox')
 }
 
 export function openDiagramLightbox({ svg, label, trigger }: OpenDiagramLightboxOptions): void {
@@ -56,6 +55,5 @@ export function openDiagramLightbox({ svg, label, trigger }: OpenDiagramLightbox
   const root = createRoot(container)
   open = { root, container, restore }
 
-  console.debug('[diagrams] Opened diagram lightbox', { length: svg.length })
   root.render(<DiagramLightbox svg={svg} label={label} onClose={closeDiagramLightbox} />)
 }
