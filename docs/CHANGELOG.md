@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: two distributed plugins required `@quilltap/plugin-types` at runtime
+
+- `qtap-plugin-default-system-prompts` (1.1.27) and `qtap-plugin-openai-compatible` (1.0.50) marked `@quilltap/plugin-types` external on the belief that its imports were type-only. The bundled `@quilltap/plugin-utils` imports it at runtime, so each `index.js` carried a bare `require("@quilltap/plugin-types")` that resolved only by walking up to a host `node_modules`. The standalone tarball kept both plugins' whole `node_modules` trees to satisfy it. Both now bundle it like the other distributed plugins; the built output differs only by that removed `require`.
+
 #### Feature: diagram lightbox and Copy PNG
 
 - Clicking a Salon diagram (or its new **Enlarge** toolbar button, or Enter/Space on the focused drawing) opens it full-window. Wheel, Chromium trackpad pinch (ctrl-wheel), Safari gesture events and two-finger touch zoom about the pointer; drag pans. **Fit** (the opening view; re-fits on window resize while active) and **100%** (natural size) buttons, zoom in/out buttons, `+` / `-` / `0` keys, double-click toggles Fit/100%. The drawing is scaled by resizing it, not by a CSS transform, so it stays sharp. Zoom range 10%–800%.

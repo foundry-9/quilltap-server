@@ -16,9 +16,10 @@ const projectRoot = resolve(__dirname, '..', '..', '..');
 
 // Packages that should NOT be bundled - they're provided by the main app at runtime
 const EXTERNAL_PACKAGES = [
-  // Quilltap plugin packages — type-only imports stripped at build time
-  '@quilltap/plugin-types',
-  // NOTE: @quilltap/plugin-utils is intentionally NOT external here.
+  // NOTE: @quilltap/plugin-types and @quilltap/plugin-utils are intentionally
+  // NOT external here. plugin-utils' runtime imports plugin-types, so marking
+  // plugin-types external emitted a bare `require('@quilltap/plugin-types')`
+  // that only resolved by walking up to a host node_modules.
   // This plugin only uses createSystemPromptPlugin from plugin-utils.
   // Bundling it (with tree-shaking) avoids pulling in the full plugin-utils
   // at runtime, which would drag in provider utilities that require 'openai'
