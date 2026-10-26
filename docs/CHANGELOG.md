@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: two distributed plugins required `@quilltap/plugin-types` at runtime
+
+- `qtap-plugin-default-system-prompts` (1.1.27) and `qtap-plugin-openai-compatible` (1.0.50) marked `@quilltap/plugin-types` external on the belief that its imports were type-only. The bundled `@quilltap/plugin-utils` imports it at runtime, so each `index.js` carried a bare `require("@quilltap/plugin-types")` that resolved only by walking up to a host `node_modules`. The standalone tarball kept both plugins' whole `node_modules` trees to satisfy it. Both now bundle it like the other distributed plugins; the built output differs only by that removed `require`.
+
 #### Test: release-checklist regression gaps
 
 - `__tests__/unit/lib/toast-stacking.test.ts`: the toast container's z-index must exceed every `z-[N]` / `z-index` declared under `components/` and `app/` (below 9999) and stay under the startup gates. Fails on the old value of 50.
