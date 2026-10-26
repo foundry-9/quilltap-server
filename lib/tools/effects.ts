@@ -213,12 +213,6 @@ export function maxEffectOfTool(name: string, ctx: ToolEffectContext = {}): Tool
   return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
 }
 
-/** True when the tool's effect depends on its input. */
-export function isComputedTool(name: string): boolean {
-  const spec = toolEffectSpecOf(name);
-  return spec !== undefined && isComputedToolEffect(spec);
-}
-
 /** The highest of a set of effects (`none` for an empty set). */
 export function highestToolEffect(effects: Iterable<ToolEffect>): ToolEffect {
   let highest: ToolEffect = 'none';
