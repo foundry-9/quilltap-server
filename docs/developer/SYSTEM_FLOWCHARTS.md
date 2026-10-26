@@ -601,7 +601,7 @@ Every path that records an operator post — an answered turn, a paused chat, a 
 
 ## 9. Context Build
 
-How `buildContext()` (`lib/chat/context-manager.ts`) assembles one turn's messages. Each phase is a module under `lib/chat/context/`; `buildContext` calls them in order. The whispers post to the transcript in the order shown; the request's message order is set separately by `assembleLeadingMessages()` and `composeTrailingMessage()`. History is chosen last, so every other part of the request is measured first (bug 263).
+How `buildContext()` (`lib/chat/context-manager.ts`) assembles one turn's messages. Each phase is a module under `lib/chat/context/`; `buildContext` calls them in order. The whispers post to the transcript in the order shown; the request's message order is set separately by `buildLeadingSystemBlocks()`, `historyContextMessages()` and `composeTrailingMessage()`. History is chosen last, so every other part of the request is measured first (bug 263).
 
 ```mermaid
 flowchart TD
@@ -610,14 +610,13 @@ flowchart TD
     TIME --> SYS["1. buildTurnSystemPrompt()<br/>compiled stack, subprompts, Taboo,<br/>standing instructions<br/><i>turn-system-prompt.ts</i>"]
     SYS --> COMP["2. compressTurnHistory()<br/>budget gate → cached or sync summary<br/>→ system block 3 + windowStart<br/><i>turn-compression.ts</i>"]
     COMP --> SCENE["3. buildTurnSceneState()<br/>stored scene + live wardrobe<br/>+ per-recipient cache<br/><i>turn-scene-state.ts</i>"]
-    SCENE --> RECALL["4. assembleTurnRecall() + retrieveTurnKnowledge()<br/>→ compressTurnMemories()<br/><i>turn-recall.ts</i>"]
-    RECALL --> INFORM["5. buildInformBlock()<br/><i>inform-block.ts</i>"]
-    INFORM --> WHISPER["6. Staff whispers<br/>postTurnTimestamp → offerCoreWhisper<br/>→ postCommonplaceWhispers (+ scene commit, sweep)<br/>→ announceTurnMail<br/><i>turn-whispers.ts</i>"]
-    WHISPER --> TRAIL["7. Trailing sections<br/>progressions, Inventory, referent ledger,<br/>closing echo, turn notes<br/><i>turn-trailing.ts</i>"]
-    TRAIL --> MEASURE["Measure blocks 1–3, timestamp line,<br/>trailing message, scene-note room<br/>(over the candidate rows),<br/>reservedOutgoingTokens"]
-    MEASURE --> HIST["8. turnHistoryRows() → packTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
-    HIST --> ASM["assembleLeadingMessages()<br/>+ timestamp line<br/>+ composeTrailingMessage()"]
-    ASM --> DELIVER["9. deliverRecall()<br/>stamp delivered lines, ring, debug log<br/><i>skipped for a storyteller bid</i>"]
+    SCENE --> RECALL["4. assembleTurnRecall() ∥ retrieveTurnKnowledge()<br/>→ compressTurnMemories()<br/><i>turn-recall.ts</i>"]
+    RECALL --> WHISPER["5. Staff whispers<br/>postTurnTimestamp → offerCoreWhisper<br/>→ postCommonplaceWhispers (+ scene commit, sweep)<br/>→ announceTurnMail<br/><i>turn-whispers.ts</i>"]
+    WHISPER --> TRAIL["6. Trailing sections, read in parallel<br/>progressions ∥ Inventory ∥ referent ledger<br/>+ closing echo ∥ inform block; turn notes<br/><i>turn-trailing.ts, inform-block.ts</i>"]
+    TRAIL --> MEASURE["countMessagesTokens() over blocks 1–3,<br/>timestamp line, trailing message<br/>(scene note over the candidate rows)<br/>+ reservedOutgoingTokens"]
+    MEASURE --> HIST["7. turnHistoryRows() → packTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
+    HIST --> ASM["buildLeadingSystemBlocks()<br/>+ historyContextMessages()<br/>+ timestamp line + trailing message"]
+    ASM --> DELIVER["8. deliverRecall()<br/>stamp delivered lines, ring, debug log<br/><i>skipped for a storyteller bid</i>"]
     DELIVER --> DONE([BuiltContext])
 ```
 

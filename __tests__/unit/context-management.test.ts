@@ -561,6 +561,11 @@ describe('Context Manager', () => {
       expect(selected.length).toBeGreaterThanOrEqual(1)
     })
 
+    it('keeps the row id on the at-least-one fallback (bug 95 anchor)', () => {
+      const { messages: selected } = selectRecentMessages([{ role: 'user', content: 'A long line '.repeat(50), id: 'row-1' }], 1, 'OPENAI')
+      expect(selected[0].id).toBe('row-1')
+    })
+
     it('should return empty for empty input', () => {
       const { messages: selected, truncated } = selectRecentMessages([], 1000, 'OPENAI')
       expect(selected.length).toBe(0)

@@ -18,6 +18,8 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { lazyAsync } from '@/lib/utils/lazy-async'
+import { logger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/error-utils'
 import type { ChatEvent } from '@/lib/schemas/types'
 
 export interface TurnTranscript {
@@ -26,7 +28,27 @@ export interface TurnTranscript {
 }
 
 export function createTurnTranscript(chatId: string): TurnTranscript {
-  return { events: lazyAsync(() => getRepositories().chats.getMessages(chatId)) }
+  return {
+    events: lazyAsync(async () => {
+      const started = performance.now()
+      try {
+        const events = await getRepositories().chats.getMessages(chatId)
+        logger.debug('[TurnTranscript] Read the chat for this build', {
+          chatId,
+          events: events.length,
+          durationMs: Math.round(performance.now() - started),
+        })
+        return events
+      } catch (error) {
+        // The reader that asked handles the failure; the next one retries.
+        logger.warn('[TurnTranscript] Failed to read the chat; the next reader retries', {
+          chatId,
+          error: getErrorMessage(error),
+        })
+        throw error
+      }
+    }),
+  }
 }
 
 /**

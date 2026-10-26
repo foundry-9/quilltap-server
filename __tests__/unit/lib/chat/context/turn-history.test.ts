@@ -8,7 +8,13 @@ jest.mock('@/lib/logger', () => {
   return { logger }
 })
 
-import { assembleLeadingMessages, packTurnHistory, turnHistoryRows, type HistoryCast } from '@/lib/chat/context/turn-history'
+import {
+  buildLeadingSystemBlocks,
+  historyContextMessages,
+  packTurnHistory,
+  turnHistoryRows,
+  type HistoryCast,
+} from '@/lib/chat/context/turn-history'
 import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
 
@@ -103,28 +109,34 @@ describe('packTurnHistory', () => {
   })
 })
 
-describe('assembleLeadingMessages', () => {
+describe('buildLeadingSystemBlocks', () => {
+  it('lays out the persona prompt then the identity reminder', () => {
+    const blocks = buildLeadingSystemBlocks({ systemPrompt: 'You are Friday.', characterName: 'Friday', compressedHistoryBlock: null })
+    expect(blocks.map(m => m.role)).toEqual(['system', 'system'])
+    expect(blocks[0].content).toBe('You are Friday.')
+    expect(blocks[1].content).toContain('## Identity Reminder')
+  })
+
+  it('adds the compressed summary as system block 3 only when in force', () => {
+    const blocks = buildLeadingSystemBlocks({ systemPrompt: 'P', characterName: 'Friday', compressedHistoryBlock: 'SUMMARY' })
+    expect(blocks.map(m => m.content)).toEqual(['P', expect.stringContaining('Identity Reminder'), 'SUMMARY'])
+  })
+})
+
+describe('historyContextMessages', () => {
   const history = [
     { role: 'USER', content: `${SUMMARY_CONTENT_PREFIX} earlier`, id: 's1' },
     { role: 'USER', content: `${SUMMARY_CONTENT_PREFIX} later`, id: 's2' },
     { role: 'ASSISTANT', content: 'Indeed.', id: 'a1' },
   ]
 
-  it('lays out the persona prompt, the identity reminder, then history', () => {
-    const messages = assembleLeadingMessages({ systemPrompt: 'You are Friday.', characterName: 'Friday', compressedHistoryBlock: null, history })
-    expect(messages.map(m => m.role)).toEqual(['system', 'system', 'user', 'user', 'assistant'])
-    expect(messages[0].content).toBe('You are Friday.')
-    expect(messages[1].content).toContain('## Identity Reminder')
-    expect(messages[4].metadata).toEqual({ messageId: 'a1' })
-  })
-
-  it('adds the compressed summary as system block 3 only when in force', () => {
-    const messages = assembleLeadingMessages({ systemPrompt: 'P', characterName: 'Friday', compressedHistoryBlock: 'SUMMARY', history: [] })
-    expect(messages.map(m => m.content)).toEqual(['P', expect.stringContaining('Identity Reminder'), 'SUMMARY'])
+  it('lowers roles and carries the source row id', () => {
+    const messages = historyContextMessages(history)
+    expect(messages.map(m => m.role)).toEqual(['user', 'user', 'assistant'])
+    expect(messages[2].metadata).toEqual({ messageId: 'a1' })
   })
 
   it('puts the cache breakpoint on the first Librarian summary only', () => {
-    const messages = assembleLeadingMessages({ systemPrompt: 'P', characterName: 'Friday', compressedHistoryBlock: null, history })
-    expect(messages.map(m => m.cacheControl)).toEqual([undefined, undefined, { type: 'ephemeral' }, undefined, undefined])
+    expect(historyContextMessages(history).map(m => m.cacheControl)).toEqual([{ type: 'ephemeral' }, undefined, undefined])
   })
 })

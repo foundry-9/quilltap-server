@@ -7,8 +7,8 @@
  * force, without rows already folded into the running summary.
  * `packTurnHistory` then packs them newest-first into what the budget leaves.
  *
- * `assembleLeadingMessages` lays out the request's head: the three system
- * blocks, then that history.
+ * `buildLeadingSystemBlocks` and `historyContextMessages` lay out the
+ * request's head: the three system blocks, then that history.
  */
 
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
@@ -158,7 +158,7 @@ function fromWindow(
 }
 
 /**
- * The request's head, in its fixed order:
+ * The request's system blocks, in their fixed order:
  *
  * 1. The persona prompt — the stable identity stack, byte-identical across
  *    turns of the same character, and so the cacheable prefix for provider
@@ -171,28 +171,34 @@ function fromWindow(
  * 3. The compressed-history summary, only when compression is in force — its
  *    own block, so its churn never invalidates blocks 1 and 2.
  *
- * Then the history. The first Librarian summary whisper in it carries a cache
- * breakpoint, so the system-and-tools prefix stays hot across folds.
+ * Built once: the blocks measured for the budget are the blocks sent.
  */
-export function assembleLeadingMessages(input: {
+export function buildLeadingSystemBlocks(input: {
   systemPrompt: string
   characterName: string
   compressedHistoryBlock: string | null
-  history: ReadonlyArray<SelectableMessage>
 }): ContextMessage[] {
-  const messages: ContextMessage[] = [
+  const blocks: ContextMessage[] = [
     { role: 'system', content: input.systemPrompt, metadata: { isInjected: true } },
     { role: 'system', content: buildIdentityReinforcement(input.characterName), metadata: { isInjected: true } },
   ]
   if (input.compressedHistoryBlock) {
-    messages.push({ role: 'system', content: input.compressedHistoryBlock, metadata: { isInjected: true } })
+    blocks.push({ role: 'system', content: input.compressedHistoryBlock, metadata: { isInjected: true } })
   }
+  return blocks
+}
 
+/**
+ * The packed history as request messages. The first Librarian summary
+ * whisper carries a cache breakpoint, so the system-and-tools prefix stays
+ * hot across folds.
+ */
+export function historyContextMessages(history: ReadonlyArray<SelectableMessage>): ContextMessage[] {
   let breakpointPlaced = false
-  for (const msg of input.history) {
+  return history.map(msg => {
     const isSummaryHead = !breakpointPlaced && typeof msg.content === 'string' && msg.content.startsWith(SUMMARY_CONTENT_PREFIX)
     if (isSummaryHead) breakpointPlaced = true
-    messages.push({
+    return {
       role: msg.role.toLowerCase() as 'user' | 'assistant',
       content: msg.content,
       thoughtSignature: msg.thoughtSignature,
@@ -201,7 +207,6 @@ export function assembleLeadingMessages(input: {
       // Carried so the attachment anchor can tell the user's own historical
       // turn from a staff whisper wearing role=user (bug 95).
       metadata: msg.id ? { messageId: msg.id } : undefined,
-    })
-  }
-  return messages
+    }
+  })
 }

@@ -10,12 +10,12 @@
  *  2. History compression, when the estimate is over budget (`turn-compression.ts`).
  *  3. The scene-state section (`turn-scene-state.ts`).
  *  4. Recall and knowledge (`turn-recall.ts`), then memory compression.
- *  5. The inform block (`inform-block.ts`).
- *  6. The Staff whispers — Host time, Aurora's Core, the Commonplace Book,
+ *  5. The Staff whispers — Host time, Aurora's Core, the Commonplace Book,
  *     Suparṇā's mail (`turn-whispers.ts`).
- *  7. The trailing sections (`turn-trailing.ts`).
- *  8. History, packed into what every part above leaves (`turn-history.ts`).
- *  9. Recall delivery, once the request body is settled.
+ *  6. The trailing sections (`turn-trailing.ts`) and the inform block
+ *     (`inform-block.ts`).
+ *  7. History, packed into what every part above leaves (`turn-history.ts`).
+ *  8. Recall delivery, once the request body is settled.
  *
  * Every part of the request is measured before history is packed, so a full
  * context lands under `safeInputLimit` — the ceiling the pre-send check holds
@@ -37,7 +37,7 @@ import type {
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
-import { estimateTokens } from '@/lib/tokens/token-counter'
+import { countMessageTokens, countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getRecommendedContextAllocation, type ContextWindowSource } from '@/lib/llm/model-context-data'
 import type { PreRecall } from '@/lib/memory/recall/assemble'
 import { deliverRecall } from '@/lib/memory/recall/deliver'
@@ -54,7 +54,6 @@ import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { buildInformBlock } from './context/inform-block'
 import { findUserParticipantName, type MessageWithParticipant } from './context/message-attribution'
-import { buildIdentityReinforcement } from './context/system-prompt-builder'
 import { buildUserNarrationAnchor } from './context/user-narration-anchor'
 import type { ContextCompressionResult } from './context/compression'
 import { buildTurnSystemPrompt } from './context/turn-system-prompt'
@@ -69,11 +68,14 @@ import {
 import { createTurnTranscript, minutesSinceLastHostTimestamp, type TurnTranscript } from './context/turn-transcript'
 import { announceTurnMail, offerCoreWhisper, postCommonplaceWhispers, postTurnTimestamp } from './context/turn-whispers'
 import { buildReferentSections, buildTurnNotes, composeTrailingMessage } from './context/turn-trailing'
-import { assembleLeadingMessages, packTurnHistory, turnHistoryRows, type HistoryCast } from './context/turn-history'
+import {
+  buildLeadingSystemBlocks,
+  historyContextMessages,
+  packTurnHistory,
+  turnHistoryRows,
+  type HistoryCast,
+} from './context/turn-history'
 import type { SelectableMessage } from './context/message-selector'
-
-/** Per-message overhead the token estimates add for role and framing. */
-const MESSAGE_OVERHEAD_TOKENS = 4
 
 /**
  * Message format expected by the context manager
@@ -455,11 +457,6 @@ export function calculateContextBudget(
   }
 }
 
-/** A message's estimated cost in the request, framing included. */
-function messageTokens(content: string, provider: Provider): number {
-  return estimateTokens(content, provider) + MESSAGE_OVERHEAD_TOKENS
-}
-
 /**
  * The cast of a multi-character chat, or undefined for a single-character one
  * — a chat is multi-character when the caller passed everything attribution
@@ -590,7 +587,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // continue mode too), then memory compression.
   const recentWindow = buildRecentWindowQuery(existingMessages, newUserMessage)
   const tRecallStart = performance.now()
-  const recall = await assembleTurnRecall({
+  // Independent reads, so they run together.
+  const [recall, knowledge] = await Promise.all([assembleTurnRecall({
     userId,
     embeddingProfileId: options.embeddingProfileId,
     provider,
@@ -619,7 +617,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }),
     onStatusChange,
-  })
+  }), retrieveTurnKnowledge({
+    userId,
+    embeddingProfileId: options.embeddingProfileId,
+    provider,
+    character,
+    query: recentWindow,
+    budgetTokens: budget.knowledgeBudget,
+    skip: skipMemories,
+    mountPool,
+    warnings,
+  })])
   warnings.push(...recall.warnings)
   logger.debug('[ContextManager] Recall assembled', {
     chatId: chat.id,
@@ -630,18 +638,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     head: recall.pools.head.length,
     interCharacter: recall.pools.interCharacter.length,
     recap: recall.pools.recap.length,
-  })
-
-  const knowledge = await retrieveTurnKnowledge({
-    userId,
-    embeddingProfileId: options.embeddingProfileId,
-    provider,
-    character,
-    query: recentWindow,
-    budgetTokens: budget.knowledgeBudget,
-    skip: skipMemories,
-    mountPool,
-    warnings,
   })
 
   const memories = await compressTurnMemories({
@@ -659,18 +655,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings,
   })
 
-  // 5. The inform block — the operator's passages for this seat, verbatim
-  // under their one vouching header. Empty-is-absent.
-  const inform = respondingParticipant
-    ? await buildInformBlock({
-        repos: getRepositories(),
-        chatId: chat.id,
-        participantId: respondingParticipant.id,
-        regenerationOfMessageIds: options.regenerationOfMessageIds,
-      })
-    : { content: null, rowIds: [] as string[] }
-
-  // 6. The Staff whispers, in transcript order. ORDERING: the Core whisper
+  // 5. The Staff whispers, in transcript order. ORDERING: the Core whisper
   // precedes the Commonplace Book on purpose — you need to know who you are
   // before you can rightly read what you remember; memory first can flood
   // identity (docs/feature-requests/aurora-core-whisper.md).
@@ -711,31 +696,44 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const isRegeneration = (options.regenerationOfMessageIds?.length ?? 0) > 0
   const mail = await announceTurnMail({ chat, character, targetParticipantId: whisperTarget, isRegeneration })
 
-  // 7. The trailing sections. Progressions and the Inventory are reads only
-  // and built on every turn, continue mode included: that is every turn
-  // without a new user message (a chained speaker, a nudge, an autonomous
-  // room), and the design of record wants both on all of them.
-  const progressions = await buildProgressionsSection({
-    character,
-    // A thunk: a character carrying no progressions — nearly all of them —
-    // must not pay for a history read it will never consult.
-    ...(respondingParticipant ? { loadEvents: transcript.events } : {}),
-    respondingParticipantId: respondingParticipant?.id ?? null,
-    nowMs: Date.now(),
-    timezone: options.timezone,
-  })
-  const inventory = (await buildInventorySection({ chat, characterId: character.id, repos: getRepositories() })) ?? ''
-  const referents = await buildReferentSections({
-    chat,
-    userId,
-    character,
-    userCharacter,
-    respondingParticipant,
-    allParticipants: options.allParticipants,
-    activeUserParticipantId: options.activeUserParticipantId,
-    newUserMessage,
-    transcript,
-  })
+  // 6. The trailing sections' reads — independent of each other and of the
+  // whispers just posted, so they run together. Progressions and the
+  // Inventory are built on every turn, continue mode included: that is every
+  // turn without a new user message (a chained speaker, a nudge, an
+  // autonomous room), and the design of record wants both on all of them.
+  // The inform block is the operator's passages for this seat, verbatim under
+  // their one vouching header; empty-is-absent.
+  const [progressions, inventory, referents, inform] = await Promise.all([
+    buildProgressionsSection({
+      character,
+      // A thunk: a character carrying no progressions — nearly all of them —
+      // must not pay for a history read it will never consult.
+      ...(respondingParticipant ? { loadEvents: transcript.events } : {}),
+      respondingParticipantId: respondingParticipant?.id ?? null,
+      nowMs: Date.now(),
+      timezone: options.timezone,
+    }),
+    buildInventorySection({ chat, characterId: character.id, repos: getRepositories() }).then(section => section ?? ''),
+    buildReferentSections({
+      chat,
+      userId,
+      character,
+      userCharacter,
+      respondingParticipant,
+      allParticipants: options.allParticipants,
+      activeUserParticipantId: options.activeUserParticipantId,
+      newUserMessage,
+      transcript,
+    }),
+    respondingParticipant
+      ? buildInformBlock({
+          repos: getRepositories(),
+          chatId: chat.id,
+          participantId: respondingParticipant.id,
+          regenerationOfMessageIds: options.regenerationOfMessageIds,
+        })
+      : Promise.resolve({ content: null, rowIds: [] as string[] }),
+  ])
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
     offerYield: options.offerYield,
@@ -783,29 +781,34 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     },
   })
 
-  // 8. History, packed into what is left under `safeInputLimit` once every
+  // 7. History, packed into what is left under `safeInputLimit` once every
   // other part of the request is measured — and whatever the caller adds
   // afterwards (`reservedOutgoingTokens`: tool schemas, agent-mode
-  // instructions, the tool-change notice). The scene note depends on which
-  // history rides, so its room is measured over every row that may ride: the
-  // packed history is a suffix of those rows, so the note built for it is
-  // never larger.
+  // instructions, the tool-change notice). Every part is counted by the one
+  // per-message rule the pre-send check uses (`countMessagesTokens`). The
+  // scene note depends on which history rides, so its room is measured over
+  // every row that may ride: the packed history is a suffix of those rows, so
+  // the note built for it is never larger.
+  const systemBlocks = buildLeadingSystemBlocks({
+    systemPrompt: systemPrompt.prompt,
+    characterName: character.name,
+    compressedHistoryBlock: compression.block,
+  })
   const historyRows = turnHistoryRows({
     existingMessages,
     cast,
     windowStart: compression.windowStart,
     summaryAnchorIds: chat.summaryAnchorMessageIds ?? [],
   })
-  const systemTokens =
-    messageTokens(systemPrompt.prompt, provider) +
-    messageTokens(buildIdentityReinforcement(character.name), provider) +
-    (compression.block ? messageTokens(compression.block, provider) : 0)
-  const trailingDraft = composeTrailing(narrationAnchorFor(historyRows))
-  const tailTokens =
-    (timestampLine ? messageTokens(timestampLine.content, provider) : 0) +
-    (trailingDraft ? messageTokens(trailingDraft.content, provider) : 0)
+  const draftAnchor = narrationAnchorFor(historyRows)
+  const trailingDraft = composeTrailing(draftAnchor)
+  const outsideHistory = (trailing: ContextMessage | null): ContextMessage[] => [
+    ...systemBlocks,
+    ...(timestampLine ? [timestampLine] : []),
+    ...(trailing ? [trailing] : []),
+  ]
   const reservedOutgoingTokens = options.reservedOutgoingTokens ?? 0
-  const fixedTokens = systemTokens + tailTokens + reservedOutgoingTokens
+  const fixedTokens = countMessagesTokens(outsideHistory(trailingDraft), provider) + reservedOutgoingTokens
   const remainingTokens = budget.safeInputLimit - fixedTokens
   if (remainingTokens <= 0) {
     // The symptom is a character with no apparent memory of the exchange,
@@ -815,8 +818,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     )
     logger.warn('[ContextManager] Message budget exhausted before any history', {
       safeInputLimit: budget.safeInputLimit,
-      systemPromptTokens: systemTokens,
-      tailTokens,
+      fixedTokens,
       reservedOutgoingTokens,
       remainingTokens,
     })
@@ -830,13 +832,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings,
   })
 
-  const contextMessages = assembleLeadingMessages({
-    systemPrompt: systemPrompt.prompt,
-    characterName: character.name,
-    compressedHistoryBlock: compression.block,
-    history: history.messages,
-  })
-  if (timestampLine) contextMessages.push(timestampLine)
+  // The draft is the message unless packing dropped the human line the
+  // scene note pointed at.
+  const finalAnchor = narrationAnchorFor(history.messages)
+  const trailing = finalAnchor === draftAnchor ? trailingDraft : composeTrailing(finalAnchor)
   if (!newUserMessage && recallText) {
     logger.debug('[CommonplaceWhisper] Delivering recall in the trailing-only message (no new user message)', {
       chatId: chat.id,
@@ -844,10 +843,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       length: recallText.length,
     })
   }
-  const trailing = composeTrailing(narrationAnchorFor(history.messages))
-  if (trailing) contextMessages.push(trailing)
+  const contextMessages: ContextMessage[] = [
+    ...systemBlocks,
+    ...historyContextMessages(history.messages),
+    ...(timestampLine ? [timestampLine] : []),
+    ...(trailing ? [trailing] : []),
+  ]
 
-  // 9. Recall delivery: the request body is built and compression has had its
+  // 8. Recall delivery: the request body is built and compression has had its
   // say, so what the model will read is settled. Only now are rows stamped
   // accessed, the head recorded in the anti-repetition ring and the debug
   // record composed — and only for lines whose memory is still in the text.
@@ -857,17 +860,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     : null
 
   const memoryTokens = recall.tokens.recap + memories.semantic.tokens + memories.interCharacter.tokens
-  const newUserMessageTokens = newUserMessage ? messageTokens(newUserMessage, provider) : 0
-  const trailingTokens = trailing ? messageTokens(trailing.content, provider) : 0
+  const newUserMessageTokens = newUserMessage ? countMessageTokens({ role: 'user', content: newUserMessage }, provider) : 0
 
   return {
     messages: contextMessages,
     tokenUsage: {
-      systemPrompt: systemTokens,
+      systemPrompt: systemBlocks.reduce((sum, block) => sum + countMessageTokens(block, provider), 0),
       memories: memoryTokens,
       knowledge: knowledge.tokens,
       recentMessages: history.tokens + newUserMessageTokens,
-      total: systemTokens + history.tokens + (timestampLine ? messageTokens(timestampLine.content, provider) : 0) + trailingTokens,
+      total: countMessagesTokens(contextMessages, provider),
     },
     budget,
     memoriesIncluded: recall.memoriesIncluded + recall.interCharacterIncluded,
