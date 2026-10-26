@@ -5,11 +5,10 @@
  */
 
 import type { StorytellerBidCallOutcome, StorytellerBidRequest, StorytellerTurnContext } from '@/lib/storyteller/types'
-import type { ChatMetadataBase, ChatParticipantBase, Character, ChatSettings, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
+import type { Character, ChatSettings, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
-import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'

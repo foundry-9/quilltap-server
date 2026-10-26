@@ -481,7 +481,8 @@ async function processMessage(
     }
   }
 
-  const apiKey = resolveTurnApiKey(connectionProfile, rawApiKey)
+  // A held post is recorded even when the responder's profile has lost its key.
+  const apiKey = resolveTurnApiKey(connectionProfile, rawApiKey, { held: hold !== null })
 
   // User identity: user-controlled character in chat → sole user-controlled
   // character → user profile → "User".

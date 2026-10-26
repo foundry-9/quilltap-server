@@ -21,6 +21,9 @@
 - The autonomous-room effect ceiling reads the chat settings already loaded for the turn instead of reading them again.
 - Dead code removed: `MessageServiceContext`.
 - Fixed bug 262: in a room where the operator drives two seats, a post that handed the floor to the other seat was recorded by the fair-rotation pause's own write, which dropped staged tool results and skipped the dice, Pascal trigger phrases and the Librarian upload note. It now goes through `recordOperatorPost`.
+- A post held by a paused chat or a storyteller round is recorded even when the responder's profile has no API key; the key check runs only for a turn that will call the provider (`resolveTurnApiKey`'s `held` option).
+- `resolveTurnHold` and `qualifiesForFairRotationCheck` use `isOperatorWhisperSend` instead of a second copy of the whisper rule. The tool slate reads the project's store links and the Carina answerer probe in parallel.
+- `help/chat-turn-manager.md` says a post that hands the floor to your other seat is filed in full.
 - Tests: new `turn-outcome`, `turn-holds`, `operator-post`, `turn-preparation`, `turn-tools` and `turn-stream` suites; `turn-extras` covers the splice; the Brahma one-shot and Scenario Builder tests read `buildTools` options by name.
 - `docs/developer/SYSTEM_FLOWCHARTS.md` has a new Salon Turn Pipeline section.
 

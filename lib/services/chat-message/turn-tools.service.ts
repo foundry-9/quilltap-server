@@ -138,6 +138,10 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     : Array.from(new Set([...(chat.disabledTools ?? []), 'self_inventory']))
 
   const effectCeiling = resolveTurnEffectCeiling(chat, chatSettings, params.storytellerCeiling)
+  const [documentEditingEnabled, askCarinaEnabled] = await Promise.all([
+    projectHasLinkedStores(repos, chat),
+    isAskCarinaOffered(repos, chatId, characterIsTransparent),
+  ])
 
   const built = await buildTools({
     connectionProfile: profile,
@@ -154,8 +158,8 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     canDressThemselves,
     canCreateOutfits,
     canManageInventory,
-    docToolsMode: (await projectHasLinkedStores(repos, chat)) ? 'full' : 'off',
-    askCarinaEnabled: await isAskCarinaOffered(repos, chatId, characterIsTransparent),
+    docToolsMode: documentEditingEnabled ? 'full' : 'off',
+    askCarinaEnabled,
     customToolContext: customToolRosterFor(chat, userId, character, chatSettings),
     effectCeiling,
   })

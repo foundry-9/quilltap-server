@@ -35,6 +35,10 @@ describe('resolveTurnApiKey', () => {
     expect(() => resolveTurnApiKey({ provider: 'OPENAI' } as never, '')).toThrow('No API key configured')
   })
 
+  it('a held post is recorded without one: no provider will be called', () => {
+    expect(resolveTurnApiKey({ provider: 'OPENAI' } as never, '', { held: true })).toBe('')
+  })
+
   it('forwards a key a provider merely accepts (bug 81)', () => {
     expect(resolveTurnApiKey({ provider: 'OPENAI_COMPATIBLE' } as never, 'sk-hosted')).toBe('sk-hosted')
   })

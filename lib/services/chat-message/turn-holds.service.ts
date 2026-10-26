@@ -34,6 +34,7 @@ import type { ChatMetadataBase } from '@/lib/schemas/types'
 import { findAttachedFiles } from './context-builder.service'
 import { recordOperatorPost } from './operator-post.service'
 import { shouldHoldUserTurnForPause } from './paused-hold'
+import { isOperatorWhisperSend } from './whisper-send'
 import { createTurnStatusEmitter, encodeChainCompleteEvent, safeEnqueue } from './streaming.service'
 import type { SubmissionLedger } from './turn-stream'
 import type { ProcessMessageResult, SendMessageOptions } from './types'
@@ -45,10 +46,6 @@ export type TurnHold = 'paused' | 'storyteller' | null
 
 type HoldOptions = Pick<SendMessageOptions,
   'continueMode' | 'neverPauseForUser' | 'targetParticipantIds' | 'respondingParticipantId' | 'nudge' | 'content'>
-
-function isWhisper(options: HoldOptions): boolean {
-  return !!(options.targetParticipantIds && options.targetParticipantIds.length > 0)
-}
 
 /**
  * Decide whether this send's post is held (pure).
@@ -73,7 +70,7 @@ export function resolveTurnHold(
   }
   if (!isContinueMode
     && chat.turnMode === 'storyteller'
-    && !isWhisper(options)
+    && !isOperatorWhisperSend(options)
     && options.neverPauseForUser !== true) {
     return 'storyteller'
   }
@@ -94,7 +91,7 @@ export function qualifiesForFairRotationCheck(
   return options.continueMode !== true
     && hold === null
     && !options.respondingParticipantId
-    && !isWhisper(options)
+    && !isOperatorWhisperSend(options)
     && !options.nudge
     && !!options.content
     && isMultiCharacterChat(chat.participants)

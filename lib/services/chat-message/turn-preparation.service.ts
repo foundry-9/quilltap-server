@@ -33,11 +33,16 @@ const logger = createServiceLogger('TurnPreparation')
  * one refuses the turn without it, and a provider that merely *accepts* one
  * still gets it — `requiresApiKey` alone used to answer both questions and so
  * dropped the key an OpenAI-Compatible profile attached for a hosted endpoint
- * (bug 81). The Courier calls no provider and carries none.
+ * (bug 81). The Courier calls no provider and carries none. A held post
+ * calls no provider either, so a missing key never stops it being recorded.
  */
-export function resolveTurnApiKey(connectionProfile: ConnectionProfile, rawApiKey: string): string {
+export function resolveTurnApiKey(
+  connectionProfile: ConnectionProfile,
+  rawApiKey: string,
+  options: { held?: boolean } = {}
+): string {
   if (connectionProfile.transport === 'courier') return ''
-  if (requiresApiKey(connectionProfile.provider) && !rawApiKey) {
+  if (requiresApiKey(connectionProfile.provider) && !rawApiKey && !options.held) {
     throw new Error('No API key configured for this connection profile')
   }
   return acceptsApiKey(connectionProfile.provider) ? rawApiKey : ''
