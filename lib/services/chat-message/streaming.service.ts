@@ -20,7 +20,6 @@ import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
-import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
@@ -78,19 +77,6 @@ export interface StreamOptions {
    * caller discards it.
    */
   toolChoice?: 'auto' | 'none'
-}
-
-/**
- * Debug info to send at start of stream
- */
-export interface StreamDebugInfo {
-  builtContext: BuiltContext
-  connectionProfile: ConnectionProfile
-  modelParams: Record<string, unknown>
-  messages: Array<{ role: string; contentLength: number; hasAttachments: boolean }>
-  tools: unknown[]
-  enabledToolOptions?: Record<string, boolean>
-  fallbackResults?: FallbackResult[]
 }
 
 /**
@@ -681,44 +667,6 @@ export async function* streamMessage(
       )
     }
   }
-}
-
-/**
- * Send debug info at start of stream
- */
-export function encodeDebugInfo(
-  encoder: TextEncoder,
-  debugInfo: StreamDebugInfo
-): Uint8Array {
-  const { builtContext, connectionProfile, modelParams, messages, tools } = debugInfo
-  const sampling = resolveSamplingParams(modelParams)
-
-  const llmRequestDetails = {
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    temperature: sampling.temperature,
-    maxTokens: sampling.maxTokens,
-    topP: sampling.topP,
-    messageCount: messages.length,
-    hasTools: tools.length > 0,
-    tools: tools.length > 0 ? tools : undefined,
-    messages: messages,
-    contextManagement: {
-      tokenUsage: builtContext.tokenUsage,
-      budget: {
-        total: builtContext.budget.totalLimit,
-        responseReserve: builtContext.budget.responseReserve,
-      },
-      memoriesIncluded: builtContext.memoriesIncluded,
-      messagesIncluded: builtContext.messagesIncluded,
-      messagesTruncated: builtContext.messagesTruncated,
-      debugMemories: builtContext.debugMemories,
-      debugSummary: builtContext.debugSummary,
-      debugSystemPrompt: builtContext.debugSystemPrompt,
-    },
-  }
-
-  return encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
 }
 
 /**
