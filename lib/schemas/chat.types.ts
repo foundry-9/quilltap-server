@@ -74,6 +74,25 @@ export const SceneStateSchema = z.object({
 
 export type SceneState = z.infer<typeof SceneStateSchema>;
 
+/**
+ * A chat's stored `sceneState` column as a `SceneState`, or null when it is
+ * absent, not JSON, or not the schema's shape. The column holds either the
+ * object or its JSON text depending on the path that wrote it.
+ */
+export function parseStoredSceneState(raw: unknown): SceneState | null {
+  if (!raw) return null;
+  let candidate: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      candidate = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  const result = SceneStateSchema.safeParse(candidate);
+  return result.success ? result.data : null;
+}
+
 // ============================================================================
 // CHAT TYPE
 // ============================================================================
@@ -749,6 +768,24 @@ export function canReceiveWhisper(status: ParticipantStatus): boolean {
  */
 export function hasWhisperTargets(message: Pick<MessageEvent, 'targetParticipantIds'>): boolean {
   return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.length > 0;
+}
+
+/**
+ * Whether a message is addressed to one whisper scope: `null` is the whole
+ * room (an untargeted message), a participant id is a whisper naming that
+ * participant. The scope a Staff writer posts a per-recipient whisper to, and
+ * the one its sweep of the recipient's prior whispers must match.
+ *
+ * An empty `targetParticipantIds` array is the whole room, as it is to
+ * `hasWhisperTargets` and to the visibility filter (`filterWhisperMessages`):
+ * a row everyone is shown belongs to the public scope.
+ */
+export function isInWhisperScope(
+  message: Pick<MessageEvent, 'targetParticipantIds'>,
+  targetParticipantId: string | null,
+): boolean {
+  if (targetParticipantId === null) return !hasWhisperTargets(message);
+  return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.includes(targetParticipantId);
 }
 
 /**

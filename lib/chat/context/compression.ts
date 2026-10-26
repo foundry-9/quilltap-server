@@ -103,35 +103,6 @@ export interface CompressibleMessage {
 }
 
 /**
- * Determines if compression should be applied based on message count and settings.
- * This is the legacy count-driven trigger — kept for backward compatibility.
- *
- * @param messageCount - Total number of messages in the conversation
- * @param settings - Compression settings
- * @param bypassCompression - Whether to bypass compression (e.g., requestFullContext flag)
- * @returns Whether compression should be applied
- */
-export function shouldApplyCompression(
-  messageCount: number,
-  settings: ContextCompressionSettings,
-  bypassCompression: boolean
-): boolean {
-  // Don't compress if disabled
-  if (!settings.enabled) {
-    return false
-  }
-
-  // Don't compress if bypass is requested
-  if (bypassCompression) {
-    return false
-  }
-
-  // Only compress if we have more messages than the window size
-  // Messages 1-5 (or 1-windowSize) get full context
-  return messageCount > settings.windowSize
-}
-
-/**
  * Determines if budget-driven compression should be applied.
  *
  * Compression triggers when the total estimated prompt tokens exceed

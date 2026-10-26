@@ -30,7 +30,6 @@ jest.mock('@/lib/logger', () => ({
 
 // Import after mocks are set up
 const {
-  shouldApplyCompression,
   splitMessagesForCompression,
   applyContextCompression,
   buildCompressedHistoryBlock,
@@ -75,38 +74,6 @@ const makeOptions = (overrides: Partial<ContextCompressionOptions> = {}): Contex
 describe('Context Compression', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-  })
-
-  describe('shouldApplyCompression', () => {
-    it('returns false when compression is disabled', () => {
-      const settings = makeSettings({ enabled: false })
-      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
-    })
-
-    it('returns false when bypass is requested', () => {
-      const settings = makeSettings({ enabled: true })
-      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], true)).toBe(false)
-    })
-
-    it('returns false when message count is within window size', () => {
-      const settings = makeSettings({ enabled: true, windowSize: 5 })
-      expect(shouldApplyCompression(5, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
-      expect(shouldApplyCompression(3, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
-    })
-
-    it('returns true when message count exceeds window size', () => {
-      const settings = makeSettings({ enabled: true, windowSize: 5 })
-      expect(shouldApplyCompression(6, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
-      expect(shouldApplyCompression(10, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
-    })
-
-    it('handles edge case at exact window boundary', () => {
-      const settings = makeSettings({ enabled: true, windowSize: 5 })
-      // At exactly windowSize, we don't compress (nothing before window)
-      expect(shouldApplyCompression(5, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(false)
-      // One more than windowSize, we do compress
-      expect(shouldApplyCompression(6, settings as Parameters<typeof shouldApplyCompression>[1], false)).toBe(true)
-    })
   })
 
   describe('splitMessagesForCompression', () => {

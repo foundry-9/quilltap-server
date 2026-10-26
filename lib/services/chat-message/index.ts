@@ -77,7 +77,6 @@ export {
 export {
   buildTools,
   streamMessage,
-  encodeDebugInfo,
   encodeFallbackInfo,
   encodeContentChunk,
   encodeReasoningChunk,
@@ -89,7 +88,6 @@ export {
   safeClose,
   createStreamingResult,
   type StreamOptions,
-  type StreamDebugInfo,
   type StreamChunkCallback,
 } from './streaming.service'
 

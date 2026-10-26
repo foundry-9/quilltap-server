@@ -1,6 +1,6 @@
 # System Flowcharts
 
-Visual workflow diagrams for the core Quilltap systems: prompt building, memory extraction, scene tracking, story backgrounds, and the Concierge content routing layer.
+Visual workflow diagrams for the core Quilltap systems: prompt building, memory extraction, scene tracking, story backgrounds, the Concierge content routing layer, the Salon turn pipeline and the context build.
 
 These diagrams use [Mermaid](https://mermaid.js.org/) syntax and render in GitHub, VS Code (with extensions), and most modern documentation tools.
 
@@ -16,6 +16,7 @@ These diagrams use [Mermaid](https://mermaid.js.org/) syntax and render in GitHu
 6. [The Concierge: Content Routing Overview](#6-the-concierge-content-routing-overview)
 7. [Unified Message Lifecycle](#7-unified-message-lifecycle)
 8. [Salon Turn Pipeline](#8-salon-turn-pipeline)
+9. [Context Build](#9-context-build)
 
 ---
 
@@ -141,12 +142,10 @@ flowchart TD
     D3 --> MEM
     D4 --> MEM
 
-    MEM["Semantic memory search<br/>on recent message content"]
-    MEM --> INJ["formatMemoriesForContext()<br/>Inject relevant memories with age labels"]
-    INJ --> SUM{"contextSummary<br/>available?"}
-    SUM -->|Yes| SUM1["formatSummaryForContext()<br/>Compressed history between<br/>system prompt and conversation"]
-    SUM -->|No| CONV
-    SUM1 --> CONV
+    MEM["assembleRecall()<br/>one query, one embedding"]
+    MEM --> INJ["Recall rides the trailing sections<br/>of the new user message"]
+    INJ --> SUM["Rolling summary rides as a<br/>Librarian whisper in the history;<br/>rows it absorbed are dropped"]
+    SUM --> CONV
 
     CONV[Attach conversation messages<br/><i>recent kept verbatim,<br/>older may be compressed</i>]
     CONV --> FMT["formatMessagesForProvider()"]
@@ -600,6 +599,31 @@ Every path that records an operator post — an answered turn, a paused chat, a 
 
 ---
 
+## 9. Context Build
+
+How `buildContext()` (`lib/chat/context-manager.ts`) assembles one turn's messages. Each phase is a module under `lib/chat/context/`; `buildContext` calls them in order. The whispers post to the transcript in the order shown; the request's message order is set separately by `buildLeadingSystemBlocks()`, `historyContextMessages()` and `composeTrailingMessage()`. History is chosen last, so every other part of the request is measured first (bug 263).
+
+```mermaid
+flowchart TD
+    START["buildContext()"] --> TX["createTurnTranscript()<br/>one pre-turn read of the chat's events,<br/>shared by the gates, cadences and ledger"]
+    TX --> TIME["resolveAnnouncedTime()<br/>timestamp gate, one clock value"]
+    TIME --> SYS["1. buildTurnSystemPrompt()<br/>compiled stack, subprompts, Taboo,<br/>standing instructions<br/><i>turn-system-prompt.ts</i>"]
+    SYS --> COMP["2. compressTurnHistory()<br/>budget gate → cached or sync summary<br/>→ system block 3 + windowStart<br/><i>turn-compression.ts</i>"]
+    COMP --> SCENE["3. buildTurnSceneState()<br/>stored scene + live wardrobe<br/>+ per-recipient cache<br/><i>turn-scene-state.ts</i>"]
+    SCENE --> RECALL["4. assembleTurnRecall() ∥ retrieveTurnKnowledge()<br/>→ compressTurnMemories()<br/><i>turn-recall.ts</i>"]
+    RECALL --> WHISPER["5. Staff whispers<br/>postTurnTimestamp → offerCoreWhisper<br/>→ postCommonplaceWhispers (+ scene commit, sweep)<br/>→ announceTurnMail<br/><i>turn-whispers.ts</i>"]
+    WHISPER --> TRAIL["6. Trailing sections, read in parallel<br/>progressions ∥ Inventory ∥ referent ledger<br/>+ closing echo ∥ inform block; turn notes<br/><i>turn-trailing.ts, inform-block.ts</i>"]
+    TRAIL --> MEASURE["countMessagesTokens() over blocks 1–3,<br/>timestamp line, trailing message<br/>(scene note over the candidate rows)<br/>+ reservedOutgoingTokens"]
+    MEASURE --> HIST["7. turnHistoryRows() → packTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
+    HIST --> ASM["buildLeadingSystemBlocks()<br/>+ historyContextMessages()<br/>+ timestamp line + trailing message"]
+    ASM --> DELIVER["8. deliverRecall()<br/>stamp delivered lines, ring, debug log<br/><i>skipped for a storyteller bid</i>"]
+    DELIVER --> DONE([BuiltContext])
+```
+
+Snapshot whispers (the Commonplace Book's per-turn whisper, Aurora's Core whisper, the fold-posted relevant-conversations list) replace a recipient's earlier ones through `sweepPriorWhispers()` (`lib/chat/whisper-sweep.ts`) once the fresh one is posted, reading the chat fresh so a whisper from an overlapping build is swept too.
+
+---
+
 ## File Reference Index
 
 | System | Key Files |
@@ -612,6 +636,7 @@ Every path that records an operator post — an answered turn, a paused chat, a 
 | **Story Backgrounds** | `lib/background-jobs/handlers/story-background.ts`, `lib/background-jobs/handlers/title-update.ts`, `lib/image-gen/appearance-resolution.ts` |
 | **The Concierge** | `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/services/dangerous-content/provider-routing.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `lib/background-jobs/scheduled-danger-scan.ts` |
 | **Background Jobs** | `lib/background-jobs/queue-service.ts`, `lib/background-jobs/processor.ts`, `lib/background-jobs/handlers/index.ts` |
+| **Context Build** | `lib/chat/context-manager.ts`, `lib/chat/context/turn-system-prompt.ts`, `turn-compression.ts`, `turn-scene-state.ts`, `turn-recall.ts`, `turn-whispers.ts`, `turn-trailing.ts`, `turn-history.ts`, `turn-transcript.ts` (all in `lib/chat/context/`), `lib/chat/whisper-sweep.ts` |
 | **Salon Turn Pipeline** | `lib/services/chat-message/orchestrator.service.ts`, `turn-stream.ts`, `turn-holds.service.ts`, `turn-preparation.service.ts`, `operator-post.service.ts`, `turn-tools.service.ts`, `turn-extras.ts`, `turn-outcome.service.ts`, `turn-orchestrator.service.ts` (all in `lib/services/chat-message/`) |
 | **Streaming** | `lib/services/chat-message/streaming.service.ts` |
 | **Templates** | `lib/templates/processor.ts` |

@@ -6,7 +6,7 @@
  */
 
 import type { Provider } from '@/lib/schemas/types'
-import { estimateTokens } from '@/lib/tokens/token-counter'
+import { countMessageTokens, estimateTokens } from '@/lib/tokens/token-counter'
 
 /**
  * Extended message type with optional participant info
@@ -49,41 +49,22 @@ export function selectRecentMessages(
   // Work backwards from most recent
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
-    // Account for potential name prefix in token count
-    const nameOverhead = msg.name ? estimateTokens(`[${msg.name}] `, provider) : 0
-    const msgTokens = estimateTokens(msg.content, provider) + nameOverhead + 4 // +4 for message overhead
+    const msgTokens = selectableMessageTokens(msg, provider)
 
     if (totalTokens + msgTokens > maxTokens) {
       truncated = true
       break
     }
 
-    // Preserve all fields including id, name and participantId. `id` is the
-    // source chat_messages row — the attachment anchor needs it to tell the
-    // user's own turn from a staff whisper wearing role=user (bug 95).
-    selectedMessages.unshift({
-      role: msg.role,
-      content: msg.content,
-      id: msg.id,
-      thoughtSignature: msg.thoughtSignature,
-      name: msg.name,
-      participantId: msg.participantId,
-    })
+    selectedMessages.unshift(keepFields(msg))
     totalTokens += msgTokens
   }
 
   // Ensure we have at least the last message if possible
   if (selectedMessages.length === 0 && messages.length > 0) {
     const lastMsg = messages[messages.length - 1]
-    selectedMessages.push({
-      role: lastMsg.role,
-      content: lastMsg.content,
-      thoughtSignature: lastMsg.thoughtSignature,
-      name: lastMsg.name,
-      participantId: lastMsg.participantId,
-    })
-    const nameOverhead = lastMsg.name ? estimateTokens(`[${lastMsg.name}] `, provider) : 0
-    totalTokens = estimateTokens(lastMsg.content, provider) + nameOverhead + 4
+    selectedMessages.push(keepFields(lastMsg))
+    totalTokens = selectableMessageTokens(lastMsg, provider)
     truncated = true
   }
 
@@ -91,5 +72,31 @@ export function selectRecentMessages(
     messages: selectedMessages,
     tokenCount: totalTokens,
     truncated,
+  }
+}
+
+/**
+ * A history message's cost in the request: the shared per-message rule
+ * (`countMessageTokens`, which the pre-send check also uses) plus the name
+ * prefix a provider without a `name` field renders it under.
+ */
+export function selectableMessageTokens(msg: SelectableMessage, provider: Provider): number {
+  const nameOverhead = msg.name ? estimateTokens(`[${msg.name}] `, provider) : 0
+  return countMessageTokens(msg, provider) + nameOverhead
+}
+
+/**
+ * Every field the request needs, `id` included: it is the source chat_messages
+ * row, which the attachment anchor uses to tell the user's own turn from a
+ * staff whisper wearing role=user (bug 95).
+ */
+function keepFields(msg: SelectableMessage): SelectableMessage {
+  return {
+    role: msg.role,
+    content: msg.content,
+    id: msg.id,
+    thoughtSignature: msg.thoughtSignature,
+    name: msg.name,
+    participantId: msg.participantId,
   }
 }
