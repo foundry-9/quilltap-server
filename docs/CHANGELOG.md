@@ -4,6 +4,33 @@
 
 ### 4.11-dev
 
+#### Refactor: context manager
+
+- `buildContext` (`lib/chat/context-manager.ts`) is now a sequence of phase calls; the file is 900 lines, down from 2,360, most of what remains being the option and result types. New modules under `lib/chat/context/`:
+  - `turn-system-prompt.ts`: `buildTurnSystemPrompt` (compiled identity stack, fallback subprompts, Taboo phrases and standing instructions, read in parallel; truncation to budget).
+  - `turn-compression.ts`: `resolveTurnBudgetInfo` (the autonomous per-turn cap), `compressTurnHistory` (budget gate, cached or synchronous summary, the verbatim window), `compressTurnMemories` (one helper instead of two copies of the compress-and-warn block), `effectiveWindowSize`, `verbatimWindowStart`.
+  - `turn-scene-state.ts`: `buildTurnSceneState` — the stored scene, live-wardrobe clothing overrides, and the per-recipient emission cache, written by a `commit` once the whisper is posted.
+  - `turn-recall.ts`: `assembleTurnRecall`, `retrieveTurnKnowledge`, `buildRecentWindowQuery`, `collectStandingConversationIds`.
+  - `turn-whispers.ts`: `postTurnTimestamp`, `offerCoreWhisper`, `postCommonplaceWhispers`, `announceTurnMail`.
+  - `turn-trailing.ts`: `composeTrailingMessage` (the one place the trailing sections are ordered and delivered, on the user message or on their own), `buildTurnNotes`, `buildReferentSections`.
+  - `turn-history.ts`: `turnHistoryRows` (single- and multi-character history, compression window, summary anchors), `packTurnHistory`, `buildLeadingSystemBlocks` (system blocks 1–3, built once so the blocks measured are the blocks sent) and `historyContextMessages` (the summary cache breakpoint).
+  - `turn-transcript.ts`: `createTurnTranscript` — one memoised read of the chat's events per build, shared by the timestamp gate, the conversation-list dedup, the Core and progressions cadences and the referent ledger. A failed read is retried by the next reader rather than kept. The whisper sweeps still read the chat fresh after posting, so a whisper from an overlapping build is swept too.
+- `sweepPriorWhispers` (`lib/chat/whisper-sweep.ts`) replaces three copies of the snapshot-whisper sweep (Commonplace Book, Core whisper, fold-posted relevant conversations). `isInWhisperScope` (`lib/schemas/chat.types.ts`) replaces three copies of the whisper-target test. It treats an empty `targetParticipantIds` array as untargeted, as `hasWhisperTargets` and `filterWhisperMessages` already do (the old copies matched only `null`), so the untargeted sweeps and the standing-conversation dedup now include such rows. No writer creates one.
+- `parseStoredSceneState` (`lib/schemas/chat.types.ts`) parses a chat's `sceneState` column; the context build and the story-background job use it.
+- `toVisibleConversationMessage` (`lib/memory/cheap-llm-tasks/chat-tasks.ts`) is the per-row rule `extractVisibleConversation` now loops over.
+- `buildTurnSkipInstruction` moved to `lib/chat/turn-manager/skip-signal.ts`, beside its sentinel, and uses `NOTHING_TO_ADD_SENTINEL`.
+- `lazyAsync` (`lib/utils/lazy-async.ts`) memoises an async read and drops a failed one so the next call retries; the turn transcript, the mount pool and the standing conversation ids use it.
+- The Host's timestamp line and the scene-state time line read one clock value; they could differ across a minute boundary.
+- Recall and knowledge retrieval run in parallel, as do the progressions, Inventory, referent-ledger and inform-block reads.
+- `selectRecentMessages`' keep-the-last-message fallback keeps the row's `id`, which the attachment anchor needs (bug 95).
+- Fixed bug 263: the history budget did not count the trailing sections (scene state, knowledge, Core whisper, mail, progressions, Inventory, referent ledger, turn notes), system block 2, the timestamp line or the new user message, so a full context went out over `safeInputLimit` and tripped the pre-send warning. Every part of the request is now built and measured before history is packed, by the one per-message rule the pre-send check uses (`countMessageTokens` / `countMessagesTokens`; `selectRecentMessages` now uses it too); the chained-turn scene note's room is measured over the same filtered rows history is packed from. `tokenUsage.total` counts everything in `messages`.
+- Fixed bug 264: in a multi-character chat, compression summarised the early history but the turns it covered were still sent verbatim. The compression window now applies on both paths.
+- Fixed bug 265: the compression window counted tool-only and empty assistant rows the summary never saw, so each one dropped a real message from both the summary and the history.
+- Dead code removed: `willExceedContextLimit`, `formatSummaryForContext`, `shouldApplyCompression`, the `lib/chat/context/index.ts` barrel, the backwards-compatibility re-exports from `context-manager.ts`, the unused `statusChangeNotifications` / `outfitChangeNotifications` options, `ContextBudget.summaryBudget`, and `BuiltContext.includedSummary` / `tokenUsage.summary` (always false / zero since the summary became a Librarian whisper).
+- Tests: new `turn-compression`, `turn-history`, `turn-trailing` and `whisper-sweep` suites; a `buildContext` regression for bug 263; tests for the removed functions removed.
+- Help: `chat-settings-ai-services.md` (compression in group chats) and `connection-profiles.md` (the budget weighs the trailing sections).
+- `docs/developer/SYSTEM_FLOWCHARTS.md` has a new Context Build section; `PROMPT_ARCHITECTURE.md` lists the phase modules.
+
 #### Refactor: Salon turn pipeline
 
 - `processMessage` (`lib/services/chat-message/orchestrator.service.ts`) is now a sequence of phase calls; the file is 1,170 lines, down from 2,840. New modules under `lib/services/chat-message/`:

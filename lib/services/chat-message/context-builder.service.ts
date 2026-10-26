@@ -7,7 +7,9 @@
 
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import { buildContext, type BuiltContext } from '@/lib/chat/context-manager'
+import type { MessageWithParticipant } from '@/lib/chat/context/message-attribution'
+import type { ContextCompressionResult } from '@/lib/chat/context/compression'
 import type { PreRecall } from '@/lib/memory/recall/assemble'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'

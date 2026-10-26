@@ -418,3 +418,35 @@ export function computeSkipEligibility(
     recentlyAddressed,
   }
 }
+
+/**
+ * Build the ephemeral "you may pass this turn" Turn note. Not persisted — it
+ * rides only in the outgoing LLM context for this single turn. The Host
+ * announcement text deliberately never contains the sentinel, so history can't
+ * teach the phrase; this note is the only place it appears.
+ */
+export function buildTurnSkipInstruction(
+  characterName: string,
+  recentlyAddressed: boolean,
+): string {
+  const base = `[Turn note from the Salon — not spoken by any character]
+You are not obliged to speak this turn. If — and only if — you genuinely have
+nothing substantive to add to the conversation right now, reply with exactly
+this single line and nothing else:
+
+${NOTHING_TO_ADD_SENTINEL}
+
+The floor will then pass to someone else and the scene continues without you
+this turn. Do not use it to be coy or mysterious — a brief in-character
+remark is always better than an empty pass. If you have anything worth
+saying, write your reply as normal and ignore this note entirely.
+
+If your reply would mostly restate, endorse, or re-phrase what has already
+been said — even in your own voice — that is not substantive. Pass.`
+
+  if (!recentlyAddressed) return base
+
+  return `${base}
+
+One caution: ${characterName} appears to have been directly addressed since they last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
+}

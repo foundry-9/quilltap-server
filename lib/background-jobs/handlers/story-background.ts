@@ -14,7 +14,7 @@ import {
 } from '@/lib/file-storage/lantern-store-bridge';
 
 import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
+import { parseStoredSceneState, isParticipantPresent, type SceneState } from '@/lib/schemas/chat.types';
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
@@ -166,26 +166,19 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const validCharacters = characters.filter(c => c !== null);
 
   // Check if we have a fresh scene state to use
-  let sceneStateData: import('@/lib/schemas/chat.types').SceneState | null = null;
-  if (chat.sceneState) {
-    try {
-      const parsed = typeof chat.sceneState === 'string' ? JSON.parse(chat.sceneState as string) : chat.sceneState;
-      const validated = SceneStateSchema.safeParse(parsed);
-      if (validated.success) {
-        // Consider scene state "fresh" if within 5 messages of current count
-        const messageGap = (chat.messageCount ?? 0) - validated.data.updatedAtMessageCount;
-        if (messageGap <= 5) {
-          sceneStateData = validated.data;
-          logger.info('[StoryBackground] Using fresh scene state for context', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            chatId: payload.chatId,
-            sceneStateAge: messageGap,
-          });
-        }
-      }
-    } catch {
-      // Failed to parse scene state, fall back to normal derivation
+  let sceneStateData: SceneState | null = null;
+  const storedScene = parseStoredSceneState(chat.sceneState);
+  if (storedScene) {
+    // Consider scene state "fresh" if within 5 messages of current count
+    const messageGap = (chat.messageCount ?? 0) - storedScene.updatedAtMessageCount;
+    if (messageGap <= 5) {
+      sceneStateData = storedScene;
+      logger.info('[StoryBackground] Using fresh scene state for context', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        sceneStateAge: messageGap,
+      });
     }
   }
 
