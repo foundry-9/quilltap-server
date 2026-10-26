@@ -16,7 +16,6 @@
 
 - Removed the unused `components/inventory/index.ts` barrel, `resolveMemoryMaintenance`, `isComputedTool` and `ProjectFileInfo`. Details in `docs/developer/DEAD-CODE-REPORT.md`.
 
-
 #### Feature: diagram lightbox and Copy PNG
 
 - Clicking a Salon diagram (or its new **Enlarge** toolbar button, or Enter/Space on the focused drawing) opens it full-window. Wheel, Chromium trackpad pinch (ctrl-wheel), Safari gesture events and two-finger touch zoom about the pointer; drag pans. **Fit** (the opening view; re-fits on window resize while active) and **100%** (natural size) buttons, zoom in/out buttons, `+` / `-` / `0` keys, double-click toggles Fit/100%. The drawing is scaled by resizing it, not by a CSS transform, so it stays sharp. Zoom range 10%–800%.
