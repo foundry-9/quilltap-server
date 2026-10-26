@@ -775,6 +775,10 @@ export function hasWhisperTargets(message: Pick<MessageEvent, 'targetParticipant
  * room (an untargeted message), a participant id is a whisper naming that
  * participant. The scope a Staff writer posts a per-recipient whisper to, and
  * the one its sweep of the recipient's prior whispers must match.
+ *
+ * An empty `targetParticipantIds` array is the whole room, as it is to
+ * `hasWhisperTargets` and to the visibility filter (`filterWhisperMessages`):
+ * a row everyone is shown belongs to the public scope.
  */
 export function isInWhisperScope(
   message: Pick<MessageEvent, 'targetParticipantIds'>,

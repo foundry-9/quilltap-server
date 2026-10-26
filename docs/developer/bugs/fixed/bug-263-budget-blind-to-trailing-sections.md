@@ -61,7 +61,9 @@ problem, not a budgeting one.
 
 The phases were reordered so the Staff whispers and trailing sections are built before history
 selection — none of them depends on which history rides, except the scene note, whose room is
-reserved at its size over the whole history and which is then built for the window. Posting order
+reserved at its size over every history row that may ride (the packed history is a suffix of
+those rows, so the note built for it is never larger). Every block is measured with the same
+per-message overhead history packing uses. Posting order
 in the transcript is unchanged.
 
 ## How to verify

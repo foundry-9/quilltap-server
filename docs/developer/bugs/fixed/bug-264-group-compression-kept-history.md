@@ -8,7 +8,7 @@
 | **Severity** | Medium. Compression in a group chat saved nothing on history and added its summary on top, so the prompt grew; the model read the same events twice, once summarised and once verbatim |
 | **Who it bites** | multi-character chats with context compression on, once the conversation is long enough for budget-driven compression to fire |
 | **Provenance** | Compression was written for single-character chats: it cut `existingMessages` to the verbatim window. The multi-character path builds history from `messagesWithParticipants` (for attribution, history access and whisper filtering) and never applied the cut |
-| **Fix site** | `lib/chat/context/turn-history.ts` (`selectTurnHistory` / `castHistory`), `lib/chat/context/turn-compression.ts` (`compressTurnHistory` returns `windowStart`) |
+| **Fix site** | `lib/chat/context/turn-history.ts` (`turnHistoryRows` / `castHistory`), `lib/chat/context/turn-compression.ts` (`compressTurnHistory` returns `windowStart`) |
 | **v5 status** | Owed |
 | **Index** | [bugs.md](../../bugs.md) |
 

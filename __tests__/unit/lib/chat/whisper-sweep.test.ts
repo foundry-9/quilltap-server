@@ -51,8 +51,8 @@ describe('sweepPriorWhispers', () => {
     whisper('new-p1', 'consolidated', ['p1']),
   ]
 
-  it('deletes the scope\'s earlier whispers of the kind from the transcript it is given', async () => {
-    const chats = { getMessages: jest.fn(), deleteMessagesByIds: jest.fn().mockResolvedValue(1) }
+  it('deletes the scope\'s earlier whispers of the kind, reading the chat after the post', async () => {
+    const chats = { getMessages: jest.fn().mockResolvedValue(events), deleteMessagesByIds: jest.fn().mockResolvedValue(1) }
     mockedGetRepositories.mockReturnValue({ chats } as any)
 
     const removed = await sweepPriorWhispers({
@@ -60,16 +60,15 @@ describe('sweepPriorWhispers', () => {
       keepId: 'new-p1',
       targetParticipantId: 'p1',
       isSameKind: m => m.systemKind !== 'relevant-conversations',
-      events,
       logTag: '[Test]',
     })
 
     expect(removed).toBe(1)
-    expect(chats.getMessages).not.toHaveBeenCalled()
+    expect(chats.getMessages).toHaveBeenCalledWith('chat')
     expect(chats.deleteMessagesByIds).toHaveBeenCalledWith('chat', ['old-p1'])
   })
 
-  it('reads the chat when no transcript is given, and swallows a failure', async () => {
+  it('swallows a failure', async () => {
     const chats = { getMessages: jest.fn().mockRejectedValue(new Error('locked')), deleteMessagesByIds: jest.fn() }
     mockedGetRepositories.mockReturnValue({ chats } as any)
 
@@ -80,7 +79,6 @@ describe('sweepPriorWhispers', () => {
       isSameKind: () => true,
       logTag: '[Test]',
     })).resolves.toBe(0)
-    expect(chats.getMessages).toHaveBeenCalledWith('chat')
     expect(chats.deleteMessagesByIds).not.toHaveBeenCalled()
   })
 })
@@ -95,6 +93,17 @@ describe('createTurnTranscript', () => {
     await Promise.all([transcript.events(), transcript.events()])
     await transcript.events()
     expect(chats.getMessages).toHaveBeenCalledTimes(1)
+  })
+
+  it('tries again after a failed read instead of failing every later reader', async () => {
+    const chats = { getMessages: jest.fn().mockRejectedValueOnce(new Error('busy')).mockResolvedValue([]) }
+    mockedGetRepositories.mockReturnValue({ chats } as any)
+
+    const transcript = createTurnTranscript('chat')
+    await expect(transcript.events()).rejects.toThrow('busy')
+    await expect(transcript.events()).resolves.toEqual([])
+    await transcript.events()
+    expect(chats.getMessages).toHaveBeenCalledTimes(2)
   })
 })
 

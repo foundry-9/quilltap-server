@@ -8,7 +8,7 @@ jest.mock('@/lib/logger', () => {
   return { logger }
 })
 
-import { assembleLeadingMessages, selectTurnHistory, type HistoryCast } from '@/lib/chat/context/turn-history'
+import { assembleLeadingMessages, packTurnHistory, turnHistoryRows, type HistoryCast } from '@/lib/chat/context/turn-history'
 import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
 
@@ -46,53 +46,60 @@ const cast: HistoryCast = {
 }
 
 const base = {
-  provider: 'OPENAI' as const,
   existingMessages,
   windowStart: 0,
   summaryAnchorIds: [] as string[],
-  remainingTokens: 100_000,
-  recentMessagesBudget: 100_000,
-  totalLimit: 128_000,
-  warnings: [] as string[],
 }
 
-describe('selectTurnHistory', () => {
+const pack = { provider: 'OPENAI' as const, recentMessagesBudget: 100_000, totalLimit: 128_000, warnings: [] as string[] }
+
+describe('turnHistoryRows', () => {
   it('keeps the whole history when nothing is summarised', () => {
-    expect(selectTurnHistory(base).messages.map(m => m.id)).toEqual(ids)
-    expect(selectTurnHistory({ ...base, cast }).messages.map(m => m.id)).toEqual(ids)
+    expect(turnHistoryRows(base).map(m => m.id)).toEqual(ids)
+    expect(turnHistoryRows({ ...base, cast }).map(m => m.id)).toEqual(ids)
   })
 
   it('cuts a single-character history to the compression window', () => {
-    expect(selectTurnHistory({ ...base, windowStart: 4 }).messages.map(m => m.id)).toEqual(['m5', 'm6'])
+    expect(turnHistoryRows({ ...base, windowStart: 4 }).map(m => m.id)).toEqual(['m5', 'm6'])
   })
 
   // Bug 264: in a multi-character chat the compression window was computed
   // and then ignored, so the rows the summary covered rode verbatim beside it.
   it('cuts a multi-character history to the same window', () => {
-    const history = selectTurnHistory({ ...base, cast, windowStart: 4 })
-    expect(history.messages.map(m => m.id)).toEqual(['m5', 'm6'])
+    const rows = turnHistoryRows({ ...base, cast, windowStart: 4 })
+    expect(rows.map(m => m.id)).toEqual(['m5', 'm6'])
     // Still attributed from the responder's seat.
-    expect(history.messages.map(m => m.role)).toEqual(['user', 'assistant'])
-    expect(history.messages[0].name).toBe('Charlie')
+    expect(rows.map(m => m.role)).toEqual(['user', 'assistant'])
+    expect(rows[0].name).toBe('Charlie')
   })
 
   it('places the window by index when the rows carry no ids', () => {
     const noIds = existingMessages.map(({ id: _id, ...m }) => m)
     const anonymousCast = { ...cast, messagesWithParticipants: cast.messagesWithParticipants.map(({ id: _id, ...m }) => m) }
-    const history = selectTurnHistory({ ...base, existingMessages: noIds, cast: anonymousCast, windowStart: 4 })
-    expect(history.messages.map(m => m.content)).toEqual(['line m5', 'line m6'])
+    const rows = turnHistoryRows({ ...base, existingMessages: noIds, cast: anonymousCast, windowStart: 4 })
+    expect(rows.map(m => m.content)).toEqual(['line m5', 'line m6'])
   })
 
   it('drops rows the running summary absorbed', () => {
-    expect(selectTurnHistory({ ...base, cast, summaryAnchorIds: ['m1', 'm2'] }).messages.map(m => m.id))
+    expect(turnHistoryRows({ ...base, cast, summaryAnchorIds: ['m1', 'm2'] }).map(m => m.id))
       .toEqual(['m3', 'm4', 'm5', 'm6'])
+  })
+})
+
+describe('packTurnHistory', () => {
+  it('sends every row when they fit', () => {
+    const history = packTurnHistory(turnHistoryRows(base), { ...pack, remainingTokens: 100_000 })
+    expect(history.truncated).toBe(false)
+    expect(history.messages.map(m => m.id)).toEqual(ids)
   })
 
   it('packs newest-first into the smaller of what is left and the history budget', () => {
-    const history = selectTurnHistory({ ...base, remainingTokens: 20, recentMessagesBudget: 100_000 })
+    const rows = turnHistoryRows(base)
+    const history = packTurnHistory(rows, { ...pack, remainingTokens: 20 })
     expect(history.truncated).toBe(true)
-    expect(history.messages[history.messages.length - 1].id).toBe('m6')
     expect(history.messages.length).toBeLessThan(ids.length)
+    // Always a suffix of the rows — what the scene note's reservation relies on.
+    expect(history.messages.map(m => m.id)).toEqual(ids.slice(ids.length - history.messages.length))
   })
 })
 

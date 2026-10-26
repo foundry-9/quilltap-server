@@ -108,7 +108,6 @@ export async function offerCoreWhisper(input: {
         keepId: posted.id,
         targetParticipantId: respondingParticipant.id,
         isSameKind: m => m.systemSender === 'aurora' && m.systemKind === 'core-whisper',
-        events,
         logTag: '[CoreWhisper]',
       })
     }
@@ -142,7 +141,6 @@ export async function postCommonplaceWhispers(input: {
   parts: CommonplaceParts
   retrospectiveRecall: string
   commitSceneState: () => Promise<void>
-  transcript: TurnTranscript
 }): Promise<void> {
   const { chatId, targetParticipantId } = input
   const personaWhisper = buildCommonplacePersonaWhisper(input.parts)
@@ -155,7 +153,6 @@ export async function postCommonplaceWhispers(input: {
         keepId: posted.id,
         targetParticipantId,
         isSameKind: m => m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations',
-        events: await input.transcript.events().catch(() => undefined),
         logTag: '[CommonplaceWhisper]',
       })
     }

@@ -9,7 +9,9 @@
  * none at all.
  *
  * The recipient is a whisper scope (`isInWhisperScope`): the participant the
- * whisper was addressed to, or `null` for an untargeted one. A sweep is
+ * whisper was addressed to, or `null` for an untargeted one. The chat is read
+ * fresh, after the post, so a whisper an overlapping build posted is swept
+ * too and at most one stands per recipient. A sweep is
  * best-effort — a stale whisper left standing is untidy, a thrown turn is not —
  * so failures are logged and swallowed.
  */
@@ -18,7 +20,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { isInWhisperScope } from '@/lib/schemas/chat.types'
-import type { ChatEvent, MessageEvent } from '@/lib/schemas/types'
+import type { MessageEvent } from '@/lib/schemas/types'
 
 export interface SweepPriorWhispersParams {
   chatId: string
@@ -28,12 +30,6 @@ export interface SweepPriorWhispersParams {
   targetParticipantId: string | null
   /** Which whispers count as the same kind as the one kept. */
   isSameKind: (message: MessageEvent) => boolean
-  /**
-   * The transcript to search. Pass one already read this turn — every prior
-   * whisper is in it — rather than decoding the whole chat again; omitted, the
-   * chat is read fresh.
-   */
-  events?: ReadonlyArray<ChatEvent>
   /** Log prefix of the writer doing the sweeping, e.g. `[CoreWhisper]`. */
   logTag: string
 }
@@ -46,7 +42,10 @@ export async function sweepPriorWhispers(params: SweepPriorWhispersParams): Prom
   const { chatId, keepId, targetParticipantId, isSameKind, logTag } = params
   try {
     const repos = getRepositories()
-    const events = params.events ?? (await repos.chats.getMessages(chatId))
+    // Read after the post, not from a snapshot taken before it: a build for
+    // the same recipient that overlapped this one posted after any snapshot
+    // of ours, and only a fresh read sees its whisper to sweep it.
+    const events = await repos.chats.getMessages(chatId)
     const stale = events
       .filter((m): m is MessageEvent => m.type === 'message')
       .filter(m => m.id !== keepId && isSameKind(m) && isInWhisperScope(m, targetParticipantId))

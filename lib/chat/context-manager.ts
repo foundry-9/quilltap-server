@@ -69,7 +69,7 @@ import {
 import { createTurnTranscript, minutesSinceLastHostTimestamp, type TurnTranscript } from './context/turn-transcript'
 import { announceTurnMail, offerCoreWhisper, postCommonplaceWhispers, postTurnTimestamp } from './context/turn-whispers'
 import { buildReferentSections, buildTurnNotes, composeTrailingMessage } from './context/turn-trailing'
-import { assembleLeadingMessages, selectTurnHistory, type HistoryCast } from './context/turn-history'
+import { assembleLeadingMessages, packTurnHistory, turnHistoryRows, type HistoryCast } from './context/turn-history'
 import type { SelectableMessage } from './context/message-selector'
 
 /** Per-message overhead the token estimates add for role and framing. */
@@ -706,7 +706,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     parts: commonplaceParts,
     retrospectiveRecall,
     commitSceneState: scene.commit,
-    transcript,
   })
 
   const isRegeneration = (options.regenerationOfMessageIds?.length ?? 0) > 0
@@ -788,14 +787,20 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // other part of the request is measured — and whatever the caller adds
   // afterwards (`reservedOutgoingTokens`: tool schemas, agent-mode
   // instructions, the tool-change notice). The scene note depends on which
-  // history rides, so its room is reserved at its size over the whole history
-  // and the note itself is built for the window afterwards.
-  const identityReinforcement = buildIdentityReinforcement(character.name)
+  // history rides, so its room is measured over every row that may ride: the
+  // packed history is a suffix of those rows, so the note built for it is
+  // never larger.
+  const historyRows = turnHistoryRows({
+    existingMessages,
+    cast,
+    windowStart: compression.windowStart,
+    summaryAnchorIds: chat.summaryAnchorMessageIds ?? [],
+  })
   const systemTokens =
-    systemPrompt.tokens +
-    estimateTokens(identityReinforcement, provider) +
-    (compression.block ? estimateTokens(compression.block, provider) : 0)
-  const trailingDraft = composeTrailing(narrationAnchorFor(fullHistoryForAnchor(existingMessages, cast)))
+    messageTokens(systemPrompt.prompt, provider) +
+    messageTokens(buildIdentityReinforcement(character.name), provider) +
+    (compression.block ? messageTokens(compression.block, provider) : 0)
+  const trailingDraft = composeTrailing(narrationAnchorFor(historyRows))
   const tailTokens =
     (timestampLine ? messageTokens(timestampLine.content, provider) : 0) +
     (trailingDraft ? messageTokens(trailingDraft.content, provider) : 0)
@@ -817,12 +822,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
-  const history = selectTurnHistory({
+  const history = packTurnHistory(historyRows, {
     provider,
-    existingMessages,
-    cast,
-    windowStart: compression.windowStart,
-    summaryAnchorIds: chat.summaryAnchorMessageIds ?? [],
     remainingTokens,
     recentMessagesBudget: budget.recentMessagesBudget,
     totalLimit: budget.totalLimit,
@@ -889,16 +890,4 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     compressionApplied: compression.applied,
     compressionDetails: compression.result?.compressionDetails,
   }
-}
-
-/**
- * The rows the scene note could be computed over before history is packed: the
- * whole history from the responder's vantage. Only ids, roles and participant
- * ids matter to it, so no attribution is needed.
- */
-function fullHistoryForAnchor(
-  existingMessages: BuildContextOptions['existingMessages'],
-  cast: HistoryCast | undefined,
-): ReadonlyArray<SelectableMessage> {
-  return cast ? cast.messagesWithParticipants : existingMessages
 }

@@ -1,11 +1,11 @@
 /**
  * Turn phase: the conversation the model sees, and the head of the request.
  *
- * `selectTurnHistory` decides which history rows ride verbatim — from the
+ * `turnHistoryRows` decides which history rows may ride verbatim — from the
  * responder's vantage point in a multi-character chat (history access,
  * whispers, attribution), cut to the compression window when a summary is in
- * force, without rows already folded into the running summary, and packed
- * newest-first into what the budget leaves.
+ * force, without rows already folded into the running summary.
+ * `packTurnHistory` then packs them newest-first into what the budget leaves.
  *
  * `assembleLeadingMessages` lays out the request's head: the three system
  * blocks, then that history.
@@ -36,8 +36,7 @@ export interface HistoryCast {
   messagesWithParticipants: MessageWithParticipant[]
 }
 
-export interface TurnHistoryInput {
-  provider: Provider
+export interface TurnHistoryRowsInput {
   existingMessages: ReadonlyArray<HistoryRow>
   /** Present in a multi-character chat only. */
   cast?: HistoryCast
@@ -45,6 +44,30 @@ export interface TurnHistoryInput {
   windowStart: number
   /** Rows the running summary has absorbed (`chats.summaryAnchorMessageIds`). */
   summaryAnchorIds: ReadonlyArray<string>
+}
+
+/**
+ * Every history row that may ride this turn, oldest first, before packing:
+ * from the responder's vantage in a multi-character chat, from the compression
+ * window on, without rows the running summary absorbed. What packing sends is
+ * always a suffix of this — which is what lets the scene note's room be
+ * measured over these rows before the packing is done.
+ */
+export function turnHistoryRows(input: TurnHistoryRowsInput): SelectableMessage[] {
+  const rows = input.cast
+    ? castHistory(input.cast, input.existingMessages, input.windowStart)
+    : ownHistory(input.existingMessages, input.windowStart)
+
+  // The Librarian summary whisper survives — it is posted after the fold and
+  // is not an anchor — so the tail begins with the newest summary whisper and
+  // the turns since.
+  if (input.summaryAnchorIds.length === 0) return rows
+  const anchors = new Set(input.summaryAnchorIds)
+  return rows.filter(m => !m.id || !anchors.has(m.id))
+}
+
+export interface PackTurnHistoryInput {
+  provider: Provider
   /** Tokens left under the input ceiling once everything fixed is spoken for. */
   remainingTokens: number
   /** `ContextBudget.recentMessagesBudget` — history never takes more than this. */
@@ -60,18 +83,9 @@ export interface TurnHistory {
   truncated: boolean
 }
 
-export function selectTurnHistory(input: TurnHistoryInput): TurnHistory {
-  const { provider, warnings } = input
-  let rows = input.cast ? castHistory(input.cast, input.existingMessages, input.windowStart) : ownHistory(input)
-
-  // Rows already absorbed into the running summary go. The Librarian summary
-  // whisper survives — it is posted after the fold and is not an anchor — so
-  // the tail begins with the newest summary whisper and the turns since.
-  if (input.summaryAnchorIds.length > 0) {
-    const anchors = new Set(input.summaryAnchorIds)
-    rows = rows.filter(m => !m.id || !anchors.has(m.id))
-  }
-
+/** Pack the rows newest-first into the smaller of what is left and the history budget. */
+export function packTurnHistory(rows: SelectableMessage[], input: PackTurnHistoryInput): TurnHistory {
+  const { provider } = input
   const selected = selectRecentMessages(
     rows,
     Math.max(0, Math.min(input.remainingTokens, input.recentMessagesBudget)),
@@ -81,15 +95,15 @@ export function selectTurnHistory(input: TurnHistoryInput): TurnHistory {
   if (selected.truncated) {
     const totalTokens = countMessagesTokens(rows.map(m => ({ role: m.role, content: m.content })), provider)
     if (shouldSummarizeConversation(rows.length, totalTokens, input.totalLimit)) {
-      warnings.push('Conversation is getting long. Consider generating a summary for better context management.')
+      input.warnings.push('Conversation is getting long. Consider generating a summary for better context management.')
     }
   }
   return { messages: selected.messages, tokens: selected.tokenCount, truncated: selected.truncated }
 }
 
 /** A single-character chat's history: the rows as given, from the window on. */
-function ownHistory(input: TurnHistoryInput): SelectableMessage[] {
-  return input.existingMessages.slice(input.windowStart).map(msg => ({
+function ownHistory(existingMessages: ReadonlyArray<HistoryRow>, windowStart: number): SelectableMessage[] {
+  return existingMessages.slice(windowStart).map(msg => ({
     role: msg.role,
     content: msg.content,
     id: msg.id,

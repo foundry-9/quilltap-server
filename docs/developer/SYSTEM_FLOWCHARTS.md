@@ -605,7 +605,7 @@ How `buildContext()` (`lib/chat/context-manager.ts`) assembles one turn's messag
 
 ```mermaid
 flowchart TD
-    START["buildContext()"] --> TX["createTurnTranscript()<br/>one read of the chat's events,<br/>shared by every reader below"]
+    START["buildContext()"] --> TX["createTurnTranscript()<br/>one pre-turn read of the chat's events,<br/>shared by the gates, cadences and ledger"]
     TX --> TIME["resolveAnnouncedTime()<br/>timestamp gate, one clock value"]
     TIME --> SYS["1. buildTurnSystemPrompt()<br/>compiled stack, subprompts, Taboo,<br/>standing instructions<br/><i>turn-system-prompt.ts</i>"]
     SYS --> COMP["2. compressTurnHistory()<br/>budget gate → cached or sync summary<br/>→ system block 3 + windowStart<br/><i>turn-compression.ts</i>"]
@@ -614,14 +614,14 @@ flowchart TD
     RECALL --> INFORM["5. buildInformBlock()<br/><i>inform-block.ts</i>"]
     INFORM --> WHISPER["6. Staff whispers<br/>postTurnTimestamp → offerCoreWhisper<br/>→ postCommonplaceWhispers (+ scene commit, sweep)<br/>→ announceTurnMail<br/><i>turn-whispers.ts</i>"]
     WHISPER --> TRAIL["7. Trailing sections<br/>progressions, Inventory, referent ledger,<br/>closing echo, turn notes<br/><i>turn-trailing.ts</i>"]
-    TRAIL --> MEASURE["Measure blocks 1–3, timestamp line,<br/>trailing message, scene-note room,<br/>reservedOutgoingTokens"]
-    MEASURE --> HIST["8. selectTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
+    TRAIL --> MEASURE["Measure blocks 1–3, timestamp line,<br/>trailing message, scene-note room<br/>(over the candidate rows),<br/>reservedOutgoingTokens"]
+    MEASURE --> HIST["8. turnHistoryRows() → packTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
     HIST --> ASM["assembleLeadingMessages()<br/>+ timestamp line<br/>+ composeTrailingMessage()"]
     ASM --> DELIVER["9. deliverRecall()<br/>stamp delivered lines, ring, debug log<br/><i>skipped for a storyteller bid</i>"]
     DELIVER --> DONE([BuiltContext])
 ```
 
-Snapshot whispers (the Commonplace Book's per-turn whisper, Aurora's Core whisper, the fold-posted relevant-conversations list) replace a recipient's earlier ones through `sweepPriorWhispers()` (`lib/chat/whisper-sweep.ts`) once the fresh one is posted.
+Snapshot whispers (the Commonplace Book's per-turn whisper, Aurora's Core whisper, the fold-posted relevant-conversations list) replace a recipient's earlier ones through `sweepPriorWhispers()` (`lib/chat/whisper-sweep.ts`) once the fresh one is posted, reading the chat fresh so a whisper from an overlapping build is swept too.
 
 ---
 
