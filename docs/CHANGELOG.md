@@ -8,6 +8,10 @@
 
 - The per-row checkbox in `components/settings/chat-settings/AutomationSettings.tsx` used raw Tailwind (`h-4 w-4 rounded border-input text-primary focus:ring-primary`); it now uses `qt-checkbox`, so themes can restyle it. Found in release checklist 7 (`qt-*` classes). No other changes needed.
 
+#### Chore: prune diagram trace logging
+
+- Removed four per-event `console.debug` traces from the diagram components (render, Copy PNG start, lightbox open and close). Failure, fallback and summary logs stay.
+
 #### Feature: diagram lightbox and Copy PNG
 
 - Clicking a Salon diagram (or its new **Enlarge** toolbar button, or Enter/Space on the focused drawing) opens it full-window. Wheel, Chromium trackpad pinch (ctrl-wheel), Safari gesture events and two-finger touch zoom about the pointer; drag pans. **Fit** (the opening view; re-fits on window resize while active) and **100%** (natural size) buttons, zoom in/out buttons, `+` / `-` / `0` keys, double-click toggles Fit/100%. The drawing is scaled by resizing it, not by a CSS transform, so it stays sharp. Zoom range 10%–800%.
