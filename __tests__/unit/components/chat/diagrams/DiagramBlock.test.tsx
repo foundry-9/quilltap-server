@@ -157,4 +157,41 @@ describe('DiagramBlock', () => {
     await waitFor(() => expect(screen.getByTestId('drawn')).toBeInTheDocument())
     expect(document.querySelector('.qt-diagram img')).toBeNull()
   })
+
+  it('opens the drawing in the lightbox on click and returns focus to it on Escape', async () => {
+    render(<DiagramBlock engine="mermaid" language="mermaid" source="flowchart LR; A-->B" style="clean" />)
+    await waitFor(() => expect(screen.getByTestId('drawn')).toBeInTheDocument())
+    const canvas = screen.getByRole('button', { name: /Diagram — open to zoom and copy/ })
+
+    fireEvent.click(canvas)
+    const dialog = await screen.findByRole('dialog', { name: 'Diagram, enlarged' })
+    // A copy of the drawing, in a root of its own outside the message.
+    expect(dialog.querySelector('[data-testid="drawn"]')).not.toBeNull()
+    expect(canvas.contains(dialog)).toBe(false)
+
+    act(() => {
+      fireEvent.keyDown(dialog, { key: 'Escape' })
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(canvas)
+  })
+
+  it('opens the lightbox from the Enlarge button and from the keyboard', async () => {
+    render(<DiagramBlock engine="svg" language="svg" source="<svg/>" style="clean" />)
+    await waitFor(() => expect(screen.getByTestId('drawn')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /Enlarge/ }))
+    expect(await screen.findByRole('dialog', { name: 'Drawing, enlarged' })).toBeInTheDocument()
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /Drawing — open to zoom and copy/ }), { key: 'Enter' })
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    act(() => {
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
 })

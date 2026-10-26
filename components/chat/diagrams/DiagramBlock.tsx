@@ -6,6 +6,8 @@
  * The dispatcher for every diagram engine: picks the renderer for the fence's
  * language, shows a fixed-height placeholder while it works, swaps in the SVG,
  * and adds the toolbar (view source, copy source, copy SVG, download SVG).
+ * Clicking the drawing (or Enlarge) opens it in the lightbox, to zoom into and
+ * copy as a PNG; closing that puts the reader back where they were.
  * A fence that cannot be drawn degrades to the ordinary code block under a
  * one-line note — never a blank space, never a stack trace.
  *
@@ -22,6 +24,7 @@ import type { DiagramEngine, DiagramStyle } from '@/lib/markdown/diagrams'
 import { renderMermaid } from './render-mermaid'
 import { renderGraphviz } from './render-graphviz'
 import { renderSvg } from './render-svg'
+import { openDiagramLightbox } from './diagram-lightbox-host'
 import type { RenderedDiagram } from './types'
 
 export interface DiagramBlockProps {
@@ -108,6 +111,7 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
   const cacheKey = cacheKeyFor(engine, style, themeKey, source)
 
   const stageRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const [result, setResult] = useState<RenderResult | null>(null)
   const [showSource, setShowSource] = useState(false)
   const [copied, setCopied] = useState<'source' | 'svg' | null>(null)
@@ -185,6 +189,28 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
+  const kind = engine === 'svg' ? 'Drawing' : 'Diagram'
+
+  const handleOpen = () => {
+    const trigger = canvasRef.current
+    if (!svg || !trigger) return
+    openDiagramLightbox({ svg, label: `${kind}, enlarged`, trigger })
+  }
+
+  const handleCanvasClick = () => {
+    // A drag across a label to copy its words is not a request to enlarge.
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && selection.toString().trim() !== '') return
+    handleOpen()
+  }
+
+  const handleCanvasKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleOpen()
+    }
+  }
+
   if (streaming) {
     return <CodeBlockWithCopy code={source} language={language} />
   }
@@ -219,6 +245,10 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
               <Icon name="code" className="w-3.5 h-3.5" />
               <span>{showSource ? 'Hide source' : 'View source'}</span>
             </button>
+            <button type="button" className="qt-diagram-toolbar-button" onClick={handleOpen} title="Enlarge — zoom, and copy as PNG">
+              <Icon name="expand" className="w-3.5 h-3.5" />
+              <span>Enlarge</span>
+            </button>
             <button type="button" className="qt-diagram-toolbar-button" onClick={handleCopySource} title="Copy source">
               <Icon name={copied === 'source' ? 'check' : 'copy'} className="w-3.5 h-3.5" />
               <span>{copied === 'source' ? 'Copied' : 'Copy source'}</span>
@@ -233,9 +263,14 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
             </button>
           </div>
           <div
+            ref={canvasRef}
             className="qt-diagram-canvas"
-            role="img"
-            aria-label={`${engine === 'svg' ? 'Drawing' : 'Diagram'}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${kind} — open to zoom and copy`}
+            title="Click to enlarge"
+            onClick={handleCanvasClick}
+            onKeyDown={handleCanvasKeyDown}
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         </>

@@ -2,6 +2,11 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.85] - 2026-10-26
+
+### Added
+- The diagram lightbox in `qt-components.css`, mirroring the app's `_content.css`: a zoom-in cursor and focus ring on a clickable `.qt-diagram-canvas[role="button"]`, the full-window `.qt-diagram-lightbox` with its toolbar (`-bar`, `-group`, `-button` with hover / pressed / disabled / focus states, `-zoom` readout, `-check` for the Transparent toggle), the pan-and-zoom `-viewport`, the drawing's `-sheet` (with a checkerboard under `[data-transparent="true"]`) and the `-hint` line. Colours read new `--qt-diagram-lightbox-*` variables, defaulting to the `--qt-overlay-*` tokens.
+
 ## [1.0.84] - 2026-10-25
 
 ### Added

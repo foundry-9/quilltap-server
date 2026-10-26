@@ -75,9 +75,24 @@ A freeform drawing ignores the drawing style — it is already in whatever hand 
 Every diagram carries a small row of buttons along its top edge:
 
 - **View source** — shows the code beneath the drawing (and **Hide source** tucks it away again)
+- **Enlarge** — opens the drawing in the viewing room (see below)
 - **Copy source** — copies the diagram's code
 - **Copy SVG** — copies the drawing itself, ready to paste into anything that understands SVG
 - **Download SVG** — saves the drawing as a file
+
+## The Viewing Room
+
+A diagram of any ambition soon outgrows the width of a message. Click the drawing itself — or press **Enlarge**, or tab to the drawing and press **Enter** — and it is brought out on its own, filling the window against a darkened room.
+
+- **Zooming** — turn the mouse wheel, or pinch on a trackpad or a touchscreen, and the drawing grows or shrinks about whatever point lies beneath your fingers. The **+** and **−** buttons (or keys) do the same about the middle. The figure between them tells you how large it stands.
+- **Panning** — drag the drawing about with the mouse, or with one finger.
+- **Fit** — the whole drawing, as large as the window allows. This is where the room opens, and while Fit is pressed the drawing follows the window if you resize it.
+- **100%** — the drawing at its natural size, as the engine laid it out. The **0** key does the same, and a double-click on the drawing swaps between the two.
+- **Copy PNG** — puts a picture of the drawing on your clipboard at twice its natural size, crisp enough for a slide or a letter. It is painted on the diagram's own card colour, unless you tick **Transparent**, in which case it comes with nothing behind it at all; the room shows a chequerboard behind the drawing while the box is ticked, so you can see what you will get. The choice is remembered until you leave the page. A truly enormous drawing is copied at whatever size the browser will allow, and you are told so.
+
+Press **Escape** (or the **×**, or click the empty floor around the drawing) to leave. You return to precisely the spot in the conversation you left — examining a diagram never costs you your place, even if a reply arrived below while you were looking.
+
+The picture you copy is drawn from the diagram as you see it, in your theme's colours and lettering. Labels that a drawing engine set as web-page text rather than as part of the drawing are re-lettered as drawing text for the copy, so they arrive intact rather than as empty boxes.
 
 Diagrams follow your theme, light or dark, and recolour themselves when you change it. A diagram too wide for the message scrolls sideways within its frame rather than shouldering the conversation aside.
 

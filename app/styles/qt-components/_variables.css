@@ -616,6 +616,17 @@
      lettered in (Mermaid's hand-drawn look and sketched Graphviz alike). */
   --qt-diagram-font: var(--font-sans);
   --qt-diagram-hand-font: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Marker Felt", cursive;
+  /* The lightbox: the overlay's backdrop and glass buttons, a lifted sheet,
+     and the checkerboard behind a transparent copy. */
+  --qt-diagram-lightbox-backdrop: var(--qt-overlay-bg);
+  --qt-diagram-lightbox-fg: var(--qt-overlay-fg);
+  --qt-diagram-lightbox-muted-fg: var(--qt-overlay-muted-fg);
+  --qt-diagram-lightbox-button-bg: var(--qt-overlay-btn-bg);
+  --qt-diagram-lightbox-button-hover-bg: var(--qt-overlay-btn-hover-bg);
+  --qt-diagram-lightbox-pressed-border: var(--qt-overlay-muted-fg);
+  --qt-diagram-lightbox-shadow: 0 10px 40px rgb(0 0 0 / 0.45);
+  --qt-diagram-lightbox-check-a: #ffffff;
+  --qt-diagram-lightbox-check-b: #d4d4d8;
 
   /* ==========================================================================
      LINK VARIABLES
