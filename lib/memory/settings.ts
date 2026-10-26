@@ -83,15 +83,6 @@ function withCapFor(maintenance: MemoryMaintenanceSettings): ResolvedMemoryMaint
 }
 
 /**
- * Only the maintenance settings (one instance-setting read), for paths that
- * need nothing but the cap — housekeeping's preview, run and job. The same
- * `capFor` as {@link resolveMemorySettings}'s.
- */
-export async function resolveMemoryMaintenance(): Promise<ResolvedMemoryMaintenance> {
-  return withCapFor(await getMemoryMaintenanceSettings())
-}
-
-/**
  * Every memory knob, typed, with defaults filled. The memory settings are
  * instance-wide; `userId` is accepted so callers need not change when a knob
  * becomes per-user, and appears in the debug log.

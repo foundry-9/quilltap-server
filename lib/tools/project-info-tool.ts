@@ -47,19 +47,6 @@ export interface ProjectCharacterInfo {
 }
 
 /**
- * Project file info
- */
-export interface ProjectFileInfo {
-  id: string
-  filename: string
-  mimeType: string
-  size: number
-  category: string
-  description?: string | null
-  createdAt: string
-}
-
-/**
  * Project document store info — the database-backed Scriptorium store
  * linked to this project (created by the Stage 1 migration and fed by new
  * writes from Stage 2 onward). Absent when no store is linked.
