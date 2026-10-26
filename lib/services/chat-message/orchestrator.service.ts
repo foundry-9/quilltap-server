@@ -43,7 +43,6 @@ import {
 import { collectTurnExtras, extractToolNames, spliceTurnExtras } from './turn-extras'
 import {
   createTurnStatusEmitter,
-  encodeDebugInfo,
   encodeFallbackInfo,
   encodeTurnStartEvent,
   encodeCarinaAnswerEvent,
@@ -857,18 +856,6 @@ async function processMessage(
     }
   }
 
-  safeEnqueue(controller, encodeDebugInfo(encoder, {
-    builtContext,
-    connectionProfile: streamingState.effectiveProfile,
-    modelParams,
-    messages: formattedMessages.map(m => ({
-      role: m.role,
-      contentLength: m.content.length,
-      hasAttachments: !!m.attachments?.length,
-    })),
-    tools: slate.actualTools,
-    enabledToolOptions: slate.enabledToolOptions as unknown as Record<string, boolean>,
-  }))
   if (fileProcessing.fallbackResults.length > 0) {
     safeEnqueue(controller, encodeFallbackInfo(encoder, fileProcessing.fallbackResults))
   }

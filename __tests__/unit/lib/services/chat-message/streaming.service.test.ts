@@ -4,7 +4,6 @@
  */
 
 import {
-  encodeDebugInfo,
   encodeFallbackInfo,
   encodeContentChunk,
   encodeDoneEvent,
@@ -35,83 +34,6 @@ describe('streaming.service', () => {
 
   beforeEach(() => {
     encoder = new TextEncoder()
-  })
-
-  describe('encodeDebugInfo', () => {
-    it('should encode debug info as SSE data event', () => {
-      const debugInfo = {
-        builtContext: {
-          tokenUsage: { total: 100, systemPrompt: 20, summary: 10, memories: 30, messages: 40 },
-          budget: { totalLimit: 1000, responseReserve: 500 },
-          memoriesIncluded: 5,
-          messagesIncluded: 10,
-          messagesTruncated: 0,
-          includedSummary: false,
-          debugMemories: [],
-          debugSummary: null,
-          debugSystemPrompt: '',
-        },
-        connectionProfile: {
-          id: 'profile-1',
-          userId: 'user-1',
-          provider: 'OPENAI',
-          modelName: 'gpt-4',
-          apiKey: 'key',
-          createdAt: '2024-01-01',
-          updatedAt: '2024-01-01',
-        },
-        modelParams: { temperature: 0.7, maxTokens: 1000 },
-        messages: [
-          { role: 'USER', contentLength: 100, hasAttachments: false },
-        ],
-        tools: [],
-      }
-
-      const result = encodeDebugInfo(encoder, debugInfo)
-      const decoded = new TextDecoder().decode(result)
-
-      expect(decoded).toContain('data: ')
-      expect(decoded).toContain('debugLLMRequest')
-      expect(decoded).toContain('gpt-4')
-      expect(decoded).toContain('OPENAI')
-      expect(decoded).toContain('"temperature":0.7')
-      expect(decoded).toMatch(/\n\n$/)
-    })
-
-    it('should include tool info when tools are present', () => {
-      const debugInfo = {
-        builtContext: {
-          tokenUsage: { total: 100, systemPrompt: 20, summary: 10, memories: 30, messages: 40 },
-          budget: { totalLimit: 1000, responseReserve: 500 },
-          memoriesIncluded: 0,
-          messagesIncluded: 1,
-          messagesTruncated: 0,
-          includedSummary: false,
-          debugMemories: [],
-          debugSummary: null,
-          debugSystemPrompt: '',
-        },
-        connectionProfile: {
-          id: 'profile-1',
-          userId: 'user-1',
-          provider: 'OPENAI',
-          modelName: 'gpt-4',
-          apiKey: 'key',
-          createdAt: '2024-01-01',
-          updatedAt: '2024-01-01',
-        },
-        modelParams: {},
-        messages: [],
-        tools: [{ name: 'search_web' }, { name: 'generate_image' }],
-      }
-
-      const result = encodeDebugInfo(encoder, debugInfo)
-      const decoded = new TextDecoder().decode(result)
-
-      expect(decoded).toContain('hasTools')
-      expect(decoded).toContain('search_web')
-      expect(decoded).toContain('generate_image')
-    })
   })
 
   describe('encodeFallbackInfo', () => {

@@ -25,7 +25,6 @@ import {
   buildSimpleJsonSystemInstructions,
   buildTextBlockSystemInstructions,
   checkResolvedToolMode,
-  determineEnabledToolOptions,
   determineTextBlockToolOptions,
   logSimpleJsonToolUsage,
   logTextBlockToolUsage,
@@ -36,7 +35,6 @@ import {
   SIMPLE_JSON_STOP,
   stripSimpleJsonFromResponse,
   stripTextBlockMarkersFromResponse,
-  type EnabledToolOptions,
 } from './pseudo-tool.service'
 import { buildTools } from './streaming.service'
 import { createToolContext } from './tool-execution.service'
@@ -66,8 +64,6 @@ export interface TurnToolSlate {
   effectCeiling: ToolEffect | undefined
   customToolEffects: Map<string, ToolEffect>
   pluginToolEffects: Map<string, ToolEffect>
-  /** For the debug frame. */
-  enabledToolOptions: EnabledToolOptions
   /** The operator changed tool settings since the last turn (the tool-change notice fires). */
   toolSettingsChanged: boolean
 }
@@ -102,8 +98,6 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
-  const enabledToolOptions = determineEnabledToolOptions(imageProfileId, profile.allowWebSearch)
-
   // The Courier transport exposes no tools (the external LLM cannot reach
   // them) and injects no tool instructions into the system prompt.
   if (profile.transport === 'courier') {
@@ -118,7 +112,6 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       effectCeiling: params.storytellerCeiling,
       customToolEffects: new Map(),
       pluginToolEffects: new Map(),
-      enabledToolOptions,
       toolSettingsChanged,
     }
   }
@@ -214,7 +207,6 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     effectCeiling,
     customToolEffects: built.customToolEffects,
     pluginToolEffects: built.pluginToolEffects,
-    enabledToolOptions,
     toolSettingsChanged,
   }
 }

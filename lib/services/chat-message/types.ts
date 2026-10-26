@@ -447,7 +447,6 @@ export interface StreamChunkData {
   error?: string
   errorType?: string
   details?: string
-  debugLLMRequest?: Record<string, unknown>
   fileProcessing?: Array<{
     filename: string
     type: string
