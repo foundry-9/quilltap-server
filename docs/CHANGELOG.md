@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Docs: CLI README lists `memories keystone` among server-backed verbs
+
+- `packages/quilltap/README.md` still said only `maintain` and `validate --repair --write` ask the running server to write, and omitted `keystone --write` from the verbs that take `--port`. Both lines now include it.
+
 #### Fix: `quilltap db --count` printed ANSI color codes under `FORCE_COLOR`
 
 - `--count` passed the bare number to `console.log`, which colors numbers when `FORCE_COLOR` is set. Jest workers set it when run from a TTY, so `db-raw-sql-qt-text.integration.test.js` received `\x1b[33m2\x1b[39m` and failed with "Expected: "2", Received: "2"". The count is now stringified before printing, so the output is plain text regardless of color settings.
