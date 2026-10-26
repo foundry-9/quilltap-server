@@ -4,6 +4,11 @@
 
 ### 4.11-dev
 
+#### Test: release-checklist regression gaps
+
+- `__tests__/unit/lib/toast-stacking.test.ts`: the toast container's z-index must exceed every `z-[N]` / `z-index` declared under `components/` and `app/` (below 9999) and stay under the startup gates. Fails on the old value of 50.
+- `lib/storyteller/__tests__/plan-run-order.test.ts`: `planStorytellerRun` sorts by rotation without `keepOrder`, keeps the operator's order with it (rotation never consulted), and orders an all-at-once round's Act tail by that order.
+
 #### Fix: Automation settings checkbox uses `qt-checkbox`
 
 - The per-row checkbox in `components/settings/chat-settings/AutomationSettings.tsx` used raw Tailwind (`h-4 w-4 rounded border-input text-primary focus:ring-primary`); it now uses `qt-checkbox`, so themes can restyle it. Found in release checklist 7 (`qt-*` classes). No other changes needed.
