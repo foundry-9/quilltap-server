@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Docs: terminal sessions are excluded from backups
+
+- `terminal_sessions` rows and their transcripts under `logs/terminals/` have never been in backups. This is now a stated decision rather than a gap: sessions cannot be resumed, `cwd` is a path on the source machine, closed sessions are reaped after `CLOSED_TERMINAL_RETENTION_DAYS` (30), and transcripts are raw shell output that can contain secrets. Ariel's dispatches are chat messages and are already backed up.
+- Listed under "Not Included in Backups" in `help/system-backup-restore.md` and as a sanctioned exclusion in release checklist 10.
+- `__tests__/unit/lib/backup/terminal-sessions-excluded.test.ts`: `createBackup` never reads the terminal-sessions repository, stages no terminal file or `.log`, and reports no terminal count in the manifest.
+
 #### Docs: CLI README lists `memories keystone` among server-backed verbs
 
 - `packages/quilltap/README.md` still said only `maintain` and `validate --repair --write` ask the running server to write, and omitted `keystone --write` from the verbs that take `--port`. Both lines now include it.

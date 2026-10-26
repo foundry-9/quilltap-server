@@ -15,6 +15,7 @@ Related project convention (CLAUDE.md): data/schema changes must be reflected in
    ```
 2. Locate the backup/restore implementation (search for the backup service and its included-tables/entities list) and confirm every new table, column, entity, or on-disk asset added this cycle is covered by **both** backup and restore.
 3. For anything intentionally excluded, confirm it's only genuinely-secret material (API keys, encryption secrets — Saquel Ytzama's domain). Everything else must be included.
+   Sanctioned non-secret exclusions, already documented under "Not Included in Backups" in [`help/system-backup-restore.md`](../../help/system-backup-restore.md): background jobs, built-in plugins, help pages, and Ariel's `terminal_sessions` rows with their `logs/terminals/` transcripts (runtime state that can hold printed secrets; guarded by `__tests__/unit/lib/backup/terminal-sessions-excluded.test.ts`). Report these as **EXCLUDED (sanctioned)**; anything else excluded is a gap.
 4. Cross-check the related surfaces so backups and exports don't drift:
    - `.qtap` export/import (remember: **always include new data-model fields in import/export**).
    - [`qtap-export.schema.json`](../../public/schemas/qtap-export.schema.json).
