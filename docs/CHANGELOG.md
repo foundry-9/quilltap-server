@@ -4,6 +4,10 @@
 
 ### 4.11-dev
 
+#### Fix: Automation settings checkbox uses `qt-checkbox`
+
+- The per-row checkbox in `components/settings/chat-settings/AutomationSettings.tsx` used raw Tailwind (`h-4 w-4 rounded border-input text-primary focus:ring-primary`); it now uses `qt-checkbox`, so themes can restyle it. Found in release checklist 7 (`qt-*` classes). No other changes needed.
+
 #### Chore: prune diagram trace logging
 
 - Removed four per-event `console.debug` traces from the diagram components (render, Copy PNG start, lightbox open and close). Failure, fallback and summary logs stay.
