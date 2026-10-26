@@ -37,6 +37,7 @@ import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -249,6 +250,8 @@ export interface BackupManifest {
     wardrobeWear?: number;
     /** Number of outfit-history rows (`chat_wardrobe_history`) */
     wardrobeHistory?: number;
+    /** Number of Log lines (`log_entries`, in the LLM logs database) */
+    logEntries?: number;
   };
 }
 
@@ -429,6 +432,13 @@ export interface BackupData {
    * it cascades from; optional, so an older archive simply has none.
    */
   wardrobeHistory?: ChatWardrobeHistoryRow[];
+
+  /**
+   * The Log (`log_entries`, in the LLM logs database): lines written by
+   * `log_create_entry` and custom tools' `log` effects. Restored after the
+   * chats they name; optional, so an older archive simply has none.
+   */
+  logEntries?: LogEntry[];
 }
 
 // ============================================================================
@@ -622,6 +632,9 @@ export interface RestoreSummary {
 
   /** Number of outfit-history rows restored */
   wardrobeHistory?: number;
+
+  /** Number of Log lines restored */
+  logEntries?: number;
 
   /**
    * Outcome of the post-restore embedding reconcile. A restore can land a

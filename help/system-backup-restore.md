@@ -49,6 +49,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Logs & History**
 - LLM request/response logs (the Inspector's records)
+- The Log — every line your characters (and Pascal's custom tools) have set down with `log_create_entry`, each still filed under the chat and the character that wrote it. A restore into a degraded logs database passes them over with a warning, as it does the LLM logs.
 
 **Not Included in Backups**
 
@@ -58,6 +59,7 @@ Certain data is intentionally excluded from backups:
 - **Encryption key (`data/quilltap.dbkey`)** — the master encryption key for your database is not included for security. Keep that file backed up separately if you use database encryption, and mind the `data/` subdirectory when you copy it.
 - **Nothing about your search indexes, ordinarily** — a full backup carries every embedding and search index intact, so semantic search is working the moment a restore finishes. This is precisely why a backup is not the same article as a portable `.qtap` export, which leaves embeddings behind on purpose. Tick **Compact backup** and the indexes are the one thing left out; see below.
 - **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
+- **Open Storyteller rounds** — a round's bids are scratch paper, cleared the moment the round closes, so a round still open when the backup is taken is simply dropped. The record of a bid that was acted upon rides on its message and is restored with it.
 - **Built-in plugins** — these ship with Quilltap and do not need backing up.
 - **The help pages you are reading** — they ship with the application and are re-read from disk whenever a page changes, so an archived copy could only hold you to yesterday's wording. Their search index is rebuilt with them.
 - **Cached provider model lists** — while included in backups for convenience, these are refreshed automatically from your providers.
