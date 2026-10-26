@@ -47,6 +47,7 @@ const globalRepos = {
   chatSettings: { findByUserId: jest.fn().mockResolvedValue(null), delete: jest.fn() },
   folders: { findByUserId: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   wardrobe: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+  logEntries: { deleteAll: jest.fn().mockResolvedValue(undefined) },
 };
 
 jest.mock('@/lib/repositories/user-scoped', () => ({

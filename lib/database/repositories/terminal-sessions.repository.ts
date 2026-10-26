@@ -184,6 +184,97 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
   }
 
   /**
+   * Remove transcript files in `<logsDir>/terminals/` that no row names.
+   *
+   * `terminal_sessions.chatId` cascades on chat delete (a Salon delete, a
+   * replace-mode restore, an import overwrite), and the terminals DELETE route
+   * drops its row directly; none of them touches the transcript, and
+   * `cleanupClosedSessions` only sees rows. This sweep is the backstop.
+   *
+   * Only `<id>.log` files are considered — the shell-init artifacts beside
+   * them (`init-<id>.bashrc`, `zdotdir-<id>/`) are cleaned on PTY exit. A file
+   * is spared when a row names it (by id or stored `transcriptPath`), when
+   * `isLive(id)` says the PTY is still running (a chat deleted under a live
+   * terminal leaves the PTY writing with no row), or when it was modified
+   * within `graceMs` (the transcript is opened before the row is created).
+   *
+   * Parent-only. Invoked by the daily maintenance tick.
+   */
+  async sweepOrphanedTranscripts(options: {
+    isLive: (sessionId: string) => boolean;
+    graceMs: number;
+    now?: Date;
+  }): Promise<{ scanned: number; deleted: number }> {
+    return this.safeQuery(
+      async () => {
+        const transcriptsDir = path.join(getLogsDir(), 'terminals');
+        let entries: string[];
+        try {
+          entries = await fs.readdir(transcriptsDir);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+            logger.debug('No terminal transcript directory; nothing to sweep', { transcriptsDir });
+            return { scanned: 0, deleted: 0 };
+          }
+          throw error;
+        }
+
+        const rows = await this.findAll();
+        const namedIds = new Set(rows.map((s) => s.id));
+        const namedPaths = new Set(
+          rows
+            .map((s) => s.transcriptPath)
+            .filter((p): p is string => !!p)
+            .map((p) => path.resolve(p))
+        );
+        const cutoffMs = (options.now ?? new Date()).getTime() - options.graceMs;
+
+        let scanned = 0;
+        let deleted = 0;
+        for (const name of entries) {
+          if (!name.endsWith('.log')) continue;
+          scanned++;
+          const sessionId = name.slice(0, -'.log'.length);
+          const filePath = path.join(transcriptsDir, name);
+
+          if (namedIds.has(sessionId) || namedPaths.has(path.resolve(filePath))) continue;
+          if (options.isLive(sessionId)) {
+            logger.debug('Sparing transcript of a live PTY with no row', { sessionId });
+            continue;
+          }
+
+          try {
+            const stat = await fs.stat(filePath);
+            if (!stat.isFile()) continue;
+            if (stat.mtimeMs > cutoffMs) {
+              logger.debug('Sparing recently written orphan transcript', { sessionId });
+              continue;
+            }
+            await fs.unlink(filePath);
+            deleted++;
+            logger.debug('Removed orphaned terminal transcript', { sessionId, filePath });
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException)?.code;
+            if (code !== 'ENOENT') {
+              logger.warn('Failed to remove orphaned terminal transcript', {
+                sessionId,
+                filePath,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+
+        logger.info('Swept orphaned terminal transcripts', { scanned, deleted });
+        return { scanned, deleted };
+      },
+      'Error sweeping orphaned terminal transcripts',
+      {},
+      { scanned: 0, deleted: 0 }
+    );
+  }
+
+  /**
    * Delete all sessions for a chat (cascade cleanup)
    */
   async deleteByChatId(chatId: string): Promise<number> {

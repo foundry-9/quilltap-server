@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: deleted chats left their terminal transcripts behind (bug 266)
+
+- Deleting a chat (or a replace-mode restore, or an import overwrite) cascades its `terminal_sessions` rows away, but the transcripts in `logs/terminals/<id>.log` stayed. The only code that removed them, `cleanupClosedSessions`, works from rows, so they were orphaned for good. `DELETE /api/v1/terminals/[id]` had the same gap.
+- The daily maintenance tick now runs `TerminalSessionsRepository.sweepOrphanedTranscripts` after the closed-session reaper. It removes `.log` files no row names, and spares a session still live in the PTY manager and any file written in the last hour (`ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS`; the transcript is opened before the row is inserted). Shell-init files are left alone. The maintenance summary reports it as `orphanedTranscriptsSwept`.
+- Test: `__tests__/unit/database/terminal-transcript-orphan-sweep.test.ts`.
+- Also fixed `delete-service-annotations.test.ts`, whose repository mock lacked `logEntries` after the Log was added to the replace-mode clear; both its cases had been failing.
+
 #### Fix: backups now carry the Log
 
 - `log_entries` (the Log, in the LLM logs database) was left out of logical backups. It is ordinary user content, not secret, so a restore lost every line. Found in release checklist 10 (backup/restore completeness). This reverses the earlier "Not included in ... logical backups" note under *Feature: the Log*; `.qtap` exports still leave it out, as they do the LLM logs.

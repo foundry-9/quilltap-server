@@ -68,6 +68,8 @@ The pane state — whether it is open, which session it shows, where you set the
 
 Either click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), or simply leave the chat — Ariel will tidy up the session when the conversation ends. Both methods are equally graceful; neither will leave orphaned processes.
 
+Each session's transcript is kept in the instance's `logs/terminals/` folder. A closed session and its transcript are swept away thirty days after the shell exits; and should the chat itself be deleted (or replaced wholesale by a restore), the Estate's daily rounds collect the transcripts it leaves behind as well — sparing, naturally, any shell still drawing breath.
+
 ## In-Chat Navigation
 
 ```
