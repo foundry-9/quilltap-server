@@ -5058,6 +5058,61 @@
 .qt-rp-font-display { font-family: var(--qt-rp-font-display, var(--theme-font-serif, Georgia, "Times New Roman", serif)); }
 .qt-rp-font-script { font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive); }
 
+/* Legacy chip classes (dialogue / narration / inner monologue / OOC). As above,
+   the app scopes these under .qt-chat-message-content. */
+.qt-chat-dialogue {
+  --qt-rp-fg: var(--qt-rp-dialogue-color);
+  --qt-rp-bg: var(--qt-rp-dialogue-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+}
+
+/* Dialogue in a user message follows the bubble's own foreground. */
+.qt-chat-message-user .qt-chat-dialogue {
+  --qt-rp-fg: var(--qt-rp-user-dialogue-color, var(--qt-chat-user-fg));
+}
+
+.qt-chat-narration {
+  --qt-rp-fg: var(--qt-rp-narration-color);
+  --qt-rp-bg: var(--qt-rp-narration-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-style: var(--qt-rp-narration-style);
+  padding: var(--qt-rp-narration-padding);
+  border-radius: var(--qt-rp-narration-radius);
+  display: inline;
+}
+
+.qt-chat-inner-monologue {
+  --qt-rp-fg: var(--qt-rp-inner-monologue-color);
+  --qt-rp-bg: var(--qt-rp-inner-monologue-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-style: var(--qt-rp-inner-monologue-style);
+  padding: var(--qt-rp-inner-monologue-padding);
+  border-radius: var(--qt-rp-inner-monologue-radius);
+  display: inline;
+}
+
+.qt-chat-ooc {
+  --qt-rp-fg: var(--qt-rp-ooc-color);
+  --qt-rp-bg: var(--qt-rp-ooc-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-family: var(--qt-rp-ooc-font);
+  padding: var(--qt-rp-ooc-padding);
+  border-radius: var(--qt-rp-ooc-radius);
+  display: inline;
+}
+
+:is(p, blockquote, h1, h2, h3, h4, h5, h6):is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
+  display: block;
+}
+
+li:is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
+  display: list-item;
+}
+
 /**
  * Gallery tile source caption — a scrim and two lines of small text laid
  * over the foot of a photo-gallery tile, saying where the picture comes from

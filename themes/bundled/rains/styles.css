@@ -446,7 +446,7 @@
   --qt-chat-message-shadow: var(--chat-shadow);
 
   --qt-chat-user-bg: hsl(var(--bg-000));
-  --qt-chat-user-fg: hsl(40 6% 98%);
+  --qt-chat-user-fg: hsl(var(--text-000));
   --qt-chat-user-border: var(--stroke-strong);
   --qt-chat-user-font: var(--font-user-message);
   --qt-chat-user-font-weight: 400;

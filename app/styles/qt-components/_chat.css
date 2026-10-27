@@ -1846,6 +1846,17 @@
   }
 
   /**
+   * Dialogue in a user message follows the bubble's own foreground.
+   * --qt-rp-dialogue-color is set for the page background (it defaults to
+   * --color-foreground), and dialogue has no chip of its own, so on a dark
+   * user bubble in a light theme it was dark ink on a dark bubble.
+   * Themes may override with --qt-rp-user-dialogue-color.
+   */
+  .qt-chat-message-user .qt-chat-message-content .qt-chat-dialogue {
+    --qt-rp-fg: var(--qt-rp-user-dialogue-color, var(--qt-chat-user-fg));
+  }
+
+  /**
    * Narration/action text styling
    * Dark background for contrast on any message bubble
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context

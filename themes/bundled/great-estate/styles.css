@@ -711,6 +711,37 @@
   border-right: 3px solid var(--estate-brown-mid);
 }
 
+/* --- Light-mode left sidebar: the panel is estate brown in both modes, so
+   its items need cream ink rather than the page's dark-brown foreground --- */
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar {
+  --qt-sidebar-item-hover-bg: hsl(38 25% 95% / 0.1);
+  --qt-sidebar-item-active-bg: hsl(43 75% 55% / 0.18);
+  color: var(--estate-cream);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar :is(
+  .qt-left-sidebar-item-icon,
+  .qt-left-sidebar-item-label,
+  .qt-collapsed-nav-button,
+  .qt-left-sidebar-toggle:hover,
+  .qt-left-sidebar-profile-name
+) {
+  color: var(--estate-cream);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar :is(
+  .qt-left-sidebar-toggle,
+  .qt-left-sidebar-view-all,
+  .qt-left-sidebar-profile-email
+) {
+  color: hsl(38 20% 78%);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar .qt-left-sidebar-item-active,
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar .qt-left-sidebar-item-active :is(.qt-left-sidebar-item-icon, .qt-left-sidebar-item-label) {
+  color: var(--estate-gold-light);
+}
+
 /* --- Sidebar active item: gold left border --- */
 [data-theme="great-estate"] [data-sidebar] [aria-current="page"],
 [data-theme="great-estate"] [data-sidebar] .active {

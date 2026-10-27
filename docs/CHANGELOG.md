@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: legible dialogue in user messages; Rains user text; Great Estate light sidebar
+
+- Core: quoted dialogue (`.qt-chat-dialogue`) inside a user message now takes `--qt-chat-user-fg` (theme hook `--qt-rp-user-dialogue-color`). `--qt-rp-dialogue-color` defaults to the page foreground, so on a dark user bubble in a light theme it was dark on dark: Art Deco light 1.2:1, Great Estate light, and the default theme's blue bubble.
+- Rains 1.3.12: `--qt-chat-user-fg` was a fixed near-white on a bubble that is white in light mode. It now uses `--text-000`.
+- Great Estate 1.0.8: the left sidebar is estate brown in both modes, but in light mode its icons and labels used the dark-brown page foreground. They now use cream, with muted items and the active item in lighter gold.
+- Mirrored to theme-storybook 1.0.88, which also gains the dialogue/narration/inner-monologue/OOC chip family.
+
 #### Docs: bugs move to GitHub Issues; in-repo catalogue frozen at Bug 269
 
 - New `.github/ISSUE_TEMPLATE/bug.yml` issue form carries the catalogue's metadata: severity, who it bites, provenance (Original to v4 / Pinned / Faithful / Inert), how it was found, v5 status, symptom, root cause, why it survived, fix site, how to verify. Applies the `bug` label.
