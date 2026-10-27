@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: terminal Kill ignored by bash; deleted chats left their shells running (bug 267)
+
+- The `?action=kill` and `DELETE` routes in `app/api/v1/terminals/[id]/route.ts` sent `SIGTERM`, which an interactive bash ignores, so Kill did nothing. They now call the new `ptyManager.terminate(id)`: `SIGHUP`, then `SIGKILL` if the process is still running after 3 s. `?action=signal` is unchanged.
+- `PtyManager.kickAllForChat` had no callers. It is replaced by `disposeChatSessions(chatId)`, which terminates the chat's sessions and drops them from the map, and `ChatsRepository.delete` calls it after the row is deleted. This covers every chat delete path, including replace-mode restore. No closing announcement is posted for a deleted chat; its transcripts go to the bug 266 orphan sweep.
+- Help: `help/ariel.md` no longer says leaving a chat closes its terminal; it says deleting the chat does.
+- Tests: `lib/terminal/__tests__/pty-termination.test.ts`, `__tests__/unit/lib/database/repositories/chats-delete-terminals.test.ts`.
+
 #### Fix: deleted chats left their terminal transcripts behind (bug 266)
 
 - Deleting a chat (or a replace-mode restore, or an import overwrite) cascades its `terminal_sessions` rows away, but the transcripts in `logs/terminals/<id>.log` stayed. The only code that removed them, `cleanupClosedSessions`, works from rows, so they were orphaned for good. `DELETE /api/v1/terminals/[id]` had the same gap.
