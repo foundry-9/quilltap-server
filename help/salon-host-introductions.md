@@ -6,7 +6,7 @@ url: /salon/:id
 
 > **[Open this page in Quilltap](/salon)**
 
-In any properly run Salon, conversation has a way of straying — names crop up that nobody present has actually met, and the company can feel suddenly outnumbered by absent acquaintances. The Host, ever observant, keeps the proceedings honest, and she does it now without so much as clearing her throat in the middle of the conversation.
+In any properly run Salon, conversation has a way of straying — names crop up that nobody present has actually met, and the company can feel suddenly outnumbered by absent acquaintances. The Host, ever observant, keeps the proceedings honest, and he does it now without so much as clearing his throat in the middle of the conversation.
 
 ## The Name Chip
 
@@ -36,7 +36,7 @@ Neither costs a thing in extra calls to a model, and neither is kept in the chat
 
 ## Those Left Behind
 
-When a conversation is carried off by **Continue Elsewhere** and someone from the old cast does not make the journey, the Host says so at once. At the end of the carried-over history — just before the new scene begins — she posts a notice:
+When a conversation is carried off by **Continue Elsewhere** and someone from the old cast does not make the journey, the Host says so at once. At the end of the carried-over history — just before the new scene begins — he posts a notice:
 
 > *The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer.*
 
