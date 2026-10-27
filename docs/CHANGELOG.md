@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Fix: NanoGPT image sizes are fitted to each model; Qwen Image 3 avatars no longer 400 (bug 269)
+
+- The NanoGPT plugin sent the provider-wide portrait/landscape sizes (`832x1248` / `1248x832`) to every model. Models with their own size list rejected them; `qwen-image-3-uncensored` answered every avatar with `400 "supports 1K and 2K output"`.
+- New `fitImageShape` (`plugins/dist/qtap-plugin-nanogpt/image-sizes.ts`) fits the request to the model's entry in the detailed catalog: the nearest listed size by aspect ratio, in the model's own spelling (`WxH` or `W*H`), or for tier models (`1k`, `2k`) the nearest tier plus the nearest listed `aspect_ratio`, sent as a flat body key. `generateImage` fetches the catalog when the cache is cold (always, in the job child); if the fetch fails, the size is sent as asked.
+- A non-square request refused on its shape (a 400 naming size/resolution/aspect/dimension/output, or a 503) is retried once as a square. On 2026-10-27, NanoGPT returned an uncharged 503 for every non-square ratio on Qwen Image 3 while `1:1` worked, so portraits on that model currently come back square.
+- `qtap-plugin-nanogpt` 1.2.10 → 1.2.11.
+- Help: `help/image-generation-profiles.md` NanoGPT size note.
+- Test: `__tests__/unit/plugins/nanogpt-image-sizes.test.ts`.
+
 #### Fix: terminal Kill ignored by bash; deleted chats left their shells running (bug 268)
 
 - The `?action=kill` and `DELETE` routes in `app/api/v1/terminals/[id]/route.ts` sent `SIGTERM`, which an interactive bash ignores, so Kill did nothing. They now call the new `ptyManager.terminate(id)`: `SIGHUP`, then `SIGKILL` if the process is still running after 3 s. `?action=signal` is unchanged.

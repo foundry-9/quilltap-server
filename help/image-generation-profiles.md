@@ -30,6 +30,8 @@ Quilltap now spares you the whole tedious diplomacy. You — and any character w
 
 The establishment then translates that wish into whatever each provider actually honours — a concrete size, an aspect ratio, or a discreet phrase slipped into the prompt — so the same instruction works everywhere. Where a provider is wholly incapable of a given shape (the venerable DALL·E 2, for instance, paints only squares), Quilltap declines to send a measurement it would reject and instead nudges the composition with words.
 
+**On NanoGPT's two hundred ateliers**, each keeps its own list of permissible canvases — some in exact pixels, some merely as "1K" or "2K" with the shape named separately as a ratio. Quilltap consults the model's own list before every order and asks for the nearest thing it actually offers. Should a model nonetheless decline to paint anything but a square (as Qwen Image 3 was observed to do in October of 2026, turning away every tall or wide request as "temporarily unavailable"), the establishment asks once more for a plain square rather than send you away empty-handed — a square portrait being, on the whole, preferable to none at all.
+
 Sensible defaults are already in place: **avatars arrive in portrait**, **story backgrounds in cinematic landscape**. And because providers have a habit of returning a different shape than was requested, Quilltap now measures every finished picture and records its *true* dimensions, rather than trusting the order it placed.
 
 ## The Model's Own Dials — Per-Model Options
