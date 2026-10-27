@@ -49,6 +49,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -274,6 +275,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const wardrobeWear = await readJsonArrayFileOptional<WardrobeWearStatsRow>(rootPath, 'data/wardrobe-wear.json', []);
     // Outfit history (4.11) — optional, so an older archive just has none.
     const wardrobeHistory = await readJsonArrayFileOptional<ChatWardrobeHistoryRow>(rootPath, 'data/wardrobe-history.json', []);
+    const logEntries = await readJsonArrayFileOptional<LogEntry>(rootPath, 'data/log-entries.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -323,6 +325,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       textReplacementRules,
       wardrobeWear,
       wardrobeHistory,
+      logEntries,
     };
 
     return { data, extractDir, rootFolder };

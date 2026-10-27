@@ -19,6 +19,18 @@
 
 - `npm update -S` in the root: `next` / `eslint-config-next` 16.4.3, `openai` 7.45.0, `@openrouter/sdk` 1.5.9, TanStack Query 5.105.0, `@tanstack/react-virtual` 3.14.23, `react` / `react-dom` 19.3.1, `zod` 4.6.7, `sharp` 0.35.5, `ws` 8.22.0, `mammoth` 1.13.0, `katex` 0.19.1, `postcss` 8.5.32, `autoprefixer` 10.6.2, `dotenv` 18.0.9, `@playwright/test` 1.64.1, and smaller type/test packages. Major-version updates (`typescript` 7, `eslint` 10, `better-sqlite3-multiple-ciphers` 13, `chokidar` 6, `croner` 11, `emojibase-data` 18, `jest-fetch-mock` 4, `@types/node` 26) are not included.
 
+#### Fix: backups now carry the Log
+
+- `log_entries` (the Log, in the LLM logs database) was left out of logical backups. It is ordinary user content, not secret, so a restore lost every line. Found in release checklist 10 (backup/restore completeness). This reverses the earlier "Not included in ... logical backups" note under *Feature: the Log*; `.qtap` exports still leave it out, as they do the LLM logs.
+- Backup writes `data/log-entries.json` (manifest count `logEntries`), read through the new `LogEntriesRepository.findAllEntries()` (oldest first, empty while the logs DB is degraded). Restore re-creates each line under its own id and timestamps, after the chats, and skips the lot with a warning while the logs DB is degraded. New-account mode remaps `id`, `chatId` and `characterId` (a null character stays null). Older archives have no file and restore none.
+- Replace-mode restore and "delete all my data" now clear the table through the new `LogEntriesRepository.deleteAll()`. Before, the per-user deletes never reached it, so a replace restore would have collided on preserved ids and a data wipe left every line behind.
+- Help: `help/system-backup-restore.md` lists the Log under *Logs & History* and open Storyteller rounds under *Not Included*; `help/the-log.md` no longer says the Log, or the LLM logs, stay out of backups.
+- Tests: a 4.11 block in `restore-field-fidelity.test.ts` pins this cycle's additions through restore (`chats.turnMode` / `storytellerInviteFilter` / `equippedInventory`, `chat_messages.storytellerBid`, `pascalMeta` trigger and intervention keys, `memories.keystone`, the three new `chat_settings` columns and `smartTypographySettings.punctuationWarnings`, `roleplay_templates.unmarkedStyle` / `markdownAsterisks`, `llm_logs.storytellerRoundId`, and the Log). Also new: a Log remap case in `uuid-remapper.test.ts`, a replace-mode clear in `delete-service.test.ts`, and whole-table read, round-trip and wipe cases in `log-entries-repository.test.ts`.
+
+#### Docs: CLI README lists `memories keystone` among server-backed verbs
+
+- `packages/quilltap/README.md` still said only `maintain` and `validate --repair --write` ask the running server to write, and omitted `keystone --write` from the verbs that take `--port`. Both lines now include it.
+
 #### Fix: `quilltap db --count` printed ANSI color codes under `FORCE_COLOR`
 
 - `--count` passed the bare number to `console.log`, which colors numbers when `FORCE_COLOR` is set. Jest workers set it when run from a TTY, so `db-raw-sql-qt-text.integration.test.js` received `\x1b[33m2\x1b[39m` and failed with "Expected: "2", Received: "2"". The count is now stringified before printing, so the output is plain text regardless of color settings.

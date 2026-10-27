@@ -129,9 +129,44 @@ export class LogEntriesRepository extends AbstractDedicatedDbRepository<LogEntry
     );
   }
 
+  /**
+   * Every entry, oldest first — the backup's read. Answers empty while the
+   * logs DB is degraded, so a backup still completes without the Log.
+   */
+  async findAllEntries(): Promise<LogEntry[]> {
+    return this.withRawDb(
+      [] as LogEntry[],
+      (db) => {
+        const rows = db
+          .prepare(`SELECT ${COLUMNS} FROM log_entries ORDER BY "createdAt" ASC`)
+          .all() as LogEntry[];
+        logger.debug('All log entries read', { returned: rows.length });
+        return rows;
+      },
+      'Error reading all log entries'
+    );
+  }
+
   // ============================================================================
   // Retention
   // ============================================================================
+
+  /**
+   * Delete every entry. Used by replace-mode restore and "delete all my data",
+   * whose per-user deletes never reach this instance-wide table. Returns how
+   * many went (0 while the logs DB is degraded).
+   */
+  async deleteAll(): Promise<number> {
+    return this.withRawDb(
+      0,
+      (db) => {
+        const result = db.prepare(`DELETE FROM log_entries`).run();
+        logger.info('Deleted all log entries', { deletedCount: result.changes });
+        return result.changes;
+      },
+      'Error deleting all log entries'
+    );
+  }
 
   /** Delete entries older than `retentionDays`. Returns how many went. */
   async cleanupOldEntries(retentionDays: number): Promise<number> {
