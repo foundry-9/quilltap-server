@@ -19,7 +19,12 @@ interface PDFDocumentProxy {
 
 interface PDFPageProxy {
   getViewport(options: { scale: number }): PDFPageViewport
-  render(params: { canvasContext: CanvasRenderingContext2D; viewport: PDFPageViewport }): { promise: Promise<void> }
+  render(params: { canvasContext: CanvasRenderingContext2D; viewport: PDFPageViewport }): PDFRenderTask
+}
+
+interface PDFRenderTask {
+  promise: Promise<void>
+  cancel(): void
 }
 
 interface PDFPageViewport {
@@ -38,6 +43,7 @@ export default function FilePreviewPdf({
   const [scale, setScale] = useState(1.0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
+  const renderTaskRef = useRef<PDFRenderTask | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -99,8 +105,13 @@ export default function FilePreviewPdf({
     }
   }, [fileUrl, file.id])
 
-  // Render the current page
+  // Render the current page. PDF.js refuses a second render on a canvas that
+  // is still drawing, and resizing the canvas clears it under the first — so
+  // a re-render (the fit-to-width scale lands right after the first draw)
+  // cancels and waits out the one in flight before touching the canvas.
   useEffect(() => {
+    let cancelled = false
+
     async function renderPage() {
       const pdf = pdfDocRef.current
       const canvas = canvasRef.current
@@ -110,7 +121,16 @@ export default function FilePreviewPdf({
       }
 
       try {
+        const previous = renderTaskRef.current
+        if (previous) {
+          previous.cancel()
+          await previous.promise.catch(() => {
+            // Cancelled on purpose
+          })
+        }
+
         const page = await pdf.getPage(currentPage)
+        if (cancelled) return
         const viewport = page.getViewport({ scale })
 
         // Set canvas dimensions
@@ -123,11 +143,18 @@ export default function FilePreviewPdf({
         }
 
         // Render the page
-        await page.render({
+        const task = page.render({
           canvasContext: context,
           viewport,
-        }).promise
+        })
+        renderTaskRef.current = task
+        try {
+          await task.promise
+        } finally {
+          if (renderTaskRef.current === task) renderTaskRef.current = null
+        }
       } catch (err) {
+        if (err instanceof Error && err.name === 'RenderingCancelledException') return
         // Use warn instead of error - page rendering failures are handled gracefully
         console.warn('[FilePreviewPdf] Failed to render page', {
           fileId: file.id,
@@ -139,6 +166,11 @@ export default function FilePreviewPdf({
     }
 
     renderPage()
+
+    return () => {
+      cancelled = true
+      renderTaskRef.current?.cancel()
+    }
   }, [currentPage, numPages, scale, file.id])
 
   // Calculate initial scale to fit width

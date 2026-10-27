@@ -1,4 +1,4 @@
-# Bug 266 — deleting a chat orphans its terminal transcripts for good
+# Bug 267 — deleting a chat orphans its terminal transcripts for good
 
 | | |
 |---|---|

@@ -3,7 +3,7 @@
  *
  * `ChatsRepository.delete` ends the chat's live terminals. The FK cascade
  * removes their `terminal_sessions` rows, so a shell left running would keep
- * writing a transcript nothing names (bug 266's follow-up).
+ * writing a transcript nothing names (bug 268).
  */
 
 jest.mock('@/lib/logger', () => {

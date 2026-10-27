@@ -52,6 +52,9 @@ const CHILD_NATIVE_EXTERNALS = [
   '--external:node-pty',
   '--external:@napi-rs/canvas',
   '--external:@napi-rs/*',
+  // pdfjs-dist is ESM that finds @napi-rs/canvas via createRequire(import.meta.url);
+  // a CJS bundle empties import.meta, so it loads from the traced node_modules copy.
+  '--external:pdfjs-dist',
 ].join(' ');
 
 function ensureParent(filePath) {

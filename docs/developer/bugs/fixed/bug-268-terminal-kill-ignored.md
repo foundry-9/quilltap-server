@@ -1,9 +1,9 @@
-# Bug 267 — Kill leaves an interactive bash running, and deleting a chat leaves its shells running
+# Bug 268 — Kill leaves an interactive bash running, and deleting a chat leaves its shells running
 
 | | |
 |---|---|
 | **Status** | FIXED |
-| **Found** | 2026-10-27, while fixing bug 266 (reproduced with node-pty directly, not yet in the app) |
+| **Found** | 2026-10-27, while fixing bug 267 (reproduced with node-pty directly, not yet in the app) |
 | **Fixed** | 2026-10-27 |
 | **Severity** | Medium. The terminal's Kill control and `DELETE /api/v1/terminals/[id]` do nothing to an interactive bash; a deleted chat's shells run on with no row, no pane and no way to reach them |
 | **Who it bites** | anyone who kills an Ariel terminal running bash (zsh not checked), or deletes a chat with a terminal open |
@@ -22,7 +22,7 @@ the chat's sessions and drops them from the map. `ChatsRepository.delete` calls 
 deleted, so every chat delete — the Salon, help chats, the Brahma console, cascade delete, import
 overwrite and replace-mode restore — ends the chat's shells. The exit handlers then find no chat
 and no row, so no announcement is posted and no exit state written; the transcripts are left for
-bug 266's orphan sweep.
+bug 267's orphan sweep.
 
 Tests: `lib/terminal/__tests__/pty-termination.test.ts`,
 `__tests__/unit/lib/database/repositories/chats-delete-terminals.test.ts`. Not yet verified live.
