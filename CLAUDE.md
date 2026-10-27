@@ -30,21 +30,20 @@ The project is **"Quilltap"** (quill + tap), **never** "Quilttap" (quilt + tap).
 
 ### Filing bugs
 
-Defects worth recording live in the bug catalogue, indexed by
-[docs/developer/bugs.md](docs/developer/bugs.md).
+New defects are **GitHub issues** filed with the Bug issue form
+(`.github/ISSUE_TEMPLATE/bug.yml`), referred to as `#N`.
 
-- **One bug, one file.** Open: `docs/developer/bugs/bug-<n>-<short-title>.md`.
-  Fixed: the same file `git mv`d into `docs/developer/bugs/fixed/`, keeping its
-  number. `<short-title>` is a two-or-three-word dashed description of the
-  *problem* (`bug-9-store-delete-orphans.md`).
-- **Numbers are permanent and sequential** — a new bug takes the next unused one.
-- **Each file opens with a metadata table** (Status, Found, Fixed, Severity, Who
-  it bites, Provenance, Fix site, v5 status, link back to the index), then states
-  symptom, root cause with file and line, why it survived, the fix, and how to
-  verify. A fixed entry keeps its full write-up plus a leading
-  **`FIXED in v4 (date)`** paragraph.
-- **The index's Status table is the register.** Filing or fixing a bug means
-  updating *both* the bug's file and its row there. Never delete an entry.
+- **The in-repo catalogue is frozen at Bug 269.** [docs/developer/bugs.md](docs/developer/bugs.md)
+  and `docs/developer/bugs/` take no new entries; "bug N" always means one of
+  those, so existing references stay valid. Never mint a new "bug N" number.
+- **File from the CLI** with `gh issue create --label bug`, writing the form's
+  headings into the body: Severity, Who it bites, Provenance (Original to v4 /
+  Pinned / Faithful / Inert), How it was found, v5 status, Symptom, Root cause
+  (file and line), Why it survived, Fix site, How to verify. Filing an issue is
+  outward-facing — confirm with the human first.
+- **Fixing one:** `Fixes #N` in the commit message, the Fix site filled in on the
+  issue, and a closing comment saying what was done. Code comments and
+  CHANGELOG entries cite it as `#N`.
 
 ### Hard stops (ask first / never work around)
 

@@ -1,0 +1,90 @@
+name: Bug
+description: A defect in Quilltap — something that does the wrong thing, not a preference.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bugs **1–269** live in the frozen catalogue at
+        [docs/developer/bugs.md](https://github.com/foundry-9/quilltap-server/blob/main/docs/developer/bugs.md).
+        New bugs are filed here. Purely-taste items (a colour you'd prefer, a default you'd change)
+        are not bugs. Title the issue with a short description of the *problem*.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+  - type: input
+    id: who-it-bites
+    attributes:
+      label: Who it bites
+      description: Which users, surfaces or configurations hit it.
+    validations:
+      required: true
+  - type: dropdown
+    id: provenance-class
+    attributes:
+      label: Provenance
+      description: >-
+        Original to v4; Pinned (v5 has the fix and a v5 test pins v4 as wrong);
+        Faithful (v5 mirrors the defect and must move with v4); Inert (dead or unreachable code).
+      options:
+        - Original to v4
+        - Pinned
+        - Faithful
+        - Inert
+    validations:
+      required: true
+  - type: input
+    id: found-by
+    attributes:
+      label: How it was found
+      description: e.g. live on Friday (chat id), code reading, the v5 differential harness, a spec review.
+    validations:
+      required: true
+  - type: dropdown
+    id: v5-status
+    attributes:
+      label: v5 status
+      options:
+        - Not assessed
+        - Owed
+        - Owed (Faithful)
+        - Converged
+        - Unaffected
+        - Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What goes wrong, as a user or caller sees it.
+    validations:
+      required: true
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root cause
+      description: The cause with file and line, if known yet.
+  - type: textarea
+    id: why-it-survived
+    attributes:
+      label: Why it survived
+      description: Why tests, review or use didn't catch it sooner.
+  - type: input
+    id: fix-site
+    attributes:
+      label: Fix site
+      description: The file(s) the fix lands in. Fill in when known.
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: Steps or tests that show it fixed.

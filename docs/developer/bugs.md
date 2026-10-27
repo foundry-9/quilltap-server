@@ -1,5 +1,10 @@
 # Bugs — defects surfaced by the v5 port
 
+> **Frozen at Bug 269 (2026-10-27).** This catalogue is closed to new entries.
+> New bugs are filed as [GitHub issues](https://github.com/foundry-9/quilltap-server/issues)
+> with the **Bug** issue form (`.github/ISSUE_TEMPLATE/bug.yml`) and referred to
+> as `#N`. "Bug N" in code, docs and the changelog always means an entry here.
+
 **Last Updated**: 2026-10-27
 **Codebase**: Quilltap v4.10.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
@@ -870,27 +875,29 @@ them and the cross-cutting v5-coordination notes.
 
 ## How these are filed
 
-- **One bug, one file.** An open bug is
-  `docs/developer/bugs/bug-<n>-<short-title>.md`; once its fix has landed in v4
-  the same file moves to `docs/developer/bugs/fixed/`. `<short-title>` is a two-
-  or three-word dashed description of the *problem*
-  (`bug-9-store-delete-orphans.md`), enough to tell the files apart in a
-  directory listing.
-- **Numbers are permanent and sequential.** A bug keeps its number forever,
-  including when it moves into `fixed/`. A new bug takes the next unused number.
-- **Every file opens with a metadata table** — Status, Found, Fixed, Severity,
-  Who it bites, Provenance, Fix site, v5 status, and a link back to this index —
-  followed by the entry proper: symptom, root cause with file and line, why it
-  survived, the fix, and how to verify it.
-- **The [Status](#status) table here is the register.** Filing a new bug means
-  writing the file *and* adding its row. Fixing one means `git mv`-ing the file
-  into `fixed/`, filling in the Fixed date, fix site and v5 status in **both**
-  the file's metadata table and its row here, and leaving a
-  **`FIXED in v4 (date)`** paragraph at the top of the entry as the account of
-  what was actually done.
-- **Nothing is deleted.** Fixed entries keep their full root-cause write-up —
-  they are the record of why the code looks the way it does, and the v5 port
-  reads them.
+**New bugs go to GitHub Issues.** The catalogue below is frozen at Bug 269 and
+takes no new entries; its numbers stay permanent so the existing "bug N"
+references in code, docs and the changelog keep resolving here.
+
+- **File with the Bug issue form** (`.github/ISSUE_TEMPLATE/bug.yml`). It asks
+  for the fields this catalogue's metadata table carried: Severity, Who it
+  bites, Provenance (Original to v4 / Pinned / Faithful / Inert), how it was
+  found, and v5 status, then symptom, root cause with file and line, why it
+  survived, fix site and how to verify. Filing from the CLI (`gh issue create`)
+  skips the form, so write the same headings into the body.
+- **Refer to a new bug as `#N`** (or `foundry-9/quilltap-server#N` from another
+  repository) in comments, commits and docs. Never give it a "bug N" number.
+- **Fixing one:** put `Fixes #N` in the commit message so the issue closes when
+  it lands on `main`, fill in the Fix site in the issue body, and leave a closing
+  comment that says what was done, as the `FIXED in v4 (date)` paragraph did here.
+- **Nothing here is deleted or renumbered.** The fixed entries keep their full
+  root-cause write-ups — they are the record of why the code looks the way it
+  does, and the v5 port reads them.
+
+The catalogue's own convention, kept for reading the entries: one file per bug
+(`docs/developer/bugs/bug-<n>-<short-title>.md` while open, moved to
+`docs/developer/bugs/fixed/` once landed), each opening with a metadata table,
+and the [Status](#status) table below as the register.
 
 ---
 
@@ -981,7 +988,7 @@ rounds, so the baseline moves once.
 
 ## Status
 
-One row per bug, newest last. **Bug** links to the entry; **Fix site** and
+One row per bug, newest last. Closed at Bug 269; later bugs are GitHub issues. **Bug** links to the entry; **Fix site** and
 **v5** are abbreviated — each bug's own file carries them in full.
 
 | # | Bug | Found | Fixed | Severity | What goes wrong | Fix site | v5 |

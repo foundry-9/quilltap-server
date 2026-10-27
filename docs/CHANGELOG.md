@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Docs: bugs move to GitHub Issues; in-repo catalogue frozen at Bug 269
+
+- New `.github/ISSUE_TEMPLATE/bug.yml` issue form carries the catalogue's metadata: severity, who it bites, provenance (Original to v4 / Pinned / Faithful / Inert), how it was found, v5 status, symptom, root cause, why it survived, fix site, how to verify. Applies the `bug` label.
+- `docs/developer/bugs.md` and `docs/developer/bugs/` take no new entries. Bugs 1–269 keep their numbers and files, so existing "bug N" references still resolve there. New bugs are cited as `#N` and closed with `Fixes #N`.
+- CLAUDE.md "Filing bugs" and the documentation index updated to match.
+
 #### Fix: legibility pass over the `qt-*` surfaces added since 4.9, in all six bundled themes
 
 - Measured every class added since 4.9.0 (storyteller board and mode control, Pascal intervention dialog and hand toggles, regeneration plate, composer Stop/raise-hand, Concierge badge and mark, diagrams, name chips, gallery captions, prose-mode highlights, Brahma launcher) in each bundled theme, light and dark, against WCAG AA. The failures and their fixes are listed below.
