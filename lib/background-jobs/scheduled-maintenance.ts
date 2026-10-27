@@ -14,7 +14,8 @@
  *  4. orphaned store children (links/folders/documents whose mount point
  *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
  *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
- *  6. closed terminal (Ariel) PTY sessions and their transcript files;
+ *  6. closed terminal (Ariel) PTY sessions and their transcript files, then
+ *     transcripts no row names (a chat delete cascades the rows away);
  *  7. orphaned thumbnail-cache entries whose source file is gone;
  *  8–9. the fold OTHER and episode catch-ups;
  *  10. the Built-in (TF-IDF) vocabulary drift check (`checkBuiltinRefit`).
@@ -52,7 +53,11 @@ import { enqueueFoldCatchups } from './maintenance/fold-catchup';
 import { checkBuiltinRefit } from '@/lib/embedding/builtin-refit-policy';
 import type { ExtractionCursorMap } from '@/lib/schemas/memory-extraction-cursor.types';
 import type { ChatMetadata } from '@/lib/schemas/types';
-import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
+import {
+  CLOSED_TERMINAL_RETENTION_DAYS,
+  ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS,
+  retentionCutoff,
+} from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
 
@@ -84,6 +89,7 @@ export interface MaintenanceSweepSummary {
   orphanedFilesSwept: number;
   orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
   terminals: { rows: number; transcripts: number };
+  orphanedTranscriptsSwept: { scanned: number; deleted: number };
   orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
   foldOtherCatchup: { enqueued: number; deferred: number };
   foldEpisodeCatchup: { enqueued: number; deferred: number };
@@ -204,6 +210,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     orphanedFilesSwept: 0,
     orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
     terminals: { rows: 0, transcripts: 0 },
+    orphanedTranscriptsSwept: { scanned: 0, deleted: 0 },
     orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
     foldOtherCatchup: { enqueued: 0, deferred: 0 },
     foldEpisodeCatchup: { enqueued: 0, deferred: 0 },
@@ -257,6 +264,19 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       retentionCutoff(CLOSED_TERMINAL_RETENTION_DAYS),
     ),
     (result) => { summary.terminals = result; });
+
+  // 6b. Transcripts no row names. Chat deletes cascade `terminal_sessions`
+  //     away without touching the files, so step 6 can never see them. A live
+  //     PTY whose row went with its chat is spared.
+  await runSweep(summary, 'orphan-transcripts', 'Orphaned-transcript sweep failed — continuing',
+    async () => {
+      const { ptyManager } = await import('@/lib/terminal/pty-manager');
+      return getRepositories().terminalSessions.sweepOrphanedTranscripts({
+        isLive: (id) => ptyManager.get(id) !== undefined,
+        graceMs: ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS,
+      });
+    },
+    (result) => { summary.orphanedTranscriptsSwept = result; });
 
   // 7. Orphaned thumbnail-cache entries whose source file is gone (derived,
   //    regenerated on demand, so deletion is always safe).

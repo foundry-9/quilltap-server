@@ -12,7 +12,7 @@ When you summon Ariel via the terminal button in the Salon composer, a live shel
 
 **This is read-only for the LLM in this release.** Characters see but cannot dictate. You hold exclusive dominion over the keyboard.
 
-Each chat maintains its own independent terminal session. Close the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight. (So ephemeral, indeed, that a [backup](/settings?tab=system&section=backup-restore) does not carry it: the chat and Ariel's dispatches to it travel, but the sessions themselves and their transcripts stay behind, and a closed session's transcript is swept away after thirty days.)
+Each chat maintains its own independent terminal session. Delete the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight. (So ephemeral, indeed, that a [backup](/settings?tab=system&section=backup-restore) does not carry it: the chat and Ariel's dispatches to it travel, but the sessions themselves and their transcripts stay behind, and a closed session's transcript is swept away after thirty days.)
 
 ## Opening a terminal
 
@@ -66,7 +66,9 @@ The pane state — whether it is open, which session it shows, where you set the
 
 ## Closing a session
 
-Either click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), or simply leave the chat — Ariel will tidy up the session when the conversation ends. Both methods are equally graceful; neither will leave orphaned processes.
+Click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), and Ariel hangs up the line — the very courtesy a closing terminal window extends — and, should the shell prove deaf to it, shows it the door outright a few moments later. Merely leaving the chat does *not* close a terminal; it carries on in the background until you return. Deleting the chat, however, ends every terminal it kept, so no orphaned processes linger in the cellar.
+
+Each session's transcript is kept in the instance's `logs/terminals/` folder. A closed session and its transcript are swept away thirty days after the shell exits; and should the chat itself be deleted (or replaced wholesale by a restore), the Estate's daily rounds collect the transcripts it leaves behind as well — sparing, naturally, any shell still drawing breath.
 
 ## In-Chat Navigation
 

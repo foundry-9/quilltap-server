@@ -4,6 +4,18 @@
 
 ### 4.11-dev
 
+#### Fix: terminal Kill ignored by bash; deleted chats left their shells running (bug 268)
+
+- The `?action=kill` and `DELETE` routes in `app/api/v1/terminals/[id]/route.ts` sent `SIGTERM`, which an interactive bash ignores, so Kill did nothing. They now call the new `ptyManager.terminate(id)`: `SIGHUP`, then `SIGKILL` if the process is still running after 3 s. `?action=signal` is unchanged.
+- `PtyManager.kickAllForChat` had no callers. It is replaced by `disposeChatSessions(chatId)`, which terminates the chat's sessions and drops them from the map, and `ChatsRepository.delete` calls it after the row is deleted. This covers every chat delete path, including replace-mode restore. No closing announcement is posted for a deleted chat; its transcripts go to the bug 267 orphan sweep.
+- Help: `help/ariel.md` no longer says leaving a chat closes its terminal; it says deleting the chat does.
+- Tests: `lib/terminal/__tests__/pty-termination.test.ts`, `__tests__/unit/lib/database/repositories/chats-delete-terminals.test.ts`.
+
+#### Fix: deleted chats left their terminal transcripts behind (bug 267)
+
+- Deleting a chat (or a replace-mode restore, or an import overwrite) cascades its `terminal_sessions` rows away, but the transcripts in `logs/terminals/<id>.log` stayed. The only code that removed them, `cleanupClosedSessions`, works from rows, so they were orphaned for good. `DELETE /api/v1/terminals/[id]` had the same gap.
+- The daily maintenance tick now runs `TerminalSessionsRepository.sweepOrphanedTranscripts` after the closed-session reaper. It removes `.log` files no row names, and spares a session still live in the PTY manager and any file written in the last hour (`ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS`; the transcript is opened before the row is inserted). Shell-init files are left alone. The maintenance summary reports it as `orphanedTranscriptsSwept`.
+- Test: `__tests__/unit/database/terminal-transcript-orphan-sweep.test.ts`.
 #### Docs: terminal sessions are excluded from backups
 
 - `terminal_sessions` rows and their transcripts under `logs/terminals/` have never been in backups. This is now a stated decision rather than a gap: sessions cannot be resumed, `cwd` is a path on the source machine, closed sessions are reaped after `CLOSED_TERMINAL_RETENTION_DAYS` (30), and transcripts are raw shell output that can contain secrets. Ariel's dispatches are chat messages and are already backed up.

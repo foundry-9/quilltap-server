@@ -346,6 +346,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           return false;
         }
 
+        // End the chat's live terminals. The FK cascade has removed their
+        // `terminal_sessions` rows, so a shell left running would keep writing
+        // a transcript nothing names. In the job child the PTY map is empty.
+        try {
+          const { ptyManager } = await import('@/lib/terminal/pty-manager');
+          ptyManager.disposeChatSessions(id);
+        } catch (error) {
+          logger.warn('Failed to terminate terminal sessions for deleted chat', {
+            chatId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Delete messages
         try {
           const messagesCollection = await this.getMessagesCollection();

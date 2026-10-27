@@ -36,6 +36,10 @@ const MAX_RING_BUFFER_SIZE = 256 * 1024; // 256 KB
 const ARIEL_FLUSH_IDLE_MS = 30_000;
 const ARIEL_FLUSH_MAX_AGE_MS = 120_000;
 
+// `terminate` sends SIGHUP (an interactive bash ignores SIGTERM), then SIGKILL
+// if the process is still running after this long.
+const TERMINATE_KILL_GRACE_MS = 3_000;
+
 class PtyManager {
   private sessions = new Map<string, PtySession>();
 
@@ -622,27 +626,64 @@ class PtyManager {
     return session.ringBuffer;
   }
 
-  async kickAllForChat(chatId: string): Promise<void> {
+  /**
+   * End a session the way closing a terminal window does: SIGHUP, which an
+   * interactive shell honours and passes on to its jobs (it ignores SIGTERM),
+   * then SIGKILL if the process has not exited after `graceMs`. The session's
+   * own onExit handler does the rest (transcript close, exit state, Ariel's
+   * announcement).
+   */
+  terminate(id: string, graceMs: number = TERMINATE_KILL_GRACE_MS): void {
+    const session = this.sessions.get(id);
+    if (!session) {
+      ptyLogger.debug('[PTY] Terminate requested for unknown session', { sessionId: id });
+      return;
+    }
+
+    this.kill(id, 'SIGHUP');
+
+    const escalate = setTimeout(() => {
+      if (session.meta.exitedAt !== null) return;
+      ptyLogger.warn('[PTY] Session ignored SIGHUP; sending SIGKILL', { sessionId: id, graceMs });
+      try {
+        session.pty.kill('SIGKILL');
+      } catch (err) {
+        ptyLogger.warn('[PTY] Failed to send SIGKILL', {
+          sessionId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }, graceMs);
+    escalate.unref?.();
+  }
+
+  /**
+   * Terminate every live session belonging to a chat that has been deleted,
+   * and drop them from the map (their sockets are closed by onExit, so nothing
+   * would unsubscribe them). Called by `ChatsRepository.delete` after the row
+   * is gone, so the exit handlers' announcements and exit-state writes find no
+   * chat and no row, and skip. The transcripts are left for the maintenance
+   * tick's orphan sweep.
+   */
+  disposeChatSessions(chatId: string): number {
     const sessionIds = Array.from(this.sessions.entries())
       .filter(([, session]) => session.meta.chatId === chatId)
       .map(([id]) => id);
 
     for (const id of sessionIds) {
-      const session = this.sessions.get(id);
-      if (session) {
-        // Drain pending Ariel output before the map entry disappears — onExit
-        // still has the closure but we want the flush to land with the kick,
-        // not whenever the OS reaps the process.
-        await this.flushArielBuffer(session, 'session-closed');
-      }
-      this.kill(id, 'SIGTERM');
+      this.terminate(id);
       this.sessions.delete(id);
     }
 
-    ptyLogger.info('[PTY] Kicked all sessions for chat', {
-      chatId,
-      count: sessionIds.length,
-    });
+    if (sessionIds.length > 0) {
+      ptyLogger.info('[PTY] Terminated sessions of deleted chat', {
+        chatId,
+        count: sessionIds.length,
+      });
+    } else {
+      ptyLogger.debug('[PTY] No live sessions for deleted chat', { chatId });
+    }
+    return sessionIds.length;
   }
 }
 
