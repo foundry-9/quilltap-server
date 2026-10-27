@@ -218,7 +218,7 @@
   --qt-response-status-gathering-fg: hsl(43 75% 55%);
   --qt-response-status-building-fg: hsl(43 70% 42%);
   --qt-response-status-sending-fg: hsl(210 70% 50%);
-  --qt-response-status-streaming-fg: hsl(142 65% 38%);
+  --qt-response-status-streaming-fg: hsl(142 65% 27%);
   --qt-response-status-tool-fg: hsl(43 75% 55%);
 
   --qt-participant-card-active-border: var(--estate-gold);
@@ -495,9 +495,11 @@
   --qt-alert-warning-border: hsl(43 75% 55% / 0.5);
 
   --qt-alert-error-bg: hsl(0 60% 48% / 0.2);
+  --qt-alert-error-fg: hsl(0 65% 70%);
   --qt-alert-error-border: hsl(0 60% 48% / 0.5);
 
   --qt-alert-info-bg: hsl(210 70% 50% / 0.2);
+  --qt-alert-info-fg: hsl(210 70% 72%);
   --qt-alert-info-border: hsl(210 70% 50% / 0.5);
 
   /* Entity badge tokens — brighter for dark backgrounds */
@@ -747,6 +749,14 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-size: 0.8125rem;
+}
+
+/* Buttons that carry prose, not a command: a Pascal outcome is a sentence,
+   and set in tracked capitals it reads as shouting. */
+[data-theme="great-estate"] .qt-intervention-row {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: inherit;
 }
 
 /* --- Input styling --- */

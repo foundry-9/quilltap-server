@@ -788,6 +788,9 @@
    DARK MODE SPECIFIC OVERRIDES
    ============================================================================ */
 [data-theme="earl-grey"].dark {
+  /* Status ink: the -100 red on its own dark tint is ~3.5:1; -000 reads. */
+  --qt-status-danger-fg: hsl(var(--danger-000));
+
   /* Primary Button - White pill with black text (dark mode) */
   --qt-button-primary-bg: hsl(var(--always-white));
   --qt-button-primary-fg: hsl(var(--always-black));
@@ -973,6 +976,13 @@
   /* Badge Primary - Black on light */
   --qt-badge-primary-bg: hsl(var(--always-black));
   --qt-badge-primary-fg: hsl(var(--always-white));
+
+  /* Status ink: the -100 gold and red are fills; as small text on white they
+     read at ~2.4:1. Same hues, deep enough to read. */
+  --qt-status-warning-fg: hsl(38 92% 28%);
+  --qt-status-danger-fg: hsl(0 70% 40%);
+  --qt-status-success-fg: hsl(142 70% 26%);
+  --qt-response-status-streaming-fg: hsl(142 70% 27%);
 
   /* Filter Chip - Black active */
   --qt-filter-chip-active-bg: hsl(var(--always-black));

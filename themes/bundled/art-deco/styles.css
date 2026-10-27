@@ -78,19 +78,19 @@
      ALERT TOKENS
      ========================================================================== */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-fg: hsl(142 76% 22%);
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(43 85% 55% / 0.12);
-  --qt-alert-warning-fg: hsl(43 80% 32%);
+  --qt-alert-warning-fg: hsl(38 85% 22%);
   --qt-alert-warning-border: hsl(43 85% 55% / 0.35);
 
   --qt-alert-error-bg: hsl(0 84% 60% / 0.1);
-  --qt-alert-error-fg: hsl(0 84% 35%);
+  --qt-alert-error-fg: hsl(0 80% 30%);
   --qt-alert-error-border: hsl(0 84% 60% / 0.3);
 
   --qt-alert-info-bg: hsl(210 80% 50% / 0.1);
-  --qt-alert-info-fg: hsl(210 80% 32%);
+  --qt-alert-info-fg: hsl(210 80% 28%);
   --qt-alert-info-border: hsl(210 80% 50% / 0.3);
 
   /* ==========================================================================
@@ -222,7 +222,7 @@
   --qt-response-status-gathering-fg: hsl(43 85% 55%);
   --qt-response-status-building-fg: hsl(43 80% 42%);
   --qt-response-status-sending-fg: hsl(210 80% 50%);
-  --qt-response-status-streaming-fg: hsl(142 76% 36%);
+  --qt-response-status-streaming-fg: hsl(142 70% 21%);
   --qt-response-status-tool-fg: hsl(43 85% 55%);
 
   --qt-participant-card-active-border: var(--deco-gold);
@@ -721,6 +721,14 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.8125rem;
+}
+
+/* Buttons that carry prose, not a command: a Pascal outcome is a sentence,
+   and set in tracked capitals it reads as shouting. */
+[data-theme="art-deco"] .qt-intervention-row {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: inherit;
 }
 
 /* --- Geometric borders on inputs: minimal rounding --- */

@@ -161,8 +161,12 @@
     color: var(--qt-response-status-streaming-fg);
   }
 
+  /* The words are in the bubble's own ink: the streaming green is a status
+     accent, and on a mid-tone bubble it fell below 3:1. The green stays on the
+     border and the quill. */
   .qt-chat-regenerating-plate-text {
     @apply text-sm font-medium px-3 py-1.5 rounded-md;
+    color: var(--qt-chat-regenerating-plate-fg, var(--qt-chat-assistant-fg, var(--color-foreground)));
     background: color-mix(in srgb, var(--qt-chat-assistant-bg) 88%, transparent);
     border: 1px solid color-mix(in srgb, var(--qt-response-status-streaming-fg) 35%, transparent);
     letter-spacing: 0.02em;
@@ -2973,15 +2977,20 @@
    */
   .qt-danger-badge {
     --qt-concierge-badge-color: var(--color-destructive, #dc2626);
+    /* The ink is the alert token, not the fill red: --color-destructive on its
+       own 15% tint read at ~3.5:1 on every bundled theme. */
+    --qt-concierge-badge-fg: var(--qt-alert-error-fg, var(--qt-concierge-badge-color));
     @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium;
     background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
-    color: var(--qt-concierge-badge-color);
+    color: var(--qt-concierge-badge-fg);
     border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
   }
 
-  /* Locked — no colour: the chat keeps to the ordinary desks. */
+  /* Locked — no colour: the chat keeps to the ordinary desks. The grey lives
+     in the tint and the rule; the word is in body ink so it stays legible. */
   .qt-danger-badge-muted {
     --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+    --qt-concierge-badge-fg: var(--color-foreground);
   }
 
 
@@ -2992,7 +3001,7 @@
    * so there is no third modifier.
    */
   .qt-concierge-mark {
-    --qt-concierge-mark-color: var(--color-destructive, #dc2626);
+    --qt-concierge-mark-color: var(--qt-alert-error-fg, var(--color-destructive, #dc2626));
     @apply inline-block font-bold leading-none;
     color: var(--qt-concierge-mark-color);
   }

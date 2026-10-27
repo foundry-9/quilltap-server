@@ -179,7 +179,9 @@
   .qt-storyteller-warning {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--qt-storyteller-warning-fg, var(--color-destructive));
+    /* The alert token, not --color-destructive: a fill red is too dark to read
+       as small text on a dark card. */
+    color: var(--qt-storyteller-warning-fg, var(--qt-alert-error-fg));
   }
 
   .qt-storyteller-actions {

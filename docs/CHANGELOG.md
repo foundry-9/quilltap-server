@@ -4,6 +4,22 @@
 
 ### 4.11-dev
 
+#### Fix: legibility pass over the `qt-*` surfaces added since 4.9, in all six bundled themes
+
+- Measured every class added since 4.9.0 (storyteller board and mode control, Pascal intervention dialog and hand toggles, regeneration plate, composer Stop/raise-hand, Concierge badge and mark, diagrams, name chips, gallery captions, prose-mode highlights, Brahma launcher) in each bundled theme, light and dark, against WCAG AA. The failures and their fixes are listed below.
+- Core: small warning/danger text now reads the text-safe alert tokens instead of fill colors. `.qt-intervention-note` uses `--qt-alert-warning-fg` (was `--color-warning`, 2.0–2.8:1 on light themes); `.qt-storyteller-warning` and the `.qt-concierge-mark` glyph use `--qt-alert-error-fg`; `.qt-danger-badge` takes its text from a new `--qt-concierge-badge-fg` (alert error ink; body ink for the Locked variant), with tint and border still from `--qt-concierge-badge-color`.
+- Core: `.qt-chat-regenerating-plate-text` sets its words in `--qt-chat-assistant-fg` (new hook `--qt-chat-regenerating-plate-fg`). The streaming green stays on the border and the quill. Was 1.6:1 on Art Deco light.
+- Core: `.qt-intervene-toggle--off` draws a diagonal slash through the hand instead of using 50% opacity, which left the icon at about 2:1 everywhere. On and off no longer differ by color alone.
+- Core: default light `--qt-response-status-streaming-fg` deepened from `hsl(152 55% 38%)` to `29%`.
+- Earl Grey 1.3.8: light-mode `--qt-status-warning/danger/success-fg` and streaming green deepened (raise-hand button, Paused segment and warning badges were 2.4:1); dark-mode `--qt-status-danger-fg` uses `--danger-000`.
+- Rains 1.3.11: light-mode orange accent `28 75% 50%` → `24 80% 40%`, primary `hsl(10 53% 53%)` → `hsl(11 55% 45%)`, muted foreground → `hsl(30 4% 40%)`, status ink and streaming green deepened. In dark mode, white on the orange was 2.4–3.1:1, so buttons, primary badges, active filter chips and `primaryForeground` now use warm charcoal ink (`--oncolor-brand`). The orange itself is unchanged and still works as text and accent.
+- Great Estate 1.0.7: muted foreground deepened in light (`45%` → `39%`) and lifted in dark (`52%` → `60%`); light destructive `48%` → `43%`; streaming green deepened. Dark mode now defines `--qt-alert-error-fg` and `--qt-alert-info-fg`; without them the light values applied in dark mode, leaving dark red at 1.9:1.
+- Old School 1.0.13: light destructive `hsl(0 72% 51%)` → `hsl(0 70% 44%)` (white on the Stop button was 4.07:1); streaming green deepened.
+- Art Deco 1.0.12: light alert ink deepened to suit its darker parchment cards; streaming green deepened. `.qt-intervention-row` is exempt from the theme's uppercase button rule, since Pascal outcomes are sentences. Great Estate gets the same exemption.
+- Madman's Box 1.1.8: diagrams use the console's near-black pane (`--qt-terminal-bg`), a dim phosphor-cyan rim and a faint inner glow. Mermaid still takes its node colors from the theme palette.
+- Mirrored to theme-storybook 1.0.87.
+- Help: `help/pascals-workbench.md` describes the struck-through hand.
+
 #### Feature: composer prose mode — narration/OOC preview and a no-dialogue warning
 
 - For a template whose narration is unmarked and whose dialogue is in `"` (Novel), the Salon composer now paints narration (`::highlight(qt-composer-narration)`) and `((…))` asides (`::highlight(qt-composer-ooc)`, using the template's `--qt-rp-ooc-*` colors). Highlights only; the text is not changed. The preview is independent of the punctuation-warnings toggle.

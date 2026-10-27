@@ -441,7 +441,7 @@
   --qt-response-status-gathering-fg: hsl(270 55% 55%);
   --qt-response-status-building-fg: hsl(38 85% 48%);
   --qt-response-status-sending-fg: var(--qt-status-info-fg);
-  --qt-response-status-streaming-fg: hsl(152 55% 38%);
+  --qt-response-status-streaming-fg: hsl(152 55% 29%);
   --qt-response-status-tool-fg: hsl(270 55% 55%);
 
   /* Participant card variables */
@@ -1080,6 +1080,9 @@
  */
 .qt-danger-badge {
   --qt-concierge-badge-color: var(--color-destructive, #dc2626);
+  /* The ink is the alert token, not the fill red: --color-destructive on its
+     own 15% tint read at ~3.5:1 on every bundled theme. */
+  --qt-concierge-badge-fg: var(--qt-alert-error-fg, var(--qt-concierge-badge-color));
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -1089,13 +1092,15 @@
   line-height: 1rem;
   font-weight: 500;
   background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
-  color: var(--qt-concierge-badge-color);
+  color: var(--qt-concierge-badge-fg);
   border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
 }
 
-/* Locked — no colour: the chat keeps to the ordinary desks. */
+/* Locked — no colour: the chat keeps to the ordinary desks. The grey lives
+   in the tint and the rule; the word is in body ink so it stays legible. */
 .qt-danger-badge-muted {
   --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+  --qt-concierge-badge-fg: var(--color-foreground);
 }
 
 
@@ -1106,7 +1111,7 @@
  * so there is no third modifier.
  */
 .qt-concierge-mark {
-  --qt-concierge-mark-color: var(--color-destructive, #dc2626);
+  --qt-concierge-mark-color: var(--qt-alert-error-fg, var(--color-destructive, #dc2626));
   display: inline-block;
   font-weight: 700;
   line-height: 1;
@@ -1975,7 +1980,11 @@
   color: var(--qt-response-status-streaming-fg);
 }
 
+/* The words are in the bubble's own ink: the streaming green is a status
+   accent, and on a mid-tone bubble it fell below 3:1. The green stays on the
+   border and the quill. */
 .qt-chat-regenerating-plate-text {
+  color: var(--qt-chat-regenerating-plate-fg, var(--qt-chat-assistant-fg, var(--color-foreground)));
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
@@ -5244,7 +5253,9 @@
 .qt-storyteller-warning {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--qt-storyteller-warning-fg, var(--color-destructive));
+  /* The alert token, not --color-destructive: a fill red is too dark to read
+     as small text on a dark card. */
+  color: var(--qt-storyteller-warning-fg, var(--qt-alert-error-fg));
 }
 
 .qt-storyteller-actions {
@@ -5334,7 +5345,9 @@
 .qt-intervention-note {
   font-size: 0.75rem;
   font-style: italic;
-  color: var(--qt-intervention-note-fg, var(--color-warning));
+  /* The alert token, not --color-warning: amber fill is not amber ink, and on
+     a light card the raw warning colour falls to ~2:1. */
+  color: var(--qt-intervention-note-fg, var(--qt-alert-warning-fg));
 }
 
 /* The "adjusted" hand beside a Pascal chip's label. */
@@ -5369,7 +5382,16 @@
 }
 
 /* A field the author has hidden from the dialog. */
+/* A field the author has hidden from the dialog: the hand, struck through.
+   The slash says "off" without leaning on colour, and without the half
+   opacity that left the icon at ~2:1 on every bundled theme. */
 .qt-intervene-toggle--off {
   color: var(--qt-intervene-toggle-off-fg, var(--color-muted-foreground));
-  opacity: 0.5;
+  background-image: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.75px),
+    currentColor calc(50% - 0.75px),
+    currentColor calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
 }

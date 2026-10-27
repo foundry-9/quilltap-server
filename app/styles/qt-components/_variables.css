@@ -410,7 +410,7 @@
   --qt-response-status-gathering-fg: hsl(270 55% 55%);
   --qt-response-status-building-fg: hsl(38 85% 48%);
   --qt-response-status-sending-fg: var(--qt-status-info-fg);
-  --qt-response-status-streaming-fg: hsl(152 55% 38%);
+  --qt-response-status-streaming-fg: hsl(152 55% 29%);
   --qt-response-status-tool-fg: hsl(270 55% 55%);
 
   --qt-participant-card-radius: var(--radius-lg);

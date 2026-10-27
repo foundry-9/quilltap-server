@@ -77,7 +77,9 @@
   .qt-intervention-note {
     font-size: 0.75rem;
     font-style: italic;
-    color: var(--qt-intervention-note-fg, var(--color-warning));
+    /* The alert token, not --color-warning: amber fill is not amber ink, and on
+       a light card the raw warning colour falls to ~2:1. */
+    color: var(--qt-intervention-note-fg, var(--qt-alert-warning-fg));
   }
 
   /* The "adjusted" hand beside a Pascal chip's label. */
@@ -111,9 +113,17 @@
     background-color: var(--qt-intervene-toggle-hover-bg, var(--color-accent));
   }
 
-  /* A field the author has hidden from the dialog. */
+  /* A field the author has hidden from the dialog: the hand, struck through.
+     The slash says "off" without leaning on colour, and without the half
+     opacity that left the icon at ~2:1 on every bundled theme. */
   .qt-intervene-toggle--off {
     color: var(--qt-intervene-toggle-off-fg, var(--color-muted-foreground));
-    opacity: 0.5;
+    background-image: linear-gradient(
+      to top right,
+      transparent calc(50% - 0.75px),
+      currentColor calc(50% - 0.75px),
+      currentColor calc(50% + 0.75px),
+      transparent calc(50% + 0.75px)
+    );
   }
 }
