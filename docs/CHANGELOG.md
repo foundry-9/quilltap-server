@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Docs: feature-spec cleanup
+
+- Removed three stale proposals and every link to them: the ComfyUI image plugin, block-scoped roleplay narration (superseded by the Novel template and prose mode), and provider usage/balance tracking.
+- `composer-typeahead.md` moved to `features/complete/` with a status line recording what shipped. Its unbuilt Phase 3 (`#` document references) is now a separate proposal, `composer-document-references.md`, revised for the current code (`qtap://` addresses, a trailing context section, a `?action=search-files` collection action, its own `composerDocReferences` toggle).
+- `svar-bridge-spike-findings.md` moved to `features/complete/`; the SVAR implementation plan's status line now records what shipped and what remains.
+- ROADMAP: dropped the stale 3.3.0 release checklist (including the website recommendations-file item), added the `#` references item, fixed the CHANGELOG_V2 link.
+
 #### Fix: legible dialogue in user messages; Rains user text; Great Estate light sidebar
 
 - Core: quoted dialogue (`.qt-chat-dialogue`) inside a user message now takes `--qt-chat-user-fg` (theme hook `--qt-rp-user-dialogue-color`). `--qt-rp-dialogue-color` defaults to the page foreground, so on a dark user bubble in a light theme it was dark on dark: Art Deco light 1.2:1, Great Estate light, and the default theme's blue bubble.

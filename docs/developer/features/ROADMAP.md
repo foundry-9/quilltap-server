@@ -2,35 +2,6 @@
 
 This document tracks planned features and improvements for Quilltap.
 
-## Release Checklist
-
-### 3.3.0
-
-- [X] Fix direct Node.js/Electron-hosted installation
-- [X] ~~Optional (opt-out)~~ reporting to providers about app/version (tell OpenRouter that it's Quilltap/3.3.0 calling)
-- [ ] Start a "recommendation" JSON file on [Quilltap website](https://quilltap.ai)
-  - [ ] Parser built-in on website
-  - [ ] Downloadable information tracking:
-    - Available providers
-    - Available models
-    - Censorship status
-    - Cost
-    - Capabilities
-    - Tool-use success
-    - Help LLM success
-    - Adaptability (can they be serious? Can they roleplay?)
-    - Thinking ability
-    - Best settings for purpose (temperature, top_p)
-- [X] Context help documentation with LLM (lock down theme)
-- [X] Browseable Help Guide tab (see `help_guide.md`)
-- [X] Turn off story backgrounds for help chats
-- [X] Better "chat" look-and-feel for help
-- [X] Unit test coverage
-- [X] Standard refactor pass
-- [X] Organize documentation (dev docs, help docs, README)
-- [X] Database locking
-- [X] Database version locking
-
 ## Planned Features
 
 ### Pascal the Croupier — the Inventory
@@ -70,6 +41,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
+- [ ] Composer `#` document references — type `#` to point a message at a Scriptorium document; the model is told where it is, or handed its text when it cannot use tools (design: [composer-document-references.md](composer-document-references.md))
 - [x] Diagrams in the Salon, iteration 1 — closed `mermaid` / `dot` / `svg` fences render live as themed SVG; per-character `canDrawDiagrams` and `diagramStyle` (hand-drawn / clean) in the vault's `properties.json`; prompt note only for drawing characters (design: [complete/diagrams.md](complete/diagrams.md))
 - [ ] Diagrams, iteration 2 — server-side render, save a diagram to the gallery or a store, a one-shot repair suggestion for a broken diagram, diagrams beyond the Salon (see the sketch in [complete/diagrams.md](complete/diagrams.md#iteration-2-sketch-not-in-scope))
 - [x] Scenarios from anywhere — browse every character, project, group and General scenario from either picker; a chat keeps a source pointer; one `resolveScenarioLocation` (design: [complete/scenarios-from-anywhere.md](complete/scenarios-from-anywhere.md))
@@ -118,7 +90,6 @@ This document tracks planned features and improvements for Quilltap.
 
 #### The Lantern
 
-- [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
 - [X] Determination of what people are wearing in an image is iffy at best - needs help
 
 ### Calliope: Themes & UI
@@ -144,4 +115,4 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.10.0 and earlier
 
-See [CHANGELOG.md](../docs/CHANGELOG_V2.md) for details on v2.7.0 and earlier releases.
+See [CHANGELOG_V2.md](../../CHANGELOG_V2.md) for details on v2.10.0 and earlier releases.

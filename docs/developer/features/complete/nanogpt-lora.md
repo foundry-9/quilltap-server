@@ -18,8 +18,7 @@ profiles already have, and add first-class LoRA support: a canonical
 `loras: [{ source, scale }]` list stored on the image profile, edited in a dedicated
 UI, and translated to each provider's wire dialect *by the plugin*. NanoGPT is the
 first consumer (it hosts ~20 LoRA-capable image models today); the design is
-deliberately provider-generic so ComfyUI (see
-[comfy_ui_local_image.md](./comfy_ui_local_image.md)), fal-style providers, and
+deliberately provider-generic so ComfyUI, fal-style providers, and
 future OpenAI-compatible image endpoints plug into the same seam.
 
 ## Research findings: how NanoGPT does LoRAs

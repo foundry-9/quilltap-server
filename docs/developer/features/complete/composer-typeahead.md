@@ -1,6 +1,6 @@
 # Composer Typeahead — Layer 2 Spec
 
-**Status:** Proposal / Not Implemented
+**Status:** Complete (closed 2026-10-27). Phase 1 shipped as the shared typeahead shell (built by [composer-emoji](composer-emoji.md), 2026-08-13). Phase 2 shipped in a simpler form: `@` inserts the plain name (`MentionTypeaheadPlugin`), with no chip and no `targetParticipantIds` addressing. Phase 3 (`#` document references) was never built and now has its own spec, [composer-document-references.md](../composer-document-references.md). Phase 4 was superseded by [composer-slash-commands.md](composer-slash-commands.md). The single `composerSuggestions` toggle was never built; each trigger has its own flag. Text below that was not built is kept as the historical design.
 **Scope:** quilltap-server (renderer + server); minor or no shell impact
 **Phase:** 2 of an open-ended series. Layer 1 (spellcheck) and Layer 1.5 (text replacements) are shipped.
 
@@ -129,7 +129,7 @@ Add one boolean to the Chat-tab settings module: `composerSuggestions` (default 
 
 > ### ✅ SHIPPED (2026-08-13) — built by Layer 2.0e
 >
-> [composer-emoji](complete/composer-emoji.md) built this shell, because emoji was
+> [composer-emoji](composer-emoji.md) built this shell, because emoji was
 > its cheapest possible consumer. Everything in this phase exists; the `@` / `#` /
 > `/` plugins consume it unchanged. **Two deltas from what is written below**,
 > recorded here as that spec promised:
@@ -290,113 +290,11 @@ if (validIds.length > 0 && (!targetParticipantIds || targetParticipantIds.length
 
 ## Phase 3 — `#` document references
 
-### Files
-
-**New:**
-- `components/chat/lexical/nodes/DocumentReferenceNode.tsx`
-- `components/chat/lexical/plugins/DocumentReferencesPlugin.tsx`
-- `components/chat/lexical/transformers/doc-reference-transformer.ts`
-- `app/api/v1/mount-points/search/route.ts` — new lightweight filename-substring endpoint.
-- `lib/chat/parse-doc-references.ts` — server-side parser.
-- `lib/services/chat-message/inject-document-references.ts` — branches on tool capability; injects whisper or attaches file.
-
-**Modified:**
-- `components/chat/lexical/LexicalComposerWrapper.tsx` — register `DocumentReferenceNode`; mount `<DocumentReferencesPlugin />`.
-- `app/salon/[id]/components/DocumentPane.tsx` — same.
-- `components/chat/lexical/plugins/MarkdownBridgePlugin.tsx` — extend `COMPOSER_TRANSFORMERS` with `DOCUMENT_REFERENCE_TRANSFORMER`.
-- `lib/services/chat-message/context-builder.service.ts` — call `parseDocumentReferences()`; call `injectDocumentReferences()` with provider, model, userId to handle the tool-capability branch.
-
-### New endpoint: `GET /api/v1/mount-points/search`
-
-Query params:
-
-- `q: string` (required, min 1 char)
-- `limit: number` (optional, default 20, max 50)
-- `mountPointIds: string` (optional, comma-separated; if absent, search across all)
-
-Response:
-
-```ts
-{
-  results: Array<{
-    mountPointId: string;
-    mountPointName: string;
-    fileId: string;
-    fileName: string;
-    relativePath: string;
-  }>;
-}
-```
-
-Implementation: case-insensitive substring match on `fileName` and `relativePath` across the mount-points file index. SQL: a `LIKE '%q%' COLLATE NOCASE` query against the mount-index DB (see CLAUDE.md — `npx quilltap db --mount-points --tables` confirms the mount-index lives in its own DB). Order by: exact filename match → filename prefix match → filename substring → path substring. Limit applied post-ordering.
-
-Use the existing `createAuthenticatedHandler` middleware and `successResponse`/`errorResponse` helpers per CLAUDE.md's `/api/v1/` conventions.
-
-### DocumentReferenceNode renderer
-
-Renders `<span class="qt-doc-ref-chip"><svg-doc-icon /> <resolved-or-stored-path></span>`. On click, opens the document in Document Mode (calls `onOpenDocumentClick` if available, with the document's path).
-
-### Markdown transformer
-
-Same pattern as MENTION_TRANSFORMER but matching `#\[([^\]]+)\]\(doc:([^/]+)/(.+)\)`.
-
-### Server-side resolution and injection
-
-`lib/services/chat-message/inject-document-references.ts`:
-
-```ts
-export async function injectDocumentReferences(
-  references: ParsedDocumentReference[],
-  provider: Provider,
-  modelName: string,
-  userId: string,
-  repos: Repositories,
-  context: BuildableContext,
-): Promise<void> {
-  if (references.length === 0) return;
-
-  const toolCapable = await checkModelSupportsTools(provider, modelName, userId);
-  logger.debug(`[DocRefs] Tool-capable=${toolCapable}, references=${references.length}`);
-
-  if (toolCapable) {
-    // Append a system whisper listing the references; LLM can fetch with doc_read if needed.
-    for (const ref of references) {
-      const exists = await mountPoints.fileExists(ref.mountPointId, ref.path);
-      if (!exists) {
-        logger.warn(`[DocRefs] Referenced document not found: ${ref.mountPointId}/${ref.path}`);
-        continue;
-      }
-      context.whispers.push({
-        sender: 'librarian',
-        text: `The user referenced this document in their message: \`${ref.path}\` (mount: ${ref.mountPointId}). You may read its contents with \`doc_read\` if needed.`,
-      });
-    }
-  } else {
-    // Load each doc and attach as a transparent file (reuse existing file plumbing).
-    for (const ref of references) {
-      try {
-        const fileData = await mountPoints.readFileAsAttachment(ref.mountPointId, ref.path);
-        context.attachedFiles.push(fileData);
-      } catch (err) {
-        logger.warn(`[DocRefs] Failed to attach referenced document ${ref.path}:`, err);
-      }
-    }
-  }
-}
-```
-
-The exact shape of `BuildableContext`, `whispers`, and `attachedFiles` is governed by the existing `buildMessageContext()` and `buildContext()` signatures. Match local convention; the pseudocode above conveys intent.
-
-### Acceptance
-
-- Typing `#scen` in a chat with a `scenes/01-opening.md` file pops the menu, picks it on Enter, inserts a chip.
-- On send with a tool-capable model (e.g. Anthropic), the LLM sees a librarian whisper naming the path; no content is inlined.
-- On send with a non-tool-capable model, the file content is loaded and attached as if the user had used the Library File button.
-- The chip serializes round-trip the same way mentions do.
+> **Moved to [composer-document-references.md](../composer-document-references.md)** (2026-10-27), revised for the current code: `qtap://` addresses instead of a `doc:` scheme, a trailing context section instead of a pushed whisper, a `?action=search-files` collection action instead of a `/search` route, and its own `composerDocReferences` toggle. The Phase 3 file entries in the file-touch summary below are struck for the same reason.
 
 ## Phase 4 — `/` slash commands
 
-> **Superseded by [composer-slash-commands.md](complete/composer-slash-commands.md)** (implemented 4.11-dev). Nothing in this phase is binding; the slash entries in the file-touch summary below are struck for the same reason.
+> **Superseded by [composer-slash-commands.md](composer-slash-commands.md)** (implemented 4.11-dev). Nothing in this phase is binding; the slash entries in the file-touch summary below are struck for the same reason.
 
 ### Files
 
@@ -558,20 +456,20 @@ No schema changes. `targetParticipantIds` already exists on the message row. The
 - `components/chat/lexical/typeahead/MenuPortal.tsx`
 - `components/chat/lexical/typeahead/types.ts`
 - `components/chat/lexical/nodes/MentionNode.tsx`
-- `components/chat/lexical/nodes/DocumentReferenceNode.tsx`
+- ~~`components/chat/lexical/nodes/DocumentReferenceNode.tsx`~~ (moved to composer-document-references.md)
 - `components/chat/lexical/plugins/MentionsPlugin.tsx`
-- `components/chat/lexical/plugins/DocumentReferencesPlugin.tsx`
+- ~~`components/chat/lexical/plugins/DocumentReferencesPlugin.tsx`~~ (moved to composer-document-references.md)
 - ~~`components/chat/lexical/plugins/SlashCommandsPlugin.tsx`~~ (superseded)
 - `components/chat/lexical/transformers/mention-transformer.ts`
-- `components/chat/lexical/transformers/doc-reference-transformer.ts`
+- ~~`components/chat/lexical/transformers/doc-reference-transformer.ts`~~ (moved to composer-document-references.md)
 - ~~`components/chat/lexical/slash-commands/registry.ts`~~ (superseded)
 - ~~`components/chat/lexical/slash-commands/types.ts`~~ (superseded)
 
 **New files (server):**
-- `app/api/v1/mount-points/search/route.ts`
+- ~~`app/api/v1/mount-points/search/route.ts`~~ (moved to composer-document-references.md)
 - `lib/chat/parse-mentions.ts`
-- `lib/chat/parse-doc-references.ts`
-- `lib/services/chat-message/inject-document-references.ts`
+- ~~`lib/chat/parse-doc-references.ts`~~ (moved to composer-document-references.md)
+- ~~`lib/services/chat-message/inject-document-references.ts`~~ (moved to composer-document-references.md)
 
 **Modified (renderer):**
 - `components/chat/lexical/LexicalComposerWrapper.tsx` — register two new nodes, mount three new plugins.
@@ -588,7 +486,3 @@ No schema changes. `targetParticipantIds` already exists on the message row. The
 **Docs:**
 - `help/chat.md` (or equivalent) — new section.
 - `docs/CHANGELOG.md` — top entry.
-
-## Completion gate
-
-Do **not** move this spec to `docs/developer/features/complete/` until every item in the file-touch summary above has been written or modified, **and** the manual verification matrix has been walked end-to-end on a running instance. Partial implementation belongs in a follow-up spec referencing this one, not in `complete/`.

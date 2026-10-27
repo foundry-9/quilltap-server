@@ -1,7 +1,7 @@
 # SVAR File Manager — Phase 0 Findings
 
-**Status:** Install + license gate PASSED (2026-06-10). CSS bridge spike pending (needs human go/no-go).
-**Parent plan:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md)
+**Status:** Complete. Install + license gate passed (2026-06-10); the CSS bridge shipped as `components/files/svar/svar-theme-bridge.css` in 0dba2d804.
+**Parent plan:** [svar-file-manager-implementation-plan.md](../svar-file-manager-implementation-plan.md)
 
 ---
 
