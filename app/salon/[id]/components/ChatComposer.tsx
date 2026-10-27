@@ -75,6 +75,8 @@ interface ChatComposerProps {
   /** Optional dialogue detection for paragraph-level styling in preview */
   dialogueDetection?: DialogueDetection | null
   roleplayTemplateId?: string | null
+  /** The template leaves narration unmarked and quotes dialogue (`isProseTemplate`). */
+  proseMode?: boolean
   /** Whether document editing mode is enabled */
   documentEditingMode: boolean
   /** Toggle document editing mode on/off */
@@ -179,6 +181,7 @@ export function ChatComposer({
   renderingPatterns: _renderingPatterns,
   dialogueDetection: _dialogueDetection,
   roleplayTemplateId,
+  proseMode,
   documentEditingMode,
   onToggleDocumentEditingMode,
   onOpenDocumentClick,
@@ -599,6 +602,7 @@ export function ChatComposer({
               disabled={composerLocked || !hasActiveCharacters}
               mentionPriorityCharacterIds={mentionPriorityCharacterIds}
               slashCommands={slashCommands}
+              proseMode={proseMode}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>

@@ -1047,6 +1047,29 @@
   }
 
   /**
+   * Prose mode (a template like Novel: unmarked narration, quoted dialogue).
+   * The no-dialogue tint covers every narrated run while the draft has no
+   * dialogue at all; the preview marks narration and ((asides)) the way the
+   * rendered message will set them. ::highlight cannot set font-style, so
+   * narration is told apart by colour rather than italics.
+   */
+  ::highlight(qt-punctuation-no-dialogue) {
+    background-color: var(--qt-punctuation-no-dialogue-bg);
+    text-decoration: underline dotted var(--qt-punctuation-no-dialogue-underline);
+    text-decoration-thickness: 2px;
+  }
+
+  ::highlight(qt-composer-narration) {
+    color: var(--qt-composer-narration-fg);
+    background-color: var(--qt-composer-narration-bg);
+  }
+
+  ::highlight(qt-composer-ooc) {
+    color: var(--qt-composer-ooc-fg);
+    background-color: var(--qt-composer-ooc-bg);
+  }
+
+  /**
    * Lexical rich text node styles
    */
   .qt-lexical-root {

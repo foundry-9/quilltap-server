@@ -8,6 +8,13 @@
  * closes and is not carried on by the next paragraph, an asterisk with no
  * partner, and a `((` or `))` with no partner.
  *
+ * In **prose mode** — a template whose narration is unmarked prose and whose
+ * dialogue sits in double quotes, as Novel's does — it also flags a draft with
+ * no dialogue at all (every narrated run lights up: the writer may have meant
+ * to speak and forgotten the quote), and `classifyProse` says which runs of the
+ * draft are narration and which are `((out of character))`, so the adapter can
+ * preview them the way the rendered message will set them.
+ *
  * **It only ever points.** Nothing here proposes a fix, because the right fix
  * depends on what the writer meant and a guess would be wrong as often as it is
  * right. The adapter (`components/chat/lexical/plugins/PunctuationLintPlugin.tsx`)
@@ -50,6 +57,7 @@ export type PunctuationRule =
   | 'unclosed-dialogue'
   | 'unpaired-asterisk'
   | 'unpaired-ooc'
+  | 'no-dialogue'
 
 /** One flagged mark. `start`/`end` are offsets into the block's string. */
 export interface PunctuationIssue {
@@ -67,6 +75,19 @@ export interface LintCaret {
 
 export interface PunctuationLintOptions {
   caret?: LintCaret | null
+  /** Unmarked narration, quoted dialogue: also flag a draft with no dialogue. */
+  proseMode?: boolean
+}
+
+/** What a run of the draft will render as in prose mode. Dialogue is the rest. */
+export type ProseKind = 'narration' | 'ooc'
+
+/** One classified run. `start`/`end` are offsets into the block's string. */
+export interface ProseSpan {
+  block: number
+  start: number
+  end: number
+  kind: ProseKind
 }
 
 /** Plain-language explanation of each rule, shown when the mark is hovered. */
@@ -81,6 +102,8 @@ export const PUNCTUATION_RULE_MESSAGES: Record<PunctuationRule, string> = {
     'This dialogue never closes, and the next paragraph does not open with a quote to carry it on.',
   'unpaired-asterisk': 'An asterisk with no partner — the emphasis will not end where you expect.',
   'unpaired-ooc': 'A double parenthesis with no partner.',
+  'no-dialogue':
+    'No dialogue yet — not a single opening quote in the whole draft. Meant to say this aloud? Put the speech in double quotes.',
 }
 
 const OPEN_QUOTE_CURLY = '“'
@@ -169,6 +192,8 @@ interface QuoteResult {
   unclosedOpener: number | null
   /** The paragraph's first mark is a dialogue opener (it continues speech). */
   opensWithQuote: boolean
+  /** Outermost dialogue runs, opener through closer (or paragraph end). */
+  dialogue: [number, number][]
 }
 
 function lintQuotes(p: Paragraph): QuoteResult {
@@ -179,6 +204,7 @@ function lintQuotes(p: Paragraph): QuoteResult {
   let depth = 0
   let outerOpener: number | null = null
   let opensWithQuote = false
+  const dialogue: [number, number][] = []
   const firstMark = p.text.search(/\S/)
 
   for (let i = 0; i < p.text.length; i++) {
@@ -215,12 +241,14 @@ function lintQuotes(p: Paragraph): QuoteResult {
       flag(i, 'nested-double-quote')
       depth = 1
     } else {
+      dialogue.push([outerOpener!, i + 1])
       depth = 0
       outerOpener = null
     }
   }
+  if (depth > 0) dialogue.push([outerOpener!, p.text.length])
 
-  return { issues, unclosedOpener: depth > 0 ? outerOpener : null, opensWithQuote }
+  return { issues, unclosedOpener: depth > 0 ? outerOpener : null, opensWithQuote, dialogue }
 }
 
 /** True when the caret sits later in the same paragraph than `offset`. */
@@ -297,6 +325,88 @@ function lintOoc(p: Paragraph): number[] {
 }
 
 /**
+ * Outermost `((…))` runs, markers included. An unclosed `((` runs to the end of
+ * the paragraph — that is where the writer is still typing the aside.
+ */
+function oocSpans(text: string): [number, number][] {
+  const spans: [number, number][] = []
+  let depth = 0
+  let start = 0
+  let i = 0
+  while (i < text.length - 1) {
+    const pair = text.slice(i, i + 2)
+    if (pair === '((') {
+      if (depth === 0) start = i
+      depth++
+      i += 2
+    } else if (pair === '))' && depth > 0) {
+      depth--
+      if (depth === 0) spans.push([start, i + 2])
+      i += 2
+    } else {
+      i++
+    }
+  }
+  if (depth > 0) spans.push([start, text.length])
+  return spans
+}
+
+/**
+ * Classify one paragraph: its `((…))` runs, and the narration — whatever is
+ * neither out of character nor inside dialogue — as whitespace-trimmed runs.
+ * Quotes inside an aside are masked out so they cannot open dialogue.
+ */
+function classifyParagraph(p: Paragraph): { ooc: [number, number][]; narration: [number, number][]; hasDialogue: boolean } {
+  const ooc = oocSpans(p.text)
+  if (SCENE_BREAK.test(p.text)) return { ooc, narration: [], hasDialogue: false }
+
+  const claimed = new Uint8Array(p.text.length)
+  let masked = p.text
+  for (const [start, end] of ooc) {
+    claimed.fill(1, start, end)
+    masked = masked.slice(0, start) + ' '.repeat(end - start) + masked.slice(end)
+  }
+  const { dialogue } = lintQuotes({ ...p, text: masked, caret: null })
+  for (const [start, end] of dialogue) claimed.fill(1, start, end)
+
+  const narration: [number, number][] = []
+  let i = 0
+  while (i < p.text.length) {
+    if (claimed[i] || isSpace(p.text[i])) {
+      i++
+      continue
+    }
+    let j = i
+    let lastInk = i
+    while (j < p.text.length && !claimed[j]) {
+      if (!isSpace(p.text[j])) lastInk = j
+      j++
+    }
+    narration.push([i, lastInk + 1])
+    i = j
+  }
+  return { ooc, narration, hasDialogue: dialogue.length > 0 }
+}
+
+/**
+ * Say which runs of a draft are narration and which are out of character, for
+ * a template that leaves narration unmarked and puts dialogue in double quotes.
+ * Same block/offset coordinates as `lintPunctuation`; sorted by block, offset.
+ */
+export function classifyProse(blocks: readonly (string | null)[]): ProseSpan[] {
+  const spans: ProseSpan[] = []
+  for (const p of toParagraphs(blocks, null)) {
+    if (!p) continue
+    const { ooc, narration } = classifyParagraph(p)
+    for (const [start, end] of ooc) spans.push({ block: p.block, start: p.start + start, end: p.start + end, kind: 'ooc' })
+    for (const [start, end] of narration) {
+      spans.push({ block: p.block, start: p.start + start, end: p.start + end, kind: 'narration' })
+    }
+  }
+  return spans.sort((a, b) => a.block - b.block || a.start - b.start)
+}
+
+/**
  * Lint a draft. Pure and deterministic; returns issues sorted by block, then
  * offset. Runs on every keystroke, so it stays a single linear pass per rule.
  */
@@ -339,6 +449,22 @@ export function lintPunctuation(
       issues.push({ block: p.block, start: p.start + offset, end: p.start + offset + 2, rule: 'unpaired-ooc' })
     }
   })
+
+  // Prose mode: a draft with narration but not one line of dialogue may be a
+  // spoken sentence whose quotes were forgotten. Light up every narrated run.
+  // No caret exemption — the point is to see it while typing.
+  if (options.proseMode) {
+    const classified = paragraphs.map((p) => (p ? classifyParagraph(p) : null))
+    if (!classified.some((c) => c?.hasDialogue)) {
+      classified.forEach((c, index) => {
+        const p = paragraphs[index]
+        if (!c || !p) return
+        for (const [start, end] of c.narration) {
+          issues.push({ block: p.block, start: p.start + start, end: p.start + end, rule: 'no-dialogue' })
+        }
+      })
+    }
+  }
 
   return issues.sort((a, b) => a.block - b.block || a.start - b.start)
 }

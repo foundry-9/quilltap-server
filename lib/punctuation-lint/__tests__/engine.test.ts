@@ -6,12 +6,15 @@
  */
 
 import {
+  classifyProse,
   lintPunctuation,
   PUNCTUATION_RULE_MESSAGES,
   type LintCaret,
+  type ProseSpan,
   type PunctuationIssue,
 } from '../engine'
 import vectors from '../fixtures/punctuation-vectors.json'
+import proseVectors from '../fixtures/prose-vectors.json'
 
 interface VectorCase {
   name: string
@@ -57,5 +60,42 @@ describe('lintPunctuation', () => {
       { block: 0, start: 8, end: 9, rule: 'floating-quote' },
     ])
     expect(lintPunctuation(['He said "'], { caret: { block: 0, offset: 9 } })).toEqual([])
+  })
+})
+
+describe('prose mode', () => {
+  interface ProseLintCase {
+    name: string
+    blocks: (string | null)[]
+    caret?: LintCaret
+    expect: PunctuationIssue[]
+  }
+  interface ProseClassifyCase {
+    name: string
+    blocks: (string | null)[]
+    expect: ProseSpan[]
+  }
+
+  describe('corpus (lib/punctuation-lint/fixtures/prose-vectors.json)', () => {
+    const lintCases = proseVectors.lint as unknown as ProseLintCase[]
+    const classifyCases = proseVectors.classify as unknown as ProseClassifyCase[]
+
+    it.each(lintCases.map((c) => [c.name, c] as const))('lint: %s', (_name, testCase) => {
+      expect(lintPunctuation(testCase.blocks, { caret: testCase.caret ?? null, proseMode: true })).toEqual(
+        testCase.expect,
+      )
+    })
+
+    it.each(classifyCases.map((c) => [c.name, c] as const))('classify: %s', (_name, testCase) => {
+      expect(classifyProse(testCase.blocks)).toEqual(testCase.expect)
+    })
+  })
+
+  it('never flags a missing dialogue outside prose mode', () => {
+    expect(lintPunctuation(['She set the cup down.'])).toEqual([])
+  })
+
+  it('has a message for the no-dialogue rule', () => {
+    expect(PUNCTUATION_RULE_MESSAGES['no-dialogue']).toBeTruthy()
   })
 })

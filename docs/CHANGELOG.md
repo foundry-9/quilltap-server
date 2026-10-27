@@ -4,6 +4,16 @@
 
 ### 4.11-dev
 
+#### Feature: composer prose mode — narration/OOC preview and a no-dialogue warning
+
+- For a template whose narration is unmarked and whose dialogue is in `"` (Novel), the Salon composer now paints narration (`::highlight(qt-composer-narration)`) and `((…))` asides (`::highlight(qt-composer-ooc)`, using the template's `--qt-rp-ooc-*` colors). Highlights only; the text is not changed. The preview is independent of the punctuation-warnings toggle.
+- New `no-dialogue` lint rule under `proseMode`: when the draft has narration but no dialogue opener anywhere (quotes inside `((…))` don't count), every narrated run is painted with `::highlight(qt-punctuation-no-dialogue)` (dotted underline, lighter tint). No caret exemption. Governed by `punctuationWarnings`.
+- Engine (`lib/punctuation-lint/engine.ts`): `proseMode` option, `classifyProse(blocks)` returning narration/OOC spans, and dialogue spans recorded by the quote pass. New `lib/punctuation-lint/prose-mode.ts` (`isProseTemplate`) decides the gate: `narrationDelimiters === null` and a wrap delimiter of `"`. `SalonView` computes it from the chat's template and passes `proseMode` through `ChatComposer` → `LexicalComposerWrapper` → `PunctuationLintPlugin`.
+- `PunctuationLintPlugin` now publishes four highlight names with priorities (warning > no-dialogue > OOC > narration); hover explains warnings before the no-dialogue tint.
+- New tokens `--qt-punctuation-no-dialogue-bg` / `-underline`, `--qt-composer-narration-fg` / `-bg`, `--qt-composer-ooc-fg` / `-bg`, mirrored to theme-storybook (1.0.86).
+- Help: `help/chat-settings-composer.md`, `help/roleplay-templates.md`.
+- Tests: `lib/punctuation-lint/fixtures/prose-vectors.json` (v5 contract corpus) driven from `engine.test.ts`; `__tests__/unit/lib/punctuation-lint/prose-mode.test.ts`; prose-mode cases in `PunctuationLintPlugin.test.tsx`.
+
 #### Fix: NanoGPT image sizes are fitted to each model; Qwen Image 3 avatars no longer 400 (bug 269)
 
 - The NanoGPT plugin sent the provider-wide portrait/landscape sizes (`832x1248` / `1248x832`) to every model. Models with their own size list rejected them; `qwen-image-3-uncensored` answered every avatar with `400 "supports 1K and 2K output"`.

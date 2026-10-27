@@ -169,6 +169,14 @@
   /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
   --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
   --qt-punctuation-warning-underline: var(--color-warning);
+  /* Prose mode (Novel-like templates): no dialogue in the draft at all */
+  --qt-punctuation-no-dialogue-bg: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  --qt-punctuation-no-dialogue-underline: var(--color-warning);
+  /* Prose mode composer preview: narration, and ((out of character)) asides */
+  --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary));
+  --qt-composer-narration-bg: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  --qt-composer-ooc-fg: var(--qt-rp-ooc-color);
+  --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
 
   /* Badge palette tokens - referenced by the provider badges */
   --qt-badge-primary-bg: var(--color-primary);
@@ -2337,6 +2345,27 @@
   background-color: var(--qt-punctuation-warning-bg);
   text-decoration: underline wavy var(--qt-punctuation-warning-underline);
   text-decoration-thickness: 2px;
+}
+
+/* Prose mode (a template like Novel: unmarked narration, quoted dialogue).
+   The no-dialogue tint covers every narrated run while the draft has no
+   dialogue at all; the preview marks narration and ((asides)) the way the
+   rendered message will set them. ::highlight cannot set font-style, so
+   narration is told apart by colour rather than italics. */
+::highlight(qt-punctuation-no-dialogue) {
+  background-color: var(--qt-punctuation-no-dialogue-bg);
+  text-decoration: underline dotted var(--qt-punctuation-no-dialogue-underline);
+  text-decoration-thickness: 2px;
+}
+
+::highlight(qt-composer-narration) {
+  color: var(--qt-composer-narration-fg);
+  background-color: var(--qt-composer-narration-bg);
+}
+
+::highlight(qt-composer-ooc) {
+  color: var(--qt-composer-ooc-fg);
+  background-color: var(--qt-composer-ooc-bg);
 }
 
 /* Lexical editor rich text node styles */

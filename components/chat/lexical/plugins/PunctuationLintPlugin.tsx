@@ -14,6 +14,14 @@
  * undo history, Markdown export and the caret are all exactly as they would be
  * without the plugin. A browser without the API simply shows nothing.
  *
+ * **Prose mode** (`proseMode`, for a template like Novel — see
+ * `lib/punctuation-lint/prose-mode.ts`) adds two things on the same terms: a
+ * softer `qt-punctuation-no-dialogue` tint over every narrated run while the
+ * draft has no dialogue at all, and a preview of how the message will be set —
+ * `qt-composer-narration` over narration and `qt-composer-ooc` over
+ * `((out of character))` asides — because neither is otherwise visible while
+ * typing. The preview ignores the warnings toggle; it is not a warning.
+ *
  * **Every decision lives in the engine.** This file only turns the editor into
  * the engine's input (one string per text block, code masked out, the caret's
  * offset) and turns the engine's offsets back into DOM ranges.
@@ -39,6 +47,7 @@ import {
 } from 'lexical'
 
 import {
+  classifyProse,
   lintPunctuation,
   PUNCTUATION_RULE_MESSAGES,
   type LintCaret,
@@ -46,6 +55,24 @@ import {
 
 /** The `::highlight()` name the stylesheet paints. */
 export const PUNCTUATION_HIGHLIGHT_NAME = 'qt-punctuation-warning'
+/** Prose mode: the whole-draft "no dialogue yet" tint. */
+export const NO_DIALOGUE_HIGHLIGHT_NAME = 'qt-punctuation-no-dialogue'
+/** Prose mode: the narration preview. */
+export const NARRATION_HIGHLIGHT_NAME = 'qt-composer-narration'
+/** Prose mode: the out-of-character preview. */
+export const OOC_HIGHLIGHT_NAME = 'qt-composer-ooc'
+
+/**
+ * Paint order where highlights overlap: a specific warning over the
+ * no-dialogue tint over the preview.
+ */
+const HIGHLIGHT_PRIORITY: Record<string, number> = {
+  [PUNCTUATION_HIGHLIGHT_NAME]: 3,
+  [NO_DIALOGUE_HIGHLIGHT_NAME]: 2,
+  [OOC_HIGHLIGHT_NAME]: 1,
+  [NARRATION_HIGHLIGHT_NAME]: 0,
+}
+const HIGHLIGHT_NAMES = Object.keys(HIGHLIGHT_PRIORITY)
 
 /** A text node's place in its block's linted string. */
 interface Segment {
@@ -68,28 +95,50 @@ interface PaintedIssue {
   message: string
 }
 
+/** Everything one paint produces, by highlight name. */
+interface Painting {
+  /** Warnings in hover order: specific marks first, the no-dialogue tint last. */
+  explained: PaintedIssue[]
+  ranges: Record<string, Range[]>
+}
+
+const EMPTY_PAINTING: Painting = { explained: [], ranges: {} }
+
 // ---------------------------------------------------------------------------
 // Highlight registry — one shared Highlight, many composers
 // ---------------------------------------------------------------------------
 
 /**
- * Several composers can be mounted at once (workspace panes), and the highlight
+ * Several composers can be mounted at once (workspace panes), and a highlight
  * name is global to the document, so each plugin contributes its ranges to one
- * shared set rather than replacing it.
+ * shared set per name rather than replacing it.
  */
-const contributions = new Map<symbol, Range[]>()
+const contributions = new Map<string, Map<symbol, Range[]>>()
 
 function highlightsSupported(): boolean {
   return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined'
 }
 
-function publishRanges(owner: symbol, ranges: Range[]): void {
-  if (ranges.length > 0) contributions.set(owner, ranges)
-  else contributions.delete(owner)
-  if (!highlightsSupported()) return
-  const all = [...contributions.values()].flat()
-  if (all.length === 0) CSS.highlights.delete(PUNCTUATION_HIGHLIGHT_NAME)
-  else CSS.highlights.set(PUNCTUATION_HIGHLIGHT_NAME, new Highlight(...all))
+function publishRanges(owner: symbol, painting: Painting): void {
+  for (const name of HIGHLIGHT_NAMES) {
+    const ranges = painting.ranges[name] ?? []
+    let byOwner = contributions.get(name)
+    if (!byOwner) {
+      byOwner = new Map()
+      contributions.set(name, byOwner)
+    }
+    if (ranges.length > 0) byOwner.set(owner, ranges)
+    else byOwner.delete(owner)
+    if (!highlightsSupported()) continue
+    const all = [...byOwner.values()].flat()
+    if (all.length === 0) {
+      CSS.highlights.delete(name)
+    } else {
+      const highlight = new Highlight(...all)
+      highlight.priority = HIGHLIGHT_PRIORITY[name]
+      CSS.highlights.set(name, highlight)
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -203,35 +252,63 @@ function domPoint(
   return { node: text, offset: local }
 }
 
-function paint(editor: LexicalEditor, enabled: boolean): PaintedIssue[] {
-  if (!enabled || !editor.getRootElement()) return []
+/** A DOM range over a block's `[start, end)`, or null when it cannot be mapped. */
+function rangeFor(
+  editor: LexicalEditor,
+  blocks: LintBlock[],
+  span: { block: number; start: number; end: number },
+): Range | null {
+  const segments = blocks[span.block]?.segments ?? []
+  const start = domPoint(editor, segments, span.start, 'start')
+  const end = domPoint(editor, segments, span.end, 'end')
+  if (!start || !end) return null
+  const range = document.createRange()
+  try {
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+  } catch {
+    return null
+  }
+  return range
+}
+
+function paint(editor: LexicalEditor, warnings: boolean, proseMode: boolean): Painting {
+  if ((!warnings && !proseMode) || !editor.getRootElement()) return EMPTY_PAINTING
 
   const { blocks, caret } = editor.getEditorState().read(() => {
     const collected = $collectBlocks()
     return { blocks: collected, caret: $caretFor(collected) }
   })
+  const texts = blocks.map((b) => b.text)
 
-  const issues = lintPunctuation(
-    blocks.map((b) => b.text),
-    { caret },
-  )
+  const ranges: Record<string, Range[]> = {}
+  const add = (name: string, range: Range) => (ranges[name] ??= []).push(range)
+  const specific: PaintedIssue[] = []
+  const general: PaintedIssue[] = []
 
-  const painted: PaintedIssue[] = []
-  for (const issue of issues) {
-    const segments = blocks[issue.block]?.segments ?? []
-    const start = domPoint(editor, segments, issue.start, 'start')
-    const end = domPoint(editor, segments, issue.end, 'end')
-    if (!start || !end) continue
-    const range = document.createRange()
-    try {
-      range.setStart(start.node, start.offset)
-      range.setEnd(end.node, end.offset)
-    } catch {
-      continue
+  if (warnings) {
+    for (const issue of lintPunctuation(texts, { caret, proseMode })) {
+      const range = rangeFor(editor, blocks, issue)
+      if (!range) continue
+      const message = PUNCTUATION_RULE_MESSAGES[issue.rule]
+      if (issue.rule === 'no-dialogue') {
+        add(NO_DIALOGUE_HIGHLIGHT_NAME, range)
+        general.push({ range, message })
+      } else {
+        add(PUNCTUATION_HIGHLIGHT_NAME, range)
+        specific.push({ range, message })
+      }
     }
-    painted.push({ range, message: PUNCTUATION_RULE_MESSAGES[issue.rule] })
   }
-  return painted
+
+  if (proseMode) {
+    for (const span of classifyProse(texts)) {
+      const range = rangeFor(editor, blocks, span)
+      if (range) add(span.kind === 'ooc' ? OOC_HIGHLIGHT_NAME : NARRATION_HIGHLIGHT_NAME, range)
+    }
+  }
+
+  return { explained: [...specific, ...general], ranges }
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +332,16 @@ function caretPointAt(x: number, y: number): { node: Node; offset: number } | nu
 // Plugin
 // ---------------------------------------------------------------------------
 
-export function PunctuationLintPlugin(): null {
+interface PunctuationLintPluginProps {
+  /**
+   * The chat's template leaves narration unmarked and quotes its dialogue
+   * (`isProseTemplate`): flag a draft with no dialogue, and preview narration
+   * and out-of-character asides.
+   */
+  proseMode?: boolean
+}
+
+export function PunctuationLintPlugin({ proseMode = false }: PunctuationLintPluginProps = {}): null {
   const [editor] = useLexicalComposerContext()
   const { data: chatSettings } = useChatSettingsQuery()
   const enabled = chatSettings?.smartTypographySettings?.punctuationWarnings ?? true
@@ -270,10 +356,12 @@ export function PunctuationLintPlugin(): null {
       return
     }
 
+    console.debug('[punctuation-lint] mounted', { warnings: enabled, proseMode })
     let lastCount = -1
     const refresh = () => {
-      paintedRef.current = paint(editor, enabled)
-      publishRanges(owner, paintedRef.current.map((p) => p.range))
+      const painting = paint(editor, enabled, proseMode)
+      paintedRef.current = painting.explained
+      publishRanges(owner, painting)
       // One line when the number of warnings changes — never per keystroke.
       if (paintedRef.current.length !== lastCount) {
         lastCount = paintedRef.current.length
@@ -286,9 +374,9 @@ export function PunctuationLintPlugin(): null {
     return () => {
       unregister()
       paintedRef.current = []
-      publishRanges(owner, [])
+      publishRanges(owner, EMPTY_PAINTING)
     }
-  }, [editor, enabled])
+  }, [editor, enabled, proseMode])
 
   // Explain a painted mark on hover through the editable root's `title`.
   useEffect(() => {

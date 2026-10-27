@@ -102,6 +102,14 @@
   /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
   --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
   --qt-punctuation-warning-underline: var(--color-warning);
+  /* Prose mode (Novel-like templates): no dialogue in the draft at all */
+  --qt-punctuation-no-dialogue-bg: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  --qt-punctuation-no-dialogue-underline: var(--color-warning);
+  /* Prose mode composer preview: narration, and ((out of character)) asides */
+  --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary));
+  --qt-composer-narration-bg: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  --qt-composer-ooc-fg: var(--qt-rp-ooc-color);
+  --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
 
   /* ==========================================================================
      ALERT TOKENS

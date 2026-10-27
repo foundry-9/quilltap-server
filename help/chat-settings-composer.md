@@ -298,6 +298,11 @@ Nothing in the second group fires inside code fences or `inline code`, nor in th
 - dialogue that never closes, when the next paragraph does not open with a quotation mark to carry the speech on (a speaker running across several paragraphs, each opened and only the last closed, is quite correct and goes unremarked)
 - an `*`, a `((` or a `))` with no partner
 
+**Under Novel — or any template whose narration is unmarked and whose dialogue sits in double quotes —** the composer does two further things:
+
+- It **previews narration and asides** as you type. Narration is drawn in a quieter shade, and anything in `((double parentheses))` takes on the out-of-character colours it will wear in the conversation, so you can see at a glance which of your sentences are speech and which are not. (The composer cannot italicise them for you without altering your text, which it declines to do, so colour must serve.) This preview is not a warning and ignores the toggle below.
+- If the draft holds narration but **not one opening quotation mark**, every narrated line is tinted and underlined with dots — the composer's way of asking whether *You came, Theo said* was meant to be spoken. This one has no patience with "still typing": it is there from the first word, precisely so that you notice before you have written a paragraph of it. A post that is honestly all narration may ignore it; a single `"` anywhere dismisses it. Asides, scene breaks and code do not count as narration.
+
 Rest the pointer on a tinted mark and a small note explains the objection. **Nothing is ever corrected for you** — the house has seen what becomes of automatic correction and will not be party to it — and nothing you are still in the middle of typing is flagged: an opening quote with the caret just past it, or emphasis you have not yet closed, waits until you move on. An inch mark after a number (`6"`) is let alone, as is a lone asterisk with spaces either side (`2 * 3`) and a `* * *` scene break. Code is ignored. The warnings live only on the screen; they are not stored, sent, or exported.
 
 **Setting Options:**
@@ -306,7 +311,7 @@ Rest the pointer on a tinted mark and a small note explains the objection. **Not
 - **Dashes (`--` → `–`, `---` → `—`)** — On by default. Applies in the Salon composer and the Document Mode rich editor.
 - **Ellipsis (`...` → `…`)** — On by default. Same two surfaces.
 - **Try it** — A scratch textarea for the second group. Type a couple of hyphens or three full stops and watch. Nothing typed here is saved.
-- **Warn about punctuation that looks wrong** — On by default. Tints suspect quotes, asterisks and double parentheses in the Salon composer. Never alters your text.
+- **Warn about punctuation that looks wrong** — On by default. Tints suspect quotes, asterisks and double parentheses in the Salon composer, and under Novel-style templates a draft with no dialogue at all. Never alters your text.
 
 **How to configure:**
 

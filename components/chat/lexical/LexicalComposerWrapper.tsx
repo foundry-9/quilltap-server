@@ -87,6 +87,12 @@ interface LexicalComposerWrapperProps {
    * plugin also stays unmounted while the `composerSlashCommands` setting is off.
    */
   slashCommands?: SlashCommandContext | null
+  /**
+   * The chat's template leaves narration unmarked and quotes its dialogue
+   * (`isProseTemplate`): the punctuation plugin previews narration and asides
+   * and flags a draft with no dialogue.
+   */
+  proseMode?: boolean
 }
 
 /**
@@ -109,6 +115,7 @@ const ComposerPlugins = forwardRef<
     suspendSync,
     mentionPriorityCharacterIds,
     slashCommands,
+    proseMode,
   },
   ref,
 ) {
@@ -180,7 +187,7 @@ const ComposerPlugins = forwardRef<
       <SmartTypographyPlugin />
       <TextReplacementPlugin />
       {/* Read-only: paints warnings, never edits, so its order is immaterial. */}
-      <PunctuationLintPlugin />
+      <PunctuationLintPlugin proseMode={proseMode} />
     </>
   )
 })

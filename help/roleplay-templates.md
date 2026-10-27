@@ -79,6 +79,8 @@ For those who would rather read a novel than a chat log. Under Novel:
 - **Double asterisks mean nothing** — `**this**` is shown as plain *this*, never bold
 - **Out of character** talk goes in double parentheses, `((like this))`, in the out-of-character style
 
+While you write under Novel, the composer shows you which is which before you send: narration is tinted in a quieter colour, and an aside in double parentheses wears the same out-of-character livery it will have in the conversation. And if your draft has narration but not a single opening quotation mark anywhere, every narrated line is tinted and underlined with dots — a gentle cough to ask whether *Of course I came, Theo said* was meant to be said aloud. Open one quote and the cough subsides. The same applies to any template of your own that leaves narration unmarked and puts dialogue in double quotes. See [The Composer and Your Typing](chat-settings-composer.md) for the particulars.
+
 Novel's instructions to the model end on a short, correctly formatted passage, because models copy an example far more faithfully than they obey a list of rules. It is built only from parts the template editor offers, so a copy of it may be rearranged to taste.
 
 ### Working with Built-in Templates

@@ -10,7 +10,13 @@
  * plugin publishes.
  */
 
-import { PunctuationLintPlugin, PUNCTUATION_HIGHLIGHT_NAME } from '@/components/chat/lexical/plugins/PunctuationLintPlugin'
+import {
+  PunctuationLintPlugin,
+  PUNCTUATION_HIGHLIGHT_NAME,
+  NO_DIALOGUE_HIGHLIGHT_NAME,
+  NARRATION_HIGHLIGHT_NAME,
+  OOC_HIGHLIGHT_NAME,
+} from '@/components/chat/lexical/plugins/PunctuationLintPlugin'
 
 import React from 'react'
 import { act } from '@testing-library/react'
@@ -27,6 +33,7 @@ import {
 
 class FakeHighlight {
   ranges: Range[]
+  priority = 0
   constructor(...ranges: Range[]) {
     this.ranges = ranges
   }
@@ -34,9 +41,9 @@ class FakeHighlight {
 
 const registry = new Map<string, FakeHighlight>()
 
-/** The characters currently painted, in document order. */
-function paintedText(): string[] {
-  return (registry.get(PUNCTUATION_HIGHLIGHT_NAME)?.ranges ?? []).map((r) => r.toString())
+/** The characters currently painted under one highlight name, in document order. */
+function paintedText(name: string = PUNCTUATION_HIGHLIGHT_NAME): string[] {
+  return (registry.get(name)?.ranges ?? []).map((r) => r.toString())
 }
 
 describe('PunctuationLintPlugin', () => {
@@ -65,8 +72,11 @@ describe('PunctuationLintPlugin', () => {
     jest.restoreAllMocks()
   })
 
-  function mount(settings?: Record<string, unknown>) {
-    harness = renderPluginEditor(<PunctuationLintPlugin />, settings ? { chatSettings: settings } : {})
+  function mount(settings?: Record<string, unknown>, proseMode = false) {
+    harness = renderPluginEditor(
+      <PunctuationLintPlugin proseMode={proseMode} />,
+      settings ? { chatSettings: settings } : {},
+    )
   }
 
   it('paints a double quote opened inside open dialogue, and nothing else', () => {
@@ -135,5 +145,46 @@ describe('PunctuationLintPlugin', () => {
     mount({ smartTypographySettings: { punctuationWarnings: false } })
     act(() => seedParagraph(harness.editor, '"He told me "go away" and left."'))
     expect(paintedText()).toEqual([])
+  })
+
+  describe('prose mode', () => {
+    it('paints nothing of the kind outside prose mode', () => {
+      mount()
+      act(() => seedParagraph(harness.editor, 'She waits. ((brb))'))
+      expect(paintedText(NO_DIALOGUE_HIGHLIGHT_NAME)).toEqual([])
+      expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual([])
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual([])
+    })
+
+    it('previews narration and asides, and flags a draft with no dialogue', () => {
+      mount(undefined, true)
+      act(() => seedParagraph(harness.editor, 'You came, Theo said. ((brb))'))
+      expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual(['You came, Theo said.'])
+      expect(paintedText(OOC_HIGHLIGHT_NAME)).toEqual(['((brb))'])
+      expect(paintedText(NO_DIALOGUE_HIGHLIGHT_NAME)).toEqual(['You came, Theo said.'])
+    })
+
+    it('drops the no-dialogue tint once a quote opens, keeping the preview', () => {
+      mount(undefined, true)
+      act(() => seedParagraph(harness.editor, '"You came," Theo said.'))
+      expect(paintedText(NO_DIALOGUE_HIGHLIGHT_NAME)).toEqual([])
+      expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual(['Theo said.'])
+    })
+
+    it('keeps the preview but drops the tint when warnings are off', () => {
+      mount({ smartTypographySettings: { punctuationWarnings: false } }, true)
+      act(() => seedParagraph(harness.editor, 'She waits.'))
+      expect(paintedText(NO_DIALOGUE_HIGHLIGHT_NAME)).toEqual([])
+      expect(paintedText(NARRATION_HIGHLIGHT_NAME)).toEqual(['She waits.'])
+    })
+
+    it('ranks a specific warning above the tint above the preview', () => {
+      mount(undefined, true)
+      act(() => seedParagraph(harness.editor, 'She waits." ((brb))'))
+      const priority = (name: string) => registry.get(name)!.priority
+      expect(priority(PUNCTUATION_HIGHLIGHT_NAME)).toBeGreaterThan(priority(NO_DIALOGUE_HIGHLIGHT_NAME))
+      expect(priority(NO_DIALOGUE_HIGHLIGHT_NAME)).toBeGreaterThan(priority(OOC_HIGHLIGHT_NAME))
+      expect(priority(OOC_HIGHLIGHT_NAME)).toBeGreaterThan(priority(NARRATION_HIGHLIGHT_NAME))
+    })
   })
 })

@@ -53,6 +53,7 @@ import {
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
+import { isProseTemplate } from '@/lib/punctuation-lint/prose-mode'
 
 // Import extracted hooks
 import {
@@ -203,6 +204,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
   const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | null | undefined>(undefined)
+  const [composerProseMode, setComposerProseMode] = useState(false)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
@@ -1012,6 +1014,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
         setNarrationDelimiters(undefined)
+        setComposerProseMode(false)
         return
       }
       try {
@@ -1022,17 +1025,20 @@ export function SalonView({ chatId }: SalonViewProps) {
           setRoleplayRenderingPatterns(template.renderingPatterns)
           setRoleplayDialogueDetection(template.dialogueDetection)
           setNarrationDelimiters(template.narrationDelimiters)
+          setComposerProseMode(isProseTemplate(template))
         } else {
           setRoleplayTemplateName(null)
           setRoleplayRenderingPatterns(undefined)
           setRoleplayDialogueDetection(undefined)
           setNarrationDelimiters(undefined)
+          setComposerProseMode(false)
         }
       } catch {
         setRoleplayTemplateName(null)
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
         setNarrationDelimiters(undefined)
+        setComposerProseMode(false)
       }
     }
     fetchTemplateData()
@@ -1798,6 +1804,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          proseMode={composerProseMode}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
