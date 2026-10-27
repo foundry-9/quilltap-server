@@ -12,7 +12,7 @@ When you summon Ariel via the terminal button in the Salon composer, a live shel
 
 **This is read-only for the LLM in this release.** Characters see but cannot dictate. You hold exclusive dominion over the keyboard.
 
-Each chat maintains its own independent terminal session. Close the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight.
+Each chat maintains its own independent terminal session. Delete the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight. (So ephemeral, indeed, that a [backup](/settings?tab=system&section=backup-restore) does not carry it: the chat and Ariel's dispatches to it travel, but the sessions themselves and their transcripts stay behind, and a closed session's transcript is swept away after thirty days.)
 
 ## Opening a terminal
 

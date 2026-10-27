@@ -16,7 +16,13 @@
 - Deleting a chat (or a replace-mode restore, or an import overwrite) cascades its `terminal_sessions` rows away, but the transcripts in `logs/terminals/<id>.log` stayed. The only code that removed them, `cleanupClosedSessions`, works from rows, so they were orphaned for good. `DELETE /api/v1/terminals/[id]` had the same gap.
 - The daily maintenance tick now runs `TerminalSessionsRepository.sweepOrphanedTranscripts` after the closed-session reaper. It removes `.log` files no row names, and spares a session still live in the PTY manager and any file written in the last hour (`ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS`; the transcript is opened before the row is inserted). Shell-init files are left alone. The maintenance summary reports it as `orphanedTranscriptsSwept`.
 - Test: `__tests__/unit/database/terminal-transcript-orphan-sweep.test.ts`.
-- Also fixed `delete-service-annotations.test.ts`, whose repository mock lacked `logEntries` after the Log was added to the replace-mode clear; both its cases had been failing.
+#### Docs: terminal sessions are excluded from backups
+
+- `terminal_sessions` rows and their transcripts under `logs/terminals/` have never been in backups. This is now a stated decision rather than a gap: sessions cannot be resumed, `cwd` is a path on the source machine, closed sessions are reaped after `CLOSED_TERMINAL_RETENTION_DAYS` (30), and transcripts are raw shell output that can contain secrets. Ariel's dispatches are chat messages and are already backed up.
+- Listed under "Not Included in Backups" in `help/system-backup-restore.md` and as a sanctioned exclusion in release checklist 10.
+- `__tests__/unit/lib/backup/terminal-sessions-excluded.test.ts`: `createBackup` never reads the terminal-sessions repository, stages no terminal file or `.log`, and reports no terminal count in the manifest.
+- `lib/backup/restore/__tests__/delete-service-annotations.test.ts`: mock `logEntries.deleteAll`, which `clearFormat3Entities` now calls; both cases threw on main without it.
+
 #### Security: pdfjs-dist 6.4; pdf-parse replaced by a direct reader
 
 - `pdfjs-dist` 5.7.284 → 6.4.299 for GHSA-hq66-cqwq-w95j (high: script execution when a malicious PDF is opened with scripting enabled; affects 5.6.83 to before 6.2.108, no 5.x fix). The Salon's PDF preview only renders pages to a canvas and the server only extracts text, so the advisory's path was probably unreachable, but there was no patched 5.x to stay on.
