@@ -6,7 +6,8 @@
  * v1 function, but pdf-parse 2.x exports a `PDFParse` class, so every PDF
  * failed and Summon From Lore dropped its PDF sources. PDF reads now go
  * through `convertPdfBufferToText`, with the regex fallback when it finds
- * no text.
+ * no text. (pdf-parse has since been replaced by a direct pdfjs-dist reader;
+ * that reader has its own tests in pdf-converter.test.ts.)
  */
 
 import { extractFileContent } from '@/lib/services/file-content-extractor'
@@ -44,14 +45,10 @@ jest.mock('@/lib/file-storage/manager', () => ({
   },
 }))
 
-const mockGetText = jest.fn()
+const mockConvert = jest.fn()
 
-// pdf-parse 2.x shape: a class, not a callable module
-jest.mock('pdf-parse', () => ({
-  PDFParse: jest.fn().mockImplementation(() => ({
-    getText: mockGetText,
-    destroy: jest.fn().mockResolvedValue(undefined),
-  })),
+jest.mock('@/lib/mount-index/converters/pdf-converter', () => ({
+  convertPdfBufferToText: (...args: unknown[]) => mockConvert(...args),
 }))
 
 // ============================================================================
@@ -77,13 +74,13 @@ const mockDownload = fileStorageManager.downloadFile as jest.Mock
 
 describe('extractFileContent — PDF', () => {
   beforeEach(() => {
-    mockGetText.mockReset()
+    mockConvert.mockReset()
     mockDownload.mockReset()
     mockDownload.mockResolvedValue(Buffer.from('%PDF-1.4 not really parsed here'))
   })
 
-  it('returns the text pdf-parse 2.x extracts', async () => {
-    mockGetText.mockResolvedValue({ text: 'Grandma keeps bees on the roof.', total: 1 })
+  it('returns the text the PDF reader extracts', async () => {
+    mockConvert.mockResolvedValue('Grandma keeps bees on the roof.')
 
     const result = await extractFileContent(pdfFile())
 
@@ -92,8 +89,8 @@ describe('extractFileContent — PDF', () => {
     expect(result.content).toBe('Grandma keeps bees on the roof.')
   })
 
-  it('falls back to the regex extractor when pdf-parse finds no text', async () => {
-    mockGetText.mockResolvedValue({ text: '   ', total: 1 })
+  it('falls back to the regex extractor when the PDF reader finds no text', async () => {
+    mockConvert.mockResolvedValue('   ')
     mockDownload.mockResolvedValue(Buffer.from('BT (Fallback lore line) Tj ET', 'latin1'))
 
     const result = await extractFileContent(pdfFile())
@@ -102,8 +99,9 @@ describe('extractFileContent — PDF', () => {
     expect(result.content).toContain('Fallback lore line')
   })
 
-  it('falls back when pdf-parse throws', async () => {
-    mockGetText.mockRejectedValue(new ReferenceError('DOMMatrix is not defined'))
+  it('falls back when the PDF reader fails', async () => {
+    // The reader logs and answers '' on any failure (e.g. DOMMatrix missing)
+    mockConvert.mockResolvedValue('')
     mockDownload.mockResolvedValue(Buffer.from('BT (Recovered text) Tj ET', 'latin1'))
 
     const result = await extractFileContent(pdfFile())
@@ -113,7 +111,7 @@ describe('extractFileContent — PDF', () => {
   })
 
   it('reports failure when neither reader finds text', async () => {
-    mockGetText.mockResolvedValue({ text: '', total: 1 })
+    mockConvert.mockResolvedValue('')
 
     const result = await extractFileContent(pdfFile())
 
@@ -122,7 +120,7 @@ describe('extractFileContent — PDF', () => {
   })
 
   it('truncates very long PDF text', async () => {
-    mockGetText.mockResolvedValue({ text: 'x'.repeat(60000), total: 1 })
+    mockConvert.mockResolvedValue('x'.repeat(60000))
 
     const result = await extractFileContent(pdfFile())
 
