@@ -4,6 +4,21 @@
 
 ### 4.11-dev
 
+#### Security: pdfjs-dist 6.4; pdf-parse replaced by a direct reader
+
+- `pdfjs-dist` 5.7.284 → 6.4.299 for GHSA-hq66-cqwq-w95j (high: script execution when a malicious PDF is opened with scripting enabled; affects 5.6.83 to before 6.2.108, no 5.x fix). The Salon's PDF preview only renders pages to a canvas and the server only extracts text, so the advisory's path was probably unreachable, but there was no patched 5.x to stay on.
+- `pdf-parse` 2.4.5 (unmaintained since October 2025, pinned to `pdfjs-dist` 5.4.296) is removed. Our `overrides` had forced it onto the root pdfjs, and pdfjs 6 removed the `PDFDocumentProxy.destroy()` its cleanup calls, so every extraction would have leaked a document and its worker without an error. `convertPdfBufferToText` (`lib/mount-index/converters/pdf-converter.ts`) now reads with `pdfjs-dist/legacy/build/pdf.mjs` directly, reproduces pdf-parse's default line, tab and `-- N of T --` page-marker assembly, disables XFA, and always destroys the loading task. The regex fallback in `file-content-extractor.ts` is unchanged. Compared against pdf-parse on four real PDFs: the three text documents are byte-identical; a sheet-music score loses a space between bar numbers and note glyphs in 52 lines, which comes from pdfjs 6's whitespace items, not the assembly.
+- Bug 178's fix moves with it: `pdfjs-dist` replaces `pdf-parse` in `serverExternalPackages` and the standalone tracing includes, and the job-child esbuild bundle now marks `pdfjs-dist` external, so it loads from `node_modules` and finds `@napi-rs/canvas` through its own `import.meta.url`.
+- `@napi-rs/canvas` 0.1.100 → 1.0.13 (pdfjs 6's optional dependency; same platform-package layout) in the root and `packages/quilltap`. The `pdfjs-dist` and `@napi-rs/canvas` entries in root `overrides` existed only for pdf-parse's nested copies and are removed. `public/pdf.worker.mjs` is re-synced to 6.4.299.
+
+#### Fix: PDF preview showed a blank first page on dark themes (bug 266)
+
+- `FilePreviewPdf.tsx` started a new `page.render()` on every scale change without cancelling the one in flight. The fit-to-width scale lands right after the first render starts, so the second run resized (cleared) the canvas under the first and pdf.js refused it ("Cannot use the same canvas during multiple render() operations"); the first then drew black text on a transparent canvas. The effect now cancels and awaits the in-flight `RenderTask` before redrawing, cancels on cleanup, and ignores `RenderingCancelledException`. Not caused by the pdfjs upgrade; found while checking it.
+
+#### Chore: minor and patch dependency updates
+
+- `npm update -S` in the root: `next` / `eslint-config-next` 16.4.3, `openai` 7.45.0, `@openrouter/sdk` 1.5.9, TanStack Query 5.105.0, `@tanstack/react-virtual` 3.14.23, `react` / `react-dom` 19.3.1, `zod` 4.6.7, `sharp` 0.35.5, `ws` 8.22.0, `mammoth` 1.13.0, `katex` 0.19.1, `postcss` 8.5.32, `autoprefixer` 10.6.2, `dotenv` 18.0.9, `@playwright/test` 1.64.1, and smaller type/test packages. Major-version updates (`typescript` 7, `eslint` 10, `better-sqlite3-multiple-ciphers` 13, `chokidar` 6, `croner` 11, `emojibase-data` 18, `jest-fetch-mock` 4, `@types/node` 26) are not included.
+
 #### Fix: `quilltap db --count` printed ANSI color codes under `FORCE_COLOR`
 
 - `--count` passed the bare number to `console.log`, which colors numbers when `FORCE_COLOR` is set. Jest workers set it when run from a TTY, so `db-raw-sql-qt-text.integration.test.js` received `\x1b[33m2\x1b[39m` and failed with "Expected: "2", Received: "2"". The count is now stringified before printing, so the output is plain text regardless of color settings.

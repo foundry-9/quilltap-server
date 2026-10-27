@@ -20,17 +20,6 @@ jest.mock('@/lib/logging/create-logger', () => ({
   })),
 }))
 
-// Mock pdf-parse dependency so pdf converter doesn't crash in test environment
-jest.mock(
-  'pdf-parse',
-  () => ({
-    PDFParse: jest.fn().mockImplementation(() => ({
-      getText: jest.fn().mockResolvedValue({ text: 'pdf content', total: 1 }),
-      destroy: jest.fn().mockResolvedValue(undefined),
-    })),
-  }),
-  { virtual: true }
-)
 // Mock docx converter's dependency (mammoth) so it doesn't crash
 jest.mock(
   'mammoth',
