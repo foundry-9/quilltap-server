@@ -892,6 +892,26 @@ Update a profile.
 
 Delete a profile.
 
+#### `POST /api/v1/connection-profiles/[id]?action=auto-configure`
+
+Look up the profile's provider and model and fill in recommended settings. No request body. The profile is updated in place with `maxContext`, `maxTokens`, `modelClass`, `isDangerousCompatible`, and `temperature` / `max_tokens` / `top_p` merged into `parameters`.
+
+**Response:**
+```json
+{
+  "profile": {},
+  "autoConfigureResult": {
+    "maxContext": 200000,
+    "maxTokens": 8192,
+    "temperature": 0.7,
+    "topP": 1,
+    "isDangerousCompatible": false,
+    "modelClass": "Standard",
+    "searchSources": ["https://…"]
+  }
+}
+```
+
 #### `POST /api/v1/connection-profiles?action=test-connection`
 
 Test a profile connection.
@@ -972,6 +992,31 @@ Update an embedding profile. When the update changes what the default profile pr
 #### `DELETE /api/v1/embedding-profiles/[id]`
 
 Delete an embedding profile.
+
+#### `POST /api/v1/embedding-profiles/[id]?action=refit`
+
+Manually enqueue a vocabulary refit for a BUILTIN profile; a full reindex follows it. Other providers get 400 (use `reindex`). No request body.
+
+**Response:** `{ "message": "Vocabulary refit job enqueued", "jobId": "uuid" }`
+
+#### `POST /api/v1/embedding-profiles/[id]?action=reindex`
+
+Enqueue a re-embed of stored content with this profile.
+
+**Request Body** (optional):
+```json
+{ "scope": "all" }
+```
+
+`scope` is `all` (default; invalidates every embedding status row first) or `mismatched-dim` (re-embeds only rows whose stored vector dimension differs from `truncateToDimensions`, or `dimensions` when that is unset; 400 if neither is set).
+
+**Response:** `{ "message": "…", "jobId": "uuid", "scope": "all", "invalidatedCount": 0 }`
+
+#### `POST /api/v1/embedding-profiles/[id]?action=reapply`
+
+Slice and renormalize stored vectors to match the profile's `truncateToDimensions` (Matryoshka). No provider call is made, and each affected database is backed up before any rewrite. 400 if `truncateToDimensions` is not set. No request body.
+
+**Response:** `{ "message": "…", "jobId": "uuid", "targetDimensions": 512 }`
 
 #### `GET /api/v1/embedding-profiles?action=list-providers`
 
@@ -1456,6 +1501,26 @@ file: <character.json>
 #### `POST /api/v1/characters?action=ai-wizard`
 
 Use AI to generate character details from a brief description.
+
+#### `POST /api/v1/characters?action=ai-wizard-stream`
+
+Same request body and generation as `ai-wizard`, but streams progress as Server-Sent Events (`Content-Type: text/event-stream`). Each event is a `data: {...}` line carrying a wizard progress event; the stream closes when generation finishes.
+
+#### `POST /api/v1/characters?action=reset-builtins`
+
+Delete and re-seed the built-in characters (Lorian and Riya) from the bundled seed data. Existing IDs are preserved so chats and links keep pointing at the right rows; their chats and images are not deleted. Memories are re-imported and avatars re-seeded. No request body.
+
+**Response:**
+```json
+{
+  "success": true,
+  "deletedCharacterIds": ["uuid"],
+  "preservedIds": { "Lorian": "uuid", "Riya": "uuid" },
+  "postResetIds": { "Lorian": "uuid", "Riya": "uuid" },
+  "remappedIdCount": 2,
+  "importResult": {}
+}
+```
 
 #### `POST /api/v1/characters?action=quick-create`
 
@@ -6623,6 +6688,73 @@ Scoping notes, because they are not uniform:
 
 An unknown `type` returns 400.
 
+#### `POST /api/v1/system/tools?action=export`
+
+Create a `.qtap` export, streamed as NDJSON (`Content-Disposition: attachment; filename="quilltap-<type>-<date>.qtap"`).
+
+**Body:**
+```json
+{ "type": "characters", "scope": "selected", "selectedIds": ["uuid"], "includeMemories": false }
+```
+
+`type` is an `ExportEntityType` (see `export-entities`). `scope` is `all` (default) or `selected`.
+
+#### `GET /api/v1/system/tools?action=export-preview`
+
+Preview what an export would contain.
+
+**Query Parameters:**
+- `type` (required) — an `ExportEntityType`
+- `scope` — `all` (default) or `selected`
+- `selectedIds` — comma-separated ids, for `selected`
+- `includeMemories` — `true` to count memories
+
+Returns the preview object. 400 if `type` is missing.
+
+#### `POST /api/v1/system/tools?action=import-preview`
+
+Preview an import without writing anything. Send `multipart/form-data` with `file` (a `.qtap`, NDJSON or legacy JSON), or a JSON body `{ "exportData": {…} }` for older clients. A file that is not `quilltap-export` v1.0 returns 400.
+
+#### `POST /api/v1/system/tools?action=import-execute`
+
+Run the import. Send `multipart/form-data` with `file` and an `options` JSON string, or a JSON body `{ "exportData": {…}, "options": {…} }`.
+
+**Options:**
+```json
+{ "conflictStrategy": "skip", "importMemories": false, "selectedIds": { "characters": ["uuid"] } }
+```
+
+`conflictStrategy` is required: `skip`, `replace` (alias of `overwrite`), `overwrite`, or `duplicate`. `selectedIds` (optional) limits the import to the listed ids per entity type. Returns the import result (`success`, `imported`, `skipped`, `warnings`, `importedCharacterIds`, …).
+
+#### `POST /api/v1/system/tools?action=ai-import-stream`
+
+Generate characters from source material with an LLM, streamed as Server-Sent Events (`text/event-stream`, one `data: {…}` progress event per line).
+
+**Body:**
+```json
+{
+  "profileId": "uuid",
+  "sourceFileIds": ["uuid"],
+  "sourceText": "",
+  "includeMemories": true,
+  "includeChats": false,
+  "existingResult": null,
+  "regenerateSteps": null
+}
+```
+
+`profileId` is required, and at least one of `sourceFileIds` / `sourceText` must be non-empty (400 otherwise). `existingResult` and `regenerateSteps` re-run selected steps against an earlier result.
+
+#### The Almanack actions
+
+The Almanack (system report) is served by five `capabilities-report-*` actions; the names predate the rename and are kept so saved links keep working. Reports are Markdown files in the `/reports` folder.
+
+- `POST …?action=capabilities-report-generate` — generate and save a new report. Optional body `{ "progressId": "uuid" }` correlates the progress stream. Returns `{ "success": true, "reportId", "filename", "storageKey", "size", "content" }`; `reportId` is the file id the other actions key off.
+- `GET …?action=capabilities-report-progress&id=<progressId>` — Server-Sent Events of phase progress for a run. Replays the backlog (including a terminal `done`/`error`) so a reopened card can re-attach. 400 without `id`.
+- `GET …?action=capabilities-report-list` — `{ "reports": [{ "id", "filename", "storageKey", "createdAt", "size" }] }`, newest first.
+- `GET …?action=capabilities-report-get&reportId=<id>` — `{ "reportId", "filename", "content", "size" }`. With `&download=true`, returns the Markdown as an attachment. 404 if not found.
+- `POST …?action=capabilities-report-delete` — body `{ "reportId": "uuid" }`; deletes the report and its file. Returns `{ "success": true }`.
+
 ---
 
 ### LLM Tools
@@ -6959,6 +7091,20 @@ Remove a character from the project roster.
 }
 ```
 
+#### `GET /api/v1/projects/[id]?action=list-characters`
+
+List the project's character roster.
+
+**Response:**
+```json
+{
+  "characters": [{ "id": "uuid", "name": "Alice", "tags": [] }],
+  "count": 1
+}
+```
+
+Roster entries whose character no longer exists are omitted.
+
 #### `GET /api/v1/projects/[id]?action=list-chats`
 
 List chats in the project with pagination.
@@ -6986,6 +7132,42 @@ Remove a chat from the project.
 ```json
 {
   "chatId": "uuid"
+}
+```
+
+#### `GET /api/v1/projects/[id]?action=list-files`
+
+List the project's files. When the project has a linked primary document store, the store's files are listed (each with `mountPointId` and `relativePath`); otherwise the legacy files table is filtered by `projectId`.
+
+**Response:**
+```json
+{
+  "files": [{ "id": "uuid", "originalFilename": "notes.md", "mimeType": "text/markdown", "size": 1024, "category": "DOCUMENT" }],
+  "count": 1
+}
+```
+
+#### `POST /api/v1/projects/[id]?action=add-file`
+
+Associate an existing file with the project.
+
+**Request Body:**
+```json
+{
+  "fileId": "uuid"
+}
+```
+
+Returns `{ "success": true }`. 404 if the project or file does not exist.
+
+#### `DELETE /api/v1/projects/[id]?action=remove-file`
+
+Remove a file's association with the project. The file itself is not deleted.
+
+**Request Body:**
+```json
+{
+  "fileId": "uuid"
 }
 ```
 

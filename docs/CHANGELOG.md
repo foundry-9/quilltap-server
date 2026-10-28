@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Docs: release checklist 14 documentation pass for 4.11.0
+
+- README: new "Published JSON Schemas" table linking all six schemas in `public/schemas/`, with what each describes and when to use it; storyteller mode, diagrams, Stop / raise-hand and the WCAG AA theme check added to the tour.
+- API.md: documented 17 undocumented actions — `characters` `ai-wizard-stream` / `reset-builtins`; `projects/[id]` `list-characters` / `list-files` / `add-file` / `remove-file`; `connection-profiles/[id]` `auto-configure`; `embedding-profiles/[id]` `refit` / `reapply` / `reindex`; `system/tools` `export` / `export-preview` / `import-preview` / `import-execute` / `ai-import-stream` and the five `capabilities-report-*` actions.
+- DEVELOPMENT.md: Contributing links GitHub issues and pull requests; new "Reporting bugs" section (Bug issue form, `#N`, catalogue frozen at Bug 269); plugin build typecheck documented.
+- CLAUDE.md: tool-effect declaration rule (`lib/tools/effects.ts`, executor `effectCeiling`) and accessibility conventions (`BaseModal` / `useDialogFocus`, `activateOnKey`, accessible names, contrast floors).
+- About page: removed `pdf-parse`; credited Mermaid, Graphviz, svg2roughjs, DOMPurify, xterm.js, node-pty, ws, croner, jsonrepair, remark-breaks and remark-smartypants.
+- 4.11.0 release notes: the October 28 accessibility pass, theme-storybook 1.0.90 and create-quilltap-theme 2.0.21; dated October 28, 2026.
+
 #### Docs: release-notes procedure in release checklist 14
 
 - `.claude/commands/release-checklist-14-docs.md` gains a "Drafting release notes" section for minor and major releases: where to gather the change surface (`rel/X.(Y-1).0..main`, the dev CHANGELOG section, completed specs, help changes, closed bugs, new migrations), the structure and house voice used by previous minor releases, and accuracy rules.
