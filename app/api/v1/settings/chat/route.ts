@@ -10,7 +10,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, CoreWhisperSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -30,6 +30,31 @@ function findRetiredConciergeKeys(body: unknown): string[] {
     retired.push('cheapLLMSettings.imagePromptProfileId')
   }
   return retired
+}
+
+/**
+ * Every top-level key a PUT may carry. Anything else is refused with a 400
+ * rather than silently dropped: a field the client thinks it saved but the
+ * route never wrote (Core whisper's toggles, for one) reads back unchanged and
+ * looks like a UI that won't take the click.
+ */
+const ACCEPTED_KEYS = new Set([
+  'avatarDisplayMode', 'avatarDisplayStyle', 'tagStyles', 'cheapLLMSettings',
+  'imageDescriptionProfileId', 'themePreference', 'defaultRoleplayTemplateId',
+  'sidebarWidth', 'tokenDisplaySettings', 'memoryCascadePreferences',
+  'llmLoggingSettings', 'autoDetectRng', 'customTools', 'customToolTriggers',
+  'customToolIntervention', 'agentModeSettings', 'storyBackgroundsSettings',
+  'contextCompressionSettings', 'conciergeSettings', 'autoLockSettings',
+  'compositionModeDefault', 'composerSpellcheck', 'composerEmoji',
+  'composerUnicode', 'composerSlashCommands', 'impersonationVoiceMode',
+  'textReplacementsEnabled', 'autonomousRoomSettings', 'thinkingDisplay',
+  'autoScrollOnResponseComplete', 'answerConfirmationSettings',
+  'smartTypographySettings', 'wardrobeImageSettings', 'coreWhisper',
+])
+
+function findUnknownKeys(body: unknown): string[] {
+  if (!body || typeof body !== 'object') return []
+  return Object.keys(body as Record<string, unknown>).filter((key) => !ACCEPTED_KEYS.has(key))
 }
 
 /**
@@ -71,6 +96,7 @@ async function updateChatSettings(
   answerConfirmationSettings?: unknown,
   smartTypographySettings?: unknown,
   wardrobeImageSettings?: unknown,
+  coreWhisper?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -201,6 +227,10 @@ async function updateChatSettings(
       imageProfileId: updateData.wardrobeImageSettings.imageProfileId ?? null,
       generateFromTools: updateData.wardrobeImageSettings.generateFromTools,
     })
+  }
+  if (typeof coreWhisper !== 'undefined') {
+    updateData.coreWhisper = CoreWhisperSettingsSchema.parse(coreWhisper)
+    logger.debug('[Settings v1] Core whisper settings updated', { coreWhisper: updateData.coreWhisper })
   }
   if (typeof contextCompressionSettings !== 'undefined') {
     // Basic validation - ensure it's an object with expected structure
@@ -396,6 +426,12 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       )
     }
 
+    const unknown = findUnknownKeys(body)
+    if (unknown.length > 0) {
+      logger.warn('[Settings v1] Rejected a PUT carrying unknown settings keys', { userId: user.id, unknown })
+      return badRequest(`Invalid settings: unknown key${unknown.length === 1 ? '' : 's'} ${unknown.join(', ')}`)
+    }
+
     const {
       avatarDisplayMode,
       avatarDisplayStyle,
@@ -430,6 +466,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       answerConfirmationSettings,
       smartTypographySettings,
       wardrobeImageSettings,
+      coreWhisper,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -468,6 +505,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       answerConfirmationSettings,
       smartTypographySettings,
       wardrobeImageSettings,
+      coreWhisper,
     )
 
     return successResponse(chatSettings)

@@ -4,6 +4,11 @@
 
 ### 4.11-dev
 
+#### Fix: Core whisper settings never saved; two settings cards left the UI stale
+
+- `PUT /api/v1/settings/chat` destructured a fixed list of keys and ignored the rest. `coreWhisper` was never on it, so every change on the Core whisper card (including the master switch) came back 200 with the old value and the control snapped back. The route now validates and writes `coreWhisper` through `CoreWhisperSettingsSchema`, and refuses any key it does not write with a 400 instead of dropping it.
+- The default roleplay template picker and the auto-lock card saved correctly but never wrote the response into the shared `settings.chat` query, so the picker snapped back and a remounted auto-lock card showed the pre-save value until the next refetch. Both now write the PUT response into the cache.
+
 #### Fix: Docker recreate lockout, deconvert into the container layer, in-container CLI, folder picker, local image build
 
 Found by the Docker test plan (`docs/developer/docker-test-plan.md`) against V4test.

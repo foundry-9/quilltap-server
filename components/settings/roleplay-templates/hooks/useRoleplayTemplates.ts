@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA, EMPTY_ADD_ONS } from '../types'
@@ -205,6 +205,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   // Fetch templates and settings via TanStack Query
+  const queryClient = useQueryClient()
   const { data: templatesData, isLoading: loading, refetch: mutateTemplates } = useQuery({
     queryKey: queryKeys.roleplayTemplates.all,
     queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
@@ -243,6 +244,9 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         throw new Error(data?.error || `Failed to update default template (${res.status})`)
       }
 
+      // The picker reads the shared settings row, so the saved value has to
+      // land in the cache or the selection snaps back until the next refetch.
+      queryClient.setQueryData(queryKeys.settings.chat, await res.json())
       setSuccess('Default template updated successfully')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
