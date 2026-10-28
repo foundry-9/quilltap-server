@@ -752,6 +752,11 @@ export default function DocumentPane({
         {editingIndicator && (
           <span className="qt-doc-status-item ml-auto">{editingIndicator}</span>
         )}
+        {/* Screen readers hear each completed save and the AI starting to edit,
+            not every Unsaved/Saving flicker while typing. */}
+        <span className="sr-only" role="status" aria-live="polite">
+          {editingIndicator ?? (saveStatus.label === 'Saved' ? 'Saved' : '')}
+        </span>
       </div>
     </div>
   )

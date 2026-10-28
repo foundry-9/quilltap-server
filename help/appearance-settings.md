@@ -283,6 +283,8 @@ That courtesy now extends to every dialog in the house, not merely the principal
 
 Nor need you reach for the mouse to open things. The name on a character card, a document store's title, a folder or a file in the Scriptorium's lists, an entry in the LLM log, a picture in a gallery and a document's title (to rename it) may all be reached with Tab and set going with Enter or the space bar.
 
+The very first press of Tab on any page now offers a **Skip to content** link, so the keyboard may bypass the sidebar entirely and land in the page proper. In the Salon, a screen reader is told each time a character replies, and Document Mode murmurs "Saved" when your work is safely put away. A whisper you are merely overhearing says so in words, not just in a paler ink, and the close buttons on workspace tabs have grown large enough to hit without squinting. Should your system be set to Windows High Contrast, the icons now keep their ink rather than vanishing into the page.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load

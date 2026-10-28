@@ -48,7 +48,7 @@ export function CopyChatIdButton({ chatId, variant = 'inline' }: CopyChatIdButto
     <button
       type="button"
       onClick={handleCopy}
-      className="flex-shrink-0 inline-flex items-center justify-center qt-text-muted hover:text-foreground transition-colors"
+      className="flex-shrink-0 inline-flex items-center justify-center min-w-6 min-h-6 qt-text-muted hover:text-foreground transition-colors"
       title={copied ? 'Copied!' : `Copy this conversation's ID (${chatId}) to the clipboard`}
       aria-label="Copy conversation ID"
     >

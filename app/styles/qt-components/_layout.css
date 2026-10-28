@@ -735,6 +735,20 @@
     }
   }
 
+  /* Phone widths: the queue badges take a row of their own rather than
+     sliding under the search button (WCAG 1.4.10 reflow). */
+  @media (max-width: 639px) {
+    .qt-page-toolbar {
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
+    }
+
+    .qt-page-toolbar-right {
+      flex-basis: 100%;
+      justify-content: center;
+    }
+  }
+
   /**
    * App header - simplified with logo, search, actions
    * @deprecated Use qt-page-toolbar instead

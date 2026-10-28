@@ -110,9 +110,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // in-app navigation is pure openTab with full keep-alive.
   const railAndContent = (
     <div className="qt-app-layout">
+      <a href="#main-content" className="qt-skip-link">Skip to content</a>
       <LeftSidebar />
       <div className="qt-app-main">
-        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <main id="main-content" tabIndex={-1} className="flex flex-col flex-1 min-h-0 overflow-hidden focus:outline-none">
           <PageToolbar />
           <div className="flex-1 min-h-0 overflow-y-auto">
             {children}

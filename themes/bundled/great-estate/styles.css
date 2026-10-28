@@ -690,7 +690,9 @@
   letter-spacing: 0.04em;
   text-transform: capitalize;
   font-weight: 700;
-  color: var(--estate-gold-dark);
+  /* Bronze, not gold-dark: gold-dark is 3.2:1 on cream, short of 4.5:1 for the
+     small card-title headings (WCAG 1.4.3). Dark mode keeps its gold below. */
+  color: var(--estate-bronze);
 }
 
 [data-theme="great-estate"].dark h1,

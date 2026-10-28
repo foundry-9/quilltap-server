@@ -1356,7 +1356,9 @@
 }
 
 [data-theme="earl-grey"] :focus-visible {
-  outline: 2px solid hsl(var(--border-300) / 0.3);
+  /* The theme ring token (3.4:1 or better on every surface); the old 30%-alpha
+     border grey was all but invisible (WCAG 2.4.7). */
+  outline: 2px solid var(--color-ring);
   outline-offset: 2px;
   box-shadow: none;
 }

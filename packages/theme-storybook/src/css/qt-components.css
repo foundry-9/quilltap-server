@@ -3971,6 +3971,66 @@
   height: 100%;
 }
 
+/* Page toolbar - top toolbar with search and actions */
+.qt-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--qt-app-header-bg);
+  backdrop-filter: var(--qt-app-header-blur);
+  -webkit-backdrop-filter: var(--qt-app-header-blur);
+}
+
+.qt-page-toolbar-left {
+  display: flex;
+  align-items: center;
+  /* Reserve space for hamburger on mobile, empty on desktop */
+  min-width: 2.5rem;
+}
+
+.qt-page-toolbar-center {
+  flex: 1 1 0%;
+  display: flex;
+  justify-content: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  max-width: 32rem;
+}
+
+.qt-page-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Balance with left section */
+  min-width: 2.5rem;
+  justify-content: flex-end;
+}
+
+/* On desktop, hide the left placeholder when hamburger is hidden */
+@media (min-width: 768px) {
+  .qt-page-toolbar-left {
+    min-width: 0;
+  }
+}
+
+/* Phone widths: the queue badges take a row of their own rather than
+   sliding under the search button (WCAG 1.4.10 reflow). */
+@media (max-width: 639px) {
+  .qt-page-toolbar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .qt-page-toolbar-right {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+}
+
 .qt-app-header {
   display: flex;
   align-items: center;
@@ -4701,6 +4761,27 @@
   border-top: 1px solid var(--qt-tab-divider-color);
 }
 
+/* Skip link - first stop for the keyboard, hidden until focused (WCAG 2.4.1) */
+.qt-skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -10rem;
+  z-index: 60; /* above the sticky toolbar and the sidebar rail */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.qt-skip-link:focus {
+  top: 0.5rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 /* ==========================================================================
    WORKSPACE  (tabbed two-pane shell — strip, divider, drop-zone)
 
@@ -4761,9 +4842,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-left: 0.125rem;
+  /* 24px: the WCAG 2.5.8 minimum target. The negative margin keeps the tab's footprint. */
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -0.175rem -0.25rem -0.175rem 0;
   border-radius: 0.25rem;
   opacity: 0.55;
   transition: opacity 0.15s ease, background 0.15s ease;

@@ -110,6 +110,7 @@ import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
 
 /** Fallback re-read cadence for the avatar watch, while the socket is down. */
 const AVATAR_POLL_INTERVAL_MS = 5000
@@ -1337,6 +1338,11 @@ export function SalonView({ chatId }: SalonViewProps) {
     return chatSettings.avatarDisplayMode === 'ALWAYS'
   }, [chatSettings])
 
+  const announcerNameFor = useCallback((participantId: string | null | undefined) => {
+    if (!participantId) return undefined
+    return chat?.participants.find(p => p.id === participantId)?.character?.name
+  }, [chat?.participants])
+
   const getRespondingCharacter = useCallback(() => {
     if (respondingParticipantId) {
       const participant = chat?.participants.find(p => p.id === respondingParticipantId)
@@ -1573,6 +1579,8 @@ export function SalonView({ chatId }: SalonViewProps) {
       style={visibleStoryBackgroundUrl ? { '--story-background-url': `url('${visibleStoryBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
+        <h1 className="sr-only">{chat?.title || 'The Salon'}</h1>
+        <ReplyAnnouncer messages={renderMessages} nameFor={announcerNameFor} />
         <SalonModePanes
           parentChatId={id}
           chatTitle={chat?.title}

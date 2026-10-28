@@ -4,6 +4,20 @@
 
 ### 4.11-dev
 
+#### Fix: remaining WCAG items from release checklist 13
+
+- Skip link: a "Skip to content" link (`.qt-skip-link`) is the first Tab stop in the app shell and jumps to `<main id="main-content">`.
+- Salon headings and announcements: the Salon renders a visually hidden `<h1>` with the chat title. New `ReplyAnnouncer` is a polite live region that reads out each character reply as it lands (the virtualized message list cannot be a `role="log"` without re-announcing rows as they mount). Document Mode announces each completed save and "AI editing", not the Unsaved/Saving flicker.
+- Colour-only states: overheard whispers say "(overheard)" in their label; a participant card in an Unmoderated chat carries hidden "Unmoderated chat." text alongside the danger tint.
+- Pointer targets: workspace tab-close buttons are 24x24 (was 18x18, footprint kept with negative margins); the inline copy-conversation-ID button is at least 24x24.
+- Terminal keyboard trap: xterm keeps Tab for the shell, so focus could not leave the terminal. F6 / Shift+F6 now move focus to the next / previous control outside it.
+- Earl Grey focus ring: `:focus-visible` used a 30%-alpha border grey; it now uses the theme's ring token. Theme 1.3.10.
+- Great Estate light: h1-h3 were gold-dark (3.2:1 on cream), failing for small card-title headings; light mode now uses the bronze already used for links and tabs (5.0:1). Theme 1.0.10.
+- Rains dark: `mutedForeground` lifted from 59.2% to 62% lightness so muted text on raised surfaces (slide-over headers) clears 4.5:1. Theme 1.3.14.
+- Forced colors (Windows High Contrast): mask-drawn icons painted with `background-color: currentColor` were forced to Canvas and vanished. `[data-icon]` now opts out with `forced-color-adjust: none` (in `scripts/generate-icon-css.ts`).
+- 320px reflow: below 640px the page toolbar wraps and the queue badges take their own row instead of sliding under the search button. The footer pads clear of the floating Brahma Console launcher at phone width.
+- theme-storybook 1.0.90: mirrors `.qt-skip-link`, the tab-close size, and ports the `.qt-page-toolbar` family (with the new phone-width rule).
+
 #### Fix: accessible names for every form control (release checklist 13, continued)
 
 - About 220 `<input>` / `<select>` / `<textarea>` controls across roughly 90 files in `app/` and `components/` had no accessible name. Most sat beside a `<label>` with no `htmlFor`, or under a heading or `<span>` caption. Visible labels are now wired with `useId()` + `htmlFor`/`id`. Captions that are headings are wired with `aria-labelledby`. Placeholder-only and label-less controls (search boxes, inline row editors, the composer's source-mode textarea, the message edit box) get an `aria-label`. No styling or visible text changed.

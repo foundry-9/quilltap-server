@@ -285,6 +285,8 @@ export function ParticipantCard({
         participant-card
       `}
     >
+      {/* The danger tint is colour only; say it in words too (WCAG 1.4.1). */}
+      {isDangerousChat && <span className="sr-only">Unmoderated chat.</span>}
       {/* Position badge - shown for all active participants with a position */}
       {turnPosition != null && turnPosition > 0 && (
         <div className={`qt-participant-position-badge ${getPositionBadgeClass()}`} data-testid="position-badge">

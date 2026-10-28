@@ -64,6 +64,8 @@ The pane state — whether it is open, which session it shows, where you set the
 
 **Keyboard shortcut:** ⌘⇧T (or Ctrl+Shift+T) toggles Terminal Mode. Escape exits focus mode back to a split.
 
+**Leaving the terminal by keyboard:** the shell keeps the Tab key for itself — it has completions to attend to — so press **F6** to step out of the terminal to the next control on the page, or **Shift+F6** to step back to the one before it. Ariel will not detain you.
+
 ## Closing a session
 
 Click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), and Ariel hangs up the line — the very courtesy a closing terminal window extends — and, should the shell prove deaf to it, shows it the door outright a few moments later. Merely leaving the chat does *not* close a terminal; it carries on in the background until you return. Deleting the chat, however, ends every terminal it kept, so no orphaned processes linger in the cellar.

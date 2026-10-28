@@ -49,6 +49,16 @@
   background-image: var(--_qt-icon-bg, none);
 }
 
+/* Windows High Contrast / forced colors replaces every background-color with
+   the system Canvas colour, which would paint each masked glyph the same colour
+   as the page behind it. Opt the icon out so it keeps the (forced) text colour
+   it inherits. */
+@media (forced-colors: active) {
+  [data-icon] {
+    forced-color-adjust: none;
+  }
+}
+
 /* ---- per-icon defaults (generated from icon-registry.ts) ---- */
 [data-icon="close"] { --_qt-icon-mask: url("/images/icons/close.svg"); --_qt-icon-bg: none; }
 [data-icon="pencil"] { --_qt-icon-mask: url("/images/icons/pencil.svg"); --_qt-icon-bg: none; }

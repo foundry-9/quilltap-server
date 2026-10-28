@@ -385,6 +385,7 @@ function MessageRowInner({
                   whispered to {message.targetParticipantIds!.map(
                     id => resolveWhisperTargetLabel(id, participantNames, currentUserId)
                   ).join(', ')}
+                  {isOverheardWhisper && ' (overheard)'}
                 </div>
               )}
               {/* Silent mode label */}
