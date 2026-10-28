@@ -12,6 +12,120 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
+ * A fresh user's chat settings. Also the value a refused stored field is
+ * repaired to (see `ChatSettingsRepository.hydrateTolerantly`).
+ */
+function defaultChatSettings(userId: string): Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    userId,
+    avatarDisplayMode: 'ALWAYS',
+    avatarDisplayStyle: 'CIRCULAR',
+    tagStyles: {},
+    cheapLLMSettings: {
+      strategy: 'PROVIDER_CHEAPEST',
+      fallbackToLocal: true,
+      allowCheapFallback: false,
+      embeddingProvider: 'OPENAI',
+    },
+    themePreference: {
+      activeThemeId: null,
+      colorMode: 'system',
+      showNavThemeSelector: false,
+    },
+    defaultTimestampConfig: {
+      mode: 'NONE',
+      format: 'FRIENDLY',
+      useFictionalTime: false,
+      autoPrepend: true,
+      intervalMinutes: 15,
+    },
+    memoryCascadePreferences: {
+      onMessageDelete: 'ASK_EVERY_TIME',
+      onSwipeRegenerate: 'DELETE_MEMORIES',
+    },
+    autonomousRoomSettings: {
+      dailyTokenBudget: null,
+      defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
+      visibilityDefault: 'owner_only',
+      destructiveToolPolicy: 'opt_in_per_room',
+    },
+    tokenDisplaySettings: {
+      showPerMessageTokens: false,
+      showPerMessageCost: false,
+      showChatTotals: false,
+      showSystemEvents: false,
+    },
+    contextCompressionSettings: {
+      enabled: true,
+      windowSize: 5,
+      compressionTargetTokens: 800,
+      systemPromptTargetTokens: 1500,
+      projectContextReinjectInterval: 5,
+    },
+    llmLoggingSettings: {
+      enabled: true,
+      verboseMode: false,
+      retentionDays: 30,
+    },
+    autoDetectRng: true,
+    customTools: true,
+    customToolTriggers: false,
+    customToolIntervention: true,
+    compositionModeDefault: false,
+    composerSpellcheck: true,
+    composerEmoji: true,
+    composerUnicode: true,
+    composerSlashCommands: true,
+    impersonationVoiceMode: 'off',
+    textReplacementsEnabled: true,
+    autoScrollOnResponseComplete: false,
+    agentModeSettings: {
+      maxTurns: 10,
+      defaultEnabled: false,
+    },
+    storyBackgroundsSettings: {
+      enabled: false,
+      defaultImageProfileId: null,
+    },
+    wardrobeImageSettings: {
+      imageProfileId: null,
+      generateFromTools: false,
+    },
+    conciergeSettings: DEFAULT_CONCIERGE_SETTINGS,
+    autoLockSettings: {
+      enabled: false,
+      idleMinutes: 15,
+    },
+    coreWhisper: {
+      enabled: true,
+      interval: 12,
+      silenceThreshold: 3,
+      packetTokenBudget: 4096,
+      fireOnContextTransition: true,
+    },
+    thinkingDisplay: {
+      defaultVisible: true,
+      defaultCollapsed: true,
+    },
+    answerConfirmationSettings: {
+      enabled: false,
+    },
+    smartTypographySettings: {
+      displayQuotes: false,
+      dashes: true,
+      ellipsis: true,
+      punctuationWarnings: true,
+    },
+    // Default roleplay template will be set by the user or by the first access flow.
+    // We don't query for templates here to avoid circular dependencies.
+    defaultRoleplayTemplateId: null,
+  };
+}
+
+/** Fields a stored row cannot be repaired without; a refusal here drops the row. */
+const IDENTITY_FIELDS = new Set(['id', 'userId', 'createdAt', 'updatedAt']);
+
+/**
  * Chat Settings Repository
  * Implements CRUD operations for chat settings with user-scoping.
  * Uses AbstractBaseRepository since we override findByUserId with different return type.
@@ -26,7 +140,11 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    */
   async findById(id: string): Promise<ChatSettings | null> {
     return this.safeQuery(
-      () => this._findById(id),
+      async () => {
+        const collection = await this.getCollection();
+        const row = await collection.findOne({ id } as TypedQueryFilter<ChatSettings>);
+        return row ? this.hydrateTolerantly(row) : null;
+      },
       'Error finding chat settings by ID',
       { chatSettingsId: id },
       null
@@ -34,15 +152,95 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   }
 
   /**
-   * Find chat settings by user ID
+   * Find chat settings by user ID.
+   *
+   * Newest row first: an instance can hold more than one row for a user
+   * (#120 minted one per load), and an un-ordered `LIMIT 1` kept answering
+   * the oldest. The first row that validates wins; if none does, the newest
+   * is repaired in memory rather than dropped, so callers (and
+   * `updateForUser`, which then writes the repair back) never mistake a
+   * refused row for "no settings".
    */
   async findByUserId(userId: string): Promise<ChatSettings | null> {
     return this.safeQuery(
-      () => this.findOneByFilter({ userId }),
+      async () => {
+        const collection = await this.getCollection();
+        const rows = await collection.find(
+          { userId } as TypedQueryFilter<ChatSettings>,
+          { sort: { updatedAt: -1 } }
+        );
+        if (rows.length > 1) {
+          logger.debug('Multiple chat settings rows for user; reading newest valid', {
+            userId,
+            rowCount: rows.length,
+          });
+        }
+        for (const row of rows) {
+          const parsed = this.schema.safeParse(row);
+          if (parsed.success) return parsed.data as ChatSettings;
+        }
+        for (const row of rows) {
+          const repaired = this.hydrateTolerantly(row);
+          if (repaired) return repaired;
+        }
+        return null;
+      },
       'Error finding chat settings by user ID',
       { userId },
       null
     );
+  }
+
+  /**
+   * Validate a stored row, repairing any top-level field the schema refuses
+   * (a legacy or imported value — the write paths all validate) to its
+   * default instead of discarding the whole row. Returns null only when an
+   * identity field is refused. The repair is in memory; the next `update`
+   * of the row writes it back.
+   */
+  private hydrateTolerantly(row: unknown): ChatSettings | null {
+    const first = this.schema.safeParse(row);
+    if (first.success) return first.data as ChatSettings;
+
+    const record = { ...(row as Record<string, unknown>) };
+    const refused = [...new Set(first.error.issues.map((issue) => String(issue.path[0] ?? '')))];
+    if (refused.some((field) => field === '' || IDENTITY_FIELDS.has(field))) {
+      logger.error('Chat settings row refused on an identity field; cannot repair', {
+        chatSettingsId: record.id,
+        refusedFields: refused,
+      });
+      return null;
+    }
+
+    const defaults = defaultChatSettings(String(record.userId)) as Record<string, unknown>;
+    const shape = ChatSettingsSchema.shape as Record<string, { safeParse(value: unknown): { success: boolean } }>;
+    for (const field of refused) {
+      if (field in defaults) {
+        record[field] = defaults[field];
+      } else if (shape[field]?.safeParse(null).success) {
+        // Null clears a nullable field on write-back; an undefined would
+        // leave the refused value in its column.
+        record[field] = null;
+      } else {
+        delete record[field];
+      }
+    }
+
+    const second = this.schema.safeParse(record);
+    if (!second.success) {
+      logger.error('Chat settings row could not be repaired', {
+        chatSettingsId: record.id,
+        refusedFields: refused,
+        error: second.error.message,
+      });
+      return null;
+    }
+    logger.warn('Chat settings row held refused values; read them as defaults', {
+      chatSettingsId: record.id,
+      userId: record.userId,
+      refusedFields: refused,
+    });
+    return second.data as ChatSettings;
   }
 
   /**
@@ -133,112 +331,8 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
         const existing = await this.findByUserId(userId);
 
         if (!existing) {
-          // Create new settings with defaults
-          // Default roleplay template will be set by the user or by the first access flow
-          // We don't query for templates here to avoid circular dependencies
-          const defaultRoleplayTemplateId: string | null = null;
-
           const defaultSettings: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> = {
-            userId,
-            avatarDisplayMode: 'ALWAYS',
-            avatarDisplayStyle: 'CIRCULAR',
-            tagStyles: {},
-            cheapLLMSettings: {
-              strategy: 'PROVIDER_CHEAPEST',
-              fallbackToLocal: true,
-              allowCheapFallback: false,
-              embeddingProvider: 'OPENAI',
-            },
-            themePreference: {
-              activeThemeId: null,
-              colorMode: 'system',
-              showNavThemeSelector: false,
-            },
-            defaultTimestampConfig: {
-              mode: 'NONE',
-              format: 'FRIENDLY',
-              useFictionalTime: false,
-              autoPrepend: true,
-              intervalMinutes: 15,
-            },
-            memoryCascadePreferences: {
-              onMessageDelete: 'ASK_EVERY_TIME',
-              onSwipeRegenerate: 'DELETE_MEMORIES',
-            },
-            autonomousRoomSettings: {
-              dailyTokenBudget: null,
-              defaultFreshnessWindowMs: 12 * 60 * 60 * 1000,
-              visibilityDefault: 'owner_only',
-              destructiveToolPolicy: 'opt_in_per_room',
-            },
-            tokenDisplaySettings: {
-              showPerMessageTokens: false,
-              showPerMessageCost: false,
-              showChatTotals: false,
-              showSystemEvents: false,
-            },
-            contextCompressionSettings: {
-              enabled: true,
-              windowSize: 5,
-              compressionTargetTokens: 800,
-              systemPromptTargetTokens: 1500,
-              projectContextReinjectInterval: 5,
-            },
-            llmLoggingSettings: {
-              enabled: true,
-              verboseMode: false,
-              retentionDays: 30,
-            },
-            autoDetectRng: true,
-            customTools: true,
-            customToolTriggers: false,
-            customToolIntervention: true,
-            compositionModeDefault: false,
-            composerSpellcheck: true,
-            composerEmoji: true,
-            composerUnicode: true,
-            composerSlashCommands: true,
-            impersonationVoiceMode: 'off',
-            textReplacementsEnabled: true,
-            autoScrollOnResponseComplete: false,
-            agentModeSettings: {
-              maxTurns: 10,
-              defaultEnabled: false,
-            },
-            storyBackgroundsSettings: {
-              enabled: false,
-              defaultImageProfileId: null,
-            },
-            wardrobeImageSettings: {
-              imageProfileId: null,
-              generateFromTools: false,
-            },
-            conciergeSettings: DEFAULT_CONCIERGE_SETTINGS,
-            autoLockSettings: {
-              enabled: false,
-              idleMinutes: 15,
-            },
-            coreWhisper: {
-              enabled: true,
-              interval: 12,
-              silenceThreshold: 3,
-              packetTokenBudget: 4096,
-              fireOnContextTransition: true,
-            },
-            thinkingDisplay: {
-              defaultVisible: true,
-              defaultCollapsed: true,
-            },
-            answerConfirmationSettings: {
-              enabled: false,
-            },
-            smartTypographySettings: {
-              displayQuotes: false,
-              dashes: true,
-              ellipsis: true,
-              punctuationWarnings: true,
-            },
-            defaultRoleplayTemplateId,
+            ...defaultChatSettings(userId),
             ...data,
           };
           return await this.create(defaultSettings);

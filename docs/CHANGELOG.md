@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: chat settings with an invalid stored value minted a new row on every load, and saves never stuck (#120)
+
+- `ChatSettingsRepository.findByUserId` was an un-ordered `LIMIT 1` that validated the row it got. A row holding a value `ChatSettingsSchema` refuses (a legacy or imported `cheapLLMSettings`, an unknown `impersonationVoiceMode`, a malformed `wardrobeImageSettings`) read as null, so `GET /api/v1/settings/chat` and `updateForUser` inserted a fresh row on every load and every save, and the next read found the refused row again and showed defaults.
+- The lookup now reads the user's rows newest first and returns the first that validates. If none does, the newest row is repaired in memory: each refused top-level field is read as its default (null for a nullable field without one), with a warning naming the fields. `findById` does the same, so `updateForUser` updates the existing row and writes the repair back instead of inserting a second one. A row refused on `id`, `userId` or a timestamp still reads as absent.
+- The defaults for a new user's row moved to `defaultChatSettings` in the same file; the repair uses the same values.
+- Rows already duplicated by this bug are left in place; the newest valid one now wins.
+
 #### Fix: Core whisper settings never saved; two settings cards left the UI stale
 
 - `PUT /api/v1/settings/chat` destructured a fixed list of keys and ignored the rest. `coreWhisper` was never on it, so every change on the Core whisper card (including the master switch) came back 200 with the old value and the control snapped back. The route now validates and writes `coreWhisper` through `CoreWhisperSettingsSchema`, and refuses any key it does not write with a 400 instead of dropping it.
