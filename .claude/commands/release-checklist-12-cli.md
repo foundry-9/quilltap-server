@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 12 of 13):** Verify that documentation, shell completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up to date.
+**Goal (checklist item 12 of 14):** Verify that documentation, shell completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up to date.
 
 ## Steps
 

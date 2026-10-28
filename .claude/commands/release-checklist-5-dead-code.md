@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 5 of 13):** Find and remove dead code, then update the [dead code report](../../docs/developer/DEAD-CODE-REPORT.md).
+**Goal (checklist item 5 of 14):** Find and remove dead code, then update the [dead code report](../../docs/developer/DEAD-CODE-REPORT.md).
 
 ## Steps
 

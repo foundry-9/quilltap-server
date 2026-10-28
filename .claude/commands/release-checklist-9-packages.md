@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 9 of 13):** If any `packages/` changed, make sure they're published to npmjs and correctly installed everywhere they're consumed — other packages, plugins, and the root `package.json`.
+**Goal (checklist item 9 of 14):** If any `packages/` changed, make sure they're published to npmjs and correctly installed everywhere they're consumed — other packages, plugins, and the root `package.json`.
 
 > **Hard stop (CLAUDE.md):** For `packages/` changes, bump the version, then **stop and ask the human to `npm publish`** — never hand-copy package contents into place. **Exception:** `packages/quilltap` (the CLI) still gets its version bumped but publishes automatically at release, so no manual publish request.
 

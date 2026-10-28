@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 10 of 13):** The backup/restore system must include **everything that can be backed up** — usually everything except secrets so sensitive they must stay encrypted (e.g. API keys).
+**Goal (checklist item 10 of 14):** The backup/restore system must include **everything that can be backed up** — usually everything except secrets so sensitive they must stay encrypted (e.g. API keys).
 
 Related project convention (CLAUDE.md): data/schema changes must be reflected in `.qtap`/SillyTavern exports, [`qtap-export.schema.json`](../../public/schemas/qtap-export.schema.json), backups, and/or `migrations/`. This step is the backup half of that.
 

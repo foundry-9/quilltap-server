@@ -413,7 +413,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
 12. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
-13. Check the following Markdown files to be sure they are up-to-date:
+13. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
+14. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)

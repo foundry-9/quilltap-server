@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Docs: new release checklist item 13 (UI, look-and-feel, WCAG); docs check becomes item 14
+
+- New `/release-checklist-13-ui` command: a whole-UI review under every bundled theme in light and dark mode. Covers token contrast measured from each theme's `tokens.json`, a live design pass on the V4test instance, and WCAG 2.2 AA checks (keyboard and focus, accessible names, labels and landmarks, live regions, color-only cues, reflow at 320px, 200% zoom, target size, reduced motion). States which layer each fix belongs in.
+- `/release-checklist-13-docs` renamed to `/release-checklist-14-docs`. It now also asks that the README explain how to use the repo, install, run and develop Quilltap and link the public JSON schemas; that DEVELOPMENT.md cover contributing with links to PRs and Issues; that the About page keep version numbers and dependency credits current; and that every public schema be documented.
+- Every checklist command now says "of 14". DEVELOPMENT.md's release checklist gains the new item 13.
+
 #### Docs: feature-spec cleanup
 
 - Removed three stale proposals and every link to them: the ComfyUI image plugin, block-scoped roleplay narration (superseded by the Novel template and prose mode), and provider usage/balance tracking.

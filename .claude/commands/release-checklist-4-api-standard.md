@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 4 of 13):** Every API endpoint must adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), using the `?action=` dispatch pattern. The **only** non-versioned exceptions are:
+**Goal (checklist item 4 of 14):** Every API endpoint must adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), using the `?action=` dispatch pattern. The **only** non-versioned exceptions are:
 
 - `/api/health`
 - `/api/plugin-routes/[...path]`
@@ -29,7 +29,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    git diff --name-only "${LAST_TAG}"..HEAD -- 'app/api/**' | sort -u
    ```
 3. Fix any violation. Remember the UI-route renames don't move the API paths — characters/chats/projects APIs stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`.
-4. Cross-check against [API.md](../../docs/developer/API.md); if routes changed, that doc is updated in checklist item 13 — note it here.
+4. Cross-check against [API.md](../../docs/developer/API.md); if routes changed, that doc is updated in checklist item 14 — note it here.
 
 ## Report
 
