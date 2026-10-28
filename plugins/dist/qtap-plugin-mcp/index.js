@@ -3367,37 +3367,6 @@ var require_utils = __commonJS({
       }
       return output.join("");
     }
-    function removeDotSegmentsRelative(path2) {
-      if (path2 === "" || path2[0] === "/") {
-        return removeDotSegments(path2);
-      }
-      const segments = path2.split("/");
-      const last = segments.length - 1;
-      const output = [];
-      let trailingDirectory = false;
-      for (let i = 0; i <= last; i++) {
-        const segment = segments[i];
-        if (segment === "." || segment === "..") {
-          if (segment === "..") {
-            if (output.length !== 0 && output[output.length - 1] !== "..") {
-              output.pop();
-            } else {
-              output.push("..");
-            }
-          }
-          trailingDirectory = i === last;
-        } else {
-          output.push(segment);
-        }
-      }
-      if (trailingDirectory && output[output.length - 1] !== "..") {
-        output.push("");
-      }
-      if (output.length === 0 || output[0] === "" || output[0].includes(":")) {
-        output.unshift(".");
-      }
-      return output.join("/");
-    }
     var HOST_DELIMS = { "@": "%40", "/": "%2F", "?": "%3F", "#": "%23", ":": "%3A" };
     var HOST_DELIM_RE = /[@/?#:]/g;
     var HOST_DELIM_NO_COLON_RE = /[@/?#]/g;
@@ -3658,7 +3627,6 @@ var require_utils = __commonJS({
       encodeFragment,
       escapePreservingEscapes,
       removeDotSegments,
-      removeDotSegmentsRelative,
       isIPv4,
       isUUID,
       normalizeIPv6,
@@ -3882,18 +3850,16 @@ var require_schemes = __commonJS({
 var require_fast_uri = __commonJS({
   "node_modules/fast-uri/index.js"(exports2, module2) {
     "use strict";
-    var { normalizeIPv6, removeDotSegments, removeDotSegmentsRelative, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
+    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
     var VALID_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*$/u;
     var MALFORMED_SCHEME_ERROR = "URI scheme is malformed.";
-    var MALFORMED_HOST_ERROR = "URI host is malformed.";
-    var FORBIDDEN_DOMAIN_HOST_CHARACTER = /[\0-\x20"#/:<>?@[\\\]^`{|}\x7F]/u;
-    function validateScheme(scheme) {
-      const stringScheme = String(scheme);
-      if (!VALID_SCHEME.test(stringScheme)) {
+    function decodeValidScheme(scheme) {
+      const decodedScheme = unescape(String(scheme));
+      if (!VALID_SCHEME.test(decodedScheme)) {
         throw new TypeError(MALFORMED_SCHEME_ERROR);
       }
-      return stringScheme;
+      return decodedScheme;
     }
     function normalize(uri, options) {
       if (typeof uri === "string") {
@@ -3930,9 +3896,6 @@ var require_fast_uri = __commonJS({
       const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
       const resolvedHost = resolved.host;
       const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
-      if (hasForbiddenDomainHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP)) {
-        throw new Error(MALFORMED_HOST_ERROR);
-      }
       canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
       const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !new RegExp("\\P{ASCII}", "u").test(resolvedHost);
       if (resolved.error && !encodedASCIIHost) {
@@ -3974,15 +3937,14 @@ var require_fast_uri = __commonJS({
             if (relative.path[0] === "/") {
               target.path = removeDotSegments(relative.path);
             } else {
-              const baseHasAuthority = base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0;
-              if (baseHasAuthority && !base.path) {
+              if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
                 target.path = "/" + relative.path;
               } else if (!base.path) {
                 target.path = relative.path;
               } else {
                 target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
               }
-              target.path = base.scheme === void 0 && !baseHasAuthority && target.path[0] !== "/" ? removeDotSegmentsRelative(target.path) : removeDotSegments(target.path);
+              target.path = removeDotSegments(target.path);
             }
             target.query = relative.query;
           }
@@ -4020,13 +3982,12 @@ var require_fast_uri = __commonJS({
       const options = Object.assign({}, opts);
       const uriTokens = [];
       if (component.scheme) {
-        component.scheme = validateScheme(component.scheme);
+        component.scheme = decodeValidScheme(component.scheme);
       }
       const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
       if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
       const hasAuthority = component.userinfo !== void 0 || component.host !== void 0 || component.port !== void 0;
-      const schemelessReference = (component.scheme === void 0 || options.reference === "suffix") && !hasAuthority;
-      const pathNoScheme = !options.skipEscape && schemelessReference;
+      const pathNoScheme = !options.skipEscape && component.scheme === void 0 && !hasAuthority;
       if (component.path !== void 0) {
         if (!options.skipEscape) {
           component.path = serializePathEncoding(component.path, pathNoScheme);
@@ -4035,7 +3996,7 @@ var require_fast_uri = __commonJS({
         }
       }
       if (options.reference !== "suffix" && component.scheme) {
-        component.scheme = validateScheme(component.scheme);
+        component.scheme = decodeValidScheme(component.scheme);
         uriTokens.push(component.scheme, ":");
       }
       const authority = recomposeAuthority(component);
@@ -4051,9 +4012,9 @@ var require_fast_uri = __commonJS({
       if (component.path !== void 0) {
         let s = component.path;
         if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
-          s = schemelessReference && s[0] !== "/" ? removeDotSegmentsRelative(s) : removeDotSegments(s);
+          s = removeDotSegments(s);
         }
-        if (schemelessReference) {
+        if (pathNoScheme) {
           s = serializePathEncoding(s, true);
         }
         if (authority === void 0 && s[0] === "/" && s[1] === "/") {
@@ -4100,33 +4061,15 @@ var require_fast_uri = __commonJS({
       return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
     }
     function canonicalizeHost(parsed, options, schemeHandler, isIP) {
-      if (hasForbiddenDomainHost(parsed, options, schemeHandler, isIP)) {
-        parsed.error = parsed.error || MALFORMED_HOST_ERROR;
-        return true;
-      }
       if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
-        let url2;
         try {
-          url2 = new URL("http://" + parsed.host);
+          parsed.host = new URL("http://" + parsed.host).hostname;
         } catch (e) {
           parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
           return true;
         }
-        if (!isHostOnlyURL(url2)) {
-          parsed.error = parsed.error || MALFORMED_HOST_ERROR;
-          return true;
-        }
-        parsed.host = url2.hostname;
       }
       return false;
-    }
-    function hasForbiddenDomainHost(parsed, options, schemeHandler, isIP) {
-      return Boolean(
-        parsed.host && isIP === false && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && FORBIDDEN_DOMAIN_HOST_CHARACTER.test(parsed.host)
-      );
-    }
-    function isHostOnlyURL(url2) {
-      return url2.username === "" && url2.password === "" && url2.port === "" && url2.pathname === "/" && url2.search === "" && url2.hash === "" && url2.hostname !== "";
     }
     function parseWithStatus(uri, opts) {
       const options = Object.assign({}, opts);
@@ -4182,8 +4125,9 @@ var require_fast_uri = __commonJS({
         parsed.query = matches[7];
         parsed.fragment = matches[8];
         if (parsed.scheme !== void 0) {
-          if (VALID_SCHEME.test(parsed.scheme)) {
-            parsed.scheme = parsed.scheme.toLowerCase();
+          const decodedScheme = unescape(parsed.scheme);
+          if (VALID_SCHEME.test(decodedScheme)) {
+            parsed.scheme = decodedScheme.toLowerCase();
           } else {
             parsed.error = parsed.error || MALFORMED_SCHEME_ERROR;
             malformedScheme = true;
@@ -4211,7 +4155,7 @@ var require_fast_uri = __commonJS({
             malformedIPLiteral = hasIPLiteralBracket && (!bracketedIPLiteral || ipv6result.error === true);
             parsed.host = isIP ? ipv6result.host : ipv6result.host.toLowerCase();
             if (malformedIPLiteral) {
-              parsed.error = parsed.error || MALFORMED_HOST_ERROR;
+              parsed.error = parsed.error || "URI host is malformed.";
               malformedAuthorityOrPort = true;
             }
           } else {
@@ -4239,7 +4183,7 @@ var require_fast_uri = __commonJS({
           if (!isIP) {
             host = normalizePercentEncoding(host.toLowerCase());
           }
-          parsed.host = isIP || options.scheme !== "null" ? reescapeHostDelimiters(host, isIP) : host;
+          parsed.host = reescapeHostDelimiters(host, isIP);
         }
         if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (parsed.path) {
@@ -32800,9 +32744,6 @@ var Protocol = class {
       this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
         const handleTaskResult = async () => {
           const taskId = request.params.taskId;
-          if (!await this._taskStore.getTask(taskId, extra.sessionId)) {
-            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
-          }
           if (this._taskMessageQueue) {
             let queuedMessage;
             while (queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId)) {
@@ -32833,12 +32774,12 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
           }
           if (!isTerminal(task.status)) {
-            await this._waitForTaskUpdate(taskId, extra.signal, extra.sessionId);
+            await this._waitForTaskUpdate(taskId, extra.signal);
             return await handleTaskResult();
           }
           if (isTerminal(task.status)) {
             const result = await this._taskStore.getTaskResult(taskId, extra.sessionId);
-            this._clearTaskQueue(taskId, extra.sessionId);
+            this._clearTaskQueue(taskId);
             return {
               ...result,
               _meta: {
@@ -32875,7 +32816,7 @@ var Protocol = class {
             throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
           }
           await this._taskStore.updateTaskStatus(request.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
-          this._clearTaskQueue(request.params.taskId, extra.sessionId);
+          this._clearTaskQueue(request.params.taskId);
           const cancelledTask = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
           if (!cancelledTask) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request.params.taskId}`);
@@ -33003,19 +32944,6 @@ var Protocol = class {
     const handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
     const capturedTransport = this._transport;
     const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
-    const sessionId = capturedTransport?.sessionId;
-    const store = this._taskStore;
-    let relatedTaskFound = true;
-    let relatedTaskLookup;
-    if (relatedTaskId && store && this._taskMessageQueue && sessionId !== void 0) {
-      relatedTaskFound = false;
-      relatedTaskLookup = (async () => {
-        if (!await store.getTask(relatedTaskId, sessionId)) {
-          throw new McpError(ErrorCode.InvalidParams, `Task not found: ${relatedTaskId}`);
-        }
-        relatedTaskFound = true;
-      })();
-    }
     if (handler === void 0) {
       const errorResponse = {
         jsonrpc: "2.0",
@@ -33025,10 +32953,7 @@ var Protocol = class {
           message: "Method not found"
         }
       };
-      if (relatedTaskId && relatedTaskLookup) {
-        const queuedError = { type: "error", message: errorResponse, timestamp: Date.now() };
-        relatedTaskLookup.then(() => this._enqueueTaskMessage(relatedTaskId, queuedError, sessionId), () => capturedTransport?.send(errorResponse)).catch((error) => this._onerror(new Error(`Failed to send an error response: ${error}`)));
-      } else if (relatedTaskId && this._taskMessageQueue) {
+      if (relatedTaskId && this._taskMessageQueue) {
         this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -33079,10 +33004,7 @@ var Protocol = class {
       closeSSEStream: extra?.closeSSEStream,
       closeStandaloneSSEStream: extra?.closeStandaloneSSEStream
     };
-    (relatedTaskLookup ?? Promise.resolve()).then(() => {
-      if (relatedTaskLookup && abortController.signal.aborted) {
-        throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
-      }
+    Promise.resolve().then(() => {
       if (taskCreationParams) {
         this.assertTaskHandlerCapability(request.method);
       }
@@ -33117,7 +33039,7 @@ var Protocol = class {
           ...error["data"] !== void 0 && { data: error["data"] }
         }
       };
-      if (relatedTaskId && this._taskMessageQueue && relatedTaskFound) {
+      if (relatedTaskId && this._taskMessageQueue) {
         await this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
           message: errorResponse,
@@ -33597,7 +33519,7 @@ var Protocol = class {
       throw new Error("Cannot enqueue task message: taskStore and taskMessageQueue are not configured");
     }
     const maxQueueSize = this._options?.maxTaskQueueSize;
-    await this._taskMessageQueue.enqueue(taskId, message, sessionId ?? this._transport?.sessionId, maxQueueSize);
+    await this._taskMessageQueue.enqueue(taskId, message, sessionId, maxQueueSize);
   }
   /**
    * Clears the message queue for a task and rejects any pending request resolvers.
@@ -33626,13 +33548,12 @@ var Protocol = class {
    * Uses polling to check for updates at the task's configured poll interval.
    * @param taskId The task ID to wait for
    * @param signal Abort signal to cancel the wait
-   * @param sessionId Session of the request that waits, passed to the task store
    * @returns Promise that resolves when an update occurs or rejects if aborted
    */
-  async _waitForTaskUpdate(taskId, signal, sessionId) {
+  async _waitForTaskUpdate(taskId, signal) {
     let interval = this._options?.defaultTaskPollInterval ?? 1e3;
     try {
-      const task = await this._taskStore?.getTask(taskId, sessionId);
+      const task = await this._taskStore?.getTask(taskId);
       if (task?.pollInterval) {
         interval = task.pollInterval;
       }
@@ -34547,68 +34468,6 @@ function createFetchWithInit(baseFetch = fetch, baseInit) {
     return baseFetch(url2, mergedInit);
   };
 }
-var MAX_REDIRECTS = 5;
-var REDIRECT_STATUSES = [301, 302, 303, 307, 308];
-function isWithinOrigin(from, to) {
-  if (from.protocol === to.protocol && from.hostname === to.hostname && from.port === to.port) {
-    return true;
-  }
-  return from.hostname === to.hostname && from.protocol === "http:" && from.port === "" && to.protocol === "https:" && to.port === "";
-}
-function redirectTarget(response, requestUrl) {
-  const location = REDIRECT_STATUSES.includes(response.status) ? response.headers.get("location") : null;
-  try {
-    return location ? new URL(location, requestUrl) : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function followWithinOrigin(baseFetch, url2, init, response, followed = 0) {
-  const target = redirectTarget(response, url2);
-  const keepsMethod = response.status === 307 || response.status === 308 || (init?.method ?? "GET").toUpperCase() === "GET";
-  if (!target || followed === MAX_REDIRECTS || !keepsMethod) {
-    return void 0;
-  }
-  const from = new URL(url2);
-  const addsUserinfo = (target.username || target.password) && (target.username !== from.username || target.password !== from.password);
-  if (addsUserinfo || !isWithinOrigin(from, target)) {
-    return void 0;
-  }
-  return Promise.resolve(response.body?.cancel()).then(() => baseFetch(target, { ...init, redirect: "manual" })).then((next) => followWithinOrigin(baseFetch, target, init, next, followed + 1) ?? next);
-}
-var followingFetches = /* @__PURE__ */ new WeakSet();
-function fetchLeavingRedirects(baseFetch) {
-  const following = (url2, init) => (baseFetch ?? fetch)(url2, init);
-  followingFetches.add(following);
-  return following;
-}
-function fetchWithinOrigin(baseFetch = fetch) {
-  if (followingFetches.has(baseFetch)) {
-    return baseFetch;
-  }
-  return (url2, init) => {
-    if (init?.redirect === "error" || init?.redirect === "manual") {
-      return baseFetch(url2, init);
-    }
-    return Promise.resolve(baseFetch(url2, { ...init, redirect: "manual" })).then((response) => followWithinOrigin(baseFetch, url2, init, response) ?? response);
-  };
-}
-function unfollowedRedirect(response, requestUrl) {
-  if (response.type === "opaqueredirect") {
-    return "Redirect not followed: this runtime does not expose the redirect target";
-  }
-  const from = response.url || requestUrl;
-  const target = redirectTarget(response, from);
-  if (!target) {
-    return void 0;
-  }
-  target.username = target.password = target.search = target.hash = "";
-  if (target.protocol === "http:" && new URL(from).protocol === "https:") {
-    target.protocol = "https:";
-    return `Redirect to plain http not followed; try ${target.href} instead`;
-  }
-  return `Redirect to ${target.href} not followed`;
-}
 
 // node_modules/pkce-challenge/dist/index.node.js
 var crypto2;
@@ -34756,12 +34615,7 @@ var OAuthTokensSchema = z2.object({
   token_type: z2.string(),
   expires_in: z2.coerce.number().optional(),
   scope: z2.string().optional(),
-  refresh_token: z2.string().optional(),
-  /**
-   * Not part of the wire format: the authorization server this value was obtained from, added by
-   * the client's `auth()` before it is stored and compared when it is read back.
-   */
-  issuer: z2.string().optional().catch(void 0)
+  refresh_token: z2.string().optional()
 }).strip();
 var OAuthErrorResponseSchema = z2.object({
   error: z2.string(),
@@ -34791,12 +34645,7 @@ var OAuthClientInformationSchema = z2.object({
   client_id: z2.string(),
   client_secret: z2.string().optional(),
   client_id_issued_at: z2.number().optional(),
-  client_secret_expires_at: z2.number().optional(),
-  /**
-   * Not part of the wire format: the authorization server this value was obtained from, added by
-   * the client's `auth()` before it is stored and compared when it is read back.
-   */
-  issuer: z2.string().optional().catch(void 0)
+  client_secret_expires_at: z2.number().optional()
 }).strip();
 var OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
 var OAuthClientRegistrationErrorSchema = z2.object({
@@ -34994,30 +34843,9 @@ async function parseErrorResponse(input) {
     const errorClass = OAUTH_ERRORS[error] || ServerError;
     return new errorClass(error_description || "", error_uri);
   } catch (error) {
-    const redirect = input instanceof Response ? unfollowedRedirect(input, input.url) : void 0;
-    const errorMessage = `${statusCode ? `HTTP ${statusCode}: ` : ""}${redirect ?? `Invalid OAuth error response: ${error}. Raw body: ${body}`}`;
+    const errorMessage = `${statusCode ? `HTTP ${statusCode}: ` : ""}Invalid OAuth error response: ${error}. Raw body: ${body}`;
     return new ServerError(errorMessage);
   }
-}
-function issuersMatch(a, b) {
-  let [x, y] = [a, b];
-  try {
-    [x, y] = [new URL(a).href, new URL(b).href];
-  } catch {
-  }
-  return x === y || x.endsWith("/") && x.slice(0, -1) === y || y.endsWith("/") && y.slice(0, -1) === x;
-}
-function discardIfIssuerMismatch(stored, issuer) {
-  if (!stored)
-    return void 0;
-  if (typeof stored.issuer !== "string")
-    return stored.issuer == null ? stored : { ...stored, issuer: void 0 };
-  return issuersMatch(stored.issuer, issuer) ? stored : void 0;
-}
-var TokenResponseSchema = OAuthTokensSchema.omit({ issuer: true });
-var RegistrationResponseSchema = OAuthClientInformationFullSchema.omit({ issuer: true });
-function boundElsewhereError(stored, issuer) {
-  return new Error(`OAuth client information is bound to authorization server ${stored.issuer} and is not presented to ${issuer}. Clear the stored client information, or correct \`expectedIssuer\`, if the authorization server has moved.`);
 }
 async function auth(provider, options) {
   try {
@@ -35072,24 +34900,10 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
       authorizationServerMetadata: metadata2
     });
   }
-  const issuer = String(authorizationServerUrl);
   const selectedResource = await selectResourceURL(serverUrl, provider, resourceMetadata);
   const resource = selectedResource && resourceMetadata && !provider.validateResourceURL ? resourceMetadata.resource : selectedResource;
   const resolvedScope = scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope;
-  const storedClientInformation = await Promise.resolve(provider.clientInformation());
-  let clientInformation = discardIfIssuerMismatch(storedClientInformation, issuer);
-  const canRegisterAgain = provider.saveClientInformation !== void 0 && !!provider.redirectUrl;
-  if (storedClientInformation && !clientInformation && !canRegisterAgain) {
-    throw boundElsewhereError(storedClientInformation, issuer);
-  }
-  const unstampedClientInformation = clientInformation?.issuer == null ? clientInformation : void 0;
-  const bindClientInformation = async () => {
-    try {
-      if (unstampedClientInformation)
-        await provider.saveClientInformation?.({ ...unstampedClientInformation, issuer });
-    } catch {
-    }
-  };
+  let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
     if (authorizationCode !== void 0) {
       throw new Error("Existing OAuth client information is required when exchanging an authorization code");
@@ -35101,7 +34915,9 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     }
     const shouldUseUrlBasedClientId = supportsUrlBasedClientId && clientMetadataUrl;
     if (shouldUseUrlBasedClientId) {
-      clientInformation = { client_id: clientMetadataUrl, issuer };
+      clientInformation = {
+        client_id: clientMetadataUrl
+      };
       await provider.saveClientInformation?.(clientInformation);
     } else {
       if (!provider.saveClientInformation) {
@@ -35113,8 +34929,8 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
         scope: resolvedScope,
         fetchFn
       });
-      clientInformation = { ...fullInformation, issuer };
-      await provider.saveClientInformation(clientInformation);
+      await provider.saveClientInformation(fullInformation);
+      clientInformation = fullInformation;
     }
   }
   const nonInteractiveFlow = !provider.redirectUrl;
@@ -35125,14 +34941,10 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
       authorizationCode,
       fetchFn
     });
-    await bindClientInformation();
-    await provider.saveTokens({ ...tokens2, issuer });
+    await provider.saveTokens(tokens2);
     return "AUTHORIZED";
   }
-  const tokens = discardIfIssuerMismatch(await provider.tokens(), issuer);
-  if (tokens?.refresh_token && tokens.issuer == null) {
-    console.warn("[mcp-sdk] stored OAuth tokens have no 'issuer' property (saved by an earlier version, or by a provider that does not keep it) and are used as-is; make sure your OAuthClientProvider stores what saveTokens() and saveClientInformation() receive unchanged.");
-  }
+  const tokens = await provider.tokens();
   if (tokens?.refresh_token) {
     try {
       const newTokens = await refreshAuthorization(authorizationServerUrl, {
@@ -35143,8 +34955,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
         addClientAuthentication: provider.addClientAuthentication,
         fetchFn
       });
-      await bindClientInformation();
-      await provider.saveTokens({ ...newTokens, issuer });
+      await provider.saveTokens(newTokens);
       return "AUTHORIZED";
     } catch (error) {
       if (!(error instanceof OAuthError2) || error instanceof ServerError) {
@@ -35243,7 +35054,7 @@ async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn =
 }
 async function fetchWithCorsRetry(url2, headers, fetchFn = fetch) {
   try {
-    return await fetchWithinOrigin(fetchFn)(url2, { headers });
+    return await fetchFn(url2, { headers });
   } catch (error) {
     if (error instanceof TypeError) {
       if (headers) {
@@ -35268,7 +35079,7 @@ async function tryMetadataDiscovery(url2, protocolVersion, fetchFn = fetch) {
   return await fetchWithCorsRetry(url2, headers, fetchFn);
 }
 function shouldAttemptFallback(response, pathname) {
-  return !response || !response.ok && response.status < 500 && pathname !== "/";
+  return !response || response.status >= 400 && response.status < 500 && pathname !== "/";
 }
 async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
   const issuer = new URL(serverUrl);
@@ -35334,7 +35145,7 @@ async function discoverAuthorizationServerMetadata(authorizationServerUrl, { fet
     }
     if (!response.ok) {
       await response.body?.cancel();
-      if (response.status < 500) {
+      if (response.status >= 400 && response.status < 500) {
         continue;
       }
       throw new Error(`HTTP ${response.status} trying to load ${type === "oauth" ? "OAuth" : "OpenID provider"} metadata from ${endpointUrl}`);
@@ -35429,7 +35240,7 @@ async function executeTokenRequest(authorizationServerUrl, { metadata: metadata2
     const authMethod = selectClientAuthMethod(clientInformation, supportedMethods);
     applyClientAuthentication(authMethod, clientInformation, headers, tokenRequestParams);
   }
-  const response = await fetchWithinOrigin(fetchFn ?? fetch)(tokenUrl, {
+  const response = await (fetchFn ?? fetch)(tokenUrl, {
     method: "POST",
     headers,
     body: tokenRequestParams
@@ -35437,7 +35248,7 @@ async function executeTokenRequest(authorizationServerUrl, { metadata: metadata2
   if (!response.ok) {
     throw await parseErrorResponse(response);
   }
-  return TokenResponseSchema.parse(await response.json());
+  return OAuthTokensSchema.parse(await response.json());
 }
 async function refreshAuthorization(authorizationServerUrl, { metadata: metadata2, clientInformation, refreshToken, resource, addClientAuthentication, fetchFn }) {
   const tokenRequestParams = new URLSearchParams({
@@ -35455,15 +35266,6 @@ async function refreshAuthorization(authorizationServerUrl, { metadata: metadata
   return { refresh_token: refreshToken, ...tokens };
 }
 async function fetchToken(provider, authorizationServerUrl, { metadata: metadata2, resource, authorizationCode, fetchFn } = {}) {
-  const readClientInformation = async () => {
-    const storedClientInformation = await provider.clientInformation();
-    const checked = discardIfIssuerMismatch(storedClientInformation, String(authorizationServerUrl));
-    if (storedClientInformation && !checked) {
-      throw boundElsewhereError(storedClientInformation, String(authorizationServerUrl));
-    }
-    return checked;
-  };
-  let clientInformation = await readClientInformation();
   const scope = provider.clientMetadata.scope;
   let tokenRequestParams;
   if (provider.prepareTokenRequest) {
@@ -35479,11 +35281,11 @@ async function fetchToken(provider, authorizationServerUrl, { metadata: metadata
     const codeVerifier = await provider.codeVerifier();
     tokenRequestParams = prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, provider.redirectUrl);
   }
-  clientInformation ?? (clientInformation = await readClientInformation());
+  const clientInformation = await provider.clientInformation();
   return executeTokenRequest(authorizationServerUrl, {
     metadata: metadata2,
     tokenRequestParams,
-    clientInformation,
+    clientInformation: clientInformation ?? void 0,
     addClientAuthentication: provider.addClientAuthentication,
     resource,
     fetchFn
@@ -35499,7 +35301,7 @@ async function registerClient(authorizationServerUrl, { metadata: metadata2, cli
   } else {
     registrationUrl = new URL("/register", authorizationServerUrl);
   }
-  const response = await fetchWithinOrigin(fetchFn ?? fetch)(registrationUrl, {
+  const response = await (fetchFn ?? fetch)(registrationUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -35512,7 +35314,7 @@ async function registerClient(authorizationServerUrl, { metadata: metadata2, cli
   if (!response.ok) {
     throw await parseErrorResponse(response);
   }
-  return RegistrationResponseSchema.parse(await response.json());
+  return OAuthClientInformationFullSchema.parse(await response.json());
 }
 
 // node_modules/eventsource-parser/dist/index.js
@@ -35739,18 +35541,8 @@ var StreamableHTTPClientTransport = class {
     this._authProvider = opts?.authProvider;
     this._fetch = opts?.fetch;
     this._fetchWithInit = createFetchWithInit(opts?.fetch, opts?.requestInit);
-    this._followRedirects = opts?.redirectPolicy === "follow";
-    if (this._followRedirects) {
-      this._fetch = fetchLeavingRedirects(this._fetch);
-      this._fetchWithInit = fetchLeavingRedirects(this._fetchWithInit);
-    }
     this._sessionId = opts?.sessionId;
     this._reconnectionOptions = opts?.reconnectionOptions ?? DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
-  }
-  /** Error text for a redirect `response` that was not followed, or `undefined` for any other response. */
-  _unfollowedRedirect(response, url2) {
-    const text = unfollowedRedirect(response, url2);
-    return text && !this._followRedirects ? `${text} (redirectPolicy: 'same-origin')` : text;
   }
   async _authThenStart() {
     if (!this._authProvider) {
@@ -35801,13 +35593,11 @@ var StreamableHTTPClientTransport = class {
       if (resumptionToken) {
         headers.set("last-event-id", resumptionToken);
       }
-      const fetchFn = this._fetch ?? fetch;
-      const init = { method: "GET", headers, signal: this._abortController?.signal };
-      let response = await fetchFn(this._url, this._followRedirects ? init : { ...init, redirect: "manual" });
-      const followed = this._followRedirects ? void 0 : followWithinOrigin(fetchFn, this._url, init, response);
-      if (followed) {
-        response = await followed;
-      }
+      const response = await (this._fetch ?? fetch)(this._url, {
+        method: "GET",
+        headers,
+        signal: this._abortController?.signal
+      });
       if (!response.ok) {
         await response.body?.cancel();
         if (response.status === 401 && this._authProvider) {
@@ -35816,7 +35606,7 @@ var StreamableHTTPClientTransport = class {
         if (response.status === 405) {
           return;
         }
-        throw new StreamableHTTPError(response.status, `Failed to open SSE stream: ${this._unfollowedRedirect(response, this._url) ?? response.statusText}`);
+        throw new StreamableHTTPError(response.status, `Failed to open SSE stream: ${response.statusText}`);
       }
       this._handleSseStream(response.body, options, true);
     } catch (error) {
@@ -35979,7 +35769,7 @@ var StreamableHTTPClientTransport = class {
         body: JSON.stringify(message),
         signal: this._abortController?.signal
       };
-      const response = await fetchWithinOrigin(this._fetch ?? fetch)(this._url, init);
+      const response = await (this._fetch ?? fetch)(this._url, init);
       const sessionId = response.headers.get("mcp-session-id");
       if (sessionId) {
         this._sessionId = sessionId;
@@ -36031,7 +35821,7 @@ var StreamableHTTPClientTransport = class {
             return this.send(message);
           }
         }
-        throw new StreamableHTTPError(response.status, `Error POSTing to endpoint: ${this._unfollowedRedirect(response, this._url) ?? text}`);
+        throw new StreamableHTTPError(response.status, `Error POSTing to endpoint: ${text}`);
       }
       this._hasCompletedAuthFlow = false;
       this._lastUpscopingHeader = void 0;
@@ -36093,10 +35883,10 @@ var StreamableHTTPClientTransport = class {
         headers,
         signal: this._abortController?.signal
       };
-      const response = await fetchWithinOrigin(this._fetch ?? fetch)(this._url, init);
+      const response = await (this._fetch ?? fetch)(this._url, init);
       await response.body?.cancel();
       if (!response.ok && response.status !== 405) {
-        throw new StreamableHTTPError(response.status, `Failed to terminate session: ${this._unfollowedRedirect(response, this._url) ?? response.statusText}`);
+        throw new StreamableHTTPError(response.status, `Failed to terminate session: ${response.statusText}`);
       }
       this._sessionId = void 0;
     } catch (error) {
@@ -36440,16 +36230,6 @@ var SSEClientTransport = class {
     this._authProvider = opts?.authProvider;
     this._fetch = opts?.fetch;
     this._fetchWithInit = createFetchWithInit(opts?.fetch, opts?.requestInit);
-    this._followRedirects = opts?.redirectPolicy === "follow";
-    if (this._followRedirects) {
-      this._fetch = fetchLeavingRedirects(this._fetch);
-      this._fetchWithInit = fetchLeavingRedirects(this._fetchWithInit);
-    }
-  }
-  /** Error text for a redirect `response` that was not followed, or `undefined` for any other response. */
-  _unfollowedRedirect(response, url2) {
-    const text = unfollowedRedirect(response, url2);
-    return text && !this._followRedirects ? `${text} (redirectPolicy: 'same-origin')` : text;
   }
   async _authThenStart() {
     if (!this._authProvider) {
@@ -36490,9 +36270,7 @@ var SSEClientTransport = class {
     });
   }
   _startOrAuth() {
-    const baseFetch = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
-    const fetchImpl = this._followRedirects ? baseFetch : fetchWithinOrigin(baseFetch);
-    let redirect;
+    const fetchImpl = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
     return new Promise((resolve, reject) => {
       this._eventSource = new EventSource(this._url.href, {
         ...this._eventSourceInit,
@@ -36503,7 +36281,6 @@ var SSEClientTransport = class {
             ...init,
             headers
           });
-          redirect = this._unfollowedRedirect(response, url2);
           if (response.status === 401 && response.headers.has("www-authenticate")) {
             const { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
             this._resourceMetadataUrl = resourceMetadataUrl;
@@ -36518,7 +36295,7 @@ var SSEClientTransport = class {
           this._authThenStart().then(resolve, reject);
           return;
         }
-        const error = new SseError(event.code, redirect ?? event.message, event);
+        const error = new SseError(event.code, event.message, event);
         reject(error);
         this.onerror?.(error);
       };
@@ -36595,7 +36372,7 @@ var SSEClientTransport = class {
         body: JSON.stringify(message),
         signal: this._abortController?.signal
       };
-      const response = await fetchWithinOrigin(this._fetch ?? fetch)(this._endpoint, init);
+      const response = await (this._fetch ?? fetch)(this._endpoint, init);
       if (!response.ok) {
         const text = await response.text().catch(() => null);
         if (response.status === 401 && this._authProvider) {
@@ -36613,7 +36390,7 @@ var SSEClientTransport = class {
           }
           return this.send(message);
         }
-        throw new Error(`Error POSTing to endpoint (HTTP ${response.status}): ${this._unfollowedRedirect(response, this._endpoint) ?? text}`);
+        throw new Error(`Error POSTing to endpoint (HTTP ${response.status}): ${text}`);
       }
       await response.body?.cancel();
     } catch (error) {

@@ -146,6 +146,7 @@ const ComposerPlugins = forwardRef<
         contentEditable={
           <ContentEditable
             className="qt-chat-composer-input qt-lexical-contenteditable"
+            aria-label="Message"
             aria-placeholder={placeholder}
             placeholder={
               <div className="qt-lexical-placeholder">{placeholder}</div>

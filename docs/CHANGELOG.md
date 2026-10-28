@@ -10,6 +10,7 @@
 - Toggle switches: the Prospero "Allow Any Character" switch gains `role="switch"`, `aria-checked` and a name. Plugin enable switches are named per plugin. The theme-selector and context-compression switches, and the Salon sidebar's All Whispers / Shared Vaults / Turn Skipping switches, are named after their visible labels.
 - `ModelSelector`: new optional `id` prop so a caller's `<label htmlFor>` names it (the connection-profile modal passes `modelName`). Without one, the placeholder is its `aria-label`. The dropdown chevron is named and reports `aria-expanded`.
 - Document picker's ".." button named "Up one folder".
+- Browser spot-check follow-ups: the Salon composer's rich-text input had no name; it is now "Message". `MarkdownLexicalEditor` put its `ariaLabel` prop on the outer frame (a plain div, ignored by screen readers) and hard-coded "Markdown editor" on the editable area, so every character field read the same. The editable area now takes `ariaLabel`, and the frame is `role="group"`.
 
 #### Fix: dialog semantics and keyboard access for every modal and clickable card (release checklist 13, continued)
 
