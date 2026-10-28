@@ -79,6 +79,7 @@ export function AIWizardModal({
             </p>
           </div>
           <button
+            aria-label="Close"
             type="button"
             onClick={handleClose}
             disabled={wizard.generating}

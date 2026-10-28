@@ -279,6 +279,7 @@ export default function AddCharacterDialog({
             Add Character to Chat
           </h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="qt-button qt-button-ghost p-2"
             disabled={isAdding}

@@ -378,6 +378,7 @@ export function ImportFromImageModal({
             <div className="flex items-center justify-between">
               <h2 className="qt-dialog-title">Import from Image</h2>
               <button
+                aria-label="Close"
                 type="button"
                 onClick={onClose}
                 className="qt-text-secondary hover:text-foreground"

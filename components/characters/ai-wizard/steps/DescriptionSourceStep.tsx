@@ -305,6 +305,7 @@ export function DescriptionSourceStep({
                 <div className="qt-dialog-header flex justify-between items-center">
                   <h3 className="qt-heading-4">Select Image</h3>
                   <button
+                    aria-label="Close gallery"
                     type="button"
                     onClick={() => setShowGallery(false)}
                     className="qt-button-icon qt-button-ghost"

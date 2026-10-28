@@ -572,7 +572,7 @@
   --qt-queue-badge-memory-fg: hsl(0 0% 100%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 48%);
   --qt-queue-badge-embedding-fg: hsl(0 0% 100%);
-  --qt-queue-badge-summary-bg: hsl(152 55% 38%);
+  --qt-queue-badge-summary-bg: hsl(152 55% 33.5%);
   --qt-queue-badge-summary-fg: hsl(0 0% 100%);
   --qt-queue-badge-danger-bg: hsl(0 60% 48%);
   --qt-queue-badge-danger-fg: hsl(0 0% 100%);
@@ -930,7 +930,7 @@
   /* Queue status badges — slightly brighter */
   --qt-queue-badge-memory-bg: hsl(225 55% 55%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
-  --qt-queue-badge-summary-bg: hsl(152 50% 42%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
   --qt-queue-badge-danger-bg: hsl(0 60% 52%);
   --qt-queue-badge-story-bg: hsl(225 12% 44%);
 
@@ -988,8 +988,12 @@
 /* ============================================================================
    REDUCED MOTION
    ============================================================================ */
+/* Every theme, not just the default: a bundle's own animations (and the
+   infinite pulses in qt-components) must honour the OS setting too. */
 @media (prefers-reduced-motion: reduce) {
-  [data-theme="default"] * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;

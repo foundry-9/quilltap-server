@@ -4,6 +4,20 @@
 
 ### 4.11-dev
 
+#### Fix: WCAG AA contrast, focus and reduced-motion pass across all themes (release checklist 13)
+
+- Status colours: every theme × mode now meets 4.5:1 for `success` / `warning` / `info` / `destructive` as text on background, card and popover, and for each `XForeground` on its fill. Light modes darken the status colours (warning foreground becomes white); dark modes lighten `destructive` and put dark text on success/info/destructive fills. Default theme changed in `lib/themes/default-tokens.ts` and `app/globals.css`. Hue and saturation are unchanged; only lightness moved.
+- Also fixed: `mutedForeground` (Art Deco, Old School, default dark), `accent` and `chatUser` fills (Earl Grey, Rains, Old School), `ring` (Art Deco light 1.37:1 → bronze, Great Estate light, Rains light), Rains dark `primary` on card, and the default `sidebarMuted`.
+- Earl Grey and Rains: status `--theme-*` lines in `styles.css` repointed (palette variables untouched); `--text-400` / `--text-300` lifted to 4.5:1 (placeholders, auth hints, chat-sidebar labels); Earl Grey links per mode.
+- Art Deco and Great Estate light: links and the active tab used gold on cream (1.85:1 and 3.2:1). New `--deco-bronze` / `--estate-bronze`. Great Estate dark active tab uses `--estate-gold`.
+- Header queue badges (`Mem` / `Sum` / `Dgr` …): fills darkened to 4.5:1 against their text in core and five themes.
+- Reduced motion: the global `prefers-reduced-motion` rule was scoped to `[data-theme="default"]`, so no bundled theme honoured it. It now applies everywhere.
+- Toasts: container was `role="toast-container"` (invalid) with no live region and used raw Tailwind white-on-green/yellow. Now `role="status"` + `aria-live="polite"` (errors `role="alert"`), coloured with theme status tokens via new `qt-text-{success,warning,info,destructive}-foreground` utilities.
+- `BaseModal`: now `role="dialog"`, `aria-modal`, `aria-labelledby` the title; moves focus in on open, traps Tab, restores focus on close. Focus logic extracted from `SlideOverPanel` into `hooks/useDialogFocus.ts`, which both now use.
+- 16 icon-only close/dismiss buttons gained `aria-label`.
+- Theme versions: Art Deco 1.0.13, Earl Grey 1.3.9, Great Estate 1.0.9, Madman's Box 1.1.9, Old School 1.0.14, Rains 1.3.13. theme-storybook 1.0.89 (defaults, queue badges, new utilities, reduced motion); create-quilltap-theme 2.0.21 (starter tokens pass AA).
+- Removed the unused root `create-quilltap-theme` dependency (and its knip ignore). Nothing imports it; `quilltap themes create` calls it through `npx`, which now always fetches the published version instead of a stale local copy.
+
 #### Docs: new release checklist item 13 (UI, look-and-feel, WCAG); docs check becomes item 14
 
 - New `/release-checklist-13-ui` command: a whole-UI review under every bundled theme in light and dark mode. Covers token contrast measured from each theme's `tokens.json`, a live design pass on the V4test instance, and WCAG 2.2 AA checks (keyboard and focus, accessible names, labels and landmarks, live regions, color-only cues, reflow at 320px, 200% zoom, target size, reduced motion). States which layer each fix belongs in.

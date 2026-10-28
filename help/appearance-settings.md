@@ -271,6 +271,14 @@ For example:
 - **Both ways work** — Changes in one are reflected in the other
 - **Choose your method** — Use whichever fits your workflow
 
+### Legibility and Motion
+
+Every theme the house supplies — in light dress and dark — is held to the customary standard of legibility: ordinary text stands at least four and a half times brighter (or darker) than the ground beneath it, and focus rings and other signposts at least three. You will notice the consequences chiefly in the status colours. In light mode, success, warning and information messages wear a deeper shade so they may be read rather than merely glimpsed; in dark mode the red "delete" buttons and their green and blue cousins are lighter, with dark lettering upon them. Art Deco and Great Estate, finding gold lettering illegible on cream, now set their links and the active tab in bronze in light mode, and the gold focus ring in Art Deco is likewise burnished.
+
+Should you have asked your operating system to reduce motion, every theme now obliges — not only the default — and the various pulses, slides and spinners settle down to a single, nearly instantaneous gesture.
+
+Notices that appear in the corner (the little toasts announcing a save or a mishap) now wear the theme's own status colours and are read aloud by screen readers, and dialog boxes take the keyboard's attention when they open, keep it while they are open, and hand it back politely when they close.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load

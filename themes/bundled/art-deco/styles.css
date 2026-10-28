@@ -47,6 +47,9 @@
   --deco-gold: hsl(43 85% 55%);
   --deco-gold-light: hsl(43 75% 72%);
   --deco-gold-dark: hsl(43 80% 42%);
+  /* Deep bronze for gold-family TEXT on the light cream ground (4.5:1+);
+     gold itself only reads on navy. */
+  --deco-bronze: hsl(43 80% 20%);
   /* Select dropdown chevron — antique gold to match the deco accent (deep enough
      to read on the cream/ivory inputs). Data URIs can't take a CSS var, so the
      stroke mirrors --deco-gold-dark hsl(43 80% 42%) ≈ #C19015. */
@@ -311,7 +314,7 @@
   --qt-queue-badge-memory-fg: hsl(43 85% 55%);
   --qt-queue-badge-embedding-bg: hsl(270 40% 30%);
   --qt-queue-badge-embedding-fg: hsl(43 85% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(222 35% 22%);
   --qt-queue-badge-story-fg: hsl(43 60% 75%);
@@ -335,7 +338,7 @@
   /* ==========================================================================
      LINK VARIABLES
      ========================================================================== */
-  --qt-link-color: var(--deco-gold-dark);
+  --qt-link-color: var(--deco-bronze);
   --qt-link-hover-color: var(--deco-gold);
   --qt-link-decoration: underline;
 
@@ -379,7 +382,7 @@
 
   --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
 
-  --qt-tab-active-fg: var(--deco-gold-dark);
+  --qt-tab-active-fg: var(--deco-bronze);
 
   --qt-tab-group-gap: 0.25rem;
 
@@ -543,8 +546,8 @@
   --qt-queue-badge-memory-fg: hsl(43 90% 65%);
   --qt-queue-badge-embedding-bg: hsl(270 40% 35%);
   --qt-queue-badge-embedding-fg: hsl(43 90% 65%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
-  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 49.5%);
   --qt-queue-badge-story-bg: hsl(222 30% 25%);
   --qt-queue-badge-story-fg: hsl(43 70% 70%);
 
@@ -573,6 +576,7 @@
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--deco-gold);
+  --qt-tab-active-fg: var(--deco-gold-dark);
   --qt-link-hover-color: var(--deco-gold-light);
 
   /* Auth page — deeper navy gradient */

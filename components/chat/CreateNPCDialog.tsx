@@ -275,6 +275,7 @@ export default function CreateNPCDialog({
             Create Ad-hoc NPC
           </h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="qt-button qt-button-ghost p-2"
             disabled={isCreating}

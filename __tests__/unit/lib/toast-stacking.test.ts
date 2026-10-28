@@ -33,7 +33,7 @@ describe('toast stacking order', () => {
   it('puts the toast container above every dialog layer and below the startup gates', () => {
     showErrorToast('Saving failed', 60_000)
 
-    const container = document.querySelector<HTMLDivElement>('[role="toast-container"]')
+    const container = document.querySelector<HTMLDivElement>('[data-toast-container]')
     expect(container).not.toBeNull()
     const toastZ = Number(container!.style.zIndex)
 

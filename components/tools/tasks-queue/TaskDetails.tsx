@@ -53,6 +53,7 @@ export function TaskDetails({
             <p className="qt-text-small">{job.type}</p>
           </div>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="p-1 rounded hover:qt-bg-muted"
           >

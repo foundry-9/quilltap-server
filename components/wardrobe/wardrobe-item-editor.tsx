@@ -481,6 +481,7 @@ export function WardrobeItemEditor({
                 {isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
               </h2>
               <button
+                aria-label="Close"
                 type="button"
                 onClick={onClose}
                 className="qt-text-secondary hover:text-foreground"

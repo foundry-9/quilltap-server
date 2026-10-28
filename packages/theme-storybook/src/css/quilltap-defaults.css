@@ -54,11 +54,11 @@
   --theme-ring: hsl(225 65% 48%);
 
   /* Status colors */
-  --theme-success: hsl(152 60% 38%);
+  --theme-success: hsl(152 60% 31%);
   --theme-success-foreground: hsl(0 0% 100%);
-  --theme-warning: hsl(38 90% 46%);
-  --theme-warning-foreground: hsl(0 0% 10%);
-  --theme-info: hsl(210 75% 48%);
+  --theme-warning: hsl(38 90% 32%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(210 75% 44.5%);
   --theme-info-foreground: hsl(0 0% 100%);
 
   /* Chat-specific colors */
@@ -99,24 +99,24 @@
   --theme-secondary-foreground: hsl(225 10% 85%);
 
   --theme-muted: hsl(225 12% 14%);
-  --theme-muted-foreground: hsl(225 8% 56%);
+  --theme-muted-foreground: hsl(225 8% 58%);
 
   --theme-accent: hsl(225 14% 18%);
   --theme-accent-foreground: hsl(225 10% 85%);
 
-  --theme-destructive: hsl(0 60% 54%);
-  --theme-destructive-foreground: hsl(0 0% 100%);
+  --theme-destructive: hsl(0 60% 62%);
+  --theme-destructive-foreground: hsl(225 18% 9%);
 
   --theme-border: hsl(225 12% 20%);
   --theme-input: hsl(225 12% 20%);
   --theme-ring: hsl(225 55% 60%);
 
   --theme-success: hsl(152 55% 44%);
-  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-success-foreground: hsl(225 18% 9%);
   --theme-warning: hsl(38 85% 52%);
   --theme-warning-foreground: hsl(0 0% 10%);
   --theme-info: hsl(210 70% 58%);
-  --theme-info-foreground: hsl(0 0% 100%);
+  --theme-info-foreground: hsl(225 18% 9%);
 
   --theme-chat-user: hsl(225 60% 56%);
   --theme-chat-user-foreground: hsl(0 0% 100%);

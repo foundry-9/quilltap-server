@@ -143,13 +143,13 @@
 
   /* Theme Color Mappings - for qt-* utility classes */
   --theme-success: hsl(var(--success-100));
-  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-success-foreground: hsl(var(--bg-100));
   --theme-warning: hsl(var(--warning-100));
   --theme-warning-foreground: hsl(var(--always-black));
-  --theme-destructive: hsl(var(--danger-100));
-  --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
-  --theme-info-foreground: hsl(var(--oncolor-100));
+  --theme-destructive: hsl(0 67% 68.1%);
+  --theme-destructive-foreground: hsl(var(--bg-100));
+  --theme-info: hsl(var(--accent-secondary-000));
+  --theme-info-foreground: hsl(var(--bg-100));
 
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
@@ -167,7 +167,7 @@
   --text-100: 0 0% 100%;
   --text-200: 0 0% 70.6%;       /* #b4b4b4 - Secondary */
   --text-300: 0 0% 70.6%;
-  --text-400: 0 0% 40%;         /* #666666 - Tertiary */
+  --text-400: 0 0% 59%;         /* Tertiary (lifted for 4.5:1 contrast) */
   --text-500: 0 0% 40%;
 
   /* Scrollbar for dark mode */
@@ -245,13 +245,13 @@
   --warning-900: 45 40% 95%;
 
   /* Theme Color Mappings - for qt-* utility classes (light mode) */
-  --theme-success: hsl(var(--success-100));
+  --theme-success: hsl(142 71% 31%);
   --theme-success-foreground: hsl(var(--oncolor-100));
-  --theme-warning: hsl(var(--warning-100));
-  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-warning: hsl(45 93% 30%);
+  --theme-warning-foreground: hsl(var(--oncolor-100));
   --theme-destructive: hsl(var(--danger-100));
   --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info: hsl(211 100% 46%);
   --theme-info-foreground: hsl(var(--oncolor-100));
 
   /* On-Color Text - Light mode */
@@ -270,7 +270,7 @@
   --text-100: 0 0% 5%;
   --text-200: 0 0% 40%;         /* #676767 - Secondary */
   --text-300: 0 0% 40%;
-  --text-400: 240 5% 56%;       /* #8E8EA0 - Placeholder (slight blue tint) */
+  --text-400: 240 5% 45.5%;      /* Placeholder (slight blue tint; 4.5:1 on white) */
   --text-500: 0 0% 60%;
 
   /* Scrollbar for light mode */
@@ -727,7 +727,7 @@
 
   --qt-queue-badge-memory-bg: hsl(217 91% 50%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 50%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(220 15% 35%);
   --qt-queue-badge-idle-opacity: 0.4;
@@ -788,6 +788,7 @@
    DARK MODE SPECIFIC OVERRIDES
    ============================================================================ */
 [data-theme="earl-grey"].dark {
+  --qt-link-color: hsl(var(--accent-secondary-000));
   /* Status ink: the -100 red on its own dark tint is ~3.5:1; -000 reads. */
   --qt-status-danger-fg: hsl(var(--danger-000));
 
@@ -941,10 +942,10 @@
   --qt-badge-capability-fg: hsl(217 91% 70%);
 
   /* Dark mode queue status badge tokens */
-  --qt-queue-badge-memory-bg: hsl(217 91% 55%);
+  --qt-queue-badge-memory-bg: hsl(217 91% 53%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
-  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 49.5%);
   --qt-queue-badge-story-bg: hsl(220 15% 45%);
 
   /* Dark mode response status tokens */
@@ -963,6 +964,7 @@
    LIGHT MODE SPECIFIC OVERRIDES
    ============================================================================ */
 [data-theme="earl-grey"].light {
+  --qt-link-color: hsl(211 100% 46%);
   /* Primary Button - Black pill with white text (light mode - inverted) */
   --qt-button-primary-bg: hsl(var(--always-black));
   --qt-button-primary-fg: hsl(var(--always-white));

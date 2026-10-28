@@ -211,6 +211,7 @@ export default function BulkCharacterReplaceModal({
         <div className="qt-dialog-header flex items-center justify-between">
           <h2 className="qt-dialog-title">Bulk Character Replace</h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="qt-button qt-button-ghost p-2"
             disabled={isSubmitting}

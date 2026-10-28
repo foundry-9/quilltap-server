@@ -144,13 +144,13 @@
 
   /* Theme Color Mappings - for qt-* utility classes */
   --theme-success: hsl(var(--success-100));
-  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-success-foreground: hsl(var(--bg-100));
   --theme-warning: hsl(var(--warning-100));
   --theme-warning-foreground: hsl(var(--always-black));
-  --theme-destructive: hsl(var(--danger-100));
-  --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
-  --theme-info-foreground: hsl(var(--oncolor-100));
+  --theme-destructive: hsl(0 67% 68.1%);
+  --theme-destructive-foreground: hsl(var(--bg-100));
+  --theme-info: hsl(210 50% 61%);
+  --theme-info-foreground: hsl(var(--bg-100));
 
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
@@ -171,8 +171,8 @@
   --text-000: 40 10% 95%;   /* #f4f3f1 - primary text */
   --text-100: 40 8% 90%;    /* #e8e6e3 - primary alt */
   --text-200: 40 5% 65%;    /* #a8a6a3 - secondary */
-  --text-300: 40 4% 55%;    /* #908e8b - tertiary */
-  --text-400: 40 3% 45%;    /* #757372 - muted */
+  --text-300: 40 4% 62%;    /* tertiary */
+  --text-400: 40 3% 59%;    /* muted (4.5:1 on sidebar) */
   --text-500: 40 2% 38%;    /* #636160 - very muted */
 
   /* Always Colors */
@@ -266,13 +266,13 @@
   --warning-900: 38 40% 95%;
 
   /* Theme Color Mappings - for qt-* utility classes (light mode) */
-  --theme-success: hsl(var(--success-100));
+  --theme-success: hsl(142 55% 32.5%);
   --theme-success-foreground: hsl(var(--oncolor-100));
-  --theme-warning: hsl(var(--warning-100));
-  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-warning: hsl(38 85% 32.5%);
+  --theme-warning-foreground: hsl(var(--oncolor-100));
   --theme-destructive: hsl(var(--danger-100));
   --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info: hsl(var(--accent-secondary-000));
   --theme-info-foreground: hsl(var(--oncolor-100));
 
   /* On-Color Text - Dark on light accents */
@@ -291,8 +291,8 @@
   --text-000: 35 15% 10%;     /* Near black, warm */
   --text-100: 35 12% 15%;     /* Primary */
   --text-200: 35 8% 35%;      /* Secondary */
-  --text-300: 35 6% 45%;      /* Tertiary */
-  --text-400: 35 5% 55%;      /* Muted */
+  --text-300: 35 6% 38%;      /* Tertiary */
+  --text-400: 35 5% 40%;      /* Muted */
   --text-500: 35 4% 65%;      /* Very muted */
 
   /* Always Colors */
@@ -813,7 +813,7 @@
 
   --qt-queue-badge-memory-bg: hsl(217 91% 50%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 50%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(220 15% 35%);
   --qt-queue-badge-idle-opacity: 0.4;
@@ -1007,10 +1007,10 @@
   --qt-badge-capability-fg: hsl(217 91% 70%);
 
   /* Dark mode queue status badge tokens */
-  --qt-queue-badge-memory-bg: hsl(217 91% 55%);
+  --qt-queue-badge-memory-bg: hsl(217 91% 53%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
-  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 49.5%);
   --qt-queue-badge-story-bg: hsl(220 15% 45%);
 
   /* Dark mode response status tokens */

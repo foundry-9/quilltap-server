@@ -23,7 +23,6 @@
   "ignoreDependencies": [
     "@types/*",
     "ts-node",
-    "create-quilltap-theme",
     "esbuild",
     "better-sqlite3-multiple-ciphers",
     "@anthropic-ai/sdk",

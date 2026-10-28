@@ -327,7 +327,7 @@
   --qt-queue-badge-memory-fg: var(--box-brass);
   --qt-queue-badge-embedding-bg: hsl(310 36% 32%);
   --qt-queue-badge-embedding-fg: var(--rotor-cyan-bright);
-  --qt-queue-badge-summary-bg: hsl(140 50% 38%);
+  --qt-queue-badge-summary-bg: hsl(140 50% 35%);
   --qt-queue-badge-danger-bg: hsl(4 70% 48%);
   --qt-queue-badge-story-bg: hsl(30 30% 22%);
   --qt-queue-badge-story-fg: hsl(40 58% 76%);

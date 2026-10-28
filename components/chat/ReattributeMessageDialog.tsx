@@ -143,6 +143,7 @@ export default function ReattributeMessageDialog({
             Re-attribute Message
           </h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="qt-button qt-button-ghost p-2"
             disabled={isSubmitting}

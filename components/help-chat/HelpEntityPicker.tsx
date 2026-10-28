@@ -131,6 +131,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
         <div className="qt-help-entity-picker-header">
           <span>Select a {route?.entityLabel || 'item'}</span>
           <button
+            aria-label="Cancel"
             type="button"
             onClick={onCancel}
             className="p-0.5 rounded qt-hover-accent qt-text-secondary transition-colors"

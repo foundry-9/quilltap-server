@@ -313,6 +313,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               <div className="flex items-center justify-between">
                 <span>{status.message}</span>
                 <button
+                  aria-label="Dismiss message"
                   type="button"
                   onClick={() => setStatus(null)}
                   className="ml-2 text-current opacity-60 hover:opacity-100"

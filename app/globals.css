@@ -109,13 +109,13 @@
   --theme-destructive: hsl(0 68% 50%);
   --theme-destructive-foreground: hsl(0 0% 100%);
 
-  --theme-success: hsl(152 60% 38%);
+  --theme-success: hsl(152 60% 31%);
   --theme-success-foreground: hsl(0 0% 100%);
 
-  --theme-warning: hsl(38 90% 46%);
-  --theme-warning-foreground: hsl(0 0% 10%);
+  --theme-warning: hsl(38 90% 32%);
+  --theme-warning-foreground: hsl(0 0% 100%);
 
-  --theme-info: hsl(210 75% 48%);
+  --theme-info: hsl(210 75% 44.5%);
   --theme-info-foreground: hsl(0 0% 100%);
 
   /* Borders & inputs */
@@ -131,7 +131,7 @@
   --theme-sidebar-background: hsl(225 14% 95%);
   --theme-sidebar-foreground: hsl(225 18% 18%);
   --theme-sidebar-border: hsl(225 10% 87%);
-  --theme-sidebar-muted: hsl(225 8% 50%);
+  --theme-sidebar-muted: hsl(225 8% 44.5%);
   --theme-sidebar-accent: hsl(225 10% 93%);
   --theme-sidebar-accent-foreground: hsl(225 18% 22%);
 
@@ -176,24 +176,24 @@
 
   /* Muted */
   --theme-muted: hsl(225 12% 14%);
-  --theme-muted-foreground: hsl(225 8% 56%);
+  --theme-muted-foreground: hsl(225 8% 58%);
 
   /* Accent */
   --theme-accent: hsl(225 14% 18%);
   --theme-accent-foreground: hsl(225 10% 85%);
 
   /* Semantic colors - adjusted for dark backgrounds */
-  --theme-destructive: hsl(0 60% 54%);
-  --theme-destructive-foreground: hsl(0 0% 100%);
+  --theme-destructive: hsl(0 60% 62%);
+  --theme-destructive-foreground: hsl(225 18% 9%);
 
   --theme-success: hsl(152 55% 44%);
-  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-success-foreground: hsl(225 18% 9%);
 
   --theme-warning: hsl(38 85% 52%);
   --theme-warning-foreground: hsl(0 0% 10%);
 
   --theme-info: hsl(210 70% 58%);
-  --theme-info-foreground: hsl(0 0% 100%);
+  --theme-info-foreground: hsl(225 18% 9%);
 
   /* Borders & inputs */
   --theme-border: hsl(225 12% 20%);
@@ -208,7 +208,7 @@
   --theme-sidebar-background: hsl(225 18% 7%);
   --theme-sidebar-foreground: hsl(225 10% 88%);
   --theme-sidebar-border: hsl(225 12% 16%);
-  --theme-sidebar-muted: hsl(225 8% 48%);
+  --theme-sidebar-muted: hsl(225 8% 51%);
   --theme-sidebar-accent: hsl(225 14% 18%);
   --theme-sidebar-accent-foreground: hsl(225 10% 85%);
 }

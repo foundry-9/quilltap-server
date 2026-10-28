@@ -221,7 +221,7 @@ export function MergeConversationModal({
           <h2 className="qt-dialog-title">
             {step === 'pick' ? 'Merge a Conversation In' : `Merge “${selectedSource?.title ?? ''}”`}
           </h2>
-          <button onClick={handleClose} className="qt-button qt-button-ghost p-2" disabled={isMerging}>
+          <button aria-label="Close" onClick={handleClose} className="qt-button qt-button-ghost p-2" disabled={isMerging}>
             <Icon name="close" className="w-6 h-6" />
           </button>
         </div>

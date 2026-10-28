@@ -112,6 +112,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               {isEditing ? 'Edit Memory' : 'Add Memory'}
             </h2>
             <button
+              aria-label="Close"
               onClick={onClose}
               className="qt-text-secondary hover:text-foreground"
             >
