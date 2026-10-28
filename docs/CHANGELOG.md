@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Fix: document-chunk embeddings lost to a job-child startup race
+
+- The job child connected its database backend lazily, and only that connect opens the mount-index database. Mount-index repositories never open it themselves, so a job whose first database read was a mount-index lookup (an `EMBEDDING_GENERATE` for a document chunk, queued by the boot-time store rescan) found "Mount index database not initialized". On the Ignite instance's 4.11 upgrade boot, 14 chunks were hit about 200 ms before the connection opened.
+- The child now connects the database backend before loading plugins, inside the existing startup gate (`lib/background-jobs/child/child-startup.ts`), so no job runs before the mount index is open.
+- The mount-chunk embedding handler calls `requireMountIndexDb()` before its lookup. `findById` returns null on a read failure as well as on absence, so an unopened or degraded mount index used to mark a live chunk FAILED, and no reconcile retries a FAILED chunk. The job now throws and is retried instead.
+
 #### Docs: release checklist 14 documentation pass for 4.11.0
 
 - README: new "Published JSON Schemas" table linking all six schemas in `public/schemas/`, with what each describes and when to use it; storyteller mode, diagrams, Stop / raise-hand and the WCAG AA theme check added to the tour.

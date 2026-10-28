@@ -9,6 +9,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { EMBEDDING_MAX_CHARS, averageEmbeddings, generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { requireMountIndexDb } from '@/lib/database/backends/sqlite/mount-index-guard';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
 import { memoryIndex, embeddingTextFor, lexicalEmbeddingTextFor } from '@/lib/memory/index-store';
@@ -557,6 +558,10 @@ async function handleMountChunkEmbedding(
   payload: EmbeddingGeneratePayload,
   repos: ReturnType<typeof getRepositories>
 ): Promise<void> {
+  // `findById` answers null on a read failure as well as on absence. With the
+  // mount index unopened or degraded, "not found" would mark a live chunk
+  // FAILED, which no reconcile retries; throw instead so the job is retried.
+  requireMountIndexDb();
   const chunk = await repos.docMountChunks.findById(payload.entityId);
   if (!chunk) {
     logger.warn('[EmbeddingGenerate] Mount chunk not found', {
