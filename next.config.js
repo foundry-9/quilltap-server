@@ -3,6 +3,14 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // `next build` type-checks with a config that leaves tests out (`npx tsc`
+  // against tsconfig.json is what checks them). Colocated tests import helpers
+  // from the root __tests__/, which .dockerignore keeps out of the image build,
+  // so type-checking them there failed the Docker build.
+  typescript: {
+    tsconfigPath: 'tsconfig.build.json',
+  },
+
   // Dev indicator position (bottom-right instead of default bottom-left)
   devIndicators: {
     position: 'bottom-right',

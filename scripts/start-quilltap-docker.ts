@@ -469,10 +469,15 @@ if (opts.dryRun) {
 if (dockerContainerExists(opts.name)) {
   if (opts.recreate) {
     console.log(`Replacing existing container '${opts.name}'...`);
-    // `docker rm -f` covers both running and stopped containers in one step.
+    // Stop gracefully first. `docker rm -f` alone is a SIGKILL, so the old
+    // server never releases its instance lock; the new container has a new
+    // hostname, can only judge that lock by its heartbeat, and is locked out
+    // (crash-looping under the restart policy) until the heartbeat goes stale
+    // several minutes later. `docker stop` on a stopped container is a no-op.
     // Only the container goes; the data directory and the stores are bind
     // mounts, so nothing the user owns is touched.
     try {
+      execSync(`docker stop -t 30 ${opts.name}`, { stdio: 'inherit' });
       execSync(`docker rm -f ${opts.name}`, { stdio: 'inherit' });
     } catch {
       console.error(`Failed to remove container '${opts.name}'.`);

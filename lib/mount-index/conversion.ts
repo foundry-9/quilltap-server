@@ -20,6 +20,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { sha256OfBuffer, sha256OfString } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountPoint, DocMountFile } from '@/lib/schemas/mount-index.types';
+import { assertPersistentTarget } from './persistent-target';
 
 const logger = createServiceLogger('MountIndex:Conversion');
 
@@ -204,6 +205,10 @@ export async function validateDeconvertTarget(targetPath: string): Promise<void>
   if (!targetPath || !path.isAbsolute(targetPath)) {
     throw new Error('Target path must be an absolute filesystem path');
   }
+  // Deconvert deletes the database copy once the files are written, so a
+  // target in the container's own layer would leave the only copy somewhere
+  // the next recreate destroys.
+  await assertPersistentTarget(targetPath);
   let stat;
   try {
     stat = await fs.stat(targetPath);

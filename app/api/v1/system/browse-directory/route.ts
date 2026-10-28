@@ -6,7 +6,7 @@
  *   Returns the resolved path and its immediate subdirectories.
  *
  * GET /api/v1/system/browse-directory
- *   Lists subdirectories of the user's home directory.
+ *   Lists subdirectories of the user's home directory (the instance root under Docker).
  */
 
 import { NextRequest } from 'next/server';
@@ -16,11 +16,20 @@ import * as os from 'os';
 import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse, badRequest } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { getBaseDataDir, isDockerEnvironment } from '@/lib/paths';
 
 export const GET = createContextHandler(async (req: NextRequest) => {
   try {
     const { searchParams } = new URL(req.url);
-    const requestedPath = searchParams.get('path') || os.homedir();
+    // In the Docker image the user has no home directory, and the only paths
+    // worth picking are under the instance bind (or path-identical store
+    // binds), so start there.
+    const defaultPath = isDockerEnvironment() ? getBaseDataDir() : os.homedir();
+    const requestedPath = searchParams.get('path') || defaultPath;
+    logger.debug('[Browse Directory] Listing directory', {
+      requestedPath,
+      usedDefault: !searchParams.get('path'),
+    });
 
     // Resolve and normalize the path
     const resolvedPath = path.resolve(requestedPath);

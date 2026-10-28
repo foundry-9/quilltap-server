@@ -184,7 +184,9 @@ One consequence follows from this that catches people out: **the directory is
 resolved on the server, not where you typed the command.** Ordinarily these
 are the same machine and nobody notices. Running Quilltap in Docker, they are
 not, and the directory must sit inside a bind mount — `quilltap docs
-docker-mounts` will tell you which binds your stores want.
+docker-mounts` will tell you which binds your stores want. A directory that
+lies anywhere else inside the container is refused, dry runs included: files
+written there would vanish the next time the container is rebuilt.
 
 ## What It Will Not Do
 

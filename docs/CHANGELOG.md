@@ -4,6 +4,16 @@
 
 ### 4.11-dev
 
+#### Fix: Docker recreate lockout, deconvert into the container layer, in-container CLI, folder picker, local image build
+
+Found by the Docker test plan (`docs/developer/docker-test-plan.md`) against V4test.
+
+- `npm run start:docker -- --recreate` ran `docker rm -f`, a SIGKILL, so the old server never released its instance lock. The new container has a new hostname, can judge the lock only by its heartbeat, and crash-looped under `--restart unless-stopped` for about 4.5 minutes until the heartbeat went stale. The script now runs `docker stop -t 30` before `docker rm -f`.
+- Deconvert and sync to a path outside any bind mount (for example `/tmp/x`) succeeded inside a container and wrote the files into the container's writable layer. Deconvert then deleted the database copy, so the next recreate destroyed the store. New `lib/mount-index/persistent-target.ts` reads `/proc/self/mountinfo`, resolves the target through its nearest existing ancestor, and refuses a target on the container root overlay or a tmpfs. `validateDeconvertTarget` asserts it, and the sync refuses with `TARGET_NOT_PERSISTENT`, dry runs included. No-op outside Docker; fails open if the mount table can't be read.
+- The CLI bundled in the image defaulted to `~/.quilltap`, a home directory the image never creates, so `docker exec quilltap quilltap db --lock-status` reported no lock while the server held one and `db --tables` found no database. New `packages/quilltap/lib/platform-paths.js` (`getDefaultBaseDir`, `isDockerContainer`) returns `/app/quilltap` under Docker and is now the one platform default for `db-helpers`, `theme-commands` and `lock-helpers`.
+- `GET /api/v1/system/browse-directory` with no `path` returned 400 "Path does not exist: /home/nextjs" in Docker. It now starts at the instance root there.
+- `docker build --target production .` (also what `scripts/build-push-docker.ts` runs) failed in `next build`'s type check: colocated tests import helpers from the root `__tests__/`, which `.dockerignore` excludes. `next build` now type-checks against new `tsconfig.build.json`, which extends `tsconfig.json` and excludes tests (`**/__tests__/**`, `**/__mocks__/**`, `*.test.*`, `*.spec.*`). `npx tsc` still checks tests.
+
 #### Fix: document-chunk embeddings lost to a job-child startup race
 
 - The job child connected its database backend lazily, and only that connect opens the mount-index database. Mount-index repositories never open it themselves, so a job whose first database read was a mount-index lookup (an `EMBEDDING_GENERATE` for a document chunk, queued by the boot-time store rescan) found "Mount index database not initialized". On the Ignite instance's 4.11 upgrade boot, 14 chunks were hit about 200 ms before the connection opened.
