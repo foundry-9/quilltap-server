@@ -21,9 +21,11 @@
  * one mounts a fresh form and half-typed edits never bleed between entries.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import {
   UNIT_MS,
   deriveProgression,
@@ -205,6 +207,10 @@ export function ProgressionEditorModal({
   const [form, setForm] = useState<FormState>(() => initialForm(editing))
   const [idTouched, setIdTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onClose, !saving)
 
   // The clock the live preview reads. Held in state and advanced by an
   // interval rather than read during render: `Date.now()` in a render body is
@@ -260,9 +266,17 @@ export function ProgressionEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay p-4">
-      <div className="qt-card qt-bg-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-card qt-bg-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4"
+      >
         <div className="flex items-start justify-between">
-          <h3 className="qt-heading-4">{isCreate ? 'New progression' : `Edit “${form.name || effectiveId}”`}</h3>
+          <h3 id={titleId} className="qt-heading-4">{isCreate ? 'New progression' : `Edit “${form.name || effectiveId}”`}</h3>
           <button type="button" onClick={onClose} className="qt-button-icon qt-button-ghost" aria-label="Close">
             <Icon name="close" className="w-4 h-4" />
           </button>

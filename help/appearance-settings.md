@@ -279,6 +279,10 @@ Should you have asked your operating system to reduce motion, every theme now ob
 
 Notices that appear in the corner (the little toasts announcing a save or a mishap) now wear the theme's own status colours and are read aloud by screen readers, and dialog boxes take the keyboard's attention when they open, keep it while they are open, and hand it back politely when they close.
 
+That courtesy now extends to every dialog in the house, not merely the principal few: each one announces itself to a screen reader by its title, keeps the Tab key circulating within its walls, closes at a touch of Escape, and returns you to the very button that summoned it. The floating Help and Console windows take your attention on opening but do not hold it hostage — the page behind them stays within reach of Tab, and Escape dismisses them wherever you happen to be, unless a proper dialog is open and has the prior claim.
+
+Nor need you reach for the mouse to open things. The name on a character card, a document store's title, a folder or a file in the Scriptorium's lists, an entry in the LLM log, a picture in a gallery and a document's title (to rename it) may all be reached with Tab and set going with Enter or the space bar.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load

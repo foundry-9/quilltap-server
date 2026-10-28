@@ -6,7 +6,9 @@
  * Modal dialog for editing an existing document store.
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { createPortal } from 'react-dom'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { DocumentStore, UpdateDocumentStoreData } from '../types'
@@ -22,6 +24,11 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
   const [storeType, setStoreType] = useState<'documents' | 'character'>(store?.storeType || 'documents')
   const [basePath, setBasePath] = useState(store?.basePath || '')
   const [enabled, setEnabled] = useState(store?.enabled ?? true)
+
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, !!store)
+  useEscapeKey(onClose, !!store)
 
   if (!store) return null
 
@@ -56,8 +63,16 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
 
   return createPortal(
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-lg p-6">
-        <h3 className="qt-dialog-title mb-4">Edit Document Store</h3>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg p-6"
+      >
+        <h3 id={titleId} className="qt-dialog-title mb-4">Edit Document Store</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="qt-label mb-2 block">Name</label>

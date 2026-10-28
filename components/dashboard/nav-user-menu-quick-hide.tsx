@@ -78,6 +78,7 @@ export function NavUserMenuQuickHideContent({ onVisibilityChanged }: NavUserMenu
                 key={tag.id}
                 type="button"
                 onClick={() => handleToggle(tag.id, tag.name, isHidden)}
+                aria-pressed={isHidden}
                 className={`qt-navbar-dropdown-item ${isHidden ? 'qt-navbar-dropdown-item-active' : ''}`}
               >
                 <TagBadge tag={tag} size="sm" />

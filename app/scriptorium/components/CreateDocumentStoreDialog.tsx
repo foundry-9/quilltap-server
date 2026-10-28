@@ -6,7 +6,9 @@
  * Modal dialog for creating a new document store (mount point).
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { createPortal } from 'react-dom'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { CreateDocumentStoreData } from '../types'
@@ -21,6 +23,11 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>('filesystem')
   const [storeType, setStoreType] = useState<'documents' | 'character'>('documents')
   const [basePath, setBasePath] = useState('')
+
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, open)
+  useEscapeKey(onClose, open)
 
   if (!open) return null
 
@@ -54,8 +61,16 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
 
   return createPortal(
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-lg p-6">
-        <h3 className="qt-dialog-title mb-4">Add Document Store</h3>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg p-6"
+      >
+        <h3 id={titleId} className="qt-dialog-title mb-4">Add Document Store</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="qt-label mb-2 block">Name</label>

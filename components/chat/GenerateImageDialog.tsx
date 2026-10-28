@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
 
 interface EntityOption {
@@ -163,6 +165,12 @@ export default function GenerateImageDialog({
     enabled: isDropdownOpen,
   })
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  useEscapeKey(onClose, isOpen && !isGenerating)
+
   if (!isOpen) return null
 
   // Get current chat participants for quick buttons
@@ -171,10 +179,18 @@ export default function GenerateImageDialog({
 
   return (
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col"
+      >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             Generate Image
           </h2>
           <button

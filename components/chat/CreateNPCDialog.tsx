@@ -12,12 +12,13 @@
  * - Connection profile selection
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface ConnectionProfile {
@@ -261,17 +262,27 @@ export default function CreateNPCDialog({
     }
   }
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
   if (!isOpen) return null
 
   return (
     <div className="qt-dialog-overlay p-4" onClick={handleOverlayClick}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             Create Ad-hoc NPC
           </h2>
           <button

@@ -6,7 +6,9 @@
  * Dialog for uploading images, importing from URL, or generating with AI
  */
 
-import { useState, useRef, FormEvent } from 'react';
+import { useState, useRef, useId, FormEvent } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { ImageGenerationDialog } from './image-generation-dialog';
 
 interface ImageUploadDialogProps {
@@ -27,6 +29,10 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen && !showGeneration);
+  useEscapeKey(handleClose, isOpen && !showGeneration);
 
   if (!isOpen) return null;
 
@@ -128,11 +134,17 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
         <div className="qt-dialog-overlay" onClick={handleClose}>
           <div
             className="qt-dialog max-w-md mx-4"
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            onKeyDown={handleFocusKeyDown}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="qt-dialog-header">
-              <h2 className="qt-dialog-title">Import Image</h2>
+              <h2 id={titleId} className="qt-dialog-title">Import Image</h2>
             </div>
 
             {/* Body */}

@@ -9,6 +9,7 @@ import type { LLMLog } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import { formatDateTime } from '@/lib/format-time'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 
 export default function LLMLogsCard() {
   const { data, isLoading, error: loadError, refetch: mutateLogs } = useQuery({
@@ -104,6 +105,9 @@ export default function LLMLogsCard() {
             <div
               key={log.id}
               onClick={() => handleViewLog(log)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={activateOnKey}
               className="qt-card p-3 flex items-center justify-between hover:qt-bg-muted/50 transition-colors cursor-pointer"
             >
               <div className="flex-1 min-w-0">

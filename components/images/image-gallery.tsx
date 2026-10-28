@@ -14,6 +14,7 @@ import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
 import { downloadFetchedFile } from '@/lib/download-utils';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
+import { activateOnKey } from '@/components/ui/activate-on-key';
 
 export interface ImageData {
   id: string;
@@ -140,7 +141,12 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           } ${onSelectImage ? 'cursor-pointer' : ''}`}
           onClick={() => onSelectImage?.(image)}
         >
-          <div className="aspect-square relative qt-bg-muted">
+          <div
+            className="aspect-square relative qt-bg-muted"
+            {...(onSelectImage && !missingImages.has(image.id)
+              ? { role: 'button', tabIndex: 0, 'aria-pressed': selectedImageId === image.id, onKeyDown: activateOnKey }
+              : {})}
+          >
             {missingImages.has(image.id) ? (
               <DeletedImagePlaceholder
                 imageId={image.id}

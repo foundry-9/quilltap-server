@@ -8,11 +8,12 @@
  * are deleted.
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/icon'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 interface ParticipantData {
   id: string
@@ -129,17 +130,25 @@ export default function ReattributeMessageDialog({
     return participant.character || null
   }
 
+  const titleId = useId()
+  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
+
   if (!isOpen) return null
 
   return (
     <div className="qt-dialog-overlay p-4">
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         className="qt-dialog max-w-md"
       >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             Re-attribute Message
           </h2>
           <button

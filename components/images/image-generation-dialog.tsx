@@ -8,7 +8,9 @@
  * Supports different generation options based on selected provider
  */
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useId, useRef, FormEvent } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface GenerationOption {
   n?: number;
@@ -87,6 +89,9 @@ export function ImageGenerationDialog({
   contextId,
   orientation,
 }: ImageGenerationDialogProps) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen);
   const [prompt, setPrompt] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
@@ -229,17 +234,25 @@ export function ImageGenerationDialog({
     onClose();
   }
 
+  useEscapeKey(handleClose, isOpen);
+
   if (!isOpen) return null;
 
   return (
     <div className="qt-dialog-overlay" onClick={handleClose}>
       <div
         className="qt-dialog max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="qt-dialog-header sticky top-0">
-          <h2 className="qt-dialog-title">Generate Image</h2>
+          <h2 id={titleId} className="qt-dialog-title">Generate Image</h2>
         </div>
 
         {/* Body */}

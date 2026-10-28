@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { ALMANACK_TITLE } from '@/lib/tools/almanack/phases'
@@ -23,7 +24,9 @@ export function CapabilitiesReportDialog({
   filename,
   content,
 }: CapabilitiesReportDialogProps) {
+  const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
 
   // Handle escape key
   useEffect(() => {
@@ -61,12 +64,17 @@ export function CapabilitiesReportDialog({
       <div className="fixed inset-4 md:inset-8 lg:inset-12 z-50 pointer-events-auto flex items-center justify-center">
         <div
           ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
           className="qt-dialog w-full h-full max-w-6xl flex flex-col"
         >
           {/* Header */}
           <div className="qt-dialog-header flex-shrink-0">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title">
+              <h2 id={titleId} className="qt-dialog-title">
                 {filename}
               </h2>
               <button

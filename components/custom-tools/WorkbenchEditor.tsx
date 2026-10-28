@@ -18,11 +18,12 @@
  * no second write path into stores.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import {
@@ -82,6 +83,8 @@ function extractErrorMessage(err: unknown): string {
 
 export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonly<WorkbenchEditorProps>) {
   const queryClient = useQueryClient()
+  const conflictTitleId = useId()
+  const conflictDialogRef = useRef<HTMLDivElement>(null)
 
   // -- Load -----------------------------------------------------------------
 
@@ -433,6 +436,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   // -- Render ---------------------------------------------------------------
 
+  const handleConflictFocusKeyDown = useDialogFocus(conflictDialogRef, conflictContent !== null && !!location)
+
   if (source && fileQuery.isLoading) {
     return <div className="p-6 text-sm qt-text-secondary">Fetching the card from its store…</div>
   }
@@ -642,9 +647,17 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
       {/* Conflict dialog */}
       {conflictContent !== null && location && (
-        <div className="qt-dialog-overlay" role="dialog" aria-modal="true">
-          <div className="qt-card qt-shadow-lg rounded-lg border w-full max-w-md p-4 space-y-3">
-            <h2 className="qt-card-title text-base">The file has moved under your hand</h2>
+        <div className="qt-dialog-overlay">
+          <div
+            ref={conflictDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={conflictTitleId}
+            tabIndex={-1}
+            onKeyDown={handleConflictFocusKeyDown}
+            className="qt-card qt-shadow-lg rounded-lg border w-full max-w-md p-4 space-y-3"
+          >
+            <h2 id={conflictTitleId} className="qt-card-title text-base">The file has moved under your hand</h2>
             <p className="text-sm">
               {location.path} was changed by someone else since you opened it. Take theirs, or press yours?
             </p>

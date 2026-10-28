@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface WhisperDialogProps {
   /** Whether the dialog is open */
@@ -30,6 +32,10 @@ export function WhisperDialog({
 }: WhisperDialogProps) {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+  useEscapeKey(onClose, isOpen)
 
   const handleSend = useCallback(async () => {
     if (!message.trim() || sending) return
@@ -82,10 +88,7 @@ export function WhisperDialog({
       e.preventDefault()
       handleSend()
     }
-    if (e.key === 'Escape') {
-      onClose()
-    }
-  }, [handleSend, onClose])
+  }, [handleSend])
 
   if (!isOpen) return null
 
@@ -97,9 +100,17 @@ export function WhisperDialog({
         onClick={onClose}
       />
       {/* Dialog */}
-      <div className="qt-dialog relative z-10 w-full max-w-md mx-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog relative z-10 w-full max-w-md mx-4"
+      >
         <div className="qt-dialog-header">
-          <h3 className="qt-dialog-title">Whisper to {targetName}</h3>
+          <h3 id={titleId} className="qt-dialog-title">Whisper to {targetName}</h3>
         </div>
         <div className="qt-dialog-body">
           <p className="text-sm qt-text-muted mb-3">

@@ -1,5 +1,8 @@
 'use client'
 
+import { useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useRoleplayTemplates } from './hooks/useRoleplayTemplates'
 import { TemplateCard } from './TemplateCard'
 import { EMPTY_DELIMITER } from './types'
@@ -147,6 +150,16 @@ export default function RoleplayTemplatesTab() {
     handleCopyAsNew,
     appendFormattingHint,
   } = useRoleplayTemplates()
+
+  const editTitleId = useId()
+  const editDialogRef = useRef<HTMLDivElement>(null)
+  const handleEditFocusKeyDown = useDialogFocus(editDialogRef, isModalOpen)
+  useEscapeKey(closeModal, isModalOpen && !saving)
+
+  const previewTitleId = useId()
+  const previewDialogRef = useRef<HTMLDivElement>(null)
+  const handlePreviewFocusKeyDown = useDialogFocus(previewDialogRef, !!previewTemplate)
+  useEscapeKey(() => setPreviewTemplate(null), !!previewTemplate)
 
   const builtInTemplates = templates.filter(t => t.isBuiltIn)
   const userTemplates = templates.filter(t => !t.isBuiltIn)
@@ -334,9 +347,17 @@ export default function RoleplayTemplatesTab() {
       {/* Create/Edit Modal */}
       {isModalOpen && (
         <div className="qt-dialog-overlay">
-          <div className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={editTitleId}
+            tabIndex={-1}
+            onKeyDown={handleEditFocusKeyDown}
+            className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4"
+          >
             <div className="p-6">
-              <h2 className="qt-heading-3 mb-4">
+              <h2 id={editTitleId} className="qt-heading-3 mb-4">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
 
@@ -835,11 +856,19 @@ export default function RoleplayTemplatesTab() {
       {/* Preview Modal */}
       {previewTemplate && (
         <div className="qt-dialog-overlay">
-          <div className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4">
+          <div
+            ref={previewDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={previewTitleId}
+            tabIndex={-1}
+            onKeyDown={handlePreviewFocusKeyDown}
+            className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4"
+          >
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="qt-heading-3">{previewTemplate.name}</h2>
+                  <h2 id={previewTitleId} className="qt-heading-3">{previewTemplate.name}</h2>
                   {previewTemplate.description && (
                     <p className="qt-text-small mt-1">
                       {previewTemplate.description}

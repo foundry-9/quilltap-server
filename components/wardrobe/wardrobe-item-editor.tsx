@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
@@ -187,6 +189,11 @@ export function WardrobeItemEditor({
   }
 
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+
+  useEscapeKey(onClose, !showKeepResetPrompt)
   useEffect(() => {
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
@@ -474,10 +481,18 @@ export function WardrobeItemEditor({
         className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
         style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
       >
-        <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col"
+        >
           <div className="qt-dialog-header sticky top-0 flex-shrink-0 qt-bg-default border-b qt-border-default">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title">
+              <h2 id={titleId} className="qt-dialog-title">
                 {isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
               </h2>
               <button

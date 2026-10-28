@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useId } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { Icon } from '@/components/ui/icon'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
@@ -83,6 +85,10 @@ export function ImportWizard({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isProcessing = step === 'analyzing' || step === 'importing'
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(() => { if (!isProcessing) onClose() }, !showMemoryDialog)
 
   /**
    * Handle file selection
@@ -460,12 +466,20 @@ export function ImportWizard({
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[61] pointer-events-auto w-[90vw] max-w-2xl">
-        <div className="qt-dialog w-full max-h-[90vh] flex flex-col">
+        <div
+          className="qt-dialog w-full max-h-[90vh] flex flex-col"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+        >
           {/* Header */}
           <div className="qt-dialog-header flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="qt-dialog-title">Import SillyTavern Chat</h2>
+                <h2 id={titleId} className="qt-dialog-title">Import SillyTavern Chat</h2>
                 <p className="qt-dialog-description mt-0.5">
                   Step {currentStepIndex + 1} of {STEPS.length}
                 </p>

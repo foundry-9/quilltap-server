@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -21,6 +21,8 @@ import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 
@@ -354,6 +356,30 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     }
   }
 
+  const importTitleId = useId()
+  const importRef = useRef<HTMLDivElement>(null)
+  const importKey = useDialogFocus(importRef, importDialogOpen)
+  useEscapeKey(() => setImportDialogOpen(false), importDialogOpen)
+
+  const resetTitleId = useId()
+  const resetRef = useRef<HTMLDivElement>(null)
+  const resetKey = useDialogFocus(resetRef, resetBuiltinsDialogOpen)
+  useEscapeKey(() => setResetBuiltinsDialogOpen(false), resetBuiltinsDialogOpen && !resetBuiltinsInProgress)
+
+  const aiImportTitleId = useId()
+  const aiImportRef = useRef<HTMLDivElement>(null)
+  const aiImportKey = useDialogFocus(aiImportRef, aiImportDialogOpen)
+  useEscapeKey(() => setAIImportDialogOpen(false), aiImportDialogOpen)
+
+  const groupTitleId = useId()
+  const groupRef = useRef<HTMLDivElement>(null)
+  const groupKey = useDialogFocus(groupRef, createGroupDialogOpen)
+  useEscapeKey(() => {
+    setCreateGroupDialogOpen(false)
+    setNewGroupName('')
+    setNewGroupDescription('')
+  }, createGroupDialogOpen && !creatingGroup)
+
   // Workspace tab, drilled into a character or group: render its detail in place
   // (the detail views manage their own loading, so this precedes the list gate).
   if (inTab && selectedCharacterId) {
@@ -499,7 +525,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                   )}
                   <div className="flex-grow">
                     <h2 className="qt-heading-3 text-foreground flex items-center gap-2">
-                      {character.name}
+                      <Link
+                        href={`/aurora/${character.id}/view`}
+                        onClick={inTab ? (e) => {
+                          e.preventDefault()
+                          setOpenChatForSelected(false)
+                          setSelectedCharacterId(character.id)
+                        } : undefined}
+                      >
+                        {character.name}
+                      </Link>
                       {character.archivedAt && (
                         <span
                           className="qt-badge inline-flex items-center rounded-full border qt-border-default qt-bg-muted px-2 py-0.5 text-xs font-medium qt-text-secondary"
@@ -607,8 +642,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       {/* Import Dialog */}
       {importDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-4 qt-dialog-title text-foreground">
+          <div
+            ref={importRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={importTitleId}
+            tabIndex={-1}
+            onKeyDown={importKey}
+            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+          >
+            <h3 id={importTitleId} className="mb-4 qt-dialog-title text-foreground">
               Import from SillyTavern
             </h3>
             <form onSubmit={handleImport}>
@@ -647,8 +690,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       {/* Reset Built-ins Dialog */}
       {resetBuiltinsDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-3 qt-dialog-title text-foreground">
+          <div
+            ref={resetRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={resetTitleId}
+            tabIndex={-1}
+            onKeyDown={resetKey}
+            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+          >
+            <h3 id={resetTitleId} className="mb-3 qt-dialog-title text-foreground">
               Reset Built-in Characters
             </h3>
             <p className="mb-5 qt-text-small">
@@ -679,9 +730,17 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       {/* AI Import Dialog */}
       {aiImportDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
+          <div
+            ref={aiImportRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={aiImportTitleId}
+            tabIndex={-1}
+            onKeyDown={aiImportKey}
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="qt-dialog-title text-foreground">
+              <h3 id={aiImportTitleId} className="qt-dialog-title text-foreground">
                 Summon From Lore
               </h3>
               <button
@@ -714,8 +773,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       {/* Create Group Dialog */}
       {createGroupDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-4 qt-dialog-title text-foreground">
+          <div
+            ref={groupRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={groupTitleId}
+            tabIndex={-1}
+            onKeyDown={groupKey}
+            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+          >
+            <h3 id={groupTitleId} className="mb-4 qt-dialog-title text-foreground">
               Create Group
             </h3>
             <form onSubmit={handleCreateGroup}>

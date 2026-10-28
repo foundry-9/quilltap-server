@@ -4,6 +4,15 @@
 
 ### 4.11-dev
 
+#### Fix: dialog semantics and keyboard access for every modal and clickable card (release checklist 13, continued)
+
+- Hand-built modals in 54 files (41 that hand-roll a `qt-dialog-overlay`, 13 built on raw `fixed inset-0` overlays) now carry `role="dialog"` (`alertdialog` for destructive confirmations), `aria-modal` and `aria-labelledby`/`aria-label`, use `useDialogFocus` (focus in, Tab trap, focus restored), and close on Escape where they did not before (busy-state gating kept). Markup otherwise unchanged; none were moved onto `BaseModal`, since doing so would have changed their layout.
+- `useDialogFocus`: the opener is now recorded during render. Before, an `autoFocus` field had already taken focus by the time the effect ran, so focus was never restored for those dialogs (BaseModal included).
+- `FloatingDialog` (Help, Brahma Console, compose dialogs): `role="dialog"`, `aria-modal="false"` (the page behind stays usable, so no Tab trap), `aria-labelledby`, focus in on open and back on close. Escape now closes it from anywhere unless a modal dialog is open; inside a topmost one it still swallows the key.
+- New `activateOnKey` (`components/ui/activate-on-key.ts`): Enter/Space clicks a `role="button"` element. Used where a `<button>` would not do (table rows; Art Deco and Great Estate uppercase every bare `button`): Scriptorium store-card titles, `FileTable` file names (`aria-expanded`), `FileBrowserList` folder and ".." rows, LLM log rows, image-gallery tiles (`aria-pressed`) and the Document Mode title.
+- Aurora character cards: the name is now a link to the character, so a card can be opened from the keyboard.
+- Alias remove "×" in the character editor has an `aria-label`; quick-hide tag toggles have `aria-pressed`.
+
 #### Fix: WCAG AA contrast, focus and reduced-motion pass across all themes (release checklist 13)
 
 - Status colours: every theme × mode now meets 4.5:1 for `success` / `warning` / `info` / `destructive` as text on background, card and popover, and for each `XForeground` on its fill. Light modes darken the status colours (warning foreground becomes white); dark modes lighten `destructive` and put dark text on success/info/destructive fills. Default theme changed in `lib/themes/default-tokens.ts` and `app/globals.css`. Hue and saturation are unchanged; only lightness moved.

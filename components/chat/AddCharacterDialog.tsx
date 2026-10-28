@@ -12,7 +12,7 @@
  * - Optional join scenario text
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -20,6 +20,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import CreateNPCDialog from './CreateNPCDialog'
 import SummonFromLoreModal from './SummonFromLoreModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
@@ -265,17 +266,25 @@ export default function AddCharacterDialog({
     setIsSummonOpen(false)
   }
 
+  const titleId = useId()
+  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
+
   if (!isOpen) return null
 
   return (
     <div className="qt-dialog-overlay p-4">
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
       >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             Add Character to Chat
           </h2>
           <button

@@ -1,8 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MemoryCard } from './memory-card'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { MemoryEditor } from './memory-editor'
 import { MaintenanceDialog } from './maintenance-dialog'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -67,6 +69,11 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [tierFilter, setTierFilter] = useState<'ALL' | 'hot' | 'cold'>('ALL')
   const [keystoneOnly, setKeystoneOnly] = useState(false)
   const [viewedDigest, setViewedDigest] = useState<Memory | null>(null)
+  const digestTitleId = useId()
+  const digestDialogRef = useRef<HTMLDivElement>(null)
+  const handleDigestFocusKeyDown = useDialogFocus(digestDialogRef, viewedDigest !== null)
+  const closeDigest = useCallback(() => setViewedDigest(null), [])
+  useEscapeKey(closeDigest, viewedDigest !== null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
@@ -383,9 +390,17 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       {/* Digest viewer (portalled so the overlay clears any stacking context) */}
       {viewedDigest && typeof document !== 'undefined' && createPortal(
         <div className="qt-dialog-overlay p-4 z-[100]">
-          <div className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto">
+          <div
+            className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto"
+            ref={digestDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={digestTitleId}
+            tabIndex={-1}
+            onKeyDown={handleDigestFocusKeyDown}
+          >
             <div className="qt-dialog-header">
-              <h2 className="qt-dialog-title">The Digest</h2>
+              <h2 id={digestTitleId} className="qt-dialog-title">The Digest</h2>
               <p className="qt-dialog-description">The denser note that took this one&rsquo;s place on the active shelf.</p>
             </div>
             <div className="p-6">

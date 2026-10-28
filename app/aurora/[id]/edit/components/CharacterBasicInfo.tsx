@@ -232,6 +232,7 @@ export function CharacterBasicInfo({
                 type="button"
                 onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
                 className="ml-1 qt-text-secondary hover:text-foreground"
+                aria-label={`Remove alias ${alias}`}
               >
                 &times;
               </button>

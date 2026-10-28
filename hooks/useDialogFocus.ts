@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, RefObject, KeyboardEvent } from 'react';
+import { useCallback, useEffect, useState, RefObject, KeyboardEvent } from 'react';
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -19,22 +19,32 @@ export function useDialogFocus(
   dialogRef: RefObject<HTMLElement | null>,
   isOpen: boolean
 ): (e: KeyboardEvent) => void {
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  // The opener is read while rendering the open, not in the effect: by the
+  // time an effect runs, an `autoFocus` field inside the dialog has already
+  // taken focus, and the opener would be lost.
+  const [focusState, setFocusState] = useState<{ open: boolean; opener: HTMLElement | null }>({
+    open: false,
+    opener: null,
+  });
+  if (focusState.open !== isOpen) {
+    setFocusState({
+      open: isOpen,
+      opener: isOpen && typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null,
+    });
+  }
+  const opener = focusState.opener;
 
   useEffect(() => {
     if (!isOpen) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
     const frame = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
       if (dialog && !dialog.contains(document.activeElement)) dialog.focus();
     });
     return () => {
       cancelAnimationFrame(frame);
-      const previous = previousFocusRef.current;
-      previousFocusRef.current = null;
-      if (previous && previous.isConnected) previous.focus();
+      if (opener && opener.isConnected) opener.focus();
     };
-  }, [isOpen, dialogRef]);
+  }, [isOpen, dialogRef, opener]);
 
   return useCallback(
     (e: KeyboardEvent) => {

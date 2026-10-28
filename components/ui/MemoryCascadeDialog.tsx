@@ -8,7 +8,9 @@
  * and optionally remember the choice for future deletions.
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
 
 export type { MemoryCascadeAction }
@@ -39,6 +41,11 @@ export function MemoryCascadeDialog({
   const [rememberChoice, setRememberChoice] = useState(false)
   const [selectedAction, setSelectedAction] = useState<MemoryCascadeAction>('DELETE_MEMORIES')
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+  useEscapeKey(onClose, isOpen)
+
   if (!isOpen) return null
 
   const messageText = isSwipeGroup
@@ -51,8 +58,16 @@ export function MemoryCascadeDialog({
 
   return (
     <div className="qt-dialog-overlay z-[100]">
-      <div className="qt-dialog-content max-w-md">
-        <h3 className="qt-heading-sm mb-4">Delete Message</h3>
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog-content max-w-md"
+      >
+        <h3 id={titleId} className="qt-heading-sm mb-4">Delete Message</h3>
 
         <p className="qt-text-small mb-4">{messageText}</p>
 

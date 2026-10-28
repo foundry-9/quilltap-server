@@ -1,6 +1,9 @@
 'use client'
 
+import { useId, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -38,6 +41,10 @@ interface MemoryEditorProps {
 
 export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEditorProps) {
   const isEditing = !!memory
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onClose, true)
 
   const form = useFormState({
     content: memory?.content || '',
@@ -105,10 +112,18 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
   return (
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div
+        className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+      >
         <div className="qt-dialog-header">
           <div className="flex items-center justify-between">
-            <h2 className="qt-dialog-title">
+            <h2 id={titleId} className="qt-dialog-title">
               {isEditing ? 'Edit Memory' : 'Add Memory'}
             </h2>
             <button

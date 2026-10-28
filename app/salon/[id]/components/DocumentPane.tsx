@@ -47,6 +47,7 @@ import { showConfirmation } from '@/lib/alert'
 import { formatQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { showSuccessToast } from '@/lib/toast'
 import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
 interface DocumentPaneProps {
@@ -599,6 +600,9 @@ export default function DocumentPane({
           <span
             className="qt-doc-title cursor-pointer"
             onClick={handleTitleClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={activateOnKey}
             title="Click to rename"
           >
             {document.displayTitle}

@@ -6,7 +6,8 @@
  * Step 2: Select the source for physical description generation.
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useId } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
 import { ImageGallery, type ImageData } from '@/components/images/image-gallery'
 import type { ConnectionProfile } from '@/lib/schemas/types'
@@ -56,6 +57,9 @@ export function DescriptionSourceStep({
   const [showGallery, setShowGallery] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const documentInputRef = useRef<HTMLInputElement>(null)
+  const galleryTitleId = useId()
+  const galleryDialogRef = useRef<HTMLDivElement>(null)
+  const handleGalleryFocusKeyDown = useDialogFocus(galleryDialogRef, showGallery)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -301,9 +305,24 @@ export function DescriptionSourceStep({
           {/* Gallery Modal */}
           {showGallery && (
             <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay-caption">
-              <div className="qt-dialog w-full max-w-4xl max-h-[80vh] m-4 flex flex-col">
+              <div
+                ref={galleryDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={galleryTitleId}
+                tabIndex={-1}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.stopPropagation()
+                    setShowGallery(false)
+                    return
+                  }
+                  handleGalleryFocusKeyDown(e)
+                }}
+                className="qt-dialog w-full max-w-4xl max-h-[80vh] m-4 flex flex-col"
+              >
                 <div className="qt-dialog-header flex justify-between items-center">
-                  <h3 className="qt-heading-4">Select Image</h3>
+                  <h3 id={galleryTitleId} className="qt-heading-4">Select Image</h3>
                   <button
                     aria-label="Close gallery"
                     type="button"

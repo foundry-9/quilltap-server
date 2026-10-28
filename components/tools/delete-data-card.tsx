@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface DeleteSummary {
   characters: number
@@ -43,6 +45,22 @@ export function DeleteDataCard() {
   const [keepArchives, setKeepArchives] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, showConfirmDialog)
+
+  const handleClose = () => {
+    setShowConfirmDialog(false)
+    setStep('preview')
+    setPreview(null)
+    setDeleteSummary(null)
+    setConfirmText('')
+    setKeepArchives(true)
+    setError(null)
+  }
+
+  useEscapeKey(handleClose, showConfirmDialog)
+
   const handleOpenDialog = async () => {
     setShowConfirmDialog(true)
     setStep('preview')
@@ -67,16 +85,6 @@ export function DeleteDataCard() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleClose = () => {
-    setShowConfirmDialog(false)
-    setStep('preview')
-    setPreview(null)
-    setDeleteSummary(null)
-    setConfirmText('')
-    setKeepArchives(true)
-    setError(null)
   }
 
   const handleProceedToConfirm = () => {
@@ -186,7 +194,15 @@ export function DeleteDataCard() {
 
           {/* Dialog */}
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-full max-w-md">
-            <div className="qt-bg-card rounded-lg qt-shadow-lg w-full max-h-[85vh] flex flex-col">
+            <div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              tabIndex={-1}
+              onKeyDown={handleFocusKeyDown}
+              className="qt-bg-card rounded-lg qt-shadow-lg w-full max-h-[85vh] flex flex-col"
+            >
               {/* Header */}
               <div className="px-6 py-4 border-b qt-border-default flex-shrink-0">
                 <div className="flex items-center justify-between">
@@ -194,7 +210,7 @@ export function DeleteDataCard() {
                     <div className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">
                       <Icon name="alert-triangle" className="w-5 h-5 qt-text-destructive" />
                     </div>
-                    <h2 className="qt-dialog-title text-foreground">
+                    <h2 id={titleId} className="qt-dialog-title text-foreground">
                       {step === 'complete' ? 'Deletion Complete' : 'Delete All Data'}
                     </h2>
                   </div>

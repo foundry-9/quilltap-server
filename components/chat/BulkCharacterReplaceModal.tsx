@@ -8,10 +8,11 @@
  * (assistant/user/both). Associated memories are deleted.
  */
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useId } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
 
 interface ParticipantData {
@@ -202,14 +203,25 @@ export default function BulkCharacterReplaceModal({
     return 'Character'
   }
 
+  const titleId = useId()
+  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
+
   if (!isOpen) return null
 
   return (
     <div className="qt-dialog-overlay p-4">
-      <div ref={modalRef} className="qt-dialog max-w-lg">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg"
+      >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">Bulk Character Replace</h2>
+          <h2 id={titleId} className="qt-dialog-title">Bulk Character Replace</h2>
           <button
             aria-label="Close"
             onClick={onClose}
