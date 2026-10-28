@@ -4,6 +4,12 @@
 
 ### 4.11-dev
 
+#### Docs: release-notes procedure in release checklist 14
+
+- `.claude/commands/release-checklist-14-docs.md` gains a "Drafting release notes" section for minor and major releases: where to gather the change surface (`rel/X.(Y-1).0..main`, the dev CHANGELOG section, completed specs, help changes, closed bugs, new migrations), the structure and house voice used by previous minor releases, and accuracy rules.
+- An existing `docs/releases/X.Y.0.md` draft is revised in place from its last commit forward, never regenerated, and the changes are reported by section.
+- `tag-for-release.md` points to that procedure instead of `docs/releases/4.0.0.md`.
+
 #### Fix: remaining WCAG items from release checklist 13
 
 - Skip link: a "Skip to content" link (`.qt-skip-link`) is the first Tab stop in the app shell and jumps to `<main id="main-content">`.
