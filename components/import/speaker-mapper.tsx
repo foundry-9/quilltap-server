@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 import type { ParsedSpeaker, SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 
 /**
@@ -42,6 +42,7 @@ export function SpeakerMapper({
   onMappingChange,
   onDefaultProfileChange,
 }: SpeakerMapperProps) {
+  const id = useId()
   // Group speakers by type (user vs AI)
   const { userSpeakers, aiSpeakers } = useMemo(() => {
     const userSpeakers: Array<{ speaker: ParsedSpeaker; mapping: SpeakerMapping; index: number }> = []
@@ -219,13 +220,14 @@ export function SpeakerMapper({
     <div className="space-y-6">
       {/* Default connection profile */}
       <div className="qt-bg-muted rounded-lg p-4">
-        <label className="block text-sm qt-text-primary mb-2">
+        <label htmlFor={`${id}-default-profile`} className="block text-sm qt-text-primary mb-2">
           Default Connection Profile
         </label>
         <p className="qt-text-xs mb-2">
           This profile will be used for any characters that don&apos;t have a specific profile assigned.
         </p>
         <select
+          id={`${id}-default-profile`}
           value={defaultProfileId}
           onChange={(e) => onDefaultProfileChange(e.target.value)}
           className="qt-select"

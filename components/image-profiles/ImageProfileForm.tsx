@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ImageLoraSpec, ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types'
 import { apiFetch } from '@/lib/query/fetcher'
@@ -78,6 +78,7 @@ export function ImageProfileForm({
   onSuccess,
   onCancel,
 }: ImageProfileFormProps) {
+  const id = useId()
   const [formData, setFormData] = useState({
     name: profile?.name || '',
     // Provider will be normalized after providers are loaded
@@ -391,10 +392,11 @@ export function ImageProfileForm({
 
       {/* Profile Name */}
       <div>
-        <label className="qt-label mb-1">
+        <label htmlFor={`${id}-name`} className="qt-label mb-1">
           Profile Name
         </label>
         <input
+          id={`${id}-name`}
           type="text"
           value={formData.name}
           onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -408,10 +410,11 @@ export function ImageProfileForm({
 
       {/* Provider Selection */}
       <div>
-        <label className="qt-label mb-1">
+        <label htmlFor={`${id}-provider`} className="qt-label mb-1">
           Provider
         </label>
         <select
+          id={`${id}-provider`}
           value={formData.provider}
           onChange={handleProviderChange}
           className="qt-select"
@@ -430,11 +433,12 @@ export function ImageProfileForm({
 
       {/* API Key Selection */}
       <div>
-        <label className="qt-label mb-1">
+        <label htmlFor={`${id}-apikey`} className="qt-label mb-1">
           API Key
         </label>
         <div className="flex gap-2">
           <select
+            id={`${id}-apikey`}
             value={formData.apiKeyId}
             onChange={handleApiKeyChange}
             className="flex-1 qt-select"
@@ -467,11 +471,12 @@ export function ImageProfileForm({
 
       {/* Model Selection */}
       <div>
-        <label className="qt-label mb-1">
+        <label htmlFor={`${id}-model`} className="qt-label mb-1">
           Model
         </label>
         <div className="flex gap-2">
           <select
+            id={`${id}-model`}
             value={formData.modelName}
             onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
             disabled={isFetchingModels}

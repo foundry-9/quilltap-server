@@ -372,6 +372,7 @@ export function DeleteDataCard() {
                       value={confirmText}
                       onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                       placeholder="Type DELETE to confirm"
+                      aria-label="Type DELETE to confirm"
                       className="qt-input"
                       autoFocus
                     />

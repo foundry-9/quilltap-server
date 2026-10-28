@@ -8,7 +8,7 @@
  * as they see fit, guided by excerpts from the character's own memoirs.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Icon } from '@/components/ui/icon';
 import type { OptimizerSuggestion, SuggestionDecision } from '../types';
 import { FIELD_LABELS, FIELD_BADGE_CLASS } from '../field-meta';
@@ -104,6 +104,7 @@ export function SuggestionCard({
   index,
   total,
 }: SuggestionCardProps) {
+  const id = useId();
   const safeProposedValue = asText(suggestion.proposedValue);
   const safeCurrentValue = asText(suggestion.currentValue);
   const safeRationale = asText(suggestion.rationale);
@@ -194,8 +195,9 @@ export function SuggestionCard({
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1 min-h-0">
-          <span className="qt-caption uppercase tracking-wider">Amend the Proposed Wording</span>
+          <span id={`${id}-amend-label`} className="qt-caption uppercase tracking-wider">Amend the Proposed Wording</span>
           <textarea
+            aria-labelledby={`${id}-amend-label`}
             className="qt-textarea text-sm min-h-[200px] flex-1 resize-y"
             value={draftValue}
             onChange={(e) => setDraftValue(e.target.value)}

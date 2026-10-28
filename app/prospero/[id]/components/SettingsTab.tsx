@@ -58,6 +58,10 @@ export function SettingsTab({
           </p>
         </div>
         <button
+          type="button"
+          role="switch"
+          aria-checked={!!project.allowAnyCharacter}
+          aria-label="Allow Any Character"
           onClick={onToggleAllowAnyCharacter}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
             project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'

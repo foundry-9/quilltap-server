@@ -68,6 +68,7 @@ export default function AddCharacterDialog({
   existingCharacterIds,
   onCharacterAdded,
 }: AddCharacterDialogProps) {
+  const id = useId()
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   // This can be a profile ID or USER_IMPERSONATION_VALUE for user control
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
@@ -316,6 +317,7 @@ export default function AddCharacterDialog({
 
                 {/* Search input */}
                 <input
+                  aria-label="Search characters"
                   ref={searchInputRef}
                   type="text"
                   placeholder="Search characters..."
@@ -496,10 +498,11 @@ export default function AddCharacterDialog({
               {/* Connection Profile Selection */}
               {selectedCharacterId && (
                 <div>
-                  <label className="block text-sm qt-text-primary mb-2">
+                  <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
                     Controlled By
                   </label>
                   <select
+                    id={`${id}-profile`}
                     value={selectedConnectionProfileId || ''}
                     onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
                     className="qt-select"

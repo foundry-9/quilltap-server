@@ -57,6 +57,7 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
         onChange={e => { setContent(e.target.value); handleInput() }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        aria-label="Message"
         disabled={disabled}
         rows={1}
         className="qt-help-composer-input"

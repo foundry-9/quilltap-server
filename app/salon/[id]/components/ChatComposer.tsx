@@ -582,6 +582,7 @@ export function ChatComposer({
             <textarea
               ref={sourceTextareaRef}
               className="qt-chat-composer-input qt-source-mode-textarea"
+              aria-label="Message (Markdown source)"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={composerLocked || !hasActiveCharacters}

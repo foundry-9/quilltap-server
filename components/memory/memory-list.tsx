@@ -278,12 +278,14 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           <input
             type="text"
             placeholder="Search memories..."
+            aria-label="Search memories"
             value={search}
             onChange={handleSearchChange}
             className="qt-input text-sm"
           />
         </div>
         <select
+          aria-label="Sort memories by"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
            className="qt-select w-auto"
@@ -300,6 +302,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           {sortOrder === 'asc' ? '↑' : '↓'}
         </button>
         <select
+          aria-label="Filter by source"
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED')}
            className="qt-select w-auto"

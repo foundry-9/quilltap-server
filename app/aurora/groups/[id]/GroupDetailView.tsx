@@ -9,7 +9,7 @@
  * @module app/aurora/groups/[id]/GroupDetailView
  */
 
-import { useEffect, useState } from 'react'
+import { useId, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { GroupMembersCard } from '../components/GroupMembersCard'
 import { GroupLinkedStoresCard } from '../components/GroupLinkedStoresCard'
@@ -29,6 +29,7 @@ export interface GroupDetailViewProps {
 }
 
 export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
+  const fieldId = useId()
   const [group, setGroup] = useState<Group | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -153,10 +154,11 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
       <form onSubmit={handleSave} className="max-w-2xl space-y-6">
         {/* Name */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f0`} className="block text-sm font-medium text-foreground mb-2">
             Group Name *
           </label>
           <input
+            id={`${fieldId}-f0`}
             type="text"
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -167,10 +169,11 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f1`} className="block text-sm font-medium text-foreground mb-2">
             Description
           </label>
           <textarea
+            id={`${fieldId}-f1`}
             value={formData.description}
             onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
             rows={3}
@@ -196,17 +199,19 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
 
         {/* Color */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f2`} className="block text-sm font-medium text-foreground mb-2">
             Color
           </label>
           <div className="flex items-center gap-3">
             <input
+              id={`${fieldId}-f2`}
               type="color"
               value={formData.color || '#808080'}
               onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
               className="w-12 h-10 rounded-lg cursor-pointer"
             />
             <input
+              aria-label="Group color (hex value)"
               type="text"
               value={formData.color}
               onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
@@ -218,10 +223,11 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
 
         {/* Icon (emoji) */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f3`} className="block text-sm font-medium text-foreground mb-2">
             Icon (emoji)
           </label>
           <input
+            id={`${fieldId}-f3`}
             type="text"
             value={formData.icon}
             onChange={(e) => setFormData(prev => ({ ...prev, icon: e.target.value }))}

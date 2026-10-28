@@ -235,6 +235,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               onFocus={() => setShowSuggestions(true)}
               onKeyDown={handleKeyDown}
               placeholder="Add a tag..."
+              aria-label="Add a tag"
               disabled={loading}
               className="qt-input py-1 px-3 qt-shadow-sm focus:border-transparent"
             />

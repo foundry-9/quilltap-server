@@ -141,6 +141,7 @@ export function GroupMembersCard({
             ) : (
               <div className="space-y-2">
                 <select
+                  aria-label="Character to add"
                   value={selectedCharacterId || ''}
                   onChange={(e) => setSelectedCharacterId(e.target.value || null)}
                   className="w-full px-3 py-2 rounded border qt-border-default bg-transparent text-foreground text-sm"

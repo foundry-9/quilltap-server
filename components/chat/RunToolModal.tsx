@@ -8,7 +8,7 @@
  * Phase 2: Parameter form + execute button
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useId } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 import JsonSchemaForm from '@/components/chat/JsonSchemaForm'
@@ -54,6 +54,7 @@ export default function RunToolModal({
   onToolExecuted,
   initialTool = null,
 }: RunToolModalProps) {
+  const id = useId()
   const [tools, setTools] = useState<AvailableTool[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedTool, setSelectedTool] = useState<AvailableTool | null>(null)
@@ -285,6 +286,7 @@ export default function RunToolModal({
           <div className="relative">
             <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
             <input
+              aria-label="Search tools"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -357,8 +359,9 @@ export default function RunToolModal({
           {/* Character selector */}
           {activeCharacters.length > 0 && (
             <div className="border-t qt-border pt-3">
-              <label className="block text-sm font-medium qt-text mb-1">Run as character</label>
+              <label htmlFor={`${id}-character`} className="block text-sm font-medium qt-text mb-1">Run as character</label>
               <select
+                id={`${id}-character`}
                 className="qt-input w-full text-sm"
                 value={selectedCharacterId || ''}
                 onChange={(e) => setSelectedCharacterId(e.target.value || null)}

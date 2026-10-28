@@ -156,6 +156,7 @@ export function SmartTypographySettings({
           {!dashes && !ellipsis && ' (Both toggles are off — substitutions are paused.)'}
         </div>
         <textarea
+          aria-label="Try smart typography"
           ref={tryItRef}
           value={tryItText}
           onChange={(e) => setTryItText(e.target.value)}

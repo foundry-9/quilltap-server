@@ -714,6 +714,7 @@ export function ProfileModal({
                 </>
               ) : fetchedModels.length > 0 ? (
                 <ModelSelector
+                  id="modelName"
                   models={fetchedModels}
                   modelsWithInfo={fetchedModelsWithInfo}
                   value={form.formData.modelName}

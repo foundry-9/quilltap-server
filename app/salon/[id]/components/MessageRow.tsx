@@ -359,6 +359,7 @@ function MessageRowInner({
                 value={editContent}
                 onChange={(e) => onEditChange(e.target.value)}
                 className="qt-textarea"
+                aria-label="Edit message"
                 rows={3}
               />
               <div className="flex gap-2">

@@ -589,6 +589,7 @@ export default function DocumentPane({
 
         {isEditingTitle ? (
           <input
+            aria-label="Document title"
             ref={titleInputRef}
             className="qt-doc-title-input"
             value={editTitle}
@@ -680,6 +681,7 @@ export default function DocumentPane({
           {showSource ? (
             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
               <textarea
+                aria-label="Document source"
                 ref={sourceTextareaRef}
                 className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
                 value={document.content}
@@ -728,6 +730,7 @@ export default function DocumentPane({
           onScroll={handleScroll}
         >
           <textarea
+            aria-label="Document content"
             className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
             value={document.content}
             onChange={(e) => onContentChange(e.target.value)}

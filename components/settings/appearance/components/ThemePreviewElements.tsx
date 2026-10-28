@@ -45,6 +45,7 @@ export function ThemePreviewElements() {
       {/* Input - shows input styling */}
       <input
         type="text"
+        aria-label="Sample text input"
         className="qt-input"
         placeholder="Text input placeholder..."
         readOnly

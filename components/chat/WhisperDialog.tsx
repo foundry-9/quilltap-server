@@ -117,6 +117,7 @@ export function WhisperDialog({
             This message will only be visible to you and {targetName}.
           </p>
           <textarea
+            aria-label={`Whisper to ${targetName}`}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}

@@ -20,6 +20,7 @@ interface CreateDocumentStoreDialogProps {
 }
 
 export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDocumentStoreDialogProps) {
+  const fieldId = useId()
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>('filesystem')
   const [storeType, setStoreType] = useState<'documents' | 'character'>('documents')
   const [basePath, setBasePath] = useState('')
@@ -73,8 +74,9 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
         <h3 id={titleId} className="qt-dialog-title mb-4">Add Document Store</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="qt-label mb-2 block">Name</label>
+            <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
             <input
+              id={`${fieldId}-f0`}
               type="text"
               name="name"
               required
@@ -85,8 +87,9 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
           </div>
 
           <div className="mb-4">
-            <label className="qt-label mb-2 block">Contents</label>
+            <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
             <select
+              id={`${fieldId}-f1`}
               name="storeType"
               value={storeType}
               onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
@@ -161,8 +164,9 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
           {!isDatabaseBacked && (
             <>
               <div className="mb-4">
-                <label className="qt-label mb-2 block">Include Patterns (optional)</label>
+                <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns (optional)</label>
                 <input
+                  id={`${fieldId}-f2`}
                   type="text"
                   name="includePatterns"
                   placeholder="*.md, *.txt, *.pdf, *.docx"
@@ -173,8 +177,9 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
               </div>
 
               <div className="mb-4">
-                <label className="qt-label mb-2 block">Exclude Patterns (optional)</label>
+                <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns (optional)</label>
                 <input
+                  id={`${fieldId}-f3`}
                   type="text"
                   name="excludePatterns"
                   placeholder=".git, node_modules, .obsidian, .trash"

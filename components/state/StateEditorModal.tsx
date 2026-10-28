@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -85,6 +85,7 @@ export default function StateEditorModal({
   entityName,
   onSuccess,
 }: Readonly<StateEditorModalProps>) {
+  const id = useId()
   const cfg = endpointConfig(entityType, entityId)
 
   const [state, setState] = useState<Record<string, unknown>>({})
@@ -360,13 +361,14 @@ export default function StateEditorModal({
 
           {/* State editor */}
           <div>
-            <label className="qt-label mb-2 flex items-center justify-between">
+            <label htmlFor={`${id}-state-json`} className="qt-label mb-2 flex items-center justify-between">
               <span>State (JSON)</span>
               {!hasState && !isEditing && (
                 <span className="qt-text-xs qt-text-secondary">No state data</span>
               )}
             </label>
             <textarea
+              id={`${id}-state-json`}
               value={stateText}
               onChange={(e) => handleTextChange(e.target.value)}
               readOnly={!isEditing}

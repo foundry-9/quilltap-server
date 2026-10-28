@@ -12,7 +12,7 @@
  * mini avatars that still surfaces the turn order at a glance.
  */
 
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { patchChat } from '@/lib/chat/patch-chat'
@@ -1479,6 +1479,7 @@ function VisibilitySection({
   answerConfirmationOverride,
   onSetAnswerConfirmationOverride,
 }: VisibilitySectionProps) {
+  const id = useId()
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-visibility flex flex-col gap-3">
       {onToggleAllWhispers && (
@@ -1491,6 +1492,7 @@ function VisibilitySection({
             }`}
             role="switch"
             aria-checked={!!showAllWhispers}
+            aria-label="All Whispers"
             title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
           >
             <span
@@ -1512,6 +1514,7 @@ function VisibilitySection({
             }`}
             role="switch"
             aria-checked={!!allowCrossCharacterVaultReads}
+            aria-label="Shared Vaults"
             title={
               allowCrossCharacterVaultReads
                 ? 'Characters may read each other’s vaults (read-only) and the results are public to the chat. Click to lock.'
@@ -1537,6 +1540,7 @@ function VisibilitySection({
             }`}
             role="switch"
             aria-checked={turnSkippingEnabled !== false}
+            aria-label="Turn Skipping"
             title={turnSkippingEnabled !== false ? 'Characters may pass their turn. Click to require everyone to speak.' : 'Every selected character must speak. Click to allow passing.'}
           >
             <span
@@ -1553,8 +1557,9 @@ function VisibilitySection({
           <span className="qt-text-secondary text-xs">Aurora&apos;s Core Whisper</span>
           {onSetCoreWhisperEnabled && (
             <div className="flex items-center justify-between gap-2">
-              <span className="qt-text-secondary text-xs">Offering</span>
+              <label htmlFor={`${id}-core-whisper-offering`} className="qt-text-secondary text-xs">Offering</label>
               <select
+                id={`${id}-core-whisper-offering`}
                 value={coreWhisperEnabled === true ? 'on' : coreWhisperEnabled === false ? 'off' : 'inherit'}
                 onChange={(e) => {
                   const v = e.target.value
@@ -1571,8 +1576,9 @@ function VisibilitySection({
           )}
           {onSetCoreWhisperInterval && (
             <div className="flex items-center justify-between gap-2">
-              <span className="qt-text-secondary text-xs">Cadence</span>
+              <label htmlFor={`${id}-core-whisper-cadence`} className="qt-text-secondary text-xs">Cadence</label>
               <select
+                id={`${id}-core-whisper-cadence`}
                 value={coreWhisperInterval == null ? '' : String(coreWhisperInterval)}
                 onChange={(e) => {
                   const raw = e.target.value
@@ -1595,8 +1601,9 @@ function VisibilitySection({
       {onSetShowThinking && (
         <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
           <div className="flex items-center justify-between gap-2">
-            <span className="qt-text-secondary text-xs">Thinking</span>
+            <label htmlFor={`${id}-thinking`} className="qt-text-secondary text-xs">Thinking</label>
             <select
+              id={`${id}-thinking`}
               value={showThinking === true ? 'on' : showThinking === false ? 'off' : 'inherit'}
               onChange={(e) => {
                 const v = e.target.value
@@ -1616,8 +1623,9 @@ function VisibilitySection({
       {onSetAnswerConfirmationOverride && (
         <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
           <div className="flex items-center justify-between gap-2">
-            <span className="qt-text-secondary text-xs">Answer Confirmation</span>
+            <label htmlFor={`${id}-answer-confirmation`} className="qt-text-secondary text-xs">Answer Confirmation</label>
             <select
+              id={`${id}-answer-confirmation`}
               value={answerConfirmationOverride ?? 'inherit'}
               onChange={(e) => {
                 const v = e.target.value

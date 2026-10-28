@@ -7,7 +7,7 @@
  * that reduces token costs by compressing older messages using a cheap LLM.
  */
 
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   ChatSettings,
@@ -26,6 +26,7 @@ export function ContextCompressionSettingsComponent({
   saving,
   onUpdate,
 }: ContextCompressionSettingsProps) {
+  const id = useId()
   const compressionSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
 
   // Track which slider is being dragged (null when not dragging)
@@ -138,7 +139,7 @@ export function ContextCompressionSettingsComponent({
         {/* Enable/Disable Toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <label className="qt-text-label block">Enable Context Compression</label>
+            <label id={`${id}-enabled`} className="qt-text-label block">Enable Context Compression</label>
             <p className="qt-text-xs qt-text-secondary mt-1">
               When enabled, older messages beyond the sliding window are compressed to save tokens.
             </p>
@@ -154,6 +155,7 @@ export function ContextCompressionSettingsComponent({
             } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"
             aria-checked={compressionSettings.enabled}
+            aria-labelledby={`${id}-enabled`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
@@ -165,13 +167,14 @@ export function ContextCompressionSettingsComponent({
 
         {/* Window Size */}
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
-          <label className="qt-text-label block mb-2">
+          <label htmlFor={`${id}-window`} className="qt-text-label block mb-2">
             Sliding Window Size
             <span className="qt-text-xs qt-text-secondary ml-2">
               ({displayWindowSize} messages)
             </span>
           </label>
           <input
+            id={`${id}-window`}
             type="range"
             min={3}
             max={10}
@@ -195,13 +198,14 @@ export function ContextCompressionSettingsComponent({
 
         {/* Compression Target Tokens */}
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
-          <label className="qt-text-label block mb-2">
+          <label htmlFor={`${id}-compression`} className="qt-text-label block mb-2">
             History Compression Target
             <span className="qt-text-xs qt-text-secondary ml-2">
               (~{displayCompressionTarget} tokens)
             </span>
           </label>
           <input
+            id={`${id}-compression`}
             type="range"
             min={300}
             max={2000}
@@ -226,13 +230,14 @@ export function ContextCompressionSettingsComponent({
 
         {/* Project Context Re-injection Interval */}
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
-          <label className="qt-text-label block mb-2">
+          <label htmlFor={`${id}-project-context`} className="qt-text-label block mb-2">
             Project Context Re-injection
             <span className="qt-text-xs qt-text-secondary ml-2">
               (every {displayProjectContextInterval === 0 ? 'never' : `${displayProjectContextInterval} messages`})
             </span>
           </label>
           <input
+            id={`${id}-project-context`}
             type="range"
             min={displayWindowSize}
             max={20}

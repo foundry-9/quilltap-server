@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { PromptTemplate, TemplateFormData } from './types'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
@@ -27,6 +28,7 @@ export function PromptModal({
   onSave,
   onFormChange,
 }: PromptModalProps) {
+  const id = useId()
   const isDisabled = !formData.name.trim() || !formData.content.trim()
 
   const handleContentChange = (value: string) => {
@@ -54,10 +56,11 @@ export function PromptModal({
       <div className="space-y-4">
         {/* Name field */}
         <div>
-          <label className="qt-label mb-1">
+          <label className="qt-label mb-1" htmlFor={`${id}-name`}>
             Name <span className="qt-text-destructive">*</span>
           </label>
           <input
+            id={`${id}-name`}
             type="text"
             name="name"
             value={formData.name}
@@ -73,8 +76,9 @@ export function PromptModal({
 
         {/* Description field */}
         <div>
-          <label className="qt-label mb-1">Description</label>
+          <label className="qt-label mb-1" htmlFor={`${id}-description`}>Description</label>
           <input
+            id={`${id}-description`}
             type="text"
             name="description"
             value={formData.description}

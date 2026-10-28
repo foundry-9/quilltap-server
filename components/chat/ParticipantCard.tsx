@@ -14,7 +14,7 @@
  * - Nudge/Queue button
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/icon'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -157,6 +157,7 @@ export function ParticipantCard({
 }: ParticipantCardProps) {
   const wardrobeDialog = useWardrobeDialogOptional()
   const inventoryDialog = useInventoryDialogOptional()
+  const talkId = useId()
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
@@ -520,10 +521,11 @@ export function ParticipantCard({
           {isCharacter && !isUserParticipant && (
             <div className="mt-2">
               <div className="flex items-center justify-between qt-text-xs mb-1">
-                <span>Talkativeness</span>
+                <label htmlFor={`${talkId}-active`}>Talkativeness</label>
                 <span>{(localTalkativeness * 100).toFixed(0)}%</span>
               </div>
               <input
+                id={`${talkId}-active`}
                 type="range"
                 min="0.1"
                 max="1"
@@ -539,10 +541,11 @@ export function ParticipantCard({
           {isUserParticipant && (
             <div className="mt-2 opacity-50">
               <div className="flex items-center justify-between qt-text-xs mb-1">
-                <span>Talkativeness</span>
+                <label htmlFor={`${talkId}-na`}>Talkativeness</label>
                 <span>N/A</span>
               </div>
               <input
+                id={`${talkId}-na`}
                 type="range"
                 min="0.1"
                 max="1"

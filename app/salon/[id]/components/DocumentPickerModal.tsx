@@ -691,6 +691,7 @@ export default function DocumentPickerModal({
                     {currentFolder && (
                       <button
                         onClick={handleNavigateUp}
+                        aria-label="Up one folder"
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                       >
                         <Icon name="arrow-left" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
@@ -716,6 +717,7 @@ export default function DocumentPickerModal({
                         <div className="flex items-center gap-2">
                           <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                           <input
+                            aria-label="New folder name"
                             type="text"
                             autoFocus
                             value={newFolderName}

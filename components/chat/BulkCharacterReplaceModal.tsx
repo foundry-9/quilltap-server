@@ -60,6 +60,7 @@ export default function BulkCharacterReplaceModal({
   messages,
   onSuccess,
 }: Readonly<BulkCharacterReplaceModalProps>) {
+  const id = useId()
   // Use a special string value for "unassigned" selection, empty string for "not selected"
   const [sourceSelection, setSourceSelection] = useState<string>('')
   const [targetSelection, setTargetSelection] = useState<string>('')
@@ -242,8 +243,9 @@ export default function BulkCharacterReplaceModal({
             <>
               {/* Source Participant */}
               <div className="space-y-2">
-                <label className="block qt-label">Re-attribute from:</label>
+                <label htmlFor={`${id}-from`} className="block qt-label">Re-attribute from:</label>
                 <select
+                  id={`${id}-from`}
                   value={sourceSelection}
                   onChange={(e) => setSourceSelection(e.target.value)}
                   disabled={isSubmitting}
@@ -263,8 +265,9 @@ export default function BulkCharacterReplaceModal({
 
               {/* Target Participant */}
               <div className="space-y-2">
-                <label className="block qt-label">Re-attribute to:</label>
+                <label htmlFor={`${id}-to`} className="block qt-label">Re-attribute to:</label>
                 <select
+                  id={`${id}-to`}
                   value={targetSelection}
                   onChange={(e) => setTargetSelection(e.target.value)}
                   disabled={isSubmitting || !sourceSelection}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 /**
  * Memory Cascade Settings Component
  *
@@ -27,6 +28,7 @@ export function MemoryCascadeSettings({
   saving,
   onUpdate,
 }: MemoryCascadeSettingsProps) {
+  const id = useId()
   const preferences = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
 
   const handleDeleteActionChange = (value: MemoryCascadeAction) => {
@@ -45,8 +47,9 @@ export function MemoryCascadeSettings({
       <div className="space-y-6">
         {/* On Message Delete */}
         <div>
-          <label className="qt-text-label block mb-2">When deleting a message:</label>
+          <label className="qt-text-label block mb-2" htmlFor={`${id}-on-delete`}>When deleting a message:</label>
           <select
+            id={`${id}-on-delete`}
             value={preferences.onMessageDelete}
             onChange={(e) => handleDeleteActionChange(e.target.value as MemoryCascadeAction)}
             disabled={saving}
@@ -65,8 +68,9 @@ export function MemoryCascadeSettings({
 
         {/* On Swipe Regenerate */}
         <div>
-          <label className="qt-text-label block mb-2">When regenerating a response (swipe):</label>
+          <label className="qt-text-label block mb-2" htmlFor={`${id}-on-swipe`}>When regenerating a response (swipe):</label>
           <select
+            id={`${id}-on-swipe`}
             value={preferences.onSwipeRegenerate}
             onChange={(e) => handleSwipeActionChange(e.target.value as MemoryCascadeAction)}
             disabled={saving}

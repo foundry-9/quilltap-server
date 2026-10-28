@@ -54,6 +54,7 @@ export function ProjectDetailHeader({
         <div>
           {isEditing ? (
             <input
+              aria-label="Project name"
               type="text"
               value={editForm.name}
               onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
@@ -64,6 +65,7 @@ export function ProjectDetailHeader({
           )}
           {isEditing ? (
             <input
+              aria-label="Project description"
               type="text"
               value={editForm.description}
               onChange={(e) => onEditFormChange({ ...editForm, description: e.target.value })}

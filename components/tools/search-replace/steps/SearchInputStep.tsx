@@ -6,6 +6,7 @@
  * Step 2: Enter search and replace text with live preview.
  */
 
+import { useId } from 'react';
 import type { SearchReplacePreview } from '../types';
 
 interface SearchInputStepProps {
@@ -35,6 +36,7 @@ export function SearchInputStep({
   onIncludeMessagesChange,
   onIncludeMemoriesChange,
 }: SearchInputStepProps) {
+  const id = useId();
 
   const totalMatches = (preview?.messageMatches || 0) + (preview?.memoryMatches || 0);
 
@@ -51,10 +53,11 @@ export function SearchInputStep({
 
       {/* Search input */}
       <div>
-        <label className="qt-label block mb-2">
+        <label htmlFor={`${id}-find`} className="qt-label block mb-2">
           Find
         </label>
         <input
+          id={`${id}-find`}
           type="text"
           value={searchText}
           onChange={(e) => onSearchTextChange(e.target.value)}
@@ -66,10 +69,11 @@ export function SearchInputStep({
 
       {/* Replace input */}
       <div>
-        <label className="qt-label block mb-2">
+        <label htmlFor={`${id}-replace`} className="qt-label block mb-2">
           Replace with
         </label>
         <input
+          id={`${id}-replace`}
           type="text"
           value={replaceText}
           onChange={(e) => onReplaceTextChange(e.target.value)}

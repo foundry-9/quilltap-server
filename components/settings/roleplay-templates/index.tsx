@@ -50,6 +50,7 @@ function AddOnsEditor({
   addOns: DelimiterAddOns
   onChange: <K extends keyof DelimiterAddOns>(key: K, value: DelimiterAddOns[K]) => void
 }) {
+  const id = useId()
   return (
     <div>
       <label className="qt-text-xs qt-text-secondary">Flourishes</label>
@@ -84,8 +85,9 @@ function AddOnsEditor({
       </div>
       <div className="grid grid-cols-3 gap-2 mt-2">
         <div>
-          <label className="qt-text-xs">Underline</label>
+          <label className="qt-text-xs" htmlFor={`${id}-underline`}>Underline</label>
           <select
+            id={`${id}-underline`}
             value={addOns.underline}
             onChange={(e) => onChange('underline', e.target.value as DelimiterAddOns['underline'])}
             className="qt-select w-full text-sm"
@@ -96,8 +98,9 @@ function AddOnsEditor({
           </select>
         </div>
         <div>
-          <label className="qt-text-xs">Border</label>
+          <label className="qt-text-xs" htmlFor={`${id}-border`}>Border</label>
           <select
+            id={`${id}-border`}
             value={addOns.border}
             onChange={(e) => onChange('border', e.target.value as DelimiterAddOns['border'])}
             className="qt-select w-full text-sm"
@@ -108,8 +111,9 @@ function AddOnsEditor({
           </select>
         </div>
         <div>
-          <label className="qt-text-xs">Font</label>
+          <label className="qt-text-xs" htmlFor={`${id}-font`}>Font</label>
           <select
+            id={`${id}-font`}
             value={addOns.font}
             onChange={(e) => onChange('font', e.target.value as DelimiterAddOns['font'])}
             className="qt-select w-full text-sm"
@@ -125,6 +129,7 @@ function AddOnsEditor({
 }
 
 export default function RoleplayTemplatesTab() {
+  const id = useId()
   const {
     templates,
     defaultTemplateId,
@@ -253,10 +258,11 @@ export default function RoleplayTemplatesTab() {
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px] max-w-md">
-            <label className="qt-label mb-1">
+            <label className="qt-label mb-1" htmlFor={`${id}-default-template`}>
               Template for New Chats
             </label>
             <select
+              id={`${id}-default-template`}
               value={defaultTemplateId || ''}
               onChange={(e) => handleDefaultTemplateChange(e.target.value || null)}
               disabled={defaultSaving || loading}
@@ -363,10 +369,11 @@ export default function RoleplayTemplatesTab() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="qt-label mb-1">
+                  <label className="qt-label mb-1" htmlFor={`${id}-name`}>
                     Name <span className="qt-text-destructive">*</span>
                   </label>
                   <input
+                    id={`${id}-name`}
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -380,10 +387,11 @@ export default function RoleplayTemplatesTab() {
                 </div>
 
                 <div>
-                  <label className="qt-label mb-1">
+                  <label className="qt-label mb-1" htmlFor={`${id}-description`}>
                     Description
                   </label>
                   <input
+                    id={`${id}-description`}
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -482,8 +490,9 @@ export default function RoleplayTemplatesTab() {
                       </span>
                     ) : formData.narrationDelimiterMode === 'single' ? (
                       <div className="flex items-center gap-2">
-                        <label className="qt-text-xs whitespace-nowrap">Delimiter:</label>
+                        <label className="qt-text-xs whitespace-nowrap" htmlFor={`${id}-narration-delimiter`}>Delimiter:</label>
                         <input
+                          id={`${id}-narration-delimiter`}
                           type="text"
                           value={formData.narrationOpen}
                           onChange={(e) => setFormData(prev => ({
@@ -501,8 +510,9 @@ export default function RoleplayTemplatesTab() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <label className="qt-text-xs whitespace-nowrap">Open:</label>
+                        <label className="qt-text-xs whitespace-nowrap" htmlFor={`${id}-narration-open`}>Open:</label>
                         <input
+                          id={`${id}-narration-open`}
                           type="text"
                           value={formData.narrationOpen}
                           onChange={(e) => setFormData(prev => ({ ...prev, narrationOpen: e.target.value }))}
@@ -510,8 +520,9 @@ export default function RoleplayTemplatesTab() {
                           placeholder="["
                           className="qt-input w-20 font-mono text-center"
                         />
-                        <label className="qt-text-xs whitespace-nowrap">Close:</label>
+                        <label className="qt-text-xs whitespace-nowrap" htmlFor={`${id}-narration-close`}>Close:</label>
                         <input
+                          id={`${id}-narration-close`}
                           type="text"
                           value={formData.narrationClose}
                           onChange={(e) => setFormData(prev => ({ ...prev, narrationClose: e.target.value }))}
@@ -545,8 +556,9 @@ export default function RoleplayTemplatesTab() {
                   {formData.unmarkedEnabled && (
                     <div className="border qt-border-default rounded-lg p-3 qt-bg-muted/20 space-y-2">
                       <div>
-                        <label className="qt-text-xs">Style (CSS class)</label>
+                        <label className="qt-text-xs" htmlFor={`${id}-unmarked-style`}>Style (CSS class)</label>
                         <input
+                          id={`${id}-unmarked-style`}
                           type="text"
                           list="qt-style-options-unmarked"
                           value={formData.unmarkedStyle}
@@ -620,8 +632,9 @@ export default function RoleplayTemplatesTab() {
                             </button>
                           </div>
                           <div className="mb-2">
-                            <label className="qt-text-xs">Kind</label>
+                            <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-kind`}>Kind</label>
                             <select
+                              id={`${id}-delim-${index}-kind`}
                               value={delimiter.kind}
                               onChange={(e) => updateDelimiter(index, 'kind', e.target.value)}
                               className="qt-select w-full text-sm"
@@ -633,8 +646,9 @@ export default function RoleplayTemplatesTab() {
                           </div>
                           <div className="grid grid-cols-2 gap-2 mb-2">
                             <div>
-                              <label className="qt-text-xs">Name</label>
+                              <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-name`}>Name</label>
                               <input
+                                id={`${id}-delim-${index}-name`}
                                 type="text"
                                 value={delimiter.name}
                                 onChange={(e) => updateDelimiter(index, 'name', e.target.value)}
@@ -644,8 +658,9 @@ export default function RoleplayTemplatesTab() {
                               />
                             </div>
                             <div>
-                              <label className="qt-text-xs">Button Label</label>
+                              <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-button`}>Button Label</label>
                               <input
+                                id={`${id}-delim-${index}-button`}
                                 type="text"
                                 value={delimiter.buttonName}
                                 onChange={(e) => updateDelimiter(index, 'buttonName', e.target.value)}
@@ -656,8 +671,9 @@ export default function RoleplayTemplatesTab() {
                             </div>
                           </div>
                           <div className="mb-2">
-                            <label className="qt-text-xs">Style (CSS class)</label>
+                            <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-style`}>Style (CSS class)</label>
                             <input
+                              id={`${id}-delim-${index}-style`}
                               type="text"
                               list={`qt-style-options-${index}`}
                               value={delimiter.style}
@@ -703,6 +719,7 @@ export default function RoleplayTemplatesTab() {
                                 {delimiter.delimiterMode === 'single' ? (
                                   <input
                                     type="text"
+                                    aria-label="Delimiter"
                                     value={delimiter.delimiterOpen}
                                     onChange={(e) => updateDelimiter(index, 'delimiterOpen', e.target.value)}
                                     placeholder="*"
@@ -712,6 +729,7 @@ export default function RoleplayTemplatesTab() {
                                   <>
                                     <input
                                       type="text"
+                                      aria-label="Opening delimiter"
                                       value={delimiter.delimiterOpen}
                                       onChange={(e) => updateDelimiter(index, 'delimiterOpen', e.target.value)}
                                       placeholder="["
@@ -720,6 +738,7 @@ export default function RoleplayTemplatesTab() {
                                     <span className="qt-text-xs">to</span>
                                     <input
                                       type="text"
+                                      aria-label="Closing delimiter"
                                       value={delimiter.delimiterClose}
                                       onChange={(e) => updateDelimiter(index, 'delimiterClose', e.target.value)}
                                       placeholder="]"
@@ -756,8 +775,9 @@ export default function RoleplayTemplatesTab() {
 
                           {delimiter.kind === 'linePrefix' && (
                             <div>
-                              <label className="qt-text-xs">Line marker</label>
+                              <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-marker`}>Line marker</label>
                               <input
+                                id={`${id}-delim-${index}-marker`}
                                 type="text"
                                 value={delimiter.marker}
                                 onChange={(e) => updateDelimiter(index, 'marker', e.target.value)}
@@ -773,8 +793,9 @@ export default function RoleplayTemplatesTab() {
                           {delimiter.kind === 'tagPrefix' && (
                             <div className="space-y-2">
                               <div className="flex items-center gap-2">
-                                <label className="qt-text-xs whitespace-nowrap">Brackets:</label>
+                                <label className="qt-text-xs whitespace-nowrap" htmlFor={`${id}-delim-${index}-tag-open`}>Brackets:</label>
                                 <input
+                                  id={`${id}-delim-${index}-tag-open`}
                                   type="text"
                                   value={delimiter.tagOpen}
                                   onChange={(e) => updateDelimiter(index, 'tagOpen', e.target.value)}
@@ -784,6 +805,7 @@ export default function RoleplayTemplatesTab() {
                                 <span className="qt-text-xs">TOKEN</span>
                                 <input
                                   type="text"
+                                  aria-label="Closing bracket"
                                   value={delimiter.tagClose}
                                   onChange={(e) => updateDelimiter(index, 'tagClose', e.target.value)}
                                   placeholder="]"
@@ -791,8 +813,9 @@ export default function RoleplayTemplatesTab() {
                                 />
                               </div>
                               <div>
-                                <label className="qt-text-xs">Token pattern (regex, Unicode)</label>
+                                <label className="qt-text-xs" htmlFor={`${id}-delim-${index}-token`}>Token pattern (regex, Unicode)</label>
                                 <input
+                                  id={`${id}-delim-${index}-token`}
                                   type="text"
                                   value={delimiter.tokenPattern}
                                   onChange={(e) => updateDelimiter(index, 'tokenPattern', e.target.value)}

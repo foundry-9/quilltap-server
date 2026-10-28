@@ -448,6 +448,7 @@ function ToolPicker({
         <div className="relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
           <input
+            aria-label="Search the table"
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}

@@ -88,6 +88,7 @@ export function ImportFromImageModal({
   onClose,
   onImported,
 }: ImportFromImageModalProps) {
+  const id = useId()
   const [state, setState] = useState<ModalState>('upload')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -572,6 +573,7 @@ export function ImportFromImageModal({
                             type="text"
                             value={item.title}
                             onChange={(e) => updateItem(index, { title: e.target.value })}
+                            aria-label="Item title"
                             className="qt-input text-sm font-medium w-full"
                             placeholder="Item title"
                           />
@@ -603,10 +605,11 @@ export function ImportFromImageModal({
 
                           {/* Appropriateness */}
                           <div className="ml-8">
-                            <label className="qt-label text-xs mb-1 block">
+                            <label htmlFor={`${id}-appropriateness-${index}`} className="qt-label text-xs mb-1 block">
                               Appropriateness
                             </label>
                             <input
+                              id={`${id}-appropriateness-${index}`}
                               type="text"
                               value={item.appropriateness}
                               onChange={(e) => updateItem(index, { appropriateness: e.target.value })}
@@ -618,10 +621,11 @@ export function ImportFromImageModal({
 
                           {/* Description */}
                           <div className="ml-8">
-                            <label className="qt-label text-xs mb-1 block">
+                            <label htmlFor={`${id}-description-${index}`} className="qt-label text-xs mb-1 block">
                               Description
                             </label>
                             <textarea
+                              id={`${id}-description-${index}`}
                               value={item.description}
                               onChange={(e) => updateItem(index, { description: e.target.value })}
                               rows={3}

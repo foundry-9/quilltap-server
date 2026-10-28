@@ -290,6 +290,7 @@ export function TextReplacementSettings({
           {!enabled && ' (Master toggle is off — replacements are paused.)'}
         </div>
         <textarea
+          aria-label="Try text replacement"
           ref={tryItRef}
           value={tryItText}
           onChange={(e) => setTryItText(e.target.value)}
@@ -333,6 +334,7 @@ function RuleRow({ rule, onPatch, onDelete, disabled }: RuleRowProps) {
     <li className="grid grid-cols-1 sm:grid-cols-[1fr,1fr,auto,auto,auto] gap-2 items-center p-3 border-t qt-border-default first:border-t-0">
       <input
         type="text"
+        aria-label="Replace this text"
         value={fromText}
         onChange={(e) => setFromText(e.target.value)}
         onBlur={commitFromText}
@@ -348,6 +350,7 @@ function RuleRow({ rule, onPatch, onDelete, disabled }: RuleRowProps) {
       />
       <input
         type="text"
+        aria-label="With this text"
         value={toText}
         onChange={(e) => setToText(e.target.value)}
         onBlur={commitToText}

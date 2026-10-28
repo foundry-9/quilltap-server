@@ -252,6 +252,7 @@ export function MergeConversationModal({
               </p>
 
               <input
+                aria-label="Search conversations"
                 type="text"
                 placeholder="Search conversations…"
                 value={search}

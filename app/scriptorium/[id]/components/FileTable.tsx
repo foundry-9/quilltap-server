@@ -313,6 +313,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input
+            aria-label="Filter files"
             type="text"
             placeholder="Filter files..."
             value={filter}
@@ -537,6 +538,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
       {isBlobBackedFile && blob && (
         <div className="flex flex-col gap-2 flex-1 min-w-[18rem]">
           <textarea
+            aria-label="File description or transcript"
             className="qt-input text-xs"
             value={description}
             placeholder="Description / transcript (searchable)"

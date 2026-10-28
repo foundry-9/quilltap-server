@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -32,6 +32,7 @@ interface TagOption {
 }
 
 export default function TagsTab() {
+  const id = useId()
   const [tagSaving, setTagSaving] = useState<string | null>(null)
   const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
@@ -261,10 +262,11 @@ export default function TagsTab() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label className="qt-label mb-1">
+              <label className="qt-label mb-1" htmlFor={`${id}-style-tag`}>
                 Tag
               </label>
               <select
+                id={`${id}-style-tag`}
                 value={selectedTagId}
                 onChange={(e) => setSelectedTagId(e.target.value)}
                 disabled={tagSaving !== null || availableForStyling.length === 0}

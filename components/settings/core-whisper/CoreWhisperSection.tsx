@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, useId } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -23,6 +23,7 @@ const BUDGET_OPTIONS = [
 ] as const
 
 export function CoreWhisperSection() {
+  const id = useId()
   const queryClient = useQueryClient()
   const { data: settings } = useQuery({
     queryKey: queryKeys.settings.chat,
@@ -98,13 +99,14 @@ export function CoreWhisperSection() {
 
         {/* Interval */}
         <div className="qt-settings-field-group">
-          <label className="block qt-settings-section-heading">
+          <label className="block qt-settings-section-heading" htmlFor={`${id}-interval`}>
             Whisper Cadence
           </label>
           <p className="qt-text-small">
             How many of a character&apos;s own turns may pass between offerings. Lower is more attentive; higher is more spacious.
           </p>
           <select
+            id={`${id}-interval`}
             value={current.interval ?? 12}
             onChange={(e) => applyPatch({ interval: parseInt(e.target.value, 10) })}
             disabled={saving}
@@ -120,13 +122,14 @@ export function CoreWhisperSection() {
 
         {/* Silence threshold */}
         <div className="qt-settings-field-group">
-          <label className="block qt-settings-section-heading">
+          <label className="block qt-settings-section-heading" htmlFor={`${id}-silence`}>
             Silence Threshold
           </label>
           <p className="qt-text-small">
             When a character has been quiet while this many <em>other</em> voices have taken the floor in turn, Aurora offers the packet before they re-enter. Useful in busier rooms where convergence pressure builds quickly.
           </p>
           <select
+            id={`${id}-silence`}
             value={current.silenceThreshold ?? 3}
             onChange={(e) => applyPatch({ silenceThreshold: parseInt(e.target.value, 10) })}
             disabled={saving}
@@ -142,13 +145,14 @@ export function CoreWhisperSection() {
 
         {/* Packet token budget */}
         <div className="qt-settings-field-group">
-          <label className="block qt-settings-section-heading">
+          <label className="block qt-settings-section-heading" htmlFor={`${id}-budget`}>
             Soft Packet Budget
           </label>
           <p className="qt-text-small">
             A hint, not a hard ceiling. When an assembled <code className="qt-bg-muted px-1 rounded">Core/</code> packet exceeds this size, the logs make a polite note suggesting the operator consider refactoring those documents. The packet is always delivered in full.
           </p>
           <select
+            id={`${id}-budget`}
             value={current.packetTokenBudget ?? 4096}
             onChange={(e) => applyPatch({ packetTokenBudget: parseInt(e.target.value, 10) })}
             disabled={saving}

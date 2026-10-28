@@ -22,6 +22,7 @@ interface ImageUploadDialogProps {
 }
 
 export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, contextId, generateOrientation }: ImageUploadDialogProps) {
+  const id = useId()
   const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
   const [showGeneration, setShowGeneration] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -190,10 +191,11 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* File Upload */}
                 {uploadMode === 'file' && (
                   <div>
-                    <label className="block text-sm qt-text-primary mb-2">
+                    <label htmlFor={`${id}-file`} className="block text-sm qt-text-primary mb-2">
                       Select Image File
                     </label>
                     <input
+                      id={`${id}-file`}
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
@@ -211,8 +213,9 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* URL Import */}
                 {uploadMode === 'url' && (
                   <div>
-                    <label className="block text-sm qt-text-primary mb-2">Image URL</label>
+                    <label htmlFor={`${id}-url`} className="block text-sm qt-text-primary mb-2">Image URL</label>
                     <input
+                      id={`${id}-url`}
                       type="url"
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}

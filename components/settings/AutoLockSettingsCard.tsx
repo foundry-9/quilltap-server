@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -20,6 +20,7 @@ interface AutoLockConfig {
  * Only functional when a user passphrase is set.
  */
 export function AutoLockSettingsCard() {
+  const id = useId()
   const [hasPassphrase, setHasPassphrase] = useState<boolean | null>(null)
   const [config, setConfig] = useState<AutoLockConfig>({ enabled: false, idleMinutes: 15 })
   const [saving, setSaving] = useState(false)
@@ -150,8 +151,9 @@ export function AutoLockSettingsCard() {
 
       {config.enabled && (
         <div className="flex items-center gap-2">
-          <label className="qt-text-small">Lock after</label>
+          <label className="qt-text-small" htmlFor={`${id}-minutes`}>Lock after</label>
           <input
+            id={`${id}-minutes`}
             type="number"
             min={1}
             value={config.idleMinutes}

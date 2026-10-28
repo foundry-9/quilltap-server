@@ -255,6 +255,7 @@ export function RngDropdown({
               <div className="px-3 py-2 space-y-2 border-t">
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Number of rolls"
                     type="number"
                     value={customRolls}
                     onChange={e => setCustomRolls(e.target.value)}
@@ -265,6 +266,7 @@ export function RngDropdown({
                   />
                   <span className="text-sm">d</span>
                   <input
+                    aria-label="Sides per die"
                     type="number"
                     value={customSides}
                     onChange={e => setCustomSides(e.target.value)}

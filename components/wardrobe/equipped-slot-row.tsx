@@ -144,6 +144,7 @@ export function EquippedSlotRow({
           <div className="p-2">
             <input
               type="search"
+              aria-label={`Search ${WARDROBE_SLOT_META[slot].label.toLowerCase()} items`}
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}

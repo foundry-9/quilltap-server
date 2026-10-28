@@ -4,6 +4,13 @@
 
 ### 4.11-dev
 
+#### Fix: accessible names for every form control (release checklist 13, continued)
+
+- About 220 `<input>` / `<select>` / `<textarea>` controls across roughly 90 files in `app/` and `components/` had no accessible name. Most sat beside a `<label>` with no `htmlFor`, or under a heading or `<span>` caption. Visible labels are now wired with `useId()` + `htmlFor`/`id`. Captions that are headings are wired with `aria-labelledby`. Placeholder-only and label-less controls (search boxes, inline row editors, the composer's source-mode textarea, the message edit box) get an `aria-label`. No styling or visible text changed.
+- Toggle switches: the Prospero "Allow Any Character" switch gains `role="switch"`, `aria-checked` and a name. Plugin enable switches are named per plugin. The theme-selector and context-compression switches, and the Salon sidebar's All Whispers / Shared Vaults / Turn Skipping switches, are named after their visible labels.
+- `ModelSelector`: new optional `id` prop so a caller's `<label htmlFor>` names it (the connection-profile modal passes `modelName`). Without one, the placeholder is its `aria-label`. The dropdown chevron is named and reports `aria-expanded`.
+- Document picker's ".." button named "Up one folder".
+
 #### Fix: dialog semantics and keyboard access for every modal and clickable card (release checklist 13, continued)
 
 - Hand-built modals in 54 files (41 that hand-roll a `qt-dialog-overlay`, 13 built on raw `fixed inset-0` overlays) now carry `role="dialog"` (`alertdialog` for destructive confirmations), `aria-modal` and `aria-labelledby`/`aria-label`, use `useDialogFocus` (focus in, Tab trap, focus restored), and close on Escape where they did not before (busy-state gating kept). Markup otherwise unchanged; none were moved onto `BaseModal`, since doing so would have changed their layout.

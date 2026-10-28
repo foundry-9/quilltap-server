@@ -142,6 +142,7 @@ export function GroupLinkedStoresCard({
             ) : (
               <div className="space-y-2">
                 <select
+                  aria-label="Document store to link"
                   value={selectedStoreId || ''}
                   onChange={(e) => setSelectedStoreId(e.target.value || null)}
                   className="w-full px-3 py-2 rounded border qt-border-default bg-transparent text-foreground text-sm"

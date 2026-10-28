@@ -144,6 +144,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
           <div className="px-2 pb-1">
             <input
               type="text"
+              aria-label="Filter list"
               value={filter}
               onChange={e => setFilter(e.target.value)}
               placeholder={`Filter ${route?.entityLabel?.toLowerCase() || 'item'}s...`}

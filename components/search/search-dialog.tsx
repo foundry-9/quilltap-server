@@ -264,6 +264,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
               <input
                 ref={inputRef}
                 type="text"
+                aria-label="Search"
                 value={query}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}

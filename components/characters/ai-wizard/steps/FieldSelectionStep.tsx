@@ -6,6 +6,7 @@
  * Step 3: Select which fields to generate and provide background context.
  */
 
+import { useId } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { GeneratableField } from '../types'
 import { FIELD_LABELS, FIELD_DESCRIPTIONS } from '../types'
@@ -33,6 +34,7 @@ export function FieldSelectionStep({
   currentData,
   canGeneratePhysicalDescription,
 }: FieldSelectionStepProps) {
+  const id = useId()
   // All possible fields, ordered by vantage point (outside → acquaintance → self)
   const allFields: GeneratableField[] = [
     'name',
@@ -60,7 +62,7 @@ export function FieldSelectionStep({
     <div className="space-y-6">
       {/* Background Context */}
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-2">
+        <h3 id={`${id}-background-heading`} className="qt-heading-4 text-foreground mb-2">
           Background Context
         </h3>
         <p className="text-sm qt-text-secondary mb-3">
@@ -68,6 +70,7 @@ export function FieldSelectionStep({
           that should inform the generation.
         </p>
         <textarea
+          aria-labelledby={`${id}-background-heading`}
           value={backgroundText}
           onChange={(e) => onBackgroundChange(e.target.value)}
           placeholder="Describe the world, scenario, backstory, or any context that should inform this character's creation. For example: 'A medieval fantasy world where magic is rare. This character is a blacksmith in a small village who secretly studies forbidden magic.'"

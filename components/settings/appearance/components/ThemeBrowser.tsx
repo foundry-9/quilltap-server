@@ -10,7 +10,7 @@
  * @module components/settings/appearance/components/ThemeBrowser
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch } from '@/lib/query/fetcher'
@@ -52,6 +52,7 @@ interface RegistrySource {
  * Renders the registry theme browser with search, install, and source management
  */
 export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
+  const id = useId()
   // Expand/collapse state
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -329,6 +330,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
             <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary pointer-events-none" />
             <input
               type="text"
+              aria-label="Search themes"
               placeholder="Search themes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -443,10 +445,11 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               <div className="mt-3 p-4 rounded-lg border qt-border-default qt-bg-card space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block qt-text-label mb-1">
+                    <label className="block qt-text-label mb-1" htmlFor={`${id}-source-name`}>
                       Name
                     </label>
                     <input
+                      id={`${id}-source-name`}
                       type="text"
                       placeholder="e.g. Community"
                       value={newSourceName}
@@ -455,10 +458,11 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     />
                   </div>
                   <div>
-                    <label className="block qt-text-label mb-1">
+                    <label className="block qt-text-label mb-1" htmlFor={`${id}-source-url`}>
                       URL
                     </label>
                     <input
+                      id={`${id}-source-url`}
                       type="url"
                       placeholder="https://registry.example.com/themes"
                       value={newSourceUrl}
@@ -468,10 +472,11 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                   </div>
                 </div>
                 <div>
-                  <label className="block qt-text-label mb-1">
+                  <label className="block qt-text-label mb-1" htmlFor={`${id}-source-key`}>
                     Public Key <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
                   <input
+                    id={`${id}-source-key`}
                     type="text"
                     placeholder="For signature verification"
                     value={newSourceKey}

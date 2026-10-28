@@ -20,6 +20,7 @@ interface EditDocumentStoreDialogProps {
 }
 
 export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocumentStoreDialogProps) {
+  const fieldId = useId()
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>(store?.mountType || 'filesystem')
   const [storeType, setStoreType] = useState<'documents' | 'character'>(store?.storeType || 'documents')
   const [basePath, setBasePath] = useState(store?.basePath || '')
@@ -75,8 +76,9 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
         <h3 id={titleId} className="qt-dialog-title mb-4">Edit Document Store</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="qt-label mb-2 block">Name</label>
+            <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
             <input
+              id={`${fieldId}-f0`}
               type="text"
               name="name"
               required
@@ -87,8 +89,9 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
           </div>
 
           <div className="mb-4">
-            <label className="qt-label mb-2 block">Contents</label>
+            <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
             <select
+              id={`${fieldId}-f1`}
               name="storeType"
               value={storeType}
               onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
@@ -172,8 +175,9 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
           {!isDatabaseBacked && (
             <>
               <div className="mb-4">
-                <label className="qt-label mb-2 block">Include Patterns</label>
+                <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns</label>
                 <input
+                  id={`${fieldId}-f2`}
                   type="text"
                   name="includePatterns"
                   defaultValue={store.includePatterns.join(', ')}
@@ -183,8 +187,9 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
               </div>
 
               <div className="mb-4">
-                <label className="qt-label mb-2 block">Exclude Patterns</label>
+                <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns</label>
                 <input
+                  id={`${fieldId}-f3`}
                   type="text"
                   name="excludePatterns"
                   defaultValue={store.excludePatterns.join(', ')}

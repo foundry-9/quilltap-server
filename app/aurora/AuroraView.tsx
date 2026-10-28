@@ -74,6 +74,7 @@ export interface AuroraViewProps {
 }
 
 export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
+  const fieldId = useId()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
@@ -656,10 +657,11 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm qt-text-primary">
+                <label htmlFor={`${fieldId}-f0`} className="mb-2 block text-sm qt-text-primary">
                   Select SillyTavern character file (PNG or JSON)
                 </label>
                 <input
+                  id={`${fieldId}-f0`}
                   type="file"
                   name="file"
                   accept=".png,.json"
@@ -787,10 +789,11 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
             </h3>
             <form onSubmit={handleCreateGroup}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label htmlFor={`${fieldId}-f1`} className="mb-2 block text-sm font-medium text-foreground">
                   Group Name *
                 </label>
                 <input
+                  id={`${fieldId}-f1`}
                   type="text"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
@@ -801,10 +804,11 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 />
               </div>
               <div className="mb-6">
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label htmlFor={`${fieldId}-f2`} className="mb-2 block text-sm font-medium text-foreground">
                   Description (optional)
                 </label>
                 <textarea
+                  id={`${fieldId}-f2`}
                   value={newGroupDescription}
                   onChange={(e) => setNewGroupDescription(e.target.value)}
                   placeholder="Optional description of this group"

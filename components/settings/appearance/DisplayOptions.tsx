@@ -79,6 +79,7 @@ export function DisplayOptions({
             type="button"
             role="switch"
             aria-checked={showNavThemeSelector}
+            aria-label="Show theme selector in navigation"
             disabled={isLoading}
             onClick={() => !isLoading && onNavThemeSelectorChange(!showNavThemeSelector)}
             className={`

@@ -6,7 +6,7 @@
  * Card displaying agent mode and default tool settings for a project.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useId, useState, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Project } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
@@ -36,6 +36,7 @@ export function ModelBehaviorCard({
   onToggle,
   onProjectUpdate,
 }: ModelBehaviorCardProps) {
+  const fieldId = useId()
   const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
   const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
@@ -91,11 +92,12 @@ export function ModelBehaviorCard({
         <div className="border-t qt-border-default p-4 space-y-4">
           {/* Agent Mode Setting */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="qt-label text-foreground mb-1">Agent Mode</h4>
+            <h4 id={`${fieldId}-f0`} className="qt-label text-foreground mb-1">Agent Mode</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               Default agent mode for chats in this project. Agent mode allows iterative tool use with self-correction.
             </p>
             <select
+              aria-labelledby={`${fieldId}-f0`}
               value={project.defaultAgentModeEnabled === null || project.defaultAgentModeEnabled === undefined ? 'inherit' : project.defaultAgentModeEnabled ? 'enabled' : 'disabled'}
               onChange={(e) => {
                 const value = e.target.value
@@ -111,11 +113,12 @@ export function ModelBehaviorCard({
 
           {/* Answer Confirmation */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="qt-label text-foreground mb-1">Answer Confirmation</h4>
+            <h4 id={`${fieldId}-f1`} className="qt-label text-foreground mb-1">Answer Confirmation</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               Vet looked-up answers in this project&apos;s chats against what the character actually knew this turn. On enables it for every chat here; individual chats may still overrule.
             </p>
             <select
+              aria-labelledby={`${fieldId}-f1`}
               value={project.answerConfirmationOverride ?? 'inherit'}
               onChange={(e) => {
                 const value = e.target.value
@@ -131,11 +134,12 @@ export function ModelBehaviorCard({
 
           {/* Default Roleplay Template */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="qt-label text-foreground mb-1">Default Roleplay Template</h4>
+            <h4 id={`${fieldId}-f2`} className="qt-label text-foreground mb-1">Default Roleplay Template</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               The roleplay template applied to new chats started in this project. Leave on inherit to use your global default.
             </p>
             <select
+              aria-labelledby={`${fieldId}-f2`}
               value={project.defaultRoleplayTemplateId || ''}
               onChange={(e) => onDefaultRoleplayTemplateChange(e.target.value || null)}
               className="qt-input w-full max-w-xs"
