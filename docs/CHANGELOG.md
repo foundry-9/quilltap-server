@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.11-dev
+### 4.11.0
 
 #### Fix: chat settings with an invalid stored value minted a new row on every load, and saves never stuck (#120)
 
