@@ -4,6 +4,14 @@
 
 ### 4.12-dev
 
+#### Deps: TypeScript 6
+
+- `typescript` 5.9.3 → 6.0.3 in the root project, `packages/plugin-utils`, `packages/plugin-types`, `packages/theme-storybook`, `packages/create-quilltap-theme` and `qtap-plugin-default-system-prompts`. The root project and all plugins type-check under 6 with no source or tsconfig changes, and `npm run lint` and the unit suite are unchanged.
+- TypeScript 7 (the native Go compiler) also type-checks the root project cleanly, but it can't be adopted yet: `typescript-eslint` 8.x caps its `typescript` peer at `<6.1.0` and needs the JavaScript compiler API, which `typescript@7` no longer ships. Next 16.4 already handles 7. Revisit once `typescript-eslint` supports 7.
+- `tsup` 8.5.1 → 9.0.0 in `plugin-utils`, `plugin-types` and `theme-storybook`. tsup 8 forces `baseUrl` into its declaration build, and TypeScript 6 rejects that with TS5101 (deprecated, removed in 7). tsup 9 no longer does. Published `dist/` contents are the same apart from hashed chunk filenames.
+- `theme-storybook`: TypeScript 6 turns on `noUncheckedSideEffectImports` by default, so `src/preview.tsx`'s side-effect `.css` imports failed type-checking. Added `src/css-modules.d.ts` declaring `*.css` modules.
+- Patch bumps: `@quilltap/plugin-utils` 2.7.2, `@quilltap/plugin-types` 2.9.1, `@quilltap/theme-storybook` 1.0.91, `create-quilltap-theme` 2.0.22, `qtap-plugin-default-system-prompts` 1.1.28.
+
 #### Deps: ESLint 10
 
 - `eslint` 9.39.5 → 10.13.0. `eslint.config.mjs` was already flat config and needs no changes. `npm run lint` reports the same results as on 9 (zero findings across 4,290 files), and a probe file with deliberate violations tripped the same rules under both versions.
