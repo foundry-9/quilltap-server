@@ -4,6 +4,13 @@
 
 ### 4.12-dev
 
+#### Deps: croner 11, jest-fetch-mock 4.2
+
+- `croner` 10.0.1 → 11.0.0. Quilltap only calls `new Cron(expr).nextRun(date)` (autonomous-room schedules and the room card's next-run preview), so none of 11's `startAt` / `dayOffset` / `previousRun()` changes apply. DST behavior changed: a fixed-time schedule that falls in a spring-forward gap now runs at the first valid time after the gap (3:00, not 3:30), and interval schedules run through both copies of the repeated fall-back hour. 11 also fixes `?` behaving like `*` in day fields and stack overflows on patterns that never match.
+- `jest-fetch-mock` 3.2.0 → 4.2.0. All 3.x APIs are unchanged; `jest.setup.ts` still calls `enableMocks()`. Under jsdom it still fills missing fetch globals from cross-fetch. Under `@jest-environment node` mocked responses are now native `Response` objects.
+- `jest-fetch-mock` and `@types/yauzl` moved from `dependencies` to `devDependencies`. Neither is used at runtime; production installs (`npm ci --omit=dev` in the Docker images) no longer pull them or `cross-fetch`.
+- `emojibase-data` stays at 17: version 18 changes the emoji characters themselves, which requires a new `emoji-index.v2.json` under the dataset's versioning contract.
+
 #### Deps: chokidar removed; the files-directory watcher uses `fs.watch`
 
 - `lib/file-storage/watcher.ts` (the instance `files/` watcher) now uses Node's recursive `fs.watch`, like the mount watcher. `handleNativeEvent` resolves each debounced event against the disk: an existing file goes through `handleFileChange` (which adds a record when there is none), a missing path is defer-deleted, a folder that leaves by rename defer-deletes every record beneath it, and a folder that arrives by rename is recorded with its contents (`scanDirectory`). Symlinks are skipped, matching the startup scan. Event paths are normalized to `/`-separated storage keys.
