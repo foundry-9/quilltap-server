@@ -681,6 +681,11 @@ describe('Cascade Delete Utilities', () => {
         docMountFileLinks: { findByIdWithContent: jest.fn().mockResolvedValue(null) },
         characterPluginData: { deleteByCharacterId: jest.fn().mockResolvedValue(0) },
         wardrobeWear,
+        wardrobeHistory: {
+          deleteByCharacter: jest.fn().mockImplementation(async () => {
+            order?.push('drop-history')
+          }),
+        },
       }
     }
 
@@ -701,7 +706,19 @@ describe('Cascade Delete Utilities', () => {
 
       expect(result.success).toBe(true)
       expect(wardrobeWear.foldWearerIntoUnattributed).toHaveBeenCalledWith('char-1')
-      expect(order).toEqual(['fold', 'delete-character'])
+      expect(order).toEqual(['fold', 'drop-history', 'delete-character'])
+    })
+
+    it("drops the character's outfit history before deleting the character", async () => {
+      const repos = minimalReposFor(createMockCharacter('char-1'), { foldWearerIntoUnattributed: jest.fn() })
+      mockGetRepositories.mockReturnValue(repos as any)
+
+      await executeCascadeDelete('char-1', {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      })
+
+      expect(repos.wardrobeHistory.deleteByCharacter).toHaveBeenCalledWith('char-1')
     })
 
     it('still deletes the character when the wear-ledger fold fails', async () => {

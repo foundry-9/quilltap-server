@@ -8,6 +8,18 @@
  * core a live chat uses (the preview/audit actions on `/api/v1/custom-tools`),
  * so the bench can never drift from what the table would actually deal. The
  * bench posts nothing and writes nothing.
+ *
+ * The fact sheet's *Pick a character* mode reads and writes the editor's
+ * shared wardrobe vantage: a character chosen here is the one the side-effects
+ * card browses, and a character vantage chosen there seats them here.
+ *
+ * The *Mock inventory* card is a list of `{ ref, state, count?, metadata? }`
+ * rows the roll, the audit and the gate verdict read as the rolling
+ * character's bag (`mockInventoryContext`), so `inventory` /
+ * `inventoryCount` / `inventoryAggregate` tests can be proved without a
+ * character. The bench cannot tell whether an object exists:
+ * `{{inventory.*}}` fields render as written and `$inventory` falls back. No
+ * rows means no bag at all — every inventory test declines.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -17,15 +29,34 @@ import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import {
   displayTitle,
+  isInventoryRef,
   isStateRef,
   scanPlaceholders,
   type CustomToolParameter,
 } from '@/lib/pascal/custom-tool.types'
-import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
+import type {
+  CustomToolAuditResult,
+  CustomToolRunResult,
+  ResolvedInventoryGesture,
+  ResolvedWardrobeGesture,
+} from '@/lib/pascal/custom-tools'
+import { mockInventoryContext, type MockInventoryRow } from '@/lib/pascal/bench-inventory'
+import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
+import type { InventoryState } from '@/lib/inventory/refs'
 import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
 import { flattenProgressions } from '@/lib/progressions/engine'
-import { definitionFromDraft, gateFromConditions, type ToolDraft } from '@/lib/pascal/tool-draft'
+import {
+  definitionFromDraft,
+  gateFromConditions,
+  reachableOutcomesMissingBrief,
+  type ToolDraft,
+  type WardrobeVantage,
+} from '@/lib/pascal/tool-draft'
+import type { PreviewWardrobeResolution } from '@/lib/pascal/workbench'
+import { formatSlotLabels } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeItemThumbnail } from '@/components/wardrobe/wardrobe-item-thumbnail'
 import {
   CustomToolParamsForm,
   coerceParamValues,
@@ -40,6 +71,9 @@ interface ProvingBenchProps {
   valid: boolean
   /** Reports which outcome row a bench roll landed on, for the form's flash. */
   onMatched?: (outcomeId: string | null) => void
+  /** The editor's shared wardrobe vantage; the bench holds its own when absent. */
+  vantage?: WardrobeVantage
+  onVantageChange?: (next: WardrobeVantage) => void
 }
 
 /** A character eligible to lend the bench its fact sheet. */
@@ -48,10 +82,11 @@ interface BenchCharacter {
   name: string
 }
 
-/** The fact sheet, in one of its two modes (§4.5 card 2). */
-type FactSheet =
-  | { mode: 'character'; characterId: string }
-  | { mode: 'manual'; text: string }
+/**
+ * The fact sheet, in one of its two modes (§4.5 card 2). The character mode's
+ * character is the shared wardrobe vantage's, not the sheet's own.
+ */
+type FactSheet = { mode: 'character' } | { mode: 'manual'; text: string }
 
 /**
  * The bench's oracle: script an answer, script a silence, or — for single
@@ -61,19 +96,83 @@ type FactSheet =
 type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { mode: 'live' }
 
 /**
+ * One mock-inventory row as the bench edits it; `count` is loose text ('' =
+ * the default) and `metadata` is JSON object text ('' = `{}`).
+ */
+interface MockInventoryDraftRow {
+  id: number
+  ref: string
+  state: InventoryState
+  count: string
+  metadata: string
+}
+
+/**
+ * A row's metadata, parsed — or why it cannot be. Values must be numbers,
+ * strings, booleans, or lists of them, as the mock schema demands.
+ */
+function parseMockMetadata(text: string): { ok: true; metadata?: MockInventoryRow['metadata'] } | { ok: false; reason: string } {
+  if (text.trim() === '') return { ok: true }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, reason: 'is not valid JSON' }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'must be a JSON object' }
+  }
+  const scalar = (v: unknown) =>
+    typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!scalar(value) && !(Array.isArray(value) && value.every(scalar))) {
+      return { ok: false, reason: `"${key}" must be a number, text, true/false, or a list of them` }
+    }
+  }
+  return { ok: true, metadata: parsed as MockInventoryRow['metadata'] }
+}
+
+/** The rows a request sends: blank refs dropped, counts and metadata parsed. Empty = no bag at all. */
+function mockRowsOf(rows: readonly MockInventoryDraftRow[]): MockInventoryRow[] {
+  return rows
+    .filter((row) => row.ref.trim() !== '')
+    .map((row) => {
+      const count = Number(row.count)
+      const metadata = parseMockMetadata(row.metadata)
+      return {
+        ref: row.ref.trim(),
+        state: row.state,
+        ...(row.count.trim() !== '' && Number.isInteger(count) && count >= 0 ? { count } : {}),
+        ...(metadata.ok && metadata.metadata ? { metadata: metadata.metadata } : {}),
+      }
+    })
+}
+
+/**
  * A bench roll, plus the gate verdict the server computed alongside it. The
  * bench always deals — a gate decides whether a character is OFFERED a tool,
  * not whether its author may test one they are holding — so the verdict rides
  * beside the roll rather than replacing it.
  */
-type BenchRoll = CustomToolRunResult & { gate?: ToolGateVerdict }
+type BenchRoll = CustomToolRunResult & {
+  gate?: ToolGateVerdict
+  /** With a character in the chair: what each wardrobe gesture would have found. */
+  wardrobeResolution?: PreviewWardrobeResolution[]
+  /** The chair's name when the roll was dealt, for "not in Imogen's reach". */
+  chairName?: string | null
+}
 
 /** {@link apiErrorMessage} with the bench's own fallback. */
 function extractErrorMessage(err: unknown): string {
   return apiErrorMessage(err, 'The bench could not oblige.')
 }
 
-export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchProps>) {
+export function ProvingBench({ draft, valid, onMatched, vantage: sharedVantage, onVantageChange }: Readonly<ProvingBenchProps>) {
+  const [localVantage, setLocalVantage] = useState<WardrobeVantage>({ kind: 'none' })
+  const vantage = sharedVantage ?? localVantage
+  const setVantage = onVantageChange ?? setLocalVantage
+  const chairCharacterId = vantage.kind === 'character' ? vantage.characterId : ''
+
   /** The document Save would write — what every roll, audit, and the preview send. */
   const definition = useMemo(() => definitionFromDraft(draft), [draft])
 
@@ -86,7 +185,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
     const specs: Record<string, CustomToolParameterSpec> = {}
     const declared = (definition.parameters ?? {}) as Record<string, CustomToolParameter>
     for (const [name, spec] of Object.entries(declared)) {
-      if (isStateRef(spec.default)) continue
+      if (isStateRef(spec.default) || isInventoryRef(spec.default)) continue
       // A half-typed numeric default serializes as NaN (the form is already
       // flagging it); the bench field shows 0 rather than "NaN".
       const fallback = typeof spec.default === 'number' && !Number.isFinite(spec.default) ? 0 : spec.default
@@ -97,8 +196,29 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
   const [values, setValues] = useState<ParameterFormValues>({})
   const [isPrivate, setIsPrivate] = useState(false)
-  const [sheet, setSheet] = useState<FactSheet>({ mode: 'manual', text: '{}' })
+  const [sheet, setSheet] = useState<FactSheet>(() =>
+    chairCharacterId ? { mode: 'character' } : { mode: 'manual', text: '{}' }
+  )
+  // A character vantage chosen elsewhere (the side-effects card, or the
+  // editor's opening default) seats that character here. Derived during
+  // render, latched on the character id.
+  const [seatedCharacterId, setSeatedCharacterId] = useState(chairCharacterId)
+  if (chairCharacterId !== seatedCharacterId) {
+    setSeatedCharacterId(chairCharacterId)
+    if (chairCharacterId && sheet.mode !== 'character') setSheet({ mode: 'character' })
+  }
   const [mockStateText, setMockStateText] = useState('{}')
+  const [mockInventory, setMockInventory] = useState<MockInventoryDraftRow[]>([])
+  const mockRows = useMemo(() => mockRowsOf(mockInventory), [mockInventory])
+  /** The first mock row whose metadata will not parse — the bench refuses to run until it does. */
+  const mockInventoryError = useMemo(() => {
+    for (const row of mockInventory) {
+      const parsed = parseMockMetadata(row.metadata)
+      if (!parsed.ok) return `${row.ref.trim() || 'A mock object'}: metadata ${parsed.reason}`
+    }
+    return null
+  }, [mockInventory])
+  const benchInventory = mockRows.length > 0 ? mockRows : undefined
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<BenchRoll[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
@@ -111,6 +231,16 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   )
 
   const testsMetadata = draft.outcomes.some((o) => o.conditions.some((c) => c.subject.kind === 'metadata'))
+  const testsInventory =
+    draft.outcomes.some((o) =>
+      o.conditions.some(
+        (c) =>
+          c.subject.kind === 'inventory' || c.subject.kind === 'inventoryCount' || c.subject.kind === 'inventoryAggregate'
+      )
+    ) ||
+    draft.gateConditions.some(
+      (c) => c.subject === 'inventory' || c.subject === 'inventoryCount' || c.subject === 'inventoryAggregate'
+    )
 
   /**
    * The clock the derived-progressions panel reads.
@@ -192,7 +322,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   })
 
   const benchMetadata = (): Record<string, unknown> | { characterId: string } | undefined => {
-    if (sheet.mode === 'character') return sheet.characterId ? { characterId: sheet.characterId } : undefined
+    if (sheet.mode === 'character') return chairCharacterId ? { characterId: chairCharacterId } : undefined
     try {
       const parsed = JSON.parse(sheet.text)
       return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
@@ -260,11 +390,16 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           private: isPrivate,
           metadata: benchMetadata(),
           state: benchState(),
+          inventory: benchInventory,
           llm: previewOracle(),
         }),
       }),
     onSuccess: (result) => {
-      setRolls((prev) => [result, ...prev].slice(0, 10))
+      const chairName =
+        sheet.mode === 'character'
+          ? (charactersQuery.data ?? []).find((c) => c.id === chairCharacterId)?.name ?? null
+          : null
+      setRolls((prev) => [{ ...result, chairName }, ...prev].slice(0, 10))
       onMatched?.(draft.outcomes[result.outcomeIndex]?.id ?? null)
     },
   })
@@ -279,6 +414,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           params: coerceParamValues(paramSpecs, effectiveValues),
           metadata: benchMetadata(),
           state: benchState(),
+          inventory: benchInventory,
           llm: auditOracle(),
         }),
       }),
@@ -286,7 +422,10 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   })
 
   const benchDisabled =
-    !valid || (sheet.mode === 'manual' && manualSheetError !== null) || mockStateError !== null
+    !valid ||
+    (sheet.mode === 'manual' && manualSheetError !== null) ||
+    mockStateError !== null ||
+    mockInventoryError !== null
   const jsonPreview = useMemo(() => `${JSON.stringify(definition, null, 2)}\n`, [definition])
 
   return (
@@ -345,7 +484,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
             role="radio"
             aria-checked={sheet.mode === 'character'}
             className={`px-2 py-1 text-xs ${sheet.mode === 'character' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
-            onClick={() => setSheet({ mode: 'character', characterId: '' })}
+            onClick={() => setSheet({ mode: 'character' })}
           >
             Pick a character
           </button>
@@ -362,8 +501,12 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
         {sheet.mode === 'character' ? (
           <select
-            value={sheet.characterId}
-            onChange={(e) => setSheet({ mode: 'character', characterId: e.target.value })}
+            value={chairCharacterId}
+            onChange={(e) => {
+              const characterId = e.target.value
+              if (characterId) setVantage({ kind: 'character', characterId })
+              else if (vantage.kind === 'character') setVantage({ kind: 'none' })
+            }}
             className="qt-select qt-select-sm w-full"
             aria-label="Character whose fact sheet to use"
           >
@@ -390,7 +533,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
         {testsMetadata &&
           ((sheet.mode === 'manual' && sheet.text.trim().replace(/\s/g, '') === '{}') ||
-            (sheet.mode === 'character' && !sheet.characterId)) && (
+            (sheet.mode === 'character' && !chairCharacterId)) && (
             <p className="text-xs qt-text-secondary">
               No fact sheet supplied — metadata tests will all decline, exactly as for an unattributed manual roll.
             </p>
@@ -420,7 +563,12 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
                back with a roll — the bench never guesses at a vault. */
             verdict={
               sheet.mode === 'manual' && manualSheetError === null
-                ? evaluateToolGate(draftGate, benchMetadata() as Record<string, unknown>, derivedProgress)
+                ? evaluateToolGate(
+                    draftGate,
+                    benchMetadata() as Record<string, unknown>,
+                    derivedProgress,
+                    mockRows.length > 0 ? mockInventoryContext(mockRows) : null
+                  )
                 : (rolls[0]?.gate ?? null)
             }
           />
@@ -446,6 +594,101 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         {testsState && mockStateText.trim().replace(/\s/g, '') === '{}' && (
           <p className="text-xs qt-text-secondary">
             No mock state supplied — every <code>$state</code> reference will use its fallback.
+          </p>
+        )}
+      </section>
+
+      {/* Card 2⅞ — Mock inventory, for inventory / inventoryCount / inventoryAggregate tests */}
+      <section className="qt-card p-3 space-y-2">
+        <h3 className="qt-card-title text-sm">Mock inventory</h3>
+        <p className="qt-hint">
+          What the rolling character carries, as the bench pretends it: a reference, its state, and — optionally —
+          how many of its kind are equipped and a <code>metadata</code> object for aggregate tests. A reference no
+          row names reads as absent. The bench cannot tell whether an object exists, so its fields render as
+          written and <code>$inventory</code> falls back.
+        </p>
+        {mockInventory.map((row) => (
+          <div key={row.id} className="space-y-1">
+            <div className="flex items-center gap-1 flex-wrap">
+              <input
+                type="text"
+                value={row.ref}
+                onChange={(e) =>
+                  setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, ref: e.target.value } : r)))
+                }
+                placeholder="Excalibur"
+                className="qt-input flex-1 min-w-24 text-xs"
+                aria-label="Mock object reference"
+              />
+              <select
+                value={row.state}
+                onChange={(e) =>
+                  setMockInventory((prev) =>
+                    prev.map((r) => (r.id === row.id ? { ...r, state: e.target.value as InventoryState } : r))
+                  )
+                }
+                className="qt-select qt-select-sm w-28"
+                aria-label="Mock object state"
+              >
+                {INVENTORY_STATE_VALUES.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={row.count}
+                onChange={(e) =>
+                  setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, count: e.target.value } : r)))
+                }
+                placeholder={row.state === 'equipped' ? '1' : '0'}
+                className="qt-input w-16 text-xs"
+                aria-label="Mock equipped count"
+                title="How many of its kind are equipped (default: 1 when equipped, else 0)"
+              />
+              <button
+                type="button"
+                className="qt-button qt-button-ghost qt-button-sm"
+                onClick={() => setMockInventory((prev) => prev.filter((r) => r.id !== row.id))}
+                aria-label="Remove this mock object"
+              >
+                <Icon name="close" className="w-3 h-3" />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={row.metadata}
+              onChange={(e) =>
+                setMockInventory((prev) => prev.map((r) => (r.id === row.id ? { ...r, metadata: e.target.value } : r)))
+              }
+              placeholder='metadata, e.g. {"toolVersion": 3, "toolAbilities": ["suppress"]}'
+              className={`qt-input w-full font-mono text-xs ${parseMockMetadata(row.metadata).ok ? '' : 'qt-input-error'}`}
+              aria-label="Mock object metadata (JSON object)"
+              title="What inventoryAggregate reads off this object. Blank is {}. An equipped row with a count stands for that many copies."
+              spellCheck={false}
+            />
+          </div>
+        ))}
+        {mockInventoryError && <p className="text-xs qt-text-destructive">{mockInventoryError}</p>}
+        <button
+          type="button"
+          className="qt-button qt-button-ghost qt-button-sm"
+          onClick={() =>
+            setMockInventory((prev) => [
+              ...prev,
+              { id: (prev[prev.length - 1]?.id ?? 0) + 1, ref: '', state: 'equipped', count: '', metadata: '' },
+            ])
+          }
+        >
+          <Icon name="plus" className="w-3 h-3" />
+          add object
+        </button>
+        {testsInventory && mockRows.length === 0 && (
+          <p className="text-xs qt-text-secondary">
+            No mock inventory — every inventory test declines, exactly as for a run nobody made.
           </p>
         )}
       </section>
@@ -538,6 +781,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
               mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
+              const missingBrief = reachableOutcomesMissingBrief(draft, audit.outcomes)
               const outcome = draft.outcomes[entry.index]
               const label = outcome?.catchAll ? 'otherwise' : `row ${entry.index + 1}`
               return (
@@ -562,6 +806,12 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
                       } as React.CSSProperties}
                     />
                   </div>
+                  {missingBrief.includes(entry.index) && (
+                    <p className="text-xs qt-text-destructive">
+                      This outcome can win, and the consult prompt reads {'{{outcome.brief}}'}, but the row has no
+                      brief — the model would be shown the placeholder as written. Give it a brief.
+                    </p>
+                  )}
                   {entry.hits === 0 && !outcome?.catchAll && (
                     <p className="text-xs qt-text-secondary">
                       This outcome never fired in {audit.runs.toLocaleString()} draws <em>with these parameters and
@@ -601,16 +851,25 @@ function GateVerdictLine({ verdict }: Readonly<{ verdict: ToolGateVerdict | null
     )
   }
 
+  // An any-of names the line that decided it; a single group has only the one.
+  const line = verdict.heldGroup !== undefined ? verdict.heldGroup + 1 : null
+
   if (verdict.available) {
-    return <p className="text-xs qt-text-secondary">✓ This sheet would be offered the tool.</p>
+    return (
+      <p className="text-xs qt-text-secondary">
+        ✓ This sheet would be offered the tool{line !== null ? ` — passed on line ${line}` : ''}.
+      </p>
+    )
   }
 
   return (
     <p className="text-xs qt-text-destructive">
       ✕ This sheet would never be offered the tool —{' '}
       {verdict.withheldBy === 'availableWhen'
-        ? 'it does not pass every “only show if” test.'
-        : 'it passes the “do not show if” test.'}{' '}
+        ? 'it passes no line of the “only show if” tests.'
+        : line !== null
+          ? `it passes line ${line} of the “do not show if” tests.`
+          : 'it passes the “do not show if” test.'}{' '}
       The roll below is the bench indulging you.
     </p>
   )
@@ -642,7 +901,7 @@ function MiniPascalBubble({
   roll,
   draft,
   faded,
-}: Readonly<{ roll: CustomToolRunResult; draft: ToolDraft; faded: boolean }>) {
+}: Readonly<{ roll: BenchRoll; draft: ToolDraft; faded: boolean }>) {
   const outcome = draft.outcomes[roll.outcomeIndex]
   const rowLabel = outcome?.catchAll ? 'the catch-all' : `row ${roll.outcomeIndex + 1}`
   const title = displayTitle({ name: draft.name || 'contrivance', title: draft.title || undefined })
@@ -680,6 +939,21 @@ function MiniPascalBubble({
               <p key={effect.index}>
                 → {effect.target.raw} = {JSON.stringify(effect.value)} <em>(would write)</em>
               </p>
+            ) : 'inventory' in effect ? (
+              <p key={effect.index}>
+                → inventory: {describeBenchInventoryGesture(effect.inventory)} <em>(would attempt)</em>
+              </p>
+            ) : 'wardrobe' in effect ? (
+              <BenchWardrobeLines
+                key={effect.index}
+                gesture={effect.wardrobe}
+                resolution={roll.wardrobeResolution?.find((entry) => entry.index === effect.index)}
+                chairName={roll.chairName ?? null}
+              />
+            ) : 'log' in effect ? (
+              <p key={effect.index}>
+                → log: {JSON.stringify(effect.log)} <em>(would write)</em>
+              </p>
             ) : (
               <p key={effect.index}>
                 · effect {effect.index + 1} skipped: {effect.skipped}
@@ -690,6 +964,91 @@ function MiniPascalBubble({
         </div>
       )}
     </div>
+  )
+}
+
+/** An inventory gesture in the bench's words: `equip "Excalibur"`, `pick up "magic bow" (unequipped)`. */
+function describeBenchInventoryGesture(gesture: ResolvedInventoryGesture): string {
+  const items = gesture.items.map((item) => `“${item}”`).join(', ')
+  const verb = gesture.action === 'pick_up' ? 'pick up' : gesture.action
+  return `${verb} ${items}${gesture.action === 'pick_up' && gesture.equip === false ? ' (unequipped)' : ''}`
+}
+
+/** The gesture's verb and mode, in the bench's words: "wear (add to slot top)", "take off … from top". */
+function gestureVerb(gesture: ResolvedWardrobeGesture): { verb: string; suffix: string } {
+  switch (gesture.action) {
+    case 'wear':
+      return {
+        verb: 'wear',
+        suffix:
+          gesture.mode && gesture.mode !== 'wear'
+            ? ` (${gesture.mode.replace(/_/g, ' ')}${gesture.slot ? ` ${gesture.slot}` : ''})`
+            : '',
+      }
+    case 'take_off':
+      return { verb: 'take off', suffix: gesture.slot ? ` from ${gesture.slot}` : '' }
+    case 'clear_slot':
+      return { verb: 'clear', suffix: '' }
+  }
+}
+
+/**
+ * A dry-run gesture, in the bench's words. "Would attempt" when nobody sits in
+ * the chair — the bench cannot know a garment exists without a wardrobe to
+ * look in. With a character in the chair the server resolves each reference
+ * through the applier's own lookup, so each item says what it would have
+ * found ("would apply") or why it would be skipped ("would skip").
+ */
+function describeBenchGesture(gesture: ResolvedWardrobeGesture): string {
+  const items = gesture.items.map((item) => `“${item}”`).join(', ')
+  const { verb, suffix } = gestureVerb(gesture)
+  if (gesture.action === 'clear_slot') return `clear ${gesture.slot ?? 'a slot'}`
+  return `${verb} ${items}${suffix}`
+}
+
+function BenchWardrobeLines({
+  gesture,
+  resolution,
+  chairName,
+}: Readonly<{ gesture: ResolvedWardrobeGesture; resolution: PreviewWardrobeResolution | undefined; chairName: string | null }>) {
+  if (!resolution || gesture.action === 'clear_slot') {
+    return (
+      <p>
+        → wardrobe: {describeBenchGesture(gesture)} <em>(would attempt)</em>
+      </p>
+    )
+  }
+  const { verb, suffix } = gestureVerb(gesture)
+  return (
+    <>
+      {resolution.items.map((entry, i) => {
+        if (entry.found) {
+          const origin = wardrobeOriginLabel(entry.found.origin)
+          const slots = formatSlotLabels(entry.found.types)
+          const detail = [slots, origin].filter(Boolean).join(' · ')
+          return (
+            <p key={`${entry.ref}-${i}`}>
+              → wardrobe: {verb}{' '}
+              <WardrobeItemThumbnail
+                fileId={entry.found.imageFileId}
+                size={28}
+                className="inline-block align-middle mr-1"
+              />
+              {entry.found.title}
+              {detail ? ` (${detail})` : ''}
+              {suffix} <em>(would apply)</em>
+            </p>
+          )
+        }
+        const why =
+          entry.reason === 'not_found' ? `not in ${chairName ? `${chairName}’s` : 'the chair’s'} reach` : entry.message
+        return (
+          <p key={`${entry.ref}-${i}`}>
+            → wardrobe: {verb} “{entry.ref}”{suffix} — {why} <em>(would skip)</em>
+          </p>
+        )
+      })}
+    </>
   )
 }
 

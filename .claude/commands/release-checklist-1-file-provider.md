@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 1 of 13):** Unless we're implementing an interface or an instance of a generic provider, this app should **never directly access the filesystem** — it should go through our generic file provider.
+**Goal (checklist item 1 of 14):** Unless we're implementing an interface or an instance of a generic provider, this app should **never directly access the filesystem** — it should go through our generic file provider.
 
 ## Scope
 

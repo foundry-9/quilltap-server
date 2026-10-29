@@ -1045,7 +1045,7 @@ async function dbCommand(args) {
     } else if (countTable) {
       const row = db.prepare(`SELECT count(*) as count FROM "${countTable}"`).get();
       if (asJson) console.log(JSON.stringify({ table: countTable, count: row.count }, null, 2));
-      else console.log(row.count);
+      else console.log(String(row.count));
     } else if (sql) {
       const stmt = db.prepare(sql);
       if (stmt.reader) {

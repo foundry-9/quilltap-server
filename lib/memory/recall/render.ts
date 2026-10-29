@@ -19,7 +19,7 @@ import { estimateTokens } from '@/lib/tokens/token-counter'
 import { formatMemoryAge } from '../time'
 import { salience } from '../scoring'
 import { CONTEXT_VALUES, SCOPE_VALUES, TEMPORAL_VALUES } from './tags'
-import type { RecallCandidate, RenderedLine } from './types'
+import { innerCircleTrimOrder, type InnerCircleEntry, type RecallCandidate, type RenderedLine } from './types'
 
 /** Debug info for one rendered memory — never shown to a model. */
 export interface DebugMemoryInfo {
@@ -129,7 +129,8 @@ function ageTag(memory: Memory, now: Date): string {
 /**
  * The frozen archive — `## Memory Anchors`. Byte-stable within a compaction
  * generation: input order verbatim (the archive arrives id-sorted), summaries
- * only, and nothing that moves with the clock or the query.
+ * only — a keystone excepted, which always renders in full — and nothing that
+ * moves with the clock or the query.
  */
 export function renderArchive(
   memories: readonly Memory[],
@@ -143,7 +144,9 @@ export function renderArchive(
   let tokens = estimateTokens(`${header}\n`, provider)
   const section = emptySection<DebugMemoryInfo>()
   for (const memory of memories) {
-    const body = memory.summary?.trim() || memory.content?.trim() || ''
+    const body = memory.keystone
+      ? memory.content?.trim() || memory.summary?.trim() || ''
+      : memory.summary?.trim() || memory.content?.trim() || ''
     if (!body) continue
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
     const line = `- ${prefix}${body}${formatDigestProvenance(memory)}${formatKeywordsTag(memory.keywords)}`
@@ -159,10 +162,55 @@ export function renderArchive(
 }
 
 /**
+ * The inner circle — `## Those Closest to You` (inner-circle-recall.md B3).
+ * Full text, because these are the lines a character must not get wrong about
+ * the people nearest them; byte-stable within a compaction generation like the
+ * anchors: circle order verbatim and no age tags. Lines past `maxTokens` are
+ * cut in {@link innerCircleTrimOrder} — loosest tier first — and the rest keep
+ * circle order.
+ */
+export function renderInnerCircle(
+  entries: readonly InnerCircleEntry[],
+  maxTokens: number,
+  provider: Provider | undefined,
+  subject: MemorySubjectContext,
+): RenderedSection {
+  if (entries.length === 0) return emptySection()
+  const header = '## Those Closest to You'
+  const headerTokens = estimateTokens(`${header}\n`, provider)
+  const built = entries.flatMap(entry => {
+    const memory = entry.memory
+    const body = memory.content?.trim() || memory.summary?.trim() || ''
+    if (!body) return []
+    const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
+    const line = `- ${prefix}${body}${formatDigestProvenance(memory)}${formatKeywordsTag(memory.keywords)}`
+    return [{ ...entry, body, line, tokens: estimateTokens(`${line}\n`, provider) }]
+  })
+  let tokens = headerTokens
+  const kept = new Set<(typeof built)[number]>()
+  for (const candidate of innerCircleTrimOrder(built)) {
+    if (tokens + candidate.tokens > maxTokens) break
+    kept.add(candidate)
+    tokens += candidate.tokens
+  }
+  if (kept.size === 0) return emptySection()
+  const section = emptySection<DebugMemoryInfo>()
+  const parts: string[] = [header]
+  for (const entry of built) {
+    if (!kept.has(entry)) continue
+    parts.push(entry.line)
+    section.lines.push({ memoryId: entry.memory.id, line: entry.line, body: entry.body })
+    section.debugMemories.push({ memoryId: entry.memory.id, summary: entry.memory.summary, importance: entry.memory.importance, score: 0, salience: 0 })
+  }
+  return { ...section, content: parts.join('\n'), tokenCount: tokens, memoriesUsed: section.lines.length }
+}
+
+/**
  * The per-turn head — `Most relevant memories for this turn:`. Ranked by the
  * post-adjustment blend when a recall context drove the search, else by
  * salience with relevance breaking near-ties; capped by entries and tokens.
- * Every line is dated: the age label, and any narrative time.
+ * Every line is dated: the age label, and any narrative time. Summaries, but a
+ * keystone in full.
  */
 export function renderHead(
   candidates: readonly RecallCandidate[],
@@ -193,7 +241,9 @@ export function renderHead(
   const section = emptySection<DebugMemoryInfo>()
   const now = new Date(options.nowMs ?? Date.now())
   for (const { memory, score, salience, recallAdjustment } of ranked) {
-    const body = memory.summary?.trim() || memory.content?.trim() || ''
+    const body = memory.keystone
+      ? memory.content?.trim() || memory.summary?.trim() || ''
+      : memory.summary?.trim() || memory.content?.trim() || ''
     if (!body) continue
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
     const line = `${ageTag(memory, now)} ${prefix}${body}${formatDigestProvenance(memory)}${formatKeywordsTag(memory.keywords)}`

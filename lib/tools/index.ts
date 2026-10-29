@@ -238,6 +238,19 @@ export {
   type RunCustomToolContext,
 } from './handlers/run-custom-handler';
 
+// Edit Custom Tool (Pascal's table — save or validate a Tools/*.tool.json)
+export {
+  editCustomToolToolDefinition,
+  validateEditCustomToolInput,
+  type EditCustomToolInput,
+  type EditCustomToolOutput,
+} from './edit-custom-tool-tool';
+
+export {
+  executeEditCustomTool,
+  formatEditCustomToolResults,
+} from './handlers/edit-custom-tool-handler';
+
 // Whisper Tool (Private Messages in Multi-Character Chats)
 export {
   whisperToolDefinition,
@@ -400,6 +413,61 @@ export {
   formatWardrobeTakeOffResults,
   type WardrobeTakeOffToolContext,
 } from './handlers/wardrobe-take-off-handler';
+
+export {
+  wardrobeRollbackToolDefinition,
+  validateWardrobeRollbackInput,
+  type WardrobeRollbackToolInput,
+  type WardrobeRollbackToolOutput,
+} from './wardrobe-rollback-tool';
+
+export {
+  executeWardrobeRollbackTool,
+  formatWardrobeRollbackResults,
+  type WardrobeRollbackToolContext,
+} from './handlers/wardrobe-rollback-handler';
+
+export {
+  wardrobeHistoryToolDefinition,
+  validateWardrobeHistoryInput,
+  type WardrobeHistoryToolInput,
+  type WardrobeHistoryToolOutput,
+} from './wardrobe-history-tool';
+
+export {
+  executeWardrobeHistoryTool,
+  formatWardrobeHistoryResults,
+  type WardrobeHistoryToolContext,
+} from './handlers/wardrobe-history-handler';
+
+// The Log — entries written by characters and custom tools
+export {
+  logCreateEntryToolDefinition,
+  logCreateEntryToolInputSchema,
+  validateLogCreateEntryInput,
+  type LogCreateEntryToolInput,
+  type LogCreateEntryToolOutput,
+} from './log-create-entry-tool';
+export {
+  logGrepToolDefinition,
+  logGrepToolInputSchema,
+  validateLogGrepInput,
+  type LogGrepToolInput,
+} from './log-grep-tool';
+export {
+  logReadToolDefinition,
+  logReadToolInputSchema,
+  validateLogReadInput,
+  type LogReadToolInput,
+} from './log-read-tool';
+export {
+  executeLogCreateEntryTool,
+  executeLogGrepTool,
+  executeLogReadTool,
+  type LogToolContext,
+  type LogQueryToolOutput,
+  type LogEntryView,
+} from './handlers/log-handler';
 
 // Scriptorium Tools (Conversation Rendering + Annotations)
 export {
@@ -571,3 +639,21 @@ export {
   formatTerminalListResults,
   TerminalToolError,
 } from './handlers/terminal-handler';
+
+// Inventory tools — the objects a character carries (gated by canManageInventory)
+export {
+  INVENTORY_TOOL_DEFINITIONS,
+  inventoryToolFlags,
+  type InventoryToolFlags,
+} from './inventory-tool-flags';
+export { inventoryListToolDefinition, validateInventoryListInput } from './inventory-list-tool';
+export { inventoryReadToolDefinition, validateInventoryReadInput } from './inventory-read-tool';
+export { inventoryEquipToolDefinition, validateInventoryEquipInput } from './inventory-equip-tool';
+export { inventoryUnequipToolDefinition, validateInventoryUnequipInput } from './inventory-unequip-tool';
+export { inventoryPickUpToolDefinition, validateInventoryPickUpInput } from './inventory-pick-up-tool';
+export { inventoryCreateToolDefinition, validateInventoryCreateInput } from './inventory-create-tool';
+export { inventoryUpdateToolDefinition, validateInventoryUpdateInput } from './inventory-update-tool';
+export { inventoryArchiveToolDefinition, validateInventoryArchiveInput } from './inventory-archive-tool';
+export { inventoryGiveToolDefinition, validateInventoryGiveInput } from './inventory-give-tool';
+export { INVENTORY_TOOL_TABLE, INVENTORY_TOOL_NAMES } from './handlers/inventory-tool-table';
+export type { InventoryToolContext, InventoryObjectSummary } from './handlers/inventory-handler-shared';

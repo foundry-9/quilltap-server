@@ -50,6 +50,8 @@
   --estate-gold: hsl(43 75% 55%);
   --estate-gold-light: hsl(43 65% 70%);
   --estate-gold-dark: hsl(43 70% 40%);
+  /* Bronze for gold-family TEXT on the light parchment ground (4.5:1+). */
+  --estate-bronze: hsl(43 70% 31%);
   /* Select dropdown chevron — burnished gold to match the estate accent, deep
      enough to read on the cream inputs. Data URIs can't take a CSS var, so the
      stroke mirrors --estate-gold-dark hsl(43 70% 40%) ≈ #AD851F. */
@@ -218,7 +220,7 @@
   --qt-response-status-gathering-fg: hsl(43 75% 55%);
   --qt-response-status-building-fg: hsl(43 70% 42%);
   --qt-response-status-sending-fg: hsl(210 70% 50%);
-  --qt-response-status-streaming-fg: hsl(142 65% 38%);
+  --qt-response-status-streaming-fg: hsl(142 65% 27%);
   --qt-response-status-tool-fg: hsl(43 75% 55%);
 
   --qt-participant-card-active-border: var(--estate-gold);
@@ -305,7 +307,7 @@
   --qt-queue-badge-memory-fg: hsl(43 75% 55%);
   --qt-queue-badge-embedding-bg: hsl(280 30% 28%);
   --qt-queue-badge-embedding-fg: hsl(43 75% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 65% 38%);
+  --qt-queue-badge-summary-bg: hsl(142 65% 32%);
   --qt-queue-badge-story-bg: hsl(20 25% 22%);
   --qt-queue-badge-story-fg: hsl(43 50% 72%);
   --qt-queue-badge-idle-opacity: 0.4;
@@ -328,7 +330,7 @@
   /* ==========================================================================
      LINK VARIABLES
      ========================================================================== */
-  --qt-link-color: var(--estate-gold-dark);
+  --qt-link-color: var(--estate-bronze);
   --qt-link-hover-color: var(--estate-gold);
   --qt-link-decoration: underline;
 
@@ -372,7 +374,7 @@
 
   --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
 
-  --qt-tab-active-fg: var(--estate-gold-dark);
+  --qt-tab-active-fg: var(--estate-bronze);
 
   --qt-tab-group-gap: 0.25rem;
 
@@ -495,9 +497,11 @@
   --qt-alert-warning-border: hsl(43 75% 55% / 0.5);
 
   --qt-alert-error-bg: hsl(0 60% 48% / 0.2);
+  --qt-alert-error-fg: hsl(0 65% 70%);
   --qt-alert-error-border: hsl(0 60% 48% / 0.5);
 
   --qt-alert-info-bg: hsl(210 70% 50% / 0.2);
+  --qt-alert-info-fg: hsl(210 70% 72%);
   --qt-alert-info-border: hsl(210 70% 50% / 0.5);
 
   /* Entity badge tokens — brighter for dark backgrounds */
@@ -540,7 +544,7 @@
   --qt-queue-badge-memory-fg: hsl(43 80% 62%);
   --qt-queue-badge-embedding-bg: hsl(280 30% 32%);
   --qt-queue-badge-embedding-fg: hsl(43 80% 62%);
-  --qt-queue-badge-summary-bg: hsl(142 60% 42%);
+  --qt-queue-badge-summary-bg: hsl(142 60% 33%);
   --qt-queue-badge-story-bg: hsl(20 22% 25%);
   --qt-queue-badge-story-fg: hsl(43 60% 68%);
 
@@ -567,6 +571,7 @@
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--estate-gold);
+  --qt-tab-active-fg: var(--estate-gold);
   --qt-link-hover-color: var(--estate-gold-light);
 
   /* Auth page — deeper brown gradient */
@@ -685,7 +690,9 @@
   letter-spacing: 0.04em;
   text-transform: capitalize;
   font-weight: 700;
-  color: var(--estate-gold-dark);
+  /* Bronze, not gold-dark: gold-dark is 3.2:1 on cream, short of 4.5:1 for the
+     small card-title headings (WCAG 1.4.3). Dark mode keeps its gold below. */
+  color: var(--estate-bronze);
 }
 
 [data-theme="great-estate"].dark h1,
@@ -707,6 +714,37 @@
 
 [data-theme="great-estate"] [data-role="user"] {
   border-right: 3px solid var(--estate-brown-mid);
+}
+
+/* --- Light-mode left sidebar: the panel is estate brown in both modes, so
+   its items need cream ink rather than the page's dark-brown foreground --- */
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar {
+  --qt-sidebar-item-hover-bg: hsl(38 25% 95% / 0.1);
+  --qt-sidebar-item-active-bg: hsl(43 75% 55% / 0.18);
+  color: var(--estate-cream);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar :is(
+  .qt-left-sidebar-item-icon,
+  .qt-left-sidebar-item-label,
+  .qt-collapsed-nav-button,
+  .qt-left-sidebar-toggle:hover,
+  .qt-left-sidebar-profile-name
+) {
+  color: var(--estate-cream);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar :is(
+  .qt-left-sidebar-toggle,
+  .qt-left-sidebar-view-all,
+  .qt-left-sidebar-profile-email
+) {
+  color: hsl(38 20% 78%);
+}
+
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar .qt-left-sidebar-item-active,
+[data-theme="great-estate"]:not(.dark) .qt-left-sidebar .qt-left-sidebar-item-active :is(.qt-left-sidebar-item-icon, .qt-left-sidebar-item-label) {
+  color: var(--estate-gold-light);
 }
 
 /* --- Sidebar active item: gold left border --- */
@@ -747,6 +785,14 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-size: 0.8125rem;
+}
+
+/* Buttons that carry prose, not a command: a Pascal outcome is a sentence,
+   and set in tracked capitals it reads as shouting. */
+[data-theme="great-estate"] .qt-intervention-row {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: inherit;
 }
 
 /* --- Input styling --- */

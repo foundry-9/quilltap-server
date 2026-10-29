@@ -7,6 +7,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { inventoryToolFlags, pickInventoryToolFlags, type InventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import {
   shouldUseTextBlockTools,
   resolveToolMode,
@@ -79,7 +80,7 @@ export function checkShouldUseTextBlockTools(
 /**
  * Extended tool options for text-block mode (supports all tools)
  */
-export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
+export interface TextBlockEnabledToolOptions extends EnabledToolOptions, InventoryToolFlags {
   whisper: boolean
   state: boolean
   rng: boolean
@@ -92,6 +93,8 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   wardrobeRead: boolean
   wardrobeWear: boolean
   wardrobeTakeOff: boolean
+  wardrobeRollback: boolean
+  wardrobeHistory: boolean
   wardrobeCreate: boolean
   wardrobeUpdate: boolean
   wardrobeArchive: boolean
@@ -108,6 +111,7 @@ export function determineTextBlockToolOptions(
   helpToolsEnabled?: boolean,
   canDressThemselves?: boolean,
   canCreateOutfits?: boolean,
+  canManageInventory?: boolean,
 ): TextBlockEnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
@@ -125,9 +129,12 @@ export function determineTextBlockToolOptions(
     wardrobeRead: canDressThemselves !== false,
     wardrobeWear: canDressThemselves !== false,
     wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeRollback: canDressThemselves !== false,
+    wardrobeHistory: canDressThemselves !== false,
     wardrobeCreate: canCreateOutfits !== false,
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
+    ...inventoryToolFlags(canManageInventory),
   }
 }
 
@@ -153,9 +160,12 @@ export function buildTextBlockSystemInstructions(
     wardrobeRead: enabledOptions.wardrobeRead,
     wardrobeWear: enabledOptions.wardrobeWear,
     wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeRollback: enabledOptions.wardrobeRollback,
+    wardrobeHistory: enabledOptions.wardrobeHistory,
     wardrobeCreate: enabledOptions.wardrobeCreate,
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,
+    ...pickInventoryToolFlags(enabledOptions),
   }
   return buildTextBlockInstructions(options)
 }
@@ -241,9 +251,12 @@ export function buildSimpleJsonSystemInstructions(
     wardrobeRead: enabledOptions.wardrobeRead,
     wardrobeWear: enabledOptions.wardrobeWear,
     wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeRollback: enabledOptions.wardrobeRollback,
+    wardrobeHistory: enabledOptions.wardrobeHistory,
     wardrobeCreate: enabledOptions.wardrobeCreate,
     wardrobeUpdate: enabledOptions.wardrobeUpdate,
     wardrobeArchive: enabledOptions.wardrobeArchive,
+    ...pickInventoryToolFlags(enabledOptions),
   }
   return buildSimpleJsonToolInstructions(options)
 }

@@ -17,11 +17,17 @@ jest.mock('@/lib/mount-index/general-state', () => ({
   writeGeneralState: jest.fn(),
 }))
 
+jest.mock('@/lib/pascal/wardrobe-effects', () => ({
+  applyWardrobeEffects: jest.fn(),
+}))
+
 import { getRepositories } from '@/lib/repositories/factory'
 import { writeGeneralState } from '@/lib/mount-index/general-state'
+import { applyWardrobeEffects } from '@/lib/pascal/wardrobe-effects'
 
 const mockGetRepositories = getRepositories as jest.Mock
 const mockWriteGeneralState = writeGeneralState as jest.Mock
+const mockApplyWardrobeEffects = applyWardrobeEffects as jest.Mock
 
 function repos() {
   return {
@@ -38,6 +44,7 @@ beforeEach(() => {
   jest.clearAllMocks()
   db = repos()
   mockGetRepositories.mockReturnValue(db)
+  mockApplyWardrobeEffects.mockResolvedValue([])
 })
 
 function cascade(overrides: Partial<StateCascadeResult> = {}): StateCascadeResult {
@@ -66,6 +73,7 @@ function apply(
   overrides: Partial<Parameters<typeof applyCustomToolEffects>[0]> = {},
 ) {
   return applyCustomToolEffects({
+    userId: 'user-1',
     chatId: 'chat-1',
     toolName: 'unlock',
     effects,
@@ -241,5 +249,88 @@ describe('fail-soft behaviour', () => {
     expect(db.chats.update).not.toHaveBeenCalled()
     expect(db.characters.update).not.toHaveBeenCalled()
     expect(mockWriteGeneralState).not.toHaveBeenCalled()
+  })
+})
+
+describe('wardrobe gestures beside the writes', () => {
+  const wear = (index: number, items: string[]): ResolvedEffect => ({ index, wardrobe: { action: 'wear', items } })
+
+  it('hands the gestures to the wardrobe applier after the writes commit, with the turn set', async () => {
+    const order: string[] = []
+    db.chats.update.mockImplementation(async () => order.push('chat write'))
+    mockApplyWardrobeEffects.mockImplementation(async () => {
+      order.push('wardrobe')
+      return []
+    })
+    const pending = new Set<string>()
+
+    await apply([wear(0, ['Cloak']), stateEffect(1, ['count'], 1)], { pendingWardrobeAnnouncements: pending })
+
+    expect(order).toEqual(['chat write', 'wardrobe'])
+    expect(mockApplyWardrobeEffects).toHaveBeenCalledWith({
+      userId: 'user-1',
+      chatId: 'chat-1',
+      toolName: 'unlock',
+      characterId: 'char-1',
+      gestures: [{ index: 0, wardrobe: { action: 'wear', items: ['Cloak'] } }],
+      pendingWardrobeAnnouncements: pending,
+    })
+  })
+
+  it('returns writes and wardrobe changes merged back into effect order', async () => {
+    mockApplyWardrobeEffects.mockResolvedValue([
+      { index: 0, applied: { target: 'wardrobe.wear', previous: {}, next: { item: { id: 'a', title: 'A' } } } },
+      { index: 0, applied: { target: 'wardrobe.wear', previous: {}, next: { item: { id: 'b', title: 'B' } } } },
+      { index: 2, applied: { target: 'wardrobe.clear_slot', previous: {}, next: { slot: 'hair' } } },
+    ])
+
+    const applied = await apply([wear(0, ['A', 'B']), stateEffect(1, ['count'], 1), wear(2, []), metadataEffect(3, 'k', 2)])
+
+    expect(applied.map((a) => a.target)).toEqual([
+      'wardrobe.wear',
+      'wardrobe.wear',
+      'state.count',
+      'wardrobe.clear_slot',
+      'metadata.k',
+    ])
+  })
+
+  it('never calls the wardrobe applier for a run with no gestures', async () => {
+    await apply([stateEffect(0, ['count'], 1)])
+    expect(mockApplyWardrobeEffects).not.toHaveBeenCalled()
+  })
+})
+
+describe('log effects', () => {
+  beforeEach(() => {
+    ;(db as unknown as { logEntries: { create: jest.Mock } }).logEntries = {
+      create: jest.fn(async (data: Record<string, unknown>) => ({ id: 'entry-1', ...data })),
+    }
+  })
+
+  const logs = () => (db as unknown as { logEntries: { create: jest.Mock } }).logEntries
+
+  it('writes each line against the chat and rolling character, in effect order after the writes', async () => {
+    const applied = await apply([
+      { index: 0, log: 'Picked the lock' },
+      stateEffect(1, ['opened'], true),
+    ])
+
+    expect(logs().create).toHaveBeenCalledWith({ message: 'Picked the lock', chatId: 'chat-1', characterId: 'char-1' })
+    expect(applied).toEqual([
+      { target: 'log', next: { id: 'entry-1', message: 'Picked the lock' } },
+      { target: 'state.opened', next: true, tier: 'chat' },
+    ])
+  })
+
+  it('writes a line for a run nobody made, with no author', async () => {
+    await apply([{ index: 0, log: 'The hour struck' }], { characterId: null })
+    expect(logs().create).toHaveBeenCalledWith(expect.objectContaining({ characterId: null }))
+  })
+
+  it('drops a failed line from the record without sinking the run', async () => {
+    logs().create.mockRejectedValueOnce(new Error('degraded'))
+    const applied = await apply([{ index: 0, log: 'Lost' }, stateEffect(1, ['kept'], 1)])
+    expect(applied).toEqual([{ target: 'state.kept', next: 1, tier: 'chat' }])
   })
 })

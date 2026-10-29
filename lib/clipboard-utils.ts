@@ -108,3 +108,26 @@ export async function copyImageToClipboard(src: string): Promise<boolean> {
 
   throw new Error('No clipboard write method available');
 }
+
+/**
+ * Copy a PNG that is still being made to the clipboard.
+ *
+ * The blob is handed to `ClipboardItem` as a promise, so the write is claimed
+ * inside the click that asked for it — Safari refuses a clipboard write that
+ * starts after an `await`, and drawing a diagram to PNG takes several. Falls
+ * back to the Electron bridge, as {@link copyImageToClipboard} does, when the
+ * standard API refuses. A rejected `png` rejects this with the same error.
+ */
+export async function copyPngBlobToClipboard(png: Promise<Blob>): Promise<void> {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    return;
+  } catch (err) {
+    // If the picture itself failed, say so rather than blaming the clipboard.
+    await png;
+    if (!hasElectronClipboard()) throw err;
+  }
+
+  const ok = await window.quilltap!.copyImageToClipboard(await blobToDataUrl(await png));
+  if (!ok) throw new Error('The Electron clipboard refused the image');
+}

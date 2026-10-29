@@ -111,6 +111,10 @@ The rules are strongest paired with [turn skipping](turn-skipping.md), which giv
 
 By the time the third character in a round takes the floor, your message is no longer the freshest thing in the room — two replies sit on top of it, and occasionally one of them (a turn you stopped that finished anyway, say) contradicts what you narrated. So on every chained turn — the second responder onward, and any Continue or Nudge — each character is handed a brief **scene note**: your most recent message is the current state of the scene, and where any other speaker's line conflicts with what you narrated, your account is what happened. What the character *does* about it remains its own business. The note is never added on the first responder's turn (your message is already the last word there), and nothing is stored.
 
+### Everyone Reads What You Hand Round
+
+Attach a document or a photograph to your message and every character in the room receives it, whole, on their next turn after you sent it: the first to answer has it handed straight across, and each who follows has it fetched back out of the record before they speak. Length is no bar. A changelog the size of a modest novella reaches the fourth speaker exactly as it reached the first, and nobody is quietly handed the cover and told it was the book. Each character is shown a given attachment once; after they have answered, it is theirs to remember rather than to be re-read every turn. A character who joins later and has not been given the chat's history does not see uploads from before their arrival. Should the whole of it outgrow a model's appetite, the usual context trimming applies to it as to any long message.
+
 ### Control Modes
 
 Each character can be:
@@ -322,6 +326,15 @@ The first remark you enter into a paused room is answered with a quiet notice to
 the silence be mistaken for a message that never arrived. Later remarks pass without comment, the
 point having been made.
 
+### Storyteller Mode
+
+The control beside Pause has a third position, **Storyteller**. In it, every post of yours opens a
+*round*: each character is asked in private whether they wish to answer and what they mean to do —
+just speak, look something up, act on the world, or (rarely, and with a warning) delete something
+— and you choose who goes ahead, in rotation order or all at once. Nothing is done that you have not
+first seen proposed, and the floor comes back to you when the round is over. The full tour is on
+[Storyteller Mode](storyteller-mode.md).
+
 The Pause button is also the establishment's own safety catch. It is pressed for you when a turn
 fails outright, when an all-LLM room reaches one of the thresholds above, and — briefly — when the
 Courier is holding a conversation while it waits for a reply you must paste in by hand. In every
@@ -367,6 +380,12 @@ A whisper is a message visible only to its sender and its intended recipient. Al
 **For AI Characters:** Characters with native tool-calling abilities will discover the `whisper` tool at their disposal. They may use it to send private asides, secret warnings, or clandestine plans to a specific character by name or alias.
 
 **For You, the Distinguished Reader:** When participating in a chat with three or more characters, you will find a small speech-bubble icon beside each character in the participant sidebar. Clicking it opens a whisper dialog—a discreet little window where you may compose your private communique.
+
+### Who Answers a Whisper
+
+A whisper is an aside, not a round of conversation. The character you addressed answers you **once**, and then the floor returns to you; the rest of the company does not take it as their cue to start talking, which would be rather like the whole table chiming in on a remark made behind a fan.
+
+Should you whisper while the room is already in full flow, with characters taking their turns one after another, your note waits politely until the present round is done, and only then does its recipient answer it. The house will not have two speakers at once on your account.
 
 ### Visibility
 
@@ -512,6 +531,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Turn Manager](chat-turn-manager.md) — Detailed turn management documentation
 - [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
+- [Storyteller Mode](storyteller-mode.md) — Each post asks the company who wishes to answer
 - [Chat Sidebar](chat-participants.md) — Full sidebar documentation, including the Chat / Visibility / Organize / Edit Content drawers
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
 - [Characters](characters.md) — Creating and managing characters

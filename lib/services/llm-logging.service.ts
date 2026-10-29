@@ -7,6 +7,7 @@
  * @module services/llm-logging
  */
 
+import { getStorytellerRoundId } from '@/lib/storyteller/round-context';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getAutonomousRunId } from '@/lib/background-jobs/autonomous-run-context';
@@ -221,6 +222,9 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       // Stamped from the ambient autonomous-run context (null outside an
       // autonomous turn). Lets the room budget sum spend by run id.
       autonomousRunId: getAutonomousRunId(),
+      // Stamped from the ambient storyteller round (null outside a round), so
+      // the inspector can group a round's bids and speaking turns.
+      storytellerRoundId: getStorytellerRoundId(),
       provider: params.provider,
       modelName: params.modelName,
       connectionProfileId: params.connectionProfileId ?? null,

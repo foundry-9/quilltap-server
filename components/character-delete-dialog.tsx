@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 interface ExclusiveChat {
   id: string
@@ -41,6 +42,10 @@ export function CharacterDeleteDialog({
 
   useEscapeKey(onClose)
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+
   useEffect(() => {
     const fetchPreview = async () => {
       try {
@@ -77,8 +82,16 @@ export function CharacterDeleteDialog({
         type="button"
       />
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[101] pointer-events-auto">
-        <div className="qt-dialog max-w-lg p-6">
-          <h2 className="qt-dialog-title text-xl mb-4">
+        <div
+          ref={dialogRef}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog max-w-lg p-6"
+        >
+          <h2 id={titleId} className="qt-dialog-title text-xl mb-4">
             Delete Character
           </h2>
 

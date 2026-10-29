@@ -59,6 +59,7 @@ import { convertBufferToPlainText } from '@/lib/mount-index/converters';
 import { writeDatabaseDocument, databaseDocumentExists } from '@/lib/mount-index/database-store';
 import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
 import { destExists, deleteAtDest, writeFsFileBytes } from '@/lib/mount-index/file-ops';
+import { reindexSingleFile } from '@/lib/doc-edit/reindex-file';
 
 const MOUNT_ID = 'mount-1';
 const transcodeMock = transcodeToWebP as jest.Mock;
@@ -69,6 +70,7 @@ const uniquePathMock = resolveUniqueRelativePath as jest.Mock;
 const destExistsMock = destExists as jest.Mock;
 const deleteAtDestMock = deleteAtDest as jest.Mock;
 const writeFsMock = writeFsFileBytes as jest.Mock;
+const reindexMock = reindexSingleFile as jest.Mock;
 
 let repos: any;
 
@@ -219,6 +221,81 @@ describe('storeMountFile — binary blobs', () => {
       expect.objectContaining({ extractionStatus: 'converted', extractedText: 'extracted pdf text' }),
       'link-1'
     );
+  });
+
+  it('extracts an uploaded .md blob\'s own text and indexes it (bug 260)', async () => {
+    const md = '# Changelog\n\n- drag ordering';
+    transcodeMock.mockResolvedValue({
+      data: Buffer.from(md, 'utf-8'), storedMimeType: 'text/markdown', sizeBytes: md.length, sha256: 'sha-md',
+    });
+    await storeMountFile({
+      mountPointId: MOUNT_ID,
+      relativePath: 'CHANGELOG.md',
+      data: Buffer.from(md, 'utf-8'),
+      originalMimeType: 'text/markdown',
+      treatNativeTextAsDocument: false,
+      collisionStrategy: 'overwrite',
+    });
+    expect(convertMock).not.toHaveBeenCalled();
+    expect(repos.docMountBlobs.updateExtractedText).toHaveBeenCalledWith(
+      'blob-1',
+      expect.objectContaining({ extractionStatus: 'converted', extractedText: md }),
+      'link-1'
+    );
+    expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+      'link-1',
+      expect.objectContaining({ conversionStatus: 'converted', plainTextLength: md.length })
+    );
+    expect(reindexMock).toHaveBeenCalledWith(MOUNT_ID, 'CHANGELOG.md', '');
+  });
+
+  it('extractText=false leaves an uploaded .md blob unextracted', async () => {
+    transcodeMock.mockResolvedValue({
+      data: Buffer.from('x'), storedMimeType: 'text/markdown', sizeBytes: 1, sha256: 'sha-x',
+    });
+    await storeMountFile({
+      mountPointId: MOUNT_ID,
+      relativePath: 'a.md',
+      data: Buffer.from('x'),
+      treatNativeTextAsDocument: false,
+      collisionStrategy: 'overwrite',
+      extractText: false,
+    });
+    expect(repos.docMountBlobs.updateExtractedText).not.toHaveBeenCalled();
+    expect(reindexMock).not.toHaveBeenCalled();
+  });
+
+  it('never extracts text from an image', async () => {
+    transcodeMock.mockResolvedValue({
+      data: Buffer.from('img'), storedMimeType: 'image/webp', sizeBytes: 3, sha256: 'sha-img',
+    });
+    await storeMountFile({
+      mountPointId: MOUNT_ID,
+      relativePath: 'photo.webp',
+      data: Buffer.from('img'),
+      originalMimeType: 'image/webp',
+      collisionStrategy: 'overwrite',
+    });
+    expect(repos.docMountBlobs.updateExtractedText).not.toHaveBeenCalled();
+  });
+
+  it('records an empty upload as failed rather than converted', async () => {
+    transcodeMock.mockResolvedValue({
+      data: Buffer.from('  \n'), storedMimeType: 'text/plain', sizeBytes: 3, sha256: 'sha-empty',
+    });
+    await storeMountFile({
+      mountPointId: MOUNT_ID,
+      relativePath: 'empty.txt',
+      data: Buffer.from('  \n'),
+      treatNativeTextAsDocument: false,
+      collisionStrategy: 'overwrite',
+    });
+    expect(repos.docMountBlobs.updateExtractedText).toHaveBeenCalledWith(
+      'blob-1',
+      expect.objectContaining({ extractionStatus: 'failed', extractedText: null }),
+      'link-1'
+    );
+    expect(reindexMock).not.toHaveBeenCalled();
   });
 
   it('uses a unique suffix path under the unique-suffix strategy', async () => {

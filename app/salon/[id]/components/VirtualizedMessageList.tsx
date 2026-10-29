@@ -109,6 +109,8 @@ interface VirtualizedMessageListProps {
   } | null
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** Character id → name, for naming a Staff bar's `customAnnouncer` */
+  announcerNames?: Record<string, string>
   /** The operator's own userId, for resolving a self-targeted whisper label to "you" (Bug 30). */
   currentUserId?: string | null
   /** Set of participant IDs controlled by the user */
@@ -127,6 +129,11 @@ interface VirtualizedMessageListProps {
   thinkingCollapsedByDefault?: boolean
   /** Live cumulative reasoning ("thinking") for the in-progress streaming message. DISPLAY ONLY. */
   streamingReasoning?: string
+  /**
+   * Storyteller "all at once": one live bubble per concurrent speaker, beside
+   * the ordinary streaming slot.
+   */
+  concurrentStreams?: Array<{ participantId: string; content: string; character: CharacterData | undefined }>
   /** Whether to show the floating jump-to-bottom button (reader has scrolled up). */
   showScrollToBottom?: boolean
   /** Click handler for the jump-to-bottom button. */
@@ -178,6 +185,7 @@ export function VirtualizedMessageList({
   getFirstCharacter,
   getMessageAvatar,
   participantNames,
+  announcerNames,
   currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
@@ -185,6 +193,7 @@ export function VirtualizedMessageList({
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
+  concurrentStreams = [],
   showScrollToBottom = false,
   onScrollToBottom,
 }: VirtualizedMessageListProps) {
@@ -240,6 +249,7 @@ export function VirtualizedMessageList({
                     members={item.members}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                     participantNames={participantNames}
+                    announcerNames={announcerNames}
                   />
                 </div>
               )
@@ -368,6 +378,7 @@ export function VirtualizedMessageList({
                   showThinking={showThinking}
                   thinkingCollapsedByDefault={thinkingCollapsedByDefault}
                   participantNames={participantNames}
+                  announcerNames={announcerNames}
                   currentUserId={currentUserId}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
@@ -406,6 +417,24 @@ export function VirtualizedMessageList({
           streamingReasoning={showThinking ? streamingReasoning : ''}
           thinkingCollapsedByDefault={thinkingCollapsedByDefault}
         />
+
+        {/* Storyteller "all at once": overlapping speech, a bubble per speaker */}
+        {concurrentStreams.map((stream) => (
+          <StreamingMessage
+            key={`concurrent-${stream.participantId}`}
+            streaming={stream.content.length > 0}
+            streamingContent={stream.content}
+            waitingForResponse={stream.content.length === 0}
+            respondingCharacter={stream.character}
+            renderingPatterns={roleplayRenderingPatterns}
+            dialogueDetection={roleplayDialogueDetection}
+            shouldShowAvatars={shouldShowAvatars()}
+            isDangerousChat={isDangerousChat}
+            streamingToolBatches={[]}
+            streamingReasoning=""
+            thinkingCollapsedByDefault={thinkingCollapsedByDefault}
+          />
+        ))}
 
         <div ref={messagesEndRef} />
       </div>

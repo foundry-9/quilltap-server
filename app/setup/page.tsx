@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useId, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
 
 export default function SetupPage() {
+  const fieldId = useId();
   const router = useRouter();
   const [pepperState, setDbKeyState] = useState<DbKeyState>('loading');
   const [passphrase, setPassphrase] = useState('');
@@ -218,8 +219,9 @@ export default function SetupPage() {
             </p>
             <div className="space-y-3">
               <div>
-                <label className="qt-text-label block mb-1">Passphrase (optional)</label>
+                <label htmlFor={`${fieldId}-f0`} className="qt-text-label block mb-1">Passphrase (optional)</label>
                 <input
+                  id={`${fieldId}-f0`}
                   type="password"
                   value={passphrase}
                   onChange={(e) => setPassphrase(e.target.value)}
@@ -233,8 +235,9 @@ export default function SetupPage() {
               </div>
               {passphrase && (
                 <div>
-                  <label className="qt-text-label block mb-1">Confirm passphrase</label>
+                  <label htmlFor={`${fieldId}-f1`} className="qt-text-label block mb-1">Confirm passphrase</label>
                   <input
+                    id={`${fieldId}-f1`}
                     type="password"
                     value={confirmPassphrase}
                     onChange={(e) => setConfirmPassphrase(e.target.value)}
@@ -265,8 +268,9 @@ export default function SetupPage() {
             </p>
             <div className="space-y-3">
               <div>
-                <label className="qt-text-label block mb-1">Passphrase (optional)</label>
+                <label htmlFor={`${fieldId}-f2`} className="qt-text-label block mb-1">Passphrase (optional)</label>
                 <input
+                  id={`${fieldId}-f2`}
                   type="password"
                   value={passphrase}
                   onChange={(e) => setPassphrase(e.target.value)}
@@ -280,8 +284,9 @@ export default function SetupPage() {
               </div>
               {passphrase && (
                 <div>
-                  <label className="qt-text-label block mb-1">Confirm passphrase</label>
+                  <label htmlFor={`${fieldId}-f3`} className="qt-text-label block mb-1">Confirm passphrase</label>
                   <input
+                    id={`${fieldId}-f3`}
                     type="password"
                     value={confirmPassphrase}
                     onChange={(e) => setConfirmPassphrase(e.target.value)}

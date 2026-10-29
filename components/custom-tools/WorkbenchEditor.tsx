@@ -18,11 +18,12 @@
  * no second write path into stores.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import {
@@ -32,7 +33,9 @@ import {
   displayTitle,
   formatDefinitionIssues,
 } from '@/lib/pascal/custom-tool.types'
+import type { CustomToolDestinations } from '@/lib/pascal/workbench'
 import {
+  defaultWardrobeVantage,
   draftFromDefinition,
   draftIsValid,
   newDraft,
@@ -40,6 +43,7 @@ import {
   serializeDraft,
   validateDraft,
   type ToolDraft,
+  type WardrobeVantage,
 } from '@/lib/pascal/tool-draft'
 import { BuilderForm } from './BuilderForm'
 import { OutcomesSection } from './OutcomesSection'
@@ -79,6 +83,8 @@ function extractErrorMessage(err: unknown): string {
 
 export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonly<WorkbenchEditorProps>) {
   const queryClient = useQueryClient()
+  const conflictTitleId = useId()
+  const conflictDialogRef = useRef<HTMLDivElement>(null)
 
   // -- Load -----------------------------------------------------------------
 
@@ -159,6 +165,41 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
       setLoadedName(null)
     }
   }
+
+  // -- Wardrobe vantage -----------------------------------------------------
+  //
+  // Whose wardrobe the side-effects card and the proving bench look through
+  // (pascal-wardrobe-effect-picker §1). Editor state only — never on the
+  // draft, never in the file. It opens on the store the file lives in, follows
+  // the file after a Save As…, and stops following the moment the author
+  // picks one by hand. Same destinations query (and cache) the save dialog
+  // and the bench already read.
+
+  const destinationsQuery = useQuery({
+    queryKey: queryKeys.customTools.destinations(),
+    queryFn: ({ signal }) => apiFetch<CustomToolDestinations>('/api/v1/custom-tools?action=destinations', { signal }),
+  })
+  const destinations = destinationsQuery.data
+  const [vantage, setVantage] = useState<WardrobeVantage>({ kind: 'none' })
+  const [vantageChosen, setVantageChosen] = useState(false)
+  const [vantageSeed, setVantageSeed] = useState<string | null>(null)
+  const seedKey = destinations ? `loaded|${location?.mountPointId ?? ''}` : null
+  // Derive-from-state during render, latched on the seed key (the same
+  // sanctioned pattern as the content initialisation above).
+  if (seedKey !== null && seedKey !== vantageSeed) {
+    setVantageSeed(seedKey)
+    if (!vantageChosen && destinations) {
+      setVantage(defaultWardrobeVantage(location?.mountPointId ?? null, destinations))
+    }
+  }
+  const chooseVantage = (next: WardrobeVantage) => {
+    setVantage(next)
+    setVantageChosen(true)
+  }
+  const homeProjectName =
+    (location && destinations?.projects.find((p) => p.stores.some((s) => s.mountPointId === location.mountPointId))
+      ?.projectName) ??
+    null
 
   // -- Derived validation ---------------------------------------------------
 
@@ -395,6 +436,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   // -- Render ---------------------------------------------------------------
 
+  const handleConflictFocusKeyDown = useDialogFocus(conflictDialogRef, conflictContent !== null && !!location)
+
   if (source && fileQuery.isLoading) {
     return <div className="p-6 text-sm qt-text-secondary">Fetching the card from its store…</div>
   }
@@ -523,6 +566,10 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
                   issues={issues}
                   onChange={handleDraftChange}
                   disabled={saveMutation.isPending}
+                  vantage={vantage}
+                  onVantageChange={chooseVantage}
+                  destinations={destinations}
+                  homeProjectName={vantage.kind === 'character' ? homeProjectName : null}
                 />
                 <OutcomesSection
                   draft={draft}
@@ -572,7 +619,13 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
           {benchOpen && draft && editorMode === 'form' && (
             <div className="w-80 flex-shrink-0 sticky top-0">
-              <ProvingBench draft={draft} valid={formValid} onMatched={handleMatched} />
+              <ProvingBench
+                draft={draft}
+                valid={formValid}
+                onMatched={handleMatched}
+                vantage={vantage}
+                onVantageChange={chooseVantage}
+              />
             </div>
           )}
         </div>
@@ -594,9 +647,17 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
       {/* Conflict dialog */}
       {conflictContent !== null && location && (
-        <div className="qt-dialog-overlay" role="dialog" aria-modal="true">
-          <div className="qt-card qt-shadow-lg rounded-lg border w-full max-w-md p-4 space-y-3">
-            <h2 className="qt-card-title text-base">The file has moved under your hand</h2>
+        <div className="qt-dialog-overlay">
+          <div
+            ref={conflictDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={conflictTitleId}
+            tabIndex={-1}
+            onKeyDown={handleConflictFocusKeyDown}
+            className="qt-card qt-shadow-lg rounded-lg border w-full max-w-md p-4 space-y-3"
+          >
+            <h2 id={conflictTitleId} className="qt-card-title text-base">The file has moved under your hand</h2>
             <p className="text-sm">
               {location.path} was changed by someone else since you opened it. Take theirs, or press yours?
             </p>

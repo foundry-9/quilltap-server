@@ -16,14 +16,14 @@ const projectRoot = resolve(__dirname, '..', '..', '..');
 
 // Packages that should NOT be bundled - they're provided by the main app at runtime
 const EXTERNAL_PACKAGES = [
-  // Quilltap plugin packages — type-only imports stripped at build time.
-  // NOTE: @quilltap/plugin-utils is intentionally NOT external here. This
+  // NOTE: @quilltap/plugin-types and @quilltap/plugin-utils are intentionally
+  // NOT external here. plugin-utils' runtime imports plugin-types, so it must
+  // be bundled too. This
   // plugin is a thin wrapper around plugin-utils' canonical
   // OpenAICompatibleProvider, so leaving it external emitted a bare
   // `require('@quilltap/plugin-utils')` that only resolved by walking up to a
   // host node_modules — the same packaging failure that broke the externally
-  // published Mistral plugin. Bundle it like every other distributed plugin.
-  '@quilltap/plugin-types',
+  // published Mistral plugin. Bundle both like every other distributed plugin.
   // React (provided by main app)
   'react',
   'react-dom',

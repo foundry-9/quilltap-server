@@ -36,6 +36,8 @@ export const queryKeys = {
      * collection with a separate endpoint, not a filtered view of the album.
      */
     avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
+    /** Generated pictures of every wardrobe item the character can reach. */
+    wardrobeImages: (id: string) => ['characters', id, 'wardrobe-images'] as const,
   },
   chats: {
     all: ['chats'] as const,
@@ -64,6 +66,18 @@ export const queryKeys = {
      * consuming an inform all refresh it without a poll of its own.
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
+    /**
+     * Absent workspace characters named in one conversation, from
+     * `?action=absent-mentions`: the message that first names each, and their
+     * card. Drives the Salon's name chips; rides the `chats` realtime topic,
+     * since a new message is what can add one.
+     */
+    absentMentions: (id: string) => ['chats', id, 'absent-mentions'] as const,
+    /**
+     * The chat's current storyteller round (open, running, or the last closed
+     * one for the summary line), from `?action=storyteller-round`.
+     */
+    storytellerRound: (id: string) => ['chats', id, 'storytellerRound'] as const,
     /**
      * The project a chat belongs to, as the wardrobe reads it to fold the
      * project tier into a character's wardrobe. Deliberately not `detail(id)`:
@@ -171,6 +185,12 @@ export const queryKeys = {
   },
   tools: {
     all: ['tools'] as const,
+    /**
+     * Prospero's tools as one chat sees them (`?chatId=…&includeSchemas=true`):
+     * availability and parameter schemas resolved for that chat. Read by the
+     * composer's `/` command menu while it is open.
+     */
+    byChat: (chatId: string) => ['tools', 'chat', chatId] as const,
   },
   customTools: {
     all: ['custom-tools'] as const,
@@ -181,6 +201,11 @@ export const queryKeys = {
      * cached across an open.
      */
     byChat: (chatId: string) => ['custom-tools', chatId] as const,
+    /**
+     * The runs held for the operator in one chat (operator intervention).
+     * Refreshed by the `customToolInterventions` realtime topic.
+     */
+    interventions: (chatId: string) => ['custom-tools', chatId, 'interventions'] as const,
     /**
      * Pascal's Workbench: every definition in every enabled store, no
      * per-invoker shadowing. Fresh per request, same doctrine as `byChat`.
@@ -257,6 +282,8 @@ export const queryKeys = {
   photos: {
     all: ['photos'] as const,
     list: (filters?: Filters) => ['photos', 'list', filters ?? {}] as const,
+    /** The albums the `/photos` selector offers. */
+    albums: () => ['photos', 'albums'] as const,
   },
   files: {
     all: ['files'] as const,
@@ -291,6 +318,10 @@ export const queryKeys = {
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
      */
     outfit: (chatId: string) => ['wardrobe', 'outfit', chatId] as const,
+    /** Prefix of every history read for a chat — the `chats` realtime topic refetches it. */
+    histories: (chatId: string) => ['wardrobe', 'history', chatId] as const,
+    /** One character's outfit timeline in a chat (`?action=wardrobe-history`). */
+    history: (chatId: string, characterId: string) => ['wardrobe', 'history', chatId, characterId] as const,
     /**
      * One item's wear-ledger breakdown (`?action=wear-history`). Keyed by item
      * id first (the ledger's own key, so `wearHistory(id)` prefix-invalidates
@@ -309,6 +340,31 @@ export const queryKeys = {
       containerKey === undefined
         ? (['wardrobe', 'images', itemId] as const)
         : (['wardrobe', 'images', itemId, containerKey] as const),
+  },
+  /**
+   * The Inventory (Pascal the Croupier): objects in four tiers, and what each
+   * character carries per chat. `tierKey` is `encodeWardrobeContainer`'s
+   * `scope:id` (plus `|shared` for a character's whole reachable pool).
+   */
+  inventory: {
+    all: ['inventory'] as const,
+    /** Prefix of every `list(...)` key — invalidate after any object write. */
+    lists: ['inventory', 'list'] as const,
+    list: (tierKey: string, filters: { includeArchived: boolean; projectId?: string | null }) =>
+      ['inventory', 'list', tierKey, filters] as const,
+    /** Prefix of every `folders(...)` key — invalidate after folder or object writes. */
+    folderLists: ['inventory', 'folders'] as const,
+    folders: (tierKey: string) => ['inventory', 'folders', tierKey] as const,
+    /** Prefix of every `archetypes(...)` key. */
+    archetypeLists: ['inventory', 'archetypes'] as const,
+    /** The archetypes a tier can reach, for the instantiate picker. */
+    archetypes: (tierKey: string, projectId?: string | null) => ['inventory', 'archetypes', tierKey, projectId ?? null] as const,
+    /** One object's pictures. */
+    images: (itemId: string) => ['inventory', 'images', itemId] as const,
+    /** Prefix of every `equipped(...)` key. */
+    equippedLists: ['inventory', 'equipped'] as const,
+    /** What every cast member carries in one chat (`?action=inventory`). The `chats` topic refetches it. */
+    equipped: (chatId: string) => ['inventory', 'equipped', chatId] as const,
   },
   mailbox: {
     all: ['mailbox'] as const,

@@ -6,7 +6,7 @@
  * Tier C. This shell is deliberately generic: it was built for the emoji
  * typeahead (Layer 2.0e) because emoji is its cheapest consumer, and Layer 2's
  * `@` / `#` / `/` plugins are meant to consume it unchanged. See
- * `docs/developer/features/composer-typeahead.md`.
+ * `docs/developer/features/complete/composer-typeahead.md`.
  *
  * @module components/chat/lexical/typeahead/types
  */

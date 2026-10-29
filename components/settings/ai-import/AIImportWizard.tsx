@@ -169,6 +169,7 @@ function SourceMaterialStep({
           Paste any additional character information, backstory, or notes here.
         </p>
         <textarea
+          aria-label="Freeform text"
           className="qt-input w-full"
           rows={8}
           value={sourceText}
@@ -216,6 +217,7 @@ function ConfigurationStep({
           <p className="qt-text-destructive">No connection profiles found. Create one in Settings first.</p>
         ) : (
           <select
+            aria-label="Connection profile"
             className="qt-input w-full"
             value={profileId}
             onChange={(e) => onProfileChange(e.target.value)}

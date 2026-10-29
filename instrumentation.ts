@@ -701,12 +701,25 @@ export async function register() {
       // and processed by the background job processor after Phase 3.5.
       try {
         const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
-        mountScanSettled = scanAllMountPoints().catch((scanError) => {
-          logger.warn('Document mount point scan failed', {
-            context: 'instrumentation.register',
-            error: scanError instanceof Error ? scanError.message : String(scanError),
+        mountScanSettled = scanAllMountPoints()
+          .catch((scanError) => {
+            logger.warn('Document mount point scan failed', {
+              context: 'instrumentation.register',
+              error: scanError instanceof Error ? scanError.message : String(scanError),
+            });
+          })
+          // Uploads stored before bug 260 carry no extracted text; give them
+          // what new uploads get at ingest. A no-op once they all have it.
+          .then(async () => {
+            const { backfillUploadBlobText } = await import('./lib/startup/backfill-upload-blob-text');
+            await backfillUploadBlobText();
+          })
+          .catch((backfillError) => {
+            logger.warn('Uploaded-blob text backfill could not start', {
+              context: 'instrumentation.register',
+              error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+            });
           });
-        });
       } catch (mountScanError) {
         logger.warn('Error initializing document mount point scanner, continuing startup', {
           context: 'instrumentation.register',

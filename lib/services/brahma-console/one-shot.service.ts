@@ -30,6 +30,8 @@
  * Builder; this module supplies the Brahma profile, slate, prompt and scope.
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -84,26 +86,19 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
   // Tools — identical to the standalone console: agent mode, doc read/write, the
   // read-only run_sql tool, search-without-memories; NO ask_carina (recursion
   // guard), NO workspace tools.
-  const built = await buildTools(
+  const built = await buildTools({
     connectionProfile,
-    null,   // imageProfileId
-    null,   // imageProfile
     userId,
-    null,   // projectId
-    false,  // requestFullContext
-    [],     // disabledTools
-    [],     // disabledToolGroups
-    true,   // agentModeEnabled
-    false,  // isMultiCharacter
-    false,  // helpToolsEnabled
-    false,  // canDressThemselves
-    false,  // canCreateOutfits
-    'full', // docToolsMode
-    false,  // askCarinaEnabled — recursion guard
-    false,  // includeWorkspaceTools — stripped for the console
-    true,   // excludeMemorySearch — no memory source
-    true,   // sqlAccess — read-only run_sql
-  )
+    agentModeEnabled: true,
+    canDressThemselves: false,
+    canCreateOutfits: false,
+    canManageInventory: false, // no inventory_* tools here
+    docToolsMode: 'full',
+    askCarinaEnabled: false, // recursion guard
+    includeWorkspaceTools: false, // stripped for the console
+    excludeMemorySearch: true, // no memory source
+    sqlAccess: true, // read-only run_sql
+  })
 
   // Operator-set turn budget (Settings → Chat → Brahma Console); shared with the
   // standalone console. The loop's stuck-loop guard is independent of it.
@@ -128,9 +123,12 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
       wardrobeRead: false,
       wardrobeWear: false,
       wardrobeTakeOff: false,
+      wardrobeRollback: false,
+      wardrobeHistory: false,
       wardrobeCreate: false,
       wardrobeUpdate: false,
       wardrobeArchive: false,
+      ...inventoryToolFlags(false),
     },
   })
 
@@ -147,7 +145,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     chatId,
     userId,
     operatorSurface: true,
-    pendingWardrobeAnnouncements: new Set<string>(),
+    ...newWardrobeTurnContainers(),
   }
 
   // ISOLATION: the loop's slate is system + the single question only — never

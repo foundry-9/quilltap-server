@@ -13,10 +13,13 @@ import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/charact
 import { JsonSchema } from '@/lib/schemas/common.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
+import { DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
+import { readCharacterVaultPhysicalPrompts } from '@/lib/database/repositories/vault-overlay/vault-readers';
+import { recompileCharacterSeats } from '@/lib/services/system-prompt-compiler/character-fanout';
 
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -69,11 +72,15 @@ const updateCharacterSchema = z.object({
   // Vault-managed (properties.json) plain boolean — named here or the parse
   // below would strip it before update() could route it to the vault.
   canChooseOutfit: z.boolean().optional(),
+  // Diagrams in the Salon — vault-managed (properties.json) for the same reason.
+  canDrawDiagrams: z.boolean().optional(),
+  diagramStyle: z.enum(DIAGRAM_STYLES).optional(),
   // Wardrobe-permission tri-states (null = inherit global, true/false = override).
   // Real DB columns, not vault-managed — omitting them here strips the key before
   // it reaches update(), so the editor toggles would silently never persist.
   canDressThemselves: z.boolean().nullable().optional(),
   canCreateOutfits: z.boolean().nullable().optional(),
+  canManageInventory: z.boolean().nullable().optional(),
   // The freeform fact sheet (vault `metadata.json`). This schema strips unknown
   // keys, so the field has to be named here or a PUT carrying it would be
   // silently dropped before the write overlay ever saw it. Sending `metadata`
@@ -90,6 +97,8 @@ const updateCharacterSchema = z.object({
       longPrompt: z.string().max(750).nullable().optional(),
       completePrompt: z.string().max(1000).nullable().optional(),
       fullDescription: z.string().nullable().optional(),
+      // Omitted → the vault's current value is kept (managed-fields write).
+      humanoid: z.boolean().optional(),
       createdAt: z.string().optional(),
       updatedAt: z.string().optional(),
     })
@@ -185,10 +194,21 @@ async function handleUpdateCharacter(
         longPrompt: rawPhysical.longPrompt ?? null,
         completePrompt: rawPhysical.completePrompt ?? null,
         fullDescription: rawPhysical.fullDescription ?? null,
+        ...(rawPhysical.humanoid !== undefined ? { humanoid: rawPhysical.humanoid } : {}),
         createdAt: rawPhysical.createdAt ?? now,
         updatedAt: now,
       });
     }
+  }
+
+  // The Humanoid flag is baked into every chat's cached identity stack for
+  // this character, which a character edit does not otherwise invalidate.
+  // Read the vault's current value so a flip can be fanned out below.
+  const incomingHumanoid = rawPhysical ? rawPhysical.humanoid : undefined;
+  let previousHumanoid: boolean | undefined;
+  if (incomingHumanoid !== undefined && existingCharacter.characterDocumentMountPointId) {
+    const current = await readCharacterVaultPhysicalPrompts(existingCharacter.characterDocumentMountPointId, id);
+    previousHumanoid = current?.humanoid ?? true;
   }
 
   // A PUT carrying nothing but the default prompt leaves an empty payload, and
@@ -205,6 +225,15 @@ async function handleUpdateCharacter(
       return badRequest('System prompt not found on this character');
     }
     character = updated;
+  }
+
+  if (previousHumanoid !== undefined && previousHumanoid !== incomingHumanoid) {
+    const fanout = await recompileCharacterSeats(id, { reason: 'humanoid flag changed' });
+    logger.debug('[Characters v1] Humanoid flag changed; identity stacks recompiled', {
+      characterId: id,
+      humanoid: incomingHumanoid,
+      ...fanout,
+    });
   }
 
   revalidatePath('/');

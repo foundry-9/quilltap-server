@@ -539,6 +539,7 @@ _quilltap_memories() {
     'tree:ASCII walk of graph'
     'status:Per-character rollup'
     'validate:Health check'
+    'keystone:Mark or unmark a keystone (standing fact) via the running server'
     'maintain:Run memory maintenance (fold, consolidate, demote, retire, mirror)'
   )
 
@@ -556,7 +557,9 @@ _quilltap_memories() {
     '--phases[Maintain: comma-separated phases]:phases:_sequence compadd - fold-near-duplicates consolidate demote retire mirror'
     '--cap[Maintain: hot-row cap for demotion]:n:'
     '--repair[Validate: repair the graph on the running server (dry run without --write)]'
-    '--write[Validate --repair: apply the repair]'
+    '--write[Validate --repair / keystone: apply the change]'
+    '--keystone[Only keystones]'
+    '--off[Keystone: unmark instead of mark]'
     '--chat[Chat id or title]:chat:'
     '--project[Project name or id]:project:'
     '--since[Since timestamp]:date:'

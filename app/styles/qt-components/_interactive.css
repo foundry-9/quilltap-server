@@ -412,4 +412,27 @@
   .qt-tab-icon {
     @apply flex-shrink-0;
   }
+
+  /**
+   * Skip link - first stop for the keyboard, hidden until focused (WCAG 2.4.1)
+   */
+  .qt-skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -10rem;
+    z-index: 60; /* above the sticky toolbar and the sidebar rail */
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .qt-skip-link:focus {
+    top: 0.5rem;
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 }

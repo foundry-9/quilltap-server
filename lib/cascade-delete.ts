@@ -407,6 +407,14 @@ export async function executeCascadeDelete(
     logger.error(`Failed to fold wear-ledger rows for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
   }
 
+  // Drop the character's outfit timelines: a departed character's history has no reader.
+  try {
+    await repos.wardrobeHistory.deleteByCharacter(characterId)
+    logger.debug('[CascadeDelete] Dropped outfit history', { context: { characterId } })
+  } catch (err) {
+    logger.error(`Failed to drop outfit history for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
+  }
+
   // Finally delete the character
   await repos.characters.delete(characterId)
 

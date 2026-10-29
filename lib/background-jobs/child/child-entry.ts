@@ -28,6 +28,7 @@ import {
 } from '../ipc-types';
 import { handleHostRpcResponse } from './host-rpc-client';
 import { startPluginInitialization, whenPluginsReady } from './plugin-readiness';
+import { initializeChildRuntime } from './child-startup';
 import { runAttributedToJob } from '../activity-registry';
 import { activityKindForJobType } from '../activity-kinds';
 import type { BackgroundJob } from '@/lib/schemas/types';
@@ -67,21 +68,27 @@ getChildRepositoriesProxy();
 // (`whenPluginsReady` in `runJob`): the parent forks the child on the first
 // job and sends it straight away, and a handler that reached the registry
 // first used to fail with "Provider '…' not found in registry" (bug 243).
-startPluginInitialization(async () => {
-  try {
-    const { initializePlugins } = await import('@/lib/startup/plugin-initialization');
-    const result = await initializePlugins();
-    log.info('Plugin registry initialized in child', {
-      total: result.stats.total,
-      enabled: result.stats.enabled,
-      errors: result.stats.errors,
-    });
-  } catch (err) {
-    log.error('Failed to initialize plugin registry in child; LLM/embedding handlers will fail until restart', {
-      error: getErrorMessage(err),
-    });
-  }
-});
+//
+// The database backend is connected first, in the same gate: connecting it is
+// what opens the mount-index and LLM-logs databases, whose repositories never
+// open them on their own (see child-startup.ts).
+startPluginInitialization(() =>
+  initializeChildRuntime({
+    initDatabase: async () => {
+      const { initializeDatabase } = await import('@/lib/database/manager');
+      return initializeDatabase();
+    },
+    initPlugins: async () => {
+      const { initializePlugins } = await import('@/lib/startup/plugin-initialization');
+      const result = await initializePlugins();
+      log.info('Plugin registry initialized in child', {
+        total: result.stats.total,
+        enabled: result.stats.enabled,
+        errors: result.stats.errors,
+      });
+    },
+  }),
+);
 
 log.info('Job-runner child ready', {
   pid: process.pid,

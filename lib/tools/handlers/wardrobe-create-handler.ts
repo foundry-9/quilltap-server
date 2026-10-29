@@ -30,6 +30,7 @@ import { isComposite as itemIsComposite, makeEmptyEquippedSlots } from '@/lib/sc
 import { createItem } from '@/lib/wardrobe/item-mutations';
 import { resolveWardrobeLocation } from '@/lib/wardrobe/location';
 import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { turnContainersOf } from '@/lib/wardrobe/turn-containers';
 import { loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { wearItem } from '@/lib/wardrobe/wear-ops';
 import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
@@ -171,6 +172,7 @@ export async function executeWardrobeCreateTool(
       component_item_ids,
       component_titles,
       replace,
+      pronoun_guidance,
       generate_image,
     } = parsed;
 
@@ -227,6 +229,7 @@ export async function executeWardrobeCreateTool(
         appropriateness,
         isDefault: false,
         replace: replace ?? false,
+        pronounGuidance: pronoun_guidance,
       },
       { lookup: pool.byId },
     );
@@ -264,7 +267,8 @@ export async function executeWardrobeCreateTool(
           userId: context.userId,
           chatId: context.chatId,
           characterId: targetCharacterId,
-          pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+          provenance: context.provenance,
+          ...turnContainersOf(context),
         },
         'wardrobe-create-handler',
       );

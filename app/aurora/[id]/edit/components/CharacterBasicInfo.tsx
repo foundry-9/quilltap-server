@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { TagEditor } from '@/components/tags/tag-editor'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { CharacterFormData, CharacterScenario } from '../types'
+import { STANDARD_PRONOUNS } from '@/lib/characters/pronoun-presets'
 
 interface CharacterBasicInfoProps {
   characterId: string
@@ -42,6 +43,7 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
 
   return (
     <input
+      aria-label="Add alias"
       type="text"
       value={value}
       onChange={(e) => setValue(e.target.value)}
@@ -52,12 +54,10 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
   )
 }
 
+// The standard sets are shared with the wardrobe's pronoun guidance.
 const PRONOUN_PRESETS = [
   { label: 'Not set', value: null },
-  { label: 'He/Him/His', value: { subject: 'he', object: 'him', possessive: 'his' } },
-  { label: 'She/Her/Her', value: { subject: 'she', object: 'her', possessive: 'her' } },
-  { label: 'They/Them/Their', value: { subject: 'they', object: 'them', possessive: 'their' } },
-  { label: 'It/It/Its', value: { subject: 'it', object: 'it', possessive: 'its' } },
+  ...STANDARD_PRONOUNS,
   { label: 'Custom', value: 'custom' as const },
 ] as const
 
@@ -86,6 +86,7 @@ export function CharacterBasicInfo({
   onCanBeCarinaChange,
   onCoreWhisperEnabledChange,
 }: CharacterBasicInfoProps) {
+  const fieldId = useId()
   // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
   // the parent's event-based handleChange (same synthetic-event shape used by
   // the AI wizard's apply flow).
@@ -233,6 +234,7 @@ export function CharacterBasicInfo({
                 type="button"
                 onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
                 className="ml-1 qt-text-secondary hover:text-foreground"
+                aria-label={`Remove alias ${alias}`}
               >
                 &times;
               </button>
@@ -248,13 +250,14 @@ export function CharacterBasicInfo({
 
       {/* Pronouns Field */}
       <div>
-        <label className="block qt-text-label mb-2">
+        <label htmlFor={`${fieldId}-f0`} className="block qt-text-label mb-2">
           Pronouns (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
           The character&apos;s pronouns, included in system prompts so the LLM uses them correctly.
         </p>
         <select
+          id={`${fieldId}-f0`}
           value={getPronounPreset(formData.pronouns)}
           onChange={(e) => {
             const selected = PRONOUN_PRESETS.find((p) => p.label === e.target.value)
@@ -278,8 +281,9 @@ export function CharacterBasicInfo({
         {formData.pronouns && getPronounPreset(formData.pronouns) === 'Custom' && (
           <div className="mt-2 grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs qt-text-secondary mb-1">Subject</label>
+              <label htmlFor={`${fieldId}-f1`} className="block text-xs qt-text-secondary mb-1">Subject</label>
               <input
+                id={`${fieldId}-f1`}
                 type="text"
                 value={formData.pronouns.subject}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
@@ -288,8 +292,9 @@ export function CharacterBasicInfo({
               />
             </div>
             <div>
-              <label className="block text-xs qt-text-secondary mb-1">Object</label>
+              <label htmlFor={`${fieldId}-f2`} className="block text-xs qt-text-secondary mb-1">Object</label>
               <input
+                id={`${fieldId}-f2`}
                 type="text"
                 value={formData.pronouns.object}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
@@ -298,8 +303,9 @@ export function CharacterBasicInfo({
               />
             </div>
             <div>
-              <label className="block text-xs qt-text-secondary mb-1">Possessive</label>
+              <label htmlFor={`${fieldId}-f3`} className="block text-xs qt-text-secondary mb-1">Possessive</label>
               <input
+                id={`${fieldId}-f3`}
                 type="text"
                 value={formData.pronouns.possessive}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
@@ -442,6 +448,7 @@ export function CharacterBasicInfo({
               <div key={scenario.id} className="qt-card">
                 <div className="flex items-center gap-2 mb-2">
                   <input
+                    aria-label="Scenario title"
                     type="text"
                     value={scenario.title}
                     onChange={(e) => {

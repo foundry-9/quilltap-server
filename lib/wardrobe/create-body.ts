@@ -12,13 +12,14 @@
  * `imageFileId`: a picture hangs off an item that already has an id, through
  * the images route.
  *
- * Client-safe: type-only imports.
+ * Client-safe: no server imports.
  *
  * @module lib/wardrobe/create-body
  */
 
 import type { z } from 'zod';
 import type { createWardrobeSchema, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
 /** A parsed `createWardrobeSchema` body. A full `WardrobeItem` satisfies it too. */
 export type WardrobeCreateBody = z.infer<typeof createWardrobeSchema>;
@@ -52,6 +53,7 @@ export function wardrobeItemFromCreateBody(
     appropriateness: prose(body.appropriateness),
     isDefault: body.isDefault ?? false,
     replace: body.replace ?? false,
+    pronounGuidance: normalizePronounGuidance(body.pronounGuidance),
     migratedFromClothingRecordId: null,
     imageFileId: null,
     folder: body.folder ?? '',

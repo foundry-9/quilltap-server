@@ -86,6 +86,7 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
           <div className="p-2">
             <input
               type="search"
+              aria-label="Search outfits"
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}

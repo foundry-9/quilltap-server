@@ -6,6 +6,7 @@ import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
+import { saveDiagramSettings, type DiagramSettingsPatch } from '../../../shared/save-diagram-settings'
 import {
   Character,
   CharacterFormData,
@@ -65,6 +66,7 @@ export function useCharacterEdit(id: string) {
     externalUpdateCount: 0,
   })
   const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
+  const [savingDiagramSettings, setSavingDiagramSettings] = useState(false)
 
   /**
    * Fetch character data from API
@@ -264,6 +266,29 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Persist the diagram ability and/or style (vault properties.json). An
+   * immediate save like `handleSaveCanChooseOutfit`, but optimistic: the local
+   * character row changes first (the form's unsaved edits are left alone), and
+   * a failure re-fetches to snap the controls back to server truth.
+   */
+  const handleSaveDiagramSettings = async (patch: DiagramSettingsPatch) => {
+    setSavingDiagramSettings(true)
+    setState((prev) => ({
+      ...prev,
+      character: prev.character ? { ...prev.character, ...patch } : prev.character,
+    }))
+    try {
+      await saveDiagramSettings(id, patch)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update diagram settings')
+      console.error('Failed to save diagram settings', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingDiagramSettings(false)
+    }
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -426,6 +451,7 @@ export function useCharacterEdit(id: string) {
     // State
     ...state,
     savingCanChooseOutfit,
+    savingDiagramSettings,
 
     // Computed
     isNpc,
@@ -439,6 +465,7 @@ export function useCharacterEdit(id: string) {
     handleCanBeCarinaChange,
     handleCoreWhisperEnabledChange,
     handleSaveCanChooseOutfit,
+    handleSaveDiagramSettings,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

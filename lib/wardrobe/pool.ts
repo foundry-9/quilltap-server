@@ -30,6 +30,7 @@ import {
 import { rosterGatedProjectId } from '@/lib/projects/roster-access';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { matchWearableTitle } from '@/lib/wardrobe/wearable-ref';
 import {
   GENERAL_WARDROBE_ORIGIN,
   type WardrobeItemWithOrigin,
@@ -234,13 +235,15 @@ export function buildWearablePool(
       }
       return out;
     },
-    findByTitle: (title) => {
-      const wanted = title.trim().toLowerCase();
-      if (!wanted) return undefined;
-      const own = layers.own.find((item) => item.title.toLowerCase() === wanted);
-      if (own) return own;
-      return wearable().find((item) => !ownIds.has(item.id) && item.title.toLowerCase() === wanted);
-    },
+    // The title rule is `matchWearableTitle` (`wearable-ref.ts`), shared with
+    // the Workbench's reference chips: own items first, then the wearable
+    // shared set.
+    findByTitle: (title) =>
+      matchWearableTitle(layers.own, title) ??
+      matchWearableTitle(
+        wearable().filter((item) => !ownIds.has(item.id)),
+        title,
+      ),
     owns: (item) => item.characterId === characterId && ownIds.has(item.id),
   };
 }

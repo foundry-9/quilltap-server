@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useId } from 'react'
 import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
 import { fetchModels } from '../wizard-api'
 import { ModelSelector } from '@/components/settings/model-selector'
@@ -11,6 +11,7 @@ interface ModelSelectionStepProps {
 }
 
 export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps) {
+  const id = useId()
   const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({})
   const [modelErrors, setModelErrors] = useState<Record<string, string>>({})
 
@@ -238,8 +239,9 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
         {state.cheapConfig.strategy === 'USER_DEFINED' && (
           <div className="ml-6 space-y-4 border-l-2 border-[var(--qt-color-primary)]/20 pl-4">
             <div>
-              <label className="qt-text-label block mb-1.5">Provider</label>
+              <label htmlFor={`${id}-cheap-provider`} className="qt-text-label block mb-1.5">Provider</label>
               <select
+                id={`${id}-cheap-provider`}
                 value={state.cheapConfig.provider || ''}
                 onChange={(e) => handleCheapProviderChange(e.target.value)}
                 className="qt-input w-full"

@@ -44,7 +44,7 @@ import {
   parseVaultPhysicalPrompts,
   parseLegacyWardrobeJson,
   parsePromptFile,
-  parseScenarioFile,
+  parseScenarioFilesSorted,
   parseWardrobeItemFile,
   resolveAndCheckComponentItems,
   isWardrobeItemDocumentPath,
@@ -92,12 +92,13 @@ export async function readCharacterVaultProperties(
  * transient error, malformed JSON, a body the schema rejects — **throws**
  * {@link CharacterVaultUnavailableError}.
  *
- * That distinction is load-bearing. The six fields this file owns (`pronouns`,
- * `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`) live
- * ONLY here post-4.6 — the DB row carries none of them. The fail-soft
+ * That distinction is load-bearing. The fields this file owns (`pronouns`,
+ * `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`,
+ * `canDrawDiagrams`, `diagramStyle`) live ONLY here post-4.6 — the DB row
+ * carries none of them. The fail-soft
  * {@link readCharacterVaultProperties} collapses "absent" and "corrupt" into
  * `null`; a read-modify-write seed that treated a *corrupt* file as absent
- * would seed empty defaults and permanently clobber all six. So the write path
+ * would seed empty defaults and permanently clobber all of them. So the write path
  * must refuse rather than seed. Mirrors `readProperties` in the project/group
  * document-store overlay (commit `dcd9440a`), which fixed the identical shape.
  */
@@ -295,11 +296,7 @@ export async function readCharacterVaultScenarios(
     CHARACTER_SCENARIOS_FOLDER,
     '.md',
   );
-  return docs
-    .slice()
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-    .map((doc) => parseScenarioFile(doc, characterId ?? mountPointId))
-    .filter((s): s is CharacterScenario => s !== null);
+  return parseScenarioFilesSorted(docs, characterId ?? mountPointId);
 }
 
 /**

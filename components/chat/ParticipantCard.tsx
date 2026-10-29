@@ -14,12 +14,14 @@
  * - Nudge/Queue button
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/icon'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 import { SubpromptPicker } from '@/components/subprompts'
 
 // Special constant for user impersonation selection
@@ -41,6 +43,8 @@ export interface ParticipantData {
     /** Set when the character is archived — seat is absent until rehydration. */
     archivedAt?: string | null
     talkativeness: number
+    /** How this character's diagrams look in the Salon (absent = hand-drawn). */
+    diagramStyle?: DiagramStyle
     defaultImage?: {
       id: string
       filepath: string
@@ -88,7 +92,6 @@ interface ParticipantCardProps {
   // Turn order display
   turnPosition?: number | null // Position in predicted turn order (1-based), null for inactive
   turnStatus?: TurnOrderStatus // Status for badge styling
-  onStopStreaming?: () => void // Stop/interrupt the current generation
   // Impersonation support
   isImpersonating?: boolean // True if user is currently impersonating this participant
   isActiveTyping?: boolean // True if this is the active typing participant (when impersonating multiple)
@@ -136,7 +139,6 @@ export function ParticipantCard({
   canSkip = false,
   turnPosition,
   turnStatus,
-  onStopStreaming,
   isImpersonating = false,
   isActiveTyping = false,
   onImpersonate,
@@ -154,6 +156,8 @@ export function ParticipantCard({
   isDangerousChat = false,
 }: ParticipantCardProps) {
   const wardrobeDialog = useWardrobeDialogOptional()
+  const inventoryDialog = useInventoryDialogOptional()
+  const talkId = useId()
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
@@ -281,6 +285,8 @@ export function ParticipantCard({
         participant-card
       `}
     >
+      {/* The danger tint is colour only; say it in words too (WCAG 1.4.1). */}
+      {isDangerousChat && <span className="sr-only">Unmoderated chat.</span>}
       {/* Position badge - shown for all active participants with a position */}
       {turnPosition != null && turnPosition > 0 && (
         <div className={`qt-participant-position-badge ${getPositionBadgeClass()}`} data-testid="position-badge">
@@ -351,6 +357,20 @@ export function ParticipantCard({
                   aria-label={`Open ${name}'s wardrobe`}
                 >
                   <Icon name="wardrobe" className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {isCharacter && participant.character?.id && inventoryDialog && (
+                <button
+                  type="button"
+                  onClick={() => inventoryDialog.open({
+                    characterId: participant.character!.id,
+                    ...(chatId ? { chatId } : {}),
+                  })}
+                  className="qt-participant-avatar-tool-button"
+                  title={`Open ${name}'s inventory`}
+                  aria-label={`Open ${name}'s inventory`}
+                >
+                  <Icon name="inventory" className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -503,10 +523,11 @@ export function ParticipantCard({
           {isCharacter && !isUserParticipant && (
             <div className="mt-2">
               <div className="flex items-center justify-between qt-text-xs mb-1">
-                <span>Talkativeness</span>
+                <label htmlFor={`${talkId}-active`}>Talkativeness</label>
                 <span>{(localTalkativeness * 100).toFixed(0)}%</span>
               </div>
               <input
+                id={`${talkId}-active`}
                 type="range"
                 min="0.1"
                 max="1"
@@ -522,10 +543,11 @@ export function ParticipantCard({
           {isUserParticipant && (
             <div className="mt-2 opacity-50">
               <div className="flex items-center justify-between qt-text-xs mb-1">
-                <span>Talkativeness</span>
+                <label htmlFor={`${talkId}-na`}>Talkativeness</label>
                 <span>N/A</span>
               </div>
               <input
+                id={`${talkId}-na`}
                 type="range"
                 min="0.1"
                 max="1"
@@ -541,18 +563,8 @@ export function ParticipantCard({
 
       {/* Action buttons */}
       <div className="qt-participant-card-actions">
-        {/* Stop button - shown when this participant is generating */}
-        {turnStatus === 'generating' && onStopStreaming ? (
-          <button
-            onClick={onStopStreaming}
-            className="flex-1 qt-button qt-button-sm qt-participant-stop-button"
-            title="Stop generating"
-            aria-label="Stop generating"
-          >
-            <Icon name="stop" className="w-3.5 h-3.5 mr-1" />
-            Stop
-          </button>
-        ) : isUserParticipant && onSkip ? (
+        {/* Stopping and interrupting live in the composer (Send / raise hand / Stop). */}
+        {isUserParticipant && onSkip ? (
           /* User participant: show Queue and Skip buttons side by side */
           <>
             <button

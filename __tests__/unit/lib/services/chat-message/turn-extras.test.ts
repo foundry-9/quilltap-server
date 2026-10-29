@@ -11,6 +11,7 @@ import {
   collectTurnExtras,
   buildToolChangeNotice,
   extractToolNames,
+  spliceTurnExtras,
 } from '@/lib/services/chat-message/turn-extras'
 import { countToolSchemaTokens } from '@/lib/tokens/token-counter'
 
@@ -137,5 +138,40 @@ describe('collectTurnExtras', () => {
     })
 
     expect(both.reservedTokens).toBeGreaterThan(agentOnly.reservedTokens)
+  })
+})
+
+describe('spliceTurnExtras', () => {
+  const sys = (content: string) => ({ role: 'system', content })
+  const user = (content: string) => ({ role: 'user', content })
+  const assistant = (content: string) => ({ role: 'assistant', content })
+  const extras = { toolChangeNotice: 'NOTICE', agentModeInstructions: 'AGENT' }
+
+  it('puts the notice before the closing user message and the agent rules after the system prefix', () => {
+    const messages = [sys('S1'), sys('S2'), user('u1'), assistant('a1'), user('u2')]
+    spliceTurnExtras(messages, extras)
+    expect(messages.map(m => m.content)).toEqual(['S1', 'S2', 'AGENT', 'u1', 'a1', 'NOTICE', 'u2'])
+  })
+
+  it('appends the notice when the context does not close on a user message', () => {
+    const messages = [sys('S1'), user('u1'), assistant('a1')]
+    spliceTurnExtras(messages, { toolChangeNotice: 'NOTICE', agentModeInstructions: null })
+    expect(messages.map(m => m.content)).toEqual(['S1', 'u1', 'a1', 'NOTICE'])
+  })
+
+  it('puts the agent rules first when nothing is a system message, last when everything is', () => {
+    const conversational = [user('u1')]
+    spliceTurnExtras(conversational, { toolChangeNotice: null, agentModeInstructions: 'AGENT' })
+    expect(conversational.map(m => m.content)).toEqual(['AGENT', 'u1'])
+
+    const allSystem = [sys('S1')]
+    spliceTurnExtras(allSystem, { toolChangeNotice: null, agentModeInstructions: 'AGENT' })
+    expect(allSystem.map(m => m.content)).toEqual(['S1', 'AGENT'])
+  })
+
+  it('splices nothing when there is nothing to add', () => {
+    const messages = [sys('S1'), user('u1')]
+    spliceTurnExtras(messages, { toolChangeNotice: null, agentModeInstructions: null })
+    expect(messages).toHaveLength(2)
   })
 })

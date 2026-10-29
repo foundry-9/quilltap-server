@@ -169,3 +169,31 @@ describe('the same-route timeout retry', () => {
     expect(params.requestTimeoutMs).toBeLessThan(120_000);
   });
 });
+
+describe('LLM log rows for the cheap route', () => {
+  const { logLLMCall } = jest.requireMock('@/lib/services/llm-logging.service') as { logLLMCall: jest.Mock };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('records every attempt, the failed one with its error, against the chat', async () => {
+    mockSendMessage
+      .mockRejectedValueOnce(new Error('Request timed out.'))
+      .mockResolvedValueOnce({ ...answered, finishReason: 'stop', cacheUsage: { cacheReadInputTokens: 1 } });
+
+    await run();
+
+    expect(logLLMCall).toHaveBeenCalledTimes(2);
+    expect(logLLMCall.mock.calls[0][0]).toMatchObject({
+      chatId: 'chat-1',
+      type: 'MEMORY_EXTRACTION',
+      response: { content: '', error: 'Request timed out.' },
+    });
+    expect(logLLMCall.mock.calls[1][0]).toMatchObject({
+      chatId: 'chat-1',
+      response: { content: '{"ok":true}', finishReason: 'stop' },
+      cacheUsage: { cacheReadInputTokens: 1 },
+    });
+  });
+});

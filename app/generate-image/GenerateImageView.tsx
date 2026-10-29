@@ -7,7 +7,7 @@
  * Allows users to generate images using their configured image profiles.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useId, useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { useQuery } from '@tanstack/react-query'
@@ -35,6 +35,7 @@ interface GeneratedImage {
 }
 
 export function GenerateImageView() {
+  const fieldId = useId()
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [imageCount, setImageCount] = useState(1)
@@ -184,11 +185,12 @@ export function GenerateImageView() {
 
           {/* Prompt Input */}
           <div>
-            <label className="block qt-label text-foreground mb-2">
+            <label htmlFor={`${fieldId}-f0`} className="block qt-label text-foreground mb-2">
               Prompt
             </label>
             <div className="relative">
               <textarea
+                id={`${fieldId}-f0`}
                 ref={promptRef}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -200,6 +202,7 @@ export function GenerateImageView() {
               <div className="relative mt-2" ref={dropdownRef}>
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Search characters"
                     type="text"
                     value={searchTerm}
                     onChange={(e) => {
@@ -252,10 +255,11 @@ export function GenerateImageView() {
 
           {/* Image Count */}
           <div>
-            <label className="block qt-label text-foreground mb-2">
+            <label htmlFor={`${fieldId}-f1`} className="block qt-label text-foreground mb-2">
               Number of Images
             </label>
             <select
+              id={`${fieldId}-f1`}
               value={imageCount}
               onChange={(e) => setImageCount(parseInt(e.target.value, 10))}
               className="px-3 py-2 border qt-border-default rounded-lg qt-bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"

@@ -36,6 +36,12 @@ import { OutfitQuickPick } from './outfit-quick-pick'
 export interface OutfitComposerProps {
   /** All wardrobe items available to the character (personal + archetypes). */
   items: WardrobeItem[]
+  /**
+   * What the outfit pull-down and slot pickers offer. Defaults to `items`;
+   * the pronoun-aware filter narrows it. Equipped chips always resolve
+   * against the whole of `items`.
+   */
+  pickableItems?: WardrobeItem[]
   /** Current equipped (or staged) slots. */
   slots: EquippedSlots
   /**
@@ -53,6 +59,7 @@ export interface OutfitComposerProps {
 
 export function OutfitComposer({
   items,
+  pickableItems,
   slots,
   onAddToSlot,
   onRemoveFromSlot,
@@ -69,7 +76,7 @@ export function OutfitComposer({
   return (
     <div className="space-y-2 mb-3">
       <OutfitQuickPick
-        items={items}
+        items={pickableItems ?? items}
         onWear={(outfit) => onAddToSlot(outfit.types[0]!, outfit.id)}
       />
       {grouped.bundles.map((bundle) => (
@@ -87,6 +94,7 @@ export function OutfitComposer({
           slot={slot}
           equippedIds={grouped.slotRemainders[slot]}
           allItems={items}
+          pickableItems={pickableItems}
           onAdd={onAddToSlot}
           onRemove={onRemoveFromSlot}
           onClear={onClearSlot}

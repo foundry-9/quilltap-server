@@ -14,7 +14,9 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
-import { isComposite as itemIsComposite } from '@/lib/schemas/wardrobe.types';
+import { allEquippedItemIds, isComposite as itemIsComposite } from '@/lib/schemas/wardrobe.types';
+import type { Pronouns } from '@/lib/schemas/character.types';
+import { filterByPronounGuidance, formatPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { findEquippedSlots, loadToolPool, type WardrobeToolContext } from './wardrobe-handler-shared';
 import { formatWornRelative } from '@/lib/wardrobe/wear-display';
@@ -69,7 +71,8 @@ export async function executeWardrobeListTool(
     }
 
     const validatedInput = parsed;
-    const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
+    const { type_filter, appropriateness_filter, include_equipped, pronoun_aware } = validatedInput;
+    const pronounAware = pronoun_aware !== false;
 
     // Everything the character can wear: their own vault over their groups'
     // stores, the chat's project stores and Quilltap General.
@@ -99,6 +102,16 @@ export async function executeWardrobeListTool(
       );
     }
 
+    // Pronoun guidance (on unless the caller turns it off): hold back items
+    // meant for other pronouns, never what the character is wearing now.
+    let hiddenByPronounGuidance = 0;
+    if (pronounAware) {
+      const pronouns = await readCharacterPronouns(repos, context.characterId);
+      const wornIds = new Set(equippedSlots ? allEquippedItemIds(equippedSlots) : []);
+      const offered = filterByPronounGuidance(filteredItems, pronouns, wornIds);
+      filteredItems = offered.items;
+      hiddenByPronounGuidance = offered.hiddenCount;
+    }
 
     // One ledger read for every listed item's wear, the caller's own share
     // kept apart from the household's (bug 184).
@@ -127,6 +140,7 @@ export async function executeWardrobeListTool(
         image_file_id: item.imageFileId ?? null,
         types: item.types,
         appropriateness: item.appropriateness ?? null,
+        pronoun_guidance: item.pronounGuidance ?? [],
         is_own: item.characterId === context.characterId,
         folder: item.folder || null,
         is_equipped: equipped.length > 0,
@@ -164,6 +178,8 @@ export async function executeWardrobeListTool(
       hasTypeFilter: !!type_filter,
       hasAppropriatenessFilter: !!appropriateness_filter,
       includeEquipped: include_equipped !== false,
+      pronounAware,
+      hiddenByPronounGuidance,
       compositeCount: finalItems.filter((i) => i.is_composite).length,
       neverWornCount: finalItems.filter((i) => i.wear_count === 0).length,
       neverWornByCallerCount: finalItems.filter((i) => i.worn_by_you === 0).length,
@@ -174,6 +190,7 @@ export async function executeWardrobeListTool(
       success: true,
       items: finalItems,
       total_count: finalItems.length,
+      hidden_by_pronoun_guidance: hiddenByPronounGuidance,
     };
   } catch (error) {
     logger.error('Wardrobe list tool execution failed', {
@@ -189,6 +206,27 @@ export async function executeWardrobeListTool(
       total_count: 0,
       error: error instanceof Error ? error.message : 'Unknown error during wardrobe list operation',
     };
+  }
+}
+
+/**
+ * The calling character's pronouns, or null. A character that cannot be read
+ * (a broken vault) lists unfiltered rather than failing the listing.
+ */
+async function readCharacterPronouns(
+  repos: ReturnType<typeof getRepositories>,
+  characterId: string,
+): Promise<Pronouns | null> {
+  try {
+    const character = await repos.characters.findById(characterId);
+    return character?.pronouns ?? null;
+  } catch (error) {
+    logger.warn('Wardrobe list could not read the character\'s pronouns; listing unfiltered', {
+      context: 'wardrobe-list-handler',
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
 }
 
@@ -237,8 +275,15 @@ export function formatWardrobeListResults(
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
 
+  const hidden = output.hidden_by_pronoun_guidance ?? 0;
+  const hiddenNote = hidden > 0
+    ? `(${hidden} more item${hidden !== 1 ? 's are' : ' is'} meant for characters with other pronouns; ` +
+      'call wardrobe_list with pronoun_aware: false to see them.)'
+    : '';
+
   if (output.items.length === 0) {
-    return 'Wardrobe: No items found matching the specified filters.';
+    const none = 'Wardrobe: No items found matching the specified filters.';
+    return hiddenNote ? `${none}\n${hiddenNote}` : none;
   }
 
   const lines: string[] = [`Wardrobe (${output.total_count} item${output.total_count !== 1 ? 's' : ''}):`];
@@ -249,6 +294,9 @@ export function formatWardrobeListResults(
     const folderTag = item.folder ? ` [folder: ${item.folder}]` : '';
     const sharedTag = item.is_own ? '' : ' [shared — read-only]';
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
+    const guidanceTag = item.pronoun_guidance.length > 0
+      ? ` [meant for: ${formatPronounGuidance(item.pronoun_guidance)}]`
+      : '';
     const description = item.description ? ` - ${item.description}` : '';
     const cueTag = item.image_prompt ? ` (cue: ${item.image_prompt})` : '';
     const compositeTag = item.is_composite
@@ -258,8 +306,9 @@ export function formatWardrobeListResults(
     const wearTag = formatWardrobeListWearNote(item, nowMs);
     const pictureTag = item.image_file_id ? ` · picture: ${formatWardrobeImageHandle(item.image_file_id)}` : '';
 
-    lines.push(`  ${typeTags} ${item.title}${folderTag}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
+    lines.push(`  ${typeTags} ${item.title}${folderTag}${equippedTag}${sharedTag}${appropriatenessTag}${guidanceTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
   }
+  if (hiddenNote) lines.push(hiddenNote);
 
   return lines.join('\n');
 }

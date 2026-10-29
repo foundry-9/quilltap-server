@@ -6,6 +6,7 @@
  * used for SQLite collection initialization.
  */
 
+import { StorytellerBidRecordSchema } from '@/lib/schemas/storyteller.types';
 import { z } from 'zod';
 import {
   ChatMetadata,
@@ -109,6 +110,10 @@ export const ChatMessageRowSchema = z.object({
     answererId: UUIDSchema,
     question: z.string(),
   }).nullable().optional(),
+  // Storyteller mode: the bid a speaking turn carried out (round, tier, plan,
+  // tools named). Re-applied on swipe/regenerate; never model-facing. NULL on
+  // every message that was not a storyteller speaking turn.
+  storytellerBid: StorytellerBidRecordSchema.nullable().optional(),
   // Pascal the Croupier (custom pseudo-tools) roll record, set on
   // systemSender='pascal' messages. The server rolled and the server picked the
   // outcome, so none of this is the model's account of its own luck.
@@ -123,7 +128,8 @@ export const ChatMessageRowSchema = z.object({
   // (tiers shadow, so a name can differ per room); rollForm = 'range' or 'dice'
   // ('dice' carries notation + diceRolls); raw = untransformed roll, value =
   // what the outcome table tested; outcomeIndex/state = the winning entry and
-  // its verdict; invokedBy = model reach vs. user Run-Tool. NULL on every
+  // its verdict; invokedBy = model reach vs. user Run-Tool vs. trigger phrase
+  // (triggerPhrase = the phrase as written in the definition). NULL on every
   // non-Pascal message.
   pascalMeta: z.object({
     tool: z.string(),
@@ -158,14 +164,17 @@ export const ChatMessageRowSchema = z.object({
     }).optional(),
     // The side effects this run applied (the audit of the definition's
     // `effects` array): raw target, prior value (absent when none), what was
-    // written, and — state targets only — the tier the write landed in.
+    // written, and — state targets only — the tier the write landed in. A
+    // wardrobe change is targeted 'wardrobe.wear' / 'wardrobe.take_off' /
+    // 'wardrobe.clear_slot', with the slots before and a WardrobeEffectRecord.
     effects: z.array(z.object({
       target: z.string(),
       previous: z.unknown().optional(),
       next: z.unknown(),
       tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
     })).optional(),
-    invokedBy: z.enum(['llm', 'user']),
+    invokedBy: z.enum(['llm', 'user', 'trigger']),
+    triggerPhrase: z.string().optional(),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
   // The route trail: every connection profile tried for this turn, in order,

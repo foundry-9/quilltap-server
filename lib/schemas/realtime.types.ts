@@ -42,6 +42,25 @@ export const REALTIME_TOPICS = [
    * and a memory's own id would mean nothing to it.
    */
   'memories',
+  /**
+   * Inventory objects: a file created, instantiated, edited, archived or
+   * moved — published by every write through an Inventory location.
+   * Collection-wide: lists, folders, archetype pickers, and every chat's
+   * carried view (which shows the objects resolved). A change to *which*
+   * objects a chat carries is the `chats` topic's.
+   */
+  'inventory',
+  /**
+   * Storyteller rounds, scoped by *chat* id: a round opened, a bid landed, a
+   * selection made, a round closed. The board re-reads the chat's round.
+   */
+  'storytellerRounds',
+  /**
+   * Custom-tool runs held for the operator (Pascal operator intervention),
+   * scoped by *chat* id: a hold opened or settled. The dialog re-reads the
+   * chat's pending holds.
+   */
+  'customToolInterventions',
 ] as const;
 
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];

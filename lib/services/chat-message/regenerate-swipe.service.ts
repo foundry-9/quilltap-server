@@ -23,10 +23,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { createLLMProvider } from '@/lib/llm'
-import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { profileParams } from '@/lib/llm/cheap-llm'
-import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { retireMemories } from '@/lib/memory/retire'
 import {
   resolveRespondingParticipant,
@@ -34,6 +31,8 @@ import {
   getRoleplayTemplate,
 } from './participant-resolver.service'
 import { buildMessageContext } from './context-builder.service'
+import { streamMessage } from './streaming.service'
+import { buildPlanSection } from '@/lib/storyteller/prompts'
 import { resolveUserIdentity } from './user-identity-resolver.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -204,6 +203,17 @@ export async function regenerateMessageAsSwipe({
       isContinueMode: true,
       contextCompressionSettings: null,
       regenerationOfMessageIds,
+      // A storyteller line re-rolls under the plan it carried out.
+      storytellerSection: targetMessage.storytellerBid
+        ? buildPlanSection({
+            plan: targetMessage.storytellerBid.plan,
+            tier: targetMessage.storytellerBid.tier,
+            toolsNamed: targetMessage.storytellerBid.toolsNamed,
+            spokenSince: [],
+            allowedTools: [],
+            reroll: true,
+          })
+        : undefined,
     },
     previousMessages,
     []
@@ -223,8 +233,10 @@ export async function regenerateMessageAsSwipe({
     characterId: character.id,
   })
 
-  const provider = await createLLMProvider(connectionProfile.provider, connectionProfile.baseUrl || undefined)
   const params = profileParams(connectionProfile) ?? {}
+  // Minted before the call so its LLM log row points at the swipe it produces —
+  // the Inspector's per-message button finds a reply's calls by this id.
+  const newSwipeId = crypto.randomUUID()
 
   let content = ''
   let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
@@ -233,36 +245,29 @@ export async function regenerateMessageAsSwipe({
   let thoughtSignature: string | undefined
   let announcedStreaming = false
 
-  for await (const chunk of withStallWatchdog(
-    provider.streamMessage(
-      {
-        messages: formattedMessages.map(m => ({
-          role: m.role.toLowerCase() as 'system' | 'user' | 'assistant' | 'tool',
-          content: m.content,
-          name: m.name,
-          attachments: m.attachments as never,
-          toolCallId: m.toolCallId,
-          toolCalls: m.toolCalls,
-        })),
-        model: connectionProfile.modelName,
-        ...resolveSamplingParams(params),
-        profileParameters: params,
-        cacheKey: character.id,
-      },
-      apiKey
-    ),
-    {
-      provider: connectionProfile.provider,
-      modelName: connectionProfile.modelName,
-      logContext: {
-        context: 'regenerate-swipe.service',
-        userId,
-        chatId: chat.id,
-        characterId: character.id,
-        messageId: targetMessage.id,
-      },
-    }
-  )) {
+  // The shared stream: the stall watchdog, the character's prompt-cache key and
+  // the LLM log row (asked, answered, tokens and cache) all come with it, the
+  // same as an ordinary turn — a re-roll used to be the one Salon reply the
+  // Inspector could not see.
+  for await (const chunk of streamMessage({
+    messages: formattedMessages.map(m => ({
+      role: m.role.toLowerCase(),
+      content: m.content,
+      name: m.name,
+      attachments: m.attachments as unknown[] | undefined,
+      toolCallId: m.toolCallId,
+      toolCalls: m.toolCalls,
+    })),
+    connectionProfile,
+    apiKey,
+    modelParams: params,
+    tools: [],
+    useNativeWebSearch: false,
+    userId,
+    messageId: newSwipeId,
+    chatId: chat.id,
+    characterId: character.id,
+  })) {
     if (chunk.content) {
       if (!announcedStreaming) {
         announcedStreaming = true
@@ -282,7 +287,13 @@ export async function regenerateMessageAsSwipe({
       reasoningContent = chunk.reasoningContent
       onProgress?.({ kind: 'reasoning', reasoning: chunk.reasoningContent })
     }
-    if (chunk.usage) usage = chunk.usage
+    if (chunk.usage) {
+      usage = {
+        promptTokens: chunk.usage.promptTokens ?? 0,
+        completionTokens: chunk.usage.completionTokens ?? 0,
+        totalTokens: chunk.usage.totalTokens ?? 0,
+      }
+    }
     if (chunk.rawResponse) rawResponse = chunk.rawResponse
     if (chunk.thoughtSignature) thoughtSignature = chunk.thoughtSignature
   }
@@ -312,7 +323,7 @@ export async function regenerateMessageAsSwipe({
 
   const newSwipe: MessageEvent = {
     type: 'message',
-    id: crypto.randomUUID(),
+    id: newSwipeId,
     role: 'ASSISTANT',
     content,
     // Attribute to the same participant that authored the original — this is the
@@ -332,6 +343,8 @@ export async function regenerateMessageAsSwipe({
     // Keep the original's timestamp so the group stays in place in the transcript.
     createdAt: targetMessage.createdAt,
     ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
+    // The variant carries out the same bid as the line it re-rolls.
+    ...(targetMessage.storytellerBid ? { storytellerBid: targetMessage.storytellerBid } : {}),
   } as MessageEvent
 
   await repos.chats.addMessage(chat.id, newSwipe)

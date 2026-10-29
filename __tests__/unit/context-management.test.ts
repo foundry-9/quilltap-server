@@ -22,20 +22,19 @@ import {
   calculateRecentMessageCount,
 } from '@/lib/llm/model-context-data'
 
+import { calculateContextBudget, buildContext } from '@/lib/chat/context-manager'
 import {
-  calculateContextBudget,
   buildSystemPrompt,
-  formatSummaryForContext,
-  selectRecentMessages,
-  willExceedContextLimit,
+  buildOtherParticipantsInfo,
+  buildIdentityReinforcement,
+} from '@/lib/chat/context/system-prompt-builder'
+import { selectRecentMessages } from '@/lib/chat/context/message-selector'
+import {
   filterMessagesByHistoryAccess,
   getParticipantName,
   attributeMessagesForCharacter,
-  buildOtherParticipantsInfo,
-  buildIdentityReinforcement,
-  buildContext,
   type MessageWithParticipant,
-} from '@/lib/chat/context-manager'
+} from '@/lib/chat/context/message-attribution'
 import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
 import { resetFrozenArchiveCacheForTests } from '@/lib/memory/recall/archive'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
@@ -47,6 +46,7 @@ import { buildSuparnaMailLLMContext, postSuparnaMailWhisper } from '@/lib/servic
 import * as coreWhisper from '@/lib/services/aurora-notifications/core-whisper'
 import * as coreWhisperTrigger from '@/lib/chat/context/core-whisper-trigger'
 import * as progressionsSection from '@/lib/progressions/prompt-section'
+import * as inventorySection from '@/lib/inventory/prompt-section'
 import * as narrationAnchor from '@/lib/chat/context/user-narration-anchor'
 
 // Pass-through by default; the bug-199 tests stand in a fixed recall text.
@@ -97,6 +97,10 @@ jest.mock('@/lib/chat/context/core-whisper-trigger', () => {
 jest.mock('@/lib/progressions/prompt-section', () => {
   const actual = jest.requireActual('@/lib/progressions/prompt-section')
   return { ...actual, buildProgressionsSection: jest.fn(actual.buildProgressionsSection) }
+})
+jest.mock('@/lib/inventory/prompt-section', () => {
+  const actual = jest.requireActual('@/lib/inventory/prompt-section')
+  return { ...actual, buildInventorySection: jest.fn(actual.buildInventorySection) }
 })
 jest.mock('@/lib/chat/context/user-narration-anchor', () => {
   const actual = jest.requireActual('@/lib/chat/context/user-narration-anchor')
@@ -362,7 +366,6 @@ describe('Context Manager', () => {
       expect(budget.totalLimit).toBe(200000)
       expect(budget.systemPromptBudget).toBeGreaterThan(0)
       expect(budget.memoryBudget).toBeGreaterThan(0)
-      expect(budget.summaryBudget).toBeGreaterThan(0)
       expect(budget.recentMessagesBudget).toBeGreaterThan(0)
       expect(budget.responseReserve).toBeGreaterThan(0)
     })
@@ -533,43 +536,6 @@ describe('Context Manager', () => {
     })
   })
 
-  describe('formatSummaryForContext', () => {
-    it('should format summary with header', () => {
-      const summary = 'This is a conversation summary.'
-      const { content } = formatSummaryForContext(summary, 1000, 'OPENAI')
-      expect(content).toContain('## Previous Conversation Summary')
-      expect(content).toContain(summary)
-    })
-
-    it('should return empty for empty summary', () => {
-      const { content } = formatSummaryForContext('', 1000, 'OPENAI')
-      expect(content).toBe('')
-    })
-
-    it('should truncate long summaries', () => {
-      const longSummary = 'A'.repeat(10000)
-      const { tokenCount } = formatSummaryForContext(longSummary, 100, 'OPENAI')
-      expect(tokenCount).toBeLessThanOrEqual(100)
-    })
-
-    it('should truncate oversized summaries so content is shorter than the input — regression for dynamic-require bug', () => {
-      // Before fix(chat) ea152d27, formatSummaryForContext called
-      //   const { truncateToTokenLimit } = require('@/lib/tokens/token-counter')
-      // which silently returned undefined in the Next.js webpack ESM bundle,
-      // causing a TypeError mid-turn on any chat with accumulated summary text.
-      // This test exercises the truncation path and verifies that content is
-      // actually shortened, confirming truncateToTokenLimit is reachable.
-      const longSummary = 'word '.repeat(3000).trim() // ~3000 tokens
-      const { content, tokenCount } = formatSummaryForContext(longSummary, 200, 'OPENAI')
-      // The result must be shorter than the input
-      expect(content.length).toBeLessThan(longSummary.length)
-      // Token count must respect the budget
-      expect(tokenCount).toBeLessThanOrEqual(200)
-      // The header must still be present
-      expect(content).toContain('## Previous Conversation Summary')
-    })
-  })
-
   describe('selectRecentMessages', () => {
     const messages = [
       { role: 'user', content: 'Hello' },
@@ -595,31 +561,15 @@ describe('Context Manager', () => {
       expect(selected.length).toBeGreaterThanOrEqual(1)
     })
 
+    it('keeps the row id on the at-least-one fallback (bug 95 anchor)', () => {
+      const { messages: selected } = selectRecentMessages([{ role: 'user', content: 'A long line '.repeat(50), id: 'row-1' }], 1, 'OPENAI')
+      expect(selected[0].id).toBe('row-1')
+    })
+
     it('should return empty for empty input', () => {
       const { messages: selected, truncated } = selectRecentMessages([], 1000, 'OPENAI')
       expect(selected.length).toBe(0)
       expect(truncated).toBe(false)
-    })
-  })
-
-  describe('willExceedContextLimit', () => {
-    it('should detect when context will exceed', () => {
-      const messages = Array(100).fill({ content: 'A'.repeat(1000) })
-      const result = willExceedContextLimit(messages, 'Hello', 'OLLAMA', 'phi3:mini')
-      expect(result.willExceed).toBe(true)
-    })
-
-    it('should return false for small context', () => {
-      const messages = [{ content: 'Hello' }]
-      const result = willExceedContextLimit(messages, 'Hi', 'ANTHROPIC', 'claude-sonnet-4-5-20250929')
-      expect(result.willExceed).toBe(false)
-    })
-
-    it('should calculate percentage used', () => {
-      const messages = [{ content: 'Hello' }]
-      const result = willExceedContextLimit(messages, 'Hi', 'OPENAI', 'gpt-4o')
-      expect(result.percentUsed).toBeGreaterThan(0)
-      expect(result.percentUsed).toBeLessThan(100)
     })
   })
 
@@ -1308,25 +1258,30 @@ describe('Context Manager', () => {
           ],
         })
 
-      it('introduces the persona as off scene in an autonomous room', async () => {
+      const ledgerOf = (result: { messages: Array<{ content: unknown }> }) =>
+        String(result.messages[result.messages.length - 1].content)
+
+      it('tells the model the persona is not in the room in an autonomous room', async () => {
         const repoMock = buildReposFor()
         mockedGetRepositories.mockReturnValue(repoMock as any)
 
-        await runFor('autonomous')
+        const result = await runFor('autonomous')
 
-        expect(repoMock.chats.addMessage).toHaveBeenCalledTimes(1)
-        const [, posted] = repoMock.chats.addMessage.mock.calls[0]
-        expect(posted.systemKind).toBe('off-scene-characters')
-        expect(posted.hostEvent).toEqual({ introducedCharacterIds: ['char-charlie'] })
-        expect(posted.content).toContain('### Charlie')
+        expect(ledgerOf(result)).toContain('**Charlie** (')
+        expect(ledgerOf(result)).toContain('not in the room) — last named by')
+        // The Host posts nothing: absent people are a chip for the operator
+        // and a ledger card for the model.
+        expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       })
 
       it('still treats the persona as present in a Salon chat', async () => {
         const repoMock = buildReposFor()
         mockedGetRepositories.mockReturnValue(repoMock as any)
 
-        await runFor('salon')
+        const result = await runFor('salon')
 
+        expect(ledgerOf(result)).toMatch(/\*\*Charlie\*\* \([^)]*; in the room\)/)
+        expect(ledgerOf(result)).not.toContain('Particulars of those not in the room')
         expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       })
     })
@@ -1442,12 +1397,101 @@ describe('Context Manager', () => {
     })
 
     // ------------------------------------------------------------------
+    // The Inventory — what the character carries, a trailing section.
+    // ------------------------------------------------------------------
+
+    it('adds nothing when nothing carried has a description: the turn is byte-identical', async () => {
+      const baseline = await buildWithInforms([])
+      ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce(null)
+      const nothingCarried = await buildWithInforms([])
+      expect(nothingCarried.messages).toEqual(baseline.messages)
+    })
+
+    it('rides the new user message after the progressions and before the inform block', async () => {
+      const baseline = await buildWithInforms([informRow('row-1', 'The lamp gutters.')])
+      ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce('## Carried and equipped\n- Excalibur (sword): Never dulled.')
+      const carrying = await buildWithInforms([informRow('row-1', 'The lamp gutters.')])
+      expect(carrying.messages.filter(m => m.role === 'system')).toEqual(baseline.messages.filter(m => m.role === 'system'))
+      expect(carrying.messages.slice(0, -1)).toEqual(baseline.messages.slice(0, -1))
+      expect(carrying.messages[carrying.messages.length - 1].content).toBe(
+        `Ready for the next task?\n\n---\n\n## Carried and equipped\n- Excalibur (sword): Never dulled.\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`,
+      )
+    })
+
+    // ------------------------------------------------------------------
+    // Bug 263: the history budget sees every part of the request.
+    // ------------------------------------------------------------------
+
+    describe('the history budget (bug 263)', () => {
+      const longHistory = Array.from({ length: 120 }, (_, i) => ({
+        role: i % 2 === 0 ? 'USER' : 'ASSISTANT',
+        content: `Line ${i}: ${'the conversation wanders on '.repeat(12)}`,
+        id: `h${i}`,
+      }))
+
+      const buildSmallWindow = (inventory: string | null) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+        ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValueOnce(inventory)
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            participants: [participantA],
+            title: 'Test Chat',
+            contextSummary: null,
+            tags: [],
+            messageCount: longHistory.length,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: longHistory,
+          newUserMessage: 'And then?',
+          skipMemories: true,
+          respondingParticipant: participantA,
+          connectionProfile: { maxContext: 8192, maxTokens: 1000 } as any,
+        } as any)
+      }
+
+      const payloadTokens = (messages: Array<{ content: string }>) =>
+        messages.reduce((sum, m) => sum + estimateTokens(m.content, 'OPENAI') + 4, 0)
+
+      it('packs history so the whole payload lands under safeInputLimit', async () => {
+        const bulky = `## Carried and equipped\n${'- A trunk of letters, each one heavier than the last.\n'.repeat(150)}`
+        const result = await buildSmallWindow(bulky)
+
+        // A trailing section the old budget could not see used to push the
+        // payload over the very ceiling the pre-send check warns about.
+        expect(payloadTokens(result.messages)).toBeLessThanOrEqual(result.budget.safeInputLimit)
+        expect(result.tokenUsage.total).toBeLessThanOrEqual(result.budget.safeInputLimit)
+        // The section rode, and so did some history — just less of it.
+        expect(result.messages[result.messages.length - 1].content).toContain('A trunk of letters')
+        expect(result.messagesTruncated).toBe(true)
+        expect(result.messagesIncluded).toBeGreaterThan(1)
+
+        const lean = await buildSmallWindow(null)
+        expect(result.messagesIncluded).toBeLessThan(lean.messagesIncluded)
+      })
+    })
+
+    // ------------------------------------------------------------------
     // The trailing sections keep one order on both kinds of turn.
     // ------------------------------------------------------------------
 
     describe('trailing sections on a turn with and without a new user message', () => {
       const CORE = 'CORE-WHISPER-SECTION'
       const PROGRESSIONS = 'PROGRESSIONS-SECTION'
+      const INVENTORY = 'INVENTORY-SECTION'
       const ANCHOR = 'SCENE-NOTE-SECTION'
       const letter = {
         path: 'Mail/2026-10-12-from-iris.md',
@@ -1470,6 +1514,7 @@ describe('Context Manager', () => {
         ;(coreWhisper.postCoreWhisper as jest.Mock).mockResolvedValue(null)
         if (sections.everything) {
           ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+          ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValue(INVENTORY)
           ;(narrationAnchor.buildUserNarrationAnchor as jest.Mock).mockReturnValue(ANCHOR)
           mockedCollectUnalertedMail.mockResolvedValue([letter])
         }
@@ -1486,10 +1531,11 @@ describe('Context Manager', () => {
         ])
         restore('@/lib/chat/context/core-whisper-trigger', coreWhisperTrigger as any, ['shouldFireCoreWhisper'])
         restore('@/lib/progressions/prompt-section', progressionsSection as any, ['buildProgressionsSection'])
+        restore('@/lib/inventory/prompt-section', inventorySection as any, ['buildInventorySection'])
         restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
       })
 
-      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean }) => {
+      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean; continueMode?: boolean }) => {
         mockedGetRepositories.mockReturnValue({
           memories: {
             findByCharacterAboutCharacters: jest.fn().mockResolvedValue(opts.recall ? [memory] : []),
@@ -1535,8 +1581,29 @@ describe('Context Manager', () => {
             { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
           ],
           turnSkip: opts.offerSkip ? { offerSkip: true, characterName: 'Lyra', recentlyAddressed: false } : undefined,
+          isContinueMode: opts.continueMode ?? false,
         } as any)
       }
+
+      it('carries the Inventory on a continue-mode turn (a chained speaker, a nudge, an autonomous room)', async () => {
+        ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValue(INVENTORY)
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true })
+
+        expect(inventorySection.buildInventorySection).toHaveBeenCalled()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content as string).toContain(INVENTORY)
+      })
+
+      it('reports progressions on a continue-mode turn (bug 254)', async () => {
+        ;(progressionsSection.buildProgressionsSection as jest.Mock).mockResolvedValue(PROGRESSIONS)
+        const result = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true })
+
+        expect(progressionsSection.buildProgressionsSection).toHaveBeenCalled()
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content as string).toContain(PROGRESSIONS)
+      })
 
       it('delivers the Core whisper on a turn with no new user message', async () => {
         enable({ core: true })
@@ -1573,6 +1640,7 @@ describe('Context Manager', () => {
           at('You also recall about the others present'),
           at('Suparṇā of the Post Office has delivered new mail to you'),
           at(PROGRESSIONS),
+          at(INVENTORY),
           at(INFORM_BLOCK_HEADER),
           at('[NOTHING TO ADD]'),
         ]

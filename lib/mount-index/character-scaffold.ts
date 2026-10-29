@@ -46,6 +46,8 @@ const PROPERTIES_JSON = {
   firstMessage: '',
   talkativeness: 0.5,
   canChooseOutfit: false,
+  canDrawDiagrams: false,
+  diagramStyle: 'handDrawn',
 };
 
 /**
@@ -67,6 +69,7 @@ const PHYSICAL_PROMPTS_JSON = {
   medium: null,
   long: null,
   complete: null,
+  humanoid: true,
 };
 
 export interface CharacterScaffoldResult {

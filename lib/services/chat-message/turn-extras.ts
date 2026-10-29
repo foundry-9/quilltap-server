@@ -112,3 +112,46 @@ export function collectTurnExtras(options: TurnExtrasOptions): TurnExtras {
     reservedTokens: toolSchemaTokens + agentModeTokens + toolChangeTokens,
   }
 }
+
+/** The message shape the splice works on (the context builder's formatted messages). */
+interface SpliceableMessage {
+  role: string
+  content: string
+  attachments?: unknown[]
+}
+
+/**
+ * Splice the turn's extra system messages into the built context, in place,
+ * with the very strings `collectTurnExtras` measured:
+ *
+ * - the tool-change notice goes just before the closing user message (so the
+ *   model reads it with the turn it applies to), or at the end when the
+ *   context does not close on one;
+ * - agent-mode instructions go after the leading system messages, before the
+ *   first conversational message.
+ */
+export function spliceTurnExtras<M extends SpliceableMessage>(
+  messages: M[],
+  extras: Pick<TurnExtras, 'toolChangeNotice' | 'agentModeInstructions'>
+): void {
+  if (extras.toolChangeNotice) {
+    const notice = { role: 'system', content: extras.toolChangeNotice, attachments: [] } as unknown as M
+    const lastIndex = messages.length - 1
+    if (lastIndex > 0 && messages[lastIndex].role === 'user') {
+      messages.splice(lastIndex, 0, notice)
+    } else {
+      messages.push(notice)
+    }
+  }
+
+  if (extras.agentModeInstructions) {
+    const instructions = { role: 'system', content: extras.agentModeInstructions, attachments: [] } as unknown as M
+    const firstNonSystemIndex = messages.findIndex(m => m.role !== 'system')
+    if (firstNonSystemIndex >= 0) {
+      messages.splice(firstNonSystemIndex, 0, instructions)
+    } else {
+      // All messages are system messages - add at end
+      messages.push(instructions)
+    }
+  }
+}

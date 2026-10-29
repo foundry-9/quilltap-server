@@ -2,6 +2,7 @@
   "$schema": "/schemas/qtap-custom-tool.schema.json",
   "name": "saving_throw",
   "description": "Roll a saving throw against the house's better judgement. Reference specimen for the dice form: `roll` is either a range object (see CUSTOM_TOOL_SPEC.json) or a dice string — never both — so the three features below cannot be shown in the same file as that one. Note also what is NOT here: with no `title`, Pascal announces this one as 'Saving Throw', title-cased from the name. Write a `title` only when the derived form is not what you want.",
+  "triggers": ["make a saving throw", "roll to save"],
   "revealOdds": false,
   "defaultVisibility": "whisper",
   "roll": "3d6+2",
@@ -18,7 +19,7 @@
     },
     {
       "when": { "gte": 11, "lte": 14 },
-      "message": "Saved, but the house noticed. {{dice}}",
+      "message": "Saved, but the house noticed. {{dice}} Demonstrates: `triggers` lists phrases that run the tool on their own, every parameter at its default, when anyone in the chat says one — exact substrings, any case, honoured only while the chat's 'Auto-Run Custom Tools on Trigger Phrases' setting is on. Never quote a trigger in an outcome message, or a model that repeats Pascal's line will set the tool off again.",
       "state": "partial"
     },
     {

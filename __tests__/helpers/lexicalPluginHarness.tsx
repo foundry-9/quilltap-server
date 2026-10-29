@@ -69,7 +69,7 @@ export interface RenderPluginEditorOptions {
    * cache instead means the flag is simply true on the first render — no timers,
    * no flake. Tests that want the "still loading" default just omit this.
    */
-  chatSettings?: Record<string, boolean>
+  chatSettings?: Record<string, unknown>
 }
 
 export function renderPluginEditor(

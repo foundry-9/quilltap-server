@@ -19,6 +19,7 @@ import {
   isSlotReportedWhenEmpty,
 } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { HAIR_STYLING_PRECEDENCE_NOTE } from '@/lib/wardrobe/slot-guidance'
 
 /**
  * Slot values for describing an outfit. Each slot is an array of human-readable
@@ -91,6 +92,9 @@ export interface DescribeOutfitOptions {
  *   covers. Such a slot never contributes a negative-space line — a character
  *   with no hair item must never read as bald — and never blocks the "naked"
  *   collapse.
+ * - A styled hair slot carries {@link HAIR_STYLING_PRECEDENCE_NOTE}, so a
+ *   reader never has to guess whether the hairdo or the physical
+ *   description's natural hair is what shows
  * - Multiple items in a slot → comma-joined under the slot label
  *
  * Slots that share the same value (e.g. a single multi-slot item equipped
@@ -144,7 +148,8 @@ export function describeOutfit(slots: OutfitSlotValues, options: DescribeOutfitO
   }
 
   for (const [value, slotsForValue] of groups) {
-    lines.push(`- **${slotsForValue.join(', ')}:** ${value}`)
+    const note = slotsForValue.includes('hair') ? ` (${HAIR_STYLING_PRECEDENCE_NOTE})` : ''
+    lines.push(`- **${slotsForValue.join(', ')}:** ${value}${note}`)
   }
 
   return lines.join('\n') + '\n'

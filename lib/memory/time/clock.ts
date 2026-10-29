@@ -91,6 +91,9 @@ function toWindow(w: RuleWindow): TimeWindow {
 // Write side
 // ---------------------------------------------------------------------------
 
+// Word tables are read only through `lookupWord`, which answers own keys
+// alone: a phrase word naming an inherited `Object.prototype` property
+// ("constructor 5") must not pass for a month (bug 247).
 const MONTH_NAMES: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
   july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
@@ -104,6 +107,10 @@ const WORD_NUMBERS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
   eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
   couple: 2, few: 3,
+}
+
+function lookupWord(table: Record<string, number>, word: string): number | undefined {
+  return Object.hasOwn(table, word) ? table[word] : undefined
 }
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
@@ -157,10 +164,12 @@ export function resolveEventTime(
   // "July 14, 2026" / "July 14" / "14 July 2026" / "14 July"
   const monthFirst = lower.match(/^(?:on\s+)?([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/)
   const dayFirst = lower.match(/^(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]+)(?:,?\s+(\d{4}))?$/)
-  const named = monthFirst && MONTH_NAMES[monthFirst[1]] !== undefined
-    ? { month: MONTH_NAMES[monthFirst[1]], day: parseInt(monthFirst[2], 10), year: monthFirst[3] ? parseInt(monthFirst[3], 10) : null }
-    : dayFirst && MONTH_NAMES[dayFirst[2]] !== undefined
-      ? { month: MONTH_NAMES[dayFirst[2]], day: parseInt(dayFirst[1], 10), year: dayFirst[3] ? parseInt(dayFirst[3], 10) : null }
+  const monthFirstMonth = monthFirst ? lookupWord(MONTH_NAMES, monthFirst[1]) : undefined
+  const dayFirstMonth = dayFirst ? lookupWord(MONTH_NAMES, dayFirst[2]) : undefined
+  const named = monthFirst && monthFirstMonth !== undefined
+    ? { month: monthFirstMonth, day: parseInt(monthFirst[2], 10), year: monthFirst[3] ? parseInt(monthFirst[3], 10) : null }
+    : dayFirst && dayFirstMonth !== undefined
+      ? { month: dayFirstMonth, day: parseInt(dayFirst[1], 10), year: dayFirst[3] ? parseInt(dayFirst[3], 10) : null }
       : null
   if (named && named.day >= 1 && named.day <= 31) {
     let year = named.year ?? zonedParts(anchorMs, tz).year
@@ -179,8 +188,8 @@ export function resolveEventTime(
   // "N days ago", "a week ago", "about 3 months back", "a couple of days ago"
   const agoMatch = lower.match(/^(?:about\s+|around\s+|some\s+)?(?:a\s+(?=couple|few))?([a-z]+|\d+)\s+(?:of\s+)?(days?|weeks?|months?|years?)\s+(?:ago|back|earlier|before)$/)
   if (agoMatch) {
-    const n = /^\d+$/.test(agoMatch[1]) ? parseInt(agoMatch[1], 10) : WORD_NUMBERS[agoMatch[1]]
-    const unit = UNIT_DAYS[agoMatch[2]]
+    const n = /^\d+$/.test(agoMatch[1]) ? parseInt(agoMatch[1], 10) : lookupWord(WORD_NUMBERS, agoMatch[1])
+    const unit = lookupWord(UNIT_DAYS, agoMatch[2])
     if (n !== undefined && n > 0 && n < 10000 && unit) return { occurredAt: daysBack(n * unit), window: null }
   }
 

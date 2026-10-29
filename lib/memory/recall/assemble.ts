@@ -23,7 +23,9 @@
  *   memory's own words on the turn it is most wanted. The archive keeps its
  *   composition and id sort; its size and token budget are fixed per
  *   compaction generation, so a retrospective turn's larger head never changes
- *   it — the head borrows from what the archive leaves.
+ *   it — the head borrows from what the archive leaves. The archive's inner
+ *   circle renders first, in full text, as `## Those Closest to You`; it is
+ *   part of the archive pool for every purpose above (dedup and delivery).
  *
  * Reads only. What was delivered is `deliver`'s to record, after the request
  * body is built.
@@ -31,14 +33,14 @@
  * @module memory/recall/assemble
  */
 
-import type { Memory, Provider } from '@/lib/schemas/types'
+import type { Provider } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { estimateTokens } from '@/lib/tokens/token-counter'
 import { withTimeout } from '@/lib/promise-timeout'
 import { logger } from '@/lib/logger'
 import type { ChatMessage, UncensoredFallbackOptions } from '../cheap-llm-tasks'
-import { getOrComputeFrozenArchive } from './archive'
+import { getOrComputeFrozenArchive, type FrozenArchive } from './archive'
 import {
   READ_CONVERSATION_CALL_NOTE,
   RELEVANT_CONVERSATIONS_MAX,
@@ -54,13 +56,14 @@ import { generateMemoryRecap, rampLimit } from './recap'
 import {
   renderArchive,
   renderHead,
+  renderInnerCircle,
   renderInterCharacter,
   type DebugInterCharacterMemoryInfo,
   type DebugMemoryInfo,
 } from './render'
 import { searchRecall } from './search'
 import { buildMemorySubjectContext } from './subject'
-import { buildTurnRecallContext, type ScopePolicy } from './tags'
+import { buildTurnRecallContext, DEFAULT_RECALL_TUNING, type ScopePolicy } from './tags'
 import type { ResolvedRecallTuning } from './tuning'
 import { traceStage, type RecallCandidate, type RecallPool, type RecallTrace, type RenderedLine } from './types'
 
@@ -335,35 +338,45 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
   const retrospective = query?.retrospective === true
   const turnSizing = retrospective ? retroSizing : ordinarySizing
 
-  // 2. The frozen archive, rendered under the turn's archive budget.
+  // 2. The frozen archive, rendered under the turn's archive budget: the inner
+  // circle first (at most its share), the anchors in what it leaves.
   let archiveIds = new Set<string>()
-  let archiveMemories: Memory[] = []
+  let archive: FrozenArchive = { anchors: [], circle: [] }
   let subject = { selfCharacterId: characterId, characterNames: new Map<string, string>() as ReadonlyMap<string, string> }
   let archiveTokens = 0
   let archiveContent = ''
   if (!plan.skipMemories) {
     try {
-      archiveMemories = await getOrComputeFrozenArchive(characterId, plan.chat.id, plan.chat.compactionGeneration ?? 0, {
+      const tuning = plan.replay?.tuning ?? DEFAULT_RECALL_TUNING
+      archive = await getOrComputeFrozenArchive(characterId, plan.chat.id, plan.chat.compactionGeneration ?? 0, {
         size: ordinarySizing.archiveSize,
         presentCharacterIds: presentIds.filter(id => id !== characterId),
         ...(excludeIds ? { exclude: excludeIds } : {}),
+        innerCircle: { share: tuning.innerCircleShare, allowance: tuning.innerCircleAllowance },
       })
-      archiveIds = new Set(archiveMemories.map(m => m.id))
+      const circleMemories = archive.circle.map(e => e.memory)
+      archiveIds = new Set([...circleMemories, ...archive.anchors].map(m => m.id))
       // Every self-facing line names a subject that is not the character (bug 122).
-      subject = await buildMemorySubjectContext(characterId, [...archiveMemories, ...bundle.pool.map(c => c.memory)])
+      subject = await buildMemorySubjectContext(characterId, [...circleMemories, ...archive.anchors, ...bundle.pool.map(c => c.memory)])
       // Always the ordinary budget: a retrospective turn's larger head never
       // trims the archive, so its bytes hold for the whole generation.
-      const archive = renderArchive(archiveMemories, ordinarySizing.archiveTokenBudget, plan.provider, subject)
-      archiveContent = archive.content
-      archiveTokens = archive.tokenCount
-      bundle.lines.archive = archive.lines
-      bundle.pools.archive = archive.lines.map(l => l.memoryId)
-      bundle.debugMemories.push(...archive.debugMemories)
+      const circleBudget = Math.floor(ordinarySizing.archiveTokenBudget * tuning.innerCircleShare)
+      const circle = renderInnerCircle(archive.circle, circleBudget, plan.provider, subject)
+      const anchors = renderArchive(archive.anchors, ordinarySizing.archiveTokenBudget - circle.tokenCount, plan.provider, subject)
+      archiveContent = [circle.content, anchors.content].filter(Boolean).join('\n\n')
+      archiveTokens = circle.tokenCount + anchors.tokenCount
+      bundle.lines.archive = [...circle.lines, ...anchors.lines]
+      bundle.pools.archive = bundle.lines.archive.map(l => l.memoryId)
+      bundle.debugMemories.push(...circle.debugMemories, ...anchors.debugMemories)
       traceStage(trace, 'assemble', {
         size: ordinarySizing.archiveSize,
-        held: archiveMemories.length,
-        rendered: archive.lines.length,
-        cutByBudget: archiveMemories.length - archive.lines.length,
+        held: archive.anchors.length + archive.circle.length,
+        circleHeld: archive.circle.length,
+        circleRendered: circle.lines.length,
+        circleMembers: new Set(archive.circle.map(e => e.characterId)).size,
+        circleTokenBudget: circleBudget,
+        rendered: anchors.lines.length,
+        cutByBudget: archive.anchors.length - anchors.lines.length,
         tokenBudget: ordinarySizing.archiveTokenBudget,
       }, 'archive')
     } catch (error) {

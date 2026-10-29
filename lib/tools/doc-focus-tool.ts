@@ -4,6 +4,7 @@
  * Scriptorium Phase 3.5.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -90,3 +91,6 @@ export interface DocFocusOutput {
   clear_focus?: boolean;
   error?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docFocusToolEffect: ToolEffectSpec = 'read';

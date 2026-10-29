@@ -4,6 +4,7 @@
  * appears zero times or multiple times. This is the primary editing tool for precise changes.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -78,3 +79,6 @@ export interface DocStrReplaceOutput {
   mtime: number;
   line_number: number;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const docStrReplaceToolEffect: ToolEffectSpec = 'write';

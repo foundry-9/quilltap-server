@@ -9,11 +9,15 @@
  * same loaders.
  */
 
+import { isIntervenable } from './intervention/eligibility';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { displayTitle, type Visibility } from './custom-tool.types';
 import { listAllCustomTools } from './custom-tools';
+import { customToolEffect } from './tool-effect';
 
 const CONTEXT = 'pascal.workbench';
 
@@ -36,9 +40,18 @@ export interface CustomToolLibraryEntry {
   /** Which availability clause this tool declares, if any. */
   gate: 'available' | 'withheld' | null;
   defaultVisibility: Visibility;
-  rollForm: 'range' | 'dice';
+  rollForm: 'range' | 'dice' | 'inventory';
   /** Whether the tool consults an LLM mid-run. */
   llm: boolean;
+  /** How many trigger phrases the tool listens for (0 = none). */
+  triggerCount: number;
+  /** Whether the tool holds its runs for the operator (operator intervention). */
+  intervention: boolean;
+  /**
+   * What the tool does to the world (`customToolEffect`): `read` unless it
+   * carries effects, then `write`. A storyteller bid ranks it by this.
+   */
+  effect: 'read' | 'write';
   parameterCount: number;
   outcomeCount: number;
   mountPointId: string;
@@ -185,10 +198,18 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     title: displayTitle(entry.definition),
     description: entry.definition.description,
     disabled: entry.definition.disabled ?? false,
+    intervention: isIntervenable(entry.definition),
     gate: entry.definition.availableWhen ? 'available' : entry.definition.withheldWhen ? 'withheld' : null,
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
-    rollForm: typeof entry.definition.roll === 'string' ? 'dice' : 'range',
+    rollForm:
+      typeof entry.definition.roll === 'string'
+        ? 'dice'
+        : entry.definition.roll && '$inventory' in entry.definition.roll
+          ? 'inventory'
+          : 'range',
     llm: entry.definition.llm !== undefined,
+    triggerCount: entry.definition.triggers?.length ?? 0,
+    effect: customToolEffect(entry.definition) === 'read' ? 'read' : 'write',
     parameterCount: Object.keys(entry.definition.parameters ?? {}).length,
     outcomeCount: entry.definition.outcomes.length,
     mountPointId: entry.mountPointId,
@@ -292,4 +313,36 @@ export async function listCustomToolDestinations(): Promise<CustomToolDestinatio
     .sort((a, b) => a.mountName.localeCompare(b.mountName));
 
   return { general, projects, groups, characters, other };
+}
+
+/** One item reference of a dry-run wardrobe gesture, as the bench's chair would find it. */
+export type PreviewWardrobeItemResolution =
+  | {
+      ref: string;
+      found: {
+        id: string;
+        title: string;
+        types: WardrobeItemType[];
+        origin: WardrobeOrigin;
+        imageFileId: string | null;
+      };
+    }
+  | {
+      ref: string;
+      found: null;
+      /** Why the applier would skip it — `resolveWearable`'s reason code. */
+      reason: 'not_found' | 'archived' | 'slot';
+      /** The same reason in `resolveWearable`'s own words. */
+      message: string;
+    };
+
+/**
+ * What a bench roll's wardrobe gestures would have found, had the character in
+ * the chair rolled for real — returned beside a `?action=preview` result when
+ * the fact sheet names a character. A read; the bench never applies anything.
+ */
+export interface PreviewWardrobeResolution {
+  /** The definition effect's index (matches `ResolvedEffect.index`). */
+  index: number;
+  items: PreviewWardrobeItemResolution[];
 }

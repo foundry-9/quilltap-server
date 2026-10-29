@@ -69,6 +69,13 @@ For example, if you're using the default configuration:
 - **macOS/Linux**: Open `~/.quilltap` in Finder or your file manager
 - **Windows**: Open `%USERPROFILE%\.quilltap` in File Explorer
 
+The `quilltap` command-line tool rides along inside the container and knows where it is, so a consultation from the host needs no further directions:
+
+```bash
+docker exec quilltap quilltap db --lock-status
+docker exec quilltap quilltap db --tables
+```
+
 ## Copying the Path
 
 Click the copy button next to the path to copy it to your clipboard. This is useful for:

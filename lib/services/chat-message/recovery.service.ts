@@ -256,6 +256,7 @@ export async function attemptRequestLimitRecovery(
     error,
     repos,
     chatId,
+    userId,
     characterParticipantId,
   } = context
 
@@ -299,6 +300,9 @@ export async function attemptRequestLimitRecovery(
   // Try to stream a recovery response
   try {
     let fullResponse = ''
+    // Minted up front so the recovery call's LLM log row points at the message
+    // it produces — the Inspector's per-message button finds it by this id.
+    const messageId = crypto.randomUUID()
 
     for await (const chunk of streamMessage({
       messages: recoveryMessages,
@@ -310,6 +314,10 @@ export async function attemptRequestLimitRecovery(
       },
       tools: [], // No tools for recovery
       useNativeWebSearch: false,
+      userId,
+      messageId,
+      chatId,
+      characterId: character.id,
     })) {
       if (chunk.content) {
         fullResponse += chunk.content
@@ -318,7 +326,6 @@ export async function attemptRequestLimitRecovery(
     }
 
     // Save the recovery response as a message
-    const messageId = crypto.randomUUID()
     const now = new Date().toISOString()
 
     await repos.chats.addMessage(chatId, {

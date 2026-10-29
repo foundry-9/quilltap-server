@@ -33,6 +33,13 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.characters.all,
   queryKeys.mountPoints.all,
   queryKeys.memories.all,
+  queryKeys.inventory.lists,
+  queryKeys.inventory.folderLists,
+  queryKeys.inventory.archetypeLists,
+  queryKeys.inventory.equippedLists,
+  // Held custom-tool runs (operator intervention). Also under the custom-tools
+  // namespace the popup reads, which a reconnect may as well refresh too.
+  queryKeys.customTools.all,
 ]
 
 /**
@@ -69,16 +76,35 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // a cancel publishes the topic explicitly — so the composer chips
             // stay honest without a poll.
             queryKeys.chats.informs(id),
+            // Name chips for absent characters. A new message — the only
+            // thing that can name someone — publishes `chats`.
+            queryKeys.chats.absentMentions(id),
             // What everyone in the chat is wearing. An LLM's wardrobe_* call
             // or an Aurora announcement lands as a message, which publishes
             // `chats` — without this a tool-driven outfit change left the
             // wardrobe dialog's cached snapshot stale (bug 198).
             queryKeys.wardrobe.outfit(id),
+            // Every character's outfit timeline in the chat. A tool call or a
+            // parent-side replay of the turn's history settle publishes
+            // `chats`, so the History tab stays honest under an open dialog.
+            queryKeys.wardrobe.histories(id),
+            // What everyone in the chat carries (the Inventory). An equip
+            // posts Pascal's line, which publishes `chats`; a write from the
+            // equip chokepoint publishes it too.
+            queryKeys.inventory.equipped(id),
             // Where the scene came from. A scenario change posts the Host's
             // revision announcement, which publishes `chats`.
             queryKeys.chats.scenarioSource(id),
           ]
         : [queryKeys.chats.all]
+
+    case 'storytellerRounds':
+      // Scoped by chat id: the board for that chat re-reads its round.
+      return id ? [queryKeys.chats.storytellerRound(id)] : [queryKeys.chats.all]
+
+    case 'customToolInterventions':
+      // Scoped by chat id: the hold dialog for that chat re-reads its queue.
+      return id ? [queryKeys.customTools.interventions(id)] : [queryKeys.customTools.all]
 
     case 'projects':
       return id
@@ -104,6 +130,20 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
       // topic sweeps the namespace, which is what a batch delete spanning
       // several chats has to fall back to.
       return id ? [queryKeys.memories.chatCount(id)] : [queryKeys.memories.all]
+
+    case 'inventory':
+      // An object file was written — through any Inventory location (the
+      // operator's dialog, a character's inventory_* tool, a Pascal effect),
+      // or by a job child's buffered write; an open dialog's lists, folders
+      // and archetype pickers re-read, and so does every Carrying-now pane,
+      // which shows the objects resolved. The dialog leaves its own writes'
+      // refresh to this (`lib/hooks/use-inventory.ts`).
+      return [
+        queryKeys.inventory.lists,
+        queryKeys.inventory.folderLists,
+        queryKeys.inventory.archetypeLists,
+        queryKeys.inventory.equippedLists,
+      ]
 
     case 'mountPoints':
       // No per-store detail key exists yet; the namespace prefix is the

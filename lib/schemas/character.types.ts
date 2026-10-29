@@ -14,6 +14,7 @@ import {
   JsonSchema,
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
+import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -76,6 +77,12 @@ export const PhysicalDescriptionSchema = z.object({
   longPrompt: z.string().max(750).nullable().optional(),
   completePrompt: z.string().max(1000).nullable().optional(),
   fullDescription: z.string().nullable().optional(),
+  // Whether the character has a body that can be drawn as one (head,
+  // shoulders, torso, limbs). Absent means true; `false` marks a character
+  // such as a moving geometric form, and every image pipeline then drops the
+  // portrait crop and the pronoun-derived "man"/"woman" anchor and says it is
+  // not humanoid. Read through `isHumanoid` (lib/characters/physical-description.ts).
+  humanoid: z.boolean().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -228,6 +235,9 @@ export const CharacterSchema = z.object({
   /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
   canCreateOutfits: z.boolean().nullable().optional(),
 
+  /** Whether this character may use the inventory_* tools (null = enabled by default) */
+  canManageInventory: z.boolean().nullable().optional(),
+
   /**
    * When true, a new chat with this character defaults its Starting Outfit to
    * "Let character choose" — the character picks their opening outfit based on
@@ -237,6 +247,21 @@ export const CharacterSchema = z.object({
    * `properties.json`, not a DB column.
    */
   canChooseOutfit: z.boolean().default(false),
+
+  /**
+   * When true, this character is told it may draw diagrams — fenced
+   * ```mermaid / ```dot / ```svg blocks that the Salon renders as pictures.
+   * Gates only the system-prompt note; any diagram fence renders regardless.
+   * Lives in the vault's `properties.json`, not a DB column.
+   */
+  canDrawDiagrams: z.boolean().default(false),
+
+  /**
+   * How this character's Mermaid and Graphviz diagrams look (`handDrawn` or
+   * `clean`). A rendering choice only — the model never hears it. Kept even
+   * while `canDrawDiagrams` is off. Lives in the vault's `properties.json`.
+   */
+  diagramStyle: z.enum(DIAGRAM_STYLES).default(DEFAULT_DIAGRAM_STYLE),
 
   /**
    * When true, this character may inspect and access "the Staff" of personified

@@ -4,6 +4,7 @@
  * Scriptorium Phase 3.5.
  */
 
+import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -75,3 +76,16 @@ export interface DocOpenDocumentOutput {
   isNew: boolean;
   mtime?: number;
 }
+
+/**
+ * What this tool does to the world: opening an existing file is a read;
+ * omitting the path creates a new blank document, which is a write.
+ */
+export const docOpenDocumentToolEffect: ToolEffectSpec = computedToolEffect({
+  schema: docOpenDocumentToolInputSchema,
+  resolve: (input) => (input.uri || input.path ? 'read' : 'write'),
+  maxEffect: 'write',
+  notes: {
+    read: 'This turn allows only opening an existing file (pass `path` or `uri`); creating a blank document will be refused.',
+  },
+});

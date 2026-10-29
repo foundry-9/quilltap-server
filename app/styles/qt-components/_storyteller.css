@@ -1,0 +1,203 @@
+/**
+ * Storyteller mode — the Salon's turn-mode control and the bidding board.
+ *
+ *   qt-storyteller-mode*   — Normal / Paused / Storyteller segmented control
+ *   qt-storyteller-board*  — the round's board above the composer
+ *   qt-storyteller-card*   — one seat's bid
+ *
+ * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
+ * Every colour reads a --qt-storyteller-* hook with a token fallback.
+ */
+
+@layer components {
+  /* The turn-mode control: Normal / Paused / Storyteller, one segmented row. */
+  .qt-storyteller-mode {
+    display: flex;
+    width: 100%;
+    border: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
+    border-radius: var(--qt-storyteller-mode-radius, 0.5rem);
+    overflow: hidden;
+  }
+
+  .qt-storyteller-mode-option {
+    flex: 1 1 0%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 0.375rem 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    background: var(--qt-storyteller-mode-bg, var(--color-card));
+    color: var(--qt-storyteller-mode-fg, var(--color-muted-foreground));
+    border: none;
+    transition: background-color 150ms, color 150ms;
+  }
+
+  .qt-storyteller-mode-option + .qt-storyteller-mode-option {
+    border-left: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
+  }
+
+  .qt-storyteller-mode-option:hover {
+    background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));
+    color: var(--qt-storyteller-mode-hover-fg, var(--color-foreground));
+  }
+
+  .qt-storyteller-mode-option-active,
+  .qt-storyteller-mode-option-active:hover {
+    background: var(--qt-storyteller-mode-active-bg, var(--color-primary));
+    color: var(--qt-storyteller-mode-active-fg, var(--color-primary-foreground));
+  }
+
+  .qt-storyteller-mode-option-paused,
+  .qt-storyteller-mode-option-paused:hover {
+    background: var(--qt-status-warning-bg, var(--color-warning));
+    color: var(--qt-status-warning-fg, var(--color-warning-foreground));
+  }
+
+  /* The board: a panel above the composer while a round is open. */
+  .qt-storyteller-board {
+    margin-bottom: 0.5rem;
+    padding: 0.625rem;
+    border: 1px solid var(--qt-storyteller-board-border, var(--color-border));
+    border-radius: var(--qt-storyteller-board-radius, 0.75rem);
+    background: var(--qt-storyteller-board-bg, var(--color-card));
+    color: var(--qt-storyteller-board-fg, var(--color-card-foreground));
+  }
+
+  .qt-storyteller-board-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .qt-storyteller-board-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .qt-storyteller-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.5rem;
+    max-height: 16rem;
+    overflow-y: auto;
+  }
+
+  .qt-storyteller-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 0.5rem;
+    border: 1px solid var(--qt-storyteller-card-border, var(--color-border));
+    border-radius: var(--qt-storyteller-card-radius, 0.5rem);
+    background: var(--qt-storyteller-card-bg, var(--color-background));
+    font-size: 0.8125rem;
+  }
+
+  .qt-storyteller-card-selected {
+    border-color: var(--qt-storyteller-card-selected-border, var(--color-primary));
+    box-shadow: 0 0 0 1px var(--qt-storyteller-card-selected-border, var(--color-primary));
+  }
+
+  .qt-storyteller-card-act {
+    border-color: var(--qt-storyteller-card-act-border, var(--color-warning));
+  }
+
+  .qt-storyteller-card-destroy {
+    border-color: var(--qt-status-danger-border, var(--color-destructive));
+    background: var(--qt-storyteller-card-destroy-bg, color-mix(in srgb, var(--color-destructive) 10%, var(--color-background)));
+  }
+
+  .qt-storyteller-card-quiet {
+    opacity: 0.65;
+  }
+
+  /* A bid card can be dragged to set the running order. */
+  .qt-storyteller-card-draggable {
+    cursor: grab;
+  }
+
+  .qt-storyteller-card-dragging {
+    position: relative;
+    z-index: 10;
+    cursor: grabbing;
+    opacity: 0.85;
+    box-shadow: var(--qt-storyteller-card-dragging-shadow, 0 4px 12px rgb(0 0 0 / 0.25));
+  }
+
+  /* Its place in the running order, once the operator has arranged the board. */
+  .qt-storyteller-card-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.25rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    background: var(--qt-storyteller-card-order-bg, var(--color-primary));
+    color: var(--qt-storyteller-card-order-fg, var(--color-primary-foreground));
+  }
+
+  .qt-storyteller-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .qt-storyteller-card-name {
+    flex: 1 1 0%;
+    min-width: 0;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .qt-storyteller-plan {
+    font-style: italic;
+    color: var(--qt-storyteller-plan-fg, var(--color-foreground));
+  }
+
+  .qt-storyteller-meta {
+    font-size: 0.6875rem;
+    color: var(--qt-storyteller-meta-fg, var(--color-muted-foreground));
+  }
+
+  .qt-storyteller-warning {
+    font-size: 0.75rem;
+    font-weight: 600;
+    /* The alert token, not --color-destructive: a fill red is too dark to read
+       as small text on a dark card. */
+    color: var(--qt-storyteller-warning-fg, var(--qt-alert-error-fg));
+  }
+
+  .qt-storyteller-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+  }
+
+  .qt-storyteller-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--qt-storyteller-meta-fg, var(--color-muted-foreground));
+  }
+}

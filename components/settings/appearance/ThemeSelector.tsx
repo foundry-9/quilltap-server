@@ -220,6 +220,7 @@ export function ThemeSelector({
           <div className="flex items-center justify-between">
             <span>{installStatus.message}</span>
             <button
+              aria-label="Dismiss message"
               type="button"
               onClick={() => setInstallStatus(null)}
               className="ml-2 text-current opacity-60 hover:opacity-100"

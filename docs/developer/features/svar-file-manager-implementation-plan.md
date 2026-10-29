@@ -1,6 +1,6 @@
 # SVAR File Manager — Implementation Plan
 
-**Status:** Planning
+**Status:** Phases 0–3 shipped in 0dba2d804 (2026-06-10): adapter, capabilities API, theme bridge, and the Scriptorium heavy costume behind a "New file manager (beta)" toggle. Remaining: Phase 4 picker swaps (`SvarFilePicker` is built but unused; `FolderPicker` / `DocumentPickerModal` not yet replaced), promoting SVAR out of beta, retiring `FileBrowser`, Phase 5 help docs. Phase 0 findings: [complete/svar-bridge-spike-findings.md](complete/svar-bridge-spike-findings.md).
 **Author:** Charlie + Ariadne
 **Last updated:** 2026-06-10
 **Supersedes:** the early-May landscape survey (Chonky / Cubone / commercial rule-out → SVAR)

@@ -21,6 +21,7 @@ import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboa
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
 import { useBrahmaConsoleOptional } from '@/components/providers/brahma-console-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { standaloneDocKey, type DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { Icon } from '@/components/ui/icon'
@@ -107,6 +108,7 @@ export function SidebarFooter() {
   const helpChat = useHelpChatOptional()
   const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
+  const inventoryDialog = useInventoryDialogOptional()
   const pathname = usePathname()
   const router = useRouter()
   // Inside the workspace, the Brahma Console and the rail Wardrobe open as
@@ -248,6 +250,31 @@ export function SidebarFooter() {
             title="Wardrobe"
           >
             <Icon name="wardrobe" className="qt-left-sidebar-item-icon w-7 h-7" />
+          </button>
+        )}
+        {inventoryDialog && (
+          <button
+            type="button"
+            onClick={async () => {
+              // As the Wardrobe: a browse/edit tab in the workspace, the
+              // chat-scoped dialog from a Salon chat.
+              if (inWorkspace) {
+                workspace!.openTab('inventory')
+                return
+              }
+              const chatMatch = pathname?.match(SALON_CHAT_PATH_RE)
+              if (!chatMatch) {
+                inventoryDialog.open()
+                return
+              }
+              const chatId = chatMatch[1]
+              const characterId = await resolveDefaultCharacterForChat(chatId)
+              inventoryDialog.open(characterId ? { chatId, characterId } : { chatId })
+            }}
+            className="qt-left-sidebar-item justify-center px-0"
+            title="Inventory"
+          >
+            <Icon name="inventory" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
 

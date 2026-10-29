@@ -97,6 +97,10 @@ export interface ChatSettings {
   autoDetectRng?: boolean
   /** Whether Pascal's custom pseudo-tools are offered to models and the composer gutter button is shown */
   customTools?: boolean
+  /** Whether a custom tool's trigger phrases, said by anyone in a chat, run it automatically with its defaults */
+  customToolTriggers?: boolean
+  /** Whether a custom tool marked intervenable is held for the operator's say-so before Pascal announces it */
+  customToolIntervention?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
@@ -105,6 +109,8 @@ export interface ChatSettings {
   composerEmoji?: boolean
   /** Whether the `\` Unicode typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
   composerUnicode?: boolean
+  /** Whether `/` opens the slash-command menu in the Salon composer (the gutter buttons and sidebar are not gated by this) */
+  composerSlashCommands?: boolean
   /** What happens to a line typed while impersonating a character: posts as typed ('off'), opens the review dialog without a model call ('ask'), or opens it and restates at once ('always') */
   impersonationVoiceMode?: ImpersonationVoiceMode
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
@@ -183,12 +189,15 @@ export interface SmartTypographySettings {
   dashes?: boolean
   /** `...` → ellipsis, as you type. */
   ellipsis?: boolean
+  /** Paint a warning over punctuation that looks wrong while typing. */
+  punctuationWarnings?: boolean
 }
 
 export const DEFAULT_SMART_TYPOGRAPHY_SETTINGS: SmartTypographySettings = {
   displayQuotes: false,
   dashes: true,
   ellipsis: true,
+  punctuationWarnings: true,
 }
 
 /**
@@ -499,7 +508,20 @@ export const AUTOMATION_OPTIONS = [
     label: 'Auto-Detect RNG Calls',
     description: 'Automatically detect dice rolls (e.g., 2d6), coin flips, and "spin the bottle" in your messages and execute them',
   },
+  {
+    key: 'customToolTriggers' as const,
+    label: 'Auto-Run Custom Tools on Trigger Phrases',
+    description: 'When anyone in a chat says a phrase one of Pascal\'s custom tools declares, run that tool automatically with its defaults. Requires Custom Tools.',
+  },
+  {
+    key: 'customToolIntervention' as const,
+    label: 'Hold intervenable rolls for me',
+    description: 'A custom tool marked for intervention pauses for your say-so before Pascal announces it. A held roll waits for you indefinitely; switch this off and every roll goes ahead as dealt, which is how a chat may be left to run unattended. Requires Custom Tools.',
+  },
 ] as const
+
+/** The settings an Automation row toggles. */
+export type AutomationKey = (typeof AUTOMATION_OPTIONS)[number]['key']
 
 /**
  * Default automation settings
@@ -510,6 +532,16 @@ export const DEFAULT_AUTO_DETECT_RNG = true
  * Default custom-tools setting
  */
 export const DEFAULT_CUSTOM_TOOLS = true
+
+/**
+ * Default trigger-phrase setting — off: overhearing is a surprise the first time
+ */
+export const DEFAULT_CUSTOM_TOOL_TRIGGERS = false
+
+/**
+ * Default intervention setting — on: a held roll is the safe state, and the operator opts out to run unattended
+ */
+export const DEFAULT_CUSTOM_TOOL_INTERVENTION = true
 
 /**
  * Agent Mode Settings

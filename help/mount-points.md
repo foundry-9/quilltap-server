@@ -124,6 +124,12 @@ The one inconvenience worth committing to memory: these passages can only be arr
 npm run start:docker -- --recreate
 ```
 
+The start script now bids the old container a proper farewell before it builds the new one: it stops it gracefully, so the departing server hands back its claim on your data before it goes. (A container dispatched without ceremony, by `docker rm -f` or `docker kill`, leaves that claim behind, and its successor must wait some five minutes for it to lapse. If you rebuild by hand, `docker stop` first.)
+
+There is a second, quieter trap, and Quilltap now refuses to walk into it. Inside a container, any path that was *not* passed through — `/tmp`, say, or a folder you have just invented — still accepts files with every appearance of good faith. They are written into the container's own private quarters, and when the container is next rebuilt they are swept away with the rest of the furniture. Since a **Deconvert** removes the database's copy once it has written the files out, deconverting into such a place would leave your store's only copy in a room scheduled for demolition. Deconvert and sync therefore decline any destination that does not lie on a bind mount, and say so plainly. Choose a folder inside your data directory (`/app/quilltap/…`) or inside a store that was passed through from your machine.
+
+When the Scriptorium's folder picker opens inside a container, it begins at the data directory (`/app/quilltap`) rather than a home directory the container does not possess.
+
 Rebuilding disturbs nothing you own: your data directory and your document stores are passed through from the host, and only the container itself is replaced. Should you prefer to make these arrangements by hand, `--no-store-mounts` will stay the script's hand entirely.
 
 ## Hard Links Between Shelves

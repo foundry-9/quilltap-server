@@ -16,13 +16,24 @@ import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
+import { currentTurnStopSignal } from '@/lib/chat/turn-control'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
-import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
+import { customToolEffectMap } from '@/lib/pascal/tool-effect'
+import {
+  isComputedToolEffect,
+  isWithinCeiling,
+  maxEffectOfTool,
+  toolEffectSpecOf,
+  type ToolEffect,
+  type ToolEffectContext,
+} from '@/lib/tools/effects'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -59,19 +70,13 @@ export interface StreamOptions {
   stop?: string[]
   /** LLM log row type for this call. Defaults to `CHAT_MESSAGE`. */
   logType?: LLMLogType
-}
-
-/**
- * Debug info to send at start of stream
- */
-export interface StreamDebugInfo {
-  builtContext: BuiltContext
-  connectionProfile: ConnectionProfile
-  modelParams: Record<string, unknown>
-  messages: Array<{ role: string; contentLength: number; hasAttachments: boolean }>
-  tools: unknown[]
-  enabledToolOptions?: Record<string, boolean>
-  fallbackResults?: FallbackResult[]
+  /**
+   * Tool choice. `'none'` offers the tools (so the request's cached prefix
+   * matches a real turn's) while asking the model not to call any — the
+   * storyteller bid. Providers that ignore it may still return a call; the
+   * caller discards it.
+   */
+  toolChoice?: 'auto' | 'none'
 }
 
 /**
@@ -135,69 +140,104 @@ function isToolDisabled(
   return false
 }
 
-/**
- * Surface-specific narrowing for `buildTools`. Every field only ever removes
- * tools relative to the positional flags and the profile.
- */
-export interface BuildToolsExtras {
-  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
-  pluginToolAllowlist?: string[]
-  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
-  documentsOnlySearch?: boolean
-  /** `false` withholds `search_web` even when the profile allows it. */
-  webSearch?: boolean
+/** Name and description slots of a provider-format tool, whichever shape it takes. */
+function toolNameOf(tool: unknown): string | undefined {
+  const toolObj = tool as { function?: { name?: string }; name?: string }
+  return toolObj.function?.name || toolObj.name
 }
 
 /**
- * Build tools for the provider
+ * Apply an effect ceiling to a built tool list (see `BuildToolsOptions.effectCeiling`).
  */
-export async function buildTools(
-  connectionProfile: ConnectionProfile,
-  imageProfileId: string | null,
-  imageProfile: ImageProfile | null,
-  userId: string,
+function applyEffectCeilingToTools(
+  tools: unknown[],
+  ceiling: ToolEffect,
+  ctx: ToolEffectContext
+): unknown[] {
+  const kept: unknown[] = []
+  const dropped: string[] = []
+  for (const tool of tools) {
+    const name = toolNameOf(tool)
+    if (!name) {
+      kept.push(tool)
+      continue
+    }
+    const max = maxEffectOfTool(name, ctx)
+    if (isWithinCeiling(max, ceiling)) {
+      kept.push(tool)
+      continue
+    }
+    const spec = toolEffectSpecOf(name)
+    const note = spec && isComputedToolEffect(spec) ? spec.usesAllowedUnder(ceiling) : null
+    if (!note) {
+      dropped.push(name)
+      continue
+    }
+    const toolObj = tool as { function?: { description?: string }; description?: string }
+    if (toolObj.function) {
+      kept.push({ ...toolObj, function: { ...toolObj.function, description: `${toolObj.function.description ?? ''}\n\n${note}` } })
+    } else {
+      kept.push({ ...toolObj, description: `${toolObj.description ?? ''}\n\n${note}` })
+    }
+  }
+  logger.debug('Effect ceiling applied to tool list', { ceiling, kept: kept.length, dropped })
+  return kept
+}
+
+/**
+ * What a surface asks `buildTools` for. Every flag is opt-in except the three
+ * wardrobe / inventory capabilities, which a character holds unless it is
+ * explicitly denied (`false`) — the same reading the character columns get.
+ */
+export interface BuildToolsOptions {
+  connectionProfile: ConnectionProfile
+  userId: string
+  imageProfileId?: string | null
+  imageProfile?: ImageProfile | null
   /** Project ID if chat is associated with a project (enables project_info tool) */
-  projectId?: string | null,
+  projectId?: string | null
   /** Whether context compression is enabled (enables request_full_context tool) */
-  requestFullContext?: boolean,
-  /** List of tool IDs to disable (or undefined to return empty tools for this message) */
-  disabledTools?: string[],
-  /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
-  disabledToolGroups?: string[],
+  requestFullContext?: boolean
+  /** Tool IDs to withhold */
+  disabledTools?: string[]
+  /** Disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
+  disabledToolGroups?: string[]
   /** Whether agent mode is enabled (enables submit_final_response tool) */
-  agentModeEnabled?: boolean,
+  agentModeEnabled?: boolean
   /** Whether this is a multi-character chat (enables whisper tool) */
-  isMultiCharacter?: boolean,
-  /** Whether help tools are enabled for this character (enables help_search and help_settings) */
-  helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, and wardrobe_take_off) */
-  canDressThemselves?: boolean,
-  /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
-  canCreateOutfits?: boolean,
+  isMultiCharacter?: boolean
+  /** Whether help tools are enabled for this character (enables help_search, help_settings, help_navigate) */
+  helpToolsEnabled?: boolean
+  /** wardrobe_list / _read / _wear / _take_off / _rollback / _history (default on) */
+  canDressThemselves?: boolean
+  /** wardrobe_create / _update / _archive (default on) */
+  canCreateOutfits?: boolean
+  /** The nine inventory_* tools (default on) */
+  canManageInventory?: boolean
   /**
    * Which `doc_*` tools to build: `'full'` (the whole family — chat surfaces
    * with linked stores, the Brahma Console), `'read'` (the read-only five — the
-   * Scenario Builder), or `'off'`.
+   * Scenario Builder), or `'off'` (the default).
    */
-  docToolsMode?: DocToolsMode,
+  docToolsMode?: DocToolsMode
   /** Whether the ask_carina tool is enabled for this character */
-  askCarinaEnabled?: boolean,
+  askCarinaEnabled?: boolean
   /**
    * Whether to include the always-on "workspace" tool set (mail, annotations,
    * terminal, conversation reading, self-inventory, RNG/state). Defaults to
    * true. The Brahma Console passes false to strip them.
    */
-  includeWorkspaceTools?: boolean,
+  includeWorkspaceTools?: boolean
   /**
    * When true, the `search` tool is built from its Brahma variant whose schema
    * omits the `memories` source (Brahma Console has no memory access).
    */
-  excludeMemorySearch?: boolean,
+  excludeMemorySearch?: boolean
   /**
    * When true, include the read-only `run_sql` tool (Brahma Console only).
    * Execution is additionally gated on `operatorSurface` in the tool executor.
    */
-  sqlAccess?: boolean,
+  sqlAccess?: boolean
   /**
    * Pascal's custom-tool roster perspective — the RESPONDING character's, since
    * a character-tier store shadows the farther tiers. Pass it to offer
@@ -205,20 +245,72 @@ export async function buildTools(
    * surface has no roster at all) and the tool is never built.
    *
    * The roster is resolved here rather than by the caller so the work happens
-   * only once tools are actually being built — a Courier turn, a profile with
-   * `allowToolUse: false`, or the legacy `disabledTools === undefined` bail all
-   * return before a single mount is listed. Deliberately NOT cached across
-   * turns: a `.tool.json` edited mid-chat must be live on the next call (see
-   * the freshness note atop `lib/pascal/custom-tools.ts`).
+   * only once tools are actually being built — a Courier turn or a profile with
+   * `allowToolUse: false` returns before a single mount is listed. Deliberately
+   * NOT cached across turns: a `.tool.json` edited mid-chat must be live on the
+   * next call (see the freshness note atop `lib/pascal/custom-tools.ts`).
    */
-  customToolContext?: RosterContext | null,
-  /** Surface-specific narrowing, applied at construction (never a post-filter). */
-  extras?: BuildToolsExtras
-): Promise<{
+  customToolContext?: RosterContext | null
+  // Surface-specific narrowing, applied at construction (never a post-filter).
+  // Each only ever removes tools relative to the flags above and the profile.
+  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
+  pluginToolAllowlist?: string[]
+  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
+  documentsOnlySearch?: boolean
+  /** `false` withholds `search_web` even when the profile allows it. */
+  webSearch?: boolean
+  /**
+   * The turn's effect ceiling (a storyteller turn, an autonomous room without
+   * destructive permission). A tool whose static effect is above it is
+   * dropped; a tool whose effect depends on its input stays listed with one
+   * line saying which uses this turn allows. The executor's check is the
+   * guarantee; this only spares the model offers it can't use.
+   */
+  effectCeiling?: ToolEffect
+}
+
+export interface BuiltTools {
   tools: unknown[]
   modelSupportsNativeTools: boolean
   useNativeWebSearch: boolean
-}> {
+  /** Custom tool name → derived effect, for the roster offered this turn (empty when none). */
+  customToolEffects: Map<string, ToolEffect>
+  /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
+  pluginToolEffects: Map<string, ToolEffect>
+}
+
+/**
+ * Build tools for the provider
+ */
+export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools> {
+  const {
+    connectionProfile,
+    userId,
+    imageProfileId,
+    imageProfile,
+    projectId,
+    requestFullContext,
+    disabledTools = [],
+    disabledToolGroups = [],
+    agentModeEnabled,
+    isMultiCharacter,
+    helpToolsEnabled,
+    canDressThemselves,
+    canCreateOutfits,
+    canManageInventory,
+    docToolsMode,
+    askCarinaEnabled,
+    includeWorkspaceTools,
+    excludeMemorySearch,
+    sqlAccess,
+    customToolContext,
+    pluginToolAllowlist,
+    documentsOnlySearch,
+    webSearch,
+    effectCeiling,
+  } = options
+  const customToolEffects = new Map<string, ToolEffect>()
+  let pluginToolEffects = new Map<string, ToolEffect>()
   const provider = await createLLMProvider(
     connectionProfile.provider,
     connectionProfile.baseUrl || undefined
@@ -235,7 +327,7 @@ export async function buildTools(
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
   }
 
   // Fetch user's plugin tool configurations from database
@@ -256,12 +348,6 @@ export async function buildTools(
     })
   }
 
-  // If disabledTools is undefined (not an array), skip tools entirely for this message
-  // This is a legacy fallback - tools are now always sent with every prompt
-  if (disabledTools === undefined) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
-  }
-
   // Pascal's custom pseudo-tools. Resolved once per turn, at the last possible
   // moment (every early return above skips it entirely). A roster that comes
   // back empty leaves `run_custom` unbuilt — the tool list stays stable for
@@ -271,6 +357,11 @@ export async function buildTools(
     try {
       const roster = await resolveCustomToolRoster(customToolContext)
       customTools = [...roster.tools.values()]
+      for (const [name, effect] of customToolEffectMap(
+        customTools.map((entry) => ({ name: entry.definition.name, definition: entry.definition }))
+      )) {
+        customToolEffects.set(name, effect)
+      }
     } catch (rosterError) {
       // A broken vault must not take the whole turn down — the character simply
       // goes to the table without their custom tools.
@@ -286,7 +377,7 @@ export async function buildTools(
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
     // A surface may narrow web search further (never widen it past the profile).
-    webSearch: !!connectionProfile.allowWebSearch && extras?.webSearch !== false,
+    webSearch: !!connectionProfile.allowWebSearch && webSearch !== false,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
@@ -297,24 +388,30 @@ export async function buildTools(
     wardrobeRead: canDressThemselves !== false,
     wardrobeWear: canDressThemselves !== false,
     wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeRollback: canDressThemselves !== false,
+    wardrobeHistory: canDressThemselves !== false,
     wardrobeCreate: canCreateOutfits !== false,
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
+    ...inventoryToolFlags(canManageInventory),
     whisper: !!isMultiCharacter,
     docToolsMode: docToolsMode ?? 'off',
-    pluginToolAllowlist: extras?.pluginToolAllowlist,
-    documentsOnlySearch: !!extras?.documentsOnlySearch,
+    pluginToolAllowlist,
+    documentsOnlySearch: !!documentsOnlySearch,
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,
     customTools,
+    // The editor rides on the same switch as the roster, not on the roster's
+    // contents: an empty table is exactly when a first tool needs writing.
+    editCustomTool: !!customToolContext,
     toolConfigs,
   })
 
   // Filter out disabled tools (individual IDs and group patterns)
   const hasDisabledTools = disabledTools.length > 0
-  const hasDisabledGroups = disabledToolGroups && disabledToolGroups.length > 0
+  const hasDisabledGroups = disabledToolGroups.length > 0
 
   if (hasDisabledTools || hasDisabledGroups) {
     // Build a map of tool name -> source metadata for group filtering
@@ -359,14 +456,28 @@ export async function buildTools(
       return !isToolDisabled(
         toolName,
         disabledTools,
-        disabledToolGroups || [],
+        disabledToolGroups,
         sourceMetadata
       )
     })
 
   }
 
-  return { tools, modelSupportsNativeTools, useNativeWebSearch }
+  try {
+    const { toolRegistry } = await import('@/lib/plugins/tool-registry')
+    pluginToolEffects = await toolRegistry.getToolEffects(toolConfigs)
+  } catch (effectsError) {
+    logger.warn('Failed to read plugin tool effects; plugin tools count as write', {
+      userId,
+      error: effectsError instanceof Error ? effectsError.message : String(effectsError),
+    })
+  }
+
+  if (effectCeiling) {
+    tools = applyEffectCeilingToTools(tools, effectCeiling, { customToolEffects, pluginToolEffects })
+  }
+
+  return { tools, modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
 }
 
 /**
@@ -385,7 +496,7 @@ export async function* streamMessage(
   thoughtSignature?: string
   reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE' } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE', toolChoice } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -417,145 +528,145 @@ export async function* streamMessage(
   const cacheKey = buildCharacterCacheKey(characterId)
   const sampling = resolveSamplingParams(modelParams)
 
-  // A provider that answers with headers and then goes silent would otherwise
-  // hold this `for await` open forever — the SDK's own timeout stops at the
-  // headers. The watchdog turns that into an ordinary throw, which the fallback
-  // engine reads as `network` and routes to the understudy.
-  for await (const chunk of withStallWatchdog(
-    provider.streamMessage(
-      {
-        messages: llmMessages,
-        model: connectionProfile.modelName,
-        temperature: sampling.temperature,
-        maxTokens: sampling.maxTokens,
-        topP: sampling.topP,
-        tools: tools.length > 0 ? tools : undefined,
-        webSearchEnabled: useNativeWebSearch,
-        profileParameters: modelParams,
-        cacheKey,
-        previousResponseId,
-        stop,
-      },
-      apiKey
-    ),
-    {
+  // One row per call, whatever becomes of it. A call that fails, stalls, is
+  // stopped by the operator or is abandoned by its consumer was still asked,
+  // and the Inspector is where the operator goes to see what was asked — so
+  // the row is written on the terminal chunk when there is one, and from the
+  // `finally` below when there is not.
+  let logged = false
+  const record = (outcome: { finishReason?: string | null; error?: string }) => {
+    if (logged || !userId) return
+    logged = true
+    const durationMs = Date.now() - startTime
+    const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
+
+    logLLMCall({
+      userId,
+      type: logType,
+      messageId,
+      chatId,
+      characterId,
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
-      logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
-    }
-  )) {
-    chunkCount++
-    if (chunk.content) {
-      // Normalize content that may be wrapped in content block format
-      // e.g., [{'type': 'text', 'text': "actual content"}]
-      const normalizedContent = normalizeContentBlockFormat(chunk.content)
-      if (normalizedContent !== chunk.content) {
-        chunk.content = normalizedContent
-      }
-      totalContentLength += chunk.content.length
-      accumulatedContent += chunk.content
-    }
-    if (chunk.usage) {
-      lastUsage = chunk.usage
-    }
-    if (chunk.cacheUsage) {
-      lastCacheUsage = chunk.cacheUsage
-    }
-    // Snapshot the provider-shape `usage` object pre-normalization so future
-    // plugin regressions (provider reports cached tokens but plugin never
-    // reads the field) show up as `rawProviderUsage` populated while
-    // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
-    // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
-    // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
-    // Google: `usageMetadata.cachedContentTokenCount`).
-    if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
-      lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
-    }
-    if (chunk.done) {
-
-      // Log the LLM call if userId is provided
-      if (userId) {
-        const durationMs = Date.now() - startTime
-        const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
-        const finishReason = extractFinishReason(chunk.rawResponse)
-
-        logLLMCall({
-          userId,
-          type: logType,
-          messageId,
-          chatId,
-          characterId,
-          provider: connectionProfile.provider,
-          modelName: connectionProfile.modelName,
-          connectionProfileId: connectionProfile.id,
-          request: {
-            messages: llmMessages.map(m => ({
-              role: m.role,
-              content: m.content,
-              attachments: m.attachments,
-            })),
-            temperature: sampling.temperature,
-            maxTokens: sampling.maxTokens,
-            tools: tools.length > 0 ? tools : undefined,
-          },
-          response: {
-            content: accumulatedContent,
-            finishReason,
-          },
-          usage: lastUsage,
-          cacheUsage: lastCacheUsage,
-          rawProviderUsage: lastRawProviderUsage,
-          requestHashes,
-          durationMs,
-        }).catch(err => {
-          logger.warn('Failed to log LLM call from streaming service', {
-            userId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
-      }
-    }
-    yield chunk
-  }
-}
-
-/**
- * Send debug info at start of stream
- */
-export function encodeDebugInfo(
-  encoder: TextEncoder,
-  debugInfo: StreamDebugInfo
-): Uint8Array {
-  const { builtContext, connectionProfile, modelParams, messages, tools } = debugInfo
-  const sampling = resolveSamplingParams(modelParams)
-
-  const llmRequestDetails = {
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-    temperature: sampling.temperature,
-    maxTokens: sampling.maxTokens,
-    topP: sampling.topP,
-    messageCount: messages.length,
-    hasTools: tools.length > 0,
-    tools: tools.length > 0 ? tools : undefined,
-    messages: messages,
-    contextManagement: {
-      tokenUsage: builtContext.tokenUsage,
-      budget: {
-        total: builtContext.budget.totalLimit,
-        responseReserve: builtContext.budget.responseReserve,
+      connectionProfileId: connectionProfile.id,
+      request: {
+        messages: llmMessages.map(m => ({
+          role: m.role,
+          content: m.content,
+          attachments: m.attachments,
+        })),
+        temperature: sampling.temperature,
+        maxTokens: sampling.maxTokens,
+        tools: tools.length > 0 ? tools : undefined,
       },
-      memoriesIncluded: builtContext.memoriesIncluded,
-      messagesIncluded: builtContext.messagesIncluded,
-      messagesTruncated: builtContext.messagesTruncated,
-      includedSummary: builtContext.includedSummary,
-      debugMemories: builtContext.debugMemories,
-      debugSummary: builtContext.debugSummary,
-      debugSystemPrompt: builtContext.debugSystemPrompt,
-    },
+      response: {
+        content: accumulatedContent,
+        finishReason: outcome.finishReason ?? null,
+        ...(outcome.error ? { error: outcome.error } : {}),
+      },
+      usage: lastUsage,
+      cacheUsage: lastCacheUsage,
+      rawProviderUsage: lastRawProviderUsage,
+      requestHashes,
+      durationMs,
+    }).catch(err => {
+      logger.warn('Failed to log LLM call from streaming service', {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
   }
 
-  return encoder.encode(`data: ${JSON.stringify({ debugLLMRequest: llmRequestDetails })}\n\n`)
+  let exhausted = false
+  let failure: string | undefined
+  try {
+    // A provider that answers with headers and then goes silent would otherwise
+    // hold this `for await` open forever — the SDK's own timeout stops at the
+    // headers. The watchdog turns that into an ordinary throw, which the fallback
+    // engine reads as `network` and routes to the understudy.
+    for await (const chunk of withStallWatchdog(
+      provider.streamMessage(
+        {
+          messages: llmMessages,
+          model: connectionProfile.modelName,
+          temperature: sampling.temperature,
+          maxTokens: sampling.maxTokens,
+          topP: sampling.topP,
+          tools: tools.length > 0 ? tools : undefined,
+          ...(toolChoice && tools.length > 0 ? { toolChoice } : {}),
+          webSearchEnabled: useNativeWebSearch,
+          profileParameters: modelParams,
+          cacheKey,
+          previousResponseId,
+          stop,
+        },
+        apiKey
+      ),
+      {
+        provider: connectionProfile.provider,
+        modelName: connectionProfile.modelName,
+        logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
+        // The operator's hard stop for the Salon stream this call belongs to —
+        // every chat-message call site (primary, retries, failover, tool-loop
+        // continuations, Carina inside the turn) inherits it from here.
+        abortSignal: currentTurnStopSignal(),
+      }
+    )) {
+      chunkCount++
+      if (chunk.content) {
+        // Normalize content that may be wrapped in content block format
+        // e.g., [{'type': 'text', 'text': "actual content"}]
+        const normalizedContent = normalizeContentBlockFormat(chunk.content)
+        if (normalizedContent !== chunk.content) {
+          chunk.content = normalizedContent
+        }
+        totalContentLength += chunk.content.length
+        accumulatedContent += chunk.content
+      }
+      if (chunk.usage) {
+        lastUsage = chunk.usage
+      }
+      if (chunk.cacheUsage) {
+        lastCacheUsage = chunk.cacheUsage
+      }
+      // Snapshot the provider-shape `usage` object pre-normalization so future
+      // plugin regressions (provider reports cached tokens but plugin never
+      // reads the field) show up as `rawProviderUsage` populated while
+      // `cacheUsage` is null. Each plugin populates this on its terminal chunk;
+      // shape is provider-specific (OpenAI/Grok/Z.AI: `prompt_tokens_details`
+      // or `input_tokens_details`; Anthropic: `cache_read_input_tokens`;
+      // Google: `usageMetadata.cachedContentTokenCount`).
+      if (chunk.rawProviderUsage && typeof chunk.rawProviderUsage === 'object') {
+        lastRawProviderUsage = chunk.rawProviderUsage as Record<string, unknown>
+      }
+      if (chunk.done) {
+        record({ finishReason: extractFinishReason(chunk.rawResponse) })
+      }
+      yield chunk
+    }
+    exhausted = true
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error)
+    throw error
+  } finally {
+    if (!logged) {
+      logger.debug('Recording an LLM stream that ended without a terminal chunk', {
+        chatId,
+        messageId,
+        logType,
+        chunkCount,
+        exhausted,
+        failed: failure !== undefined,
+      })
+      record(
+        failure !== undefined
+          ? { error: failure }
+          : exhausted
+            ? {}
+            : { error: 'The stream was closed before the provider finished' }
+      )
+    }
+  }
 }
 
 /**
@@ -653,52 +764,84 @@ export function flushReasoningSegment(streaming: StreamingState): void {
 }
 
 /**
+ * The payload of the done event
+ */
+export interface DoneEventData {
+  messageId: string | null
+  participantId?: string | null
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
+  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
+  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
+  toolsExecuted: boolean
+  turn?: {
+    nextSpeakerId: string | null
+    reason: string
+    cycleComplete: boolean
+    isUsersTurn: boolean
+  }
+  emptyResponse?: boolean
+  emptyResponseReason?: string
+  provider?: string
+  modelName?: string
+  /** The turn's route trail — every profile tried, in order — so the client's
+   *  optimistic assistant push carries it without a refetch. Null (the common
+   *  case) when nothing failed. */
+  routeTrail?: RouteAttempt[] | null
+  isSilentMessage?: boolean
+  /** The Courier: signals that this done event closes a parked placeholder turn,
+   * not an actual streamed response. The Salon should skip its optimistic
+   * assistant-message push and rely on the prior fetchChat() refresh. */
+  pendingExternalTurn?: boolean
+  /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
+   * client's optimistic assistant-message push carry thinking without a refetch. */
+  reasoningContent?: string | null
+  /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
+  reasoningSegments?: ReasoningSegment[] | null
+  /**
+   * "Nothing to add" turn-skipping: this turn was passed. The client resets
+   * its streaming buffer without appending a bubble or toasting (the Host
+   * turn-pass announcement already carries the visible note).
+   */
+  skipped?: boolean
+  /** Participant ID of the character who passed (set when `skipped` is true). */
+  skippedParticipantId?: string | null
+  /**
+   * Raised hand: this character yielded the floor. Rides with `skipped` on a
+   * bare yield (no bubble to append — the Host announcement is the note).
+   */
+  yielded?: boolean
+  /**
+   * The operator hard-stopped the turn before any prose streamed. Like
+   * `skipped`, the client resets its buffer without a bubble or a toast.
+   */
+  stopped?: boolean
+}
+
+/**
  * Encode the done event
  */
-export function encodeDoneEvent(
-  encoder: TextEncoder,
-  data: {
-    messageId: string | null
-    participantId?: string | null
-    usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-    cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-    attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-    toolsExecuted: boolean
-    turn?: {
-      nextSpeakerId: string | null
-      reason: string
-      cycleComplete: boolean
-      isUsersTurn: boolean
-    }
-    emptyResponse?: boolean
-    emptyResponseReason?: string
-    provider?: string
-    modelName?: string
-    /** The turn's route trail — every profile tried, in order — so the client's
-     *  optimistic assistant push carries it without a refetch. Null (the common
-     *  case) when nothing failed. */
-    routeTrail?: RouteAttempt[] | null
-    isSilentMessage?: boolean
-    /** The Courier: signals that this done event closes a parked placeholder turn,
-     * not an actual streamed response. The Salon should skip its optimistic
-     * assistant-message push and rely on the prior fetchChat() refresh. */
-    pendingExternalTurn?: boolean
-    /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
-     * client's optimistic assistant-message push carry thinking without a refetch. */
-    reasoningContent?: string | null
-    /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
-    reasoningSegments?: ReasoningSegment[] | null
-    /**
-     * "Nothing to add" turn-skipping: this turn was passed. The client resets
-     * its streaming buffer without appending a bubble or toasting (the Host
-     * turn-pass announcement already carries the visible note).
-     */
-    skipped?: boolean
-    /** Participant ID of the character who passed (set when `skipped` is true). */
-    skippedParticipantId?: string | null
-  }
-): Uint8Array {
+export function encodeDoneEvent(encoder: TextEncoder, data: DoneEventData): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode the done event of a Salon turn that reached the provider: the usage,
+ * attachment results and answering model come from the turn's streaming state,
+ * so every way a turn closes reports them the same way.
+ */
+export function encodeTurnDoneEvent(
+  encoder: TextEncoder,
+  streaming: StreamingState,
+  data: Omit<DoneEventData, 'usage' | 'cacheUsage' | 'attachmentResults' | 'provider' | 'modelName'>
+): Uint8Array {
+  return encodeDoneEvent(encoder, {
+    usage: streaming.usage,
+    cacheUsage: streaming.cacheUsage,
+    attachmentResults: streaming.attachmentResults,
+    provider: streaming.effectiveProfile.provider,
+    modelName: streaming.effectiveProfile.modelName,
+    ...data,
+  })
 }
 
 /**
@@ -756,6 +899,28 @@ export function encodeStatusEvent(
   return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
 }
 
+/** Emits one status line for the character whose turn is being built. */
+export type TurnStatusEmitter = (stage: string, message: string) => void
+
+/**
+ * A status emitter bound to one turn's stream and (once it is known) its
+ * responding character, so every line the Salon shows above the composer is
+ * attributed the same way.
+ */
+export function createTurnStatusEmitter(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  character?: { id: string; name: string }
+): TurnStatusEmitter {
+  return (stage, message) => {
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage,
+      message,
+      ...(character ? { characterName: character.name, characterId: character.id } : {}),
+    }))
+  }
+}
+
 /**
  * Encode a Courier "pending external turn" event. The Salon uses this to
  * surface the placeholder bubble with a copy-out / paste-back affordance.
@@ -793,7 +958,7 @@ export function encodeTurnCompleteEvent(
 export function encodeChainCompleteEvent(
   encoder: TextEncoder,
   data: {
-    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'yielded' | 'stopped' | 'round_open'
     nextSpeakerId: string | null
     chainDepth: number
     /**
@@ -815,6 +980,44 @@ export function encodeChainCompleteEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Storyteller: the round's board as it stands (sent when a round opens).
+ */
+export function encodeStorytellerRoundEvent(encoder: TextEncoder, round: StorytellerRound): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ storytellerRound: round })}\n\n`)
+}
+
+/**
+ * Storyteller: one seat's bid landed (or failed, or passed).
+ */
+export function encodeStorytellerBidEvent(
+  encoder: TextEncoder,
+  data: { roundId: string; bid: StorytellerBid }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ storytellerBid: data })}\n\n`)
+}
+
+/**
+ * Storyteller: every bid is in (or the board timeout passed). The floor is the
+ * operator's; the board waits for a selection. Followed by a `round_open`
+ * chain-complete, which ends the send's stream.
+ */
+export function encodeRoundOpenEvent(encoder: TextEncoder, data: { roundId: string }): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ roundOpen: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode the answer to the operator's raised hand: the asked character either
+ * yielded the floor or carried on. Either way the hand is down; the Salon
+ * lowers its button and, on a decline, says who carried on.
+ */
+export function encodeHandAnsweredEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; characterName: string; yielded: boolean }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ handAnswered: true, ...data })}\n\n`)
 }
 
 /**

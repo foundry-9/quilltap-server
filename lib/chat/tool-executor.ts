@@ -3,6 +3,7 @@
  * Detects and executes LLM tool calls during message processing
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { logger } from '@/lib/logger'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
@@ -77,6 +78,13 @@ import {
   type DocEditToolContext,
 } from '@/lib/tools/handlers/doc-edit-handler';
 import { WARDROBE_TOOL_TABLE } from '@/lib/tools/handlers/wardrobe-tool-table';
+import { INVENTORY_TOOL_NAMES, INVENTORY_TOOL_TABLE } from '@/lib/tools/handlers/inventory-tool-table';
+import {
+  executeLogCreateEntryTool,
+  executeLogGrepTool,
+  executeLogReadTool,
+  type LogToolContext,
+} from '@/lib/tools/handlers/log-handler';
 import {
   executeReadConversationTool,
   formatReadConversationResults,
@@ -109,6 +117,12 @@ import {
   type TerminalToolError as TerminalToolErrorType,
 } from '@/lib/tools/handlers/terminal-handler';
 import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
+import {
+  describeCeilingRefusal,
+  effectOfToolCall,
+  isWithinCeiling,
+  type ToolEffect,
+} from '@/lib/tools/effects';
 
 export interface ToolCallRequest {
   name: string;
@@ -186,6 +200,17 @@ export interface ToolExecutionContext {
    */
   pendingWardrobeAnnouncements?: Set<string>;
   /**
+   * The turn's outfit-history intents, created beside the announcement set by
+   * `newWardrobeTurnContainers` and drained with it.
+   */
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  /**
+   * The turn's pending Inventory changes, created beside the announcement set
+   * by `newWardrobeTurnContainers` and drained by
+   * `flushPendingInventoryAnnouncements` at turn end.
+   */
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
+  /**
    * Surface a Carina (`ask_carina`) answer to the Salon the instant it posts,
    * via the turn's live SSE stream. Set by the orchestrator (which holds the
    * stream controller); absent in the autonomous-room/forked-child path, where
@@ -220,6 +245,18 @@ export interface ToolExecutionContext {
    * `operatorSurface`: the executor refuses a context that sets both.
    */
   mountPool?: TieredMountPool;
+  /**
+   * The highest effect a call may have this turn (a storyteller turn's bid
+   * tier; an autonomous room without destructive-tool permission). A call
+   * above it is not executed: it returns a tool result saying so, and the
+   * model carries on. Unset everywhere else. This check is the guarantee —
+   * `buildTools()`'s list filter only spares the model offers it can't use.
+   */
+  effectCeiling?: ToolEffect;
+  /** Custom tool name → derived effect for the caller's roster, so `run_custom` can be ranked. */
+  customToolEffects?: ReadonlyMap<string, ToolEffect>;
+  /** Plugin / MCP tool name → declared effect. Missing tools count as `write`. */
+  pluginToolEffects?: ReadonlyMap<string, ToolEffect>;
 }
 
 /**
@@ -240,9 +277,14 @@ const BUILT_IN_TOOLS = new Set<string>([
   'state',
   // Pascal the Croupier — user-authored pseudo-tools
   'run_custom',
+  'edit_custom_tool',
   'self_inventory',
   'submit_final_response',
   'whisper',
+  // The log
+  'log_create_entry',
+  'log_grep',
+  'log_read',
   // Scriptorium tools
   'read_conversation',
   'upsert_annotation',
@@ -258,6 +300,10 @@ const BUILT_IN_TOOLS = new Set<string>([
   'wardrobe_archive',
   'wardrobe_wear',
   'wardrobe_take_off',
+  'wardrobe_rollback',
+  'wardrobe_history',
+  // Inventory tools — the objects a character carries
+  ...INVENTORY_TOOL_NAMES,
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
   // Terminal tools — Prospero Phase 2
@@ -292,6 +338,36 @@ export async function executeToolCallWithContext(
       result: null,
       error: 'Tool context is misconfigured (mountPool and operatorSurface are mutually exclusive).',
     };
+  }
+
+  // The effect ceiling — the one place a call's effect is checked.
+  if (context.effectCeiling) {
+    const effect = effectOfToolCall(toolCall.name, toolCall.arguments, {
+      customToolEffects: context.customToolEffects,
+      pluginToolEffects: context.pluginToolEffects,
+    });
+    if (!isWithinCeiling(effect, context.effectCeiling)) {
+      logger.info('Tool call refused: above the turn\'s effect ceiling', {
+        context: 'tool-executor',
+        toolName: toolCall.name,
+        chatId,
+        effect,
+        ceiling: context.effectCeiling,
+      });
+      const message = describeCeilingRefusal(toolCall.name, effect, context.effectCeiling);
+      return {
+        toolName: toolCall.name,
+        success: false,
+        result: { formattedText: message },
+        error: message,
+      };
+    }
+    logger.debug('Tool call within the turn\'s effect ceiling', {
+      context: 'tool-executor',
+      toolName: toolCall.name,
+      effect,
+      ceiling: context.effectCeiling,
+    });
   }
 
   try {
@@ -618,10 +694,10 @@ export async function executeToolCallWithContext(
         chatId,
         characterId,
         characterMountPointId: context.characterMountPointId,
-        characterIds: context.characterIds,
         projectId: context.projectId,
         callerParticipantId: context.callingParticipantId,
         onPosted: context.emitPascalResult,
+        ...turnContainersOf(context),
       });
 
       return {
@@ -633,6 +709,37 @@ export async function executeToolCallWithContext(
           value: out.value,
           state: out.state,
           whispered: out.whispered,
+        } : null,
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle edit_custom_tool (Pascal the Croupier — save or validate a definition, or fetch the format)
+    if (toolCall.name === 'edit_custom_tool') {
+      const { executeEditCustomTool, formatEditCustomToolResults } = await import('@/lib/tools/handlers/edit-custom-tool-handler');
+
+      // A definition is a document: it resolves and writes with the same
+      // context, and so the same store access, as the doc_* tools.
+      const out = await executeEditCustomTool(toolCall.arguments, {
+        userId,
+        chatId,
+        projectId: context.projectId,
+        characterId,
+        operatorOverride: context.operatorSurface,
+        mountPool: context.mountPool,
+      });
+
+      return {
+        toolName: 'edit_custom_tool',
+        success: out.success,
+        result: out.success ? {
+          formattedText: formatEditCustomToolResults(out),
+          action: out.action,
+          path: out.path,
+          uri: out.uri,
+          name: out.name,
+          schema: out.schema,
+          examples: out.examples,
         } : null,
         error: out.success ? undefined : out.error,
       };
@@ -715,17 +822,55 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // The seven wardrobe_* tools: one table, one context. Every tool gets the
-    // turn's announcement set, so none can be the one that drops it (bug 193).
+    // The wardrobe_* tools: one table, one context. Every tool gets the
+    // turn's containers, so none can be the one that drops them (bug 193),
+    // and every change is recorded as the calling character's.
     const wardrobeTool = WARDROBE_TOOL_TABLE[toolCall.name];
     if (wardrobeTool) {
       const { success, result, error } = await wardrobeTool(toolCall.arguments, {
         userId,
         chatId,
         characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+        provenance: { source: 'character', ...(characterId ? { actorCharacterId: characterId } : {}) },
+        ...turnContainersOf(context),
       });
       return { toolName: toolCall.name, success, result, error };
+    }
+
+    // The inventory_* tools: one table, one context, the calling character's
+    // bag. The turn's pending Inventory announcements ride along so every
+    // change in the turn collapses into one Pascal line.
+    const inventoryTool = INVENTORY_TOOL_TABLE[toolCall.name];
+    if (inventoryTool) {
+      if (!characterId) {
+        return { toolName: toolCall.name, success: false, result: null, error: 'The inventory tools need a character to act for.' };
+      }
+      const { success, result, error } = await inventoryTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+        ...(context.pendingInventoryAnnouncements ? { pendingInventoryAnnouncements: context.pendingInventoryAnnouncements } : {}),
+      });
+      return { toolName: toolCall.name, success, result, error };
+    }
+
+    // Handle the log tools. The answer is the handler's output itself, so the
+    // model reads the entries as JSON.
+    if (toolCall.name === 'log_create_entry' || toolCall.name === 'log_grep' || toolCall.name === 'log_read') {
+      const logContext: LogToolContext = { userId, chatId, ...(characterId ? { characterId } : {}) };
+      const execute =
+        toolCall.name === 'log_create_entry'
+          ? executeLogCreateEntryTool
+          : toolCall.name === 'log_grep'
+            ? executeLogGrepTool
+            : executeLogReadTool;
+      const { success, error, ...result } = await execute(toolCall.arguments, logContext);
+      return {
+        toolName: toolCall.name,
+        success,
+        result: success ? result : null,
+        error: success ? undefined : error,
+      };
     }
 
     // Handle read_conversation (Scriptorium)

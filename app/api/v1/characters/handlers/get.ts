@@ -9,6 +9,7 @@ import { enrichWithDefaultImage } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { serverError } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
+import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 
 export async function handleGet(
   req: NextRequest,
@@ -77,6 +78,8 @@ export async function handleGet(
           controlledBy: character.controlledBy ?? 'llm',
           canBeCarina: character.canBeCarina ?? false,
           canChooseOutfit: character.canChooseOutfit ?? false,
+          canDrawDiagrams: character.canDrawDiagrams ?? false,
+          diagramStyle: diagramStyleOrDefault(character.diagramStyle),
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,

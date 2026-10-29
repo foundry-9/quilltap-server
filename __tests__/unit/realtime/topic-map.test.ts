@@ -36,9 +36,40 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.background('chat-1'),
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
+      queryKeys.chats.absentMentions('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
+      queryKeys.wardrobe.histories('chat-1'),
+      queryKeys.inventory.equipped('chat-1'),
       queryKeys.chats.scenarioSource('chat-1'),
     ]);
+  });
+
+  it('refreshes the Inventory dialog\'s lists, folders, archetype pickers and carried sets on the inventory topic', () => {
+    // Every write through an Inventory location publishes it, and the dialog
+    // leaves its own writes' refresh to it while the socket is up.
+    expect(queryKeysForTopic('inventory')).toEqual([
+      queryKeys.inventory.lists,
+      queryKeys.inventory.folderLists,
+      queryKeys.inventory.archetypeLists,
+      queryKeys.inventory.equippedLists,
+    ]);
+  });
+
+  it('refreshes what the cast carries on the chats topic (the Inventory)', () => {
+    // An equip posts Pascal's line and publishes `chats`, so the Carrying-now
+    // pane stays honest without a poll of its own.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(queryKeys.inventory.equipped('chat-1'));
+  });
+
+  it('refreshes every outfit timeline in the chat on the chats topic', () => {
+    // A tool call, or the parent's replay of a turn's history settle, publishes
+    // `chats`; the prefix covers each character's History tab.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.wardrobe.histories('chat-1'),
+    );
+    expect(queryKeys.wardrobe.history('chat-1', 'char-1').slice(0, 3)).toEqual(
+      [...queryKeys.wardrobe.histories('chat-1')],
+    );
   });
 
   it('refreshes the pending informs on the chats topic', () => {

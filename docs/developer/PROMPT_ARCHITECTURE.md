@@ -30,11 +30,10 @@ For one Salon turn, in wire order:
 | 3 | `system` | **Compressed-history block** — the rolling summary, only when budget compression fired | Every few turns |
 | — | `system` | Agent-mode instructions, when agent mode is on (inserted after the system group) | Rare |
 | 4 | `user`/`assistant` | **Conversation history**, attributed by `name`; Staff whispers re-roled to `user`; a cache breakpoint on the first surviving Librarian summary | Every turn |
-| 5 | `user` | Host **off-scene character introduction**, when a workspace character was just name-dropped for the first time | Rare |
-| 6 | `user` | Host **timestamp** whisper, when `autoPrepend` mode fires | Per cadence |
+| 5 | `user` | Host **timestamp** whisper, when `autoPrepend` mode fires | Per cadence |
 | — | `system` | Tool-change notice, when the user just changed the tool slate (inserted before the last user message) | Rare |
-| 7 | `user` | **New user message**, plus trailing per-turn sections (see §7) and any attachments | Every turn |
-| 8 | `assistant` | Multi-character anchor `[Name]` prefill — **non-Anthropic providers only** | Multi-character |
+| 6 | `user` | **New user message**, plus trailing per-turn sections (see §9) and any attachments | Every turn |
+| 7 | `assistant` | Multi-character anchor `[Name]` prefill — **non-Anthropic providers only** | Multi-character |
 
 Blocks 1–3 are emitted as separate system messages precisely so their cache lifetimes are independent: the persona prefix does not get invalidated when the rolling summary is refolded.
 
@@ -42,7 +41,9 @@ The **inform block** is not a system block. It rides the trailing context sectio
 
 **Local providers see them folded into one.** A local runtime applies the *model's own* chat template, and the Qwen family — plus several Llama- and Gemma-derived templates — raises an exception on any system message after index 0, rejecting the whole request. So the Ollama and OpenAI-Compatible request builders fold the leading `system` run into a single message at request-build time, joining the contents with a blank line (`collapseLeadingSystemMessages` in `@quilltap/plugin-utils`; `OpenAICompatibleProvider.acceptsRepeatedSystemMessages`, which defaults to `true`). Nothing about the assembly above changes, and no hosted provider's bytes or cache breakpoints move — see [bug 82](bugs/fixed/bug-82-three-leading-system-messages.md). A new local provider must opt into the same fold; a new hosted one must not.
 
-On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` message — "does not support assistant message prefill"), so the multi-character anchor is appended to block 1 as prose instead. The same constraint is why every Staff whisper reaching the model is re-roled to `user`.
+The Host's **"spoken of" introduction** (the card once posted the first time an absent workspace character was named) is no longer posted at all. Absent people reach the model through the referent ledger (§9), card included, on every turn they are named; the operator sees a name chip at the first mention with the same card on hover (`lib/chat/absent-mentions.ts`, `?action=absent-mentions`). In the history the card could land between a line and the reply that leaned on it, and the pronoun lost its antecedent. Cards already in old chats are record-only (`isOffSceneMentionIntroduction`, `lib/services/host-notifications/off-scene-kinds.ts`): stripped by `buildMessageContext` and `extractVisibleConversation`, and hidden from the Salon feed. The Host's **left-behind** notice (Continue Elsewhere, kind `off-scene-left-behind`; legacy rows keep `off-scene-characters` and open with `LEFT_BEHIND_INTRO_PREFIX`) is not a record and stays in the history. The Courier transport still passes both kinds: it builds its own transcript and has no ledger.
+
+On Anthropic, step 7 is impossible (Sonnet 4.6+ rejects a trailing `assistant` message — "does not support assistant message prefill"), so the multi-character anchor is appended to block 1 as prose instead. The same constraint is why every Staff whisper reaching the model is re-roled to `user`.
 
 ---
 
@@ -160,10 +161,16 @@ Sections are appended to the new user message in this order, separated by `---`:
 2. Commonplace Book recall (scene state → recap → relevant memories → inter-character memories → knowledge → relevant past conversations → retrospective recall). The relevant-past-conversations section is present only when the instance-wide `memoryRecall.perTurnConversationSummaries` setting is on (off by default); otherwise that list reaches the character through the recap, the fold-posted `relevant-conversations` whisper, or the retrospective mini-recap.
 3. Suparṇā mail
 4. Character progressions
-5. Inform block (`INFORM_BLOCK_HEADER` + the operator's passages, standing first) — after recall on purpose, so an inform outranks a recalled memory that contradicts it
-6. "Nothing to add" turn-skip note
+5. Inventory
+6. Inform block (`INFORM_BLOCK_HEADER` + the operator's passages, standing first) — after recall on purpose, so an inform outranks a recalled memory that contradicts it
+7. Referent ledger, "Who is being spoken of" (`buildReferentLedger`, `lib/chat/context/referent-ledger.ts`) — everyone named in the last 6 spoken lines, most recent first, with pronouns, in the room or not, who last named them and the sentence; then the card of each listed person not in the room. Leaves out the responder and the latest line's author. Empty-is-absent.
+8. Closing echo, "The line you are answering" (`buildClosingEcho`) — the new user message repeated (its closing paragraphs past 1,500 characters), so the last thing the model reads about the conversation is what it is answering. New-user-message turns only.
+9. "Nothing to add" turn-skip note, then the raised-hand yield note
+10. The storyteller section (a bid's instructions or a speaking turn's plan), when there is one
 
-On continue / nudge / chained autonomous turns (and swipes) there is no new user message, so the turn-skip note — and the progressions and inform sections, in the same order — is pushed as its own trailing `user` message.
+On continue / nudge / chained autonomous turns (and swipes) there is no new user message, so these sections (all but the echo), in the same order, are pushed as their own trailing `user` message, led by the chained-turn scene note when it applies. The order and both deliveries live in one function, `composeTrailingMessage` (`lib/chat/context/turn-trailing.ts`).
+
+**The sections are measured before history is packed.** `buildContext` builds every Staff whisper and trailing section first, then gives history what `safeInputLimit` leaves after system blocks 1–3, the timestamp line, the whole trailing message and the caller's `reservedOutgoingTokens`. A section added here is counted automatically; one built after history is chosen would not be ([bug 263](bugs/fixed/bug-263-budget-blind-to-trailing-sections.md)).
 
 **Character progressions** (§9a) are the newest of these and the only one derived from the wall clock.
 
@@ -179,7 +186,7 @@ Three properties matter to this document:
 
 Cadence is derived from message history rather than stored — `findLastOwnTurnMs` in `core-whisper-trigger.ts`, beside the Core whisper's own cadence, which set that precedent. Zero writes on the prompt path, no participant-JSON race, and safe in the forked job child (no read-your-writes). The accepted approximation: a character prompted who does not speak leaves no new turn, so a period-cadence entry can be mentioned once more inside the same period.
 
-`isContinueMode` skips the section entirely — the model is finishing its own sentence, and the Core whisper skips there for the same reason.
+The section is built on every turn, `isContinueMode` included. Continue mode is not a model finishing its own sentence: it is every turn without a new user message — the Salon's Continue, a nudge, every chained speaker, every autonomous-room turn — so skipping it there (as the section once did, bug 254) withholds the report from most of a multi-character scene. On those turns the section rides the trailing-only user message. The Core whisper alone skips continue mode, by its own design.
 
 **Ordering constraint:** the Core whisper is computed and placed before the Commonplace Book whisper, on purpose. Identity grounds the speaker; memory then situates them. Reversed, recall floods identity and the character starts performing the person who had those experiences rather than being the person who grew from them. Do not reorder without reading the Core whisper design first.
 
@@ -251,7 +258,7 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 - **Do not reorder Core before/after Commonplace** (§9).
 - **Never derive progression state at a call site** (§9a). Elapsed / remaining / percent come from `lib/progressions/` and nowhere else.
 - **Cache-structure bumps are structural, not cosmetic** (§7).
-- **Whisper role must end `user`.** Anthropic 4.6+ rejects an `assistant` tail; any new trailing injection has to follow the same pattern as the timestamp and off-scene pushes.
+- **Whisper role must end `user`.** Anthropic 4.6+ rejects an `assistant` tail; any new trailing injection has to follow the same pattern as the timestamp push.
 
 ## 15. Key files
 
@@ -260,7 +267,16 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | `lib/chat/context/system-prompt-builder.ts` | `buildIdentityStack`, `buildSystemPrompt`, `buildIdentityReinforcement`, `buildPublicIdentityCard`, `renderTabooSection` |
 | `lib/chat/context/standing-instructions.ts` | Resolve + render project/group `instructions` for the standing-instructions section |
 | `lib/services/system-prompt-compiler/compiler.ts` | Compile / cache / invalidate `chats.compiledIdentityStacks` |
-| `lib/chat/context-manager.ts` | `buildContext` — budget, memory, knowledge, scene state, whisper emission, final message assembly |
+| `lib/chat/context-manager.ts` | `buildContext` — the turn's phases in order (module header has the map); `calculateContextBudget`; the option and result types |
+| `lib/chat/context/turn-system-prompt.ts` | System block 1: compiled stack, fallback subprompts, Taboo, standing instructions, truncation |
+| `lib/chat/context/turn-compression.ts` | Budget-driven history compression (system block 3, the verbatim window) and memory compression |
+| `lib/chat/context/turn-scene-state.ts` | The `## Current State` section and its per-recipient emission cache |
+| `lib/chat/context/turn-recall.ts` | Recall assembly, knowledge retrieval, the recent-window query |
+| `lib/chat/context/turn-whispers.ts` | The Staff whispers a turn posts: Host time, Aurora's Core, the Commonplace Book, Suparṇā's mail |
+| `lib/chat/context/turn-trailing.ts` | `composeTrailingMessage` — the trailing sections' one order and delivery; turn notes; referent ledger |
+| `lib/chat/context/turn-history.ts` | History selection (both chat shapes, compression window, summary anchors) and system blocks 1–3 |
+| `lib/chat/context/turn-transcript.ts` | The build's one read of the chat's events |
+| `lib/chat/whisper-sweep.ts` | `sweepPriorWhispers` — removes a recipient's stale snapshot whispers after a fresh one posts |
 | `lib/services/chat-message/context-builder.service.ts` | History filtering, whisper role normalization, opaque body swap, multi-character anchoring |
 | `lib/services/chat-message/orchestrator.service.ts` | Tool mode + tool instructions, Prospero cadence, agent-mode and tool-change injections |
 | `lib/chat/context/message-attribution.ts` | `name` attribution, history-access and presence-window filtering, whisper visibility |

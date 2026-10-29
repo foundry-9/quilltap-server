@@ -43,16 +43,27 @@ import {
   classifyPlaceholder,
   collectUnknownKeys,
   formatDefinitionIssues,
+  isInventoryRef,
   isParamRef,
   isStateRef,
   parseEffectTarget,
+  isWardrobeEffect,
+  isInventoryEffect,
+  isLogEffect,
+  type CustomToolInventoryGesture,
+  type InventoryEffectAction,
   type PlaceholderRef,
+  type CustomToolWardrobeGesture,
+  type WardrobeEffectAction,
+  type WardrobeEffectMode,
+  type WardrobeItemType,
   MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
   type CustomToolLlm,
   type CustomToolParameter,
+  type InventoryRef,
   type EffectTarget,
   type EffectWhen,
   type LlmComparator,
@@ -68,13 +79,27 @@ import {
   type Visibility,
   type When,
   type WhenObject,
+  type EffectCondition,
+  effectWhenGroups,
+  gateGroups,
+  outcomeTableTestsLlm,
+  whenGroups,
 } from './custom-tool.types';
 import { evaluateExpression, formatValue, parseExpression, type ExprValue } from './expressions';
 
 export { formatValue };
 import { compareOrdered, isPrimitive, metadataComparatorHolds } from './metadata-match';
 import { flattenProgressions, type ProgressPrimitive } from '@/lib/progressions/engine';
-import { evaluateToolGate, hasToolGate } from './tool-gate';
+import { evaluateToolGate, gateNamesProgress, hasToolGate } from './tool-gate';
+import { describeAggregateValue, inventoryAggregateHolds } from './inventory-aggregate';
+import {
+  gateNamesInventory,
+  inventoryCountHolds,
+  inventoryStateHolds,
+  resolveInventoryValue,
+  type InventoryContext,
+} from './inventory-subjects';
+import { loadInventoryContext } from '@/lib/inventory/context';
 
 /**
  * The persistent-state view a run resolves `$state` references against — the
@@ -101,8 +126,14 @@ import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceNotation
 
 const CONTEXT = 'pascal.custom-tools';
 
-/** Tier precedence, nearest first. A nearer tier shadows a farther one. */
-const TIER_ORDER: MountTier[] = ['character', 'participant', 'group', 'project', 'global'];
+/**
+ * Tier precedence, nearest first. A nearer tier shadows a farther one.
+ *
+ * There is deliberately no 'participant' tier: a tool in a character's vault
+ * is that character's alone, and sharing a room with them does not deal it to
+ * anybody else. Shared tools belong in a group, project, or General store.
+ */
+const TIER_ORDER: MountTier[] = ['character', 'group', 'project', 'global'];
 
 /**
  * A definition found in a store, with the provenance needed to resolve
@@ -124,6 +155,24 @@ export interface CustomToolLoadError {
   mountName: string;
   tier: MountTier;
   reason: string;
+  /** Where loading stopped: the bytes, the JSON, the schema, or a same-store name clash. */
+  stage?: 'read' | 'json' | 'schema' | 'duplicate';
+  /** The clashing tool name, on a `duplicate` error. */
+  name?: string;
+}
+
+/**
+ * Something a mount's discovery could not look at: the `Tools/` listing
+ * itself failed, or a file the listing named was gone on open. The roster
+ * skips these quietly (a race, not a defect); a caller that must know every
+ * definition — the inventory title lint — refuses on them instead.
+ */
+export interface CustomToolUnread {
+  mountPointId: string;
+  mountName: string;
+  /** The file, or `Tools/` when the listing failed. */
+  definitionPath: string;
+  reason: string;
 }
 
 /** The resolved roster for one invoker's perspective. */
@@ -143,8 +192,6 @@ export interface RosterContext {
   /** The invoking character — their vault is the 'character' tier. */
   characterId?: string | null;
   characterMountPointId?: string | null;
-  /** Every character in the chat — their vaults form the 'participant' tier. */
-  characterIds?: string[];
   projectId?: string | null;
   /**
    * The invoking character's hydrated fact sheet, which availability gates are
@@ -154,6 +201,15 @@ export interface RosterContext {
    * roster to fetch it, but only if some definition turns out to be gated.
    */
   metadata?: Record<string, unknown> | null;
+  /**
+   * The invoking character's Inventory context for this chat, which gates on
+   * `inventory` / `inventoryCount` are answered against. Omitted → loaded
+   * lazily, once, and only when a gated definition names either subject; a
+   * context without a chat or character (the Workbench library), or a vault
+   * that cannot be read, degrades to null — and a null context declines every
+   * inventory comparator.
+   */
+  inventory?: InventoryContext | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +274,70 @@ async function readToolFile(
   return bytes.toString('utf-8');
 }
 
+/** A definition file's text, judged exactly as load time judges it. */
+export type ToolDefinitionValidation =
+  | { ok: true; definition: QtapCustomTool }
+  | { ok: false; stage: 'json' | 'schema'; reason: string };
+
+/**
+ * Parse and schema-check one definition file's text. The single judgement
+ * shared by discovery ({@link loadToolsFromMount}) and the `edit_custom_tool`
+ * save gate, so a file the editor accepts is a file the roster loads. Unknown
+ * keys are tolerated, never rejected — future keys ship under this tolerance
+ * (as `effects` did) and an older build must not choke on a newer file.
+ * Never throws. `where` only labels the debug logs.
+ */
+export function validateToolDefinitionText(
+  raw: string,
+  where: { mountPointId?: string; definitionPath?: string } = {}
+): ToolDefinitionValidation {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(raw);
+  } catch (error) {
+    return { ok: false, stage: 'json', reason: `is not valid JSON: ${getErrorMessage(error)}` };
+  }
+
+  const unknownKeys = collectUnknownKeys(parsedJson);
+  if (unknownKeys.length > 0) {
+    logger.debug('Custom tool carries keys this build does not know', {
+      context: CONTEXT,
+      ...where,
+      unknownKeys,
+    });
+  }
+
+  const result = QtapCustomToolSchema.safeParse(parsedJson);
+  if (!result.success) {
+    const reason = formatDefinitionIssues(result.error);
+    logger.debug('Custom tool definition failed schema validation', {
+      context: CONTEXT,
+      ...where,
+      reason,
+    });
+    return { ok: false, stage: 'schema', reason };
+  }
+
+  return { ok: true, definition: result.data };
+}
+
+/**
+ * Normalise a caller's name for a definition file to its store-relative path,
+ * `Tools/<stem>.tool.json`. Accepts the bare stem (`unlock`), the file name
+ * (`unlock.tool.json`, suffix case-insensitive) or that file name under a
+ * leading `Tools/`. Anything that would land outside the top level of `Tools/`
+ * — another folder, a nested path, an empty stem — returns null: definitions
+ * are a flat root-level convention (see {@link isRootToolFile}).
+ */
+export function toolDefinitionPathFor(file: string): string | null {
+  let name = file.trim().replace(/\\/g, '/');
+  const folderPrefix = `${TOOLS_FOLDER.toLowerCase()}/`;
+  if (name.toLowerCase().startsWith(folderPrefix)) name = name.slice(folderPrefix.length);
+  if (name.toLowerCase().endsWith(TOOL_FILE_SUFFIX)) name = name.slice(0, -TOOL_FILE_SUFFIX.length);
+  if (name.length === 0 || name.includes('/') || name === '.' || name === '..') return null;
+  return `${TOOLS_FOLDER}/${name}${TOOL_FILE_SUFFIX}`;
+}
+
 /**
  * Load every definition in one mount. Never throws: a broken file becomes an
  * error entry, because one malformed `.tool.json` must not take the whole
@@ -230,13 +350,14 @@ async function readToolFile(
 export async function loadToolsFromMount(
   mountPointId: string,
   tier: MountTier
-): Promise<{ found: DiscoveredCustomTool[]; errors: CustomToolLoadError[] }> {
+): Promise<{ found: DiscoveredCustomTool[]; errors: CustomToolLoadError[]; unread: CustomToolUnread[] }> {
   const found: DiscoveredCustomTool[] = [];
   const errors: CustomToolLoadError[] = [];
+  const unread: CustomToolUnread[] = [];
 
   const repos = getRepositories();
   const mount = await repos.docMountPoints.findById(mountPointId);
-  if (!mount || !mount.enabled) return { found, errors };
+  if (!mount || !mount.enabled) return { found, errors, unread };
 
   const mountName = mount.name;
 
@@ -253,7 +374,8 @@ export async function loadToolsFromMount(
       mountName,
       error: getErrorMessage(error),
     });
-    return { found, errors };
+    unread.push({ mountPointId, mountName, definitionPath: `${TOOLS_FOLDER}/`, reason: `listing failed: ${getErrorMessage(error)}` });
+    return { found, errors, unread };
   }
 
   // Same-mount duplicate `name` is a rejection (the spec's rule 5): within one
@@ -266,48 +388,27 @@ export async function loadToolsFromMount(
     try {
       raw = await readToolFile(mount, relativePath);
     } catch (error) {
-      // Deleted between list and read — a race, not a defect. Skip quietly.
-      if (error instanceof FileOpError && error.code === 'SOURCE_NOT_FOUND') continue;
-      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') continue;
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `could not be read: ${getErrorMessage(error)}` });
+      // Deleted between list and read — a race, not a defect. Skip quietly,
+      // but note it: a file that is listed and never opens looks just the same.
+      if (
+        (error instanceof FileOpError && error.code === 'SOURCE_NOT_FOUND') ||
+        (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') ||
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        unread.push({ mountPointId, mountName, definitionPath: relativePath, reason: 'listed but not found on open' });
+        continue;
+      }
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `could not be read: ${getErrorMessage(error)}`, stage: 'read' });
       continue;
     }
 
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(raw);
-    } catch (error) {
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: `is not valid JSON: ${getErrorMessage(error)}` });
+    const validated = validateToolDefinitionText(raw, { mountPointId, definitionPath: relativePath });
+    if (!validated.ok) {
+      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason: validated.reason, stage: validated.stage });
       continue;
     }
 
-    const unknownKeys = collectUnknownKeys(parsedJson);
-    if (unknownKeys.length > 0) {
-      // Tolerated, not rejected — future keys ship under this tolerance (as
-      // `effects` did) and an older build must not choke on a newer file.
-      logger.debug('Custom tool carries keys this build does not know', {
-        context: CONTEXT,
-        mountPointId,
-        definitionPath: relativePath,
-        unknownKeys,
-      });
-    }
-
-    const result = QtapCustomToolSchema.safeParse(parsedJson);
-    if (!result.success) {
-      const reason = formatDefinitionIssues(result.error);
-      errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason });
-      logger.debug('Custom tool rejected at load time', {
-        context: CONTEXT,
-        mountPointId,
-        definitionPath: relativePath,
-        reason,
-      });
-      continue;
-    }
-
-    const definition = result.data;
+    const definition = validated.definition;
     const priorPath = nameToPath.get(definition.name);
     if (priorPath) {
       errors.push({
@@ -316,6 +417,8 @@ export async function loadToolsFromMount(
         mountName,
         tier,
         reason: `defines "${definition.name}", which ${priorPath} in this same store already defines`,
+        stage: 'duplicate',
+        name: definition.name,
       });
       continue;
     }
@@ -324,14 +427,16 @@ export async function loadToolsFromMount(
     found.push({ definition, tier, mountPointId, mountName, definitionPath: relativePath });
   }
 
-  return { found, errors };
+  return { found, errors, unread };
 }
 
 /** Bucket the pool into (tier, mountPointId) pairs in precedence order. */
 function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPointId: string }> {
   const byTier: Record<MountTier, string[]> = {
     character: pool.characterMountPointId ? [pool.characterMountPointId] : [],
-    participant: pool.participantMountPointIds,
+    // Never resolved for custom tools (see TIER_ORDER); present only because
+    // the record is keyed by every MountTier.
+    participant: [],
     group: pool.groupMountPointIds,
     project: pool.projectMountPointIds,
     global: pool.globalMountPointId ? [pool.globalMountPointId] : [],
@@ -374,6 +479,41 @@ async function loadInvokerMetadata(ctx: RosterContext): Promise<Record<string, u
 }
 
 /**
+ * The invoking character's Inventory, for the availability gates. Null when
+ * there is no character or chat to read it for, or it cannot be read.
+ */
+async function loadInvokerInventory(ctx: RosterContext): Promise<InventoryContext | null> {
+  if (ctx.inventory !== undefined) return ctx.inventory;
+  if (!ctx.characterId || !ctx.chatId) {
+    logger.debug('Custom-tool gates: no character or chat to read an inventory for; inventory tests decline', {
+      context: CONTEXT,
+      chatId: ctx.chatId || null,
+      characterId: ctx.characterId ?? null,
+    });
+    return null;
+  }
+  try {
+    const loaded = await loadInventoryContext(getRepositories(), ctx.characterId, ctx.chatId);
+    logger.debug('Custom-tool gates: loaded the invoker’s inventory', {
+      context: CONTEXT,
+      chatId: ctx.chatId,
+      characterId: ctx.characterId,
+      reachable: loaded.pool.items.length,
+      equipped: loaded.equippedIds.size,
+    });
+    return loaded;
+  } catch (error) {
+    logger.debug('Custom-tool gates: the invoker’s inventory could not be read; inventory tests decline', {
+      context: CONTEXT,
+      chatId: ctx.chatId,
+      characterId: ctx.characterId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+/**
  * Resolve the roster for one invoker.
  *
  * Iterates tier buckets explicitly rather than flattening the pool: flattening
@@ -381,16 +521,13 @@ async function loadInvokerMetadata(ctx: RosterContext): Promise<Record<string, u
  * `pascalMeta.definitionTier` both depend on.
  */
 export async function resolveCustomToolRoster(ctx: RosterContext): Promise<CustomToolRoster> {
-  const pool = await resolveTieredMountPool(
-    {
-      userId: ctx.userId,
-      characterId: ctx.characterId ?? null,
-      characterMountPointId: ctx.characterMountPointId ?? null,
-      characterIds: ctx.characterIds,
-      projectId: ctx.projectId ?? null,
-    },
-    { includeParticipants: true }
-  );
+  // No `includeParticipants`: other characters' vaults are not a tier here.
+  const pool = await resolveTieredMountPool({
+    userId: ctx.userId,
+    characterId: ctx.characterId ?? null,
+    characterMountPointId: ctx.characterMountPointId ?? null,
+    projectId: ctx.projectId ?? null,
+  });
 
   const tools = new Map<string, DiscoveredCustomTool>();
   const errors: CustomToolLoadError[] = [];
@@ -412,6 +549,14 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
   const rosterNowMs = Date.now();
   const invokerProgress = async (): Promise<Record<string, ProgressPrimitive>> =>
     flattenProgressions(await invokerMetadata(), rosterNowMs);
+
+  // Likewise the invoker's Inventory: read at most once, and only when a gate
+  // names `inventory` or `inventoryCount`.
+  let bag: Promise<InventoryContext | null> | null = null;
+  const invokerInventory = (): Promise<InventoryContext | null> => {
+    bag ??= loadInvokerInventory(ctx);
+    return bag;
+  };
 
   for (const { tier, mountPointId } of orderedMounts(pool)) {
     const { found, errors: mountErrors } = await loadToolsFromMount(mountPointId, tier);
@@ -436,8 +581,11 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
         const verdict = evaluateToolGate(
           entry.definition,
           await invokerMetadata(),
-          entry.definition.availableWhen?.progress || entry.definition.withheldWhen?.progress
+          gateNamesProgress(entry.definition.availableWhen) || gateNamesProgress(entry.definition.withheldWhen)
             ? await invokerProgress()
+            : undefined,
+          gateNamesInventory(entry.definition.availableWhen) || gateNamesInventory(entry.definition.withheldWhen)
+            ? await invokerInventory()
             : undefined
         );
         if (!verdict.available) {
@@ -448,6 +596,8 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
             mountPointId,
             characterId: ctx.characterId ?? null,
             withheldBy: verdict.withheldBy,
+            groups: gateGroups((entry.definition.availableWhen ?? entry.definition.withheldWhen)!).length,
+            heldGroup: verdict.heldGroup ?? null,
           });
           continue;
         }
@@ -492,6 +642,10 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
 export interface CustomToolLibrary {
   entries: DiscoveredCustomTool[];
   errors: CustomToolLoadError[];
+  /** What discovery could not look at (see {@link CustomToolUnread}). */
+  unread: CustomToolUnread[];
+  /** The names of the enabled stores that were looked in. */
+  storesConsulted: string[];
 }
 
 /**
@@ -511,14 +665,18 @@ export async function listAllCustomTools(): Promise<CustomToolLibrary> {
 
   const entries: DiscoveredCustomTool[] = [];
   const errors: CustomToolLoadError[] = [];
+  const unread: CustomToolUnread[] = [];
+  const storesConsulted: string[] = [];
 
   for (const mount of [...mounts].sort((a, b) => a.id.localeCompare(b.id))) {
-    const { found, errors: mountErrors } = await loadToolsFromMount(mount.id, 'global');
+    const { found, errors: mountErrors, unread: mountUnread } = await loadToolsFromMount(mount.id, 'global');
     entries.push(...found);
     errors.push(...mountErrors);
+    unread.push(...mountUnread);
+    storesConsulted.push(mount.name);
   }
 
-  return { entries, errors };
+  return { entries, errors, unread, storesConsulted };
 }
 
 // ---------------------------------------------------------------------------
@@ -584,6 +742,65 @@ export class CustomToolRunError extends Error {
 /** Resolved parameter values, post-default and post-clamp. */
 export type ResolvedParams = Record<string, number | string | boolean>;
 
+/**
+ * The random draw a run used, recorded so a held run can be recomputed with
+ * the same luck (operator intervention, spec §3.1). For the range form it is
+ * the UNIT draw `u ∈ [0, 1)` that is scaled into `[min, max)` — so a parameter
+ * change that moves the bounds keeps a top-10% draw in the top 10% of the new
+ * range. For the dice form it is the faces.
+ */
+export type RecordedDraw = { form: 'range'; unit: number } | { form: 'dice'; faces: number[] };
+
+/**
+ * What a draw could have produced, given the run's resolved parameters: the
+ * low and high ends, each inclusive unless flagged. The range form's raw draw
+ * is half-open (`[min, max)`); after rounding both ends are reachable values.
+ * The hold dialog shows these so the operator knows what they are bending.
+ */
+export interface RunSpan {
+  min: number;
+  max: number;
+  minExclusive?: boolean;
+  maxExclusive?: boolean;
+}
+
+/** One effect's operator setting for a held run. Edited fields are literals, never expressions. */
+export interface EffectPin {
+  /** `auto` follows the effect's own `when`; `on` fires it regardless; `off` suppresses it. */
+  mode: 'auto' | 'on' | 'off';
+  /** A write's value, taken literally. */
+  value?: number | string | boolean;
+  /** A wardrobe or inventory gesture's references, taken literally (resolved at apply time as usual). */
+  items?: string[];
+  /** A log line, taken literally. */
+  log?: string;
+}
+
+/**
+ * Fields of a run the operator has pinned in the hold dialog. Each present key
+ * replaces what the engine would have computed; everything downstream that is
+ * not pinned is recomputed from it. Absent everywhere outside a held run.
+ */
+export interface RunPins {
+  /** Range form: the raw draw, taken as given. */
+  roll?: number;
+  /** Dice form: the faces, one per die, clamped to [1, sides]. */
+  dice?: number[];
+  /** Range form: the value after modifiers. */
+  value?: number;
+  /** The consult's answer, in place of any consult result. */
+  llmAnswer?: { ok: boolean; output: string };
+  /** This outcome row wins, whatever the table says. */
+  outcomeIndex?: number;
+  /** The rendered message, taken literally — no placeholders re-rendered. */
+  message?: string;
+  state?: OutcomeState;
+  /** The rendered chip label, taken literally. */
+  chipLabel?: string;
+  /** Per effect index (file order). */
+  effects?: Record<number, EffectPin>;
+}
+
 /** Everything a run produced — enough to post the message and fill pascalMeta. */
 export interface CustomToolRunResult {
   tool: string;
@@ -621,6 +838,20 @@ export interface CustomToolRunResult {
    * Absent when the definition declares none.
    */
   effects?: ResolvedEffect[];
+  /** The random draw this run used — what a held run replays. */
+  draw: RecordedDraw;
+  /** What the raw draw could have been (dice: the total). Independent of any pin. */
+  rollSpan: RunSpan;
+  /** What the value could have been after modifiers (dice: the total). Independent of any pin. */
+  valueSpan: RunSpan;
+  /**
+   * The consult prompt as rendered for THIS run. Equal to `llm.prompt` on an
+   * ordinary run; on a replay it may differ from the prompt that produced the
+   * answer in use, which is how a held run knows its answer is out of date.
+   */
+  llmPromptRendered?: string;
+  /** When the outcome was pinned: the row the table itself would have picked. */
+  tableOutcomeIndex?: number;
 }
 
 /**
@@ -633,7 +864,8 @@ export interface CustomToolRunResult {
 export function resolveParams(
   definition: QtapCustomTool,
   supplied: Record<string, unknown> | null | undefined,
-  state: CustomToolState = {}
+  state: CustomToolState = {},
+  inventory?: InventoryContext | null
 ): ResolvedParams {
   const declared = definition.parameters ?? {};
   const given = supplied ?? {};
@@ -649,7 +881,7 @@ export function resolveParams(
 
   const resolved: ResolvedParams = {};
   for (const [name, spec] of Object.entries(declared)) {
-    resolved[name] = coerceParam(definition.name, name, spec, given[name], state);
+    resolved[name] = coerceParam(definition.name, name, spec, given[name], state, inventory);
   }
   return resolved;
 }
@@ -659,13 +891,17 @@ function coerceParam(
   name: string,
   spec: CustomToolParameter,
   value: unknown,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number | string | boolean {
   // An omitted parameter falls to its default, which may itself be a `$state`
-  // reference resolved against the merged state (its fallback is type-checked
-  // against this parameter's type at load time, so it always fits).
+  // reference resolved against the merged state, or a `$inventory` reference
+  // into an object the rolling character carries (each fallback is
+  // type-checked against this parameter's type at load time, so it always fits).
   if (value === undefined || value === null) {
-    return isStateRef(spec.default) ? resolveStateValue(spec.default, state) : spec.default;
+    if (isStateRef(spec.default)) return resolveStateValue(spec.default, state);
+    if (isInventoryRef(spec.default)) return resolveInventoryValue(spec.default, inventory);
+    return spec.default;
   }
 
   switch (spec.type) {
@@ -706,9 +942,22 @@ function resolveRollField(
   spec: NumberOrParamRef | undefined,
   params: ResolvedParams,
   fallback: number,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number {
   if (spec === undefined) return fallback;
+
+  // A `$inventory` roll field resolves to the object's (numeric) metadata or
+  // its numeric fallback — never a failure, exactly as `$state` does.
+  if (isInventoryRef(spec)) {
+    const value = resolveInventoryValue(spec, inventory);
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new CustomToolRunError(
+        `${toolName}: roll.${field} $inventory reference resolved to ${JSON.stringify(value)} rather than a finite number`
+      );
+    }
+    return value;
+  }
 
   if (isParamRef(spec)) {
     const value = params[spec.$param];
@@ -745,25 +994,33 @@ function resolveRollField(
  * (48 bits — comfortably more precision than a double's 52-bit mantissa needs
  * for this, and far beyond what any outcome table can distinguish).
  */
-function cryptoUniform(min: number, max: number): number {
+function cryptoUnit(): number {
   const bytes = randomBytes(6);
   let scaled = 0;
   for (const byte of bytes) scaled = scaled * 256 + byte;
-  const fraction = scaled / 2 ** 48;
-  return min + fraction * (max - min);
+  return scaled / 2 ** 48;
 }
 
-/** Draw the raw value for Form A, honouring `$param` and `$state` bounds. */
+/**
+ * Draw the raw value for Form A, honouring `$param` and `$state` bounds.
+ *
+ * The unit draw is always taken (or replayed), even for a degenerate range, so
+ * a held run whose parameters later widen the range still has luck to scale.
+ * A pinned `roll` replaces the raw draw and a pinned `value` the transform.
+ */
 function rollRange(
   definition: QtapCustomTool,
   range: RollRange,
   params: ResolvedParams,
-  state: CustomToolState
-): { raw: number; value: number } {
-  const min = resolveRollField(definition.name, 'min', range.min, params, 0, state);
-  const max = resolveRollField(definition.name, 'max', range.max, params, 1, state);
-  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state);
-  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0, state);
+  state: CustomToolState,
+  inventory?: InventoryContext | null,
+  unitDraw?: number,
+  pins?: Pick<RunPins, 'roll' | 'value'>
+): { raw: number; value: number; unit: number; rollSpan: RunSpan; valueSpan: RunSpan } {
+  const min = resolveRollField(definition.name, 'min', range.min, params, 0, state, inventory);
+  const max = resolveRollField(definition.name, 'max', range.max, params, 1, state, inventory);
+  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state, inventory);
+  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0, state, inventory);
 
   if (min > max) {
     throw new CustomToolRunError(
@@ -771,19 +1028,51 @@ function rollRange(
     );
   }
 
-  const raw = min === max ? min : cryptoUniform(min, max);
+  const unit = unitDraw ?? cryptoUnit();
+  const raw = pins?.roll ?? (min === max ? min : min + unit * (max - min));
 
   // The transform order is fixed and load-bearing: multiply, then offset, then
   // round. Rounding first would quantise before the offset could shift it.
   let value = raw * multiplier;
   value = value + offset;
   if (range.round) value = Math.round(value);
+  if (pins?.value !== undefined) value = pins.value;
 
   if (!Number.isFinite(value)) {
     throw new CustomToolRunError(`${definition.name}: the roll produced a value that is not a finite number`);
   }
 
-  return { raw, value };
+  const rollSpan: RunSpan = min === max ? { min, max } : { min, max, maxExclusive: true };
+  return { raw, value, unit, rollSpan, valueSpan: transformSpan(rollSpan, multiplier, offset, range.round === true) };
+}
+
+/**
+ * Carry a raw span through the range form's transform (multiply, offset,
+ * round). A negative multiplier swaps the ends, and with them which end is
+ * open. Rounding makes both ends reachable values: the largest rounding of a
+ * value strictly below `t` is `ceil(t - 0.5)`, the smallest of one strictly
+ * above is `Math.round(t)` (which rounds halves up).
+ */
+function transformSpan(span: RunSpan, multiplier: number, offset: number, round: boolean): RunSpan {
+  const low = span.min * multiplier + offset;
+  const high = span.max * multiplier + offset;
+  const swapped = multiplier < 0;
+  const out: RunSpan =
+    multiplier === 0
+      ? { min: offset, max: offset }
+      : swapped
+        ? { min: high, max: low, ...(span.maxExclusive ? { minExclusive: true } : {}) }
+        : { min: low, max: high, ...(span.maxExclusive ? { maxExclusive: true } : {}) };
+  if (!round) return out;
+  return {
+    min: Math.round(out.min),
+    max: out.maxExclusive ? Math.ceil(out.max - 0.5) : Math.round(out.max),
+  };
+}
+
+/** A dice notation's reachable totals: every die low, every die high. */
+function diceSpan(notation: DiceNotation): RunSpan {
+  return { min: notation.count + notation.modifier, max: notation.count * notation.sides + notation.modifier };
 }
 
 /** Everything an outcome test may be posed about. */
@@ -794,6 +1083,11 @@ export interface OutcomeSubjects {
   roll: number;
   /** The resolved parameters, post-default and post-clamp. */
   params: ResolvedParams;
+  /**
+   * The rolling character's name, for `{{character}}`. Absent when nobody in
+   * particular rolled — the placeholder then renders as written.
+   */
+  character?: string;
   /**
    * The invoking character's metadata sheet, as hydrated from their vault's
    * `metadata.json`. Absent (or `{}`) when nobody in particular rolled — every
@@ -820,6 +1114,13 @@ export interface OutcomeSubjects {
    * so every `$state` operand falls to its own fallback.
    */
   state?: CustomToolState;
+  /**
+   * The rolling character's Inventory for this chat (`lib/inventory/refs.ts`),
+   * loaded once per run. null or absent for a run nobody made, or a vault that
+   * could not be read: every `inventory` / `inventoryCount` test then
+   * declines, and every `$inventory` operand falls back.
+   */
+  inventory?: InventoryContext | null;
 }
 
 /** The metadata keys a run actually consulted, and what they held at the time. */
@@ -835,14 +1136,17 @@ export type MetadataTested = Record<string, number | string | boolean>;
  */
 function resolveOperand(
   toolName: string,
-  operand: number | string | boolean | ParamRef | StateRef,
+  operand: number | string | boolean | ParamRef | StateRef | InventoryRef,
   params: ResolvedParams,
   label: string,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): number | string | boolean {
   // A `$state` operand resolves against the merged state, falling back to its
   // own (load-typed) fallback — it never throws, matching the metadata doctrine.
   if (isStateRef(operand)) return resolveStateValue(operand, state);
+  // So does a `$inventory` operand, against the rolling character's bag.
+  if (isInventoryRef(operand)) return resolveInventoryValue(operand, inventory);
 
   if (!isParamRef(operand)) return operand;
 
@@ -885,15 +1189,17 @@ function matchesComparator(
   subject: number | string | boolean,
   subjectLabel: string,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): boolean {
   const operandFor = (key: keyof ParamComparator): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef | StateRef,
+      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef | StateRef | InventoryRef,
       params,
       `${subjectLabel} ${key}`,
-      state
+      state,
+      inventory
     );
 
   for (const key of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -940,16 +1246,18 @@ function matchesMetadataComparator(
   params: ResolvedParams,
   state: CustomToolState,
   /** Which sheet is being read, for the operand label and the debug log. */
-  subject: 'metadata' | 'progress' = 'metadata'
+  subject: 'metadata' | 'progress' = 'metadata',
+  inventory?: InventoryContext | null
 ): boolean {
   return metadataComparatorHolds(comparator, key, sheet, {
     resolveOperand: (comparatorKey) =>
       resolveOperand(
         toolName,
-        comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
+        comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
         params,
         `${subject} "${key}" ${comparatorKey}`,
-        state
+        state,
+        inventory
       ),
     onDecline: (reason) =>
       logger.debug(`Custom tool ${subject} test did not match`, {
@@ -988,7 +1296,8 @@ function matchesLlmComparator(
   comparator: LlmComparator,
   llm: LlmSubject,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  inventory?: InventoryContext | null
 ): boolean {
   const decline = (reason: string): false => {
     logger.debug('Custom tool llm test did not match', { context: CONTEXT, tool: toolName, reason });
@@ -1003,10 +1312,11 @@ function matchesLlmComparator(
   const operandFor = (comparatorKey: Exclude<keyof LlmComparator, 'ok'>): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef | StateRef,
+      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
       params,
       `the llm answer ${comparatorKey}`,
-      state
+      state,
+      inventory
     );
 
   for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -1041,21 +1351,43 @@ function matchesLlmComparator(
 }
 
 /**
- * Evaluate an outcome test. Every subject named must hold — bare comparators
- * against the final value, `roll` against the raw draw, `params` against what
- * the caller supplied, `metadata` against the invoking character's fact sheet.
+ * Evaluate an outcome test: the catch-all, one AND-group, or an any-of array
+ * of them (the first group to hold decides, left to right).
  */
 export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'custom tool'): boolean {
   if (when === true) return true;
+  if (!Array.isArray(when)) return matchesWhenGroup(when, subjects, toolName);
+  return anyGroupHolds(when, (group) => matchesWhenGroup(group, subjects, toolName), toolName);
+}
 
+/** Try groups left to right, short-circuiting on the first that holds; logs which one did. */
+function anyGroupHolds<G>(groups: readonly G[], holds: (group: G) => boolean, toolName: string): boolean {
+  const heldGroup = groups.findIndex(holds);
+  logger.debug('Custom tool any-of test', {
+    context: CONTEXT,
+    tool: toolName,
+    groups: groups.length,
+    heldGroup: heldGroup >= 0 ? heldGroup : null,
+  });
+  return heldGroup >= 0;
+}
+
+/**
+ * Evaluate one AND-group of an outcome test. Every subject named must hold —
+ * bare comparators against the final value, `roll` against the raw draw,
+ * `params` against what the caller supplied, `metadata` against the invoking
+ * character's fact sheet, and the Inventory subjects against their bag.
+ */
+function matchesWhenGroup(when: WhenObject, subjects: OutcomeSubjects, toolName: string): boolean {
   const { value, roll, params } = subjects;
   const metadata = subjects.metadata ?? {};
   const progress = subjects.progress ?? {};
   const state = subjects.state ?? {};
+  const inventory = subjects.inventory ?? null;
 
-  if (!matchesComparator(toolName, when, value, 'the rolled value', params, state)) return false;
+  if (!matchesComparator(toolName, when, value, 'the rolled value', params, state, inventory)) return false;
 
-  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params, state)) {
+  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params, state, inventory)) {
     return false;
   }
 
@@ -1065,20 +1397,101 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       // Load-time validation rejects a test of an undeclared parameter.
       throw new CustomToolRunError(`${toolName}: an outcome tests "${name}", which is not a declared parameter`);
     }
-    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params, state)) return false;
+    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params, state, inventory)) return false;
   }
 
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
-    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state)) return false;
+    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state, 'metadata', inventory)) return false;
   }
 
   // The derived progress sheet reads through the SAME fail-soft table as
   // metadata — one semantics, no second comparison code — differing only in
   // which sheet it looks in and what it calls the subject in the log.
   for (const [key, comparator] of Object.entries(when.progress ?? {})) {
-    if (!matchesMetadataComparator(toolName, comparator, key, progress, params, state, 'progress')) {
+    if (!matchesMetadataComparator(toolName, comparator, key, progress, params, state, 'progress', inventory)) {
       return false;
     }
+  }
+
+  // The Inventory subjects. Each key is a TEMPLATE, rendered against the
+  // run's subjects first (`{{params.weapon}}`), then resolved through the one
+  // reference rule. Fail-soft like `metadata`: with no context every
+  // comparator declines.
+  const inventoryKeys = [...Object.keys(when.inventory ?? {}), ...Object.keys(when.inventoryCount ?? {})];
+  if (inventoryKeys.length > 0) {
+    const renderVars: PlaceholderSubjects = { ...subjects, dice: (subjects as Partial<EffectSubjects>).dice ?? '' };
+    const decline = (key: string) => (reason: string) =>
+      logger.debug('Custom tool inventory test did not match', { context: CONTEXT, tool: toolName, key, reason });
+
+    for (const [rawKey, comparator] of Object.entries(when.inventory ?? {})) {
+      const ref = renderTemplate(rawKey, renderVars).trim();
+      const operandFor = (op: 'eq' | 'neq'): string | undefined => {
+        const operand = comparator[op];
+        if (operand === undefined) return undefined;
+        return String(resolveOperand(toolName, operand, params, `inventory "${rawKey}" ${op}`, state, inventory));
+      };
+      const holds = inventoryStateHolds({ eq: operandFor('eq'), neq: operandFor('neq') }, ref, inventory, decline(rawKey));
+      logger.debug('Custom tool inventory state test', {
+        context: CONTEXT,
+        tool: toolName,
+        key: rawKey,
+        ref,
+        state: inventory ? inventory.state(ref) : null,
+        holds,
+      });
+      if (!holds) return false;
+    }
+
+    for (const [rawKey, comparator] of Object.entries(when.inventoryCount ?? {})) {
+      const ref = renderTemplate(rawKey, renderVars).trim();
+      const test: Record<string, number> = {};
+      for (const op of ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const) {
+        const operand = comparator[op];
+        if (operand === undefined) continue;
+        test[op] = requireNumber(
+          toolName,
+          resolveOperand(toolName, operand, params, `inventoryCount "${rawKey}" ${op}`, state, inventory),
+          `inventoryCount "${rawKey}" ${op}`
+        );
+      }
+      const holds = inventoryCountHolds(test, ref, inventory, decline(rawKey));
+      logger.debug('Custom tool inventory count test', {
+        context: CONTEXT,
+        tool: toolName,
+        key: rawKey,
+        ref,
+        count: inventory ? inventory.equippedKinCount(ref) : null,
+        holds,
+      });
+      if (!holds) return false;
+    }
+  }
+
+  // The aggregate sheet: one attribute across a scope of the bag, through the
+  // same comparison table as `metadata`. The key is literal (it names a scope
+  // and a field, never an object); operands resolve like any other.
+  for (const [key, comparator] of Object.entries(when.inventoryAggregate ?? {})) {
+    const holds = inventoryAggregateHolds(comparator, key, inventory, {
+      resolveOperand: (comparatorKey) =>
+        resolveOperand(
+          toolName,
+          comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef | InventoryRef,
+          params,
+          `inventoryAggregate "${key}" ${comparatorKey}`,
+          state,
+          inventory
+        ),
+      onDecline: (reason) =>
+        logger.debug('Custom tool inventoryAggregate test did not match', { context: CONTEXT, tool: toolName, key, reason }),
+    });
+    logger.debug('Custom tool inventoryAggregate test', {
+      context: CONTEXT,
+      tool: toolName,
+      key,
+      value: describeAggregateValue(key, inventory),
+      holds,
+    });
+    if (!holds) return false;
   }
 
   if (when.llm !== undefined) {
@@ -1089,7 +1502,7 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       logger.debug('Custom tool llm test did not match — no consult ran', { context: CONTEXT, tool: toolName });
       return false;
     }
-    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params, state)) return false;
+    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params, state, inventory)) return false;
   }
 
   return true;
@@ -1098,7 +1511,7 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
 /** What an effect condition may be posed about: the run's subjects, plus the winning outcome. */
 export interface EffectSubjects extends OutcomeSubjects {
   /** The winning outcome — the one subject that exists only after the deal. */
-  outcome: { state: OutcomeState; index: number };
+  outcome: { state: OutcomeState; index: number; brief?: string };
   /** Dice breakdown for `{{dice}}` in expressions — a string, '' for Form A. */
   dice: string;
   /**
@@ -1115,35 +1528,96 @@ export interface EffectSubjects extends OutcomeSubjects {
  * can test — the winning outcome's semantic state.
  */
 export function matchesEffectWhen(
-  when: EffectWhen | undefined,
+  when: EffectCondition | undefined,
   subjects: EffectSubjects,
   toolName = 'custom tool'
 ): boolean {
   if (when === undefined) return true;
+  if (!Array.isArray(when)) return matchesEffectWhenGroup(when, subjects, toolName);
+  return anyGroupHolds(effectWhenGroups(when), (group) => matchesEffectWhenGroup(group, subjects, toolName), toolName);
+}
 
+/** One AND-group of an effect condition: the outcome test, then the shared subjects. */
+function matchesEffectWhenGroup(when: EffectWhen, subjects: EffectSubjects, toolName: string): boolean {
   if (when.outcome !== undefined) {
     if (when.outcome.eq !== undefined && subjects.outcome.state !== when.outcome.eq) return false;
     if (when.outcome.neq !== undefined && subjects.outcome.state === when.outcome.neq) return false;
   }
 
   const { outcome: _outcome, ...shared } = when;
-  return matchesWhen(shared as WhenObject, subjects, toolName);
+  // An outcome-only group has no shared subjects left: it holds on the outcome alone.
+  return matchesWhenGroup(shared as WhenObject, subjects, toolName);
 }
 
 /**
- * One effect, resolved by the pure core: either the value it would write, or
- * the reason it was skipped. The entrances (and only they) apply the former;
- * the Proving Bench shows both as a dry run.
+ * One effect, resolved by the pure core: the value it would write, the
+ * wardrobe gesture it would make, or the reason it was skipped. The entrances
+ * (and only they) apply the first two; the Proving Bench shows all three as a
+ * dry run.
  */
 export type ResolvedEffect =
   | { index: number; target: EffectTarget; value: ExprValue }
+  | { index: number; wardrobe: ResolvedWardrobeGesture }
+  | { index: number; inventory: ResolvedInventoryGesture }
+  | { index: number; log: string }
   | { index: number; skipped: string };
 
-/** True for a resolved effect that would actually write. */
-export function isApplicableEffect(
+/** An Inventory gesture with its object references rendered — ready for the applier. */
+export interface ResolvedInventoryGesture {
+  action: InventoryEffectAction;
+  /** Rendered, trimmed references in file order; empty ones dropped with a debug log. */
+  items: string[];
+  /** pick_up only: equip the new instances (default true). */
+  equip?: boolean;
+}
+
+/** A wardrobe gesture with its item references rendered — ready for the applier. */
+export interface ResolvedWardrobeGesture {
+  action: WardrobeEffectAction;
+  /** Rendered, trimmed item references in file order. Empty strings are dropped here, with a debug log. */
+  items: string[];
+  mode?: WardrobeEffectMode;
+  slot?: WardrobeItemType;
+}
+
+/** True for a resolved effect that would actually write a value. */
+export function isApplicableWriteEffect(
   effect: ResolvedEffect
 ): effect is Extract<ResolvedEffect, { target: EffectTarget }> {
   return 'target' in effect;
+}
+
+/** True for a resolved effect that would actually change an outfit. */
+export function isApplicableWardrobeEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { wardrobe: ResolvedWardrobeGesture }> {
+  return 'wardrobe' in effect;
+}
+
+/** True for a resolved effect that would change what the rolling character carries. */
+export function isApplicableInventoryEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { inventory: ResolvedInventoryGesture }> {
+  return 'inventory' in effect;
+}
+
+/** True for a resolved effect that would write a line to the log. */
+export function isApplicableLogEffect(
+  effect: ResolvedEffect
+): effect is Extract<ResolvedEffect, { log: string }> {
+  return 'log' in effect;
+}
+
+/** True for a resolved effect of any kind that would apply (the Proving Bench's count). */
+export function isApplicableEffect(
+  effect: ResolvedEffect
+): effect is Exclude<ResolvedEffect, { skipped: string }> {
+  return (
+    isApplicableWriteEffect(effect) ||
+    isApplicableWardrobeEffect(effect) ||
+    isApplicableInventoryEffect(effect) ||
+    isApplicableLogEffect(effect)
+  );
 }
 
 /**
@@ -1157,7 +1631,12 @@ export function isApplicableEffect(
  * load-time rejections and only reach here as regressions, handled the same
  * fail-soft way.
  */
-function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): ResolvedEffect[] {
+function resolveEffects(
+  definition: QtapCustomTool,
+  subjects: EffectSubjects,
+  /** A held run's per-effect settings (operator intervention). Absent everywhere else. */
+  pins?: Record<number, EffectPin>
+): ResolvedEffect[] {
   const resolveRef = (refname: string): ExprValue | undefined => {
     const v = resolvePlaceholderValue(classifyPlaceholder(refname), subjects);
     return isPrimitive(v) ? v : undefined;
@@ -1174,18 +1653,49 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
   };
 
   return (definition.effects ?? []).map((effect, index) => {
-    let holds: boolean;
-    try {
-      holds = matchesEffectWhen(effect.when, subjects, definition.name);
-    } catch (error) {
-      // A comparator regression past load-time validation. An outcome row in
-      // this state fails the run; an effect never does — it just doesn't fire.
-      return skipped(index, `condition could not be evaluated: ${getErrorMessage(error)}`);
+    const pin = pins?.[index];
+    if (pin?.mode === 'off') return skipped(index, 'switched off for this run');
+
+    // A forced effect fires whatever its condition says; it can never add an
+    // effect the definition lacks, only override this one's `when`.
+    if (pin?.mode !== 'on') {
+      let holds: boolean;
+      try {
+        holds = matchesEffectWhen(effect.when, subjects, definition.name);
+      } catch (error) {
+        // A comparator regression past load-time validation. An outcome row in
+        // this state fails the run; an effect never does — it just doesn't fire.
+        return skipped(index, `condition could not be evaluated: ${getErrorMessage(error)}`);
+      }
+      if (!holds) return skipped(index, 'condition did not hold');
     }
-    if (!holds) return skipped(index, 'condition did not hold');
+
+    // An edited gesture's references, or an edited log line, are literals —
+    // the operator is editing what gets written, not the template.
+    const literalItems = pin?.items?.map((item) => item.trim()).filter((item) => item.length > 0);
+
+    if (isWardrobeEffect(effect)) {
+      const gesture = literalItems ? { ...effect.wardrobe, items: literalItems } : effect.wardrobe;
+      return resolveWardrobeGesture(definition.name, index, gesture, subjects, skipped, literalItems !== undefined);
+    }
+    if (isInventoryEffect(effect)) {
+      const gesture = literalItems ? { ...effect.inventory, items: literalItems } : effect.inventory;
+      return resolveInventoryGesture(definition.name, index, gesture, subjects, skipped, literalItems !== undefined);
+    }
+    if (isLogEffect(effect)) {
+      // A template, like an outcome message — not an expression.
+      const line = (pin?.log !== undefined ? pin.log : renderTemplate(effect.log, subjects)).trim();
+      return line.length > 0 ? { index, log: line } : skipped(index, 'log line rendered empty');
+    }
+    if (effect.target === undefined || effect.value === undefined) {
+      // Load-time validation rejects this; reaching here is a regression.
+      return skipped(index, 'effect is neither a complete write, a wardrobe or inventory gesture, nor a log line');
+    }
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) return skipped(index, `target ${target.reason}`);
+
+    if (pin?.value !== undefined) return { index, target: target.target, value: pin.value };
 
     if (typeof effect.value !== 'string') {
       return { index, target: target.target, value: effect.value };
@@ -1202,6 +1712,91 @@ function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): R
 }
 
 /**
+ * Render a wardrobe gesture's item references with the same subjects an
+ * outcome message gets. Templates, not expressions: a reference that renders
+ * empty is dropped (a `wear` or `take_off` left with none is skipped), and one
+ * that keeps an unresolved placeholder is passed on as written — it will
+ * simply fail to resolve in the wardrobe, fail-soft, at the applier.
+ */
+function resolveWardrobeGesture(
+  toolName: string,
+  index: number,
+  gesture: CustomToolWardrobeGesture,
+  subjects: EffectSubjects,
+  skipped: (index: number, reason: string) => ResolvedEffect,
+  /** The references are the operator's literals — not rendered as templates. */
+  literal = false
+): ResolvedEffect {
+  const items: string[] = [];
+  for (const raw of gesture.items ?? []) {
+    const rendered = (literal ? raw : renderTemplate(raw, subjects)).trim();
+    if (rendered.length === 0) {
+      logger.debug('Custom tool wardrobe item reference rendered empty; dropped', {
+        context: CONTEXT,
+        tool: toolName,
+        effectIndex: index,
+        reference: raw,
+      });
+      continue;
+    }
+    items.push(rendered);
+  }
+
+  if (gesture.action !== 'clear_slot' && items.length === 0) {
+    return skipped(index, 'every item reference rendered empty');
+  }
+
+  return {
+    index,
+    wardrobe: {
+      action: gesture.action,
+      items,
+      ...(gesture.mode !== undefined ? { mode: gesture.mode } : {}),
+      ...(gesture.slot !== undefined ? { slot: gesture.slot } : {}),
+    },
+  };
+}
+
+/**
+ * Render an Inventory gesture's object references with the same subjects an
+ * outcome message gets — templates, not expressions. A reference that renders
+ * empty is dropped; a gesture left with none is skipped with that reason.
+ */
+function resolveInventoryGesture(
+  toolName: string,
+  index: number,
+  gesture: CustomToolInventoryGesture,
+  subjects: EffectSubjects,
+  skipped: (index: number, reason: string) => ResolvedEffect,
+  /** The references are the operator's literals — not rendered as templates. */
+  literal = false
+): ResolvedEffect {
+  const items: string[] = [];
+  for (const raw of gesture.items) {
+    const rendered = (literal ? raw : renderTemplate(raw, subjects)).trim();
+    if (rendered.length === 0) {
+      logger.debug('Custom tool inventory reference rendered empty; dropped', {
+        context: CONTEXT,
+        tool: toolName,
+        effectIndex: index,
+        reference: raw,
+      });
+      continue;
+    }
+    items.push(rendered);
+  }
+  if (items.length === 0) return skipped(index, 'every object reference rendered empty');
+  return {
+    index,
+    inventory: {
+      action: gesture.action,
+      items,
+      ...(gesture.action === 'pick_up' ? { equip: gesture.equip !== false } : {}),
+    },
+  };
+}
+
+/**
  * The metadata a winning outcome consulted, for the roll record.
  *
  * Only the keys that row actually tested, and only their primitive values —
@@ -1214,12 +1809,15 @@ export function collectMetadataTested(
   when: When,
   metadata: Record<string, unknown> | undefined
 ): MetadataTested | undefined {
-  if (when === true || when.metadata === undefined || !metadata) return undefined;
+  if (!metadata) return undefined;
 
+  // Across every group of an any-of: a key some group consulted was consulted.
   const tested: MetadataTested = {};
-  for (const key of Object.keys(when.metadata)) {
-    const value = metadata[key];
-    if (isPrimitive(value)) tested[key] = value;
+  for (const group of whenGroups(when)) {
+    for (const key of Object.keys(group.metadata ?? {})) {
+      const value = metadata[key];
+      if (isPrimitive(value)) tested[key] = value;
+    }
   }
   return Object.keys(tested).length > 0 ? tested : undefined;
 }
@@ -1234,6 +1832,8 @@ export interface PlaceholderSubjects {
   roll: number;
   dice: string;
   params: ResolvedParams;
+  /** The rolling character's name, for `{{character}}`. */
+  character?: string;
   metadata?: Record<string, unknown>;
   /** The flattened progress sheet, for `{{progress.<id>.<field>}}`. */
   progress?: Record<string, ProgressPrimitive>;
@@ -1244,8 +1844,16 @@ export interface PlaceholderSubjects {
   now?: number;
   /** The consult's result. Absent while rendering the consult's own prompt. */
   llm?: LlmSubject;
+  /**
+   * The winning outcome, for `{{outcome.state}}` / `{{outcome.index}}` /
+   * `{{outcome.brief}}`. Present once the table has dealt: before the consult
+   * when no row tests it, after otherwise (so absent from the prompt then).
+   */
+  outcome?: { state: OutcomeState; index: number; brief?: string };
   /** The merged persistent state, for `{{state.path}}` placeholders. */
   state?: CustomToolState;
+  /** The rolling character's Inventory, for `{{inventory.<ref>.<field>}}`. */
+  inventory?: InventoryContext | null;
 }
 
 /**
@@ -1266,6 +1874,8 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
       return vars.dice;
     case 'llm':
       return vars.llm?.output;
+    case 'outcome':
+      return vars.outcome?.[ref.field];
     case 'params':
       return vars.params[ref.name];
     case 'metadata':
@@ -1274,9 +1884,30 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
       return vars.progress?.[`${ref.id}.${ref.field}`];
     case 'now':
       return vars.now;
+    case 'character':
+      return vars.character;
     case 'state':
       // `state.` is stripped and the remainder is a full state path.
       return getAtPath(vars.state ?? {}, parsePath(ref.path));
+    case 'inventory': {
+      // No context (a run nobody made): nothing renders, not even `state`.
+      if (!vars.inventory) return undefined;
+      if (ref.field === 'state') return vars.inventory.state(ref.ref);
+      const item = vars.inventory.item(ref.ref);
+      if (!item) return undefined;
+      switch (ref.field) {
+        case 'title':
+          // A title, or the name — so a message can always say *the sword*.
+          return item.title?.trim() || item.name;
+        case 'name':
+          return item.name;
+        case 'description':
+          return item.description ?? undefined;
+        case 'metadata':
+          return ref.key !== undefined ? item.metadata?.[ref.key] : undefined;
+      }
+      return undefined;
+    }
     case 'unknown':
       return undefined;
   }
@@ -1303,6 +1934,15 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
       case 'llm':
         logger.debug('Custom tool message references {{llm}} with no consult to render', { context: CONTEXT });
         break;
+      case 'outcome':
+        logger.debug('Custom tool template references {{outcome.*}} it cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: !vars.outcome
+            ? 'the table has not dealt yet (or the consult is read by an outcome row)'
+            : 'the winning outcome has no brief',
+        });
+        break;
       case 'metadata':
         logger.debug('Custom tool message references metadata the character cannot render', {
           context: CONTEXT,
@@ -1319,6 +1959,20 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
         break;
       case 'now':
         logger.debug('Custom tool message references {{now}} with no run clock to render', { context: CONTEXT });
+        break;
+      case 'character':
+        logger.debug('Custom tool message references {{character}} but nobody in particular rolled', { context: CONTEXT });
+        break;
+      case 'inventory':
+        logger.debug('Custom tool message references an inventory object it cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: !vars.inventory
+            ? 'no inventory to read (nobody in particular rolled)'
+            : v === undefined
+              ? 'the object is absent, or has no such field or metadata key'
+              : 'the metadata key does not hold a primitive',
+        });
         break;
       case 'state':
         logger.debug('Custom tool message references state it cannot render', {
@@ -1381,6 +2035,22 @@ async function resolveLlmConsult(
   };
 }
 
+/**
+ * Pose a definition's consult once, with a prompt given whole — the hold
+ * dialog's Re-ask (operator intervention). The same fail-soft resolution as a
+ * run's own consult: never throws.
+ */
+export function poseLlmConsult(
+  definition: QtapCustomTool,
+  prompt: string,
+  invoke: LlmInvoker | undefined
+): Promise<LlmConsultResult> {
+  if (!definition.llm) {
+    throw new CustomToolRunError(`${definition.name}: this tool consults no model`);
+  }
+  return resolveLlmConsult(definition.name, definition.llm, prompt, invoke);
+}
+
 /** A definition's roll, parsed once so a thousand draws need not re-parse it. */
 type PreparedRoll = { form: 'dice'; notation: string; parsed: DiceNotation } | { form: 'range'; range: RollRange };
 
@@ -1389,13 +2059,34 @@ type PreparedRoll = { form: 'dice'; notation: string; parsed: DiceNotation } | {
  * a dice string that no longer parses is a regression and must still fail
  * loudly rather than invent a number.
  */
-function prepareRoll(definition: QtapCustomTool): PreparedRoll {
+function prepareRoll(definition: QtapCustomTool, inventory?: InventoryContext | null): PreparedRoll {
   if (typeof definition.roll === 'string') {
     const parsed = parseDiceNotation(definition.roll);
     if (!parsed) {
       throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
     }
     return { form: 'dice', notation: definition.roll, parsed };
+  }
+  // A whole roll drawn from an object's metadata ("sword.metadata.damage"):
+  // the notation it holds, or the (load-checked) dice fallback when it holds
+  // none, or none this build can roll.
+  if (isInventoryRef(definition.roll)) {
+    const ref = definition.roll;
+    const resolved = resolveInventoryValue(ref, inventory);
+    const parsed = typeof resolved === 'string' ? parseDiceNotation(resolved) : null;
+    if (parsed) return { form: 'dice', notation: resolved as string, parsed };
+    logger.debug('Custom tool $inventory roll fell back', {
+      context: CONTEXT,
+      tool: definition.name,
+      reference: ref.$inventory,
+      resolved,
+      fallback: ref.fallback,
+    });
+    const fallback = typeof ref.fallback === 'string' ? parseDiceNotation(ref.fallback) : null;
+    if (!fallback) {
+      throw new CustomToolRunError(`${definition.name}: the $inventory roll's fallback is not dice notation this build can roll`);
+    }
+    return { form: 'dice', notation: ref.fallback as string, parsed: fallback };
   }
   return { form: 'range', range: definition.roll ?? {} };
 }
@@ -1409,13 +2100,52 @@ function drawRoll(
   definition: QtapCustomTool,
   roll: PreparedRoll,
   params: ResolvedParams,
-  state: CustomToolState
-): { raw: number; value: number; dice?: DiceRollResult } {
+  state: CustomToolState,
+  inventory?: InventoryContext | null,
+  replay?: { draw?: RecordedDraw; pins?: RunPins }
+): { raw: number; value: number; dice?: DiceRollResult; draw: RecordedDraw; rollSpan: RunSpan; valueSpan: RunSpan } {
   if (roll.form === 'dice') {
-    const rolled = rollNotation(roll.parsed);
-    return { raw: rolled.total, value: rolled.total, dice: rolled };
+    const faces = replay?.pins?.dice ?? (replay?.draw?.form === 'dice' ? replay.draw.faces : undefined);
+    const rolled = faces ? diceFromFaces(definition.name, roll.parsed, faces) : rollNotation(roll.parsed);
+    // Dice carry their own modifier, so the total is both raw and value: a
+    // pinned total without its faces would make `{{dice}}` lie.
+    const span = diceSpan(roll.parsed);
+    return {
+      raw: rolled.total,
+      value: rolled.total,
+      dice: rolled,
+      draw: { form: 'dice', faces: [...rolled.results] },
+      rollSpan: span,
+      valueSpan: span,
+    };
   }
-  return rollRange(definition, roll.range, params, state);
+  const unit = replay?.draw?.form === 'range' ? replay.draw.unit : undefined;
+  const { raw, value, unit: used, rollSpan, valueSpan } = rollRange(
+    definition,
+    roll.range,
+    params,
+    state,
+    inventory,
+    unit,
+    replay?.pins
+  );
+  return { raw, value, draw: { form: 'range', unit: used }, rollSpan, valueSpan };
+}
+
+/**
+ * A dice result from given faces (a replayed draw or the operator's pin): each
+ * face clamped to [1, sides], the total their sum plus the notation's modifier.
+ * The count must match the notation — a held run's notation cannot change.
+ */
+function diceFromFaces(toolName: string, notation: DiceNotation, faces: number[]): DiceRollResult {
+  if (faces.length !== notation.count) {
+    throw new CustomToolRunError(
+      `${toolName}: ${faces.length} dice given for ${notation.count}d${notation.sides}`
+    );
+  }
+  const results = faces.map((face) => Math.min(notation.sides, Math.max(1, Math.round(face))));
+  const subtotal = results.reduce((sum, face) => sum + face, 0);
+  return { ...notation, results, subtotal, total: subtotal + notation.modifier };
 }
 
 /**
@@ -1454,16 +2184,45 @@ export async function executeCustomTool(
     progress?: Record<string, ProgressPrimitive>;
     /** Epoch milliseconds at run start, for `{{now}}`. Defaults to `Date.now()`. */
     now?: number;
+    /** The rolling character's name, for `{{character}}`. Absent for a run nobody made. */
+    character?: string;
     /** Merged persistent state for `$state` refs and `{{state.path}}`. Default {}. */
     state?: CustomToolState;
+    /**
+     * The rolling character's Inventory for this chat, loaded once by the
+     * entrance. Absent/null for a run nobody made — inventory tests decline,
+     * `$inventory` operands fall back, `{{inventory.*}}` renders as written.
+     */
+    inventory?: InventoryContext | null;
     llmInvoke?: LlmInvoker;
+    /**
+     * Operator intervention (lib/pascal/intervention/): the random draw to
+     * replay instead of fresh randomness. Absent = a fresh draw.
+     */
+    draw?: RecordedDraw;
+    /**
+     * Operator intervention: the consult result to use instead of calling
+     * `llmInvoke`. When supplied, the invoker is never called.
+     */
+    consult?: LlmConsultResult;
+    /** Operator intervention: the fields the operator pinned. */
+    pins?: RunPins;
   }
 ): Promise<CustomToolRunResult> {
   const state = overrides?.state ?? {};
-  const params = resolveParams(definition, suppliedParams, state);
+  const inventory = overrides?.inventory ?? null;
+  const pins = overrides?.pins;
+  const params = resolveParams(definition, suppliedParams, state, inventory);
 
-  const roll = prepareRoll(definition);
-  const { raw, value, dice } = drawRoll(definition, roll, params, state);
+  if (pins?.outcomeIndex !== undefined && !definition.outcomes[pins.outcomeIndex]) {
+    throw new CustomToolRunError(`${definition.name}: there is no outcome row ${pins.outcomeIndex}`);
+  }
+
+  const roll = prepareRoll(definition, inventory);
+  const { raw, value, dice, draw, rollSpan, valueSpan } = drawRoll(definition, roll, params, state, inventory, {
+    ...(overrides?.draw ? { draw: overrides.draw } : {}),
+    ...(pins ? { pins } : {}),
+  });
   const rollForm = roll.form;
   const notation = roll.form === 'dice' ? roll.notation : undefined;
   const diceRolls = dice?.results;
@@ -1474,40 +2233,108 @@ export async function executeCustomTool(
   // One clock reading for the whole run: two effects that both say {{now}}
   // must agree, and a run's start is the honest instant for both.
   const now = overrides?.now ?? Date.now();
+  const character = overrides?.character?.trim() || undefined;
 
-  // The consult runs AFTER the roll — its prompt may quote the draw — and
-  // BEFORE the table, which may test its answer.
+  // Two run orders, and the table decides which. A table that TESTS the
+  // consult's answer needs the consult first (the oracle: the model's answer is
+  // the verdict). Any other table is dealt BEFORE the consult, so the prompt
+  // is told the verdict (`{{outcome.brief}}`) rather than asked to recompute it
+  // — a cheap model asked to redo arithmetic the engine has already done will
+  // sometimes report the other branch (bug 257).
+  const consultFirst = definition.llm !== undefined && outcomeTableTestsLlm(definition.outcomes);
+  const baseSubjects: OutcomeSubjects = {
+    value,
+    roll: raw,
+    params,
+    metadata,
+    progress,
+    state,
+    inventory,
+    ...(character ? { character } : {}),
+  };
+  const templateVars = { value, roll: raw, dice: diceBreakdown, params, character, metadata, progress, now, state, inventory };
+
+  // A held run never calls the model from here: a pinned answer, or the
+  // consult it was handed, stands in. Only a Re-ask spends a call, and that
+  // goes through the dialog's own action.
+  const consult = async (spec: CustomToolLlm, prompt: string): Promise<LlmConsultResult> => {
+    if (pins?.llmAnswer) return { ok: pins.llmAnswer.ok, output: pins.llmAnswer.output, prompt };
+    if (overrides?.consult) return overrides.consult;
+    return resolveLlmConsult(definition.name, spec, prompt, overrides?.llmInvoke);
+  };
+
   let llm: LlmConsultResult | undefined;
-  if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, state });
-    llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
+  let llmPromptRendered: string | undefined;
+  let outcomeIndex: number;
+  let tableOutcomeIndex: number | undefined;
+  let briefs: Array<string | undefined> = [];
+  if (definition.llm && consultFirst) {
+    llmPromptRendered = renderTemplate(definition.llm.prompt, templateVars);
+    llm = await consult(definition.llm, llmPromptRendered);
+    const tablePick = pickOutcome(definition, { ...baseSubjects, llm });
+    outcomeIndex = pins?.outcomeIndex ?? tablePick;
+    if (pins?.outcomeIndex !== undefined) tableOutcomeIndex = tablePick;
+  } else {
+    const tablePick = pickOutcome(definition, baseSubjects);
+    outcomeIndex = pins?.outcomeIndex ?? tablePick;
+    if (pins?.outcomeIndex !== undefined) tableOutcomeIndex = tablePick;
+    if (definition.llm) {
+      const winner = definition.outcomes[outcomeIndex];
+      // The brief is written before the consult, so it quotes only what the
+      // prompt may: no `{{llm}}`, no `{{outcome.*}}` (load rejects both).
+      const brief = winner.brief !== undefined ? renderTemplate(winner.brief, templateVars) : undefined;
+      briefs = [];
+      briefs[outcomeIndex] = brief;
+      logger.debug('Custom tool table dealt ahead of the consult', {
+        context: CONTEXT,
+        tool: definition.name,
+        outcomeIndex,
+        state: winner.state,
+        hasBrief: brief !== undefined,
+      });
+      llmPromptRendered = renderTemplate(definition.llm.prompt, {
+        ...templateVars,
+        outcome: { state: winner.state, index: outcomeIndex, ...(brief !== undefined ? { brief } : {}) },
+      });
+      llm = await consult(definition.llm, llmPromptRendered);
+    }
   }
 
-  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, progress, state, ...(llm ? { llm } : {}) };
-  const outcomeIndex = pickOutcome(definition, subjects);
+  const subjects: OutcomeSubjects = { ...baseSubjects, ...(llm ? { llm } : {}) };
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state });
+  // Rendered once for the winner, whichever run order dealt it: a brief after
+  // an oracle-first run is never read by the prompt, but `{{outcome.brief}}`
+  // in a message or effect still resolves.
+  const winningBrief =
+    briefs[outcomeIndex] ?? (outcome.brief !== undefined ? renderTemplate(outcome.brief, templateVars) : undefined);
+  // A pinned state is the state the run announces, and the one effects test.
+  const finalState = pins?.state ?? outcome.state;
+  const winning = { state: finalState, index: outcomeIndex, ...(winningBrief !== undefined ? { brief: winningBrief } : {}) };
+
+  // A pinned message is the operator's literal text: no placeholders re-rendered in it.
+  const message = pins?.message ?? renderTemplate(outcome.message, { ...templateVars, llm, outcome: winning });
+
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state })
+    ? (pins?.chipLabel ?? renderTemplate(definition.chipLabel, { ...templateVars, llm, outcome: winning }))
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written
   // here; the entrances decide whether (and where) the writes land.
   const effectSubjects: EffectSubjects = {
     ...subjects,
-    outcome: { state: outcome.state, index: outcomeIndex },
+    outcome: winning,
     dice: diceBreakdown,
     now,
   };
   const effects =
     definition.effects && definition.effects.length > 0
-      ? resolveEffects(definition, effectSubjects)
+      ? resolveEffects(definition, effectSubjects, pins?.effects)
       : undefined;
 
   const visibility: Visibility =
@@ -1525,7 +2352,7 @@ export async function executeCustomTool(
     raw,
     diceRolls,
     value,
-    state: outcome.state,
+    state: finalState,
     outcomeIndex,
     message,
     diceBreakdown,
@@ -1534,6 +2361,11 @@ export async function executeCustomTool(
     ...(llm ? { llm } : {}),
     ...(chipLabel !== undefined ? { chipLabel } : {}),
     ...(effects ? { effects } : {}),
+    draw,
+    rollSpan,
+    valueSpan,
+    ...(llmPromptRendered !== undefined ? { llmPromptRendered } : {}),
+    ...(tableOutcomeIndex !== undefined ? { tableOutcomeIndex } : {}),
   };
 }
 
@@ -1580,10 +2412,12 @@ export function simulateOutcomes(
    * branches on `cannon.complete` is conditional on that one clock reading —
    * the same caveat the bench already states for a pretend consult.
    */
-  progress: Record<string, ProgressPrimitive> = {}
+  progress: Record<string, ProgressPrimitive> = {},
+  /** The mock Inventory (the bench's), held fixed across every draw. */
+  inventory: InventoryContext | null = null
 ): CustomToolAuditResult {
-  const params = resolveParams(definition, suppliedParams, state);
-  const roll = prepareRoll(definition);
+  const params = resolveParams(definition, suppliedParams, state, inventory);
+  const roll = prepareRoll(definition, inventory);
 
   const hits = new Array<number>(definition.outcomes.length).fill(0);
   let valueMin = Infinity;
@@ -1591,7 +2425,7 @@ export function simulateOutcomes(
   let valueSum = 0;
 
   for (let i = 0; i < runs; i++) {
-    const { raw, value } = drawRoll(definition, roll, params, state);
+    const { raw, value } = drawRoll(definition, roll, params, state, inventory);
 
     const subjects: OutcomeSubjects = {
       value,
@@ -1600,6 +2434,7 @@ export function simulateOutcomes(
       metadata: metadata ?? {},
       progress,
       state,
+      inventory,
       ...(llm ? { llm } : {}),
     };
     hits[pickOutcome(definition, subjects)] += 1;

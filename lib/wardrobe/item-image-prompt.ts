@@ -100,15 +100,23 @@ export async function buildWardrobeItemImagePrompt(
     subject = 'worn';
     orientation = 'portrait';
     const figure = buildFigureIdentityBlock(owner, hairOnly ? 'head-and-shoulders' : 'full-length');
-    const framing = hairOnly
-      ? 'Head-and-shoulders portrait, facing the viewer, showing the hairstyle clearly'
-      : 'Full-length, standing, facing the viewer, head to toe in frame';
+    // A non-humanoid owner has no head to crop to and nothing to stand on: its
+    // whole form is framed and the item is shown on it, never on a body.
+    const framing = !figure.humanoid
+      ? 'Its whole form in frame, the item clearly visible on it'
+      : hairOnly
+        ? 'Head-and-shoulders portrait, facing the viewer, showing the hairstyle clearly'
+        : 'Full-length, standing, facing the viewer, head to toe in frame';
     const intro = `${soloFigureIntro('picture', figure.subjectNoun, owner.name)}. ${framing}.`;
     const physBlock = figure.physBlock ? ` ${figure.physBlock}` : '';
-    const wearing = hairOnly ? `Wearing their hair as ${cueInline}` : `Wearing ${cueInline}`;
-    const rest = hairOnly
-      ? 'The hairstyle is the subject; neutral studio backdrop; even light.'
-      : 'The rest of the attire plain and unremarkable so the garment is the subject; neutral studio backdrop; even light. Only one person in the image.';
+    const wearing = !figure.humanoid
+      ? `Bearing ${cueInline}`
+      : hairOnly ? `Wearing their hair as ${cueInline}` : `Wearing ${cueInline}`;
+    const rest = !figure.humanoid
+      ? 'The item is the subject; neutral studio backdrop; even light. Only one subject in the image.'
+      : hairOnly
+        ? 'The hairstyle is the subject; neutral studio backdrop; even light.'
+        : 'The rest of the attire plain and unremarkable so the garment is the subject; neutral studio backdrop; even light. Only one person in the image.';
     prompt = `${intro}${physBlock} ${wearing}${rest}`;
   } else {
     subject = 'catalogue';

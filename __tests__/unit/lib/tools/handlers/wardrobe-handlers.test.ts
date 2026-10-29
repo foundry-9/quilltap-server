@@ -209,6 +209,65 @@ describe('wardrobe tool handlers', () => {
       expect(byId['grp-item'].is_own).toBe(false)
     })
 
+    describe('pronoun guidance', () => {
+      const HE = { subject: 'he', object: 'him', possessive: 'his' }
+
+      beforeEach(() => {
+        repos.characters.findById.mockResolvedValue({ id: 'char-1', pronouns: HE })
+        sharedByMount[GENERAL_MOUNT] = [
+          makeWardrobeItem({ id: 'gown', title: 'Ball Gown', characterId: null, pronounGuidance: ['she', 'they'] }),
+          makeWardrobeItem({ id: 'suit', title: 'Morning Suit', characterId: null, pronounGuidance: ['he'] }),
+          makeWardrobeItem({ id: 'boots', title: 'Plain Boots', characterId: null, types: ['footwear'] }),
+        ]
+      })
+
+      it('holds back items meant for other pronouns by default and says how many', async () => {
+        const result = await executeWardrobeListTool({}, context)
+
+        expect(result.items.map((i: any) => i.item_id).sort()).toEqual(['boots', 'suit'])
+        expect(result.hidden_by_pronoun_guidance).toBe(1)
+        const suit = result.items.find((i: any) => i.item_id === 'suit')
+        expect(suit.pronoun_guidance).toEqual(['he'])
+        const text = formatWardrobeListResults(result)
+        expect(text).toContain('[meant for: He/Him/His]')
+        expect(text).toContain('1 more item is meant for characters with other pronouns')
+        expect(text).toContain('pronoun_aware: false')
+      })
+
+      it('lists everything with pronoun_aware: false', async () => {
+        const result = await executeWardrobeListTool({ pronoun_aware: false }, context)
+
+        expect(result.total_count).toBe(3)
+        expect(result.hidden_by_pronoun_guidance).toBe(0)
+      })
+
+      it('never hides what the character is wearing now', async () => {
+        repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({ ...emptySlots(), top: ['gown'], bottom: ['gown'] })
+
+        const result = await executeWardrobeListTool({}, context)
+
+        expect(result.items.map((i: any) => i.item_id)).toContain('gown')
+        expect(result.hidden_by_pronoun_guidance).toBe(0)
+      })
+
+      it('hides nothing from a character with custom or unset pronouns', async () => {
+        repos.characters.findById.mockResolvedValue({ id: 'char-1', pronouns: { subject: 'xe', object: 'xem', possessive: 'xyr' } })
+        expect((await executeWardrobeListTool({}, context)).total_count).toBe(3)
+
+        repos.characters.findById.mockResolvedValue({ id: 'char-1', pronouns: null })
+        expect((await executeWardrobeListTool({}, context)).total_count).toBe(3)
+      })
+
+      it('lists unfiltered when the character cannot be read', async () => {
+        repos.characters.findById.mockRejectedValue(new Error('vault unavailable'))
+
+        const result = await executeWardrobeListTool({}, context)
+
+        expect(result.success).toBe(true)
+        expect(result.total_count).toBe(3)
+      })
+    })
+
     it('lets a character\'s own item override a shared item on id collision', async () => {
       ownItems = [makeWardrobeItem({ id: 'dup', title: 'Mine' })]
       sharedByMount[GENERAL_MOUNT] = [makeWardrobeItem({ id: 'dup', title: 'Shared', characterId: null })]
@@ -654,6 +713,33 @@ describe('wardrobe tool handlers', () => {
 
       expect(mockApplyDisplacement).toHaveBeenCalledTimes(1)
       expect(mockApplyDisplacement.mock.calls[0][3]).toEqual({ mode: 'remove_from_slot', slot: 'top', itemId: 'item-1' })
+    })
+
+    it('takes a worn outfit off by its leaves — worn composites are stored dissolved', async () => {
+      ownItems = [
+        makeWardrobeItem({ id: 'shirt', title: 'Shirt', types: ['top'] }),
+        makeWardrobeItem({ id: 'skirt', title: 'Skirt', types: ['bottom'] }),
+        makeWardrobeItem({ id: 'scarf', title: 'Scarf', types: ['accessories'] }),
+        makeWardrobeItem({ id: 'outfit', title: 'Picnic Outfit', types: ['top', 'bottom'], componentItemIds: ['shirt', 'skirt'] }),
+      ]
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        ...emptySlots(),
+        top: ['shirt'],
+        bottom: ['skirt'],
+        accessories: ['scarf'],
+      })
+
+      const result = await executeWardrobeTakeOffTool(
+        { operations: [{ item_title: 'Picnic Outfit', mode: 'remove' }] },
+        context
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.operations[0].slots_affected).toEqual(['top', 'bottom'])
+      expect(mockApplyDisplacement.mock.calls.map((c: any[]) => c[3])).toEqual([
+        { mode: 'remove_from_slot', slot: 'top', itemId: 'shirt' },
+        { mode: 'remove_from_slot', slot: 'bottom', itemId: 'skirt' },
+      ])
     })
   })
 })

@@ -404,7 +404,7 @@
   /* --qt-queue-badge-group-radius: var(--radius-md); */
   /* --qt-queue-badge-memory-bg: hsl(225 55% 48%); */
   /* --qt-queue-badge-memory-fg: hsl(0 0% 100%); */
-  /* --qt-queue-badge-summary-bg: hsl(152 55% 38%); */
+  /* --qt-queue-badge-summary-bg: hsl(152 55% 33.5%); */
   /* --qt-queue-badge-summary-fg: hsl(0 0% 100%); */
   /* --qt-queue-badge-danger-bg: hsl(0 60% 48%); */
   /* --qt-queue-badge-danger-fg: hsl(0 0% 100%); */

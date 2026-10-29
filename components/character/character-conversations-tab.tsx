@@ -312,6 +312,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           <input
             type="text"
             placeholder="Search conversations..."
+            aria-label="Search conversations"
             value={searchQuery}
             onChange={handleSearch}
             className="qt-input pl-10"

@@ -15,6 +15,8 @@ import {
   AGREEMENTS_INSTRUCTION_BLOCK,
   AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE,
   EVENT_INSTRUCTION_BLOCK,
+  IMPORTANCE_FACT_NOT_TELLING_NOTE,
+  IMPORTANCE_WORK_CEILING_NOTE,
   ORIENTING_CONTEXT_SKIP_BULLET,
   TAGS_INSTRUCTION_BLOCK,
   renderClockBlock,
@@ -88,16 +90,26 @@ same underlying realization or decision in different words, keep
 the more specific one and drop the other.
 
 IMPORTANCE — calibrate to these anchors
-  0.90  The subject made a major commitment (one the subject spoke
-        themselves) or had a self-revelation that changes how they
-        understand themselves.
+  0.95  A fact that redefines the subject's life or bonds: marriage,
+        vows, pregnancy, birth, death, a change of body, joining or
+        leaving the family.
+  0.85  The subject had a self-revelation that changes how they
+        understand themselves, or made a personal commitment
+        (one the subject spoke themselves) to another person about
+        their relationship.
   0.65  The subject formed a substantive new opinion, plan, or
-        position.
+        position — including a commitment to build, file, fix, or
+        rule on something.
+  0.45  The subject made a work decision, ruling, or task agreement
+        in passing.
   0.40  The subject expressed a fresh preference, reaction, or novel
         gesture in passing.
   0.20  The subject acted in a way consistent with established identity
         but worth a single note.
   < 0.20  Do not extract.
+${IMPORTANCE_WORK_CEILING_NOTE}
+
+${IMPORTANCE_FACT_NOT_TELLING_NOTE}
 
 OUTPUT — first person, past tense, one fact per object.
   content      one sentence stating what the subject did, decided, or
@@ -115,10 +127,19 @@ EXAMPLE — good extraction:
     "content": "I committed to restructuring the summarization pipeline around a shared-base-plus-witness-set design after Charlie agreed it was the highest-leverage fix.",
     "summary": "committed to summarizer refactor",
     "keywords": ["summarizer", "commitment", "architecture"],
-    "importance": 0.85,
+    "importance": 0.65,
     "temporal": "future",
     "scope": "narrow",
     "context": "philosophy"
+  },
+  {
+    "content": "I told Charlie and Amy at breakfast that I am pregnant with Charlie's daughter, and that I have known since August.",
+    "summary": "told charlie and amy i am pregnant",
+    "keywords": ["pregnancy", "daughter", "family"],
+    "importance": 0.95,
+    "temporal": "present",
+    "scope": "wide",
+    "context": "relationships"
   }
 ]
 

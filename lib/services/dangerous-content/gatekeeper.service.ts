@@ -398,45 +398,58 @@ async function runClassification(
       cheapLLMSelection.baseUrl
     )
 
+    // Log the classification call (fire and forget) — a failed one too, so
+    // the Inspector shows the attempt the safe fallback stood in for.
     const classificationStartedAt = Date.now()
-    const response = await provider.sendMessage(
-      {
-        messages,
-        model: cheapLLMSelection.modelName,
-        temperature: 0.1, // Low temperature for consistent classification
-        maxTokens: 500,
-        // Forward the cheap profile's provider params (e.g. DeepSeek thinking
-        // mode) so a "reasoning off" setting takes effect and the classifier
-        // doesn't burn its budget thinking and return empty content.
-        profileParameters: cheapLLMSelection.profileParameters,
-      },
-      apiKey
-    )
-    const classificationDurationMs = Date.now() - classificationStartedAt
-
-    // Log the classification call (fire and forget)
-    logLLMCall({
-      userId,
-      type: 'DANGER_CLASSIFICATION',
-      chatId,
-      provider: cheapLLMSelection.provider,
-      modelName: cheapLLMSelection.modelName,
-      connectionProfileId: cheapLLMSelection.connectionProfileId ?? null,
-      request: {
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        temperature: 0.1,
-        maxTokens: 500,
-      },
-      response: {
-        content: response.content,
-      },
-      usage: response.usage,
-      durationMs: classificationDurationMs,
-    }).catch(err => {
-      logger.warn('[Gatekeeper] Failed to log classification call', {
-        error: err instanceof Error ? err.message : String(err),
+    const recordClassification = (
+      outcome: { response: Awaited<ReturnType<typeof provider.sendMessage>> } | { error: string }
+    ) => {
+      const answered = 'response' in outcome ? outcome.response : null
+      logLLMCall({
+        userId,
+        type: 'DANGER_CLASSIFICATION',
+        chatId,
+        provider: cheapLLMSelection.provider,
+        modelName: cheapLLMSelection.modelName,
+        connectionProfileId: cheapLLMSelection.connectionProfileId ?? null,
+        request: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          temperature: 0.1,
+          maxTokens: 500,
+        },
+        response: answered
+          ? { content: answered.content, finishReason: answered.finishReason ?? null }
+          : { content: '', error: 'error' in outcome ? outcome.error : undefined },
+        usage: answered?.usage,
+        cacheUsage: answered?.cacheUsage,
+        durationMs: Date.now() - classificationStartedAt,
+      }).catch(err => {
+        logger.warn('[Gatekeeper] Failed to log classification call', {
+          error: err instanceof Error ? err.message : String(err),
+        })
       })
-    })
+    }
+
+    let response: Awaited<ReturnType<typeof provider.sendMessage>>
+    try {
+      response = await provider.sendMessage(
+        {
+          messages,
+          model: cheapLLMSelection.modelName,
+          temperature: 0.1, // Low temperature for consistent classification
+          maxTokens: 500,
+          // Forward the cheap profile's provider params (e.g. DeepSeek thinking
+          // mode) so a "reasoning off" setting takes effect and the classifier
+          // doesn't burn its budget thinking and return empty content.
+          profileParameters: cheapLLMSelection.profileParameters,
+        },
+        apiKey
+      )
+    } catch (sendError) {
+      recordClassification({ error: getErrorMessage(sendError) })
+      throw sendError
+    }
+    recordClassification({ response })
 
     // Parse the response
     const result = parseClassificationResponse(response.content, conciergePolicy.preScreen.threshold)

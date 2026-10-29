@@ -84,6 +84,27 @@ async function decryptKey(
   }
 }
 
+/**
+ * Whether an image profile is itself uncensored: the Concierge desk's
+ * configured image profile, or one the operator ticked
+ * "Uncensored-compatible". The same two marks the image resolver below
+ * accepts an understudy by.
+ *
+ * A profile that answers yes needs nothing cleaned and nobody to stand in for
+ * it: appearance sanitization, the story-background crafter's concealment and
+ * the pre-flight reroute all step aside for it, whatever the chat's state. A
+ * profile wrongly marked so still has the post-hoc failover behind it.
+ */
+export function isUncensoredImageProfile(
+  profile: Pick<ImageProfile, 'id' | 'isDangerousCompatible'> | null | undefined,
+  conciergePolicy: ResolvedConciergePolicy,
+): boolean {
+  if (!profile) return false
+  if (profile.isDangerousCompatible === true) return true
+  const deskId = conciergePolicy.desk.imageProfileId
+  return Boolean(deskId) && profile.id === deskId
+}
+
 function profileCanCarryTurn(profile: ConnectionProfile, mimeTypes: string[]): boolean {
   return mimeTypes.every((m) => profileCanReceiveAttachment(profile, m))
 }

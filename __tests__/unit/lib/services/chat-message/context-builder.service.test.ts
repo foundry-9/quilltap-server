@@ -9,7 +9,13 @@ import {
   collectUnseenUserAttachmentsForCharacter,
   isRecordOnlyMessage,
   normalizeWhisperRoles,
+  rehydrateUserAttachments,
 } from '@/lib/services/chat-message/context-builder.service'
+import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
+
+jest.mock('@/lib/chat-files-v2', () => ({
+  loadChatFilesForLLM: jest.fn(),
+}))
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -39,6 +45,27 @@ describe('context-builder.service', () => {
       expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'announcement' })).toBe(false)
       expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'roster' })).toBe(false)
       expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'nudge' })).toBe(false)
+    })
+
+    it('strips the Host\'s "spoken of" cards, which ride in the referent ledger instead', () => {
+      expect(
+        isRecordOnlyMessage({
+          systemSender: 'host',
+          systemKind: 'off-scene-characters',
+          content: 'The Host begs leave to introduce a person spoken of in this conversation…',
+        }),
+      ).toBe(true)
+    })
+
+    it('keeps left-behind notices, old kind and new', () => {
+      expect(isRecordOnlyMessage({ systemSender: 'host', systemKind: 'off-scene-left-behind' })).toBe(false)
+      expect(
+        isRecordOnlyMessage({
+          systemSender: 'host',
+          systemKind: 'off-scene-characters',
+          content: 'The Host observes that one member of the previous company did not make the journey.',
+        }),
+      ).toBe(false)
     })
 
     it('strips Commonplace Book recall whispers, which are recomputed per turn', () => {
@@ -877,6 +904,53 @@ describe('context-builder.service', () => {
       expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([
         { messageId: 'm1', fileIds: ['file-b'] },
       ])
+    })
+  })
+
+  describe('rehydrateUserAttachments (bug 259)', () => {
+    const textProfile = {
+      id: 'profile-1',
+      provider: 'ANTHROPIC',
+      modelName: 'claude-opus-5-5',
+      supportsImageUpload: false,
+    } as any
+
+    const textFile = (id: string, filename: string, chars: number) => ({
+      id,
+      filename,
+      mimeType: 'text/markdown',
+      size: chars,
+      data: Buffer.from('x'.repeat(chars), 'utf-8').toString('base64'),
+    })
+
+    it('re-sends every unseen upload whole, however large', async () => {
+      // Friday, chat 772f89bf. Charlie attaches release notes (36 KB) and the
+      // changelog (108 KB); Amy answers first with both, and Friday, second,
+      // used to lose the changelog to an 80k-character cap.
+      ;(loadChatFilesForLLM as jest.Mock).mockResolvedValue([
+        textFile('notes', '4.11.0.md', 36_000),
+        textFile('changelog', 'CHANGELOG.md', 108_000),
+      ])
+      const messages = [
+        { type: 'message', role: 'USER', content: 'Here they are.', id: 'm1', attachments: ['notes', 'changelog'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Amy reads them', id: 'm2', participantId: 'amy' },
+      ]
+
+      const { rehydratedContentByMessageId } = await rehydrateUserAttachments({
+        messages,
+        characterParticipantId: 'friday',
+        isMultiCharacter: true,
+        historyCutoff: null,
+        connectionProfile: textProfile,
+        repos: {} as any,
+        userId: 'user-1',
+        chatId: 'chat-1',
+      })
+
+      const prefix = rehydratedContentByMessageId.get('m1') ?? ''
+      expect(prefix).toContain('[User attached text file: 4.11.0.md]')
+      expect(prefix).toContain('[User attached text file: CHANGELOG.md]')
+      expect(prefix.length).toBeGreaterThan(144_000)
     })
   })
 

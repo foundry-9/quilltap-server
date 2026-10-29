@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import type { ChatSettings, CheapLLMSettings as CheapLLMSettingsType, ConnectionProfile, CheapLLMStrategy, EmbeddingProvider } from './types'
 
@@ -22,6 +23,7 @@ export function CheapLLMSettings({
   connectionProfiles,
   onUpdate,
 }: CheapLLMSettingsProps) {
+  const id = useId()
   return (
     <SettingsCard
       title="Cheap LLM Settings"
@@ -66,10 +68,11 @@ export function CheapLLMSettings({
         {/* User Defined Profile Selection */}
         {settings?.cheapLLMSettings.strategy === 'USER_DEFINED' && (
           <div>
-            <label className="block qt-text-label mb-2">
+            <label className="block qt-text-label mb-2" htmlFor={`${id}-user-profile`}>
               Select Cheap LLM Profile
             </label>
             <select
+              id={`${id}-user-profile`}
               value={settings?.cheapLLMSettings.userDefinedProfileId || ''}
               onChange={(e) => onUpdate({ userDefinedProfileId: e.target.value || null })}
               disabled={saving || loadingProfiles}
@@ -95,13 +98,14 @@ export function CheapLLMSettings({
 
         {/* Default Cheap Profile (Global Override) */}
         <div>
-          <label className="block qt-text-label mb-2">
+          <label className="block qt-text-label mb-2" htmlFor={`${id}-default-profile`}>
             Global Default Cheap LLM (Optional Override)
           </label>
           <p className="qt-text-xs mb-2">
             If set, this profile will always be used regardless of strategy
           </p>
           <select
+            id={`${id}-default-profile`}
             value={settings?.cheapLLMSettings.defaultCheapProfileId || ''}
             onChange={(e) => onUpdate({ defaultCheapProfileId: e.target.value || null })}
             disabled={saving || loadingProfiles}

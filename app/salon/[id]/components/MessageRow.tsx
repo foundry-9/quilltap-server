@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
@@ -8,7 +8,7 @@ import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import {
-  getSystemSenderDisplayName,
+  getAnnouncementSenderName,
   getSystemKindDisplayLabel,
   getAnnouncementAccentClasses,
 } from './system-message-labels'
@@ -18,10 +18,12 @@ import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse
 import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import MessageContent from '@/components/chat/MessageContent'
+import { useAbsentMentions } from '@/hooks/useAbsentMentions'
+import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
-import { getImageAttachments } from './message-row/helpers'
+import { getImageAttachments, resolveMessageDiagramStyle } from './message-row/helpers'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, ConciergeSettings, CharacterData } from '../types'
@@ -111,6 +113,8 @@ interface MessageRowProps {
   onReattribute?: (messageId: string) => void
   /** Mapping of participant IDs to display names for whisper labels */
   participantNames?: Record<string, string>
+  /** Character id → name, for naming a Staff bar's `customAnnouncer` */
+  announcerNames?: Record<string, string>
   /** The operator's own userId — a private user-initiated run whispers to it,
    * so the whisper label resolves it to "you" rather than "unknown" (Bug 30). */
   currentUserId?: string | null
@@ -187,6 +191,7 @@ function MessageRowInner({
   onHandleContinue,
   onReattribute,
   participantNames,
+  announcerNames,
   currentUserId,
   isOverheardWhisper = false,
   isDangerousChat = false,
@@ -199,7 +204,14 @@ function MessageRowInner({
   regeneration = null,
 }: MessageRowProps) {
   const imagesHidden = useImagesHidden()
+  // Name chips: absent characters whose first mention in the chat is here.
+  const mentions = useAbsentMentions(chatId, message.id)
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
+  // Diagrams are drawn in their author's hand (see resolveMessageDiagramStyle).
+  const diagramStyle = useMemo(
+    () => resolveMessageDiagramStyle(message, participantData),
+    [message, participantData],
+  )
 
   // Silent message styling is based solely on the persisted flag set when the message
   // was generated — NOT the participant's current status. Changing a character to silent
@@ -236,6 +248,12 @@ function MessageRowInner({
     ? buildInterleavedLayout(message.content, attachedTools, reasoningSegments)
     : null
   const trailingTools = isSourceView ? attachedTools : (toolLayout?.trailingTools ?? [])
+  // Prose split around tool calls renders in runs; each chip goes to the first
+  // run that names it.
+  const partMentions = useMemo(
+    () => (toolLayout ? assignMentionsToRuns(toolLayout.parts.map(p => (p.kind === 'text' ? p.text : null)), mentions) : null),
+    [toolLayout, mentions],
+  )
 
   // The Courier: pending placeholder for a manual / clipboard turn. Render
   // a special bubble with the Markdown blob, copy button, attachment links,
@@ -283,6 +301,7 @@ function MessageRowInner({
           message={message}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
+          announcerNames={announcerNames}
         />
       </div>
     )
@@ -305,7 +324,7 @@ function MessageRowInner({
       )}
       <div className="qt-chat-message-body group">
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
-          const senderName = getSystemSenderDisplayName(message.systemSender)
+          const senderName = getAnnouncementSenderName(message, announcerNames)
           const kindLabel = getSystemKindDisplayLabel(message)
           // A Pascal roll wears its outcome state on the bar's leading edge.
           const accent = getAnnouncementAccentClasses(message)
@@ -321,6 +340,7 @@ function MessageRowInner({
                 message={message}
                 expanded
                 participantNames={participantNames}
+                announcerNames={announcerNames}
               />
             </button>
           )
@@ -339,6 +359,7 @@ function MessageRowInner({
                 value={editContent}
                 onChange={(e) => onEditChange(e.target.value)}
                 className="qt-textarea"
+                aria-label="Edit message"
                 rows={3}
               />
               <div className="flex gap-2">
@@ -364,6 +385,7 @@ function MessageRowInner({
                   whispered to {message.targetParticipantIds!.map(
                     id => resolveWhisperTargetLabel(id, participantNames, currentUserId)
                   ).join(', ')}
+                  {isOverheardWhisper && ' (overheard)'}
                 </div>
               )}
               {/* Silent mode label */}
@@ -388,6 +410,7 @@ function MessageRowInner({
                           renderingPatterns={renderingPatterns}
                           dialogueDetection={dialogueDetection}
                           forceRender
+                          diagramStyle={diagramStyle}
                         />
                       </div>
                       <div className="qt-chat-regenerating-plate" role="status" aria-live="polite">
@@ -413,6 +436,7 @@ function MessageRowInner({
                         content={regeneration.content}
                         renderingPatterns={renderingPatterns}
                         dialogueDetection={dialogueDetection}
+                        diagrams={{ style: diagramStyle, streaming: true }}
                       />
                       <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
                     </>
@@ -438,6 +462,8 @@ function MessageRowInner({
                         renderingPatterns={renderingPatterns}
                         dialogueDetection={dialogueDetection}
                         forceRender={forceRender}
+                        mentions={partMentions?.[idx]}
+                        diagramStyle={diagramStyle}
                       />
                     ) : part.kind === 'reasoning' ? (
                       <ThinkingBlock
@@ -466,7 +492,7 @@ function MessageRowInner({
                     )
                   )
                 ) : (
-                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
+                  <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} mentions={mentions} diagramStyle={diagramStyle} />
                 )}
               </DangerContentWrapper>
               )}
@@ -680,6 +706,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
   if (prev.participantNames !== next.participantNames) return false
+  if (prev.announcerNames !== next.announcerNames) return false
   if (prev.currentUserId !== next.currentUserId) return false
 
   // Danger state

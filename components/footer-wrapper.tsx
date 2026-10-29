@@ -49,7 +49,8 @@ export default function FooterWrapper() {
 
   return (
     <footer className="qt-footer">
-      <div className="qt-footer-container">
+      {/* At phone width, clear the floating Brahma Console launcher. */}
+      <div className="qt-footer-container max-sm:pl-14">
         <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}{shellVersion ? ` shell v${shellVersion}` : ''}</span>
         {hostPath && (
           <button

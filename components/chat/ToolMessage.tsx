@@ -90,6 +90,7 @@ interface ToolResult {
 const WARDROBE_ACTION_TOOLS = new Set([
   'wardrobe_wear',
   'wardrobe_take_off',
+  'wardrobe_rollback',
   'wardrobe_create',
   'wardrobe_update',
   'wardrobe_archive',
@@ -119,6 +120,20 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
     if (coverageSummary) lines.push(coverageSummary)
 
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_rollback') {
+    const restored = result.restored_index as number | undefined
+    if (typeof restored !== 'number') return null
+    lines.push(`Returned to outfit ${restored}.`)
+    const skipped = (result.skipped as Array<{ title?: string | null; item_id?: string; reason?: string }> | undefined) ?? []
+    for (const item of skipped) {
+      const name = item.title ?? item.item_id ?? 'An item'
+      lines.push(`${name} could not be put back on (${item.reason === 'archived' ? 'archived' : 'no longer exists'}).`)
+    }
+    const coverageSummary = result.coverage_summary as string | undefined
+    if (coverageSummary) lines.push(coverageSummary)
+    return { label: 'Wardrobe', lines }
   }
 
   if (toolData.toolName === 'wardrobe_create') {
@@ -155,6 +170,78 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
   }
 
   return null
+}
+
+/** Inventory tool names that should show an action notice */
+const INVENTORY_ACTION_TOOLS = new Set([
+  'inventory_equip',
+  'inventory_unequip',
+  'inventory_pick_up',
+  'inventory_create',
+  'inventory_update',
+  'inventory_archive',
+  'inventory_give',
+])
+
+type InventorySummaryRow = { name?: string; title?: string | null }
+
+function inventoryRowLabel(row: InventorySummaryRow | undefined): string | null {
+  if (!row) return null
+  return row.title?.trim() || row.name || null
+}
+
+/** "a magic bow" for an untitled object, "Excalibur" for a titled one. */
+function withArticle(row: InventorySummaryRow): string {
+  if (row.title?.trim()) return row.title.trim()
+  const name = row.name ?? 'object'
+  return /^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`
+}
+
+/**
+ * Build a human-readable Inventory action summary from tool result data, one
+ * line per tool ("Equipped Excalibur.", "Picked up a magic bow.", "Handed the
+ * lantern to Marcus."). Null when not an Inventory action or not successful.
+ */
+function buildInventoryActionSummary(toolData: ToolResult): { label: string; lines: string[] } | null {
+  if (!toolData.success || !toolData.toolName || !INVENTORY_ACTION_TOOLS.has(toolData.toolName)) {
+    return null
+  }
+  const result = toolData.result as Record<string, unknown> | undefined
+  if (!result || typeof result !== 'object') return null
+  const lines: string[] = []
+  const item = result.item as InventorySummaryRow | undefined
+  const label = inventoryRowLabel(item)
+
+  switch (toolData.toolName) {
+    case 'inventory_equip': {
+      const names = ((result.equipped as InventorySummaryRow[] | undefined) ?? []).map(inventoryRowLabel).filter(Boolean)
+      if (names.length > 0) lines.push(`Equipped ${names.join(', ')}.`)
+      break
+    }
+    case 'inventory_unequip': {
+      const names = ((result.unequipped as InventorySummaryRow[] | undefined) ?? []).map(inventoryRowLabel).filter(Boolean)
+      if (names.length > 0) lines.push(`Set down ${names.join(', ')}.`)
+      break
+    }
+    case 'inventory_pick_up':
+      if (item) lines.push(`Picked up ${withArticle(item)}${result.equipped ? ' and equipped it' : ''}.`)
+      break
+    case 'inventory_create':
+      if (label) lines.push(`Made "${label}"${result.equipped ? ' and equipped it' : ''}.`)
+      break
+    case 'inventory_update':
+      if (label) lines.push(`Updated "${label}".`)
+      break
+    case 'inventory_archive':
+      if (label) lines.push(result.archived ? `Put away "${label}".` : `Restored "${label}".`)
+      break
+    case 'inventory_give': {
+      const recipient = (result.recipient as { name?: string } | undefined)?.name
+      if (item && recipient) lines.push(`Handed ${item.title?.trim() || `the ${item.name ?? 'object'}`} to ${recipient}.`)
+      break
+    }
+  }
+  return lines.length > 0 ? { label: 'Inventory', lines } : null
 }
 
 /**
@@ -245,7 +332,10 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   }, [message.content])
 
   // Build wardrobe action summary (if applicable)
-  const wardrobeSummary = useMemo(() => buildWardrobeActionSummary(toolData), [toolData])
+  const wardrobeSummary = useMemo(
+    () => buildWardrobeActionSummary(toolData) ?? buildInventoryActionSummary(toolData),
+    [toolData]
+  )
 
   // Get image attachments
   const imageAttachments = (message.attachments || []).filter((a) =>
@@ -276,6 +366,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     },
     rng: {
       displayName: 'Random Number Generator',
+      icon: '🎲',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    edit_custom_tool: {
+      displayName: 'Edit Custom Tool',
       icon: '🎲',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
@@ -319,6 +414,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
+    wardrobe_rollback: {
+      displayName: 'Earlier Outfit',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_history: {
+      displayName: 'Outfit History',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
     wardrobe_create: {
       displayName: 'New Wardrobe Item',
       icon: '🧵',
@@ -332,6 +437,51 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     wardrobe_archive: {
       displayName: 'Archive Wardrobe Item',
       icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_list: {
+      displayName: 'Inventory',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_read: {
+      displayName: 'Inspect Object',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_equip: {
+      displayName: 'Equip',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_unequip: {
+      displayName: 'Set Down',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_pick_up: {
+      displayName: 'Pick Up',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_create: {
+      displayName: 'New Object',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_update: {
+      displayName: 'Edit Object',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_archive: {
+      displayName: 'Put Away Object',
+      icon: '🎒',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    inventory_give: {
+      displayName: 'Give Object',
+      icon: '🎒',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
   }

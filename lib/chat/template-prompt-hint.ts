@@ -20,14 +20,20 @@ import { delimiterToPrefixSuffix } from '@/lib/chat/annotations'
  */
 export function generateFormattingPromptHint(
   delimiters: TemplateDelimiter[],
-  narrationDelimiters?: NarrationDelimiters,
+  narrationDelimiters?: NarrationDelimiters | null,
+  options: { markdownAsterisks?: boolean } = {},
 ): string {
   const bullets: string[] = []
 
-  // Narration first (it's the template-wide default action style).
+  // Narration first (it's the template-wide default action style). `null`
+  // means narration is unmarked prose.
   let narrationPrefix: string | undefined
   let narrationSuffix: string | undefined
-  if (narrationDelimiters) {
+  if (narrationDelimiters === null) {
+    bullets.push(
+      '- Narration and action: plain prose with no marks around it (e.g. She stepped closer.). Never wrap narration in asterisks or brackets.',
+    )
+  } else if (narrationDelimiters) {
     narrationPrefix = Array.isArray(narrationDelimiters) ? narrationDelimiters[0] : narrationDelimiters
     narrationSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
     bullets.push(
@@ -50,10 +56,20 @@ export function generateFormattingPromptHint(
         const { prefix, suffix } = delimiterToPrefixSuffix(d)
         // Skip a wrap delimiter that simply restates the narration default.
         if (prefix === narrationPrefix && suffix === narrationSuffix) break
-        bullets.push(`- ${d.name}: wrap in ${prefix}…${suffix} (e.g. ${prefix}example${suffix}).`)
+        const notes: string[] = []
+        if (d.matchCurlyQuotes) notes.push('straight or curly quotation marks are both fine')
+        if (d.closeOptional) {
+          notes.push(`when it runs over several paragraphs, leave ${suffix} off every paragraph but the last`)
+        }
+        const tail = notes.length > 0 ? ` ${notes.map((n) => n[0].toUpperCase() + n.slice(1)).join('; ')}.` : ''
+        bullets.push(`- ${d.name}: wrap in ${prefix}…${suffix} (e.g. ${prefix}example${suffix}).${tail}`)
         break
       }
     }
+  }
+
+  if (options.markdownAsterisks === false) {
+    bullets.push('- Never use double asterisks (**like this**); they have no meaning here and will not display as bold.')
   }
 
   if (bullets.length === 0) return ''

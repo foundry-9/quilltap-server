@@ -171,6 +171,8 @@ describe('chat-enrichment.service', () => {
         talkativeness: 0.5,
         systemPrompts: [],
         archivedAt: null,
+        // No style on record reads as the default hand.
+        diagramStyle: 'handDrawn',
       })
       expect(result).not.toHaveProperty('tags')
     })

@@ -27,7 +27,7 @@
  * can see what the tool reads about their character. Vocabulary, not odds.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -89,6 +89,24 @@ export interface CustomToolReferences {
   progressWrites?: string[]
   /** The tool quotes `{{now}}`. Absent on older servers. */
   now?: boolean
+  /** The tool quotes `{{character}}`. Absent on older servers. */
+  character?: boolean
+  /** Item references this tool's wardrobe effects may put on, verbatim. Absent on older servers. */
+  wears?: string[]
+  /** Item references this tool's wardrobe effects may take off, verbatim. Absent on older servers. */
+  takesOff?: string[]
+  /** Slots this tool's wardrobe effects may clear. Absent on older servers. */
+  clearsSlots?: string[]
+  /** Inventory object references this tool reads (tests, quotes, draws from). Absent on older servers. */
+  inventoryReads?: string[]
+  /** `inventoryAggregate` keys this tool tests (`equipped.names`, …). Absent on older servers. */
+  inventoryAggregates?: string[]
+  /** References this tool's inventory effects may equip, verbatim. Absent on older servers. */
+  equips?: string[]
+  /** References this tool's inventory effects may unequip, verbatim. Absent on older servers. */
+  unequips?: string[]
+  /** Archetype references this tool's inventory effects may pick up, verbatim. Absent on older servers. */
+  picksUp?: string[]
 }
 
 /** A runnable tool in the resolved roster. */
@@ -144,6 +162,12 @@ interface CustomToolRunDialogProps {
   chatId: string
   /** Called after a successful run so the Salon can refetch the chat */
   onRan?: () => void
+  /**
+   * Open straight onto this tool's form (the composer's `/<name>` command).
+   * Applied once per nonce, after the fresh roster arrives; it lands on the
+   * remembered values for that tool like any other selection.
+   */
+  initialTool?: { name: string; asCharacterId: string | null; nonce: number } | null
 }
 
 /** Above this many tools, the picker earns a search box. */
@@ -167,6 +191,7 @@ export function CustomToolRunDialog({
   onClose,
   chatId,
   onRan,
+  initialTool = null,
 }: Readonly<CustomToolRunDialogProps>) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, ParameterFormValues>>({})
@@ -255,6 +280,28 @@ export function CustomToolRunDialog({
     )
     setSelectedKey(key)
   }
+
+  // A pre-selection waits for the roster this open fetched, not a cached one, so
+  // a tool added to a store mid-chat is found. One nonce, one application.
+  const appliedNonceRef = useRef<number | null>(null)
+  const rosterSettled = rosterQuery.isSuccess && !rosterQuery.isFetching
+  useEffect(() => {
+    if (!isOpen || !initialTool || !rosterSettled) return
+    if (appliedNonceRef.current === initialTool.nonce) return
+    appliedNonceRef.current = initialTool.nonce
+    const named = tools.filter((tool) => tool.name === initialTool.name)
+    const match =
+      named.find((tool) => (tool.asCharacterId ?? null) === initialTool.asCharacterId) ??
+      (initialTool.asCharacterId === null ? named[0] : undefined) ??
+      null
+    if (!match) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- falling back to the picker for a request that named nothing dealt
+      setSelectedKey(null)
+      showErrorToast(`No tool named "${initialTool.name}" is on Pascal's table in this chat`)
+      return
+    }
+    handleSelect(match)
+  }, [isOpen, initialTool, rosterSettled, tools])
 
   const handleRun = () => {
     if (!selectedTool || isRunning) return
@@ -401,6 +448,7 @@ function ToolPicker({
         <div className="relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
           <input
+            aria-label="Search the table"
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -841,6 +889,9 @@ function referenceRows(tool: CustomTool): ReferenceRow[] {
   if (refs.now) {
     rows.push({ placeholder: '{{now}}', meaning: 'the moment the run began, to the millisecond' })
   }
+  if (refs.character) {
+    rows.push({ placeholder: '{{character}}', meaning: 'the name of the character the run is made for' })
+  }
 
   for (const name of refs.params) {
     rows.push({
@@ -888,10 +939,35 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   // interesting claim is WHICH timed condition the tool consults or adjusts,
   // not which of its dozen derived fields the author happened to quote.
   const readsProgress = tool.references?.progress ?? []
+  // The wardrobe, likewise, in its own sentences: dressing, undressing and
+  // clearing are three different promises about the running character.
+  const wardrobeLines: Array<{ key: string; lead: string; values: string[] }> = [
+    { key: 'wears', lead: 'It may dress the running character in', values: tool.references?.wears ?? [] },
+    { key: 'takesOff', lead: 'It may undress them of', values: tool.references?.takesOff ?? [] },
+    { key: 'clearsSlots', lead: 'It may clear their', values: tool.references?.clearsSlots ?? [] },
+  ].filter((line) => line.values.length > 0)
+  // And the Inventory: what it reads, and what it may hand them or take away.
+  const readsInventory = tool.references?.inventoryReads ?? []
+  const readsAggregates = tool.references?.inventoryAggregates ?? []
+  const inventoryLines: Array<{ key: string; lead: string; values: string[] }> = [
+    { key: 'equips', lead: 'It may equip the running character with', values: tool.references?.equips ?? [] },
+    { key: 'unequips', lead: 'It may unequip them of', values: tool.references?.unequips ?? [] },
+    { key: 'picksUp', lead: 'It may pick up for them', values: tool.references?.picksUp ?? [] },
+  ].filter((line) => line.values.length > 0)
 
   // A tool that quotes nothing and writes nothing gets no panel. An empty list
   // under a heading promising a list is worse than the heading's absence.
-  if (rows.length === 0 && writes.length === 0 && readsProgress.length === 0) return null
+  if (
+    rows.length === 0 &&
+    writes.length === 0 &&
+    readsProgress.length === 0 &&
+    wardrobeLines.length === 0 &&
+    readsInventory.length === 0 &&
+    readsAggregates.length === 0 &&
+    inventoryLines.length === 0
+  ) {
+    return null
+  }
 
   return (
     <details className="rounded-lg qt-border p-5" open>
@@ -953,6 +1029,59 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
           . The record of what actually changed rides with the roll itself.
         </p>
       )}
+
+      {wardrobeLines.map((line) => (
+        <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          {line.lead}{' '}
+          {line.values.map((value, i) => (
+            <span key={value}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{value}</code>
+            </span>
+          ))}
+          {line.key === 'clearsSlots' ? (line.values.length > 1 ? ' slots' : ' slot') : ''}
+          . Only when you run it as a character — a run made as nobody dresses nobody.
+        </p>
+      ))}
+
+      {readsInventory.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          It reads the inventory for{' '}
+          {readsInventory.map((ref, i) => (
+            <span key={ref}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{ref}</code>
+            </span>
+          ))}
+          . Run as nobody, it finds no inventory at all.
+        </p>
+      )}
+
+      {readsAggregates.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          It takes stock of everything they carry, reading{' '}
+          {readsAggregates.map((key, i) => (
+            <span key={key}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{key}</code>
+            </span>
+          ))}
+          . Run as nobody, it finds no inventory at all.
+        </p>
+      )}
+
+      {inventoryLines.map((line) => (
+        <p key={line.key} className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          {line.lead}{' '}
+          {line.values.map((value, i) => (
+            <span key={value}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{value}</code>
+            </span>
+          ))}
+          . Only when you run it as a character — a run made as nobody carries nothing.
+        </p>
+      ))}
     </details>
   )
 }

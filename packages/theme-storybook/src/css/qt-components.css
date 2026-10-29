@@ -166,6 +166,18 @@
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
+  /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
+  --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --qt-punctuation-warning-underline: var(--color-warning);
+  /* Prose mode (Novel-like templates): no dialogue in the draft at all */
+  --qt-punctuation-no-dialogue-bg: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  --qt-punctuation-no-dialogue-underline: var(--color-warning);
+  /* Prose mode composer preview: narration, and ((out of character)) asides */
+  --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary));
+  --qt-composer-narration-bg: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  --qt-composer-ooc-fg: var(--qt-rp-ooc-color);
+  --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
+
   /* Badge palette tokens - referenced by the provider badges */
   --qt-badge-primary-bg: var(--color-primary);
   --qt-badge-primary-fg: var(--color-primary-foreground);
@@ -336,7 +348,7 @@
   --qt-queue-badge-memory-fg: hsl(0 0% 100%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 48%);
   --qt-queue-badge-embedding-fg: hsl(0 0% 100%);
-  --qt-queue-badge-summary-bg: hsl(152 55% 38%);
+  --qt-queue-badge-summary-bg: hsl(152 55% 33.5%);
   --qt-queue-badge-summary-fg: hsl(0 0% 100%);
   --qt-queue-badge-danger-bg: hsl(0 60% 48%);
   --qt-queue-badge-danger-fg: hsl(0 0% 100%);
@@ -429,7 +441,7 @@
   --qt-response-status-gathering-fg: hsl(270 55% 55%);
   --qt-response-status-building-fg: hsl(38 85% 48%);
   --qt-response-status-sending-fg: var(--qt-status-info-fg);
-  --qt-response-status-streaming-fg: hsl(152 55% 38%);
+  --qt-response-status-streaming-fg: hsl(152 55% 29%);
   --qt-response-status-tool-fg: hsl(270 55% 55%);
 
   /* Participant card variables */
@@ -455,6 +467,30 @@
   --qt-code-fg: var(--color-foreground);
   --qt-code-border: var(--color-border);
   --qt-code-font: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Diagram variables */
+  --qt-diagram-radius: var(--radius-md);
+  --qt-diagram-bg: var(--color-card);
+  --qt-diagram-fg: var(--color-foreground);
+  --qt-diagram-border: var(--color-border);
+  --qt-diagram-muted-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-fg: var(--color-muted-foreground);
+  --qt-diagram-toolbar-hover-bg: var(--color-muted);
+  --qt-diagram-error-fg: var(--color-muted-foreground);
+  --qt-diagram-placeholder-height: 8rem;
+  --qt-diagram-font: var(--font-sans);
+  --qt-diagram-hand-font: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Marker Felt", cursive;
+  /* The lightbox: the overlay's backdrop and glass buttons, a lifted sheet,
+     and the checkerboard behind a transparent copy. */
+  --qt-diagram-lightbox-backdrop: var(--qt-overlay-bg);
+  --qt-diagram-lightbox-fg: var(--qt-overlay-fg);
+  --qt-diagram-lightbox-muted-fg: var(--qt-overlay-muted-fg);
+  --qt-diagram-lightbox-button-bg: var(--qt-overlay-btn-bg);
+  --qt-diagram-lightbox-button-hover-bg: var(--qt-overlay-btn-hover-bg);
+  --qt-diagram-lightbox-pressed-border: var(--qt-overlay-muted-fg);
+  --qt-diagram-lightbox-shadow: 0 10px 40px rgb(0 0 0 / 0.45);
+  --qt-diagram-lightbox-check-a: #ffffff;
+  --qt-diagram-lightbox-check-b: #d4d4d8;
 
   /* Link variables */
   --qt-link-color: var(--color-primary);
@@ -1044,6 +1080,9 @@
  */
 .qt-danger-badge {
   --qt-concierge-badge-color: var(--color-destructive, #dc2626);
+  /* The ink is the alert token, not the fill red: --color-destructive on its
+     own 15% tint read at ~3.5:1 on every bundled theme. */
+  --qt-concierge-badge-fg: var(--qt-alert-error-fg, var(--qt-concierge-badge-color));
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -1053,13 +1092,15 @@
   line-height: 1rem;
   font-weight: 500;
   background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
-  color: var(--qt-concierge-badge-color);
+  color: var(--qt-concierge-badge-fg);
   border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
 }
 
-/* Locked — no colour: the chat keeps to the ordinary desks. */
+/* Locked — no colour: the chat keeps to the ordinary desks. The grey lives
+   in the tint and the rule; the word is in body ink so it stays legible. */
 .qt-danger-badge-muted {
   --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+  --qt-concierge-badge-fg: var(--color-foreground);
 }
 
 
@@ -1070,7 +1111,7 @@
  * so there is no third modifier.
  */
 .qt-concierge-mark {
-  --qt-concierge-mark-color: var(--color-destructive, #dc2626);
+  --qt-concierge-mark-color: var(--qt-alert-error-fg, var(--color-destructive, #dc2626));
   display: inline-block;
   font-weight: 700;
   line-height: 1;
@@ -1288,6 +1329,127 @@
 /* Wide dialog variant - matches page container width */
 .qt-dialog-wide {
   max-width: min(var(--qt-page-max-width, 75rem), calc(100vw - 2rem));
+}
+
+/* ==========================================================================
+   FLOATING DIALOG - Movable, resizable floating panel
+   z 58 places it between panels (z 55) and modals (z 60)
+   ========================================================================== */
+
+.qt-floating-dialog {
+  position: fixed;
+  z-index: 58;
+  border-radius: var(--qt-dialog-radius, var(--radius-lg, 0.5rem));
+  background: var(--qt-dialog-bg, var(--color-background));
+  border: 1px solid var(--qt-dialog-border, var(--color-border));
+  box-shadow: var(--qt-dialog-shadow, 0 24px 48px -12px rgb(0 0 0 / 0.18));
+  resize: both;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Topmost floating dialog — lifted above every portal modal (Brahma Console) */
+.qt-floating-dialog-topmost {
+  z-index: var(--qt-floating-layer-z);
+}
+
+.qt-floating-dialog-header {
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid var(--qt-dialog-border, var(--color-border));
+  background: var(--qt-dialog-bg, var(--color-background));
+  flex-shrink: 0;
+}
+
+.qt-floating-dialog-header:active {
+  cursor: grabbing;
+}
+
+.qt-floating-dialog-title {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-floating-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.qt-floating-dialog-close {
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  color: var(--color-muted-foreground);
+  transition: color 150ms, background-color 150ms;
+}
+
+.qt-floating-dialog-close:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.qt-floating-dialog-body {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   BRAHMA CONSOLE LAUNCHER - The always-on button beside the left rail
+   Sits in the topmost floating layer so it stays reachable over any modal.
+   ========================================================================== */
+
+.qt-brahma-launcher {
+  position: fixed;
+  left: calc(var(--qt-left-sidebar-collapsed-width) + var(--qt-brahma-launcher-offset));
+  bottom: var(--qt-brahma-launcher-offset);
+  z-index: var(--qt-floating-layer-z);
+  width: var(--qt-brahma-launcher-size);
+  height: var(--qt-brahma-launcher-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--qt-brahma-launcher-bg);
+  color: var(--qt-brahma-launcher-fg);
+  border: 2px solid var(--qt-brahma-launcher-ring);
+  box-shadow: var(--qt-brahma-launcher-shadow);
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.qt-brahma-launcher:hover {
+  background: var(--qt-brahma-launcher-hover-bg);
+  transform: scale(1.06);
+}
+
+.qt-brahma-launcher:focus-visible {
+  outline: 2px solid var(--qt-brahma-launcher-ring);
+  outline-offset: 3px;
+}
+
+.qt-brahma-launcher-active,
+.qt-brahma-launcher-active:hover {
+  background: var(--qt-brahma-launcher-active-bg);
+  color: var(--qt-brahma-launcher-active-fg);
+}
+
+.qt-brahma-launcher-icon {
+  width: 60%;
+  height: 60%;
 }
 
 /* ==========================================================================
@@ -1818,7 +1980,11 @@
   color: var(--qt-response-status-streaming-fg);
 }
 
+/* The words are in the bubble's own ink: the streaming green is a status
+   accent, and on a mid-tone bubble it fell below 3:1. The green stays on the
+   border and the quill. */
 .qt-chat-regenerating-plate-text {
+  color: var(--qt-chat-regenerating-plate-fg, var(--qt-chat-assistant-fg, var(--color-foreground)));
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
@@ -2096,6 +2262,119 @@
 .qt-chat-composer-input:focus,
 .qt-chat-composer-input:focus-within {
   outline: none;
+}
+
+/* Composer action buttons: Send, the soft interrupt (raise a hand) and the
+   hard Stop. Mirrors app/styles/qt-components/_chat.css. */
+.qt-chat-composer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.qt-chat-composer-actions .qt-chat-composer-send {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.qt-chat-composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  width: 3rem;
+  border-radius: 9999px;
+  transition: all 200ms;
+  cursor: pointer;
+  background: var(--qt-button-primary-bg);
+  color: var(--qt-button-primary-fg);
+  box-shadow: var(--qt-button-primary-shadow);
+}
+
+.qt-chat-composer-send:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
+}
+
+.qt-chat-composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qt-chat-composer-send:hover:not(:disabled) {
+  background: var(--qt-button-primary-hover-bg);
+}
+
+.qt-chat-continue-button {
+  background: var(--qt-status-info-bg);
+  color: var(--qt-status-info-fg);
+  border: 1px solid var(--qt-status-info-border);
+}
+
+.qt-chat-stop-button {
+  background: var(--qt-status-danger-bg);
+  color: var(--qt-status-danger-fg);
+  border: 1px solid var(--qt-status-danger-border);
+}
+
+.qt-chat-stop-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qt-status-danger-bg) 70%, black);
+}
+
+.qt-chat-interrupt-button {
+  background: var(--qt-status-warning-bg);
+  color: var(--qt-status-warning-fg);
+  border: 1px solid var(--qt-status-warning-border);
+}
+
+.qt-chat-interrupt-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qt-status-warning-bg) 70%, black);
+}
+
+.qt-chat-interrupt-button-raised {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent);
+  animation: qt-hand-raised-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes qt-hand-raised-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--qt-status-warning-border) 45%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--qt-status-warning-border) 15%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qt-chat-interrupt-button-raised { animation: none; }
+}
+
+/* Composer punctuation warnings — painted by PunctuationLintPlugin through the
+   CSS Custom Highlight API, so no element carries a class. Only background and
+   text-decoration are styleable on a ::highlight. */
+::highlight(qt-punctuation-warning) {
+  background-color: var(--qt-punctuation-warning-bg);
+  text-decoration: underline wavy var(--qt-punctuation-warning-underline);
+  text-decoration-thickness: 2px;
+}
+
+/* Prose mode (a template like Novel: unmarked narration, quoted dialogue).
+   The no-dialogue tint covers every narrated run while the draft has no
+   dialogue at all; the preview marks narration and ((asides)) the way the
+   rendered message will set them. ::highlight cannot set font-style, so
+   narration is told apart by colour rather than italics. */
+::highlight(qt-punctuation-no-dialogue) {
+  background-color: var(--qt-punctuation-no-dialogue-bg);
+  text-decoration: underline dotted var(--qt-punctuation-no-dialogue-underline);
+  text-decoration-thickness: 2px;
+}
+
+::highlight(qt-composer-narration) {
+  color: var(--qt-composer-narration-fg);
+  background-color: var(--qt-composer-narration-bg);
+}
+
+::highlight(qt-composer-ooc) {
+  color: var(--qt-composer-ooc-fg);
+  background-color: var(--qt-composer-ooc-bg);
 }
 
 /* Lexical editor rich text node styles */
@@ -2524,6 +2803,26 @@
   margin-top: 0.5rem;
   font-size: 0.625rem;
   opacity: 0.65;
+}
+
+/* Name chip: an absent character's first mention in a chat (MentionChip).
+   It keeps the surrounding roleplay colour; a soft tint and a dotted rule
+   say there is a card to hover. */
+.qt-mention-chip {
+  color: inherit;
+  padding: 0 0.25em;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-bottom: 1px dotted color-mix(in srgb, var(--color-primary) 70%, transparent);
+  cursor: help;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.qt-mention-chip:hover,
+.qt-mention-chip:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 26%, transparent);
+  outline: none;
 }
 
 /* ==========================================================================
@@ -3115,6 +3414,23 @@
   color: var(--color-destructive);
 }
 
+/* Text on a status fill */
+.qt-text-success-foreground {
+  color: var(--color-success-foreground);
+}
+
+.qt-text-warning-foreground {
+  color: var(--color-warning-foreground);
+}
+
+.qt-text-info-foreground {
+  color: var(--color-info-foreground);
+}
+
+.qt-text-destructive-foreground {
+  color: var(--color-destructive-foreground);
+}
+
 /* Border utilities */
 .qt-border-primary {
   border-color: var(--color-primary);
@@ -3655,6 +3971,66 @@
   height: 100%;
 }
 
+/* Page toolbar - top toolbar with search and actions */
+.qt-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--qt-app-header-bg);
+  backdrop-filter: var(--qt-app-header-blur);
+  -webkit-backdrop-filter: var(--qt-app-header-blur);
+}
+
+.qt-page-toolbar-left {
+  display: flex;
+  align-items: center;
+  /* Reserve space for hamburger on mobile, empty on desktop */
+  min-width: 2.5rem;
+}
+
+.qt-page-toolbar-center {
+  flex: 1 1 0%;
+  display: flex;
+  justify-content: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  max-width: 32rem;
+}
+
+.qt-page-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Balance with left section */
+  min-width: 2.5rem;
+  justify-content: flex-end;
+}
+
+/* On desktop, hide the left placeholder when hamburger is hidden */
+@media (min-width: 768px) {
+  .qt-page-toolbar-left {
+    min-width: 0;
+  }
+}
+
+/* Phone widths: the queue badges take a row of their own rather than
+   sliding under the search button (WCAG 1.4.10 reflow). */
+@media (max-width: 639px) {
+  .qt-page-toolbar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .qt-page-toolbar-right {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+}
+
 .qt-app-header {
   display: flex;
   align-items: center;
@@ -3850,6 +4226,271 @@
 }
 
 /* ==========================================================================
+   DIAGRAMS
+   Closed ```mermaid / ```dot / ```graphviz / ```svg fences drawn in the
+   Salon (components/chat/diagrams/DiagramBlock.tsx).
+   ========================================================================== */
+
+/* The frame around one drawn diagram. */
+.qt-diagram {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: var(--qt-diagram-radius);
+  background: var(--qt-diagram-bg);
+  border: 1px solid var(--qt-diagram-border);
+  color: var(--qt-diagram-fg);
+}
+
+/* View source / Copy source / Copy SVG / Download SVG. */
+.qt-diagram-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.qt-diagram-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--qt-diagram-toolbar-fg);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.qt-diagram-toolbar-button:hover,
+.qt-diagram-toolbar-button[aria-pressed="true"] {
+  background: var(--qt-diagram-toolbar-hover-bg);
+  border-color: var(--qt-diagram-border);
+  color: var(--qt-diagram-fg);
+}
+
+.qt-diagram-toolbar-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* The drawing itself. A wide diagram scrolls here; it never widens the bubble. */
+.qt-diagram-canvas {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.qt-diagram-canvas > svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Fixed height while a diagram is drawn, so the transcript doesn't jump. */
+.qt-diagram-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--qt-diagram-placeholder-height);
+  color: var(--qt-diagram-muted-fg);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* Zero-size scratch space a renderer lays a drawing out in, offscreen. */
+.qt-diagram-stage {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+/* A fence that could not be drawn: a note, the engine's words, the code. */
+.qt-diagram-error {
+  margin: 0.5rem 0;
+}
+
+.qt-diagram-error-note {
+  margin: 0 0 0.25rem;
+  color: var(--qt-diagram-error-fg);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.qt-diagram-error-details {
+  margin-bottom: 0.25rem;
+  color: var(--qt-diagram-muted-fg);
+  font-size: 0.75rem;
+}
+
+.qt-diagram-error-details > summary {
+  cursor: pointer;
+}
+
+.qt-diagram-error-details > pre {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--qt-code-bg);
+  color: var(--qt-code-fg);
+  font-family: var(--qt-code-font);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The drawing is also the way in: click (or Enter) to enlarge. */
+.qt-diagram-canvas[role="button"] {
+  cursor: zoom-in;
+  border-radius: var(--radius-sm);
+}
+
+.qt-diagram-canvas[role="button"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* The lightbox: one diagram, full-window, to zoom into and copy as PNG
+   (components/chat/diagrams/DiagramLightbox.tsx). */
+.qt-diagram-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--qt-diagram-lightbox-backdrop);
+  backdrop-filter: blur(4px);
+  color: var(--qt-diagram-lightbox-fg);
+  outline: none;
+}
+
+/* Zoom controls on the left; Transparent, Copy PNG and Close on the right. */
+.qt-diagram-lightbox-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.qt-diagram-lightbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.qt-diagram-lightbox-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--qt-diagram-lightbox-button-bg);
+  color: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms;
+}
+
+.qt-diagram-lightbox-button:hover,
+.qt-diagram-lightbox-button[aria-pressed="true"] {
+  background: var(--qt-diagram-lightbox-button-hover-bg);
+}
+
+.qt-diagram-lightbox-button[aria-pressed="true"] {
+  border-color: var(--qt-diagram-lightbox-pressed-border);
+}
+
+.qt-diagram-lightbox-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.qt-diagram-lightbox-button:focus-visible,
+.qt-diagram-lightbox-check:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.qt-diagram-lightbox-zoom {
+  min-width: 3.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--qt-diagram-lightbox-muted-fg);
+}
+
+.qt-diagram-lightbox-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.qt-diagram-lightbox-check > input {
+  accent-color: var(--color-primary);
+}
+
+/* The pan-and-zoom surface. Touch gestures are all ours here. */
+.qt-diagram-lightbox-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.qt-diagram-lightbox-viewport:active {
+  cursor: grabbing;
+}
+
+/* The drawing on its own card. Sized (not transformed) by the zoom, so the
+   vector is redrawn sharp at every scale. */
+.qt-diagram-lightbox-sheet {
+  position: absolute;
+  border-radius: var(--qt-diagram-radius);
+  background: var(--qt-diagram-bg);
+  color: var(--qt-diagram-fg);
+  box-shadow: var(--qt-diagram-lightbox-shadow);
+}
+
+/* Transparent ticked: show what the PNG will carry — nothing behind it. */
+.qt-diagram-lightbox-sheet[data-transparent="true"] {
+  background-color: var(--qt-diagram-lightbox-check-a);
+  background-image: conic-gradient(
+    var(--qt-diagram-lightbox-check-b) 25%,
+    transparent 0 50%,
+    var(--qt-diagram-lightbox-check-b) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+
+.qt-diagram-lightbox-hint {
+  margin: 0;
+  padding: 0.5rem 1rem 0.75rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--qt-diagram-lightbox-muted-fg);
+}
+
+/* ==========================================================================
    WIKILINK COMPONENTS
    ========================================================================== */
 
@@ -3966,7 +4607,7 @@
   /* Queue status badges — dark mode */
   --qt-queue-badge-memory-bg: hsl(225 55% 55%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
-  --qt-queue-badge-summary-bg: hsl(152 50% 42%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
   --qt-queue-badge-danger-bg: hsl(0 60% 52%);
   --qt-queue-badge-story-bg: hsl(225 12% 44%);
 
@@ -4120,6 +4761,27 @@
   border-top: 1px solid var(--qt-tab-divider-color);
 }
 
+/* Skip link - first stop for the keyboard, hidden until focused (WCAG 2.4.1) */
+.qt-skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -10rem;
+  z-index: 60; /* above the sticky toolbar and the sidebar rail */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.qt-skip-link:focus {
+  top: 0.5rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 /* ==========================================================================
    WORKSPACE  (tabbed two-pane shell — strip, divider, drop-zone)
 
@@ -4180,9 +4842,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-left: 0.125rem;
+  /* 24px: the WCAG 2.5.8 minimum target. The negative margin keeps the tab's footprint. */
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -0.175rem -0.25rem -0.175rem 0;
   border-radius: 0.25rem;
   opacity: 0.55;
   transition: opacity 0.15s ease, background 0.15s ease;
@@ -4493,3 +5156,409 @@
 .qt-rp-font-mono { font-family: var(--theme-font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace); }
 .qt-rp-font-display { font-family: var(--qt-rp-font-display, var(--theme-font-serif, Georgia, "Times New Roman", serif)); }
 .qt-rp-font-script { font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive); }
+
+/* Legacy chip classes (dialogue / narration / inner monologue / OOC). As above,
+   the app scopes these under .qt-chat-message-content. */
+.qt-chat-dialogue {
+  --qt-rp-fg: var(--qt-rp-dialogue-color);
+  --qt-rp-bg: var(--qt-rp-dialogue-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+}
+
+/* Dialogue in a user message follows the bubble's own foreground. */
+.qt-chat-message-user .qt-chat-dialogue {
+  --qt-rp-fg: var(--qt-rp-user-dialogue-color, var(--qt-chat-user-fg));
+}
+
+.qt-chat-narration {
+  --qt-rp-fg: var(--qt-rp-narration-color);
+  --qt-rp-bg: var(--qt-rp-narration-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-style: var(--qt-rp-narration-style);
+  padding: var(--qt-rp-narration-padding);
+  border-radius: var(--qt-rp-narration-radius);
+  display: inline;
+}
+
+.qt-chat-inner-monologue {
+  --qt-rp-fg: var(--qt-rp-inner-monologue-color);
+  --qt-rp-bg: var(--qt-rp-inner-monologue-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-style: var(--qt-rp-inner-monologue-style);
+  padding: var(--qt-rp-inner-monologue-padding);
+  border-radius: var(--qt-rp-inner-monologue-radius);
+  display: inline;
+}
+
+.qt-chat-ooc {
+  --qt-rp-fg: var(--qt-rp-ooc-color);
+  --qt-rp-bg: var(--qt-rp-ooc-bg);
+  color: var(--qt-rp-fg);
+  background: var(--qt-rp-bg);
+  font-family: var(--qt-rp-ooc-font);
+  padding: var(--qt-rp-ooc-padding);
+  border-radius: var(--qt-rp-ooc-radius);
+  display: inline;
+}
+
+:is(p, blockquote, h1, h2, h3, h4, h5, h6):is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
+  display: block;
+}
+
+li:is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
+  display: list-item;
+}
+
+/**
+ * Gallery tile source caption — a scrim and two lines of small text laid
+ * over the foot of a photo-gallery tile, saying where the picture comes from
+ * (the Aurora gallery's wardrobe pictures: item title, then tier).
+ * Light text on a dark scrim regardless of theme, since it sits on a photo.
+ */
+.qt-gallery-caption {
+  background: var(--qt-gallery-caption-bg, linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.45) 60%, transparent));
+  color: var(--qt-gallery-caption-fg, #fff);
+  line-height: 1.2;
+}
+
+.qt-gallery-caption-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.qt-gallery-caption-detail {
+  font-size: 0.625rem;
+  opacity: 0.85;
+}
+
+/**
+ * Storyteller mode — the Salon's turn-mode control and the bidding board.
+ * Mirrors app/styles/qt-components/_storyteller.css.
+ */
+/* The turn-mode control: Normal / Paused / Storyteller, one segmented row. */
+.qt-storyteller-mode {
+  display: flex;
+  width: 100%;
+  border: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
+  border-radius: var(--qt-storyteller-mode-radius, 0.5rem);
+  overflow: hidden;
+}
+
+.qt-storyteller-mode-option {
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0.375rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  background: var(--qt-storyteller-mode-bg, var(--color-card));
+  color: var(--qt-storyteller-mode-fg, var(--color-muted-foreground));
+  border: none;
+  transition: background-color 150ms, color 150ms;
+}
+
+.qt-storyteller-mode-option + .qt-storyteller-mode-option {
+  border-left: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
+}
+
+.qt-storyteller-mode-option:hover {
+  background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));
+  color: var(--qt-storyteller-mode-hover-fg, var(--color-foreground));
+}
+
+.qt-storyteller-mode-option-active,
+.qt-storyteller-mode-option-active:hover {
+  background: var(--qt-storyteller-mode-active-bg, var(--color-primary));
+  color: var(--qt-storyteller-mode-active-fg, var(--color-primary-foreground));
+}
+
+.qt-storyteller-mode-option-paused,
+.qt-storyteller-mode-option-paused:hover {
+  background: var(--qt-status-warning-bg, var(--color-warning));
+  color: var(--qt-status-warning-fg, var(--color-warning-foreground));
+}
+
+/* The board: a panel above the composer while a round is open. */
+.qt-storyteller-board {
+  margin-bottom: 0.5rem;
+  padding: 0.625rem;
+  border: 1px solid var(--qt-storyteller-board-border, var(--color-border));
+  border-radius: var(--qt-storyteller-board-radius, 0.75rem);
+  background: var(--qt-storyteller-board-bg, var(--color-card));
+  color: var(--qt-storyteller-board-fg, var(--color-card-foreground));
+}
+
+.qt-storyteller-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.qt-storyteller-board-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.qt-storyteller-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.5rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.qt-storyteller-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem;
+  border: 1px solid var(--qt-storyteller-card-border, var(--color-border));
+  border-radius: var(--qt-storyteller-card-radius, 0.5rem);
+  background: var(--qt-storyteller-card-bg, var(--color-background));
+  font-size: 0.8125rem;
+}
+
+.qt-storyteller-card-selected {
+  border-color: var(--qt-storyteller-card-selected-border, var(--color-primary));
+  box-shadow: 0 0 0 1px var(--qt-storyteller-card-selected-border, var(--color-primary));
+}
+
+.qt-storyteller-card-act {
+  border-color: var(--qt-storyteller-card-act-border, var(--color-warning));
+}
+
+.qt-storyteller-card-destroy {
+  border-color: var(--qt-status-danger-border, var(--color-destructive));
+  background: var(--qt-storyteller-card-destroy-bg, color-mix(in srgb, var(--color-destructive) 10%, var(--color-background)));
+}
+
+.qt-storyteller-card-quiet {
+  opacity: 0.65;
+}
+
+/* A bid card can be dragged to set the running order. */
+.qt-storyteller-card-draggable {
+  cursor: grab;
+}
+
+.qt-storyteller-card-dragging {
+  position: relative;
+  z-index: 10;
+  cursor: grabbing;
+  opacity: 0.85;
+  box-shadow: var(--qt-storyteller-card-dragging-shadow, 0 4px 12px rgb(0 0 0 / 0.25));
+}
+
+/* Its place in the running order, once the operator has arranged the board. */
+.qt-storyteller-card-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.25rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: var(--qt-storyteller-card-order-bg, var(--color-primary));
+  color: var(--qt-storyteller-card-order-fg, var(--color-primary-foreground));
+}
+
+.qt-storyteller-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qt-storyteller-card-name {
+  flex: 1 1 0%;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-storyteller-plan {
+  font-style: italic;
+  color: var(--qt-storyteller-plan-fg, var(--color-foreground));
+}
+
+.qt-storyteller-meta {
+  font-size: 0.6875rem;
+  color: var(--qt-storyteller-meta-fg, var(--color-muted-foreground));
+}
+
+.qt-storyteller-warning {
+  font-size: 0.75rem;
+  font-weight: 600;
+  /* The alert token, not --color-destructive: a fill red is too dark to read
+     as small text on a dark card. */
+  color: var(--qt-storyteller-warning-fg, var(--qt-alert-error-fg));
+}
+
+.qt-storyteller-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.qt-storyteller-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--qt-storyteller-meta-fg, var(--color-muted-foreground));
+}
+
+/**
+ * Pascal operator intervention — the hold dialog, the Workbench's hand toggles,
+ * and the "adjusted" badge on a Pascal chip.
+ * Mirrors app/styles/qt-components/_intervention.css.
+ */
+/* The hold dialog's body. */
+.qt-intervention {
+  color: var(--qt-intervention-fg, var(--color-foreground));
+}
+
+/* "2 more waiting." beside the header line. */
+.qt-intervention-queue {
+  font-weight: 600;
+  color: var(--qt-intervention-queue-fg, var(--color-primary));
+}
+
+/* One part of the run: parameters, roll, consult, outcome… */
+.qt-intervention-section {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--qt-intervention-section-border, var(--color-border));
+  border-radius: var(--qt-intervention-section-radius, 0.5rem);
+}
+
+/* A section the operator has changed. */
+.qt-intervention-section--pinned {
+  border-color: var(--qt-intervention-pinned-border, var(--color-primary));
+}
+
+/* The reset control: unpins the section. */
+.qt-intervention-reset {
+  text-decoration: underline;
+  color: var(--qt-intervention-reset-fg, var(--color-primary));
+  cursor: pointer;
+}
+
+/* One outcome row; click to force it. Wears the .qt-pascal-result accent. */
+.qt-intervention-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.qt-intervention-row:hover {
+  opacity: 1;
+}
+
+/* The row that wins under the current settings. */
+.qt-intervention-row--winning {
+  opacity: 1;
+  font-weight: 600;
+  outline: 2px solid var(--qt-intervention-winning-outline, var(--color-primary));
+  outline-offset: 1px;
+}
+
+/* One declared effect, with its Auto / On / Off control. */
+.qt-intervention-effect {
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--qt-intervention-section-border, var(--color-border));
+}
+
+.qt-intervention-effect:last-child {
+  border-bottom: none;
+}
+
+/* An advisory note: a stale answer, a forced row, a clamped parameter. */
+.qt-intervention-note {
+  font-size: 0.75rem;
+  font-style: italic;
+  /* The alert token, not --color-warning: amber fill is not amber ink, and on
+     a light card the raw warning colour falls to ~2:1. */
+  color: var(--qt-intervention-note-fg, var(--qt-alert-warning-fg));
+}
+
+/* The "adjusted" hand beside a Pascal chip's label. */
+.qt-intervention-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  color: var(--qt-intervention-badge-fg, var(--color-muted-foreground));
+}
+
+/* The hand on an intervenable tool in the Workbench library. */
+.qt-intervention-mark {
+  display: inline-block;
+  flex-shrink: 0;
+  color: var(--qt-intervention-badge-fg, var(--color-muted-foreground));
+}
+
+/* The Workbench's per-field hand toggle: shown in the hold dialog, or not. */
+.qt-intervene-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;
+  border-radius: 0.25rem;
+  color: var(--qt-intervene-toggle-fg, var(--color-primary));
+  background: transparent;
+  cursor: pointer;
+}
+
+.qt-intervene-toggle:hover {
+  background-color: var(--qt-intervene-toggle-hover-bg, var(--color-accent));
+}
+
+/* A field the author has hidden from the dialog. */
+/* A field the author has hidden from the dialog: the hand, struck through.
+   The slash says "off" without leaning on colour, and without the half
+   opacity that left the icon at ~2:1 on every bundled theme. */
+.qt-intervene-toggle--off {
+  color: var(--qt-intervene-toggle-off-fg, var(--color-muted-foreground));
+  background-image: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.75px),
+    currentColor calc(50% - 0.75px),
+    currentColor calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
+}
+
+/* ============================================================================
+   REDUCED MOTION — every theme honours the OS setting
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

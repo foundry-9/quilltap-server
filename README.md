@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.10.1--bugfix.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.11.1--bugfix.0-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -150,7 +150,7 @@ Whichever route you took, the first visit goes like this:
 
 Quilltap's subsystems are personified as the Staff of an Estate, and they speak up in the chat when something happens in the room. You'll meet them throughout the interface and the help pages; here is who they are and what they do. The long-form tour, with the mechanics behind each, is in [docs/FEATURES.md](docs/FEATURES.md).
 
-**The Salon** is the chat. It opens as a two-pane workspace of tabs — chats, documents, terminals, characters, settings — each staying live in the background, so a conversation streaming in one tab keeps going while you read a document beside it. Every open tab stays current the moment something changes, without a reload. **Document Mode** turns any chat into a side-by-side editor: prose in one pane, conversation in the other, the LLM aware of both.
+**The Salon** is the chat. It opens as a two-pane workspace of tabs — chats, documents, terminals, characters, settings — each staying live in the background, so a conversation streaming in one tab keeps going while you read a document beside it. Every open tab stays current the moment something changes, without a reload. Characters can draw **diagrams** right in a reply (Mermaid, Graphviz or plain SVG, hand-drawn or clean), and you can stop a reply mid-sentence or raise your hand to ask for the floor. **Document Mode** turns any chat into a side-by-side editor: prose in one pane, conversation in the other, the LLM aware of both.
 
 **Aurora** keeps the characters. A character is a persistent identity — personality, backstory, system prompts, pronouns, aliases, physical description — with a **private vault** of files on disk that you can hand-edit, version-control, or gift. Each can carry several named system prompts and scenarios, short per-chat **subprompts**, and **progressions** (a pregnancy, a cask maturing) whose elapsed time she hears reported. Aurora also runs the **wardrobe**: a persistent closet of garments and outfits, with pictures, folders, and a ledger of who wore what. Characters whose story has ended can be **archived** into a single encrypted bundle rather than deleted, and rehydrated later with nothing lost.
 
@@ -162,9 +162,9 @@ Quilltap's subsystems are personified as the Staff of an Estate, and they speak 
 
 **The Concierge** handles refusals. When a provider declines a turn — text or image — the Concierge reroutes it to the uncensored understudy you configured and says so in the chat. Your primary provider is always tried first; nothing is pre-screened unless you turn it on. Each chat carries one of three states — **Moderated**, **Unmoderated**, or **Locked** — and you choose it. Provider limits should not decide which collaborators you get to keep.
 
-**The Host** runs the room. Multi-character chats put several collaborators at one table, with a turn-order sidebar, four-state participation (active, silent, absent, removed), anti-chorus discipline so a group scene doesn't become a committee meeting, private whispers between characters, and **Inform** — a note passed from the wings to one or more characters, stated as fact and kept out of the transcript. The Host also builds scenes: ask him to research a real or in-world location through your stores (and the web) and draft an opening you can save to any shelf. **Autonomous rooms** are salons that run without you — budgeted by turns, tokens, time, or spend, optionally on a schedule, overnight if you like — with the whole apparatus present and every run bounded and inspectable. SillyTavern character and chat imports are fully supported.
+**The Host** runs the room. Multi-character chats put several collaborators at one table, with a turn-order sidebar, four-state participation (active, silent, absent, removed), anti-chorus discipline so a group scene doesn't become a committee meeting, private whispers between characters, **storyteller mode** (every character privately bids on what they mean to do, and only the bids you pick take the floor, in the order you set), and **Inform** — a note passed from the wings to one or more characters, stated as fact and kept out of the transcript. The Host also builds scenes: ask him to research a real or in-world location through your stores (and the web) and draft an opening you can save to any shelf. **Autonomous rooms** are salons that run without you — budgeted by turns, tokens, time, or spend, optionally on a schedule, overnight if you like — with the whole apparatus present and every run bounded and inspectable. SillyTavern character and chat imports are fully supported.
 
-**Pascal the Croupier** settles chance. Cryptographically secure dice (d4 to d1000), coin flips, persistent chat state for inventories and scores, and **custom mechanics** — a named action, a roll, a table of outcomes — built in Pascal's Workbench and settled by Quilltap rather than the model, so a character can't narrate a failure into a win.
+**Pascal the Croupier** settles chance. Cryptographically secure dice (d4 to d1000), coin flips, persistent chat state for inventories and scores, and **custom mechanics** — a named action, a roll, a table of outcomes — built in Pascal's Workbench and settled by Quilltap rather than the model, so a character can't narrate a failure into a win. He also keeps the **Inventory**: the things characters carry, on four shelves, with archetypes, kits, pictures, and a per-chat record of what each character has in hand — told to the model while carried and drawn into their pictures.
 
 **The Lantern** makes pictures. Scene-aware background images for chats, per-conversation character portraits, wardrobe pictures, LoRA adapters on providers that take them, and `describe_image` so characters can look at pictures as well as make them.
 
@@ -224,6 +224,8 @@ Switch themes live without reloading. Six ship with the application:
 | **Rains** | Warm, earthy palette with cozy amber accents |
 | **Madman's Box** | A mad inventor's time-machine cabin — dark walnut and brass, amber tubes, and cool phosphor-cyan dials |
 
+Every bundled theme is checked against WCAG 2.2 AA in light and dark mode: contrast, focus rings, reduced motion, keyboard access and screen-reader names.
+
 Themes are `.qtap-theme` bundles — JSON design tokens, CSS, fonts, and images; no build tools. Create your own with `npx create-quilltap-theme my-theme`, manage them with `npx quilltap themes`, or install signed bundles from a registry in Settings.
 
 ---
@@ -240,6 +242,19 @@ Quilltap is a single Next.js 16 application (App Router) serving both the UI and
 - [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) · [Memory Management](docs/developer/features/complete/memory_management.md) · [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) · [Image Generation](docs/developer/IMAGE_GENERATION.md)
 - [Deployment Guide](docs/DEPLOYMENT.md) — production setup with SSL and reverse proxies
 - [Changelog](docs/CHANGELOG.md) · [Roadmap](docs/developer/features/ROADMAP.md)
+
+### Published JSON Schemas
+
+Quilltap's file formats are described by JSON Schemas you can validate against before you hand a file to the application. Each is in the repository under [`public/schemas/`](public/schemas/) and is also served by every running instance at `/schemas/<name>` (for example `http://localhost:3000/schemas/qtap-export.schema.json`).
+
+| Schema | Describes | Use it when |
+| ------ | --------- | ----------- |
+| [`qtap-export.schema.json`](public/schemas/qtap-export.schema.json) | A `.qtap` export bundle (characters, chats, memories, projects, stores, wardrobe, Inventory, and more) | Writing or checking a `.qtap` file by hand or from another tool |
+| [`qtap-export-ndjson.schema.json`](public/schemas/qtap-export-ndjson.schema.json) | One line of a streaming (newline-delimited) `.qtap` export | Validating a large streamed export line by line |
+| [`qtap-custom-tool.schema.json`](public/schemas/qtap-custom-tool.schema.json) | A Pascal custom tool: a JSON file in a store's `Tools/` folder | Writing custom mechanics outside Pascal's Workbench (characters can fetch it with `edit_custom_tool`'s `schema` action) |
+| [`qtap-progression.schema.json`](public/schemas/qtap-progression.schema.json) | The `progressions` key in a character vault's `metadata.json` | Hand-editing a character's progressions |
+| [`qtap-theme.schema.json`](public/schemas/qtap-theme.schema.json) | `theme.json` in a `.qtap-theme` bundle | Building a theme bundle |
+| [`plugin-manifest.schema.json`](public/schemas/plugin-manifest.schema.json) | A plugin's `manifest.json` | Writing a provider, tool, template or search plugin |
 
 Contributions are welcome. Please open an issue to discuss major changes before submitting a PR — it is far better to align on direction before building the bridge, as anyone who has ever built a bridge in the wrong direction can attest.
 

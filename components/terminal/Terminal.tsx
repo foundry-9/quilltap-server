@@ -97,6 +97,15 @@ export function Terminal({
       }
 
       term.open(containerRef.current);
+      // The shell needs Tab, so xterm keeps it — which would trap a keyboard
+      // user inside the terminal (WCAG 2.1.2). F6 / Shift+F6, the browser's
+      // own "next pane" key, steps focus out to the next / previous control.
+      term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        if (event.key !== 'F6' || event.type !== 'keydown') return true;
+        event.preventDefault();
+        moveFocusOutOf(containerRef.current, event.shiftKey ? -1 : 1);
+        return false;
+      });
       try { fitAddon.fit(); } catch { /* noop */ }
       try { term.focus(); } catch { /* noop */ }
 
@@ -220,6 +229,26 @@ export function Terminal({
 // constructor — and TypeScript skips excess-property checks on variables. That
 // is how the pre-6.0 `selection` key survived here silently after xterm renamed
 // it. Annotating the return type makes any unknown key a build error.
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Move keyboard focus to the first focusable control after (direction 1) or
+ * before (direction -1) `container`, skipping everything inside it — xterm's
+ * own hidden textarea included.
+ */
+function moveFocusOutOf(container: HTMLElement | null, direction: 1 | -1): void {
+  if (!container) return;
+  const all = Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => !container.contains(el) && el.offsetParent !== null,
+  );
+  const target = direction === 1
+    ? all.find((el) => container.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+    : [...all].reverse().find((el) => container.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING);
+  if (target) target.focus();
+  else (document.activeElement as HTMLElement | null)?.blur();
+}
+
 function getTerminalTheme(): ITheme {
   if (typeof document === 'undefined') {
     // SSR fallback

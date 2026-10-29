@@ -21,11 +21,16 @@ let toasts: Toast[] = []
 function ensureContainer() {
   if (!toastContainer) {
     toastContainer = document.createElement('div')
-    toastContainer.setAttribute('role', 'toast-container')
+    // Polite live region: screen readers announce each toast as it lands.
+    toastContainer.setAttribute('role', 'status')
+    toastContainer.setAttribute('aria-live', 'polite')
+    toastContainer.setAttribute('data-toast-container', '')
     toastContainer.style.position = 'fixed'
     toastContainer.style.bottom = '20px'
     toastContainer.style.right = '20px'
-    toastContainer.style.zIndex = '50'
+    // Above every dialog overlay (z-[60]–z-[101]) so a toast raised from inside a
+    // modal is visible; below the full-screen startup gates at z-[9999].
+    toastContainer.style.zIndex = '1000'
     toastContainer.style.pointerEvents = 'none'
     toastContainer.style.display = 'flex'
     toastContainer.style.flexDirection = 'column'
@@ -36,29 +41,19 @@ function ensureContainer() {
   }
 }
 
+// Theme status colours: every bundle pairs each fill with a foreground at
+// 4.5:1 or better, which the old fixed Tailwind palette did not.
 function getToastStyles(type: ToastType) {
   switch (type) {
     case 'success':
-      return {
-        bg: 'bg-green-500 dark:bg-green-600',
-        border: 'border-green-600 dark:border-green-700',
-      }
+      return 'qt-bg-success qt-text-success-foreground qt-border-success'
     case 'error':
-      return {
-        bg: 'bg-red-500 dark:bg-red-600',
-        border: 'border-red-600 dark:border-red-700',
-      }
+      return 'qt-bg-destructive qt-text-destructive-foreground qt-border-destructive'
     case 'warning':
-      return {
-        bg: 'bg-yellow-500 dark:bg-yellow-600',
-        border: 'border-yellow-600 dark:border-yellow-700',
-      }
+      return 'qt-bg-warning qt-text-warning-foreground qt-border-warning'
     case 'info':
     default:
-      return {
-        bg: 'bg-blue-500 dark:bg-blue-600',
-        border: 'border-blue-600 dark:border-blue-700',
-      }
+      return 'qt-bg-info qt-text-info-foreground qt-border-info'
   }
 }
 
@@ -69,10 +64,12 @@ function renderToasts() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {toasts.map((toast) => {
         const styles = getToastStyles(toast.type)
+        // Errors interrupt; everything else waits its turn in the polite region.
         return (
           <div
             key={toast.id}
-            className={`app-toast ${styles.bg} border ${styles.border} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto`}
+            role={toast.type === 'error' ? 'alert' : undefined}
+            className={`app-toast ${styles} border px-4 py-3 rounded-lg shadow-lg pointer-events-auto`}
             style={{
               animation: 'slideInUp 0.3s ease-out',
             }}

@@ -136,9 +136,9 @@ export async function executeSearchScriptoriumTool(
     const results: SearchScriptoriumResult[] = []
 
     // Resolver for emitting a canonical qtap:// URI per document/knowledge hit
-    // (self-vault → qtap://self/…, else the store name with UUID fallback).
+    // (the store name, with UUID fallback — never qtap://self, bug 256).
     // Built once so per-row tagging stays synchronous.
-    const docUriResolver = await buildDocStoreUriResolver(context.characterId)
+    const docUriResolver = await buildDocStoreUriResolver()
 
     // Resolve the tri-tier mount pool up front so both the `documents` and
     // `knowledge` branches pick from the same deduped set, scoped by `scope`.

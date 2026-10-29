@@ -77,13 +77,13 @@ function vec(...xs: number[]): Float32Array {
 
 function seed(rows: Array<Record<string, unknown>>) {
   const insert = db.prepare(`INSERT INTO memories
-    (id, characterId, aboutCharacterId, chatId, tier, source, supersededById, supersededAt, consolidatedFrom, relatedMemoryIds, embedding, updatedAt)
-    VALUES (@id, @characterId, @aboutCharacterId, @chatId, @tier, @source, @supersededById, @supersededAt, @consolidatedFrom, @relatedMemoryIds, @embedding, @updatedAt)`)
+    (id, characterId, aboutCharacterId, chatId, tier, source, supersededById, supersededAt, consolidatedFrom, relatedMemoryIds, embedding, updatedAt, keystone)
+    VALUES (@id, @characterId, @aboutCharacterId, @chatId, @tier, @source, @supersededById, @supersededAt, @consolidatedFrom, @relatedMemoryIds, @embedding, @updatedAt, @keystone)`)
   for (const r of rows) {
     insert.run({
       characterId: CHAR, aboutCharacterId: null, chatId: null, tier: 'hot', source: 'AUTO',
       supersededById: null, supersededAt: null, consolidatedFrom: '[]', relatedMemoryIds: '[]',
-      updatedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z', keystone: 0,
       ...r,
       embedding: r.embedding instanceof Float32Array ? float32ToBlob(r.embedding) : (r.embedding ?? null),
     })
@@ -154,7 +154,7 @@ beforeEach(() => {
   db.exec(`CREATE TABLE memories (
     id TEXT PRIMARY KEY, characterId TEXT, aboutCharacterId TEXT, chatId TEXT, tier TEXT, source TEXT,
     supersededById TEXT, supersededAt TEXT, consolidatedFrom TEXT, relatedMemoryIds TEXT,
-    embedding BLOB, updatedAt TEXT)`)
+    embedding BLOB, updatedAt TEXT, keystone INTEGER NOT NULL DEFAULT 0)`)
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) =>
     db.prepare(sql).all(...params))
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)
@@ -334,6 +334,20 @@ describe('retireMemories — the one deletion', () => {
     expect(ids('consolidatedFrom', 'digest')).toEqual(['m-2'])
   })
 
+  it('a keystone digest outlives its last member', async () => {
+    seed([
+      { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1']), keystone: 1 },
+      { id: 'm-1', tier: 'cold', supersededById: 'digest' },
+    ])
+    installRepos()
+
+    const report = await retireMemories(['m-1'], { reason: 'item-delete' })
+
+    expect(report.digestsRetiredWithLastMember).toBe(0)
+    expect(read('digest')).toBeDefined()
+    expect(ids('consolidatedFrom', 'digest')).toEqual([])
+  })
+
   it('retention never takes the digest its expired members leave behind', async () => {
     seed([
       { id: 'digest', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['m-1']) },
@@ -356,13 +370,15 @@ describe('retireMemories — the one deletion', () => {
       { id: 'kept-digest', chatId: 'chat-1', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['member']) },
       { id: 'member', chatId: 'chat-2', tier: 'cold', supersededById: 'kept-digest' },
       { id: 'empty-digest', chatId: 'chat-1', source: 'CONSOLIDATED', consolidatedFrom: JSON.stringify(['long-gone']) },
+      { id: 'keystone', chatId: 'chat-1', keystone: 1 },
     ])
     installRepos()
 
     const report = await retireChatMemories('chat-1')
 
     expect(report.retiredIds.sort()).toEqual(['auto', 'empty-digest'])
-    expect(report.sparedBy).toEqual({ manual: 1, digest: 1, cold: 1 })
+    expect(report.sparedBy).toEqual({ keystone: 1, manual: 1, digest: 1, cold: 1 })
+    expect(read('keystone')).toBeDefined()
     expect(read('manual')).toBeDefined()
     expect(read('cold')).toBeDefined()
     expect(read('kept-digest')).toBeDefined()

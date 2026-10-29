@@ -4,8 +4,9 @@ import { memo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { formatMessageTime } from '@/lib/format-time'
 import {
-  getSystemSenderDisplayName,
+  getAnnouncementSenderName,
   getSystemKindDisplayLabel,
+  getInterventionSummary,
   getAnnouncementImportance,
   getAnnouncementOutcomeState,
   getAnnouncementAccentClasses,
@@ -54,16 +55,20 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
   message,
   expanded = false,
   participantNames,
+  announcerNames,
 }: {
   message: Message
   /** When true, render the down-chevron (collapse affordance) instead of the right-chevron. */
   expanded?: boolean
   /** Participant id → display name, for naming a whisper's audience. */
   participantNames?: Record<string, string>
+  /** Character id → name, for naming a `customAnnouncer` in place of the Staff member. */
+  announcerNames?: Record<string, string>
 }) {
-  const senderName = getSystemSenderDisplayName(message.systemSender)
+  const senderName = getAnnouncementSenderName(message, announcerNames)
   const kindLabel = getSystemKindDisplayLabel(message)
   const outcomeState = getAnnouncementOutcomeState(message)
+  const adjusted = getInterventionSummary(message)
   const importance = getAnnouncementImportance(message)
   const dotModifier = outcomeState
     ? `qt-chat-announcement-dot-outcome-${outcomeState}`
@@ -76,6 +81,12 @@ export const AnnouncementBarContents = memo(function AnnouncementBarContents({
           who can't see the accent (and for anyone skimming with a screen reader). */}
       {outcomeState && <span className="sr-only">{outcomeState}</span>}
       {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+      {adjusted && (
+        <span className="qt-intervention-badge" title={adjusted}>
+          <Icon name="hand-raised" className="w-3 h-3" aria-hidden="true" />
+          <span className="sr-only">{adjusted}</span>
+        </span>
+      )}
       <WhisperTag message={message} participantNames={participantNames} />
       <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
       <Icon
@@ -96,12 +107,14 @@ export const AnnouncementChip = memo(function AnnouncementChip({
   message,
   onToggleExpanded,
   participantNames,
+  announcerNames,
 }: {
   message: Message
   onToggleExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
+  announcerNames?: Record<string, string>
 }) {
-  const senderName = getSystemSenderDisplayName(message.systemSender)
+  const senderName = getAnnouncementSenderName(message, announcerNames)
   const kindLabel = getSystemKindDisplayLabel(message)
   const accent = getAnnouncementAccentClasses(message)
   const isWhisper = !!message.targetParticipantIds?.length
@@ -117,7 +130,11 @@ export const AnnouncementChip = memo(function AnnouncementChip({
       aria-expanded={false}
       aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
     >
-      <AnnouncementBarContents message={message} participantNames={participantNames} />
+      <AnnouncementBarContents
+        message={message}
+        participantNames={participantNames}
+        announcerNames={announcerNames}
+      />
     </button>
   )
 })
@@ -130,10 +147,12 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
   members,
   onToggleSystemMessageExpanded,
   participantNames,
+  announcerNames,
 }: {
   members: { message: Message }[]
   onToggleSystemMessageExpanded: (messageId: string) => void
   participantNames?: Record<string, string>
+  announcerNames?: Record<string, string>
 }) {
   return (
     <div className="qt-chat-announcement-group">
@@ -143,6 +162,7 @@ export const AnnouncementGroup = memo(function AnnouncementGroup({
           message={message}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
+          announcerNames={announcerNames}
         />
       ))}
     </div>

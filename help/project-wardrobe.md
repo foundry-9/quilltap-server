@@ -67,6 +67,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Pages
 
 - [The Wardrobe](wardrobe.md) — The full wardrobe system, including character vaults and shared archetypes
+- [Project Inventory](project-inventory.md) — The project's shared shelf of things to carry, as opposed to wear
 - [Project Scenarios](project-scenarios.md) — The same tiered idea, for opening scenes
 - [Projects Overview](projects.md) — Main project documentation
 - [Project Files](project-files.md) — The document shelf where wardrobe files live

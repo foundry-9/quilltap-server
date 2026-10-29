@@ -8,6 +8,7 @@
  * the derived OpenAI-format `parameters`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -45,3 +46,6 @@ export function validateDiscardMailInput(input: unknown): DiscardMailToolInput |
   const parsed = discardMailToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: deletes — cannot be undone from inside Quilltap. */
+export const discardMailToolEffect: ToolEffectSpec = 'destroy';

@@ -4,12 +4,24 @@
  * FloatingDialog
  *
  * A floating, draggable, resizable dialog component rendered via portal.
- * Used for the help chat dialog. Persists position/size to localStorage.
+ * Used for the help chat dialog and the Brahma Console. Persists position/size
+ * to localStorage.
+ *
+ * By default it sits in the panel layer, beneath portal modals. `topmost` lifts
+ * it into the floating layer above every modal (see `floating-layer.ts`): it
+ * then belongs to no modal, so using it never dismisses the one beneath.
+ *
+ * It is a non-modal dialog: the page behind it stays usable, so it is announced
+ * with `aria-modal="false"` and Tab is not trapped. Focus moves in on open and
+ * returns to the opener on close. Escape closes it when pressed inside it, or
+ * anywhere while no modal dialog is open (with one open, Escape is the modal's).
  */
 
-import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react'
+import { useId, useState, useRef, useCallback, useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
+import { floatingLayerProps } from '@/components/ui/floating-layer'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 export interface DialogGeometry {
   x: number
@@ -29,6 +41,8 @@ interface FloatingDialogProps {
   minWidth?: number
   minHeight?: number
   headerActions?: ReactNode
+  /** Float above every portal modal instead of beneath them */
+  topmost?: boolean
 }
 
 const DEFAULT_GEOMETRY: DialogGeometry = {
@@ -85,11 +99,14 @@ export function FloatingDialog({
   minWidth = 320,
   minHeight = 300,
   headerActions,
+  topmost = false,
 }: FloatingDialogProps) {
   const [geometry, setGeometry] = useState<DialogGeometry>(() =>
     constrainToViewport(loadGeometry(storageKey, initialGeometry), minWidth, minHeight)
   )
   const dialogRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  useDialogFocus(dialogRef, isOpen)
   const isDragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
 
@@ -152,22 +169,43 @@ export function FloatingDialog({
     return () => observer.disconnect()
   }, [isOpen, geometry, updateGeometry])
 
-  // Escape key closes
+  // Escape inside the dialog closes it; a topmost one swallows the key so the
+  // modal beneath doesn't close too. Escape elsewhere closes it only while no
+  // modal dialog is open — otherwise that Escape belongs to the modal.
   useEffect(() => {
     if (!isOpen) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const el = dialogRef.current
+    if (!el) return
+    const handleInside = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (topmost) e.stopPropagation()
+      onClose()
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+    const handleOutside = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (el.contains(e.target as Node)) return
+      if (document.querySelector('[aria-modal="true"]')) return
+      onClose()
+    }
+    el.addEventListener('keydown', handleInside)
+    document.addEventListener('keydown', handleOutside)
+    return () => {
+      el.removeEventListener('keydown', handleInside)
+      document.removeEventListener('keydown', handleOutside)
+    }
+  }, [isOpen, onClose, topmost])
 
   if (!isOpen) return null
 
   return createPortal(
     <div
       ref={dialogRef}
-      className="qt-floating-dialog"
+      className={topmost ? 'qt-floating-dialog qt-floating-dialog-topmost' : 'qt-floating-dialog'}
+      {...(topmost ? floatingLayerProps : {})}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      tabIndex={-1}
       style={{
         left: geometry.x,
         top: geometry.y,
@@ -181,7 +219,7 @@ export function FloatingDialog({
         className="qt-floating-dialog-header"
         onMouseDown={handleMouseDown}
       >
-        <div className="qt-floating-dialog-title">
+        <div id={titleId} className="qt-floating-dialog-title">
           {title}
         </div>
         <div className="qt-floating-dialog-actions">
@@ -191,6 +229,7 @@ export function FloatingDialog({
             onClick={onClose}
             className="qt-floating-dialog-close"
             title="Close"
+            aria-label="Close"
           >
             <Icon name="close" className="w-4 h-4" />
           </button>

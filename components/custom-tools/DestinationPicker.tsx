@@ -10,10 +10,12 @@
  * same name in a DIFFERENT store is a non-blocking advisory.
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import type { CustomToolDestinations, DestinationStore } from '@/lib/pascal/workbench'
 
 export interface PickedDestination {
@@ -32,6 +34,10 @@ interface DestinationPickerProps {
 
 export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }: Readonly<DestinationPickerProps>) {
   const [selected, setSelected] = useState<PickedDestination | null>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onCancel)
 
   const destinationsQuery = useQuery({
     queryKey: queryKeys.customTools.destinations(),
@@ -72,9 +78,17 @@ export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }
   }
 
   return (
-    <div className="qt-dialog-overlay" role="dialog" aria-modal="true">
-      <div className="qt-card qt-shadow-lg rounded-lg border w-full max-w-lg max-h-[80vh] overflow-y-auto p-4 space-y-3">
-        <h2 className="qt-card-title text-base">Where shall Pascal keep this contrivance?</h2>
+    <div className="qt-dialog-overlay">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-card qt-shadow-lg rounded-lg border w-full max-w-lg max-h-[80vh] overflow-y-auto p-4 space-y-3"
+      >
+        <h2 id={titleId} className="qt-card-title text-base">Where shall Pascal keep this contrivance?</h2>
 
         {destinationsQuery.isLoading && <p className="text-sm qt-text-secondary">Surveying the premises…</p>}
         {destinationsQuery.isError && (

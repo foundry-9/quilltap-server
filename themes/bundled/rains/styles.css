@@ -144,18 +144,22 @@
 
   /* Theme Color Mappings - for qt-* utility classes */
   --theme-success: hsl(var(--success-100));
-  --theme-success-foreground: hsl(var(--oncolor-100));
+  --theme-success-foreground: hsl(var(--bg-100));
   --theme-warning: hsl(var(--warning-100));
   --theme-warning-foreground: hsl(var(--always-black));
-  --theme-destructive: hsl(var(--danger-100));
-  --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
-  --theme-info-foreground: hsl(var(--oncolor-100));
+  --theme-destructive: hsl(0 67% 68.1%);
+  --theme-destructive-foreground: hsl(var(--bg-100));
+  --theme-info: hsl(210 50% 61%);
+  --theme-info-foreground: hsl(var(--bg-100));
 
   /* On-Color Text */
   --oncolor-100: 0 0% 100%;
   --oncolor-200: 0 0% 97%;
   --oncolor-300: 0 0% 97%;
+  /* Ink on the orange-amber fill. White on this orange is ~2.4:1, so the
+     dark mode sets its buttons and chips in warm charcoal instead — the
+     orange stays bright enough to work as text and accent elsewhere. */
+  --oncolor-brand: 30 25% 9%;
 
   /* Pictogram Tones - Warm greys */
   --pictogram-100: 40 4% 30%;
@@ -167,8 +171,8 @@
   --text-000: 40 10% 95%;   /* #f4f3f1 - primary text */
   --text-100: 40 8% 90%;    /* #e8e6e3 - primary alt */
   --text-200: 40 5% 65%;    /* #a8a6a3 - secondary */
-  --text-300: 40 4% 55%;    /* #908e8b - tertiary */
-  --text-400: 40 3% 45%;    /* #757372 - muted */
+  --text-300: 40 4% 62%;    /* tertiary */
+  --text-400: 40 3% 59%;    /* muted (4.5:1 on sidebar) */
   --text-500: 40 2% 38%;    /* #636160 - very muted */
 
   /* Always Colors */
@@ -213,10 +217,10 @@
   color-scheme: light;
 
   /* Color Palette - Orange-amber (same hue family as dark) */
-  --accent-brand: 28 75% 50%;           /* Slightly deeper for light bg */
-  --accent-main-000: 28 70% 45%;
-  --accent-main-100: 28 75% 50%;
-  --accent-main-200: 28 70% 55%;
+  --accent-brand: 24 80% 40%;           /* Deep enough for white ink and for links on parchment */
+  --accent-main-000: 24 80% 35%;
+  --accent-main-100: 24 80% 40%;
+  --accent-main-200: 24 78% 32%;
   --accent-main-900: 28 50% 85%;
 
   /* Pro/Purple Accent - Adjusted for light */
@@ -262,19 +266,20 @@
   --warning-900: 38 40% 95%;
 
   /* Theme Color Mappings - for qt-* utility classes (light mode) */
-  --theme-success: hsl(var(--success-100));
+  --theme-success: hsl(142 55% 32.5%);
   --theme-success-foreground: hsl(var(--oncolor-100));
-  --theme-warning: hsl(var(--warning-100));
-  --theme-warning-foreground: hsl(var(--always-black));
+  --theme-warning: hsl(38 85% 32.5%);
+  --theme-warning-foreground: hsl(var(--oncolor-100));
   --theme-destructive: hsl(var(--danger-100));
   --theme-destructive-foreground: hsl(var(--oncolor-100));
-  --theme-info: hsl(var(--accent-secondary-100));
+  --theme-info: hsl(var(--accent-secondary-000));
   --theme-info-foreground: hsl(var(--oncolor-100));
 
   /* On-Color Text - Dark on light accents */
   --oncolor-100: 0 0% 100%;
   --oncolor-200: 0 0% 100%;
   --oncolor-300: 0 0% 10%;
+  --oncolor-brand: 0 0% 100%;
 
   /* Pictogram Tones - Light mode */
   --pictogram-100: 35 8% 90%;
@@ -286,8 +291,8 @@
   --text-000: 35 15% 10%;     /* Near black, warm */
   --text-100: 35 12% 15%;     /* Primary */
   --text-200: 35 8% 35%;      /* Secondary */
-  --text-300: 35 6% 45%;      /* Tertiary */
-  --text-400: 35 5% 55%;      /* Muted */
+  --text-300: 35 6% 38%;      /* Tertiary */
+  --text-400: 35 5% 40%;      /* Muted */
   --text-500: 35 4% 65%;      /* Very muted */
 
   /* Always Colors */
@@ -335,7 +340,7 @@
   /* Button Variables */
   --qt-button-radius: var(--radius-sm);
   --qt-button-primary-bg: hsl(var(--accent-brand));
-  --qt-button-primary-fg: hsl(var(--oncolor-100));
+  --qt-button-primary-fg: hsl(var(--oncolor-brand));
   --qt-button-primary-hover-bg: hsl(var(--accent-main-000));
   --qt-button-primary-shadow: none;
 
@@ -441,7 +446,7 @@
   --qt-chat-message-shadow: var(--chat-shadow);
 
   --qt-chat-user-bg: hsl(var(--bg-000));
-  --qt-chat-user-fg: hsl(40 6% 98%);
+  --qt-chat-user-fg: hsl(var(--text-000));
   --qt-chat-user-border: var(--stroke-strong);
   --qt-chat-user-font: var(--font-user-message);
   --qt-chat-user-font-weight: 400;
@@ -504,7 +509,7 @@
   --qt-badge-font-size: 0.8rem;
 
   --qt-badge-primary-bg: hsl(var(--accent-brand));
-  --qt-badge-primary-fg: hsl(var(--oncolor-100));
+  --qt-badge-primary-fg: hsl(var(--oncolor-brand));
   --qt-badge-secondary-bg: hsl(var(--bg-200));
   --qt-badge-secondary-fg: hsl(var(--text-200));
   --qt-badge-secondary-border: var(--stroke-soft);
@@ -517,7 +522,7 @@
 
   /* Filter Chip Variables */
   --qt-filter-chip-active-bg: hsl(var(--accent-brand));
-  --qt-filter-chip-active-fg: hsl(var(--oncolor-100));
+  --qt-filter-chip-active-fg: hsl(var(--oncolor-brand));
   --qt-filter-chip-inactive-bg: hsl(var(--bg-100));
   --qt-filter-chip-inactive-fg: hsl(var(--text-200));
   --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-000));
@@ -770,7 +775,7 @@
   /* Response Status Tokens */
   --qt-response-status-gathering-fg: hsl(270 70% 60%);
   --qt-response-status-building-fg: hsl(38 92% 50%);
-  --qt-response-status-streaming-fg: hsl(142 76% 36%);
+  --qt-response-status-streaming-fg: hsl(142 70% 27%);
   --qt-response-status-tool-fg: hsl(270 70% 60%);
 
   /* Badge Tokens - Entity/Status/Source */
@@ -808,7 +813,7 @@
 
   --qt-queue-badge-memory-bg: hsl(217 91% 50%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 50%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(220 15% 35%);
   --qt-queue-badge-idle-opacity: 0.4;
@@ -1002,10 +1007,10 @@
   --qt-badge-capability-fg: hsl(217 91% 70%);
 
   /* Dark mode queue status badge tokens */
-  --qt-queue-badge-memory-bg: hsl(217 91% 55%);
+  --qt-queue-badge-memory-bg: hsl(217 91% 53%);
   --qt-queue-badge-embedding-bg: hsl(270 60% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
-  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 49.5%);
   --qt-queue-badge-story-bg: hsl(220 15% 45%);
 
   /* Dark mode response status tokens */
@@ -1037,6 +1042,12 @@
 
   /* Toggle knob - dark warm on light */
   --qt-toggle-knob-bg: hsl(30 10% 15%);
+
+  /* Status ink: the 50% amber and red are fills; as small text on parchment
+     they read at ~2:1. These are the same hues, deep enough to read. */
+  --qt-status-warning-fg: hsl(38 92% 28%);
+  --qt-status-danger-fg: hsl(0 70% 40%);
+  --qt-status-success-fg: hsl(142 70% 26%);
 
   /* Whisper — warm slate-blue for light mode */
   --qt-chat-whisper-bg: hsl(240 18% 90%);
@@ -1075,7 +1086,7 @@
 /* Primary Button - Solid with simple hover */
 [data-theme="rains"] .qt-button-primary {
   background: hsl(var(--accent-brand));
-  color: hsl(var(--oncolor-100));
+  color: hsl(var(--oncolor-brand));
   border: none;
   box-shadow: none;
   transition: background-color 0.2s;

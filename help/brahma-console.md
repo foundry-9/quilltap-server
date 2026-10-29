@@ -6,25 +6,39 @@ tags: [help, chat, console, llm, model, tools, brahma]
 
 # The Brahma Console
 
-> **The Brahma Console is summoned from the sidebar, by the tetra-radial console mark sitting just beneath the question-mark.**
+> **The Brahma Console is summoned by the bright round button at the bottom-left of every page, just to the right of the sidebar — or, in the workspace, opened as a tab from the console mark in the sidebar.**
 
 Where the Help Chat sends you a well-mannered concierge — a *character*, with a personality and a fondness for the house documentation — the Brahma Console dispenses with all such ceremony. It is, quite simply, a direct line to a large language model: no persona, no costume, no scene to play. You choose an engine, and you speak to it plainly. Think of it as the telegraph key in the corner of the workshop, ready at any hour for a frank word with the machine.
 
 ## Opening the Console
 
-At the foot of the left sidebar, just below the Help icon, you will find the **tetra-radial console mark** — a ring of four nodes wired to a central hub. A single press and the Console floats into view, a draggable, resizable window that hovers obligingly over whatever page you happen to be on. (It cares not one whit which page that is; see *What the Console deliberately forgets*, below.)
+The Console keeps two doors.
 
-The Console opens, as the Help Chat does, to a roster of your **past conversations**. Select one to resume it exactly where you left off, or begin afresh with the composer at the bottom of the window.
+### The ever-present button
+
+At the very foot of every page, just to the right of the sidebar, there sits a round, brightly lacquered button bearing the **tetra-radial console mark** — a ring of four nodes wired to a central hub. It is never dimmed and never out of reach. A single press and the Console floats into view: a draggable, resizable window you may haul about by its title bar and stretch by its lower corner. Press the button again (it wears an inverted, *pressed-in* look while the Console is showing) and the window tucks itself away.
+
+This floating Console rides **above everything else in the house** — above any form, picker or confirmation box you happen to have open. Halfway through filling out a new connection profile and uncertain what a setting means? Press the button, put your question to the engine, and carry on with the form; working in the Console never dismisses the dialog beneath it. Pressing **Escape** while you are typing in the Console hides only the Console; pressing it in the form beneath closes only the form.
+
+Hiding the window does not hang up the line. Should a reply still be on the wire when you tuck the Console away, it keeps arriving, and reopening the window returns you to the very conversation you left.
+
+### The workspace tab
+
+Inside the workspace, the **console mark in the sidebar** (just beneath the Help question-mark) opens the Console as a tab of its own, for longer sittings. The tab and the floating window keep their own places: each remembers its own conversation, so the tab may hold one line of inquiry while the floating window is busy with another.
+
+### Past conversations
+
+A fresh Console opens to a roster of your **past conversations**. Select one to resume it exactly where you left off, or begin afresh with the composer at the bottom of the window. Once you are inside a conversation, the title bar carries a **clock** button that returns you to the roster at any moment, and a **plus** button that clears the way for a new conversation.
 
 Every message in the transcript — yours and the engine's alike — wears a small **copy mark** just beneath it. A single press tucks that message's text, in its original Markdown, onto your clipboard, ready to be pasted wherever you please; the mark winks to a checkmark for a moment to confirm the deed is done.
 
 ## Choosing your engine
 
-Every Console conversation talks to exactly one **connection profile** (your configured model). When you open a fresh conversation, the Console reaches for your **default** profile. Once a conversation is underway, a **model picker** appears in the window's title bar: press it to survey every profile you've established — provider and model plainly labelled — and choose another.
+Every Console conversation talks to exactly one **connection profile** (your configured model). The **model picker** in the title bar shows which. On the roster of past conversations it names the engine your *next* conversation will start with — your **default** profile, unless you choose another before asking your first question. Once a conversation is underway, press it to survey every profile you've established — provider and model plainly labelled — and choose another.
 
 Switching the engine **continues the same conversation**. The transcript carries on uninterrupted; only the machine answering from that point forward has changed. Should you wish to put the same question to two different engines, simply ask, switch, and ask again.
 
-> A connection profile is the one prerequisite. With none established, the Console mark sits dimmed; visit the Foundry's system settings to add one, then return.
+> A connection profile is the one prerequisite. With none established, the sidebar's console mark sits dimmed and the floating Console opens only to say it wants for an engine; visit the Foundry's system settings to add one, then return.
 
 ## What the Console can do
 
@@ -84,7 +98,7 @@ The Console is, by design, an amnesiac of impeccable discretion:
 
 ## In-Chat Navigation
 
-To direct the user to the sidebar where the Console mark lives:
+To direct the user to the home page (the floating Console button sits at the bottom-left of every page, and the sidebar's console mark opens it as a workspace tab):
 ```
 help_navigate(url: "/")
 ```

@@ -82,6 +82,8 @@ describe('the retuned defaults', () => {
       anchorMinHits: 1,
       anchorOrder: 'rarest',
       backgroundReserve: 0,
+      innerCircleShare: 1 / 3,
+      innerCircleAllowance: [3, 2, 1],
     })
     expect(RECALL_MULTIPLIERS.freshEvent24h).toBe(1.3)
     expect(RECALL_MULTIPLIERS.freshEvent48h).toBe(1.15)

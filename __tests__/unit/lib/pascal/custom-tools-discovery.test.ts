@@ -307,10 +307,30 @@ describe('tier shadowing', () => {
     const roster = await resolveCustomToolRoster(ctx)
 
     expect(roster.tools.get('a')!.tier).toBe('character')
-    expect(roster.tools.get('b')!.tier).toBe('participant')
+    // A participant vault is never a tier for custom tools, so `b` falls
+    // through to the group store.
+    expect(roster.tools.get('b')!.tier).toBe('group')
     expect(roster.tools.get('c')!.tier).toBe('group')
     expect(roster.tools.get('d')!.tier).toBe('project')
     expect(roster.tools.get('e')!.tier).toBe('global')
+  })
+
+  it("never deals a tool that lives only in another participant's vault", async () => {
+    primePool({ characterMountPointId: 'mine', participantMountPointIds: ['theirs'] })
+    primeMounts({
+      mine: { 'Tools/listen.tool.json': tool('listen') },
+      theirs: {
+        'Tools/unlock.tool.json': tool('unlock'),
+        'Tools/listen.tool.json': tool('listen', { disabled: true }),
+      },
+    })
+
+    const roster = await resolveCustomToolRoster(ctx)
+
+    // Their `unlock` is theirs alone, and their tombstone does not reach mine.
+    expect([...roster.tools.keys()]).toEqual(['listen'])
+    expect(roster.tools.get('listen')!.tier).toBe('character')
+    expect(mockReadMountFileBytes).not.toHaveBeenCalledWith('theirs', expect.anything())
   })
 
   it('suppresses an inherited tool via a nearer `disabled` definition', async () => {
@@ -384,7 +404,6 @@ describe('perspective', () => {
       chatId: 'c1',
       characterId: 'char1',
       characterMountPointId: 'vault1',
-      characterIds: ['char1', 'char2'],
       projectId: 'proj1',
     })
 
@@ -396,11 +415,14 @@ describe('perspective', () => {
         userId: 'u1',
         characterId: 'char1',
         characterMountPointId: 'vault1',
-        characterIds: ['char1', 'char2'],
         projectId: 'proj1',
-      }),
-      expect.objectContaining({ includeParticipants: true })
+      })
     )
+    // Other participants' vaults are never asked for: no `characterIds`, and
+    // no `includeParticipants` option.
+    const [poolCtx, poolOpts] = mockResolvePool.mock.calls[0]
+    expect(poolCtx).not.toHaveProperty('characterIds')
+    expect(poolOpts?.includeParticipants).toBeFalsy()
   })
 })
 

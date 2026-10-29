@@ -80,6 +80,7 @@ export function ImageProfilePicker({
   return (
     <div className="space-y-2">
       <select
+        aria-label="Image profile"
         value={value || ''}
         onChange={e => onChange?.(e.target.value || null)}
         disabled={disabled}

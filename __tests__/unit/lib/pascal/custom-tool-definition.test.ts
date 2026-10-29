@@ -10,6 +10,8 @@
  * file the loader will refuse, or red-lines one it would have taken.
  */
 
+import fs from 'fs'
+import path from 'path'
 import Ajv2020 from 'ajv/dist/2020'
 import {
   QtapCustomToolSchema,
@@ -19,6 +21,8 @@ import {
   MAX_TITLE_LENGTH,
   MAX_CHIP_LABEL_LENGTH,
   MAX_EFFECTS,
+  KNOWN_TOP_LEVEL_KEYS,
+  MAX_WHEN_GROUPS,
 } from '@/lib/pascal/custom-tool.types'
 
 import mirror from '@/public/schemas/qtap-custom-tool.schema.json'
@@ -269,6 +273,86 @@ describe('effects — load-time validation', () => {
 
   it('rejects a when that tests nothing', () => {
     expect(rejection(withEffects([{ when: {}, target: 'state.x', value: 1 }]))).toMatch(/must test something/)
+  })
+})
+
+describe('effects — wardrobe gestures', () => {
+  const issuesOf = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('accepts each action in its own shape', () => {
+    expect(
+      accepts(
+        withEffects([
+          { wardrobe: { action: 'wear', items: ['Cloak of Night'] } },
+          { wardrobe: { action: 'wear', items: ['Ribbon'], mode: 'add_to_slot', slot: 'hair' } },
+          { wardrobe: { action: 'wear', items: ['Regalia'], mode: 'replace' } },
+          { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'] } },
+          { wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } },
+          { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+        ])
+      )
+    ).toBe(true)
+  })
+
+  it('accepts a parameter choosing the garment', () => {
+    expect(
+      accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{params.material}} gloves'] } }], STR_PARAM))
+    ).toBe(true)
+  })
+
+  it('tolerates an unknown placeholder family — it simply fails to resolve at the table', () => {
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{mystery}}'] } }]))).toBe(true)
+  })
+
+  it('rejects an effect that is both a write and a gesture, or neither', () => {
+    expect(
+      rejection(withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }]))
+    ).toMatch(/exactly one of/)
+    expect(rejection(withEffects([{}]))).toMatch(/needs target \+ value, wardrobe, inventory, or log/)
+    expect(rejection(withEffects([{ target: 'state.x' }]))).toMatch(/needs both target and value/)
+  })
+
+  it('states the per-action rules at precise paths', () => {
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], mode: 'add_to_slot' } }]))).toMatch(
+      /effects\.0\.wardrobe\.slot.*mode add_to_slot needs a slot/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], slot: 'hair' } }]))).toMatch(
+      /effects\.0\.wardrobe\.slot.*only used with mode add_to_slot/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear' } }]))).toMatch(/effects\.0\.wardrobe\.items.*at least one item/)
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'take_off', items: ['Hat'], mode: 'replace' } }]))).toMatch(
+      /effects\.0\.wardrobe\.mode/
+    )
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'clear_slot' } }]))).toMatch(/clear_slot needs a slot/)
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', items: ['Wig'] } }]))).toMatch(
+      /effects\.0\.wardrobe\.items.*takes no items/
+    )
+  })
+
+  it('rejects an item naming an undeclared parameter, or {{llm}} without a consult', () => {
+    expect(issuesOf(withEffects([{ wardrobe: { action: 'wear', items: ['Hat', '{{params.ghost}}'] } }]))).toMatch(
+      /effects\.0\.wardrobe\.items\.1.*undeclared parameter "ghost"/
+    )
+    expect(rejection(withEffects([{ wardrobe: { action: 'wear', items: ['{{llm}}'] } }]))).toMatch(
+      /declares no `llm` block/
+    )
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['{{llm}}'] } }], LLM_BLOCK))).toBe(true)
+  })
+
+  it('rejects an over-long item list or reference', () => {
+    const nine = Array.from({ length: 9 }, (_, i) => `Item ${i}`)
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: nine } }]))).toBe(false)
+    expect(accepts(withEffects([{ wardrobe: { action: 'wear', items: ['x'.repeat(201)] } }]))).toBe(false)
+  })
+
+  it('counts gestures and writes together against the effects cap', () => {
+    const many = Array.from({ length: MAX_EFFECTS + 1 }, (_, i) =>
+      i % 2 ? { target: `state.k${i}`, value: 1 } : { wardrobe: { action: 'clear_slot', slot: 'hair' } }
+    )
+    expect(accepts(withEffects(many))).toBe(false)
   })
 })
 
@@ -600,6 +684,14 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an llm block missing its errorMessage', { ...BASE, llm: { prompt: 'Speak.' } }],
     ['an llm block with an empty prompt', { ...BASE, llm: { prompt: '', errorMessage: 'Silence.' } }],
     ['an unknown key inside the llm block', { ...BASE, llm: { prompt: 'Speak.', errorMessage: 'Silence.', model: 'x' } }],
+    ['an intervention block', { ...BASE, intervention: { enabled: true } }],
+    ['an intervention block with field flags', { ...BASE, intervention: { enabled: false, fields: { roll: false, llmPrompt: true } } }],
+    ['an intervention block without enabled', { ...BASE, intervention: {} }],
+    ['an unknown intervention field key', { ...BASE, intervention: { enabled: true, fields: { dice: false } } }],
+    ['an unknown key inside the intervention block', { ...BASE, intervention: { enabled: true, always: true } }],
+    ['a non-boolean intervention flag', { ...BASE, intervention: { enabled: true, fields: { roll: 'no' } } }],
+    ['an intervene flag on a parameter', { ...BASE, parameters: { bonus: { type: 'number', default: 0, intervene: false } } }],
+    ['an intervene flag on an effect', { ...BASE, effects: [{ target: 'state.n', value: 1, intervene: false }] }],
     ['an llm answer test', withWhen({ llm: { eq: 'YES' } }, LLM_BLOCK)],
     ['an llm ok test', withWhen({ llm: { ok: false } }, LLM_BLOCK)],
     ['ok ANDed with an answer comparator', withWhen({ llm: { ok: true, eq: 'YES' } }, LLM_BLOCK)],
@@ -635,7 +727,68 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an empty outcome condition on an effect', withEffects([{ when: { outcome: {} }, target: 'state.x', value: 1 }])],
     ['an unknown outcome state in an effect condition', withEffects([{ when: { outcome: { eq: 'triumph' } }, target: 'state.x', value: 1 }])],
     ['an outcome subject inside an effect condition ANDed with a value test', withEffects([{ when: { gt: 0.5, outcome: { neq: 'failure' } }, target: 'state.x', value: 1 }])],
+    ['a trigger list', { ...BASE, triggers: ['abracadabra', 'open sesame'] }],
+    ['an empty trigger list', { ...BASE, triggers: [] }],
+    ['a too-short trigger', { ...BASE, triggers: ['ok'] }],
+    ['an over-long trigger', { ...BASE, triggers: ['x'.repeat(81)] }],
+    ['more triggers than the cap', { ...BASE, triggers: Array.from({ length: 9 }, (_, i) => `phrase ${i}`) }],
+    ['an exact duplicate trigger', { ...BASE, triggers: ['abracadabra', 'abracadabra'] }],
+    ['a wardrobe wear effect', withEffects([{ wardrobe: { action: 'wear', items: ['Cloak of Night', 'Boots'] } }])],
+    ['a wardrobe take_off restricted to a slot', withEffects([{ when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } }])],
+    ['a wardrobe clear_slot effect', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair' } }])],
+    ['an effect with both a target and a wardrobe gesture', withEffects([{ target: 'state.x', value: 1, wardrobe: { action: 'clear_slot', slot: 'hair' } }])],
+    ['an empty effect', withEffects([{}])],
+    ['a write with no value', withEffects([{ target: 'state.x' }])],
+    ['a wardrobe gesture with an unknown action', withEffects([{ wardrobe: { action: 'dress', items: ['Hat'] } }])],
+    ['a wardrobe gesture with an unknown slot', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'gloves' } }])],
+    ['a wardrobe gesture with an empty item list', withEffects([{ wardrobe: { action: 'wear', items: [] } }])],
+    ['a wardrobe gesture with an unknown key', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', who: 'Bob' } }])],
     ['more effects than the cap', withEffects(Array.from({ length: MAX_EFFECTS + 1 }, (_, i) => ({ target: `state.k${i}`, value: 1 })))],
+    ['an inventory state test', withWhen({ inventory: { sword: { eq: 'equipped' } } })],
+    ['an inventory state test with gt', withWhen({ inventory: { sword: { gt: 1 } } })],
+    ['an inventory state test against an unknown state', withWhen({ inventory: { sword: { eq: 'worn' } } })],
+    ['an empty inventory comparator', withWhen({ inventory: { sword: {} } })],
+    ['an inventory count test', withWhen({ inventoryCount: { ring: { gte: 2 } } })],
+    ['an inventory count test with contains', withWhen({ inventoryCount: { ring: { contains: 'x' } } })],
+    ['an inventory state $param to a string parameter', withWhen({ inventory: { sword: { eq: { $param: 'material' } } } }, STR_PARAM)],
+    ['a templated inventory key', withWhen({ inventory: { '{{params.material}}': { neq: 'absent' } } }, STR_PARAM)],
+    ['an inventory gate', { ...BASE, availableWhen: { inventory: { sword: { eq: 'equipped' } } } }],
+    ['an inventory count gate', { ...BASE, withheldWhen: { inventoryCount: { ring: { gt: 0 } } } }],
+    ['a $param inside an inventory gate', { ...BASE, availableWhen: { inventory: { sword: { eq: { $param: 'material' } } } }, ...STR_PARAM }],
+    ['a roll drawn from $inventory', { ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' } }],
+    ['a range field drawn from $inventory', { ...BASE, roll: { min: 0, max: { $inventory: 'sword.metadata.reach', fallback: 1 } } }],
+    ['a $inventory with no metadata segment', { ...BASE, roll: { $inventory: 'sword.title', fallback: '1d4' } }],
+    ['a $inventory operand', withWhen({ gte: { $inventory: 'sword.metadata.bonus', fallback: 0 } })],
+    ['a $inventory in a gate', { ...BASE, availableWhen: { metadata: { level: { gte: { $inventory: 'sword.metadata.level', fallback: 1 } } } } }],
+    ['a $inventory parameter default', { ...BASE, parameters: { bonus: { type: 'number', default: { $inventory: 'sword.metadata.bonus', fallback: 0 } } } }],
+    ['an inventory equip effect', withEffects([{ inventory: { action: 'equip', items: ['Excalibur'] } }])],
+    ['an inventory pick_up effect with equip', withEffects([{ inventory: { action: 'pick_up', items: ['magic bow'], equip: false } }])],
+    ['an inventory effect with an unknown action', withEffects([{ inventory: { action: 'give', items: ['lantern'] } }])],
+    ['an inventory effect with no items', withEffects([{ inventory: { action: 'equip', items: [] } }])],
+    ['an effect with both a wardrobe and an inventory gesture', withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair' }, inventory: { action: 'equip', items: ['x'] } }])],
+    ['an effect with both a target and an inventory gesture', withEffects([{ target: 'state.x', value: 1, inventory: { action: 'equip', items: ['x'] } }])],
+    ['an inventoryAggregate list test', withWhen({ inventoryAggregate: { 'equipped.names': { eq: 'ansible resonator' } } })],
+    ['an inventoryAggregate fold test', withWhen({ inventoryAggregate: { 'equipped.metadata.toolVersion.max': { gte: 4 } } })],
+    ['an inventoryAggregate count test', withWhen({ inventoryAggregate: { 'reachable.count': { gt: 0 } } })],
+    ['an inventoryAggregate with a $param operand', withWhen({ inventoryAggregate: { 'owned.titles': { contains: { $param: 'material' } } } }, STR_PARAM)],
+    ['an inventoryAggregate key with no scope', withWhen({ inventoryAggregate: { 'carried.names': { eq: 'x' } } })],
+    ['an inventoryAggregate key with no field', withWhen({ inventoryAggregate: { 'equipped.': { eq: 'x' } } })],
+    ['an inventoryAggregate key with an unknown field', withWhen({ inventoryAggregate: { 'equipped.weight': { gt: 1 } } })],
+    ['an empty inventoryAggregate object', withWhen({ inventoryAggregate: {} })],
+    ['an inventoryAggregate gate', { ...BASE, availableWhen: { inventoryAggregate: { 'equipped.metadata.toolAbilities': { contains: 'suppress' } } } }],
+    ['a $param inside an inventoryAggregate gate', { ...BASE, ...STR_PARAM, availableWhen: { inventoryAggregate: { 'equipped.names': { eq: { $param: 'material' } } } } }],
+    ['an any-of outcome', withWhen([{ gte: 0.9 }, { inventory: { 'lucky charm': { eq: 'equipped' } } }])],
+    ['a one-element any-of outcome', withWhen([{ gte: 0.9 }])],
+    ['an empty any-of outcome', withWhen([])],
+    ['a nested any-of outcome', withWhen([[{ gte: 0.9 }]])],
+    ['an any-of outcome with an empty group', withWhen([{ gte: 0.9 }, {}])],
+    ['an any-of outcome past the cap', withWhen(Array.from({ length: MAX_WHEN_GROUPS + 1 }, (_, i) => ({ gte: i })))],
+    ['an any-of gate', { ...BASE, availableWhen: [{ metadata: { a: { eq: true } } }, { metadata: { b: { eq: true } } }] }],
+    ['an empty any-of gate', { ...BASE, withheldWhen: [] }],
+    ['an any-of gate with an empty group', { ...BASE, withheldWhen: [{ metadata: { a: { eq: 1 } } }, {}] }],
+    ['an any-of effect condition', withEffects([{ when: [{ outcome: { eq: 'success' } }, { metadata: { lucky: { eq: true } } }], target: 'state.x', value: 1 }])],
+    ['an empty any-of effect condition', withEffects([{ when: [], target: 'state.x', value: 1 }])],
+    ['an effect condition with an inventoryAggregate', withEffects([{ when: { inventoryAggregate: { 'owned.count': { gte: 3 } } }, log: 'Encumbered' }])],
   ]
 
   it.each(corpus)('on %s', (_label, doc) => {
@@ -691,6 +844,29 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(userOnly)).toBe(false)
   })
 
+  it('is deliberately weaker than Zod on wardrobe per-action rules', () => {
+    // Which fields an action needs is stated in the WardrobeGesture
+    // description and enforced by the loader; the mirror checks shapes only.
+    const addToSlotNoSlot = withEffects([{ wardrobe: { action: 'wear', items: ['Hat'], mode: 'add_to_slot' } }])
+    const clearSlotWithItems = withEffects([{ wardrobe: { action: 'clear_slot', slot: 'hair', items: ['Wig'] } }])
+    const ghostGarment = withEffects([{ wardrobe: { action: 'wear', items: ['{{params.ghost}}'] } }])
+    for (const doc of [addToSlotNoSlot, clearSlotWithItems, ghostGarment]) {
+      expect(validate(doc)).toBe(true)
+      expect(accepts(doc)).toBe(false)
+    }
+  })
+
+  it('is deliberately weaker than Zod on trigger case-folding and whitespace', () => {
+    // JSON Schema's uniqueItems is case-sensitive and it has no trim rule; both
+    // are stated in the `triggers` description and enforced by the loader.
+    const caseDuplicate = { ...BASE, triggers: ['Abracadabra', 'abracadabra'] }
+    const padded = { ...BASE, triggers: [' abracadabra'] }
+    expect(validate(caseDuplicate)).toBe(true)
+    expect(accepts(caseDuplicate)).toBe(false)
+    expect(validate(padded)).toBe(true)
+    expect(accepts(padded)).toBe(false)
+  })
+
   it('is deliberately weaker than Zod on effect cross-item rules', () => {
     // Undeclared params and a missing llm block are cross-item facts the
     // mirror cannot see from inside an effect.
@@ -700,5 +876,196 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     expect(accepts(ghostParam)).toBe(false)
     expect(validate(orphanLlm)).toBe(true)
     expect(accepts(orphanLlm)).toBe(false)
+  })
+})
+
+describe('the Inventory subjects, operand and effect', () => {
+  const issues = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+  const NUMBER_ARG = { parameters: { scale: { type: 'number', default: 1 } } }
+
+  it('rejects an inventory state $param to a number parameter', () => {
+    expect(issues(withWhen({ inventory: { sword: { eq: { $param: 'scale' } } } }, NUMBER_ARG))).toMatch(
+      /outcomes\.0\.when\.inventory\.sword\.eq.*rather than a string/
+    )
+  })
+
+  it('rejects an ordering key on a state, and containment on a count', () => {
+    expect(issues(withWhen({ inventory: { sword: { gt: 1 } } }))).not.toBe('')
+    expect(issues(withWhen({ inventoryCount: { ring: { contains: 'x' } } }))).not.toBe('')
+  })
+
+  it('rejects a placeholder in a gate key, and accepts one in an outcome key', () => {
+    expect(issues({ ...BASE, ...NUMBER_ARG, availableWhen: { inventory: { '{{params.scale}}': { eq: 'equipped' } } } })).toMatch(
+      /availableWhen\.inventory.*must be a literal object reference/
+    )
+    expect(issues(withWhen({ inventory: { '{{params.scale}}': { eq: 'equipped' } } }, NUMBER_ARG))).toBe('')
+    expect(issues(withWhen({ inventory: { '{{params.ghost}}': { eq: 'equipped' } } }))).toMatch(/undeclared parameter "ghost"/)
+  })
+
+  it('types $inventory by its fallback, and demands dice for a whole roll', () => {
+    expect(issues({ ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' } })).toBe('')
+    expect(issues({ ...BASE, roll: { $inventory: 'sword.metadata.damage', fallback: 4 } })).toMatch(/dice-notation fallback/)
+    expect(issues({ ...BASE, roll: { max: { $inventory: 'sword.metadata.reach', fallback: 'far' } } })).toMatch(
+      /\$inventory reference whose fallback is string rather than a number/
+    )
+    expect(issues(withWhen({ gte: { $inventory: 'sword.metadata.bonus', fallback: 'x' } }))).toMatch(/only numbers can be ordered/)
+  })
+
+  it('rejects $inventory in a gate, as $state is', () => {
+    expect(issues({ ...BASE, availableWhen: { metadata: { level: { gte: { $inventory: 'sword.metadata.level', fallback: 1 } } } } })).not.toBe('')
+  })
+
+  it('states the gesture rules at precise paths', () => {
+    expect(issues(withEffects([{ inventory: { action: 'equip', items: ['x'], equip: true } }]))).toMatch(
+      /effects\.0\.inventory\.equip.*only used with pick_up/
+    )
+    expect(issues(withEffects([{ inventory: { action: 'equip', items: ['{{params.ghost}}'] } }]))).toMatch(
+      /effects\.0\.inventory\.items\.0.*undeclared parameter/
+    )
+  })
+})
+
+describe('triggers', () => {
+  const issues = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('stores phrases as written', () => {
+    const parsed = QtapCustomToolSchema.parse({ ...BASE, triggers: ['Open Sesame'] })
+    expect(parsed.triggers).toEqual(['Open Sesame'])
+  })
+
+  it('rejects leading or trailing whitespace, naming the trigger', () => {
+    expect(issues({ ...BASE, triggers: ['abracadabra', 'open sesame '] })).toContain(
+      'trigger 2 has leading or trailing whitespace',
+    )
+  })
+
+  it('rejects a phrase that repeats another ignoring case', () => {
+    expect(issues({ ...BASE, triggers: ['Abracadabra', 'ABRACADABRA'] })).toContain('trigger 2 repeats trigger 1')
+  })
+
+  it('is a known top-level key', () => {
+    expect(KNOWN_TOP_LEVEL_KEYS).toContain('triggers')
+  })
+})
+
+describe('effects — log lines', () => {
+  const issuesOf = (doc: unknown): string => {
+    const result = QtapCustomToolSchema.safeParse(doc)
+    return result.success ? '' : formatDefinitionIssues(result.error)
+  }
+
+  it('accepts a log line, with or without a condition', () => {
+    expect(accepts(withEffects([{ log: 'Rolled {{value}} on the lock' }]))).toBe(true)
+    expect(accepts(withEffects([{ when: { outcome: { eq: 'success' } }, log: 'Opened' }]))).toBe(true)
+  })
+
+  it('rejects a log line beside any other kind', () => {
+    expect(rejection(withEffects([{ log: 'x', target: 'state.x', value: 1 }]))).toMatch(/exactly one of/)
+    expect(rejection(withEffects([{ log: 'x', inventory: { action: 'equip', items: ['Lamp'] } }]))).toMatch(
+      /exactly one of/
+    )
+  })
+
+  it('rejects an empty or over-long line', () => {
+    expect(accepts(withEffects([{ log: '' }]))).toBe(false)
+    expect(accepts(withEffects([{ log: 'x'.repeat(1001) }]))).toBe(false)
+  })
+
+  it('checks its placeholders as an outcome message’s are checked', () => {
+    expect(issuesOf(withEffects([{ log: 'Opened {{params.ghost}}' }]))).toMatch(
+      /effects\.0\.log.*undeclared parameter "ghost"/
+    )
+    expect(rejection(withEffects([{ log: 'Oracle: {{llm}}' }]))).toMatch(/declares no `llm` block/)
+    expect(accepts(withEffects([{ log: 'Oracle: {{llm}}' }], LLM_BLOCK))).toBe(true)
+  })
+})
+
+describe('inventoryAggregate and any-of', () => {
+  it('accepts every aggregate key form and rejects the rest with the parser’s reason', () => {
+    for (const key of [
+      'equipped.count',
+      'owned.names',
+      'reachable.titles',
+      'equipped.metadata.toolAbilities',
+      'equipped.metadata.toolVersion.max',
+      'owned.metadata.a.b',
+    ]) {
+      expect(accepts(withWhen({ inventoryAggregate: { [key]: { eq: 1 } } }))).toBe(true)
+    }
+    expect(rejection(withWhen({ inventoryAggregate: { 'carried.names': { eq: 'x' } } }))).toMatch(/not a scope/)
+    expect(rejection(withWhen({ inventoryAggregate: { 'equipped.weight': { eq: 'x' } } }))).toMatch(/not a field/)
+  })
+
+  it('rejects a $param operand in an aggregate gate, and an undeclared one in an outcome', () => {
+    expect(accepts({ ...BASE, ...STR_PARAM, availableWhen: { inventoryAggregate: { 'equipped.names': { eq: { $param: 'material' } } } } })).toBe(false)
+    expect(rejection(withWhen({ inventoryAggregate: { 'equipped.names': { eq: { $param: 'ghost' } } } }))).toMatch(
+      /undeclared parameter "ghost"/
+    )
+  })
+
+  it('locates an issue inside an any-of group by its index', () => {
+    expect(rejection(withWhen([{ gte: 0.9 }, { params: { ghost: { eq: 1 } } }]))).toMatch(/outcomes\.0\.when\.1\.params\.ghost/)
+    expect(
+      rejection({ ...BASE, ...STR_PARAM, withheldWhen: [{ metadata: { a: { eq: 1 } } }, { inventory: { '{{params.material}}': { eq: 'equipped' } } }] })
+    ).toMatch(/withheldWhen\.1\.inventory.*must be a literal object reference/)
+  })
+
+  it('does not bury a group’s complaint under the array branch', () => {
+    expect(rejection({ ...BASE, availableWhen: {} })).toMatch(/must test at least one/)
+    expect(rejection({ ...BASE, availableWhen: {} })).not.toMatch(/expected array/)
+  })
+
+  it('keeps the catch-all rule: an array is never a catch-all', () => {
+    expect(rejection({ ...BASE, outcomes: [{ when: [{ gte: 0.5 }], message: '-', state: 'info' }] })).toMatch(
+      /final outcome must be a catch-all/
+    )
+  })
+})
+
+/**
+ * Every reader of a gate or a `when` goes through `gateGroups` / `whenGroups`
+ * / `effectWhenGroups`, so an any-of array can never be read as one group by
+ * a site that forgot it could be an array. The types enforce most of it; this
+ * holds the line for the rest.
+ */
+describe('no raw reads of a gate or a when', () => {
+  const ROOTS = ['lib', 'app', 'components']
+  const EXEMPT = new Set([
+    path.join('lib', 'pascal', 'custom-tool.types.ts'),
+    path.join('lib', 'pascal', 'tool-draft.ts'),
+  ])
+  const SUBJECTS = 'metadata|progress|inventory|inventoryCount|inventoryAggregate|params|roll|llm|outcome'
+  const RAW = new RegExp(`(?:availableWhen|withheldWhen|\\.when)\\??\\.(?:${SUBJECTS})\\b`)
+
+  function* walk(dir: string): Generator<string> {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) yield* walk(full)
+      else if (/\.(ts|tsx)$/.test(entry.name)) yield full
+    }
+  }
+
+  it('finds none outside the schema and the draft model', () => {
+    const repo = path.resolve(__dirname, '../../../..')
+    const offenders: string[] = []
+    for (const root of ROOTS) {
+      for (const file of walk(path.join(repo, root))) {
+        const relative = path.relative(repo, file)
+        if (EXEMPT.has(relative)) continue
+        fs.readFileSync(file, 'utf8')
+          .split('\n')
+          .forEach((line, i) => {
+            if (RAW.test(line)) offenders.push(`${relative}:${i + 1}: ${line.trim()}`)
+          })
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })

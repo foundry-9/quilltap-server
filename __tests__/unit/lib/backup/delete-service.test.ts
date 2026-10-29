@@ -22,6 +22,7 @@ jest.mock('@/lib/file-storage/manager', () => ({
 }));
 
 const mockRawQuery = jest.fn();
+const mockLogEntriesDeleteAll = jest.fn();
 jest.mock('@/lib/database/manager', () => ({
   rawQuery: (...args: unknown[]) => mockRawQuery(...args),
 }));
@@ -79,6 +80,7 @@ jest.mock('@/lib/repositories/factory', () => ({
     chatSettings: { findByUserId: jest.fn().mockResolvedValue(null), delete: jest.fn() },
     folders: { findByUserId: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     wardrobe: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+    logEntries: { deleteAll: (...args: unknown[]) => mockLogEntriesDeleteAll(...args) },
   }),
 }));
 
@@ -115,6 +117,13 @@ describe('delete-service keepArchivedCharacterBundles', () => {
     mockCharactersFindAll.mockResolvedValue([]);
     mockMemoriesFindByCharacterId.mockResolvedValue([]);
     mockRetireMemories.mockResolvedValue({ retired: 0 });
+    mockLogEntriesDeleteAll.mockResolvedValue(0);
+  });
+
+  it('clears the Log, which the per-user deletes never reach', async () => {
+    await deleteUserData(USER);
+
+    expect(mockLogEntriesDeleteAll).toHaveBeenCalledTimes(1);
   });
 
   it('routes memory deletion through the retireMemories chokepoint', async () => {

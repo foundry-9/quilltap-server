@@ -9,6 +9,9 @@
  * unknowable at authoring time (a metadata key, the consult's answer): only
  * the author can say whether they mean 3, "3", or true. Switching kinds keeps
  * typed text between number and text and starts a boolean at `true`.
+ *
+ * An Inventory state test passes `stateOptions`: its operand is always text,
+ * drawn from the four states, so it renders as a select of them instead.
  */
 
 import type { LiteralOperand } from '@/lib/pascal/tool-draft'
@@ -23,6 +26,8 @@ interface LiteralOperandFieldProps {
   pickerClassName?: string
   /** Extra classes on the text input; the two chips size it differently. */
   textClassName?: string
+  /** A closed vocabulary for a text operand (the Inventory states), rendered as a select. */
+  stateOptions?: readonly string[]
 }
 
 /** The operand a picker choice produces from the one being replaced. */
@@ -39,7 +44,27 @@ export function LiteralOperandField({
   showTypePicker,
   pickerClassName = '',
   textClassName = 'w-28',
+  stateOptions,
 }: Readonly<LiteralOperandFieldProps>) {
+  if (stateOptions) {
+    const current = operand.kind === 'string' ? operand.text : ''
+    return (
+      <select
+        value={stateOptions.includes(current) ? current : ''}
+        onChange={(e) => onChange({ kind: 'string', text: e.target.value })}
+        disabled={disabled}
+        className="qt-select qt-select-sm w-28"
+        aria-label="Inventory state"
+      >
+        {!stateOptions.includes(current) && <option value="">—</option>}
+        {stateOptions.map((state) => (
+          <option key={state} value={state}>
+            {state}
+          </option>
+        ))}
+      </select>
+    )
+  }
   return (
     <>
       {showTypePicker && (

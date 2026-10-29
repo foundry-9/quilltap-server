@@ -18,7 +18,7 @@
  * the source chat.
  */
 
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useId, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -26,6 +26,8 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { formatRelativeDate } from '@/lib/format-time'
 import { useNow } from '@/hooks/useNow'
 import { Icon } from '@/components/ui/icon'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
@@ -206,6 +208,12 @@ export function MergeConversationModal({
     }
   }, [selectedSource, mergeCharacters, targetChatId, outfitSelections, queryClient, onMerged, onClose])
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  useEscapeKey(handleClose, isOpen)
+
   if (!isOpen) return null
 
   return (
@@ -215,13 +223,21 @@ export function MergeConversationModal({
         if (e.target === e.currentTarget) handleClose()
       }}
     >
-      <div className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
+      >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             {step === 'pick' ? 'Merge a Conversation In' : `Merge “${selectedSource?.title ?? ''}”`}
           </h2>
-          <button onClick={handleClose} className="qt-button qt-button-ghost p-2" disabled={isMerging}>
+          <button aria-label="Close" onClick={handleClose} className="qt-button qt-button-ghost p-2" disabled={isMerging}>
             <Icon name="close" className="w-6 h-6" />
           </button>
         </div>
@@ -236,6 +252,7 @@ export function MergeConversationModal({
               </p>
 
               <input
+                aria-label="Search conversations"
                 type="text"
                 placeholder="Search conversations…"
                 value={search}

@@ -21,6 +21,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { validateThemeBundle, validateManifest } = require('./theme-validation');
+const { getDefaultBaseDir } = require('./platform-paths');
 
 // ============================================================================
 // COLOR HELPERS
@@ -54,10 +55,7 @@ function resolveBaseDir(overrideDir) {
   if (process.env.QUILLTAP_DATA_DIR) {
     return process.env.QUILLTAP_DATA_DIR;
   }
-  const home = os.homedir();
-  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Quilltap');
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Quilltap');
-  return path.join(home, '.quilltap');
+  return getDefaultBaseDir();
 }
 
 function getThemesDir(overrideDir) {

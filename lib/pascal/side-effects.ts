@@ -50,6 +50,26 @@
  * accepted risk from state-cascade.md, and re-reading just before the write is
  * deliberately rejected because the job child forbids it.
  *
+ * ## Wardrobe gestures go after the writes, inventory gestures after those
+ *
+ * A `wardrobe` effect is not a write into any of these stores; it is a
+ * sequence of outfit changes through the wardrobe chokepoint, applied by
+ * `applyWardrobeEffects` (`wardrobe-effects.ts`) AFTER every write here has
+ * committed, and an `inventory` effect is a sequence of equip gestures
+ * through the Inventory's chokepoints, applied by `applyInventoryEffects`
+ * (`inventory-effects.ts`) after the wardrobe's. The order exists so the
+ * three appliers' store reads never interleave; it is NOT visibility — every
+ * effect's `when` was decided by the pure core before any applier ran, so no
+ * write is visible to a later effect's `when` in the same run. The applied
+ * lists are merged back into effect order for the record.
+ *
+ * ## Log lines go last
+ *
+ * A `log` effect writes one entry to the log (`lib/log-entries/write.ts`)
+ * after every other applier has run, so a line describing the run is recorded
+ * after the run's changes. Like the gestures, its `when` was decided by the pure
+ * core, and its text rendered there.
+ *
  * ## Never throws
  *
  * The roll already happened and Pascal still announces. Each store's write is
@@ -58,13 +78,24 @@
  * drop from the applied list.
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeGeneralState } from '@/lib/mount-index/general-state';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getAtPath, setAtPath } from '@/lib/state/state-paths';
 import type { StateCascadeResult } from '@/lib/state/state-cascade';
-import { isApplicableEffect, type ResolvedEffect } from './custom-tools';
+import { writeLogEntry } from '@/lib/log-entries/write';
+import {
+  isApplicableInventoryEffect,
+  isApplicableLogEffect,
+  isApplicableWardrobeEffect,
+  isApplicableWriteEffect,
+  type ResolvedEffect,
+} from './custom-tools';
+import { applyWardrobeEffects } from './wardrobe-effects';
+import { applyInventoryEffects } from './inventory-effects';
+import type { InventoryContext } from '@/lib/inventory/refs';
 import { inferIncrement, UNIT_MS } from '@/lib/progressions/engine';
 import {
   PROGRESSIONS_METADATA_KEY,
@@ -78,9 +109,17 @@ const CONTEXT = 'pascal.side-effects';
 /** The four stores a state effect can land in. */
 export type EffectTier = 'chat' | 'project' | 'group' | 'general';
 
-/** One write that actually landed — the shape `pascalMeta.effects` records. */
+/** One write or wardrobe change that actually landed — the shape `pascalMeta.effects` records. */
 export interface AppliedEffect {
-  /** The effect's raw target ("state.encounter.count", "metadata.lockpick"). */
+  /**
+   * The effect's raw target ("state.encounter.count", "metadata.lockpick"), or
+   * for a wardrobe change one of "wardrobe.wear" / "wardrobe.take_off" /
+   * "wardrobe.clear_slot" (its `previous` / `next` are then the slots before
+   * and a `WardrobeEffectRecord`), or for an Inventory change one of
+   * "inventory.equip" / "inventory.unequip" / "inventory.pick_up" (the
+   * equipped ids before, and an `InventoryEffectRecord`), or for a log line
+   * "log" (its `next` is the entry's `{ id, message }`).
+   */
   target: string;
   /** What the store held before, when it held anything. */
   previous?: unknown;
@@ -91,6 +130,7 @@ export interface AppliedEffect {
 }
 
 export interface ApplyCustomToolEffectsParams {
+  userId: string;
   chatId: string;
   toolName: string;
   /** The core's resolved effects; skipped entries are ignored here. */
@@ -111,6 +151,17 @@ export interface ApplyCustomToolEffectsParams {
    * (a re-armed cannon is announced immediately). Defaults to `Date.now()`.
    */
   nowMs?: number;
+  /**
+   * The turn's wardrobe containers (announcement set + history map), when the
+   * run happens inside a model turn, so a wardrobe effect joins the turn's
+   * single Aurora announcement and history entry. Absent → both happen at once.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  /** The turn's pending Inventory changes — an inventory effect joins the turn's one Pascal line. */
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
+  /** The run's Inventory context, when the entrance loaded one. */
+  inventory?: InventoryContext | null;
 }
 
 /** Every store an application may touch, for the ordered commit below. */
@@ -123,10 +174,85 @@ type Store = EffectTier | 'metadata';
 export async function applyCustomToolEffects(
   params: ApplyCustomToolEffectsParams
 ): Promise<AppliedEffect[]> {
-  const { chatId, toolName, effects, cascade, characterId, metadataSnapshot } = params;
-  const nowMs = params.nowMs ?? Date.now();
+  const { chatId, toolName, effects, characterId } = params;
 
-  const applicable = effects.filter(isApplicableEffect);
+  const writes = await applyWriteEffects(params, effects.filter(isApplicableWriteEffect));
+
+  // Gestures after the writes have committed — see the module header.
+  const gestures = effects.filter(isApplicableWardrobeEffect);
+  const changes = gestures.length
+    ? await applyWardrobeEffects({
+        userId: params.userId,
+        chatId,
+        toolName,
+        characterId,
+        gestures,
+        ...turnContainersOf(params),
+      })
+    : [];
+
+  // Inventory gestures after the wardrobe's — see the module header.
+  const inventoryGestures = effects.filter(isApplicableInventoryEffect);
+  const carried = inventoryGestures.length
+    ? await applyInventoryEffects({
+        userId: params.userId,
+        chatId,
+        toolName,
+        characterId,
+        gestures: inventoryGestures,
+        inventory: params.inventory,
+        ...(params.pendingInventoryAnnouncements
+          ? { pendingInventoryAnnouncements: params.pendingInventoryAnnouncements }
+          : {}),
+      })
+    : [];
+
+  // Log lines last of all — see the module header.
+  const logged = await applyLogEffects(params, effects.filter(isApplicableLogEffect));
+
+  if (changes.length === 0 && carried.length === 0 && logged.length === 0) return writes.map((w) => w.applied);
+  // Stable sort: entries of one effect keep their own order.
+  return [...writes, ...changes, ...carried, ...logged].sort((a, b) => a.index - b.index).map((w) => w.applied);
+}
+
+/**
+ * The log lines: one entry each, against this chat and the rolling character
+ * (null when nobody rolled — the line is still the operator's to keep). Each
+ * write is its own try/catch; a failed one logs a warning and drops from the
+ * applied list.
+ */
+async function applyLogEffects(
+  params: ApplyCustomToolEffectsParams,
+  applicable: Array<Extract<ResolvedEffect, { log: string }>>
+): Promise<Array<{ index: number; applied: AppliedEffect }>> {
+  const applied: Array<{ index: number; applied: AppliedEffect }> = [];
+  for (const effect of applicable) {
+    try {
+      const entry = await writeLogEntry({ message: effect.log, chatId: params.chatId, characterId: params.characterId });
+      applied.push({ index: effect.index, applied: { target: 'log', next: { id: entry.id, message: entry.message } } });
+    } catch (error) {
+      logger.warn('Custom tool log effect failed; skipped', {
+        context: CONTEXT,
+        chatId: params.chatId,
+        tool: params.toolName,
+        effectIndex: effect.index,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+  return applied;
+}
+
+/**
+ * The value writes: folded into local working copies in effect order, then
+ * committed at most once per touched store.
+ */
+async function applyWriteEffects(
+  params: ApplyCustomToolEffectsParams,
+  applicable: Array<Extract<ResolvedEffect, { target: unknown }>>
+): Promise<Array<{ index: number; applied: AppliedEffect }>> {
+  const { chatId, toolName, cascade, characterId, metadataSnapshot } = params;
+  const nowMs = params.nowMs ?? Date.now();
   if (applicable.length === 0) return [];
 
   // Local working copies — read once, mutated in effect order, committed once
@@ -149,10 +275,10 @@ export async function applyCustomToolEffects(
   };
 
   /** Applications in effect order, each tagged with the store it rode. */
-  const pending: Array<{ store: Store; entry: AppliedEffect }> = [];
+  const pending: Array<{ store: Store; index: number; entry: AppliedEffect }> = [];
 
   for (const effect of applicable) {
-    const { target, value } = effect;
+    const { target, value, index } = effect;
 
     if (target.kind === 'metadata') {
       if (!characterId) {
@@ -165,6 +291,7 @@ export async function applyCustomToolEffects(
       metadataNext[target.key] = value;
       pending.push({
         store: 'metadata',
+        index,
         entry: { target: target.raw, ...(previous !== undefined ? { previous } : {}), next: value },
       });
       continue;
@@ -193,6 +320,7 @@ export async function applyCustomToolEffects(
       });
       pending.push({
         store: 'metadata',
+        index,
         entry: {
           target: target.raw,
           ...(applied.previous !== undefined ? { previous: applied.previous } : {}),
@@ -227,6 +355,7 @@ export async function applyCustomToolEffects(
     setAtPath(store, target.path, value);
     pending.push({
       store: tier,
+      index,
       entry: { target: target.raw, ...(previous !== undefined ? { previous } : {}), next: value, tier },
     });
   }
@@ -295,20 +424,18 @@ export async function applyCustomToolEffects(
   await commit('general', () => writeGeneralState(tiers!.general));
   await commit('metadata', () => repos.characters.update(characterId!, { metadata: metadataNext! }));
 
-  const applied = pending
-    .filter((p) => !failed.has(p.store) && survived(p.entry))
-    .map((p) => p.entry);
+  const applied = pending.filter((p) => !failed.has(p.store) && survived(p.entry));
 
   if (applied.length > 0) {
     logger.debug('Custom tool effects applied', {
       context: CONTEXT,
       chatId,
       tool: toolName,
-      applied: applied.map((entry) => entry.target),
+      applied: applied.map((p) => p.entry.target),
     });
   }
 
-  return applied;
+  return applied.map((p) => ({ index: p.index, applied: p.entry }));
 }
 
 /** The default span a created-on-write progression gets: an hour from now. */

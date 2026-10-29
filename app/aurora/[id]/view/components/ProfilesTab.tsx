@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
@@ -21,6 +22,7 @@ interface ProfilesTabProps {
   savingHelpTools?: boolean
   savingCanDressThemselves?: boolean
   savingCanCreateOutfits?: boolean
+  savingCanManageInventory?: boolean
   savingTimestampConfig?: boolean
   savingDefaultScenario?: boolean
   savingDefaultSystemPrompt?: boolean
@@ -31,6 +33,7 @@ interface ProfilesTabProps {
   onHelpToolsChange: (enabled: boolean | null) => void
   onCanDressThemselvesChange: (enabled: boolean | null) => void
   onCanCreateOutfitsChange: (enabled: boolean | null) => void
+  onCanManageInventoryChange: (enabled: boolean | null) => void
   onTimestampConfigChange: (config: TimestampConfig | null) => void
   onDefaultScenarioChange: (scenarioId: string | null) => void
   onDefaultSystemPromptChange: (promptId: string | null) => void
@@ -50,6 +53,7 @@ export function ProfilesTab({
   savingHelpTools,
   savingCanDressThemselves,
   savingCanCreateOutfits,
+  savingCanManageInventory,
   savingTimestampConfig,
   savingDefaultScenario,
   savingDefaultSystemPrompt,
@@ -60,10 +64,12 @@ export function ProfilesTab({
   onHelpToolsChange,
   onCanDressThemselvesChange,
   onCanCreateOutfitsChange,
+  onCanManageInventoryChange,
   onTimestampConfigChange,
   onDefaultScenarioChange,
   onDefaultSystemPromptChange,
 }: ProfilesTabProps) {
+  const fieldId = useId()
   // Check if this character is user-controlled (disable partner selection if so)
   const isUserControlled = character?.controlledBy === 'user'
 
@@ -73,7 +79,7 @@ export function ProfilesTab({
     <div className="space-y-8">
       {/* Connection Profile Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="qt-heading-4 text-foreground mb-2">
+        <h2 id={`${fieldId}-f0`} className="qt-heading-4 text-foreground mb-2">
           Default Connection Profile
         </h2>
         <p className="qt-text-small mb-4">
@@ -81,6 +87,7 @@ export function ProfilesTab({
         </p>
         <div className="flex items-center gap-3">
           <select
+            aria-labelledby={`${fieldId}-f0`}
             value={
               character?.controlledBy === 'user'
                 ? USER_CONTROLLED_PROFILE_ID
@@ -114,7 +121,7 @@ export function ProfilesTab({
 
       {/* Default Partner Section */}
       <div className={`character-section-card rounded-lg border qt-border-default qt-bg-card p-6 ${isUserControlled ? 'opacity-50' : ''}`}>
-        <h2 className="qt-heading-4 text-foreground mb-2">
+        <h2 id={`${fieldId}-f1`} className="qt-heading-4 text-foreground mb-2">
           Default Conversation Partner
         </h2>
         <p className="qt-text-small mb-4">
@@ -124,6 +131,7 @@ export function ProfilesTab({
         </p>
         <div className="flex items-center gap-3">
           <select
+            aria-labelledby={`${fieldId}-f1`}
             value={defaultPartnerId}
             onChange={(e) => onPartnerChange(e.target.value)}
             disabled={savingPartner || isUserControlled}
@@ -181,7 +189,7 @@ export function ProfilesTab({
       {/* Default System Prompt Section - only show if more than one prompt */}
       {character.systemPrompts && character.systemPrompts.length > 1 && (
         <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-          <h2 className="qt-heading-4 text-foreground mb-2">
+          <h2 id={`${fieldId}-f2`} className="qt-heading-4 text-foreground mb-2">
             Default System Prompt
           </h2>
           <p className="qt-text-small mb-4">
@@ -189,6 +197,7 @@ export function ProfilesTab({
           </p>
           <div className="flex items-center gap-3">
             <select
+              aria-labelledby={`${fieldId}-f2`}
               value={character.defaultSystemPromptId || ''}
               onChange={(e) => onDefaultSystemPromptChange(e.target.value || null)}
               disabled={savingDefaultSystemPrompt}
@@ -214,7 +223,7 @@ export function ProfilesTab({
       {/* Default Scenario Section - only show if more than one scenario */}
       {character.scenarios && character.scenarios.length > 1 && (
         <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-          <h2 className="qt-heading-4 text-foreground mb-2">
+          <h2 id={`${fieldId}-f3`} className="qt-heading-4 text-foreground mb-2">
             Default Scenario
           </h2>
           <p className="qt-text-small mb-4">
@@ -222,6 +231,7 @@ export function ProfilesTab({
           </p>
           <div className="flex items-center gap-3">
             <select
+              aria-labelledby={`${fieldId}-f3`}
               value={character.defaultScenarioId || ''}
               onChange={(e) => onDefaultScenarioChange(e.target.value || null)}
               disabled={savingDefaultScenario}
@@ -246,7 +256,7 @@ export function ProfilesTab({
 
       {/* Agent Mode Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="qt-heading-4 text-foreground mb-2">
+        <h2 id={`${fieldId}-f4`} className="qt-heading-4 text-foreground mb-2">
           Agent Mode
         </h2>
         <p className="qt-text-small mb-4">
@@ -255,6 +265,7 @@ export function ProfilesTab({
         </p>
         <div className="flex items-center gap-3">
           <select
+            aria-labelledby={`${fieldId}-f4`}
             value={character?.defaultAgentModeEnabled === null || character?.defaultAgentModeEnabled === undefined ? 'inherit' : character.defaultAgentModeEnabled ? 'enabled' : 'disabled'}
             onChange={(e) => {
               const value = e.target.value
@@ -278,7 +289,7 @@ export function ProfilesTab({
 
       {/* Help Tools Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="qt-heading-4 text-foreground mb-2">
+        <h2 id={`${fieldId}-f5`} className="qt-heading-4 text-foreground mb-2">
           Help Tools
         </h2>
         <p className="qt-text-small mb-4">
@@ -287,6 +298,7 @@ export function ProfilesTab({
         </p>
         <div className="flex items-center gap-3">
           <select
+            aria-labelledby={`${fieldId}-f5`}
             value={character?.defaultHelpToolsEnabled === null || character?.defaultHelpToolsEnabled === undefined ? 'inherit' : character.defaultHelpToolsEnabled ? 'enabled' : 'disabled'}
             onChange={(e) => {
               const value = e.target.value
@@ -316,12 +328,13 @@ export function ProfilesTab({
 
         {/* Self-Dressing */}
         <div className="mb-6">
-          <h3 className="qt-text-label mb-1">Self-Dressing</h3>
+          <h3 id={`${fieldId}-f6`} className="qt-text-label mb-1">Self-Dressing</h3>
           <p className="qt-text-small mb-3">
             Control whether this character can change their own outfit during conversations using wardrobe tools.
           </p>
           <div className="flex items-center gap-3">
             <select
+              aria-labelledby={`${fieldId}-f6`}
               value={character?.canDressThemselves === null || character?.canDressThemselves === undefined ? 'inherit' : character.canDressThemselves ? 'enabled' : 'disabled'}
               onChange={(e) => {
                 const value = e.target.value
@@ -345,12 +358,13 @@ export function ProfilesTab({
 
         {/* Outfit Creation */}
         <div>
-          <h3 className="qt-text-label mb-1">Outfit Creation</h3>
+          <h3 id={`${fieldId}-f7`} className="qt-text-label mb-1">Outfit Creation</h3>
           <p className="qt-text-small mb-3">
             Control whether this character can create new wardrobe items mid-conversation. Requires tool use.
           </p>
           <div className="flex items-center gap-3">
             <select
+              aria-labelledby={`${fieldId}-f7`}
               value={character?.canCreateOutfits === null || character?.canCreateOutfits === undefined ? 'inherit' : character.canCreateOutfits ? 'enabled' : 'disabled'}
               onChange={(e) => {
                 const value = e.target.value
@@ -364,6 +378,36 @@ export function ProfilesTab({
               <option value="disabled">Disabled</option>
             </select>
             {savingCanCreateOutfits && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Inventory Management */}
+        <div className="mt-6">
+          <h3 id={`${fieldId}-f8`} className="qt-text-label mb-1">Inventory Management</h3>
+          <p className="qt-text-small mb-3">
+            Control whether this character can see, pick up, equip, set down, make and give away the objects they carry, using the inventory tools. Requires tool use.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              aria-labelledby={`${fieldId}-f8`}
+              value={character?.canManageInventory === null || character?.canManageInventory === undefined ? 'inherit' : character.canManageInventory ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onCanManageInventoryChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              disabled={savingCanManageInventory}
+              className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="inherit">Inherit from global settings (enabled)</option>
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            {savingCanManageInventory && (
               <div className="flex items-center gap-2 qt-text-small">
                 <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
                 Saving...

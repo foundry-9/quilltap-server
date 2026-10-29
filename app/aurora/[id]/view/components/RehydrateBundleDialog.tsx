@@ -6,8 +6,10 @@
  * this dialog is where the user decides whether it stays.
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface RehydrateBundleDialogProps {
   characterName: string
@@ -26,6 +28,10 @@ export function RehydrateBundleDialog({
 }: RehydrateBundleDialogProps) {
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onClose, !working)
 
   const handleDiscard = async () => {
     setWorking(true)
@@ -47,10 +53,18 @@ export function RehydrateBundleDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border qt-border-default qt-bg-card shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+      >
         <div className="px-6 py-4 border-b qt-border-default flex items-center gap-3 flex-shrink-0">
           <Icon name="folder" className="w-6 h-6 qt-text-secondary" />
-          <h3 className="qt-dialog-title text-foreground">
+          <h3 id={titleId} className="qt-dialog-title text-foreground">
             The empty bundle remains on the shelf
           </h3>
         </div>

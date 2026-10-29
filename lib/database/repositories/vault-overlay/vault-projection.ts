@@ -35,6 +35,13 @@ export interface ProjectArrayOptions {
    * rejects — a note kept beside the items — is left alone.
    */
   ownsFile?: (doc: { relativePath: string; content?: string | null }) => boolean;
+  /**
+   * The extension of the files the projection lists and may sweep. Default
+   * `.md` (every markdown caller); the Inventory projects `.json` objects.
+   * Only files with this extension are ever considered — the mapper's
+   * `content` is written as given, so the serialiser is the mapper's.
+   */
+  ext?: string;
 }
 
 /**
@@ -70,7 +77,7 @@ export async function projectArrayIntoVaultFolder<T>(
   const existing = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     folder,
-    '.md',
+    opts?.ext ?? '.md',
     recursive ? { recursive: true } : undefined,
   );
   const existingByPath = new Map(existing.map((d) => [d.relativePath, d]));

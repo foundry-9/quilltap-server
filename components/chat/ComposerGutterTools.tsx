@@ -28,8 +28,8 @@ interface ComposerGutterToolsProps {
    *  tools button is rendered only when it does — an empty roster means the
    *  user has no definitions in scope and the button would open onto nothing. */
   customToolsAvailable?: boolean
-  /** Callback after a custom tool runs, so the Salon can refetch the chat */
-  onCustomToolRan?: () => void
+  /** Opens Pascal's custom-tool dialog (mounted in the Salon's ChatModals) */
+  onCustomToolsClick?: () => void
   /** Whether the tools are disabled */
   disabled?: boolean
 }
@@ -60,7 +60,7 @@ export function ComposerGutterTools({
   chatId,
   onPendingToolResult,
   customToolsAvailable = false,
-  onCustomToolRan,
+  onCustomToolsClick,
   disabled = false,
 }: Readonly<ComposerGutterToolsProps>) {
   const rngDropdownRef = useRef<HTMLDivElement>(null)
@@ -146,11 +146,10 @@ export function ComposerGutterTools({
 
       {/* Row 4, Col 1: Custom tools (Pascal) — opens a dialog; only when the
           chat actually resolves a roster */}
-      {customToolsAvailable && (
+      {customToolsAvailable && onCustomToolsClick && (
         <CustomToolsButton
-          chatId={chatId}
+          onClick={onCustomToolsClick}
           disabled={disabled}
-          onRan={onCustomToolRan}
           variant="gutter"
         />
       )}

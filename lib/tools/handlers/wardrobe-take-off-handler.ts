@@ -9,8 +9,8 @@
  *                    layers stay.
  *   - `clear_slot` → empty the named slot entirely.
  *
- * Works for single garments and composites (a composite's id is filtered out of
- * every slot it covers). Fails fast on the first bad operation; fires avatar
+ * Works for single garments and composites: a composite comes off by its
+ * leaves, since worn composites are stored dissolved (`takeOffWearable`). Fails fast on the first bad operation; fires avatar
  * generation + the Aurora announcement ONCE after the loop.
  */
 
@@ -22,9 +22,8 @@ import type {
   WardrobeTakeOffOpResult,
 } from '../wardrobe-take-off-tool';
 import { validateWardrobeTakeOffInput } from '../wardrobe-take-off-tool';
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
-import { findInPool, takeOffItem } from '@/lib/wardrobe/wear-ops';
+import { findInPool, takeOffWearable } from '@/lib/wardrobe/wear-ops';
 import {
   buildWardrobeMutationFailure,
   describeWardrobeEffect,
@@ -102,12 +101,9 @@ export async function executeWardrobeTakeOffTool(
         throw new WardrobeTakeOffError(wardrobeItemNotFoundMessage(itemId, itemTitle));
       }
 
-      // Restrict to one slot if given (and the item covers it), else take it off
-      // every slot it occupies.
-      const slotsAffected: WardrobeItemType[] = op.slot
-        ? [op.slot]
-        : (item.types as WardrobeItemType[]);
-      await takeOffItem(repos, context.chatId, context.characterId, item.id, slotsAffected);
+      // Restrict to one slot if given, else take it off every slot it covers
+      // (a composite: every slot one of its leaves occupies).
+      const { slotsAffected } = await takeOffWearable(repos, context.chatId, pool, item, op.slot);
 
       results.push({
         mode,

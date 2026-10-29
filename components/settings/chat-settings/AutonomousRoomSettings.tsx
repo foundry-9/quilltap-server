@@ -138,6 +138,7 @@ function DailyTokenBudgetInput({
     <div className="flex items-center gap-2">
       <input
         type="text"
+        aria-label="Daily token budget"
         inputMode="numeric"
         pattern="[0-9]*"
         placeholder="(no cap)"
@@ -175,6 +176,7 @@ function FreshnessHoursInput({
     <div className="flex items-center gap-2">
       <input
         type="text"
+        aria-label="Freshness window in hours"
         inputMode="numeric"
         pattern="[0-9]*"
         className="qt-input w-24"

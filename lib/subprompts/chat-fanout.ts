@@ -19,8 +19,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
-import { publishRealtime } from '@/lib/realtime/bus';
+import { recompileCharacterSeats } from '@/lib/services/system-prompt-compiler/character-fanout';
 
 const logger = createServiceLogger('Subprompts:Fanout');
 
@@ -43,63 +42,23 @@ export async function fanOutSubpromptChange(
 ): Promise<SubpromptFanoutResult> {
   const repos = getRepositories();
   const wanted = subpromptId.toLowerCase();
-  let chatsTouched = 0;
-  let seatsRecompiled = 0;
 
-  let chats;
-  try {
-    chats = await repos.chats.findByCharacterId(characterId);
-  } catch (error) {
-    logger.warn('Could not list chats for subprompt fan-out', {
-      characterId,
-      subpromptId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { chatsTouched, seatsRecompiled };
-  }
-
-  for (const chat of chats) {
-    const seats = chat.participants.filter(
-      (p) =>
-        p.characterId === characterId &&
-        p.controlledBy !== 'user' &&
-        p.status !== 'removed' &&
-        (p.selectedSubpromptIds ?? []).some((id) => id.toLowerCase() === wanted),
-    );
-    if (seats.length === 0) continue;
-    chatsTouched += 1;
-
-    let current = chat;
-    for (const seat of seats) {
-      try {
-        if (options.removeSelection) {
-          const next = (seat.selectedSubpromptIds ?? []).filter((id) => id.toLowerCase() !== wanted);
-          const updated = await repos.chats.updateParticipant(chat.id, seat.id, {
-            selectedSubpromptIds: next,
-          });
-          if (updated) current = updated;
-        }
-        await compileIdentityStackForParticipant(current, seat.id);
-        seatsRecompiled += 1;
-      } catch (error) {
-        logger.warn('Failed to recompile a seat after a subprompt change', {
-          chatId: chat.id,
-          participantId: seat.id,
-          characterId,
-          subpromptId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-    publishRealtime('chats', chat.id);
-  }
+  const result = await recompileCharacterSeats(characterId, {
+    reason: `subprompt ${subpromptId}`,
+    seatFilter: (p) => (p.selectedSubpromptIds ?? []).some((id) => id.toLowerCase() === wanted),
+    prepareSeat: options.removeSelection
+      ? (chat, seat) => repos.chats.updateParticipant(chat.id, seat.id, {
+          selectedSubpromptIds: (seat.selectedSubpromptIds ?? []).filter((id) => id.toLowerCase() !== wanted),
+        })
+      : undefined,
+  });
 
   logger.info('Subprompt change fanned out', {
     characterId,
     subpromptId,
     removeSelection: options.removeSelection === true,
-    chatsTouched,
-    seatsRecompiled,
+    chatsTouched: result.chatsTouched,
+    seatsRecompiled: result.seatsRecompiled,
   });
-  return { chatsTouched, seatsRecompiled };
+  return result;
 }

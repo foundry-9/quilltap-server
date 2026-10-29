@@ -12,11 +12,17 @@
  * if it disagrees. Cycles are rejected by the repository at save time.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance';
+import { pronounGuidanceToolParam } from './wardrobe-pronoun-params';
+import {
+  WARDROBE_CREATE_IMAGE_PROMPT_GUIDANCE,
+  WARDROBE_DESCRIPTION_GUIDANCE,
+} from './image-cue-guidance';
 import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation';
 
 /**
@@ -31,17 +37,11 @@ export const wardrobeCreateToolInputSchema = z
       .describe('The name of the wardrobe item.'),
     description: z
       .string()
-      .describe('A detailed description of the wardrobe item.')
+      .describe(WARDROBE_DESCRIPTION_GUIDANCE)
       .optional(),
     image_prompt: z
       .string()
-      .describe(
-        'Optional Portrait Cue — a short, literal, plain-text visual phrase fed ' +
-        'to the image generator IN PLACE OF the title (e.g. "intricate dense ' +
-        'burnished-gold circular rank glyph on the shoulder"). Terse, never ' +
-        'Markdown; it is joined into a comma-separated outfit list. Omit to fall ' +
-        'back to the title.'
-      )
+      .describe(WARDROBE_CREATE_IMAGE_PROMPT_GUIDANCE)
       .optional(),
     types: z
       .array(WardrobeItemTypeEnum)
@@ -63,6 +63,7 @@ export const wardrobeCreateToolInputSchema = z
         'Context tags describing when this item is appropriate, such as "casual", "formal", "athletic", etc.'
       )
       .optional(),
+    pronoun_guidance: pronounGuidanceToolParam('set'),
     equip_now: z
       .boolean()
       .default(false)
@@ -183,8 +184,9 @@ export const wardrobeCreateToolDefinition = {
       'outfit that bundles other wardrobe items — supply title and component_item_ids ' +
       '(or component_titles) referring to existing items in the character\'s wardrobe. ' +
       'For composites, the slots covered are computed from the union of the components\' ' +
-      'slots, so you do not need to supply types yourself. Optionally set image_prompt ' +
-      '(a Portrait Cue) to steer image generation; if the operator allows it, a picture ' +
+      'slots, so you do not need to supply types yourself. For a single garment ALWAYS set ' +
+      'image_prompt (a Portrait Cue of 200 characters or fewer, literal visual detail only): ' +
+      'pictures are drawn from it, never from the description. If the operator allows it, a picture ' +
       'of the item is drawn in the background (generate_image). ' +
       'You can give the item to another character in the chat by specifying a recipient.',
     parameters: zodToOpenAISchema(wardrobeCreateToolInputSchema),
@@ -203,3 +205,6 @@ export function validateWardrobeCreateInput(
 
 /** Re-export the slot type for the union-of-types computation in the handler. */
 export type CreateWardrobeItemSlotType = WardrobeItemType;
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeCreateToolEffect: ToolEffectSpec = 'write';

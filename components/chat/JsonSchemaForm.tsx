@@ -151,6 +151,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
       return (
         <select
           id={`field-${key}`}
+          aria-label={required.has(key) ? undefined : key}
           value={String(currentValue ?? prop.default ?? '')}
           onChange={(e) => handleChange(key, e.target.value)}
           className="qt-select w-full text-sm"
@@ -185,6 +186,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
       return (
         <input
           id={`field-${key}`}
+          aria-label={required.has(key) ? undefined : key}
           type="number"
           value={currentValue !== undefined ? String(currentValue) : (prop.default !== undefined ? String(prop.default) : '')}
           onChange={(e) => {
@@ -215,6 +217,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
       return (
         <textarea
           id={`field-${key}`}
+          aria-label={required.has(key) ? undefined : key}
           value={strVal}
           onChange={(e) => {
             try {
@@ -242,6 +245,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
       return (
         <textarea
           id={`field-${key}`}
+          aria-label={required.has(key) ? undefined : key}
           value={String(currentValue ?? prop.default ?? '')}
           onChange={(e) => handleChange(key, e.target.value)}
           rows={3}
@@ -255,6 +259,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
     return (
       <input
         id={`field-${key}`}
+        aria-label={required.has(key) ? undefined : key}
         type="text"
         value={String(currentValue ?? prop.default ?? '')}
         onChange={(e) => handleChange(key, e.target.value)}
@@ -341,6 +346,7 @@ function OneOfField({
       {/* Render the active variant's input */}
       {activeVariant.enum ? (
         <select
+          aria-label={propKey}
           value={String(value ?? '')}
           onChange={(e) => onChange(propKey, e.target.value)}
           className="qt-select w-full text-sm"
@@ -354,6 +360,7 @@ function OneOfField({
         </select>
       ) : activeVariant.type === 'integer' || activeVariant.type === 'number' ? (
         <input
+          aria-label={propKey}
           type="number"
           value={value !== undefined ? String(value) : ''}
           onChange={(e) => {
@@ -371,6 +378,7 @@ function OneOfField({
         />
       ) : (
         <input
+          aria-label={propKey}
           type="text"
           value={String(value ?? '')}
           onChange={(e) => onChange(propKey, e.target.value)}

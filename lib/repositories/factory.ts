@@ -20,6 +20,7 @@ import {
   type UserScopedRepositoryContainer,
 } from './user-scoped';
 import { startupState } from '@/lib/startup/startup-state';
+import { dryRepositories, isInDryScope } from './dry-scope';
 
 /**
  * Type alias for repository container
@@ -92,6 +93,12 @@ async function ensureMigrationsComplete(): Promise<void> {
  * @returns RepositoryContainer for the configured backend
  */
 export function getRepositories(): RepositoryContainer {
+  const container = getRepositoriesUndry();
+  // Inside a dry scope (the storyteller bid) every write is discarded.
+  return isInDryScope() ? dryRepositories(container) : container;
+}
+
+function getRepositoriesUndry(): RepositoryContainer {
   // Return cached repositories if already initialized
   if (cachedRepositories) {
     return cachedRepositories;

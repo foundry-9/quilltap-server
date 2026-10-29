@@ -574,6 +574,8 @@ export async function importMemories(
         supersededAt: memory.supersededById ? (memory.supersededAt ?? null) : null,
         consolidatedFrom: (memory.consolidatedFrom ?? []).map(remapMemoryRef),
         consolidatedAt: memory.consolidatedAt ?? null,
+        // A standing fact stays one; older bundles read as false.
+        keystone: memory.keystone ?? false,
         characterId: newCharacterId,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,

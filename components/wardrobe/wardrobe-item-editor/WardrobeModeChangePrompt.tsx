@@ -1,5 +1,9 @@
 'use client'
 
+import { useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+
 interface WardrobeModeChangePromptProps {
   /** How many components will be discarded by switching to a single garment. */
   componentCount: number
@@ -19,6 +23,12 @@ export function WardrobeModeChangePrompt({
   onReset,
   onKeepTypes,
 }: WardrobeModeChangePromptProps) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+
+  useEscapeKey(onCancel, true)
+
   return (
     <>
       <button
@@ -31,9 +41,17 @@ export function WardrobeModeChangePrompt({
         className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-auto"
         style={{ width: 'min(420px, calc(100vw - 2rem))' }}
       >
-        <div className="qt-dialog">
+        <div
+          ref={dialogRef}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog"
+        >
           <div className="qt-dialog-header">
-            <h3 className="qt-dialog-title">Switch to a single garment?</h3>
+            <h3 id={titleId} className="qt-dialog-title">Switch to a single garment?</h3>
           </div>
           <div className="qt-dialog-body">
             <p className="qt-text-small">

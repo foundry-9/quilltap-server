@@ -13,6 +13,7 @@
  *   - `clear_slot`       — empty one named slot entirely (requires `slot`).
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
@@ -135,3 +136,6 @@ export function validateWardrobeTakeOffInput(
   const parsed = wardrobeTakeOffToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeTakeOffToolEffect: ToolEffectSpec = 'write';

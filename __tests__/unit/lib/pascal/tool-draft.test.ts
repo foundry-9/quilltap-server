@@ -14,6 +14,7 @@ import {
   draftFromDefinition,
   findParameterReferences,
   newDraft,
+  newDraftEffect,
   renameParameterEverywhere,
   serializeDraft,
   slugFromTitle,
@@ -35,6 +36,7 @@ function normalize(parsed: Record<string, unknown>): Record<string, unknown> {
   if (out.disabled === false) delete out.disabled
   if (out.revealOdds === true) delete out.revealOdds
   if (out.defaultVisibility === 'public') delete out.defaultVisibility
+  if (out.announceAsCharacter === false) delete out.announceAsCharacter
   if (out.parameters && Object.keys(out.parameters as object).length === 0) delete out.parameters
   if (typeof out.roll === 'object' && out.roll !== null) {
     const roll: Record<string, unknown> = { ...(out.roll as Record<string, unknown>) }
@@ -87,6 +89,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
       disabled: true,
       revealOdds: false,
       defaultVisibility: 'whisper',
+      announceAsCharacter: true,
       parameters: {
         baseline: { type: 'number', default: 0, description: 'Floor.', min: -10, max: 10 },
         scale: { type: 'integer', default: 2 },
@@ -140,6 +143,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
       disabled: false,
       revealOdds: true,
       defaultVisibility: 'public',
+      announceAsCharacter: false,
       roll: { min: 0, max: 1, multiplier: 1, offset: 0, round: false },
       outcomes: [{ when: true, message: 'Done.', state: 'info' }],
     })
@@ -147,6 +151,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
     expect(emitted.disabled).toBeUndefined()
     expect(emitted.revealOdds).toBeUndefined()
     expect(emitted.defaultVisibility).toBeUndefined()
+    expect(emitted.announceAsCharacter).toBeUndefined()
     expect(emitted.roll).toBeUndefined()
   })
 
@@ -911,5 +916,176 @@ describe('effects in the draft', () => {
       value: '1',
     }))
     expect(validateDraft(draft).some((i) => i.message.includes('at most 16 effects'))).toBe(true)
+  })
+})
+
+describe('wardrobe effects in the draft', () => {
+  const BASE = {
+    name: 'regalia',
+    description: 'Be knighted.',
+    parameters: { garment: { type: 'string', default: 'Boots' } },
+    roll: { min: 1, max: 1 },
+    outcomes: [{ when: true, message: 'Arise.', state: 'success' }],
+  }
+
+  const effectIssues = (draft: ReturnType<typeof newDraft>) =>
+    validateDraft(draft).filter((i) => i.where.section === 'effect')
+
+  function wardrobeDraft(wardrobe: Partial<ReturnType<typeof newDraftEffect>['wardrobe']>) {
+    const draft = draftFromDefinition(BASE)!
+    const effect = newDraftEffect('wardrobe')
+    effect.wardrobe = { ...effect.wardrobe, ...wardrobe }
+    draft.effects = [effect]
+    return draft
+  }
+
+  it('round-trips each action, beside a write', () => {
+    expectRoundTrip({
+      ...BASE,
+      effects: [
+        { wardrobe: { action: 'wear', items: ['Cloak of Night', '{{params.garment}}'] } },
+        { wardrobe: { action: 'wear', items: ['Ribbon'], mode: 'add_to_slot', slot: 'hair' } },
+        { wardrobe: { action: 'wear', items: ['Regalia'], mode: 'replace' } },
+        { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['Sundress'], slot: 'top' } },
+        { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+        { target: 'state.knighted', value: true },
+      ],
+    })
+  })
+
+  it('keeps both halves on the draft, and emits only the active one', () => {
+    const draft = draftFromDefinition({ ...BASE, effects: [{ target: 'state.x', value: 1 }] })!
+    const effect = draft.effects[0]
+    expect(effect.kind).toBe('write')
+
+    effect.kind = 'wardrobe'
+    effect.wardrobe = { action: 'wear', items: ['Hat', '  '], mode: 'wear', slot: 'hair' }
+    expect(definitionFromDraft(draft).effects).toEqual([{ wardrobe: { action: 'wear', items: ['Hat'] } }])
+    // The write half survives the switch.
+    expect(effect.target).toBe('state.x')
+
+    effect.kind = 'write'
+    expect(definitionFromDraft(draft).effects).toEqual([{ target: 'state.x', value: 1 }])
+  })
+
+  it('says the per-action rules in the loader\'s own words', () => {
+    expect(effectIssues(wardrobeDraft({ action: 'wear', items: [''] })).map((i) => i.message)).toEqual([
+      'wear needs at least one item',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'wear', items: ['Hat'], mode: 'add_to_slot' })).map((i) => i.message)).toEqual([
+      'mode add_to_slot needs a slot',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'clear_slot' })).map((i) => i.message)).toEqual([
+      'clear_slot needs a slot',
+    ])
+    expect(effectIssues(wardrobeDraft({ action: 'clear_slot', slot: 'hair', items: ['ignored'] }))).toEqual([])
+  })
+
+  it('errors on an undeclared parameter, warns on an unknown placeholder family', () => {
+    const issues = effectIssues(wardrobeDraft({ action: 'wear', items: ['{{params.ghost}}', '{{mystery}}'] }))
+    expect(issues.filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([
+      '{{params.ghost}} names no declared parameter',
+    ])
+    expect(issues.filter((i) => i.severity === 'warning')).toHaveLength(1)
+  })
+
+  it('renames a parameter inside wardrobe items, and lists it as a reference', () => {
+    const draft = wardrobeDraft({ action: 'take_off', items: ['{{params.garment}}'] })
+    expect(findParameterReferences(draft, 'garment')).toContain('effect 1: a wardrobe item names it')
+    const renamed = renameParameterEverywhere(draft, 'garment', 'cloth')
+    expect(renamed.effects[0].wardrobe.items).toEqual(['{{params.cloth}}'])
+  })
+})
+
+describe('trigger phrases in the draft', () => {
+  const BASE = {
+    name: 'spell',
+    description: 'Cast it.',
+    outcomes: [{ when: true, message: 'The air shimmers.', state: 'info' }],
+  }
+
+  const triggerIssues = (draft: ReturnType<typeof newDraft>) =>
+    validateDraft(draft).filter((i) => i.where.section === 'triggers')
+
+  it('round-trips triggers, as written and in order', () => {
+    expectRoundTrip({ ...BASE, triggers: ['Abracadabra', 'open sesame'] })
+  })
+
+  it('emits triggers right after chipLabel, and none while empty', () => {
+    const draft = draftFromDefinition({ ...BASE, chipLabel: 'Spell', triggers: ['abracadabra'] })
+    expect(Object.keys(definitionFromDraft(draft)).slice(0, 5)).toEqual([
+      '$schema',
+      'name',
+      'chipLabel',
+      'triggers',
+      'description',
+    ])
+    draft.triggers = []
+    expect('triggers' in definitionFromDraft(draft)).toBe(false)
+  })
+
+  it('errors on a phrase too short, padded, or repeated ignoring case', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = ['ok', ' abracadabra', 'Hocus', 'HOCUS']
+    const issues = triggerIssues(draft)
+    expect(issues.every((i) => i.severity === 'error')).toBe(true)
+    expect(issues.map((i) => (i.where as { index?: number }).index)).toEqual([0, 1, 3])
+  })
+
+  it('errors past the cap', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = Array.from({ length: 9 }, (_, i) => `phrase ${i}`)
+    expect(triggerIssues(draft).some((i) => i.severity === 'error')).toBe(true)
+  })
+
+  it('warns — never errors — when an outcome message echoes its own trigger', () => {
+    const draft = draftFromDefinition({
+      ...BASE,
+      outcomes: [{ when: true, message: 'You cry ABRACADABRA and the door opens.', state: 'info' }],
+    })
+    draft.triggers = ['abracadabra']
+    const outcomeId = draft.outcomes[0].id
+    const echoes = validateDraft(draft).filter((i) => i.where.section === 'message' && i.where.id === outcomeId)
+    expect(echoes).toHaveLength(1)
+    expect(echoes[0].severity).toBe('warning')
+    expect(echoes[0].message).toContain('"abracadabra"')
+  })
+
+  it('warns when the chip label or consult prompt echoes a trigger', () => {
+    const draft = draftFromDefinition(BASE)
+    draft.triggers = ['abracadabra']
+    draft.chipLabel = 'Abracadabra!'
+    draft.llmEnabled = true
+    draft.llmPrompt = 'Say abracadabra back.'
+    draft.llmErrorMessage = 'Silence.'
+    const issues = validateDraft(draft)
+    expect(issues.some((i) => i.severity === 'warning' && i.where.section === 'identity' && i.where.field === 'chipLabel' && i.message.includes('trigger'))).toBe(true)
+    expect(issues.some((i) => i.severity === 'warning' && i.where.section === 'llm' && i.message.includes('trigger'))).toBe(true)
+  })
+})
+
+describe('log effects', () => {
+  const base = { name: 'x', description: 'x', outcomes: [{ when: true, message: '-', state: 'info' }] }
+
+  it('round-trips a log line with and without a when', () => {
+    const effects = [{ log: 'rolled {{roll}}' }, { when: { outcome: { eq: 'failure' } }, log: 'the lock held' }]
+    const draft = draftFromDefinition({ ...base, effects })!
+    expect(draft.effects.map((e) => e.kind)).toEqual(['log', 'log'])
+    expect(definitionFromDraft(draft).effects).toEqual(effects)
+  })
+
+  it('trims the line on save and flags an empty one', () => {
+    const draft = draftFromDefinition(base)!
+    draft.effects = [{ ...newDraftEffect('log'), log: '  hello  ' }]
+    expect(definitionFromDraft(draft).effects).toEqual([{ log: 'hello' }])
+    draft.effects = [newDraftEffect('log')]
+    const issue = validateDraft(draft).find((i) => i.where.section === 'effect' && i.where.field === 'log')
+    expect(issue?.severity).toBe('error')
+  })
+
+  it('warns about an undeclared parameter in the line', () => {
+    const draft = draftFromDefinition(base)!
+    draft.effects = [{ ...newDraftEffect('log'), log: 'saw {{params.ghost}}' }]
+    expect(validateDraft(draft).some((i) => i.severity === 'warning' && i.message.includes('params.ghost'))).toBe(true)
   })
 })

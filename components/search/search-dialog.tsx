@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
@@ -151,6 +152,8 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
   }, [isOpen, initialQuery, initialTypes, hasSearched])
 
   useEscapeKey(onClose, isOpen)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
 
   // Handle input change with debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -245,7 +248,15 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
 
       {/* Dialog */}
       <div className="fixed inset-x-4 top-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-[101]">
-        <div className="bg-background rounded-lg shadow-2xl overflow-hidden">
+        <div
+          className="bg-background rounded-lg shadow-2xl overflow-hidden"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Search"
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+        >
           {/* Search input */}
           <div className="p-4 border-b qt-border-default">
             <div className="relative">
@@ -253,6 +264,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
               <input
                 ref={inputRef}
                 type="text"
+                aria-label="Search"
                 value={query}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-10-22
+
+### Added
+
+- `ToolEffect` (`'none' | 'read' | 'write' | 'destroy'`) — what a tool does to the world.
+- `ToolPlugin.getToolEffects?(config)` — optional map of tool name to `ToolEffect`, sync or async. The host uses it to decide which tools a turn may use (storyteller bid tiers, the autonomous-room destructive-tool policy). Tools missing from the map, and every tool of a plugin without the method, count as `write`, so existing plugins keep working unchanged.
+
+### Changed
+
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.8.0] - 2026-09-25
 
 ### Added

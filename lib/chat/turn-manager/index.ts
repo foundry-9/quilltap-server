@@ -62,6 +62,15 @@ export type {
   SkipEligibility,
 } from './skip-signal';
 
+// Raised-hand yielding — shared pure logic (who has a hand up: lib/chat/turn-control.ts)
+export {
+  YIELD_SENTINEL,
+  TURN_YIELD_SYSTEM_KIND,
+  detectYieldSentinel,
+  buildTurnYieldInstruction,
+} from './yield-signal';
+export type { DetectYieldResult } from './yield-signal';
+
 // Queue management
 export {
   addToQueue,

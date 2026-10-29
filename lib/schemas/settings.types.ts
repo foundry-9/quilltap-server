@@ -683,6 +683,8 @@ export const SmartTypographySettingsSchema = z.object({
   dashes: z.boolean().default(true),
   /** Part B — `...` becomes an ellipsis as you type. Default: true. */
   ellipsis: z.boolean().default(true),
+  /** Paint a warning over quotes, asterisks and `((`/`))` that look wrong while typing. Never rewrites. Default: true. */
+  punctuationWarnings: z.boolean().default(true),
 });
 
 export type SmartTypographySettings = z.infer<typeof SmartTypographySettingsSchema>;
@@ -798,6 +800,19 @@ export const ChatSettingsSchema = z.object({
   autoDetectRng: z.boolean().default(true),
   /** Offer Pascal's custom pseudo-tools (`run_custom`) to models and show the composer gutter button (default: true) */
   customTools: z.boolean().default(true),
+  /**
+   * Run a custom tool automatically, with its defaults, when a message from
+   * anyone in a chat contains one of its declared `triggers` phrases (default:
+   * false). Dead while `customTools` is off.
+   */
+  customToolTriggers: z.boolean().default(false),
+  /**
+   * Hold a custom tool marked intervenable for the operator, in a dialog,
+   * before Pascal announces its roll (default: true). Off means every run goes
+   * ahead as rolled. A held roll waits indefinitely, so this is the switch for
+   * letting a chat run unattended. Dead while `customTools` is off.
+   */
+  customToolIntervention: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */
@@ -806,6 +821,8 @@ export const ChatSettingsSchema = z.object({
   composerEmoji: z.boolean().default(true),
   /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
   composerUnicode: z.boolean().default(true),
+  /** Whether `/` at the start of a word opens the slash-command menu in the Salon composer (default: true). Document Mode never has it. The gutter buttons and the sidebar's Run Tool are NOT gated by this — an explicit button press is never a surprise. */
+  composerSlashCommands: z.boolean().default(true),
   /** What happens to a line typed while impersonating a character — see `ImpersonationVoiceModeEnum` (default: 'off'). Replaced the 4.10-dev boolean `impersonationVoiceRewrite`. */
   impersonationVoiceMode: ImpersonationVoiceModeEnum.default('off'),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
@@ -839,6 +856,7 @@ export const ChatSettingsSchema = z.object({
     displayQuotes: false,
     dashes: true,
     ellipsis: true,
+    punctuationWarnings: true,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

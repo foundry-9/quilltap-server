@@ -18,9 +18,12 @@ import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 import { BrahmaConsoleProvider } from '@/components/providers/brahma-console-provider'
 import { BrahmaConsoleDialog } from '@/components/brahma-console/BrahmaConsoleDialog'
+import { BrahmaConsoleLauncher } from '@/components/brahma-console/BrahmaConsoleLauncher'
 import { QtapLinkProvider } from '@/components/providers/qtap-link-provider'
 import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
+import { InventoryDialogProvider } from '@/components/providers/inventory-dialog-provider'
+import { InventoryControlDialog } from '@/components/inventory/inventory-control-dialog'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
@@ -107,9 +110,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // in-app navigation is pure openTab with full keep-alive.
   const railAndContent = (
     <div className="qt-app-layout">
+      <a href="#main-content" className="qt-skip-link">Skip to content</a>
       <LeftSidebar />
       <div className="qt-app-main">
-        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <main id="main-content" tabIndex={-1} className="flex flex-col flex-1 min-h-0 overflow-hidden focus:outline-none">
           <PageToolbar />
           <div className="flex-1 min-h-0 overflow-y-auto">
             {children}
@@ -124,17 +128,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     <HelpChatProvider>
       <BrahmaConsoleProvider>
         <WardrobeDialogProvider>
-          <DictionaryFeedMount />
-          {isWorkspaceTabsEnabled() ? (
-            <WorkspaceProviders>
+          <InventoryDialogProvider>
+            <DictionaryFeedMount />
+            {isWorkspaceTabsEnabled() ? (
+              <WorkspaceProviders>
+                <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+              </WorkspaceProviders>
+            ) : (
               <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-            </WorkspaceProviders>
-          ) : (
-            <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-          )}
-          <HelpChatDialog />
-          <BrahmaConsoleDialog />
-          <WardrobeControlDialog />
+            )}
+            <HelpChatDialog />
+            <BrahmaConsoleDialog />
+            <BrahmaConsoleLauncher />
+            <WardrobeControlDialog />
+            <InventoryControlDialog />
+          </InventoryDialogProvider>
         </WardrobeDialogProvider>
       </BrahmaConsoleProvider>
     </HelpChatProvider>

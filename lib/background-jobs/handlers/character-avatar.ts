@@ -32,6 +32,7 @@ import {
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { buildCharacterAvatarPrompt } from '@/lib/image-gen/avatar-prompt';
+import { loadCarryingPhrase } from '@/lib/inventory/image-description';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
@@ -154,10 +155,14 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     kind: 'aurora',
     projectOfficialMountPointId: await getProjectOfficialMountPointId(chat.projectId),
   });
+  // What the character carries in this chat (the Inventory's image phrase),
+  // beside the outfit. Null when nothing carried is depicted.
+  const carrying = await loadCarryingPhrase(repos, chat, payload.characterId);
   const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, {
     equippedSlots,
     projectMountPointIds: avatarProjectMountPointIds,
     characterAesthetic,
+    carrying,
   });
 
   if (!hasAppearance) {

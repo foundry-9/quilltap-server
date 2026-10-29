@@ -34,10 +34,12 @@ export const LLMLogTypeEnum = z.enum([
   'IMAGE_GENERATION',
   'WARDROBE_IMAGE_ANALYSIS',
   'WARDROBE_ITEM_IMAGE',
+  'INVENTORY_ITEM_IMAGE',
   'ANSWER_CONFIRMATION',
   'CUSTOM_TOOL_CONSULT',
   'VOICE_REWRITE',
   'SCENARIO_BUILDER',
+  'STORYTELLER_BID',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 
@@ -45,10 +47,10 @@ export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
  * Every log type that records an image-provider call, and so counts as image
  * spend. The Almanack's per-image-profile roll-up filters on exactly this, and
  * `makeLoggedImageAttempt` (`lib/image-gen/image-attempt.ts`) accepts nothing
- * else. A wardrobe item's picture keeps its own type so the Inspector can tell
- * it apart, but it is spend all the same (bug 196).
+ * else. A wardrobe item's picture (and an Inventory object's) keeps its own
+ * type so the Inspector can tell it apart, but it is spend all the same (bug 196).
  */
-export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE'] as const satisfies readonly LLMLogType[];
+export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE', 'INVENTORY_ITEM_IMAGE'] as const satisfies readonly LLMLogType[];
 
 /** An image-provider call's log type. */
 export type ImageSpendLogType = (typeof IMAGE_SPEND_LOG_TYPES)[number];
@@ -161,6 +163,11 @@ export const LLMLogSchema = z.object({
   // per-run token spend can be summed by run instead of by a fragile
   // timestamp window. Null for all non-autonomous calls.
   autonomousRunId: UUIDSchema.nullable().optional(),
+
+  // Storyteller round linkage. Set on every LLM call made for a storyteller
+  // round — each bid (type STORYTELLER_BID) and each speaking turn the round
+  // runs — via the round AsyncLocalStorage. Null outside a round.
+  storytellerRoundId: UUIDSchema.nullable().optional(),
 
   // Provider info
   provider: z.string(),

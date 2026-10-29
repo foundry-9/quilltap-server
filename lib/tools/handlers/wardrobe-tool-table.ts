@@ -1,5 +1,5 @@
 /**
- * The seven `wardrobe_*` tools as one table — name → run. Each entry runs its
+ * The nine `wardrobe_*` tools as one table — name → run. Each entry runs its
  * handler, formats the result for the conversation, and projects the payload
  * the executor returns. The executor builds one `WardrobeToolContext` for all
  * of them, so the turn's announcement set reaches every tool that changes an
@@ -16,6 +16,8 @@ import { executeWardrobeReadTool, formatWardrobeReadResults } from './wardrobe-r
 import { executeWardrobeTakeOffTool, formatWardrobeTakeOffResults } from './wardrobe-take-off-handler';
 import { executeWardrobeUpdateTool, formatWardrobeUpdateResults } from './wardrobe-update-handler';
 import { executeWardrobeWearTool, formatWardrobeWearResults } from './wardrobe-wear-handler';
+import { executeWardrobeRollbackTool, formatWardrobeRollbackResults } from './wardrobe-rollback-handler';
+import { executeWardrobeHistoryTool, formatWardrobeHistoryResults } from './wardrobe-history-handler';
 
 export interface WardrobeToolRun {
   success: boolean;
@@ -103,6 +105,31 @@ export const WARDROBE_TOOL_TABLE: Record<string, WardrobeToolRunner> = {
         current_state: r.current_state,
         coverage_summary: r.coverage_summary,
       },
+      error: r.success ? undefined : r.error,
+    };
+  },
+  wardrobe_rollback: async (input, context) => {
+    const r = await executeWardrobeRollbackTool(input, context);
+    return {
+      success: r.success,
+      result: r.success
+        ? {
+            formattedText: formatWardrobeRollbackResults(r),
+            previous_index: r.previous_index,
+            restored_index: r.restored_index,
+            current_state: r.current_state,
+            coverage_summary: r.coverage_summary,
+            skipped: r.skipped,
+          }
+        : null,
+      error: r.success ? undefined : r.error,
+    };
+  },
+  wardrobe_history: async (input, context) => {
+    const r = await executeWardrobeHistoryTool(input, context);
+    return {
+      success: r.success,
+      result: r.success ? { formattedText: formatWardrobeHistoryResults(r), ...r } : null,
       error: r.success ? undefined : r.error,
     };
   },

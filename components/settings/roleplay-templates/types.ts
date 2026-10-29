@@ -2,7 +2,7 @@
  * TypeScript types and interfaces for Roleplay Templates feature
  */
 
-import type { TemplateDelimiter, DelimiterAddOns } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, DelimiterAddOns, UnmarkedStyle } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 
 export interface RoleplayTemplate {
@@ -15,8 +15,12 @@ export interface RoleplayTemplate {
   tags: string[]
   /** Delimiter entries for the formatting toolbar */
   delimiters: TemplateDelimiter[]
-  /** Narration delimiters — single string (same open/close) or [open, close] tuple */
-  narrationDelimiters: string | [string, string]
+  /** Narration delimiters — single string (same open/close), [open, close] tuple, or null for unmarked prose */
+  narrationDelimiters: string | [string, string] | null
+  /** How text no delimiter claims is displayed */
+  unmarkedStyle?: UnmarkedStyle | null
+  /** Whether Markdown reads asterisks as bold/italic (default true) */
+  markdownAsterisks?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -41,6 +45,10 @@ export interface DelimiterFormEntry {
   style: string
   /** Hide the delimiter/prefix from the rendered output. */
   hideDelimiter: boolean
+  /** wrap only: straight quotes in the delimiters also match curly ones. */
+  matchCurlyQuotes: boolean
+  /** wrap only: an unclosed span runs to the end of its paragraph. */
+  closeOptional: boolean
   /** Layered text decorations applied on top of `style`. */
   addOns: DelimiterAddOns
 }
@@ -59,14 +67,22 @@ export interface TemplateFormData {
   name: string
   description: string
   systemPrompt: string
-  /** 'single' = same open/close delimiter, 'pair' = different open/close */
-  narrationDelimiterMode: 'single' | 'pair'
+  /** 'single' = same open/close delimiter, 'pair' = different open/close, 'none' = unmarked prose */
+  narrationDelimiterMode: 'single' | 'pair' | 'none'
   /** The delimiter string (single mode) or opening delimiter (pair mode) */
   narrationOpen: string
   /** Closing delimiter (pair mode only) */
   narrationClose: string
   /** Delimiter entries for the template */
   delimiters: DelimiterFormEntry[]
+  /** Whether unmarked text gets a style of its own */
+  unmarkedEnabled: boolean
+  /** CSS class for unmarked text */
+  unmarkedStyle: string
+  /** Flourishes for unmarked text */
+  unmarkedAddOns: DelimiterAddOns
+  /** Whether Markdown reads asterisks as bold/italic */
+  markdownAsterisks: boolean
 }
 
 export const EMPTY_DELIMITER: DelimiterFormEntry = {
@@ -82,6 +98,8 @@ export const EMPTY_DELIMITER: DelimiterFormEntry = {
   tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
   style: '',
   hideDelimiter: false,
+  matchCurlyQuotes: false,
+  closeOptional: false,
   addOns: { ...EMPTY_ADD_ONS },
 }
 
@@ -93,4 +111,8 @@ export const INITIAL_FORM_DATA: TemplateFormData = {
   narrationOpen: '*',
   narrationClose: '*',
   delimiters: [],
+  unmarkedEnabled: false,
+  unmarkedStyle: 'qt-roleplay-plain',
+  unmarkedAddOns: { ...EMPTY_ADD_ONS },
+  markdownAsterisks: true,
 }

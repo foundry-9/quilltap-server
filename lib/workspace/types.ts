@@ -33,6 +33,7 @@ export type TabKind =
   | 'scenarios'
   | 'brahma'
   | 'wardrobe' // payload: { characterId?: string } — RAIL-opened only; NO chatId
+  | 'inventory' // payload: { characterId?: string; projectId?: string } — RAIL-opened only; NO chatId
   | 'profile' // the user's profile page
   | 'about' // the About page
   | 'generate-image' // standalone (chat-less) image generation
@@ -66,6 +67,7 @@ export const TAB_KINDS = [
   'scenarios',
   'brahma',
   'wardrobe',
+  'inventory',
   'profile',
   'about',
   'generate-image',
@@ -163,6 +165,10 @@ export interface SettingsTabPayload {
 }
 export interface WardrobeTabPayload {
   characterId?: string
+}
+export interface InventoryTabPayload {
+  characterId?: string
+  projectId?: string
 }
 export interface CharacterEditTabPayload {
   characterId: string

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
 import { MemoryList } from '@/components/memory/memory-list'
 import { createQueryWrapper } from '../../../helpers/renderWithQuery'
 
@@ -174,6 +174,8 @@ describe('MemoryList', () => {
     expect(screen.getByText(/memory maintenance/i)).toBeInTheDocument()
     // Fixed to this character: no picker, and the four pickable phases are offered.
     expect(screen.queryByLabelText(/^character$/i)).not.toBeInTheDocument()
-    expect(screen.getAllByRole('checkbox')).toHaveLength(4)
+    // The list's own "Keystones only" filter is a checkbox too; count the dialog's.
+    const dialog = screen.getByText(/memory maintenance/i).closest('.qt-dialog') as HTMLElement
+    expect(within(dialog).getAllByRole('checkbox')).toHaveLength(4)
   })
 })

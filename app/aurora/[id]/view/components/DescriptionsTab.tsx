@@ -21,6 +21,7 @@ interface FormState {
   longPrompt: string
   completePrompt: string
   fullDescription: string
+  humanoid: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -32,6 +33,7 @@ const EMPTY_FORM: FormState = {
   longPrompt: '',
   completePrompt: '',
   fullDescription: '',
+  humanoid: true,
 }
 
 function toForm(pd: CharacterPhysicalDescription | null | undefined): FormState {
@@ -45,6 +47,7 @@ function toForm(pd: CharacterPhysicalDescription | null | undefined): FormState 
     longPrompt: pd.longPrompt || '',
     completePrompt: pd.completePrompt || '',
     fullDescription: pd.fullDescription || '',
+    humanoid: pd.humanoid !== false,
   }
 }
 
@@ -82,11 +85,11 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [characterId])
 
-  const setField = (name: keyof FormState) => (value: string) => {
+  const setField = (name: Exclude<keyof FormState, 'humanoid'>) => (value: string) => {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleInputChange = (name: keyof FormState) =>
+  const handleInputChange = (name: Exclude<keyof FormState, 'humanoid'>) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm((prev) => ({ ...prev, [name]: e.target.value }))
     }
@@ -109,6 +112,7 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
           longPrompt: form.longPrompt || null,
           completePrompt: form.completePrompt || null,
           fullDescription: form.fullDescription || null,
+          humanoid: form.humanoid,
         },
       }
       const res = await fetch(`/api/v1/characters/${characterId}`, {
@@ -214,6 +218,30 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
           </p>
         </div>
 
+        {/* Humanoid — whether the figure has a body to draw at all */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label htmlFor="physical-humanoid" className="block qt-text-label">
+              Humanoid
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              Untick for a character with no head, shoulders or body to speak of &mdash; a
+              cluster of interlocking spheres, a drifting lattice of light. The Lantern and
+              Aurora will then paint the whole of its form and never so much as hint at a
+              face, a neck or a pair of shoulders, and the character is reminded it has none.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="physical-humanoid"
+              type="checkbox"
+              checked={form.humanoid}
+              onChange={(e) => setForm((prev) => ({ ...prev, humanoid: e.target.checked }))}
+              className="h-5 w-5 qt-accent-primary"
+            />
+          </label>
+        </div>
+
         {/* Shared form-of-address note for every prompt variant below —
             attached once here rather than repeated per field. */}
         <PromptFieldLabel hint={PROMPT_FIELD_HINTS.physicalDescription} />
@@ -229,8 +257,9 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
             </span>
           </div>
           <p className="text-xs qt-text-secondary mb-2">
-            Used for avatar generation — describe only the head, face, hair, expression
-            and neckline; nothing below the shoulders.
+            {form.humanoid
+              ? 'Used for avatar generation — describe only the head, face, hair, expression and neckline; nothing below the shoulders.'
+              : 'Not used for a non-humanoid character — its avatar is drawn from the Medium prompt, whole form in frame.'}
           </p>
           <MarkdownLexicalEditor
             value={form.headAndShouldersPrompt}

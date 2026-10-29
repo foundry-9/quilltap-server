@@ -91,7 +91,10 @@ const eslintConfig = defineConfig([
     //
     // Adding an import here is not a lint failure to silence; it means the code
     // belongs in the adapter instead.
-    files: ['lib/char-insert/**/*.ts'],
+    //
+    // `lib/slash-commands/**` (composer-slash-commands.md) is under the same
+    // contract; it may import `lib/char-insert/` only by relative path.
+    files: ['lib/char-insert/**/*.ts', 'lib/slash-commands/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -121,7 +124,9 @@ const eslintConfig = defineConfig([
     // See docs/developer/features/complete/composer-smart-typography.md. Adding an
     // import here is not a lint failure to silence; it means the code belongs
     // in `components/chat/lexical/plugins/SmartTypographyPlugin.tsx` instead.
-    files: ['lib/smart-typography/**/*.ts'],
+    // `lib/punctuation-lint/**` (composer punctuation warnings) shares the
+    // contract: the engine travels to v5, the Lexical adapter does not.
+    files: ['lib/smart-typography/**/*.ts', 'lib/punctuation-lint/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

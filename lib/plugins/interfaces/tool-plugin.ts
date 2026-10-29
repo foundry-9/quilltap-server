@@ -12,6 +12,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import type { ToolEffect } from '@/lib/tools/effect-types';
 
 /**
  * Universal tool format for cross-provider compatibility
@@ -281,6 +282,18 @@ export interface ToolPlugin {
    * @returns Promise resolving to array of tool hierarchy info
    */
   getToolHierarchy?: (config: Record<string, unknown>) => Promise<ToolHierarchyInfo[]>;
+
+  /**
+   * Declare each tool's effect on the world (optional; `@quilltap/plugin-types` 2.9.0+).
+   *
+   * Tool name → effect. A tool missing from the map, and every tool of a
+   * plugin without this method, counts as `write`.
+   *
+   * @param config User configuration for this plugin
+   */
+  getToolEffects?: (
+    config: Record<string, unknown>
+  ) => Record<string, ToolEffect> | Promise<Record<string, ToolEffect>>;
 
   // ============================================================================
   // Deprecated Methods (for backwards compatibility)

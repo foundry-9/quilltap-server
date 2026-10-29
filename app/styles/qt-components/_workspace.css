@@ -220,9 +220,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    margin-left: 0.125rem;
+    /* 24px: the WCAG 2.5.8 minimum target. The negative margin keeps the tab's footprint. */
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: -0.175rem -0.25rem -0.175rem 0;
     border-radius: 0.25rem;
     opacity: 0.55;
     transition: opacity 0.15s ease, background 0.15s ease;

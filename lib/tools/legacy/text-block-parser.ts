@@ -106,6 +106,13 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'remove': 'wardrobe_take_off',
   'undress': 'wardrobe_take_off',
 
+  'wardrobe_rollback': 'wardrobe_rollback',
+  'rollback_outfit': 'wardrobe_rollback',
+  'undo_outfit': 'wardrobe_rollback',
+
+  'wardrobe_history': 'wardrobe_history',
+  'outfit_history': 'wardrobe_history',
+
   'wardrobe_create': 'wardrobe_create',
   'create_wardrobe_item': 'wardrobe_create',
 
@@ -116,6 +123,27 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'wardrobe_archive': 'wardrobe_archive',
   'archive_wardrobe_item': 'wardrobe_archive',
   'discard': 'wardrobe_archive',
+
+  // Inventory tools (objects carried — not clothing)
+  'inventory_list': 'inventory_list',
+  'list_inventory': 'inventory_list',
+  'inventory': 'inventory_list',
+  'inventory_read': 'inventory_read',
+  'read_inventory': 'inventory_read',
+  'inventory_equip': 'inventory_equip',
+  'equip_item': 'inventory_equip',
+  'inventory_unequip': 'inventory_unequip',
+  'unequip_item': 'inventory_unequip',
+  'inventory_pick_up': 'inventory_pick_up',
+  'pick_up': 'inventory_pick_up',
+  'inventory_create': 'inventory_create',
+  'create_inventory_item': 'inventory_create',
+  'inventory_update': 'inventory_update',
+  'update_inventory_item': 'inventory_update',
+  'inventory_archive': 'inventory_archive',
+  'archive_inventory_item': 'inventory_archive',
+  'inventory_give': 'inventory_give',
+  'give_item': 'inventory_give',
 
   // Scriptorium search
   'search': 'search',
@@ -199,6 +227,14 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'component_ids': 'component_item_ids',
     'component_names': 'component_titles',
   },
+  inventory_read: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref' },
+  inventory_equip: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'items': 'refs' },
+  inventory_unequip: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'items': 'refs' },
+  inventory_pick_up: { 'id': 'ref', 'name': 'ref', 'item': 'ref', 'archetype': 'ref' },
+  inventory_update: { 'id': 'ref', 'item': 'ref', 'image': 'image_description', 'looks': 'image_description', 'max': 'max_equipped' },
+  inventory_archive: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref' },
+  inventory_give: { 'id': 'ref', 'title': 'ref', 'name': 'ref', 'item': 'ref', 'recipient': 'to', 'target': 'to' },
+  inventory_create: { 'image': 'image_description', 'looks': 'image_description', 'max': 'max_equipped' },
   search: {
     'search': 'query',
     'q': 'query',
@@ -212,6 +248,8 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
  * If a tool isn't listed here, content maps to 'content' by default.
  */
 const CONTENT_PARAM_MAP: Record<string, string> = {
+  inventory_create: 'description',
+  wardrobe_create: 'description',
   whisper: 'message',
   generate_image: 'prompt',
   search_web: 'query',
@@ -330,6 +368,10 @@ function resolveParamAliases(toolName: string, params: Record<string, string>): 
  * Maps tool name aliases, parameter aliases, and content to the appropriate
  * tool argument using per-tool mappings.
  */
+/** The only non-text parameters the `inventory_*` tools take. */
+const INVENTORY_BOOLEAN_PARAMS = new Set(['archived', 'equip'])
+const INVENTORY_NUMBER_PARAMS = new Set(['max_equipped'])
+
 export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): ToolCallRequest {
   const internalName = mapTextBlockToolName(parsed.toolName)
   const resolvedParams = resolveParamAliases(internalName, parsed.params)
@@ -346,8 +388,20 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
     }
   }
 
-  // Convert numeric-looking values
+  // Convert numeric-looking values. The inventory tools name their few
+  // non-text parameters, so their names, titles and descriptions stay text
+  // even when they look like "42" or "true".
+  const inventoryTool = internalName.startsWith('inventory_')
   for (const [key, value] of Object.entries(args)) {
+    if (inventoryTool) {
+      if (typeof value !== 'string') continue
+      if (INVENTORY_BOOLEAN_PARAMS.has(key) && (value === 'true' || value === 'false')) {
+        args[key] = value === 'true'
+      } else if (INVENTORY_NUMBER_PARAMS.has(key) && value.trim() !== '' && !isNaN(Number(value))) {
+        args[key] = Number(value)
+      }
+      continue
+    }
     if (typeof value === 'string') {
       if (value === 'true') {
         args[key] = true
@@ -376,6 +430,17 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
       name: internalName,
       arguments: { ...rest, operations: [op] },
     }
+  }
+
+  // inventory_equip / inventory_unequip take a `refs` array; the flat syntax
+  // names one `ref`, or several comma-separated in `refs`.
+  if (internalName === 'inventory_equip' || internalName === 'inventory_unequip') {
+    const { ref, refs, ...rest } = args
+    const list = [
+      ...(ref !== undefined ? [String(ref)] : []),
+      ...(typeof refs === 'string' ? refs.split(',') : Array.isArray(refs) ? refs.map(String) : []),
+    ].map((value) => value.trim()).filter(Boolean)
+    return { name: internalName, arguments: { ...rest, refs: list } }
   }
 
   return {

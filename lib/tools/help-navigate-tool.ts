@@ -7,6 +7,7 @@
  * settings page, opening the correct tab and section automatically.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -80,3 +81,6 @@ export function validateHelpNavigateInput(
   const parsed = helpNavigateToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const helpNavigateToolEffect: ToolEffectSpec = 'read';

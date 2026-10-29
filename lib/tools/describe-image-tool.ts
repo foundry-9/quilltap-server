@@ -18,6 +18,7 @@
  * labels rather than descriptions for generated images (bug 132).
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -73,3 +74,6 @@ export interface DescribeImageOutput {
    */
   stored_description?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const describeImageToolEffect: ToolEffectSpec = 'read';

@@ -2,6 +2,7 @@ import {
   getAnnouncementAccentClasses,
   getAnnouncementImportance,
   getAnnouncementOutcomeState,
+  getAnnouncementSenderName,
   getSystemKindDisplayLabel,
 } from './system-message-labels'
 import type { Message } from '../types'
@@ -174,5 +175,31 @@ describe('getAnnouncementOutcomeState / getAnnouncementAccentClasses', () => {
     // A state from a future build this one doesn't know how to colour.
     expect(getAnnouncementOutcomeState(roll({ state: 'triumph' as 'success' }))).toBeNull()
     expect(getAnnouncementAccentClasses(roll({ state: 'triumph' as 'success' }))).toBe('')
+  })
+})
+
+describe('getAnnouncementSenderName', () => {
+  const names = { 'char-1': 'Tester' }
+
+  it('names the Staff member when nobody else announces it', () => {
+    expect(getAnnouncementSenderName({ systemSender: 'pascal', customAnnouncer: null }, names)).toBe('Pascal')
+  })
+
+  it('names the announcing character on a character-announced Pascal outcome', () => {
+    expect(
+      getAnnouncementSenderName(
+        { systemSender: 'pascal', customAnnouncer: { kind: 'character', characterId: 'char-1' } },
+        names,
+      ),
+    ).toBe('Tester')
+  })
+
+  it('falls back to the Staff member when the announcer cannot be named', () => {
+    expect(
+      getAnnouncementSenderName(
+        { systemSender: 'pascal', customAnnouncer: { kind: 'character', characterId: 'gone' } },
+        names,
+      ),
+    ).toBe('Pascal')
   })
 })

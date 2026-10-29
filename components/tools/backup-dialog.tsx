@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { triggerUrlDownload } from '@/lib/download-utils'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface BackupDialogProps {
   isOpen: boolean
@@ -19,6 +21,17 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
   // search indexes are still valid on arrival and rebuilding them costs real
   // time and money exactly when the user is recovering from something.
   const [compact, setCompact] = useState(false)
+
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  const handleClose = () => {
+    setError(null)
+    onClose()
+  }
+
+  useEscapeKey(handleClose, isOpen)
 
   if (!isOpen) return null
 
@@ -65,11 +78,6 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     }
   }
 
-  const handleClose = () => {
-    setError(null)
-    onClose()
-  }
-
   return (
     <>
       {/* Overlay */}
@@ -82,11 +90,19 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div className="qt-dialog max-w-md">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog max-w-md"
+        >
           {/* Header */}
           <div className="qt-dialog-header">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title">Create Backup</h2>
+              <h2 id={titleId} className="qt-dialog-title">Create Backup</h2>
               <button
                 onClick={handleClose}
                 className="qt-text-secondary hover:text-foreground"

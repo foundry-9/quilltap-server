@@ -5,6 +5,7 @@
  * in multi-character chats. Only the sender and target can see whispers.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -50,3 +51,6 @@ export function validateWhisperInput(input: unknown): WhisperToolInput | null {
   const parsed = whisperToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: nothing beyond its own result (speech and reporting are not side effects). */
+export const whisperToolEffect: ToolEffectSpec = 'none';

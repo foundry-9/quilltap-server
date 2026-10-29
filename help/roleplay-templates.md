@@ -65,11 +65,23 @@ The default template provides:
 
 ### Available Built-in Templates
 
-Additional built-in templates may be available in your installation:
+- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `((asides))` in double parentheses
+- **Quilltap RP** — bare dialogue, `[actions]`, `{thoughts}`, and `// ` before an aside
+- **Novel** — see below
 
-- Different formatting conventions
-- Alternative structures for specific roleplay styles
-- Specialized formats for particular genres
+### Novel
+
+For those who would rather read a novel than a chat log. Under Novel:
+
+- **Narration is plain prose** — no marks at all — and is displayed in italics
+- **Dialogue** sits in double quotation marks, straight `"…"` or curly `“…”` as the mood takes it, and is displayed upright. Speech that runs across several paragraphs may leave each paragraph unclosed but the last, as printed fiction does
+- **Emphasis** is a word between single asterisks, `*like so*`, displayed **bold and italic**; the asterisks themselves are tidied away
+- **Double asterisks mean nothing** — `**this**` is shown as plain *this*, never bold
+- **Out of character** talk goes in double parentheses, `((like this))`, in the out-of-character style
+
+While you write under Novel, the composer shows you which is which before you send: narration is tinted in a quieter colour, and an aside in double parentheses wears the same out-of-character livery it will have in the conversation. And if your draft has narration but not a single opening quotation mark anywhere, every narrated line is tinted and underlined with dots — a gentle cough to ask whether *Of course I came, Theo said* was meant to be said aloud. Open one quote and the cough subsides. The same applies to any template of your own that leaves narration unmarked and puts dialogue in double quotes. See [The Composer and Your Typing](chat-settings-composer.md) for the particulars.
+
+Novel's instructions to the model end on a short, correctly formatted passage, because models copy an example far more faithfully than they obey a list of rules. It is built only from parts the template editor offers, so a copy of it may be rearranged to taste.
 
 ### Working with Built-in Templates
 
@@ -335,6 +347,9 @@ Speech (dialogue) is everything that isn't delimited as narration. If your templ
 |----------|---------------------|---------------------|
 | Standard | `*` | `*She crossed her arms.* ` |
 | Quilltap RP | `[`, `]` | `[She crossed her arms.]` |
+| Novel | None — plain prose | `She crossed her arms.` |
+
+A template whose narration is **None** writes its narration as ordinary prose; give it a look of its own with the template's **Unmarked Text** style (see [Roleplay Templates Settings](roleplay-templates-settings.md)).
 
 ### Formatting Delimiters and Their Kinds
 
@@ -344,7 +359,7 @@ Beyond narration, a template can declare a list of **formatting delimiters**. Ea
 - **Line prefix** — a marker at the *start of a line* that styles the whole line, such as `// ` for an out-of-character aside. (The Quilltap RP built-in uses this for OOC.)
 - **Tag prefix** — a bracketed token at the start of a line that styles the whole line *when the token matches a pattern you choose*. For example, `[CAPTAIN] All hands on deck!` styles the entire line. The default token rule accepts uppercase letters and non-cased scripts but never lowercase, so `[captain] …` would not match. This is a general capability you author yourself — Quilltap does not ship a "ranks" template, just the building block.
 
-Wrap delimiters style only the span between the markers; line-prefix and tag-prefix delimiters style the entire line they begin.
+Wrap delimiters style only the span between the markers; line-prefix and tag-prefix delimiters style the entire line they begin. A wrap may also be told to accept curly quotation marks alongside straight ones, and to run unclosed to the end of its paragraph; and one wrap's span may hold another's, so emphasis inside dialogue is styled where it stands.
 
 ### Markdown Within the Delimiters
 
@@ -354,6 +369,8 @@ A delicate matter, this: what becomes of ordinary Markdown — your `*italics*`,
 - **When a delimiter keeps its markers on display** — or when the wrap sits mid-line amid other prose — the Markdown characters inside are shown verbatim, so the markers themselves are never mistaken or mangled.
 
 In short: a fully-wrapped, marker-hiding passage renders its inner Markdown; a marker-showing or inline wrap presents that Markdown as plain characters.
+
+A template may go further and take the asterisk away from Markdown altogether (Novel does). A single `*` is then an ordinary character for the template's own delimiters to claim, and a doubled `**` is dropped from view as meaning nothing; scene breaks (`* * *`), list bullets and code are left as they were.
 
 ### Formatting Conventions
 

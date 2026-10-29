@@ -10,7 +10,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, CoreWhisperSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -33,6 +33,31 @@ function findRetiredConciergeKeys(body: unknown): string[] {
 }
 
 /**
+ * Every top-level key a PUT may carry. Anything else is refused with a 400
+ * rather than silently dropped: a field the client thinks it saved but the
+ * route never wrote (Core whisper's toggles, for one) reads back unchanged and
+ * looks like a UI that won't take the click.
+ */
+const ACCEPTED_KEYS = new Set([
+  'avatarDisplayMode', 'avatarDisplayStyle', 'tagStyles', 'cheapLLMSettings',
+  'imageDescriptionProfileId', 'themePreference', 'defaultRoleplayTemplateId',
+  'sidebarWidth', 'tokenDisplaySettings', 'memoryCascadePreferences',
+  'llmLoggingSettings', 'autoDetectRng', 'customTools', 'customToolTriggers',
+  'customToolIntervention', 'agentModeSettings', 'storyBackgroundsSettings',
+  'contextCompressionSettings', 'conciergeSettings', 'autoLockSettings',
+  'compositionModeDefault', 'composerSpellcheck', 'composerEmoji',
+  'composerUnicode', 'composerSlashCommands', 'impersonationVoiceMode',
+  'textReplacementsEnabled', 'autonomousRoomSettings', 'thinkingDisplay',
+  'autoScrollOnResponseComplete', 'answerConfirmationSettings',
+  'smartTypographySettings', 'wardrobeImageSettings', 'coreWhisper',
+])
+
+function findUnknownKeys(body: unknown): string[] {
+  if (!body || typeof body !== 'object') return []
+  return Object.keys(body as Record<string, unknown>).filter((key) => !ACCEPTED_KEYS.has(key))
+}
+
+/**
  * Validate and update chat settings
  */
 async function updateChatSettings(
@@ -51,6 +76,8 @@ async function updateChatSettings(
   llmLoggingSettings?: unknown,
   autoDetectRng?: boolean,
   customTools?: boolean,
+  customToolTriggers?: boolean,
+  customToolIntervention?: boolean,
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
@@ -60,6 +87,7 @@ async function updateChatSettings(
   composerSpellcheck?: boolean,
   composerEmoji?: boolean,
   composerUnicode?: boolean,
+  composerSlashCommands?: boolean,
   impersonationVoiceMode?: unknown,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
@@ -68,6 +96,7 @@ async function updateChatSettings(
   answerConfirmationSettings?: unknown,
   smartTypographySettings?: unknown,
   wardrobeImageSettings?: unknown,
+  coreWhisper?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -172,6 +201,18 @@ async function updateChatSettings(
     }
     updateData.customTools = customTools
   }
+  if (typeof customToolTriggers !== 'undefined') {
+    if (typeof customToolTriggers !== 'boolean') {
+      throw new Error('Invalid customToolTriggers value (must be boolean)')
+    }
+    updateData.customToolTriggers = customToolTriggers
+  }
+  if (typeof customToolIntervention !== 'undefined') {
+    if (typeof customToolIntervention !== 'boolean') {
+      throw new Error('Invalid customToolIntervention value (must be boolean)')
+    }
+    updateData.customToolIntervention = customToolIntervention
+  }
   if (typeof agentModeSettings !== 'undefined') {
     const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
     updateData.agentModeSettings = validatedAgentModeSettings
@@ -186,6 +227,10 @@ async function updateChatSettings(
       imageProfileId: updateData.wardrobeImageSettings.imageProfileId ?? null,
       generateFromTools: updateData.wardrobeImageSettings.generateFromTools,
     })
+  }
+  if (typeof coreWhisper !== 'undefined') {
+    updateData.coreWhisper = CoreWhisperSettingsSchema.parse(coreWhisper)
+    logger.debug('[Settings v1] Core whisper settings updated', { coreWhisper: updateData.coreWhisper })
   }
   if (typeof contextCompressionSettings !== 'undefined') {
     // Basic validation - ensure it's an object with expected structure
@@ -240,6 +285,12 @@ async function updateChatSettings(
       throw new Error('Invalid composerUnicode value (must be boolean)')
     }
     updateData.composerUnicode = composerUnicode
+  }
+  if (typeof composerSlashCommands !== 'undefined') {
+    if (typeof composerSlashCommands !== 'boolean') {
+      throw new Error('Invalid composerSlashCommands value (must be boolean)')
+    }
+    updateData.composerSlashCommands = composerSlashCommands
   }
   if (typeof impersonationVoiceMode !== 'undefined') {
     const parsedMode = ImpersonationVoiceModeEnum.safeParse(impersonationVoiceMode)
@@ -375,6 +426,12 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       )
     }
 
+    const unknown = findUnknownKeys(body)
+    if (unknown.length > 0) {
+      logger.warn('[Settings v1] Rejected a PUT carrying unknown settings keys', { userId: user.id, unknown })
+      return badRequest(`Invalid settings: unknown key${unknown.length === 1 ? '' : 's'} ${unknown.join(', ')}`)
+    }
+
     const {
       avatarDisplayMode,
       avatarDisplayStyle,
@@ -389,6 +446,8 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       llmLoggingSettings,
       autoDetectRng,
       customTools,
+      customToolTriggers,
+      customToolIntervention,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -398,6 +457,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      composerSlashCommands,
       impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,
@@ -406,6 +466,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       answerConfirmationSettings,
       smartTypographySettings,
       wardrobeImageSettings,
+      coreWhisper,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -424,6 +485,8 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       llmLoggingSettings,
       autoDetectRng,
       customTools,
+      customToolTriggers,
+      customToolIntervention,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -433,6 +496,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      composerSlashCommands,
       impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,
@@ -441,6 +505,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       answerConfirmationSettings,
       smartTypographySettings,
       wardrobeImageSettings,
+      coreWhisper,
     )
 
     return successResponse(chatSettings)

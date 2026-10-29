@@ -2,58 +2,47 @@
  * Server-side `qtap://` URI producers.
  *
  * These build human-/model-facing URIs from resolved documents. They touch the
- * database (to detect the self-vault and to count name collisions) but are kept
+ * database (to count name collisions) but are kept
  * deliberately free of the heavier doc-edit modules (`reindex-file` →
  * `converters`, the path resolver's filesystem deps): they import only the pure
  * codec, the repositories factory, and TYPE-only references to the resolver.
  * That keeps any consumer (search, self-inventory, the doc-edit handlers) from
  * dragging native conversion deps into its module graph.
  *
+ * ## No `self` here
+ *
+ * A produced address must not depend on who reads it. `qtap://self/…` means
+ * the vault of whoever follows it, and these URIs land in tool results and
+ * announcements that every character in a chat reads — so one character's
+ * `qtap://self/metadata.json`, followed by another, opened the follower's own
+ * file with no error (bug 256). Every producer here names the store (its UUID
+ * when the name is ambiguous). A character may still TYPE `self` for its own
+ * vault; the resolver honours it. Owner-only surfaces (the knowledge
+ * injector, the Prospero vault whisper) may still teach the shorthand.
+ *
  * @module doc-edit/uri-producers
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { formatSelfUri, formatScopedUri, formatDocStoreUri, docStoreAuthority } from './qtap-uri';
+import { formatScopedUri, formatDocStoreUri, docStoreAuthority } from './qtap-uri';
 // Type-only — erased at compile time, so no runtime dependency on path-resolver.
 import type { ResolvedPath } from './path-resolver';
 
 /**
- * The acting character's own vault mount-point id, or null. A self-contained
- * copy of the resolver's `resolveSelfVaultMountPointId` so this module needs no
- * runtime import of path-resolver (which pulls in fs/native deps).
- */
-async function selfVaultMountPointId(characterId: string | undefined): Promise<string | null> {
-  if (!characterId) return null;
-  try {
-    const acting = await getRepositories().characters.findByIdRaw(characterId);
-    return acting?.characterDocumentMountPointId ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Build a `qtap://` URI for a single document-store document given its mount id
- * and name (the form blob handlers and search hold instead of a `ResolvedPath`).
- * Prefers `qtap://self/…` for the acting character's own vault, else the store
- * name (UUID when the name is ambiguous). The URI is an additive convenience,
+ * and name (the form blob handlers and search hold instead of a `ResolvedPath`):
+ * the store name, or its UUID when the name is ambiguous — a character's own
+ * vault included. The URI is an additive convenience,
  * so any failure degrades to '' rather than throwing.
  */
 export async function docStoreUriFor(args: {
   mountPointId: string;
   mountPointName: string;
   relativePath: string;
-  characterId?: string;
   heading?: string;
   level?: number;
 }): Promise<string> {
   try {
-    if (args.characterId && args.mountPointId) {
-      const selfId = await selfVaultMountPointId(args.characterId);
-      if (selfId && args.mountPointId === selfId) {
-        return formatSelfUri(args.relativePath, { heading: args.heading, level: args.level });
-      }
-    }
     let nameIsAmbiguous = !args.mountPointName;
     if (args.mountPointName) {
       try {
@@ -76,15 +65,13 @@ export async function docStoreUriFor(args: {
 }
 
 /**
- * Build a human-/model-facing `qtap://` URI for a single resolved document,
- * choosing the most stable readable form: the acting character's own vault →
- * `qtap://self/…`; project/general scope → the scoped authority; any other
- * document store → its name (or UUID when ambiguous). For multi-row tools that
+ * Build a human-/model-facing `qtap://` URI for a single resolved document:
+ * project/general scope → the scoped authority; any document store, a
+ * character's own vault included → its name (or UUID when ambiguous). For multi-row tools that
  * emit many URIs at once, prefer `buildDocStoreUriResolver`.
  */
 export async function uriForResolvedPath(
   resolved: ResolvedPath,
-  context: { characterId?: string },
   opts?: { heading?: string; level?: number }
 ): Promise<string> {
   try {
@@ -95,7 +82,6 @@ export async function uriForResolvedPath(
       mountPointId: resolved.mountPointId ?? '',
       mountPointName: resolved.mountPointName ?? '',
       relativePath: resolved.relativePath,
-      characterId: context.characterId,
       heading: opts?.heading,
       level: opts?.level,
     });
@@ -105,27 +91,19 @@ export async function uriForResolvedPath(
 }
 
 /**
- * Pre-compute the self-vault id and the set of ambiguous (duplicated) store
- * names ONCE, then hand back synchronous helpers for building many `qtap://`
+ * Pre-compute the set of ambiguous (duplicated) store names ONCE, then hand back synchronous helpers for building many `qtap://`
  * URIs — for `doc_list_files`, `doc_grep`, `doc_list_blobs`, and search, which
  * emit a URI per row and must not fire a repo lookup per row. Each closure is
  * fully defensive: a URI is additive and must never throw out of a handler.
  */
-export async function buildDocStoreUriResolver(characterId?: string): Promise<{
+export async function buildDocStoreUriResolver(): Promise<{
   uriForMount(mountPointName: string, mountPointId: string, relativePath: string): string;
   uriForScope(scope: 'project' | 'general', relativePath: string): string;
 }> {
-  let selfVaultId: string | null = null;
-  try {
-    selfVaultId = await selfVaultMountPointId(characterId);
-  } catch {
-    // No acting character, or a degraded read — no self-vault shorthand.
-  }
   const ambiguous = await collectAmbiguousStoreNames();
   return {
     uriForMount(name, id, relativePath) {
       try {
-        if (selfVaultId && id === selfVaultId) return formatSelfUri(relativePath);
         return formatDocStoreUri({
           mountPointName: name,
           mountPointId: id,
@@ -176,8 +154,7 @@ async function collectAmbiguousStoreNames(): Promise<Set<string>> {
  * search bar's document results, whose click targets and deep links carry
  * `mountPoint=<ref>`.
  *
- * There is no self-vault shorthand here: `self` only means anything inside a
- * character's own prompt, and these references are handed to operator surfaces.
+ * Like every producer here, it never yields `self` (see the module note).
  */
 export async function buildDocStoreRefResolver(): Promise<{
   refForMount(mountPointName: string, mountPointId: string): string;

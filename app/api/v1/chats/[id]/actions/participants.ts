@@ -27,6 +27,7 @@ import {
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
+import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
@@ -235,6 +236,10 @@ async function applyOutfitForAddedParticipant(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+
+  // What the arriving character carries: their equipped-by-default objects,
+  // unless a returning seat already has an entry. Never throws.
+  await applyInventoryDefaults(repos, chatId, [characterId], { source: 'participant-added', userId });
 }
 
 /**

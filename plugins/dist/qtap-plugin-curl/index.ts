@@ -8,6 +8,7 @@
 
 import type {
   ToolPlugin,
+  ToolEffect,
   ToolExecutionContext,
   ToolExecutionResult,
   UniversalTool,
@@ -36,6 +37,14 @@ export const plugin: ToolPlugin = {
    */
   async getToolDefinitions(_config: Record<string, unknown>): Promise<UniversalTool[]> {
     return [curlToolDefinition];
+  },
+
+  /**
+   * curl can POST, PUT and DELETE to the outside world, so it is declared a
+   * write. (A static map cannot tell a GET from a DELETE.)
+   */
+  getToolEffects(_config: Record<string, unknown>): Record<string, ToolEffect> {
+    return { curl: 'write' };
   },
 
   /**

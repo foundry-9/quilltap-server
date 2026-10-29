@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import { ptyManager } from '@/lib/terminal/pty-manager';
-import { cleanTerminalOutput } from '@/lib/terminal/clean-output';
+import { renderTranscript, type ScreenRendering } from '@/lib/terminal/screen';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { ToolContext } from '../registry';
@@ -18,9 +18,15 @@ export class TerminalToolError extends Error {
 
 const MAX_RETURN_LINES = 2000;
 
-function splitLines(text: string): string[] {
-  return text.split(/\r?\n/);
-}
+/** How much of an exited session's transcript is replayed through the emulator. */
+const TRANSCRIPT_REPLAY_BYTES = 4 * 1024 * 1024;
+
+/** How much of the raw byte stream `raw: true` returns. */
+const RAW_RETURN_CHARS = 64 * 1024;
+
+/** Geometry assumed for a transcript recorded before sessions stored theirs. */
+const DEFAULT_COLS = 80;
+const DEFAULT_ROWS = 24;
 
 /**
  * Resolve a possibly-negative line index to a concrete in-range index.
@@ -87,7 +93,7 @@ function tailByCount(all: string[], n: number): SliceResult {
   };
 }
 
-async function tailFile(path: string, maxBytes = 1_000_000): Promise<string> {
+async function tailFile(path: string, maxBytes: number): Promise<string> {
   const fh = await fs.open(path, 'r');
   try {
     const stat = await fh.stat();
@@ -119,15 +125,25 @@ export async function executeTerminalReadTool(
     throw new TerminalToolError('Session does not belong to this chat');
   }
 
-  let fullContent = '';
+  // Text is rendered through a terminal emulator, never by stripping escape
+  // codes: a full-screen program (Claude Code, vim, less) draws with cursor
+  // addressing that stripping turns into fragments (bug 255).
+  let rendering: ScreenRendering | null = null;
+  let raw = '';
 
   const liveSession = ptyManager.get(input.sessionId);
 
   if (liveSession && session.exitedAt == null) {
-    fullContent = ptyManager.getRingBuffer(input.sessionId) ?? '';
+    rendering = await ptyManager.renderScreen(input.sessionId);
+    raw = ptyManager.getRingBuffer(input.sessionId) ?? '';
   } else if (session.transcriptPath) {
     try {
-      fullContent = await tailFile(session.transcriptPath);
+      raw = await tailFile(session.transcriptPath, TRANSCRIPT_REPLAY_BYTES);
+      rendering = await renderTranscript(
+        raw,
+        session.cols ?? DEFAULT_COLS,
+        session.rows ?? DEFAULT_ROWS,
+      );
     } catch (err) {
       moduleLogger.warn('Failed to read transcript file', {
         sessionId: input.sessionId,
@@ -137,7 +153,7 @@ export async function executeTerminalReadTool(
     }
   }
 
-  const allLines = splitLines(fullContent);
+  const allLines = rendering?.lines ?? [];
   const totalLines = allLines.length;
 
   const useSlice = input.start !== undefined || input.end !== undefined;
@@ -145,7 +161,6 @@ export async function executeTerminalReadTool(
     ? sliceByRange(allLines, input.start, input.end)
     : tailByCount(allLines, input.lines ?? 200);
 
-  const cleanedScrollback = cleanTerminalOutput(result.text);
   const status = session.exitedAt == null ? 'live' : 'exited';
 
   moduleLogger.debug('Terminal read executed', {
@@ -157,6 +172,7 @@ export async function executeTerminalReadTool(
     linesReturned: result.count,
     totalLines,
     truncated: result.truncated,
+    buffer: rendering?.buffer ?? null,
     raw: input.raw === true,
   });
 
@@ -171,11 +187,12 @@ export async function executeTerminalReadTool(
     startLine: result.startLine,
     endLine: result.endLine,
     truncated: result.truncated,
-    scrollback: cleanedScrollback,
+    buffer: rendering?.buffer ?? 'normal',
+    scrollback: result.text,
   };
 
   if (input.raw === true) {
-    output.rawScrollback = result.text;
+    output.rawScrollback = raw.slice(-RAW_RETURN_CHARS);
   }
 
   return output;
@@ -218,6 +235,9 @@ export function formatTerminalReadResults(out: TerminalReadOutput): string {
   const rangeStr = out.totalLines > 0
     ? `Lines: ${out.lines} (showing ${out.startLine}–${out.endLine} of ${out.totalLines})`
     : `Lines: 0`;
+  const screenStr = out.buffer === 'alternate'
+    ? '\nScreen: a full-screen program has the terminal; these lines are its current screen, not scrollback.'
+    : '';
   const truncationStr = out.truncated ? '\n\n[scrollback truncated — output exceeded the per-read line cap]' : '';
   const rawBlock = out.rawScrollback !== undefined
     ? `\n\nRaw (ANSI preserved):\n\`\`\`\n${out.rawScrollback}\n\`\`\``
@@ -226,7 +246,7 @@ export function formatTerminalReadResults(out: TerminalReadOutput): string {
   return `${statusBadge}${exitCodeStr}
 Shell: ${out.shell}
 Working Directory: ${out.cwd}
-${rangeStr}
+${rangeStr}${screenStr}
 
 \`\`\`
 ${out.scrollback}

@@ -29,7 +29,11 @@ import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
-import { pickPhysicalDescription } from '@/lib/characters/physical-description'
+import {
+  isHumanoid,
+  NON_HUMANOID_IMAGE_DIRECTION,
+  pickPhysicalDescription,
+} from '@/lib/characters/physical-description'
 
 // ============================================================================
 // TYPES
@@ -55,10 +59,23 @@ export interface ResolvedCharacterAppearance {
   physicalDescription: string
   /** The selected physical description's name (for logging) */
   physicalDescriptionName: string
+  /**
+   * False when the character has no humanoid body (`isHumanoid` on its
+   * physical description). {@link sceneDescriptionParts} then drops the
+   * gender prefix and adds the non-humanoid direction. Absent means true.
+   */
+  humanoid?: boolean
   /** What the character is currently wearing */
   clothingDescription: string
   /** How clothing was determined */
   clothingSource: 'narrative' | 'stored' | 'default'
+  /**
+   * What the character carries in the chat (the Inventory's equipped objects'
+   * `imageDescription`s, e.g. "carrying a longsword with a jewelled pommel"),
+   * or '' — set by {@link resolveCharacterAppearances} whatever path resolved
+   * the rest, and rendered beside the outfit.
+   */
+  carryingDescription?: string
   /** Whether the Concierge sanitized this appearance */
   wasSanitized: boolean
   /**
@@ -178,6 +195,7 @@ function buildDefaultAppearances(
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: primary?.name || 'default',
+      ...(isHumanoid(primary) ? {} : { humanoid: false }),
       clothingDescription: hasWardrobe
         ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
         : '',
@@ -211,6 +229,7 @@ function mapResolutionResults(
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: selectedDesc?.name || 'default',
+      ...(isHumanoid(selectedDesc) ? {} : { humanoid: false }),
       clothingDescription: resolved?.clothingDescription || '',
       clothingSource: resolved?.clothingSource || 'default',
       wasSanitized: false,
@@ -243,6 +262,51 @@ export async function resolveCharacterAppearances(
   chatId?: string,
   sceneState?: { characters: Array<{ characterId: string; characterName: string; appearance: string | null; clothing: string | null }> } | null
 ): Promise<AppearanceResolutionResult> {
+  const result = await resolveAppearancesWithoutInventory(
+    characters, recentMessages, imagePrompt, cheapLLMSelection, userId, chatId, sceneState,
+  )
+  if (!chatId || result.appearances.length === 0) return result
+  return { ...result, appearances: await withCarrying(result.appearances, chatId) }
+}
+
+/**
+ * Add what each character carries in the chat (the Inventory) to its
+ * resolved appearance. The one place the image pipelines learn of it; fails
+ * soft to the appearances as they were.
+ */
+async function withCarrying(
+  appearances: ResolvedCharacterAppearance[],
+  chatId: string,
+): Promise<ResolvedCharacterAppearance[]> {
+  try {
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const { loadCarryingPhrase } = await import('@/lib/inventory/image-description')
+    const repos = getRepositories()
+    const chat = await repos.chats.findById(chatId)
+    if (!chat) return appearances
+    return await Promise.all(appearances.map(async (appearance) => {
+      const carrying = await loadCarryingPhrase(repos, chat, appearance.characterId)
+      return carrying ? { ...appearance, carryingDescription: carrying } : appearance
+    }))
+  } catch (error) {
+    logger.warn('[AppearanceResolution] Could not add carried objects to appearances', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return appearances
+  }
+}
+
+async function resolveAppearancesWithoutInventory(
+  characters: AppearanceResolutionInput[],
+  recentMessages: ChatMessage[],
+  imagePrompt: string,
+  cheapLLMSelection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+  sceneState?: { characters: Array<{ characterId: string; characterName: string; appearance: string | null; clothing: string | null }> } | null
+): Promise<AppearanceResolutionResult> {
   if (characters.length === 0) {
     return { appearances: [], llmResolved: true }
   }
@@ -261,6 +325,7 @@ export async function resolveCharacterAppearances(
         characterName: char.characterName,
         physicalDescription: physDesc,
         physicalDescriptionName: primary?.name || 'scene-state',
+        ...(isHumanoid(primary) ? {} : { humanoid: false }),
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
         // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
         // If the character wasn't found in scene state at all, leave clothing empty.
@@ -290,6 +355,7 @@ export async function resolveCharacterAppearances(
   const llmInput: CharacterAppearanceInput[] = characters.map(char => ({
     characterId: char.characterId,
     characterName: char.characterName,
+    ...(isHumanoid(char.physicalDescription) ? {} : { nonHumanoid: true }),
     physicalDescriptions: char.physicalDescription
       ? [{
           id: char.physicalDescription.id,
@@ -335,34 +401,36 @@ export async function resolveCharacterAppearances(
 /**
  * Sanitize resolved appearances through the Concierge if needed.
  *
- * Logic:
- * 1. Unless the policy pre-screens (Moderated, pre-screen opted in) or routes
- *    direct (Unmoderated) → return unchanged. Off duty, Locked, or a Moderated
- *    chat without the pre-screen costs no classifier call.
- * 2. If chat is marked dangerous AND the scene routes uncensored → return unchanged
- * 3. Classify concatenated appearance text; if safe → return unchanged
- * 4. If dangerous AND the scene routes uncensored → return unchanged (it goes
- *    to a provider that accepts it, so accuracy beats a draped sheet)
- * 5. Otherwise → sanitize via cheap LLM
+ * Cleaning exists for one case only: a Moderated chat whose image is bound for
+ * a moderated provider. Everywhere else the text goes through as written.
  *
- * The fourth parameter is deliberately NOT "an uncensored profile is
- * configured" (bug 133). Whether one exists in settings and whether *this*
- * scene will actually be generated by it are different questions, and only
- * some callers route on the appearance classification:
+ * Logic:
+ * 1. The image is bound for an uncensored profile → return unchanged, whatever
+ *    the chat's state. That provider accepts it, so accuracy beats a draped
+ *    sheet, and no classifier call is spent finding that out.
+ * 2. Unless the policy pre-screens (Moderated, on duty, pre-screen opted in) →
+ *    return unchanged. An Unmoderated chat bound for a moderated provider is
+ *    sent as written: a refusal is answered by the post-hoc failover, if an
+ *    understudy exists, not by rewriting the scene. Off duty and Locked keep
+ *    the Concierge's hands off as before.
+ * 3. Classify concatenated appearance text; if safe → return unchanged
+ * 4. Otherwise → sanitize via cheap LLM
+ *
+ * The third parameter is "the profile that will actually paint this is
+ * uncensored" (`isUncensoredImageProfile` on the effective profile), never "an
+ * uncensored profile is configured somewhere" (bug 133). Whether one exists in
+ * settings and whether *this* image will be generated by it are different
+ * questions:
  *
  * - The image-generation tool classifies each prompt and reroutes on the spot
- *   when failover is allowed, so a dangerous appearance there really is bound for the
- *   uncensored provider.
- * - Story backgrounds never route up front; a moderated chat's background goes
- *   to the moderated provider regardless. Passing mere existence there let raw
- *   "naked, barefoot" appearance text through to a prompt crafter working for
- *   a provider that promptly rejected it.
+ *   when failover is allowed, so it passes the profile it ended up on.
+ * - Story backgrounds route up front only for an Unmoderated chat; otherwise
+ *   they paint on the chat's own image profile, uncensored or not.
  *
  * @param appearances - Resolved character appearances
  * @param conciergePolicy - the chat's resolved Concierge policy
- * @param isDangerousChat - Whether the chat is marked as dangerous
- * @param routesDangerousToUncensored - Whether appearance text classified as
- *   dangerous will actually be generated by the uncensored image provider
+ * @param imageTargetUncensored - Whether the profile that will generate this
+ *   image is uncensored (`isUncensoredImageProfile`)
  * @param cheapLLMSelection - Cheap LLM provider for classification/sanitization
  * @param userId - Current user ID
  * @param chatId - Optional chat ID for logging
@@ -376,19 +444,26 @@ export async function resolveCharacterAppearances(
 export async function sanitizeAppearancesIfNeeded(
   appearances: ResolvedCharacterAppearance[],
   conciergePolicy: ResolvedConciergePolicy,
-  isDangerousChat: boolean,
-  routesDangerousToUncensored: boolean,
+  imageTargetUncensored: boolean,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
   chatId?: string,
   mode: AppearanceSanitizeMode = 'redress'
 ): Promise<ResolvedCharacterAppearance[]> {
-  // 1. The appearance check is a classifier scan: a Moderated chat pays for
-  // it only when the pre-screen is on. An Unmoderated chat is already known to
-  // be dangerous, so when its scene cannot reach the uncensored desk the sheet
-  // still goes on rather than handing the moderated provider a refusal. Off
-  // duty or Locked → the Concierge keeps his hands off.
-  if (!conciergePolicy.preScreen.enabled && !conciergePolicy.routeDirect) {
+  // 1. Bound for an uncensored painter → nothing to clean, in any chat state.
+  if (imageTargetUncensored) {
+    logger.debug('[AppearanceResolution] Image bound for an uncensored profile; appearances left as written', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      conciergeState: conciergePolicy.state,
+    })
+    return appearances
+  }
+
+  // 2. Only a Moderated chat with the pre-screen on is cleaned. Unmoderated
+  // goes out as written to whatever painter it has; off duty or Locked → the
+  // Concierge keeps his hands off.
+  if (!conciergePolicy.preScreen.enabled) {
     logger.debug('[AppearanceResolution] Appearance sanitization not applicable under this Concierge policy', {
       context: 'image-gen.appearance-resolution',
       chatId,
@@ -397,15 +472,10 @@ export async function sanitizeAppearancesIfNeeded(
     return appearances
   }
 
-  // 2. Dangerous chat already bound for the uncensored provider → accurate
-  // appearances are fine; nobody asked for a sheet over this one.
-  if (isDangerousChat && routesDangerousToUncensored) {
-    return appearances
-  }
-
-  // 3. Classify concatenated appearance text
+  // 3. Classify concatenated appearance text — what each character carries
+  // included, since it reaches the same moderated provider.
   const combinedText = appearances
-    .map(a => `${a.physicalDescription} ${a.clothingDescription}`)
+    .map(a => [a.physicalDescription, a.clothingDescription, a.carryingDescription].filter(Boolean).join(' '))
     .join(' | ')
 
   let classification
@@ -437,16 +507,9 @@ export async function sanitizeAppearancesIfNeeded(
     chatId,
     score: classification.score,
     categories: classification.categories.map(c => c.category),
-    routesDangerousToUncensored,
   })
 
-  // 4. Dangerous, and this scene really is bound for the uncensored provider
-  // → leave it accurate. Existence of such a profile is not enough (bug 133).
-  if (routesDangerousToUncensored) {
-    return appearances
-  }
-
-  // 5. Dangerous and staying on a moderated provider → sanitize
+  // 4. Dangerous and bound for a moderated provider → sanitize
   logger.info('[AppearanceResolution] Sanitizing dangerous appearance descriptions', {
     context: 'image-gen.appearance-resolution',
     chatId,
@@ -456,7 +519,7 @@ export async function sanitizeAppearancesIfNeeded(
 
   const toSanitize = appearances.map(a => ({
     characterId: a.characterId,
-    appearanceText: `${a.physicalDescription}. ${a.clothingDescription}`.trim(),
+    appearanceText: sanitizableAppearanceText(a),
   }))
 
   const sanitizeResult = await sanitizeAppearance(
@@ -482,19 +545,67 @@ export async function sanitizeAppearancesIfNeeded(
       s => s.characterId === appearance.characterId
     )
     if (!sanitized) return appearance
-    const textChanged = sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()
+    const textChanged = sanitized.appearanceText !== sanitizableAppearanceText(appearance)
     if (!textChanged && !sanitized.undressed) return appearance
     return {
       ...appearance,
       ...(textChanged
         ? {
-            // Use sanitized text as both physical + clothing combined
+            // Use sanitized text as physical + clothing + carrying combined;
+            // the carrying phrase is inside it now, so it is not appended again.
             physicalDescription: sanitized.appearanceText,
             clothingDescription: '',
+            carryingDescription: undefined,
             wasSanitized: true,
           }
         : {}),
       ...(sanitized.undressed ? { needsConcealment: true } : {}),
     }
   })
+}
+
+/**
+ * One character's appearance as the sanitizer sees it: physical, clothing and
+ * (when anything carried is described) the carrying phrase, as sentences.
+ */
+function sanitizableAppearanceText(
+  a: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription'>,
+): string {
+  const base = `${a.physicalDescription}. ${a.clothingDescription}`.trim()
+  const carrying = a.carryingDescription?.trim()
+  return carrying ? `${base}. ${carrying}`.trim() : base
+}
+
+/**
+ * The Lantern's description of one resolved character: the (gender-prefixed)
+ * physical description, what they wear, and what they carry — each a
+ * sentence-fragment the caller joins with `. `. A non-humanoid character
+ * takes no gender prefix (pronouns don't give it a body) and gets the
+ * non-humanoid direction right after its description. Pure.
+ */
+export function sceneDescriptionParts(
+  resolved: Pick<ResolvedCharacterAppearance, 'physicalDescription' | 'clothingDescription' | 'carryingDescription' | 'humanoid'>,
+  genderPrefix = '',
+): string[] {
+  const humanoid = resolved.humanoid !== false
+  if (!humanoid) {
+    // Trailing punctuation off, so the caller's `. ` join can't make "spheres..".
+    return [
+      resolved.physicalDescription.trim().replace(/[.!?]+$/, ''),
+      NON_HUMANOID_IMAGE_DIRECTION,
+      ...sceneDescriptionTail(resolved),
+    ].filter(Boolean)
+  }
+  return [genderPrefix + resolved.physicalDescription, ...sceneDescriptionTail(resolved)]
+}
+
+/** What a resolved character wears and carries, as sentence-fragments. */
+function sceneDescriptionTail(
+  resolved: Pick<ResolvedCharacterAppearance, 'clothingDescription' | 'carryingDescription'>,
+): string[] {
+  const parts: string[] = []
+  if (resolved.clothingDescription) parts.push(`Wearing: ${resolved.clothingDescription}`)
+  const carrying = resolved.carryingDescription?.trim()
+  if (carrying) parts.push(carrying.charAt(0).toUpperCase() + carrying.slice(1))
+  return parts
 }

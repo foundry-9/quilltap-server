@@ -11,6 +11,9 @@
  *
  * Guards:
  *   - migrations/scripts/index.ts (registration completeness)
+ *   - the dependency graph is acyclic — the runner's topological sort throws
+ *     "Circular dependency detected" at boot and the server never starts
+ *     (`add-custom-tool-triggers-field-v1` once named itself in `dependsOn`).
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -62,5 +65,26 @@ describe('migration registry', () => {
       }
     }
     expect(dangling).toEqual([]);
+  });
+
+  it('has an acyclic dependency graph (no migration depends on itself, directly or transitively)', () => {
+    const byId = new Map(registered.map(m => [m.id, m]));
+    const done = new Set<string>();
+    const cycles: string[] = [];
+
+    function visit(id: string, path: string[]): void {
+      if (done.has(id)) return;
+      if (path.includes(id)) {
+        cycles.push([...path.slice(path.indexOf(id)), id].join(' → '));
+        return;
+      }
+      for (const dep of byId.get(id)?.dependsOn ?? []) {
+        if (byId.has(dep)) visit(dep, [...path, id]);
+      }
+      done.add(id);
+    }
+
+    for (const migration of registered) visit(migration.id, []);
+    expect(cycles).toEqual([]);
   });
 });

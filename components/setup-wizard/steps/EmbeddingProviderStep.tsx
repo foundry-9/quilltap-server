@@ -178,6 +178,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
             <div className="qt-alert qt-alert-error">{error}</div>
           ) : (
             <select
+              aria-label="Embedding model"
               value={selectedModel}
               onChange={(e) => handleModelSelect(e.target.value)}
               className="qt-select"

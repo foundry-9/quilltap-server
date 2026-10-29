@@ -68,11 +68,13 @@ function EditorBody({
   onChange,
   disabled,
   minHeight,
+  ariaLabel,
 }: {
   value: string
   onChange: (value: string) => void
   disabled: boolean
   minHeight: string
+  ariaLabel?: string
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -86,7 +88,7 @@ function EditorBody({
         contentEditable={
           <ContentEditable
             className="qt-doc-editor-area qt-lexical-contenteditable"
-            aria-label="Markdown editor"
+            aria-label={ariaLabel ?? 'Markdown editor'}
             style={{ lineHeight: '1.6', minHeight }}
           />
         }
@@ -203,7 +205,7 @@ export default function MarkdownLexicalEditor({
     .join(' ')
 
   return (
-    <div className={frameClassName} aria-label={ariaLabel}>
+    <div className={frameClassName} role="group" aria-label={ariaLabel}>
       <LexicalComposer key={composerKey} initialConfig={initialConfig}>
         <ToolbarSlot
           roleplayTemplateId={roleplayTemplateId}
@@ -232,6 +234,7 @@ export default function MarkdownLexicalEditor({
                 onChange={onChange}
                 disabled={disabled}
                 minHeight={minHeight}
+                ariaLabel={ariaLabel}
               />
             </div>
           </div>

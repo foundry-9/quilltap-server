@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useId } from 'react'
 import { Icon } from '@/components/ui/icon'
 import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
 import { createApiKey, testConnection } from '../wizard-api'
@@ -20,6 +20,7 @@ interface ProviderKeyFormState {
 }
 
 export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
+  const id = useId()
   const [formStates, setFormStates] = useState<Record<string, ProviderKeyFormState>>(() => {
     const initial: Record<string, ProviderKeyFormState> = {}
     for (const providerId of state.selectedProviders) {
@@ -167,10 +168,11 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
               <div className="space-y-4">
                 {requiresKey && (
                   <div>
-                    <label className="qt-text-label block mb-1.5">
+                    <label htmlFor={`${id}-key-${provider.id}`} className="qt-text-label block mb-1.5">
                       {provider.configRequirements.apiKeyLabel || 'API Key'}
                     </label>
                     <input
+                      id={`${id}-key-${provider.id}`}
                       type="password"
                       value={form.key}
                       onChange={(e) => {
@@ -189,10 +191,11 @@ export function ApiKeyEntryStep({ state, dispatch }: ApiKeyEntryStepProps) {
 
                 {requiresBaseUrl && (
                   <div>
-                    <label className="qt-text-label block mb-1.5">
+                    <label htmlFor={`${id}-baseurl-${provider.id}`} className="qt-text-label block mb-1.5">
                       {provider.configRequirements.baseUrlLabel || 'Base URL'}
                     </label>
                     <input
+                      id={`${id}-baseurl-${provider.id}`}
                       type="text"
                       value={form.baseUrl}
                       onChange={(e) => {

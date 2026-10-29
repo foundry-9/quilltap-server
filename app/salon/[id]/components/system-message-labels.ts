@@ -49,6 +49,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   inform: 'out of character',
   'custom-tool-result': 'roll outcome',
   'custom-tool-error': "the table couldn't deal",
+  'inventory-change': 'inventory',
   'turn-pass': 'nothing to add',
   nudge: 'invited to speak',
   timestamp: 'time',
@@ -58,6 +59,28 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
   return staffDisplayName(sender)
+}
+
+/**
+ * The name on a Staff message's bar. A Staff row that also carries a
+ * `customAnnouncer` — a Pascal outcome whose tool sets `announceAsCharacter` —
+ * is spoken by that announcer, so the bar names them, as the bubble's avatar
+ * does. `announcerNames` is character id → name; an announcer it cannot name
+ * falls back to the Staff member rather than inventing one.
+ */
+export function getAnnouncementSenderName(
+  message: Pick<Message, 'systemSender' | 'customAnnouncer'>,
+  announcerNames?: Record<string, string>,
+): string {
+  const announcer = message.customAnnouncer
+  if (announcer?.kind === 'character' && announcer.characterId) {
+    const name = announcerNames?.[announcer.characterId]?.trim()
+    if (name) return name
+  } else if (announcer?.kind === 'custom') {
+    const name = announcer.displayName?.trim()
+    if (name) return name
+  }
+  return getSystemSenderDisplayName(message.systemSender)
 }
 
 /**
@@ -182,6 +205,54 @@ export function getSystemKindDisplayLabel(
   }
 
   return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
+}
+
+/**
+ * The "adjusted" badge's tooltip for a Pascal roll the operator changed while
+ * it was held (operator intervention): each changed field as *dealt → final*.
+ * Null when the roll was never adjusted. Operator-facing only — the Salon's own
+ * view of the transcript, which no model reads.
+ */
+export function getInterventionSummary(message: Pick<Message, 'systemSender' | 'pascalMeta'>): string | null {
+  const meta = message.pascalMeta
+  const record = meta?.intervention
+  if (message.systemSender !== 'pascal' || !meta || !record || record.changed.length === 0) return null
+  const { dealt } = record
+  const show = (v: unknown) => (typeof v === 'number' && !Number.isInteger(v) ? String(Number(v.toPrecision(4))) : String(v))
+  const parts = record.changed.map((key) => {
+    if (key.startsWith('params.')) {
+      const name = key.slice('params.'.length)
+      return `${name} ${show(dealt.params[name])} → ${show(meta.params[name])}`
+    }
+    if (key.startsWith('effects.')) return `effect ${Number(key.slice('effects.'.length)) + 1} changed`
+    switch (key) {
+      case 'roll':
+        return dealt.diceRolls && meta.diceRolls
+          ? `dice [${dealt.diceRolls.join(', ')}] → [${meta.diceRolls.join(', ')}]`
+          : `roll ${show(dealt.raw)} → ${show(meta.raw)}`
+      case 'value':
+        return `value ${show(dealt.value)} → ${show(meta.value)}`
+      case 'outcome':
+        return `outcome row ${dealt.outcomeIndex + 1} → ${meta.outcomeIndex + 1}`
+      case 'state':
+        return `verdict ${dealt.state} → ${meta.state}`
+      case 'message':
+        return 'message rewritten'
+      case 'llmAnswer':
+        return "the oracle's answer replaced"
+      case 'chipLabel':
+        return `label "${dealt.chipLabel ?? ''}" → "${meta.chipLabel ?? ''}"`
+      case 'title':
+        return `title "${dealt.toolTitle ?? ''}" → "${meta.toolTitle ?? ''}"`
+      case 'visibility':
+        return `${dealt.visibility} → ${dealt.visibility === 'public' ? 'whisper' : 'public'}`
+      case 'announcer':
+        return `announced by ${dealt.announcer === 'pascal' ? 'the character' : 'Pascal'}, not ${dealt.announcer === 'pascal' ? 'Pascal' : 'the character'}`
+      default:
+        return key
+    }
+  })
+  return `Adjusted before it was dealt: ${parts.join('; ')}`
 }
 
 /** The semantic states an author may assign to a custom tool's outcome row. */
@@ -322,7 +393,9 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   // and doubly so for the dot, which a roll record overrides with the outcome's
   // own state (see getAnnouncementOutcomeState): a success has no business
   // wearing the red dot that "high" would give it.
-  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', '*': 'high' },
+  // An Inventory change (who took up or set down what) is a plain line, not a
+  // roll: no outcome accent, and no more urgent than a wardrobe note.
+  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', 'inventory-change': 'medium', '*': 'high' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'

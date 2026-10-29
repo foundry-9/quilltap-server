@@ -441,6 +441,23 @@ import { dropInterCharacterMemoryJobsMigration } from './drop-inter-character-me
 import { addTfidfTextShapeVersionMigration } from './add-tfidf-text-shape-version-v1';
 // Memory: MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION folded into MEMORY_MAINTENANCE (refactor phase F)
 import { dropHousekeepingConsolidationJobsMigration } from './drop-housekeeping-consolidation-jobs-v1';
+// Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+import { addCustomToolTriggersFieldMigration } from './add-custom-tool-triggers-field';
+// Pascal operator intervention: customToolIntervention toggle column on chat_settings
+import { addCustomToolInterventionFieldMigration } from './add-custom-tool-intervention-field';
+// Composer slash commands: composerSlashCommands toggle column on chat_settings
+import { addComposerSlashCommandsFieldMigration } from './add-composer-slash-commands-field';
+import { addChatWardrobeHistoryTableMigration } from './add-chat-wardrobe-history-table-v1';
+import { seedChatWardrobeHistoryMigration } from './seed-chat-wardrobe-history-v1';
+import { addChatWardrobeHistoryToolNameMigration } from './add-chat-wardrobe-history-tool-name-v1';
+import { addChatEquippedInventoryMigration } from './add-chat-equipped-inventory-v1';
+import { addCharacterInventoryFlagMigration } from './add-character-inventory-flag-v1';
+import { addTerminalSessionGeometryMigration } from './add-terminal-session-geometry-v1';
+import { addMemoryKeystoneMigration } from './add-memory-keystone-v1';
+import { addStorytellerModeMigration } from './add-storyteller-mode-v1';
+import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-storyteller-round-id-column';
+// Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
+import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-template-unmarked-fields-v1';
 
 /**
  * All available migrations.
@@ -901,6 +918,31 @@ export const migrations: Migration[] = [
   addTfidfTextShapeVersionMigration,
   // Memory: the retired MEMORY_HOUSEKEEPING / MEMORY_CONSOLIDATION job rows (Phase F)
   dropHousekeepingConsolidationJobsMigration,
+  // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+  addCustomToolTriggersFieldMigration,
+  // Pascal operator intervention: customToolIntervention toggle column on chat_settings
+  addCustomToolInterventionFieldMigration,
+  // Composer slash commands: composerSlashCommands toggle column on chat_settings
+  addComposerSlashCommandsFieldMigration,
+  // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
+  addChatWardrobeHistoryTableMigration,
+  // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
+  addChatWardrobeHistoryToolNameMigration,
+  seedChatWardrobeHistoryMigration,
+  // Inventory: chats.equippedInventory (the objects each character carries)
+  addChatEquippedInventoryMigration,
+  // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
+  addCharacterInventoryFlagMigration,
+  // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
+  addTerminalSessionGeometryMigration,
+  // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
+  addMemoryKeystoneMigration,
+  // Storyteller mode: chats.turnMode, chat_messages.storytellerBid, storyteller_rounds
+  addStorytellerModeMigration,
+  // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
+  addLLMLogsStorytellerRoundIdColumnMigration,
+  // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
+  addRoleplayTemplateUnmarkedFieldsMigration,
 ];
 
 export {
@@ -1338,5 +1380,29 @@ export {
   // Built-in TF-IDF: tfidf_vocabularies.textShapeVersion (anchor-free text shape)
   addTfidfTextShapeVersionMigration,
   dropHousekeepingConsolidationJobsMigration,
+  // Pascal trigger phrases: customToolTriggers toggle column on chat_settings
+  addCustomToolTriggersFieldMigration,
+  // Pascal operator intervention: customToolIntervention toggle column on chat_settings
+  addCustomToolInterventionFieldMigration,
+  // Composer slash commands: composerSlashCommands toggle column on chat_settings
+  addComposerSlashCommandsFieldMigration,
+  // Wardrobe outfit history: the table, then a one-time seed of entry 0 from current outfits
+  addChatWardrobeHistoryTableMigration,
+  // Wardrobe outfit history: actorToolName (the custom tool behind a Pascal change)
+  addChatWardrobeHistoryToolNameMigration,
+  seedChatWardrobeHistoryMigration,
+  // Inventory: chats.equippedInventory (the objects each character carries)
+  addChatEquippedInventoryMigration,
+  // Inventory tools: characters.canManageInventory (gates the inventory_* tools)
+  addCharacterInventoryFlagMigration,
+  // Ariel: terminal_sessions.cols/rows (geometry for replaying a transcript, bug 255)
+  addTerminalSessionGeometryMigration,
+  // Memory: memories.keystone (operator-marked standing facts, inner-circle recall Part C)
+  addMemoryKeystoneMigration,
+  // Storyteller mode: chats.turnMode, chat_messages.storytellerBid, storyteller_rounds
+  addStorytellerModeMigration,
+  // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
+  addLLMLogsStorytellerRoundIdColumnMigration,
+  addRoleplayTemplateUnmarkedFieldsMigration,
 };
 

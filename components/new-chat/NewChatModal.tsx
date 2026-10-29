@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
@@ -136,6 +138,17 @@ export function NewChatModal({
 
   const isAutonomous = state.autonomous.enabled
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+  useEscapeKey(() => {
+    if (openedFromQuery) {
+      router.push('/aurora')
+      return
+    }
+    onClose()
+  }, isOpen && !creating)
+
   if (!isOpen) return null
 
   const handleCancel = () => {
@@ -171,10 +184,16 @@ export function NewChatModal({
   const modalContent = (
     <div className="new-chat-modal fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         className={`w-full max-w-md ${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col`}
       >
         <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
-          <h3 className="qt-dialog-title">
+          <h3 id={titleId} className="qt-dialog-title">
             {isAutonomous
               ? 'New Autonomous Room'
               : isContinuation

@@ -13,11 +13,21 @@
  * regenerating a reply does not re-roll.
  */
 
+import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
+import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary';
+import { isListAggregate, parseAggregateKey, type AggregateScope } from '@/lib/pascal/inventory-aggregate';
 import {
+  isInventoryEffect,
+  isLogEffect,
+  isInventoryRef,
   isParamRef,
+  isWardrobeEffect,
+  isWriteEffect,
+  whenGroups,
+  type WhenObject,
   type LlmComparator,
   type NumericComparator,
   type ParamComparator,
@@ -86,7 +96,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
-  'Some tools record side effects when they run — adjusting the scene\'s persistent state or the rolling character\'s own records, server-side, as part of the roll.',
+  'Some tools record side effects when they run — adjusting the scene\'s persistent state, the rolling character\'s own records, what they are wearing, or what they carry, server-side, as part of the roll.',
   'Some tools consult, or adjust, the rolling character\'s timed progressions — recharges, gestations, countdowns — server-side; you cannot set one yourself.',
   '',
   'Available tools:',
@@ -96,6 +106,7 @@ const RUN_CUSTOM_PREAMBLE = [
 function describeRoll(roll: QtapCustomTool['roll']): string {
   if (roll === undefined) return 'random value from 0 to 1';
   if (typeof roll === 'string') return `dice ${roll}`;
+  if (isInventoryRef(roll)) return `dice from ${roll.$inventory} (else ${roll.fallback})`;
 
   const part = (label: string, v: unknown, fallback: string): string =>
     v === undefined ? fallback : isParamRef(v) ? `${label} ${v.$param}` : `${label} ${v}`;
@@ -141,12 +152,57 @@ function describeComparator(
 /**
  * Render an outcome test. Every subject is named — the bare comparators are
  * about `value`, so saying so keeps them legible beside a `roll` or a parameter
- * test rather than leaving the model to infer which is which.
+ * test rather than leaving the model to infer which is which. An any-of reads
+ * as each group in parentheses joined by "or" (a one-test group goes bare).
  */
 function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string {
   if (when === true) return 'otherwise';
+  if (!Array.isArray(when)) return describeWhenGroup(when).join(' and ');
+  return whenGroups(when)
+    .map((group) => {
+      const parts = describeWhenGroup(group);
+      return parts.length === 1 ? parts[0] : `(${parts.join(' and ')})`;
+    })
+    .join(' or ');
+}
 
-  const parts: string[] = [
+/** The possessive a scope reads as, and how its count is asked. */
+const SCOPE_WORDS: Record<AggregateScope, { possessive: string; count: string }> = {
+  equipped: { possessive: "your equipped objects'", count: 'how many objects you have equipped' },
+  owned: { possessive: "your owned objects'", count: 'how many objects you own' },
+  reachable: { possessive: "your reachable objects'", count: 'how many objects you can reach' },
+};
+
+/** The list comparators read as sentences about entries, not as symbols. */
+const LIST_WORDS: Array<[keyof ParamComparator, string]> = [
+  ['eq', 'includes'],
+  ['neq', 'includes no'],
+  ['contains', 'has an entry containing'],
+  ['ncontains', 'has no entry containing'],
+];
+
+/** Render one `inventoryAggregate` test. */
+function describeAggregate(key: string, comparator: ParamComparator): string[] {
+  const parsed = parseAggregateKey(key);
+  if (!parsed.ok) return describeComparator(comparator, `your inventory's ${key}`);
+  const { scope, field } = parsed.parsed;
+  const words = SCOPE_WORDS[scope];
+  if (field.kind === 'count') return describeComparator(comparator, words.count);
+  const subject =
+    field.kind === 'metadata'
+      ? field.fold === 'count'
+        ? `how many of ${words.possessive.replace(/'$/, '')} carry a numeric metadata.${field.key}`
+        : `${words.possessive} metadata.${field.key}${field.fold ? `.${field.fold}` : ''}`
+      : `${words.possessive} ${field.kind}`;
+  if (!isListAggregate(parsed.parsed)) return describeComparator(comparator, subject);
+  return LIST_WORDS.filter(([k]) => comparator[k] !== undefined).map(
+    ([k, verb]) => `${subject} ${verb} ${describeOperand(comparator[k])}`
+  );
+}
+
+/** Render one AND-group's tests. */
+function describeWhenGroup(when: WhenObject): string[] {
+  return [
     ...describeComparator(when, 'value'),
     ...(when.roll !== undefined ? describeComparator(when.roll, 'roll') : []),
     ...Object.entries(when.params ?? {}).flatMap(([name, comparator]) => describeComparator(comparator, name)),
@@ -157,9 +213,15 @@ function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string 
       describeComparator(comparator, `your ${key}`)
     ),
     ...(when.llm !== undefined ? describeLlmComparator(when.llm) : []),
+    ...Object.entries(when.inventory ?? {}).flatMap(([ref, comparator]) => [
+      ...(comparator.eq !== undefined ? [`your ${ref} is ${describeOperand(comparator.eq)}`] : []),
+      ...(comparator.neq !== undefined ? [`your ${ref} is not ${describeOperand(comparator.neq)}`] : []),
+    ]),
+    ...Object.entries(when.inventoryCount ?? {}).flatMap(([ref, comparator]) =>
+      describeComparator(comparator, `your equipped ${ref} count`)
+    ),
+    ...Object.entries(when.inventoryAggregate ?? {}).flatMap(([key, comparator]) => describeAggregate(key, comparator)),
   ];
-
-  return parts.join(' and ');
 }
 
 /** Render an `llm` test: the ok flag reads as a sentence, the rest as comparators. */
@@ -220,8 +282,16 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
       // `revealOdds: false` this line is gone with the rest of the odds: the
       // consequences stay as hidden as the thresholds. (The human popup still
       // sees the targets via the vocabulary — the file is the user's own.)
-      const targets = [...new Set(definition.effects.map((effect) => effect.target))];
-      lines.push(`    Side effects: writes ${targets.join(', ')}`);
+      // Wardrobe gestures name their item references verbatim, placeholders
+      // and all — what may be worn, not which outcome wears it.
+      lines.push(`    Side effects: ${describeEffects(definition.effects)}`);
+    }
+    // Which objects the tool consults — vocabulary, never the odds.
+    const vocabulary = collectToolVocabulary(definition);
+    const reads = vocabulary.inventoryReads;
+    if (reads.length > 0) lines.push(`    Reads: your inventory for ${reads.join(', ')}`);
+    if (vocabulary.inventoryAggregates.length > 0) {
+      lines.push(`    Takes stock of: ${vocabulary.inventoryAggregates.join(', ')}`);
     }
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);
@@ -254,3 +324,50 @@ export function validateRunCustomInput(input: unknown): RunCustomToolInput | nul
   const parsed = runCustomToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/**
+ * The `Side effects:` line's clauses: `writes a, b` for the value writes, then
+ * one clause per wardrobe gesture — `wears Cloak of Night, Boots`, `takes off
+ * {{params.garment}}`, `clears hair` — then one per inventory gesture —
+ * `equips Excalibur`, `unequips lantern`, `picks up magic bow` — then
+ * `writes to the log` when any effect is a log line. Duplicates collapse.
+ */
+function describeEffects(effects: NonNullable<QtapCustomTool['effects']>): string {
+  const targets = [...new Set(effects.filter(isWriteEffect).map((effect) => effect.target))];
+  const clauses: string[] = targets.length > 0 ? [`writes ${targets.join(', ')}`] : [];
+  for (const effect of effects) {
+    if (!isWardrobeEffect(effect)) continue;
+    const { action, items = [], slot } = effect.wardrobe;
+    const clause =
+      action === 'wear'
+        ? `wears ${items.join(', ')}`
+        : action === 'take_off'
+          ? `takes off ${items.join(', ')}${slot ? ` (${slot} only)` : ''}`
+          : `clears ${slot}`;
+    if (!clauses.includes(clause)) clauses.push(clause);
+  }
+  for (const effect of effects) {
+    if (!isInventoryEffect(effect)) continue;
+    const { action, items } = effect.inventory;
+    const verb = action === 'equip' ? 'equips' : action === 'unequip' ? 'unequips' : 'picks up';
+    const clause = `${verb} ${items.join(', ')}`;
+    if (!clauses.includes(clause)) clauses.push(clause);
+  }
+  if (effects.some(isLogEffect)) clauses.push('writes to the log');
+  return clauses.join('; ');
+}
+
+/**
+ * What this tool does to the world: whatever the named custom tool does —
+ * `read` unless its definition carries effects (`customToolEffect`). The
+ * caller supplies the roster's effects; a name it does not know counts as a
+ * write.
+ */
+export const runCustomToolEffect: ToolEffectSpec = computedToolEffect({
+  schema: runCustomToolInputSchema,
+  resolve: (input, lookups) => lookups.customToolEffects?.get(input.tool) ?? 'write',
+  maxEffect: 'write',
+  notes: {
+    read: 'This turn allows only the custom tools marked "read" in the list above; a tool with effects will be refused.',
+  },
+});

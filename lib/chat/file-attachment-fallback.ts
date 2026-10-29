@@ -244,7 +244,8 @@ async function describeImageWithProfile(
   file: FileAttachment,
   imageDescProfile: ConnectionProfile,
   repos: any,
-  userId: string
+  userId: string,
+  chatId?: string | null
 ): Promise<FallbackResult> {
   try {
     // Get parameters from profile, with sensible defaults for description task
@@ -280,6 +281,7 @@ async function describeImageWithProfile(
       sampling: { temperature, maxTokens, topP },
       timeoutMs: IMAGE_DESCRIPTION_TIMEOUT_MS,
       logType: 'IMAGE_DESCRIPTION',
+      chatId,
     })
 
     if (!sent.ok) {
@@ -474,7 +476,7 @@ async function runGenerateImageDescription(
     }
   }
 
-  const primaryResult = await describeImageWithProfile(file, imageDescProfile, repos, userId)
+  const primaryResult = await describeImageWithProfile(file, imageDescProfile, repos, userId, options.chatId)
   if (primaryResult.type === 'image_description') {
     return primaryResult
   }
@@ -496,7 +498,7 @@ async function runGenerateImageDescription(
 
   const chainResult = await describeViaFallbackChain(
     file, imageDescProfile, repos, userId,
-    { dangerous: false, alreadyTried: [imageDescProfile.id] },
+    { dangerous: false, alreadyTried: [imageDescProfile.id], chatId: options.chatId },
     attemptTrail
   )
   if (chainResult) return chainResult
@@ -515,7 +517,7 @@ async function runGenerateImageDescription(
     chainAttempts: attemptTrail.length - 1,
   })
 
-  const fallbackResult = await describeImageWithProfile(file, fallbackProfile, repos, userId)
+  const fallbackResult = await describeImageWithProfile(file, fallbackProfile, repos, userId, options.chatId)
   if (fallbackResult.type === 'image_description') {
     return {
       ...fallbackResult,
@@ -536,7 +538,7 @@ async function runGenerateImageDescription(
   // the primary would refuse a mainstream stand-in too.
   const uncensoredChainResult = await describeViaFallbackChain(
     file, fallbackProfile, repos, userId,
-    { dangerous: true, alreadyTried: [imageDescProfile.id, fallbackProfile.id] },
+    { dangerous: true, alreadyTried: [imageDescProfile.id, fallbackProfile.id], chatId: options.chatId },
     attemptTrail
   )
   if (uncensoredChainResult) {
@@ -583,7 +585,7 @@ async function describeViaFallbackChain(
   primary: ConnectionProfile,
   repos: any,
   userId: string,
-  opts: { dangerous: boolean; alreadyTried: string[] },
+  opts: { dangerous: boolean; alreadyTried: string[]; chatId?: string | null },
   attemptTrail: string[]
 ): Promise<FallbackResult | null> {
   let chain
@@ -616,7 +618,7 @@ async function describeViaFallbackChain(
       dangerous: opts.dangerous,
     })
 
-    const result = await describeImageWithProfile(file, candidate.profile, repos, userId)
+    const result = await describeImageWithProfile(file, candidate.profile, repos, userId, opts.chatId)
     if (result.type === 'image_description') {
       logger.info('[Image Fallback] Describer stand-in answered', {
         standInProfileId: candidate.profile.id,

@@ -4,6 +4,8 @@
  * GET /api/v1/chats/[id]?action=outfit         — Get equipped outfit state
  * GET /api/v1/chats/[id]?action=outfit-summary — Per-character resolved title summary
  * POST /api/v1/chats/[id]?action=equip         — Mutate equipped state
+ * GET /api/v1/chats/[id]?action=wardrobe-history&characterId=… — One character's outfit timeline
+ * POST /api/v1/chats/[id]?action=wardrobe-rollback — Return a character to a recorded outfit
  *
  * The POST body's put-on modes go through `lib/wardrobe/wear-ops.ts` — the
  * same resolution and refusals as the `wardrobe_wear` tool (an archived item
@@ -27,6 +29,9 @@ import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
 import { wornBundlesFor, type WornBundle } from '@/lib/wardrobe/slot-ops';
 import { resolveWearable, wearItem, type PutOnMode } from '@/lib/wardrobe/wear-ops';
 import { newlyWornArchivedItems, wearRefusal } from '@/lib/wardrobe/wearable';
+import { rollbackWardrobe } from '@/lib/wardrobe/history/rollback';
+import { changedByLabel, resolveHistorySlots, summarizeHistorySlots } from '@/lib/wardrobe/history/describe-entry';
+import { operatorWardrobeProvenance } from '@/lib/wardrobe/history/operator-provenance';
 
 const equipBodySchema = z
   .object({
@@ -266,9 +271,15 @@ export async function handleEquipSlot(
       }
     }
 
+    const chat = await repos.chats.findById(chatId);
     await notifyWardrobeChanged(
       repos,
-      { userId: ctx.user.id, chatId, characterId },
+      {
+        userId: ctx.user.id,
+        chatId,
+        characterId,
+        provenance: chat ? operatorWardrobeProvenance(chat) : { source: 'operator' },
+      },
       '[Chats v1] outfit-equip',
     );
 
@@ -279,5 +290,127 @@ export async function handleEquipSlot(
     }
     logger.error('[Chats v1] Error equipping wardrobe slot', { chatId }, error instanceof Error ? error : undefined);
     return serverError('Failed to equip wardrobe slot');
+  }
+}
+
+const rollbackBodySchema = z.object({
+  characterId: z.string().min(1, 'characterId is required'),
+  index: z.number().int().nonnegative(),
+});
+
+/**
+ * GET ?action=wardrobe-history&characterId=… — One character's outfit timeline
+ * in this chat, ascending by index. Each entry's slots resolve against the
+ * character's pool (operator view, archived included); an id the pool no
+ * longer holds renders `{ title: null, missing: true }`.
+ */
+export async function handleGetWardrobeHistory(
+  req: NextRequest,
+  chatId: string,
+  { repos }: RequestContext,
+): Promise<NextResponse> {
+  const characterId = req.nextUrl.searchParams.get('characterId');
+  if (!characterId) return badRequest('characterId is required');
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) return notFound('Chat');
+
+    const rows = await repos.wardrobeHistory.findEntries(chatId, characterId);
+    if (rows.length === 0) {
+      return NextResponse.json({ currentIndex: null, entries: [] });
+    }
+
+    const pool = await loadWearablePool(repos, characterId, undefined, { chatId, operator: true });
+    const names = new Map<string, string | null>();
+    const nameOf = async (id: string): Promise<string | null> => {
+      if (!names.has(id)) {
+        try {
+          names.set(id, (await repos.characters.findByIdRaw(id))?.name ?? null);
+        } catch {
+          names.set(id, null);
+        }
+      }
+      return names.get(id) ?? null;
+    };
+    const selfName = (await nameOf(characterId)) ?? 'the character';
+
+    const entries = [];
+    for (const row of rows) {
+      const actorName = row.actorCharacterId ? await nameOf(row.actorCharacterId) : null;
+      const slots = resolveHistorySlots(pool, row.slots);
+      entries.push({
+        index: row.entryIndex,
+        at: row.createdAt,
+        source: row.source,
+        actorCharacterId: row.actorCharacterId,
+        actorName,
+        actorToolName: row.actorToolName,
+        changedBy: changedByLabel(row, actorName, selfName),
+        isCurrent: row.isCurrent,
+        summary: summarizeHistorySlots(slots),
+        slots,
+      });
+    }
+
+    logger.debug('[Chats v1] Read wardrobe history', { chatId, characterId, entries: entries.length, context: 'wardrobe' });
+    return NextResponse.json({
+      currentIndex: rows.find((row) => row.isCurrent)?.entryIndex ?? null,
+      entries,
+    });
+  } catch (error) {
+    logger.error('[Chats v1] Error reading wardrobe history', { chatId, characterId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to read wardrobe history');
+  }
+}
+
+/**
+ * POST ?action=wardrobe-rollback — Return a character to a recorded outfit, as
+ * an operator change. Body `{ characterId, index }`. A refusal (`no_history`,
+ * `out_of_range`, `already_current`) answers 400 with its message.
+ */
+export async function handleWardrobeRollback(
+  req: NextRequest,
+  chatId: string,
+  ctx: RequestContext,
+): Promise<NextResponse> {
+  const { repos } = ctx;
+  try {
+    const { characterId, index } = rollbackBodySchema.parse(await req.json());
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) return notFound('Chat');
+
+    const pool = await loadWearablePool(repos, characterId, undefined, { chatId, operator: true });
+    const outcome = await rollbackWardrobe(
+      repos,
+      {
+        chatId,
+        pool,
+        index,
+        context: { userId: ctx.user.id, chatId, characterId, provenance: operatorWardrobeProvenance(chat) },
+        source: 'ui',
+      },
+      '[Chats v1] wardrobe-rollback',
+    );
+    if (!outcome.ok) {
+      logger.info('[Chats v1] Wardrobe rollback refused', { chatId, characterId, index, reason: outcome.reason, context: 'wardrobe' });
+      return badRequest(outcome.message);
+    }
+
+    logger.info('[Chats v1] Wardrobe rolled back', {
+      chatId, characterId, previousIndex: outcome.previousIndex, restoredIndex: outcome.restoredIndex,
+      skipped: outcome.skipped.length, context: 'wardrobe',
+    });
+    return NextResponse.json({
+      equippedSlots: outcome.slots,
+      previousIndex: outcome.previousIndex,
+      restoredIndex: outcome.restoredIndex,
+      skipped: outcome.skipped,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return badRequest(error.issues.map((e: { message: string }) => e.message).join(', '));
+    }
+    logger.error('[Chats v1] Error rolling back wardrobe', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to roll back the outfit');
   }
 }

@@ -46,8 +46,11 @@ import {
 import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { SmartTypographyPlugin } from './plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
+import { PunctuationLintPlugin } from './plugins/PunctuationLintPlugin'
 import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
 import { MentionTypeaheadPlugin } from './plugins/MentionTypeaheadPlugin'
+import { SlashCommandPlugin } from './plugins/SlashCommandPlugin'
+import type { SlashCommandContext } from './slash-commands/context'
 import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
 import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 
@@ -79,6 +82,17 @@ interface LexicalComposerWrapperProps {
   suspendSync?: boolean
   /** Character ids the `@` typeahead lists first — the current chat's cast. */
   mentionPriorityCharacterIds?: readonly string[]
+  /**
+   * What the `/` command menu runs. Omit (or null) and there is no menu — the
+   * plugin also stays unmounted while the `composerSlashCommands` setting is off.
+   */
+  slashCommands?: SlashCommandContext | null
+  /**
+   * The chat's template leaves narration unmarked and quotes its dialogue
+   * (`isProseTemplate`): the punctuation plugin previews narration and asides
+   * and flags a draft with no dialogue.
+   */
+  proseMode?: boolean
 }
 
 /**
@@ -100,6 +114,8 @@ const ComposerPlugins = forwardRef<
     placeholder,
     suspendSync,
     mentionPriorityCharacterIds,
+    slashCommands,
+    proseMode,
   },
   ref,
 ) {
@@ -130,6 +146,7 @@ const ComposerPlugins = forwardRef<
         contentEditable={
           <ContentEditable
             className="qt-chat-composer-input qt-lexical-contenteditable"
+            aria-label="Message"
             aria-placeholder={placeholder}
             placeholder={
               <div className="qt-lexical-placeholder">{placeholder}</div>
@@ -163,12 +180,15 @@ const ComposerPlugins = forwardRef<
       <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
       <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
       <MentionTypeaheadPlugin priorityCharacterIds={mentionPriorityCharacterIds} />
+      {slashCommands && <SlashCommandPlugin context={slashCommands} />}
       {/* Above TextReplacementPlugin: `.` is a trigger for both, and smart
           typography must resolve `...` before text replacement claims the word
           boundary. Registration order is load-bearing — see the interaction
           table in SmartTypographyPlugin. */}
       <SmartTypographyPlugin />
       <TextReplacementPlugin />
+      {/* Read-only: paints warnings, never edits, so its order is immaterial. */}
+      <PunctuationLintPlugin proseMode={proseMode} />
     </>
   )
 })

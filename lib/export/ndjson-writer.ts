@@ -420,6 +420,21 @@ async function* streamChats(
       });
     }
 
+    // Every character's outfit timeline in this chat, cursor included.
+    try {
+      const historyRows = await getRepositories().wardrobeHistory.findByChatId(id);
+      for (const row of historyRows) {
+        yield { kind: 'wardrobe_history', chatId: id, data: row };
+        bump(counts, 'wardrobeHistory');
+      }
+      logger.debug('Exported outfit history', { chatId: id, count: historyRows.length });
+    } catch (error) {
+      logger.warn('Failed to load outfit history for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Conversation annotations and chat documents come after the messages so
     // importers can resolve sourceMessageId / chatId against IDs they have
     // already seen in this same stream.

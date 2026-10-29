@@ -92,7 +92,7 @@ Note that the dialog governs a room's *settings* — its schedule, its purse, it
 
 ## Tools — what characters may, and may not, deliberately undo
 
-In an autonomous room, characters may invoke any tool they would ordinarily be permitted to invoke, with one narrowing: tools that **mutate** or **destroy** files on disk — at present, vault-file deletion — are disabled unless the room's owner has pre-authorized them at room creation. The rationale is straightforward: the householder is not present to confirm; the conservative default is to refuse.
+In an autonomous room, characters may invoke any tool they would ordinarily be permitted to invoke, with one narrowing: tools whose effect is **destroy** — deletion that cannot be undone from inside Quilltap: deleting a document, a folder or a stored file, discarding a letter, removing an annotation, and any plugin or MCP tool declared to delete — are disabled unless the room's owner has pre-authorized them at room creation. Every tool declares its effect (none, read, write or destroy), so the set is no longer a hand-kept list; and the refusal is enforced when the tool is called, not merely by leaving it off the menu. The rationale is straightforward: the householder is not present to confirm; the conservative default is to refuse.
 
 The user-level **destructive-tool policy** (`/settings?tab=chat`, *Autonomous Rooms* → *Destructive tools*) acts as a ceiling. Setting it to **Always refuse** disables the destructive set across every autonomous room regardless of any permissive per-room flag. Setting it to **Opt in per room** honors the per-room authorization, when granted.
 

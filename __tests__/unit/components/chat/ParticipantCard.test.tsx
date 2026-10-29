@@ -11,7 +11,7 @@
  * - Accessibility attributes
  * - Connection profile dropdown
  * - Turn position badge (turnPosition + turnStatus)
- * - Stop button (turnStatus generating + onStopStreaming)
+ * - No Stop button while generating (Stop lives in the composer)
  * - Active toggle button (visible eye icon)
  * - Inactive card styling
  */
@@ -945,58 +945,17 @@ describe('ParticipantCard', () => {
     })
   })
 
-  describe('Stop button', () => {
-    it('shows stop button when turnStatus is generating and onStopStreaming provided', () => {
-      const onStopStreaming = jest.fn()
+  describe('Stop button (moved to the composer)', () => {
+    it('shows the Speaking button, not a Stop button, while this participant is generating', () => {
       const props = createDefaultProps({
         turnStatus: 'generating',
-        onStopStreaming,
-        isGenerating: true,
-        isCurrentTurn: true,
-      })
-      render(<ParticipantCard {...props} />)
-
-      const stopButton = screen.getByRole('button', { name: /stop generating/i })
-      expect(stopButton).toBeInTheDocument()
-      expect(stopButton).toHaveTextContent('Stop')
-    })
-
-    it('calls onStopStreaming when stop button is clicked', () => {
-      const onStopStreaming = jest.fn()
-      const props = createDefaultProps({
-        turnStatus: 'generating',
-        onStopStreaming,
-        isGenerating: true,
-        isCurrentTurn: true,
-      })
-      render(<ParticipantCard {...props} />)
-
-      fireEvent.click(screen.getByRole('button', { name: /stop generating/i }))
-      expect(onStopStreaming).toHaveBeenCalled()
-    })
-
-    it('shows Speaking button when generating but no onStopStreaming', () => {
-      const props = createDefaultProps({
         isGenerating: true,
         isCurrentTurn: true,
         queuePosition: 0,
-        // No onStopStreaming, no turnStatus
       })
       render(<ParticipantCard {...props} />)
 
       expect(screen.getByRole('button', { name: /speaking\.\.\./i })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /stop generating/i })).not.toBeInTheDocument()
-    })
-
-    it('does not show stop button when turnStatus is not generating', () => {
-      const onStopStreaming = jest.fn()
-      const props = createDefaultProps({
-        turnStatus: 'next',
-        onStopStreaming,
-        isGenerating: false,
-      })
-      render(<ParticipantCard {...props} />)
-
       expect(screen.queryByRole('button', { name: /stop generating/i })).not.toBeInTheDocument()
     })
   })

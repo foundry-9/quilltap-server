@@ -13,7 +13,7 @@
  * @module components/settings/chat-settings/components/TimestampConfigCard
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useId } from 'react'
 import type {
   TimestampConfig,
   TimestampMode,
@@ -43,6 +43,7 @@ export function TimestampConfigCard({
   compact = false,
   disabled = false,
 }: TimestampConfigCardProps) {
+  const id = useId()
   // Use the provided config/value or default - fully controlled component
   const currentConfig = useMemo(
     () => config ?? value ?? DEFAULT_TIMESTAMP_CONFIG,
@@ -149,10 +150,11 @@ export function TimestampConfigCard({
       {/* Interval (only when mode is EVERY_N_MINUTES) */}
       {currentConfig.mode === 'EVERY_N_MINUTES' && (
         <div>
-          <label className="block qt-text-label mb-2">
+          <label className="block qt-text-label mb-2" htmlFor={`${id}-interval`}>
             Interval (minutes)
           </label>
           <input
+            id={`${id}-interval`}
             type="number"
             min={1}
             step={1}
@@ -172,10 +174,11 @@ export function TimestampConfigCard({
         <>
           {/* Format Selection */}
           <div>
-            <label className="block qt-text-label mb-2">
+            <label className="block qt-text-label mb-2" htmlFor={`${id}-format`}>
               Timestamp Format
             </label>
             <select
+              id={`${id}-format`}
               value={currentConfig.format}
               onChange={(e) =>
                 handleFormatChange(e.target.value as TimestampFormat)
@@ -201,10 +204,11 @@ export function TimestampConfigCard({
           {/* Custom Format Input (only when format is CUSTOM) */}
           {currentConfig.format === 'CUSTOM' && (
             <div>
-              <label className="block qt-text-label mb-2">
+              <label className="block qt-text-label mb-2" htmlFor={`${id}-custom-format`}>
                 Custom Format String
               </label>
               <input
+                id={`${id}-custom-format`}
                 type="text"
                 value={currentConfig.customFormat || ''}
                 onChange={(e) => handleCustomFormatChange(e.target.value)}
@@ -229,11 +233,12 @@ export function TimestampConfigCard({
 
           {/* Timezone Override */}
           <div>
-            <label className="block qt-text-label mb-2">
+            <label className="block qt-text-label mb-2" htmlFor={`${id}-timezone`}>
               Timezone
             </label>
             <div className="flex gap-2">
               <input
+                id={`${id}-timezone`}
                 type="text"
                 list="timezone-options"
                 value={currentConfig.timezone || ''}
@@ -357,10 +362,11 @@ export function TimestampConfigCard({
           {/* Fictional Base Timestamp (only when useFictionalTime is true) */}
           {currentConfig.useFictionalTime && (
             <div>
-              <label className="block qt-text-label mb-2">
+              <label className="block qt-text-label mb-2" htmlFor={`${id}-fictional`}>
                 Fictional Base Timestamp
               </label>
               <input
+                id={`${id}-fictional`}
                 type="datetime-local"
                 value={currentConfig.fictionalBaseTimestamp || ''}
                 onChange={(e) =>

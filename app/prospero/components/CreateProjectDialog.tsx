@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 /**
  * Create Project Dialog
  *
@@ -19,6 +20,7 @@ interface CreateProjectDialogProps {
 const FORM_ID = 'create-project-form'
 
 export function CreateProjectDialog({ open, onClose, onSubmit }: CreateProjectDialogProps) {
+  const fieldId = useId()
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -47,8 +49,9 @@ export function CreateProjectDialog({ open, onClose, onSubmit }: CreateProjectDi
     >
       <form id={FORM_ID} onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="qt-label mb-2 block">Name</label>
+          <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
           <input
+            id={`${fieldId}-f0`}
             type="text"
             name="name"
             required
@@ -58,8 +61,9 @@ export function CreateProjectDialog({ open, onClose, onSubmit }: CreateProjectDi
           />
         </div>
         <div>
-          <label className="qt-label mb-2 block">Description (optional)</label>
+          <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Description (optional)</label>
           <textarea
+            id={`${fieldId}-f1`}
             name="description"
             maxLength={2000}
             rows={3}

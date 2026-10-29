@@ -7,6 +7,7 @@
 
 import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   selectNextSpeaker,
@@ -25,7 +26,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
-import { encodeDoneEvent, encodeCarinaAnswerEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
+import { encodeDoneEvent, encodeCarinaAnswerEvent, encodePascalResultEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
 import { maybeConfirmAnswer } from './answer-confirmation.service'
 import {
   triggerTurnMemoryExtraction,
@@ -36,8 +37,10 @@ import {
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { runReplyTriggers } from './trigger-phrase-sites'
 import { buildRouteTrail } from './route-trail'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { StorytellerTurnContext } from '@/lib/storyteller/types'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -60,6 +63,13 @@ export interface FinalizeMessageResponseOptions {
   streaming: StreamingState
   compression: CompressionContext
   triggers: TriggerContext
+  /**
+   * A storyteller speaking turn: the bid it carries out (stored on the
+   * message, re-applied on swipe) and its effect ceiling (trigger phrases
+   * above it are skipped). Memory extraction, the summary fold and the danger
+   * classification wait for the round's end (`runStorytellerRoundHousekeeping`).
+   */
+  storyteller?: StorytellerTurnContext
 }
 
 /**
@@ -84,10 +94,15 @@ export async function finalizeMessageResponse({
   streaming,
   compression,
   triggers,
+  storyteller,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
   const { conciergePolicy, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
+  // A reply the operator hard-stopped is kept as it streamed: nothing here may
+  // rewrite it (answer confirmation) or act on its half-finished words (dice,
+  // trigger phrases, Carina markup).
+  const turnStopped = isCurrentTurnStopped()
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const leadingStripped = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
@@ -213,7 +228,7 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     toolMessages,
     participantCharacters,
-    globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true,
+    globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true && !turnStopped,
     cheapLLMSelection,
     connectionProfile,
     conciergePolicy,
@@ -286,6 +301,20 @@ export async function finalizeMessageResponse({
     { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent },
     routeTrail
   )
+
+  // A storyteller turn records the bid it carried out, so a swipe re-runs it
+  // under the same plan and ceiling. Never model-facing.
+  if (storyteller) {
+    try {
+      await repos.chats.updateMessage(chatId, assistantMessageId, { storytellerBid: storyteller.bidRecord })
+    } catch (error) {
+      logger.warn('Failed to record the storyteller bid on its message', {
+        chatId,
+        messageId: assistantMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 
   // The turn's recall record (stage trace, delivered pools, the ring line the
   // replay reads back) rides on the message it shaped.
@@ -379,7 +408,7 @@ export async function finalizeMessageResponse({
   }
 
   const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
-  if (autoDetectRngInResponse && cleanedResponse) {
+  if (autoDetectRngInResponse && cleanedResponse && !turnStopped) {
     const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
     if (rngPatternsInResponse.length > 0) {
       logger.info('Auto-detected RNG patterns in assistant response', {
@@ -438,6 +467,30 @@ export async function finalizeMessageResponse({
   }
 
   // ============================================================================
+  // Pascal trigger phrases — assistant-reply path
+  // ============================================================================
+  // When the chat setting is on, a custom tool whose `triggers` phrase this
+  // character just said runs with its defaults, from this character's own
+  // perspective (their roster, their sheet). Runs AFTER the reply is saved so
+  // the announcement follows the words that caused it, and BEFORE the done
+  // event so the client's post-turn refetch includes it. No in-memory splice:
+  // a chained next speaker re-reads the transcript. No wardrobe announcement
+  // set either — the turn's tool-execution context is already drained here.
+  // A swipe never reaches this path (regenerate-swipe.service.ts), so a swipe
+  // fires nothing, matching the dice. Never throws.
+  if (!turnStopped) await runReplyTriggers({
+    userId,
+    chatId,
+    chat,
+    content: cleanedResponse,
+    characterParticipantId: characterParticipant.id,
+    characterId: character.id,
+    chatSettings,
+    onPosted: (msg) => safeEnqueue(controller, encodePascalResultEvent(encoder, msg)),
+    effectCeiling: storyteller?.effectCeiling,
+  })
+
+  // ============================================================================
   // Carina (inline LLM queries) — assistant-markup path
   // ============================================================================
   // If the character wrote @Name: / @Name? in their response, fire the isolated
@@ -446,7 +499,7 @@ export async function finalizeMessageResponse({
   // the done event below (so the client's post-turn fetchChat() includes it).
   // The asker is this character's participant; the answer carries
   // systemSender:'carina' and is excluded from memory extraction automatically.
-  if (cleanedResponse) {
+  if (cleanedResponse && !turnStopped) {
     await runCarinaMarkupQuery({
       userId,
       chatId,
@@ -511,7 +564,13 @@ export async function finalizeMessageResponse({
       })
   }
 
-  if (chatSettings) {
+  // A storyteller turn leaves the round's housekeeping to the round's end.
+  if (chatSettings && storyteller) {
+    logger.debug('Storyteller turn: housekeeping deferred to the end of the round', {
+      chatId,
+      roundId: storyteller.bidRecord.roundId,
+    })
+  } else if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
     }
@@ -578,6 +637,46 @@ export async function finalizeMessageResponse({
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
   }
+}
+
+/**
+ * A storyteller round's housekeeping, run once after its last speaking turn:
+ * memory extraction, the context-summary fold (and with it the auto-title
+ * check) and the danger classification — what each turn of a rotation chain
+ * triggers from the finalizer, but once for the whole round, not once per
+ * concurrent turn.
+ */
+export async function runStorytellerRoundHousekeeping(
+  repos: ReturnType<typeof getRepositories>,
+  params: {
+    chatId: string
+    userId: string
+    connectionProfile: ConnectionProfile
+    memoryChatSettings: MemoryChatSettings
+  }
+): Promise<void> {
+  const { chatId, userId, connectionProfile, memoryChatSettings } = params
+  logger.debug('Storyteller round housekeeping', { chatId })
+  await triggerTurnMemoryExtraction(repos, {
+    chatId,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
+  await triggerContextSummaryCheck(repos, {
+    chatId,
+    provider: connectionProfile.provider,
+    modelName: connectionProfile.modelName,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
+  await triggerChatDangerClassification(repos, {
+    chatId,
+    userId,
+    connectionProfile,
+    chatSettings: memoryChatSettings,
+  })
 }
 
 /**

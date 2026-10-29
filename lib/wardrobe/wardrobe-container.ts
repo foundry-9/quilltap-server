@@ -77,6 +77,33 @@ export function wardrobeOriginLabel(origin: WardrobeOrigin | null | undefined): 
   }
 }
 
+/**
+ * Who can reach an item from where it lives — the note a reference picker
+ * shows under the origin chip, because there (unlike the wardrobe dialog) no
+ * character is given. A character's own garment reaches that character only
+ * (`characterName`, or "this character" without one); a group's reaches its
+ * members, a project's the chats in it, Quilltap General everyone. Null for
+ * an item that arrived without an origin.
+ */
+export function wardrobeReachLabel(
+  origin: WardrobeOrigin | null | undefined,
+  characterName?: string | null,
+): string | null {
+  if (!origin) return null
+  switch (origin.scope) {
+    case 'character': {
+      const name = characterName?.trim() || origin.name.trim()
+      return `${name || 'this character'} only`
+    }
+    case 'group':
+      return `members of ${origin.name}`
+    case 'project':
+      return `chats in ${origin.name}`
+    case 'general':
+      return 'everyone'
+  }
+}
+
 /** Tag every item in a collection read with the container it came from. */
 export function withOrigin(
   items: readonly WardrobeItem[],

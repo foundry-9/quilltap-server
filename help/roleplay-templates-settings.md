@@ -73,6 +73,12 @@ Built-in templates are:
 - **Copyable** — Create custom versions based on built-in ones
 - **Marked** — Show a "Built-in" badge
 
+Three are presently on the shelf:
+
+- **Standard** — `*actions*` in asterisks, `"dialogue"` in quotes, `((asides))` in double parentheses
+- **Quilltap RP** — bare dialogue, `[actions]` in brackets, `{thoughts}` in braces, `// ` before an aside
+- **Novel** — prose as a published novel prints it: narration wears no marks at all and is set in italics, `"dialogue"` sits upright in straight or curly quotes, a `*single asterisk*` marks emphasis (shown bold and italic), `**double asterisks**` mean nothing whatever, and `((double parentheses))` are out of character. Novel is built entirely from the editor's own parts — copy it and you may rebuild or rearrange every piece of it yourself.
+
 ### Viewing Built-in Templates
 
 The Built-in Templates section shows:
@@ -175,18 +181,37 @@ To create a brand new custom template:
 
 #### Narration Delimiters
 
-- **What it is** — The character(s) used to mark narration text (required)
+- **What it is** — How narration text is marked (a choice is required)
 - **Why it's required** — The system uses this to semantically distinguish narration from speech
-- **Format** — Either a single string (same character for open/close, like `*`) or a pair (different open/close, like `[` and `]`)
+- **Format** — A single string (same character for open/close, like `*`), a pair (different open/close, like `[` and `]`), or **None — plain prose**, for narration that goes about its business unmarked, as it does in any novel worth the binding
 - **Examples** —
   - `*` — Standard asterisk narration: `*She sighed heavily.*`
   - `[`, `]` — Bracket narration: `[She sighed heavily.]`
+  - **None** — Novel's way: `She sighed heavily.` Choosing it switches on **Unmarked Text** styling (below), since unmarked narration generally wants a look of its own
+
+#### Unmarked Text
+
+Whatever no delimiter lays claim to — the narration of a Novel-style template, or simply the words between the marks in any other — may be given a style of its own. Tick **Style unmarked text**, choose a **Style** (the new **Plain** style wears no chip at all and is meant to be dressed with flourishes), and add any **Flourishes** you fancy. Novel uses Plain with **Italic**, which is why its narration leans gently to the right while its dialogue stands up straight.
+
+Unmarked styling never intrudes upon a span a delimiter has claimed, nor upon a line a line-prefix or tag-prefix rule has taken for its own.
+
+#### Markdown and the Asterisk
+
+The **Markdown reads asterisks as bold and italic** box is ticked by default, and for most templates it should stay that way. Untick it and the asterisk is withdrawn from Markdown's service entirely:
+
+- A **single** `*` becomes an ordinary character, free for your own delimiters to claim — Novel's **Emphasis** delimiter is a concealed `*` wrap, dressed bold and italic
+- A **doubled** `**` means nothing at all and is quietly dropped from the display, so a stray `**word**` from an over-eager model reads simply as *word*
+- A `* * *` scene break, a `* ` list bullet and anything inside code are left exactly as they were
+
+The composer's **Bold** button retires from the toolbar for such a template, there being nothing left for it to do.
 
 #### Formatting Delimiters
 
 Below the prompt and narration fields, the **Formatting Delimiters** list adds toolbar buttons and styling rules. Click **+ Add Delimiter** for each rule, then choose its **Kind**:
 
-- **Wrap** — an opening and closing marker around an inline span (e.g. `*action*` or `[action]`). Choose **Same** for one marker on both sides, or **Pair** for different open/close markers.
+- **Wrap** — an opening and closing marker around an inline span (e.g. `*action*` or `[action]`). Choose **Same** for one marker on both sides, or **Pair** for different open/close markers. Two further switches attend a wrap:
+  - **Straight quotes also match curly ones** — a `"` in the markers also answers to `“` when opening and `”` when closing, in any mixture, which is what models and smart-quote keyboards actually produce. (Single quotes likewise, with `‘` and `’`.) Such a delimiter also leaves the **Smart typography** display setting free to curl your quotes.
+  - **May run unclosed to the end of a paragraph** — the prose convention for speech carried across several paragraphs, where every paragraph but the last opens with a quotation mark and never closes. The span simply runs to the paragraph's end.
 - **Line prefix** — a marker at the start of a line styles the *whole line* (e.g. `// ` for an out-of-character aside). Set the **Line marker**.
 - **Tag prefix** — a bracketed token at the start of a line styles the *whole line* when the token matches a pattern you set. For example, `[CAPTAIN] All hands on deck!` with the default "uppercase only" token rule. Set the **Brackets** (open and close) and the **Token pattern** — a regular expression whose default accepts uppercase and non-cased scripts but never lowercase. Edit it to suit (for example `\d+` to match a number).
 
@@ -195,6 +220,7 @@ Each rule also has:
 - **Name** — the full label shown in the button's tooltip
 - **Button Label** — the short text on the composer toolbar button (max 10 characters)
 - **Style (CSS class)** — pick a built-in style or type your own theme class for a custom look. The built-in roster now runs to:
+  - **Plain** — no chip, no colour of its own; a blank canvas for the Flourishes below (Novel's emphasis and narration both wear it)
   - The classics — **Narration**, **Dialogue**, **Out of Character**, **Inner Monologue**
   - **Style 1–4** — four boldly contrasting liveries that every theme dresses in its own four hues, so a marked passage fairly leaps off the page
   - The semantics — **Danger**, **Warning**, **Success**, **Info**, **Muted**, and **Code** (the last in a monospace hand), each drawn from the theme's standing palette
@@ -215,11 +241,15 @@ Beneath each rule sits a small parade of optional **Flourishes**, layered atop t
 
 Mix them freely; they compose with whatever Style you've picked.
 
+#### Marks Within Marks
+
+A delimiter's span may hold another's: emphasis inside dialogue (`"I said *stop*!"`), dialogue inside an aside, and so on, up to a few layers deep. The inner mark is styled within the outer one rather than lost inside it.
+
 A delimiter is defined once and drives three things at once: the composer toolbar button, and how matching text is styled in both the live chat and the server-rendered views — so they always agree.
 
 #### Draft Formatting Instructions
 
-Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
+Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It knows about unmarked narration, curly-quote and unclosed-paragraph wraps, and a template that has taken the asterisk from Markdown. It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
 
 ### Previewing Your Templates
 

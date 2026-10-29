@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 interface PromptDialogProps {
   message: string
@@ -22,6 +23,10 @@ export function PromptDialog({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEscapeKey(() => onClose(undefined))
+
+  const messageId = useId()
+  const dialogRef = useRef<HTMLFormElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
 
   useEffect(() => {
     const el = inputRef.current
@@ -44,9 +49,18 @@ export function PromptDialog({
         type="button"
       />
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[101] pointer-events-auto">
-        <form onSubmit={handleSubmit} className="qt-dialog p-6 min-w-[20rem]">
+        <form
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={messageId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          onSubmit={handleSubmit}
+          className="qt-dialog p-6 min-w-[20rem]"
+        >
           <div className="qt-dialog-body !px-0 !py-0 mb-4">
-            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+            <p id={messageId} className="text-sm text-foreground whitespace-pre-wrap break-words">
               {message}
             </p>
           </div>

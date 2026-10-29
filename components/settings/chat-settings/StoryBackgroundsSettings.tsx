@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import type { ChatSettings, ImageProfile } from './types'
 
@@ -20,6 +21,7 @@ export function StoryBackgroundsSettings({
   onEnabledChange,
   onProfileChange,
 }: StoryBackgroundsSettingsProps) {
+  const id = useId()
   const storyBackgroundsSettings = settings.storyBackgroundsSettings ?? {
     enabled: false,
     defaultImageProfileId: null,
@@ -55,7 +57,7 @@ export function StoryBackgroundsSettings({
 
         {/* Image Profile Selection */}
         <div className="space-y-2">
-          <label className="block font-medium text-foreground">
+          <label className="block font-medium text-foreground" htmlFor={`${id}-image-profile`}>
             Image Generation Profile
           </label>
           <p className="qt-text-small">
@@ -63,6 +65,7 @@ export function StoryBackgroundsSettings({
             If not set, will use the character&apos;s image profile or your default profile.
           </p>
           <select
+            id={`${id}-image-profile`}
             value={storyBackgroundsSettings.defaultImageProfileId ?? ''}
             onChange={(e) => onProfileChange(e.target.value || null)}
             disabled={saving || loadingProfiles || !storyBackgroundsSettings.enabled}

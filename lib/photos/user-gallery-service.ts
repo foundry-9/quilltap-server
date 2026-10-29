@@ -2,12 +2,17 @@
  * User photo gallery service.
  *
  * The human user's gallery is a deduped roll-up of every `photos/` folder
- * across the instance — character vaults, project stores, Quilltap General,
- * Quilltap Uploads. Whenever an image is saved (via `keep_image`, the Salon
- * Save-Image dialog, or the legacy "save to my gallery" button) it lands in
- * some mount point's `photos/` folder; this service surfaces them all under
- * one roof on `/photos`, deduped by sha256 so the same bytes appearing in
- * multiple albums show as a single card with a "linked in N places" badge.
+ * in a non-character store — project stores, Quilltap General, Quilltap
+ * Uploads. A character vault's `photos/` folder is that character's own album
+ * (Aurora's Photo Gallery) and never joins this roll-up, so a portrait promoted from
+ * the Avatar Rolls, or a picture a character kept with `keep_image`, stays in
+ * the character's album and out of the operator's. The rest are surfaced
+ * together on `/photos`, deduped by sha256 so the same bytes appearing
+ * in multiple albums show as a single card with a "linked in N places" badge
+ * (whose link list still names any character vault holding the same bytes).
+ *
+ * `/photos` can also be pointed at any single store's album (`mountPointId`)
+ * — a character's vault included — which reads that store alone.
  *
  * The save path still piggy-backs on `linkBlobContent` — same content-
  * addressed hard-link plumbing the rest of the photo system uses — and
@@ -41,6 +46,23 @@ import { getPhotoLinkSummaryBySha256, type PhotoLinkSummary } from './photo-link
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 
 const USER_LINKED_BY_NAME = 'You';
+
+/**
+ * The one rule for which stores belong to `/photos`: every enabled store
+ * except a character vault, whose `photos/` folder is the character's album.
+ */
+function isUserGalleryMount(mountPoint: { storeType?: string | null }): boolean {
+  return mountPoint.storeType !== 'character';
+}
+
+async function isUserGalleryLink(
+  link: { mountPointId: string; relativePath: string },
+  repos: ReturnType<typeof getRepositories>
+): Promise<boolean> {
+  if (!isPhotosRelativePath(link.relativePath)) return false;
+  const mountPoint = await repos.docMountPoints.findById(link.mountPointId);
+  return !!mountPoint && isUserGalleryMount(mountPoint);
+}
 
 export interface SaveToUserGalleryInput {
   /** image-v2 FileEntry id to save. */
@@ -86,6 +108,12 @@ export interface UserGalleryEntry {
 }
 
 export interface ListUserGalleryInput {
+  /**
+   * Show one store's album — a character's vault, a project store, Quilltap
+   * General, any document store — instead of the operator's own gallery.
+   * Same search, dedupe and paging either way.
+   */
+  mountPointId?: string | null;
   query?: string;
   tags?: string[];
   limit?: number;
@@ -254,7 +282,8 @@ export async function saveToUserGallery(
 
 /**
  * List the user's gallery entries — every `photos/` link across every
- * enabled mount point, deduped by sha256. With `query` set, ranks by
+ * enabled non-character mount point, deduped by sha256 — or, with
+ * `mountPointId`, the `photos/` links in that one store. With `query` set, ranks by
  * semantic similarity over the saved markdown (prompt + scene + caption +
  * tags); otherwise returns most-recent first.
  *
@@ -265,15 +294,21 @@ export async function saveToUserGallery(
 export async function listUserGallery(
   input: ListUserGalleryInput
 ): Promise<ListUserGalleryOutput> {
-  const { query, tags, limit, offset, userId, repos } = input;
+  const { mountPointId, query, tags, limit, offset, userId, repos } = input;
 
   const effectiveLimit = Math.max(1, Math.min(limit ?? DEFAULT_LIMIT, 200));
   const effectiveOffset = Math.max(0, offset ?? 0);
 
-  // 1. Fan out across every enabled mount point and collect links whose
-  //    relativePath lives under `photos/`. Quilltap is single-user, so we
-  //    don't filter by userId at the link layer.
-  const mountPoints = await repos.docMountPoints.findEnabled();
+  // 1. Fan out across the album's stores and collect links whose
+  //    relativePath lives under `photos/`: one named store, or every enabled
+  //    non-character store. Quilltap is single-user, so we don't filter by
+  //    userId at the link layer.
+  const mountPoints = await resolveAlbumMountPoints(mountPointId ?? null, repos);
+  logger.debug('Listing user gallery', {
+    mountPointId: mountPointId ?? null,
+    galleryMounts: mountPoints.length,
+    hasQuery: !!query,
+  });
   const allPhotoLinks: Array<{
     link: Awaited<ReturnType<typeof repos.docMountFileLinks.findByMountPointId>>[number];
     mountPointId: string;
@@ -409,6 +444,25 @@ export async function listUserGallery(
   return { entries, total, hasMore: effectiveOffset + page.length < total };
 }
 
+/**
+ * The stores an album reads: the named store alone, or — for the operator's
+ * own gallery — every enabled non-character store.
+ */
+async function resolveAlbumMountPoints(
+  mountPointId: string | null,
+  repos: ReturnType<typeof getRepositories>
+): Promise<Array<{ id: string }>> {
+  if (!mountPointId) {
+    const enabled = await repos.docMountPoints.findEnabled();
+    return enabled.filter(isUserGalleryMount);
+  }
+  const mountPoint = await repos.docMountPoints.findById(mountPointId);
+  if (!mountPoint || !mountPoint.enabled) {
+    throw new Error(`Album not found: ${mountPointId}`);
+  }
+  return [mountPoint];
+}
+
 export interface RemoveFromUserGalleryInput {
   linkId: string;
   userId: string;
@@ -419,10 +473,10 @@ export interface RemoveFromUserGalleryInput {
  * Remove a gallery entry (cascades to its chunks and, if it was the last
  * hard link to the bytes, drops the file row and blob).
  *
- * /photos surfaces every `photos/` link across every enabled mount, so the
- * removal target may live in a character vault, a project store, Quilltap
- * General, or Quilltap Uploads — we accept any of them, as long as the
- * link's relativePath is under `photos/`.
+ * /photos surfaces every `photos/` link outside the character vaults, so the
+ * removal target may live in a project store, Quilltap General, or Quilltap
+ * Uploads. A character's album is not ours to prune from here — that is
+ * Aurora's Photo Gallery's job — so a vault link is refused.
  */
 export async function removeFromUserGallery(
   input: RemoveFromUserGalleryInput
@@ -430,7 +484,7 @@ export async function removeFromUserGallery(
   const { linkId, repos } = input;
   const link = await repos.docMountFileLinks.findByIdWithContent(linkId);
   if (!link) return { deleted: false, fileGC: false };
-  if (!isPhotosRelativePath(link.relativePath)) {
+  if (!(await isUserGalleryLink(link, repos))) {
     throw new Error('Link is not a gallery entry');
   }
   const result = await repos.docMountFileLinks.deleteWithGC(linkId);
@@ -459,7 +513,7 @@ export async function getUserGalleryEntry(
 ): Promise<UserGalleryEntry | null> {
   const link = await repos.docMountFileLinks.findByIdWithContent(linkId);
   if (!link) return null;
-  if (!isPhotosRelativePath(link.relativePath)) return null;
+  if (!(await isUserGalleryLink(link, repos))) return null;
   const meta = parseKeptImageFrontmatter(link.extractedText ?? null);
   const linkSummary = await getPhotoLinkSummaryBySha256(link.sha256, repos);
   return {

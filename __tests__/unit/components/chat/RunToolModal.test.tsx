@@ -609,4 +609,52 @@ describe('RunToolModal', () => {
       expect(screen.getByText('plugin: MCP Server')).toBeInTheDocument()
     })
   })
+
+  describe('initialTool (the composer\'s `/` commands)', () => {
+    it('opens straight onto the requested tool\'s form', async () => {
+      mockFetchTools([
+        createMockTool({ id: 'search', name: 'Search Memories' }),
+        createMockToolWithParams({ id: 'wardrobe_wear', name: 'Wear Wardrobe Items' }),
+      ])
+
+      await act(async () => {
+        render(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />)
+      })
+
+      expect(screen.getByText('Run Tool: Wear Wardrobe Items')).toBeInTheDocument()
+      expect(screen.getByTestId('json-schema-form')).toBeInTheDocument()
+      // "Back" still returns to the list.
+      fireEvent.click(screen.getByText('Back'))
+      expect(screen.getByText('Search Memories')).toBeInTheDocument()
+    })
+
+    it('stays on the list and says so when the tool is not in this chat', async () => {
+      mockFetchTools([createMockTool({ id: 'search', name: 'Search Memories' })])
+
+      await act(async () => {
+        render(<RunToolModal {...baseProps} initialTool={{ toolId: 'nonesuch', nonce: 1 }} />)
+      })
+
+      expect(screen.getByText('Search Memories')).toBeInTheDocument()
+      expect(showErrorToast).toHaveBeenCalledWith('No tool named "nonesuch" is available in this chat')
+    })
+
+    it('re-selects on a new nonce for the same tool', async () => {
+      const tools = [createMockToolWithParams({ id: 'wardrobe_wear', name: 'Wear Wardrobe Items' })]
+      mockFetchTools(tools)
+
+      let rerender: (ui: React.ReactElement) => void = () => {}
+      await act(async () => {
+        rerender = render(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 1 }} />).rerender
+      })
+      fireEvent.click(screen.getByText('Back'))
+      expect(screen.queryByText('Run Tool: Wear Wardrobe Items')).toBeNull()
+
+      mockFetchTools(tools)
+      await act(async () => {
+        rerender(<RunToolModal {...baseProps} initialTool={{ toolId: 'wardrobe_wear', nonce: 2 }} />)
+      })
+      expect(screen.getByText('Run Tool: Wear Wardrobe Items')).toBeInTheDocument()
+    })
+  })
 })

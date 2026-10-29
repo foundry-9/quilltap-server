@@ -27,8 +27,12 @@ import type {
   CharacterScenario,
 } from '@/lib/schemas/character.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
 export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
+
+/** Every tier's Inventory objects live under `Inventory/` (rules in `lib/inventory/folders.ts`). */
+export { INVENTORY_FOLDER as CHARACTER_INVENTORY_FOLDER } from '@/lib/inventory/folders';
 
 /**
  * Optional per-tier dressing-instructions file living at the root of a
@@ -229,6 +233,7 @@ export function renderPhysicalPromptsJson(primary: PhysicalDescription | null | 
       medium: primary?.mediumPrompt ?? null,
       long: primary?.longPrompt ?? null,
       complete: primary?.completePrompt ?? null,
+      humanoid: primary?.humanoid ?? true,
     },
     null,
     2,
@@ -346,6 +351,10 @@ export function buildWardrobeItemFile(
   }
   if (item.replace) {
     data.replace = true;
+  }
+  const pronounGuidance = normalizePronounGuidance(item.pronounGuidance);
+  if (pronounGuidance.length > 0) {
+    data.pronounGuidance = pronounGuidance;
   }
   if (item.archivedAt) {
     data.archived = true;

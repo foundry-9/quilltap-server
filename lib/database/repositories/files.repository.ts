@@ -113,6 +113,33 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Find files linked to any of the given entities, in one query per chunk
+   * of ids rather than one per entity.
+   */
+  async findByLinkedToAny(entityIds: readonly string[]): Promise<FileEntry[]> {
+    if (entityIds.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const CHUNK = 500;
+        const seen = new Set<string>();
+        const out: FileEntry[] = [];
+        for (let i = 0; i < entityIds.length; i += CHUNK) {
+          const chunk = entityIds.slice(i, i + CHUNK);
+          const files = await this.findByFilter({ linkedTo: { $in: [...chunk] } });
+          for (const file of files) {
+            if (seen.has(file.id)) continue;
+            seen.add(file.id);
+            out.push(file);
+          }
+        }
+        return out;
+      },
+      'Error finding files linked to entities',
+      { entityCount: entityIds.length }
+    );
+  }
+
+  /**
    * Find files by user ID
    */
   async findByUserId(userId: string): Promise<FileEntry[]> {

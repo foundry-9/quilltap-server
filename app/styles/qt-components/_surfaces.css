@@ -289,6 +289,14 @@
   }
 
   /**
+   * Topmost floating dialog — lifted above every portal modal (the always-on
+   * Brahma Console), so it can be consulted while a form dialog is open.
+   */
+  .qt-floating-dialog-topmost {
+    z-index: var(--qt-floating-layer-z);
+  }
+
+  /**
    * Floating dialog title bar — drag handle
    */
   .qt-floating-dialog-header {
@@ -319,6 +327,51 @@
     @apply flex-1 flex flex-col relative;
     min-height: 0;
     overflow: hidden;
+  }
+
+  /* ==========================================================================
+     BRAHMA CONSOLE LAUNCHER - The always-on button beside the left rail
+     Sits in the topmost floating layer so it stays reachable over any modal.
+     ========================================================================== */
+
+  .qt-brahma-launcher {
+    position: fixed;
+    left: calc(var(--qt-left-sidebar-collapsed-width) + var(--qt-brahma-launcher-offset));
+    bottom: var(--qt-brahma-launcher-offset);
+    z-index: var(--qt-floating-layer-z);
+    width: var(--qt-brahma-launcher-size);
+    height: var(--qt-brahma-launcher-size);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: var(--qt-brahma-launcher-bg);
+    color: var(--qt-brahma-launcher-fg);
+    border: 2px solid var(--qt-brahma-launcher-ring);
+    box-shadow: var(--qt-brahma-launcher-shadow);
+    transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+  }
+
+  .qt-brahma-launcher:hover {
+    background: var(--qt-brahma-launcher-hover-bg);
+    transform: scale(1.06);
+  }
+
+  .qt-brahma-launcher:focus-visible {
+    outline: 2px solid var(--qt-brahma-launcher-ring);
+    outline-offset: 3px;
+  }
+
+  /* Open: inverted, so the button reads as "pressed" while the console shows */
+  .qt-brahma-launcher-active,
+  .qt-brahma-launcher-active:hover {
+    background: var(--qt-brahma-launcher-active-bg);
+    color: var(--qt-brahma-launcher-active-fg);
+  }
+
+  .qt-brahma-launcher-icon {
+    width: 60%;
+    height: 60%;
   }
 
   /* ==========================================================================

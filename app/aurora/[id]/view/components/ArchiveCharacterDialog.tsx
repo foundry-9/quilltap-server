@@ -5,8 +5,10 @@
  * and what stays behind before the deed is done (character-archive spec §5.2).
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 
 interface ArchiveCharacterDialogProps {
   characterName: string
@@ -20,6 +22,10 @@ export function ArchiveCharacterDialog({
   onCancel,
 }: ArchiveCharacterDialogProps) {
   const [working, setWorking] = useState(false)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onCancel, !working)
 
   const handleConfirm = async () => {
     setWorking(true)
@@ -32,10 +38,18 @@ export function ArchiveCharacterDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border qt-border-default qt-bg-card shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+      >
         <div className="px-6 py-4 border-b qt-border-default flex items-center gap-3 flex-shrink-0">
           <Icon name="folder" className="w-6 h-6 qt-text-secondary" />
-          <h3 className="qt-dialog-title text-foreground">
+          <h3 id={titleId} className="qt-dialog-title text-foreground">
             Set {characterName} resting in the archive?
           </h3>
         </div>

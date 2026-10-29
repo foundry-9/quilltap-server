@@ -20,6 +20,7 @@ import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
 import { registerTextCodecFunction } from './text-codec-function';
+import { registerRegexpFunction } from './regexp-function';
 import { openWithColdOpenRetry } from './cold-open-retry';
 import { stopLLMLogsPeriodicCheckpoints, runLLMLogsShutdownCheckpoint } from './llm-logs-protection';
 
@@ -52,6 +53,7 @@ function attemptOpenLLMLogs(config: SQLiteConfig): DatabaseType {
       moduleLogger.debug('SQLCipher key set on LLM logs database');
     }
     registerTextCodecFunction(db);
+    registerRegexpFunction(db);
 
     // Verify probe — forces SQLCipher to decrypt page 1 and parse the header,
     // which is where a flaky iCloud Drive / VirtioFS cold read fails.

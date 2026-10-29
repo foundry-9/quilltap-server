@@ -8,7 +8,9 @@
  * mountType back to 'filesystem'.
  */
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { createPortal } from 'react-dom'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { DocumentStore } from '../types'
@@ -22,6 +24,11 @@ interface DeconvertToFilesystemDialogProps {
 export function DeconvertToFilesystemDialog({ store, onClose, onConfirm }: DeconvertToFilesystemDialogProps) {
   const [targetPath, setTargetPath] = useState('')
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, !!store)
+  useEscapeKey(onClose, !!store)
+
   if (!store) return null
 
   const canSubmit = targetPath.trim().length > 0 && targetPath.trim().startsWith('/')
@@ -34,8 +41,16 @@ export function DeconvertToFilesystemDialog({ store, onClose, onConfirm }: Decon
 
   return createPortal(
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-lg p-6">
-        <h3 className="qt-dialog-title mb-4">Deconvert &ldquo;{store.name}&rdquo; to Filesystem Storage</h3>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg p-6"
+      >
+        <h3 id={titleId} className="qt-dialog-title mb-4">Deconvert &ldquo;{store.name}&rdquo; to Filesystem Storage</h3>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-3 mb-5">

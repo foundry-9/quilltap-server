@@ -515,6 +515,7 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
   push(`- **Permitted to see the Staff**: ${data.characterBreakdown.systemTransparent}`);
   push(`- **May dress themselves**: ${data.characterBreakdown.canDressThemselves}`);
   push(`- **May create outfits**: ${data.characterBreakdown.canCreateOutfits}`);
+  push(`- **May manage their inventory**: ${data.characterBreakdown.canManageInventory}`);
   push(`- **With a Core-whisper override**: ${data.characterBreakdown.coreWhisperOverrides}`, '');
 
   renderFeatureConfig(push, data);
@@ -724,6 +725,8 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
 
   push("#### Pascal's Workbench (Custom Tools)", '');
   push(`- **Custom tools offered to models**: ${yesNo(fc.customTools)}`);
+  push(`- **Auto-Run on Trigger Phrases**: ${yesNo(fc.customToolTriggers)}`);
+  push(`- **Hold Intervenable Rolls for the Operator**: ${yesNo(fc.customToolIntervention)}`);
   push(
     '- *(the inventory of definitions lives in the Scriptorium section — they are documents, not settings)*',
     '',

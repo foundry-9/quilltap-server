@@ -657,6 +657,271 @@
   }
 
   /* ==========================================================================
+     DIAGRAMS
+     Closed ```mermaid / ```dot / ```graphviz / ```svg fences drawn in the
+     Salon (components/chat/diagrams/DiagramBlock.tsx).
+     ========================================================================== */
+
+  /* The frame around one drawn diagram. */
+  .qt-diagram {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    border-radius: var(--qt-diagram-radius);
+    background: var(--qt-diagram-bg);
+    border: 1px solid var(--qt-diagram-border);
+    color: var(--qt-diagram-fg);
+  }
+
+  /* View source / Copy source / Copy SVG / Download SVG. */
+  .qt-diagram-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .qt-diagram-toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--qt-diagram-toolbar-fg);
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    cursor: pointer;
+    transition: background-color 150ms, color 150ms, border-color 150ms;
+  }
+
+  .qt-diagram-toolbar-button:hover,
+  .qt-diagram-toolbar-button[aria-pressed="true"] {
+    background: var(--qt-diagram-toolbar-hover-bg);
+    border-color: var(--qt-diagram-border);
+    color: var(--qt-diagram-fg);
+  }
+
+  .qt-diagram-toolbar-button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+
+  /* The drawing itself. A wide diagram scrolls here; it never widens the bubble. */
+  .qt-diagram-canvas {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .qt-diagram-canvas > svg {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Fixed height while a diagram is drawn, so the transcript doesn't jump. */
+  .qt-diagram-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--qt-diagram-placeholder-height);
+    color: var(--qt-diagram-muted-fg);
+    font-size: 0.875rem;
+    font-style: italic;
+  }
+
+  /* Zero-size scratch space a renderer lays a drawing out in, offscreen. */
+  .qt-diagram-stage {
+    position: relative;
+    width: 0;
+    height: 0;
+    overflow: visible;
+  }
+
+  /* A fence that could not be drawn: a note, the engine's words, the code. */
+  .qt-diagram-error {
+    margin: 0.5rem 0;
+  }
+
+  .qt-diagram-error-note {
+    margin: 0 0 0.25rem;
+    color: var(--qt-diagram-error-fg);
+    font-size: 0.875rem;
+    font-style: italic;
+  }
+
+  .qt-diagram-error-details {
+    margin-bottom: 0.25rem;
+    color: var(--qt-diagram-muted-fg);
+    font-size: 0.75rem;
+  }
+
+  .qt-diagram-error-details > summary {
+    cursor: pointer;
+  }
+
+  .qt-diagram-error-details > pre {
+    margin: 0.25rem 0 0;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    font-family: var(--qt-code-font);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* The drawing is also the way in: click (or Enter) to enlarge. */
+  .qt-diagram-canvas[role="button"] {
+    cursor: zoom-in;
+    border-radius: var(--radius-sm);
+  }
+
+  .qt-diagram-canvas[role="button"]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* The lightbox: one diagram, full-window, to zoom into and copy as PNG
+     (components/chat/diagrams/DiagramLightbox.tsx). */
+  .qt-diagram-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    background: var(--qt-diagram-lightbox-backdrop);
+    backdrop-filter: blur(4px);
+    color: var(--qt-diagram-lightbox-fg);
+    outline: none;
+  }
+
+  /* Zoom controls on the left; Transparent, Copy PNG and Close on the right. */
+  .qt-diagram-lightbox-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .qt-diagram-lightbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .qt-diagram-lightbox-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: var(--qt-diagram-lightbox-button-bg);
+    color: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    cursor: pointer;
+    transition: background-color 150ms, border-color 150ms;
+  }
+
+  .qt-diagram-lightbox-button:hover,
+  .qt-diagram-lightbox-button[aria-pressed="true"] {
+    background: var(--qt-diagram-lightbox-button-hover-bg);
+  }
+
+  .qt-diagram-lightbox-button[aria-pressed="true"] {
+    border-color: var(--qt-diagram-lightbox-pressed-border);
+  }
+
+  .qt-diagram-lightbox-button:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  .qt-diagram-lightbox-button:focus-visible,
+  .qt-diagram-lightbox-check:focus-within {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+
+  .qt-diagram-lightbox-zoom {
+    min-width: 3.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--qt-diagram-lightbox-muted-fg);
+  }
+
+  .qt-diagram-lightbox-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .qt-diagram-lightbox-check > input {
+    accent-color: var(--color-primary);
+  }
+
+  /* The pan-and-zoom surface. Touch gestures are all ours here. */
+  .qt-diagram-lightbox-viewport {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+  }
+
+  .qt-diagram-lightbox-viewport:active {
+    cursor: grabbing;
+  }
+
+  /* The drawing on its own card. Sized (not transformed) by the zoom, so the
+     vector is redrawn sharp at every scale. */
+  .qt-diagram-lightbox-sheet {
+    position: absolute;
+    border-radius: var(--qt-diagram-radius);
+    background: var(--qt-diagram-bg);
+    color: var(--qt-diagram-fg);
+    box-shadow: var(--qt-diagram-lightbox-shadow);
+  }
+
+  /* Transparent ticked: show what the PNG will carry — nothing behind it. */
+  .qt-diagram-lightbox-sheet[data-transparent="true"] {
+    background-color: var(--qt-diagram-lightbox-check-a);
+    background-image: conic-gradient(
+      var(--qt-diagram-lightbox-check-b) 25%,
+      transparent 0 50%,
+      var(--qt-diagram-lightbox-check-b) 0 75%,
+      transparent 0
+    );
+    background-size: 16px 16px;
+  }
+
+  .qt-diagram-lightbox-hint {
+    margin: 0;
+    padding: 0.5rem 1rem 0.75rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--qt-diagram-lightbox-muted-fg);
+  }
+
+  /* ==========================================================================
      HIGHLIGHT.JS SYNTAX HIGHLIGHTING (Server-side rendered code blocks)
      ========================================================================== */
 
@@ -1743,5 +2008,27 @@
     background: var(--qt-status-info-bg);
     color: var(--qt-status-info-fg);
     border: 1px solid var(--qt-status-info-border);
+  }
+
+  /**
+   * Gallery tile source caption — a scrim and two lines of small text laid
+   * over the foot of a photo-gallery tile, saying where the picture comes from
+   * (the Aurora gallery's wardrobe pictures: item title, then tier).
+   * Light text on a dark scrim regardless of theme, since it sits on a photo.
+   */
+  .qt-gallery-caption {
+    background: var(--qt-gallery-caption-bg, linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.45) 60%, transparent));
+    color: var(--qt-gallery-caption-fg, #fff);
+    line-height: 1.2;
+  }
+
+  .qt-gallery-caption-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+  }
+
+  .qt-gallery-caption-detail {
+    font-size: 0.625rem;
+    opacity: 0.85;
   }
 }

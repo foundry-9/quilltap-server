@@ -11,7 +11,7 @@ import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/tim
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
-import { pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -29,6 +29,19 @@ Responses render as Markdown with KaTeX math support. To display a formula, wrap
 $$
 \\int_0^1 x^2 \\, dx = \\frac{1}{3}
 $$`
+
+/**
+ * Diagram formatting note, appended right after the math note — but ONLY for
+ * a character whose vault `properties.json` says `canDrawDiagrams: true`.
+ * Every other character hears nothing about diagrams. The Salon renders a
+ * closed ```mermaid / ```dot / ```graphviz / ```svg fence as a picture (see
+ * `lib/markdown/diagrams.ts`); this note teaches the format and nothing more.
+ * It does not ask the character to draw often — an operator who wants a
+ * prolific sketcher says so in the character's own prompt — and it never
+ * mentions `diagramStyle`, which is a rendering choice the model doesn't need.
+ */
+export const DIAGRAM_FORMATTING_INSTRUCTION = `[FORMATTING: DIAGRAMS]
+You can draw diagrams. Write one in a fenced code block and it renders as a picture: \`\`\`mermaid for flowcharts, sequences, timelines, mind maps and the like; \`\`\`dot for graphs of connections (Graphviz DOT); \`\`\`svg for freeform drawings. Put only the diagram source inside the fence.`
 
 /**
  * Preamble of the Taboo section — the instance-wide list of phrases no
@@ -246,8 +259,17 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     const desc = character.physicalDescription
     const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
     const descText = pickPhysicalDescription(desc, 'self-image')
+    // A non-humanoid character (`humanoid: false` in physical-prompts.json)
+    // is told so, lest it narrate a shrug or a nod it has no body for. Only
+    // that flag adds the line, so no existing character's stack changes.
+    const formNote = isHumanoid(desc)
+      ? ''
+      : '\nYou have no humanoid body: no head, face, shoulders, hands or limbs. Never describe yourself as having or using one.'
     if (descText) {
-      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}`)
+      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}${formNote}`)
+    } else if (formNote) {
+      // Flag set before any prompt is written: the reminder still goes out.
+      parts.push(`\n## Physical Appearance${formNote}`)
     }
   }
 
@@ -423,6 +445,13 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   // Universal math-notation formatting note — applies to every character
   // regardless of the selected roleplay template.
   parts.push(MATH_FORMATTING_INSTRUCTION)
+
+  // Diagram note — per character, gated on the vault's `canDrawDiagrams`.
+  // Same cacheable block as the math note; it is not part of the identity
+  // stack, so neither the stack's builder version nor its goldens move.
+  if (character.canDrawDiagrams === true) {
+    parts.push(DIAGRAM_FORMATTING_INSTRUCTION)
+  }
 
   // Universal Taboo section — instance-wide, character-independent, and stable
   // between edits, so it belongs here with the other universal material rather

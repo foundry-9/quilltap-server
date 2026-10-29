@@ -18,6 +18,7 @@ import {
   getFileTypeLabel,
 } from './types'
 import { formatBytes } from '@/lib/utils/format-bytes'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 
 interface FileBrowserListProps {
   /** Files to display */
@@ -162,7 +163,9 @@ export default function FileBrowserList({
               className="border-b qt-border-default hover:qt-bg-surface-alt cursor-pointer transition-colors"
             >
               <td className="p-2 text-xl">{'\u{1F4C1}'}</td>
-              <td className="p-2 font-medium qt-text-secondary">..</td>
+              <td className="p-2 font-medium qt-text-secondary">
+                <span role="button" tabIndex={0} aria-label="Up one folder" onKeyDown={activateOnKey}>..</span>
+              </td>
               <td className="p-2 hidden md:table-cell"></td>
               <td className="p-2 hidden sm:table-cell"></td>
               <td className="p-2 hidden lg:table-cell"></td>
@@ -180,7 +183,7 @@ export default function FileBrowserList({
             >
               <td className="p-2 text-xl">{'\u{1F4C1}'}</td>
               <td className="p-2">
-                <span className="font-medium">{folder.name}</span>
+                <span className="font-medium" role="button" tabIndex={0} onKeyDown={activateOnKey}>{folder.name}</span>
               </td>
               <td className="p-2 hidden md:table-cell qt-text-secondary">
                 {folder.fileCount} file{folder.fileCount !== 1 ? 's' : ''}

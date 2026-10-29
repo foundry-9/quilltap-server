@@ -34,8 +34,8 @@ export function ImagePastePlugin({ onImagePaste }: ImagePastePluginProps) {
   useEffect(() => {
     const unregister = editor.registerCommand(
       PASTE_COMMAND,
-      (event: ClipboardEvent) => {
-        const items = event.clipboardData?.items;
+      (event) => {
+        const items = 'clipboardData' in event ? event.clipboardData?.items : undefined;
         if (!items) {
           return false;
         }

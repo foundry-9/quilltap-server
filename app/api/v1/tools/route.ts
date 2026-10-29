@@ -30,7 +30,11 @@ import {
   helpNavigateToolDefinition,
   rngToolDefinition,
   runCustomToolDefinition,
+  editCustomToolToolDefinition,
   stateToolDefinition,
+  logCreateEntryToolDefinition,
+  logGrepToolDefinition,
+  logReadToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
   wardrobeListToolDefinition,
@@ -40,11 +44,14 @@ import {
   wardrobeArchiveToolDefinition,
   wardrobeWearToolDefinition,
   wardrobeTakeOffToolDefinition,
+  wardrobeRollbackToolDefinition,
+  wardrobeHistoryToolDefinition,
   sendMailToolDefinition,
   listMailToolDefinition,
   readMailToolDefinition,
   discardMailToolDefinition,
 } from '@/lib/tools';
+import { INVENTORY_TOOL_DEFINITIONS } from '@/lib/tools/inventory-tool-flags';
 import {
   searchScriptoriumToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
@@ -84,7 +91,11 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   help_navigate: helpNavigateToolDefinition,
   rng: rngToolDefinition,
   run_custom: runCustomToolDefinition,
+  edit_custom_tool: editCustomToolToolDefinition,
   state: stateToolDefinition,
+  log_create_entry: logCreateEntryToolDefinition,
+  log_grep: logGrepToolDefinition,
+  log_read: logReadToolDefinition,
   self_inventory: selfInventoryToolDefinition,
   whisper: whisperToolDefinition,
   wardrobe_list: wardrobeListToolDefinition,
@@ -94,6 +105,9 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   wardrobe_archive: wardrobeArchiveToolDefinition,
   wardrobe_wear: wardrobeWearToolDefinition,
   wardrobe_take_off: wardrobeTakeOffToolDefinition,
+  wardrobe_rollback: wardrobeRollbackToolDefinition,
+  wardrobe_history: wardrobeHistoryToolDefinition,
+  ...Object.fromEntries(Object.values(INVENTORY_TOOL_DEFINITIONS).map((definition) => [definition.function.name, definition])),
   doc_read_file: docReadFileTool,
   doc_write_file: docWriteFileTool,
   doc_str_replace: docStrReplaceTool,
@@ -211,7 +225,14 @@ const BUILT_IN_TOOLS = [
     name: 'Custom Tools',
     description: "Run one of this scene's user-authored custom tools (Tools/*.tool.json) — Pascal rolls it server-side and announces the outcome. Only offered when the chat can actually see at least one valid definition.",
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'pascal',
+  },
+  {
+    id: 'edit_custom_tool',
+    name: 'Edit Custom Tool',
+    description: "Save or validate a custom tool definition (Tools/<name>.tool.json at the top level of a document store), or fetch the definition format (JSON Schema and worked examples) to write one from scratch. Every save is schema-validated first, and an invalid definition is not written.",
+    source: 'built-in' as const,
+    category: 'pascal',
   },
   {
     id: 'state',
@@ -219,6 +240,27 @@ const BUILT_IN_TOOLS = [
     description: 'Get, set, or delete persistent key-value state for the chat',
     source: 'built-in' as const,
     category: 'utility',
+  },
+  {
+    id: 'log_create_entry',
+    name: 'Write Log Entry',
+    description: 'Write a timestamped line to the log, recorded against this chat and the writing character',
+    source: 'built-in' as const,
+    category: 'log',
+  },
+  {
+    id: 'log_grep',
+    name: 'Search Log',
+    description: 'Search every log entry in the instance by regular expression',
+    source: 'built-in' as const,
+    category: 'log',
+  },
+  {
+    id: 'log_read',
+    name: 'Read Log',
+    description: 'Read log entries by chat, by character, and/or by a span of time',
+    source: 'built-in' as const,
+    category: 'log',
   },
   {
     id: 'self_inventory',
@@ -282,6 +324,83 @@ const BUILT_IN_TOOLS = [
     description: 'Take off worn wardrobe items or empty slots',
     source: 'built-in' as const,
     category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_rollback',
+    name: 'Return to an Earlier Outfit',
+    description: 'Return to an outfit worn earlier in this chat, by its number',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'wardrobe_history',
+    name: 'Outfit History',
+    description: 'List the numbered outfits worn in this chat',
+    source: 'built-in' as const,
+    category: 'wardrobe',
+  },
+  {
+    id: 'inventory_list',
+    name: 'List Inventory',
+    description: "List the objects the character carries and can reach, with their states",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_read',
+    name: 'Read Inventory Object',
+    description: "Read one object in full: descriptions, metadata, archetype, kit members",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_equip',
+    name: 'Equip Objects',
+    description: "Take up objects or kits in this chat",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_unequip',
+    name: 'Unequip Objects',
+    description: "Set down carried objects in this chat",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_pick_up',
+    name: 'Pick Up Object',
+    description: "Make an instance of a reachable archetype in the character's vault, optionally equipped",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_create',
+    name: 'Create Object',
+    description: "Make a new object of the character's own",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_update',
+    name: 'Update Object',
+    description: "Change one of the character's own objects",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_archive',
+    name: 'Archive Object',
+    description: "Put away (or restore) one of the character's own objects",
+    source: 'built-in' as const,
+    category: 'inventory',
+  },
+  {
+    id: 'inventory_give',
+    name: 'Give Object',
+    description: "Hand one of the character's own objects to another participant",
+    source: 'built-in' as const,
+    category: 'inventory',
   },
   // Document editing tools (Scriptorium Phase 3.3)
   {
@@ -472,6 +591,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
       isMultiCharacter: boolean;
       canDressThemselves: boolean;
       canCreateOutfits: boolean;
+      canManageInventory: boolean;
     } | null = null;
 
     if (chatId) {
@@ -505,12 +625,14 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
           // Check wardrobe capability flags from character (default: enabled when null)
           let canDressThemselves = true;
           let canCreateOutfits = true;
+          let canManageInventory = true;
           if (characterParticipant?.characterId) {
             try {
               const character = await repos.characters.findById(characterParticipant.characterId);
               if (character) {
                 canDressThemselves = character.canDressThemselves !== false;
                 canCreateOutfits = character.canCreateOutfits !== false;
+                canManageInventory = character.canManageInventory !== false;
               }
             } catch (charError) {
               logger.warn('[Tools v1] Failed to load character for wardrobe check', {
@@ -531,7 +653,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             }
           }
 
-          chatContext = { hasImageProfile, hasProject, hasDocumentStores, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
+          chatContext = { hasImageProfile, hasProject, hasDocumentStores, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits, canManageInventory };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -702,6 +824,8 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
           case 'wardrobe_read':
           case 'wardrobe_wear':
           case 'wardrobe_take_off':
+          case 'wardrobe_rollback':
+          case 'wardrobe_history':
             if (!chatContext.canDressThemselves) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe self-dressing enabled';
@@ -713,6 +837,20 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             if (!chatContext.canCreateOutfits) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe item creation enabled';
+            }
+            break;
+          case 'inventory_list':
+          case 'inventory_read':
+          case 'inventory_equip':
+          case 'inventory_unequip':
+          case 'inventory_pick_up':
+          case 'inventory_create':
+          case 'inventory_update':
+          case 'inventory_archive':
+          case 'inventory_give':
+            if (!chatContext.canManageInventory) {
+              tool.available = false;
+              tool.unavailableReason = 'Character does not have inventory management enabled';
             }
             break;
           case 'doc_read_file':

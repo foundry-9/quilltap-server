@@ -30,7 +30,19 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 160,
-      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
+      "description": "Templated label for the outcome chip and the announcement header — a per-run name for a tool that does many different things per run ('Agent lambda — {{params.label}}'). Takes the same placeholders as an outcome message ({{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}}), rendered after the outcome is chosen. Blank or absent = the title labels the chip. Never sent to the model; to have the LLM name the chip, declare a string parameter whose description prompts it, then template that parameter here."
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 80
+      },
+      "description": "Phrases that run this tool automatically, with every parameter at its default, when a message from anyone in the chat contains one — exact substrings, case-insensitive, no wildcards ('fire' matches 'fireplace'; write a longer phrase for precision). Only honoured when the chat setting 'Auto-Run Custom Tools on Trigger Phrases' is on (it is off by default). Each phrase must have no leading or trailing whitespace, and no two phrases may be equal ignoring case — the loader enforces both, this schema cannot. Never sent to the model."
     },
     "description": {
       "type": "string",
@@ -44,11 +56,11 @@
     },
     "availableWhen": {
       "$ref": "#/$defs/ToolGate",
-      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+      "description": "Availability gate: offer this tool ONLY to an invoker whose metadata.json satisfies every test here — { \"availableWhen\": { \"metadata\": { \"toolAbilities\": { \"contains\": \"programmable\" } } } }. An array of such objects is OR: the clause holds when any one of them does. Tested before the deal, so a withheld tool is never listed to the model and never appears in the composer popup. A key the character lacks does not match, so a character with no fact sheet at all fails every availableWhen. A definition gated out this way makes no claim on its name — a farther tier may still supply an ungated tool of the same name, which is how a character-vault variant and a General-store fallback coexist. At most one of availableWhen/withheldWhen (enforced when the file loads)."
     },
     "withheldWhen": {
       "$ref": "#/$defs/ToolGate",
-      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
+      "description": "Availability gate: withhold this tool from an invoker whose metadata.json satisfies every test here. An array of such objects is OR: the clause holds when any one of them does. The mirror of availableWhen, and NOT its complement — a key the character lacks does not match, so a character with no fact sheet satisfies no withheldWhen and is offered the tool. At most one of availableWhen/withheldWhen (enforced when the file loads)."
     },
     "revealOdds": {
       "type": "boolean",
@@ -62,6 +74,65 @@
       ],
       "default": "public",
       "description": "Default visibility of the result. 'whisper' hides the outcome from other participants (a GM-style hidden roll); the human operator always sees it."
+    },
+    "announceAsCharacter": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the rolling character announces the outcome under their own name and avatar instead of Pascal, and the model reads it as that character's line. The roll record is unchanged. A run made by nobody in particular (the bare operator, with no character seat) is still announced by Pascal."
+    },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "description": "Operator intervention: hold each run a model's run_custom or a trigger phrase reaches, so the operator can adjust any shown part of it, force an outcome, or veto it before Pascal announces it. Changes apply to that one run only; nothing is written back to this file. The operator's own popup runs and autonomous rooms never hold. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Required. true holds runs for the operator; false keeps the block (and its per-field choices) but switches it off."
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-field visibility in the hold dialog. A key set to false hides that part of the run (and the server refuses an override naming it). Absent keys are shown. Keys naming something the tool lacks (llmAnswer with no llm block) are accepted and ignored.",
+          "properties": {
+            "roll": {
+              "type": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            },
+            "llmPrompt": {
+              "type": "boolean"
+            },
+            "llmAnswer": {
+              "type": "boolean"
+            },
+            "outcome": {
+              "type": "boolean"
+            },
+            "message": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "boolean"
+            },
+            "chipLabel": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "boolean"
+            },
+            "visibility": {
+              "type": "boolean"
+            },
+            "announcer": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
     },
     "parameters": {
       "type": "object",
@@ -84,7 +155,7 @@
             "description": "Value type of this parameter."
           },
           "default": {
-            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type.",
+            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type. A { \"$inventory\": \"<object>.metadata.<key>\", \"fallback\": ... } reference is allowed on the same terms.",
             "oneOf": [
               {
                 "type": "number"
@@ -97,6 +168,9 @@
               },
               {
                 "$ref": "#/$defs/StateRef"
+              },
+              {
+                "$ref": "#/$defs/InventoryRef"
               }
             ]
           },
@@ -112,12 +186,16 @@
           "max": {
             "type": "number",
             "description": "Numeric types only. Run-time values are clamped down to this."
+          },
+          "intervene": {
+            "type": "boolean",
+            "description": "Operator intervention only: false hides this parameter from the hold dialog. Absent or true shows it. Ignored unless intervention.enabled is true. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds."
           }
         }
       }
     },
     "roll": {
-      "description": "How chance is drawn. Either a numeric-range object (Form A) or a dice-notation string (Form B). Omit for a plain uniform 0–1 roll.",
+      "description": "How chance is drawn. A numeric-range object (Form A), a dice-notation string (Form B), or a $inventory reference naming dice an object carries (Form C). Omit for a plain uniform 0–1 roll.",
       "oneOf": [
         {
           "type": "string",
@@ -150,6 +228,10 @@
               "description": "Round the final value to a whole number. Applied last. Default false."
             }
           }
+        },
+        {
+          "$ref": "#/$defs/InventoryRef",
+          "description": "Form C — the dice an Inventory object names: { \"$inventory\": \"sword.metadata.damage\", \"fallback\": \"1d4\" }. The object's value is rolled when it is dice notation; otherwise the fallback, which must be dice notation (enforced when the file loads)."
         }
       ]
     },
@@ -160,13 +242,13 @@
         "errorMessage"
       ],
       "additionalProperties": false,
-      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table. The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
+      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table — unless no outcome tests `llm`, in which case the table is dealt first and the prompt may read the winning row ({{outcome.brief}}). The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
       "properties": {
         "prompt": {
           "type": "string",
           "minLength": 1,
           "maxLength": 4000,
-          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence. When the table decides the verdict (no outcome tests `llm`), do not ask the model to compare numbers: give each outcome a `brief` and write {{outcome.brief}} (also {{outcome.state}}, {{outcome.index}}, the winning row's state and 0-based index) here — the table has already been dealt. A prompt that references {{outcome.*}} on a tool whose outcomes test `llm` is rejected at load."
         },
         "errorMessage": {
           "type": "string",
@@ -185,7 +267,7 @@
     "effects": {
       "type": "array",
       "maxItems": 16,
-      "description": "Side effects applied after the run, in order: writes into tiered persistent state (at the tier where the key already lives, defaulting to the chat) or onto the rolling character's metadata.json fact sheet. Computed server-side as part of the roll, so the model cannot fudge them. At most 16. The Workbench's Proving Bench shows them as a dry run and never applies them.",
+      "description": "Side effects applied after the run, in order: writes into tiered persistent state (at the tier where the key already lives, defaulting to the chat) or onto the rolling character's metadata.json fact sheet, and wardrobe gestures that dress or undress the rolling character. Computed server-side as part of the roll, so the model cannot fudge them. At most 16. The Workbench's Proving Bench shows them as a dry run and never applies them.",
       "items": {
         "$ref": "#/$defs/Effect"
       }
@@ -205,82 +287,22 @@
         "additionalProperties": false,
         "properties": {
           "when": {
-            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). For OR, write an array of such objects: the row wins when ANY of them holds (AND binds tighter than OR) — [{ \"gte\": 0.9 }, { \"inventory\": { \"lucky charm\": { \"eq\": \"equipped\" } } }]. One level only: no nesting, no parentheses, at most 8 groups, and no expression grammar.",
             "oneOf": [
               {
                 "const": true
               },
               {
-                "type": "object",
-                "minProperties": 1,
-                "additionalProperties": false,
-                "properties": {
-                  "gt": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is greater than."
-                  },
-                  "gte": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is greater than or equal to."
-                  },
-                  "lt": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is less than."
-                  },
-                  "lte": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is less than or equal to."
-                  },
-                  "eq": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is equal to."
-                  },
-                  "neq": {
-                    "$ref": "#/$defs/NumberOperand",
-                    "description": "Value is not equal to."
-                  },
-                  "roll": {
-                    "$ref": "#/$defs/NumericComparator",
-                    "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
-                  },
-                  "params": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/ParamComparator"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
-                    }
-                  },
-                  "metadata": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. At run time a key the character does not have, or one holding a list/object/null, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/MetadataComparator"
-                    },
-                    "propertyNames": {
-                      "minLength": 1
-                    }
-                  },
-                  "progress": {
-                    "type": "object",
-                    "minProperties": 1,
-                    "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
-                    "additionalProperties": {
-                      "$ref": "#/$defs/MetadataComparator"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
-                    }
-                  },
-                  "llm": {
-                    "$ref": "#/$defs/LlmComparator",
-                    "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
-                  }
-                }
+                "$ref": "#/$defs/WhenObject"
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "$ref": "#/$defs/WhenObject"
+                },
+                "description": "Any-of: the row wins when any element holds."
               }
             ]
           },
@@ -288,7 +310,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, or {{llm}} on a tool with no llm block."
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{character}} (the rolling character's name), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, {{llm}} on a tool with no llm block, or {{character}} on a run nobody in particular made."
           },
           "state": {
             "enum": [
@@ -298,6 +320,12 @@
               "info"
             ],
             "description": "Semantic state of this outcome. Accents the result bubble; authors never write CSS."
+          },
+          "brief": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "An instruction for the llm block's narrator: the conclusion this outcome means, in the author's words (\"Report that the entanglement is definitively confirmed\"). When this row wins, the consult prompt may quote it as {{outcome.brief}}, so the model is told the verdict the table reached instead of asked to work it out. Takes the placeholders a consult prompt takes (no {{llm}}, no {{outcome.*}}). Needs an llm block, and the prompt can read it only while no outcome row tests `llm`."
           }
         }
       }
@@ -306,22 +334,30 @@
   "$defs": {
     "Effect": {
       "type": "object",
-      "required": [
-        "target",
-        "value"
-      ],
       "additionalProperties": false,
-      "description": "One side effect: a write the run records after the outcome table has dealt. Effects apply in order, each seeing the writes of the ones before it; a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
+      "description": "One side effect, recorded after the outcome table has dealt: exactly one of a write (target + value), a wardrobe gesture (wardrobe), an inventory gesture (inventory) or a log line (log). Effects apply in order, each seeing the writes of the ones before it (value writes commit first, then wardrobe gestures, then inventory gestures, then log lines); a condition that does not hold, or an expression that fails to evaluate at run time, skips that one effect fail-soft — a broken effect never sinks a roll.",
       "properties": {
         "when": {
-          "$ref": "#/$defs/EffectWhen",
-          "description": "Condition for this effect. Omitted = fires on every run."
+          "description": "Condition for this effect: one object whose tests AND together, or an array of them, any one of which may hold (OR). Omitted = fires on every run.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/EffectWhen"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/EffectWhen"
+              }
+            }
+          ]
         },
         "target": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Where to write. \"state.<path>\" writes tiered persistent state at the tier where the key already lives (chat if nowhere). \"metadata.<key>\" writes the rolling character's fact sheet; the remainder is taken WHOLE, so dots inside a key are fine. \"progress.<id>.<field>\" writes one of their timed progressions — writable fields are name, description, startTime, endTime, timeIncrement, percentageReport, reportFrequency, onComplete, reportTemplate, quantity.total, quantity.unit, quantity.precision, plus the pseudo-field remove (write true to delete the progression). Writing a field of an id nobody authored CREATES it with defaults, and a time field takes epoch milliseconds or an ISO instant, normalised to ISO on write."
+          "description": "Where to write. \"state.<path>\" writes tiered persistent state at the tier where the key already lives (chat if nowhere). \"metadata.<key>\" writes the rolling character's fact sheet; the remainder is taken WHOLE, so dots inside a key are fine. \"progress.<id>.<field>\" writes one of their timed progressions — writable fields are name, description, startTime, endTime, timeIncrement, percentageReport, reportFrequency, onComplete, reportTemplate, quantity.total, quantity.unit, quantity.precision, plus the pseudo-field remove (write true to delete the progression). Writing a field of an id nobody authored CREATES it with defaults, and a time field takes epoch milliseconds or an ISO instant, normalised to ISO on write. A write needs both target and value."
         },
         "value": {
           "description": "What to write. A JSON number or boolean is a literal, stored as-is. A JSON string is ALWAYS an expression — quote literal prose inside it: \"'broken pick'\", not \"broken pick\" (the bare form is a load-time parse error). Expressions take arithmetic (+ - * /), string concatenation (+ with a string operand), parentheses, number/string/boolean literals, and {{ref}} substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}) — no identifiers, no function calls, no member access. {{dice}} and {{llm}} are strings and are never numerically coerced. Division by zero, or any reference that does not resolve, skips the effect at run time.",
@@ -338,8 +374,298 @@
               "maxLength": 500
             }
           ]
+        },
+        "wardrobe": {
+          "$ref": "#/$defs/WardrobeGesture",
+          "description": "A wardrobe gesture on the rolling character (and nobody else) instead of a write: wear items, take them off, or clear a slot. A run made as nobody dresses nobody."
+        },
+        "inventory": {
+          "$ref": "#/$defs/InventoryGesture",
+          "description": "An Inventory gesture on the rolling character (and nobody else) instead of a write: equip, unequip or pick up objects. A run made as nobody carries nothing."
+        },
+        "log": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "A line for the log (the one the log_read and log_grep tools search) instead of a write. A TEMPLATE, like an outcome message — plain prose, not an expression, so no inner quoting: {{value}}, {{roll}}, {{dice}}, {{character}}, {{params.name}}, {{metadata.key}}, {{state.path}}, {{llm}} and the other placeholder families are substituted, and unknown ones are left as written. Recorded against this chat and the rolling character (none on a run nobody in particular made). A line that renders empty is skipped."
+        },
+        "intervene": {
+          "type": "boolean",
+          "description": "Operator intervention only: false hides this effect from the hold dialog. Absent or true shows it. Ignored unless intervention.enabled is true. Never shown to the model — but the file is an ordinary document, so a character with character_read on the store can read the flag, as with revealOdds."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "target",
+            "value"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
+                ]
+              },
+              {
+                "required": [
+                  "log"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "wardrobe"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
+                ]
+              },
+              {
+                "required": [
+                  "log"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "inventory"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "log"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "log"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "target"
+                ]
+              },
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "wardrobe"
+                ]
+              },
+              {
+                "required": [
+                  "inventory"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "WardrobeGesture": {
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "description": "A wardrobe gesture. Per-action rules (checked by the loader, not by this schema): \"wear\" needs items, and needs slot exactly when mode is \"add_to_slot\"; \"take_off\" needs items, may name a slot to restrict the removal, and takes no mode; \"clear_slot\" needs slot and takes neither items nor mode. Each item that cannot be found (or is archived, for wear) is skipped and the rest proceed.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "wear",
+            "take_off",
+            "clear_slot"
+          ],
+          "description": "\"wear\" puts the listed items on the rolling character; \"take_off\" takes them off; \"clear_slot\" empties one slot."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": "The garments or outfits, each by title (case-insensitive) or id, in order; an id is tried first, then a title. Each is a TEMPLATE, not an expression: {{params.x}}, {{metadata.key}}, {{state.path}} and the other placeholder families are substituted before lookup, so a parameter may choose the garment (\"{{params.garment}}\"). An outfit (a composite) is worn and taken off as a whole. Required for wear and take_off."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "wear",
+            "replace",
+            "add_to_slot"
+          ],
+          "description": "wear only. Same meaning as the wardrobe_wear tool: honour the item's replace flag (default), force a swap, or layer into one slot."
+        },
+        "slot": {
+          "type": "string",
+          "enum": [
+            "top",
+            "bottom",
+            "footwear",
+            "accessories",
+            "hair"
+          ],
+          "description": "Required for clear_slot and for mode add_to_slot; optional on take_off to restrict the removal to one slot."
         }
       }
+    },
+    "WhenObject": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "gt": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is greater than."
+        },
+        "gte": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is greater than or equal to."
+        },
+        "lt": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is less than."
+        },
+        "lte": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is less than or equal to."
+        },
+        "eq": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is equal to."
+        },
+        "neq": {
+          "$ref": "#/$defs/NumberOperand",
+          "description": "Value is not equal to."
+        },
+        "roll": {
+          "$ref": "#/$defs/NumericComparator",
+          "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
+        },
+        "params": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
+          "additionalProperties": {
+            "$ref": "#/$defs/ParamComparator"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. A key holding a list of plain values compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, and ordering declines. At run time a key the character does not have, or one holding an object, null or a list of anything else, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "progress": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
+          }
+        },
+        "llm": {
+          "$ref": "#/$defs/LlmComparator",
+          "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
+          "additionalProperties": {
+            "$ref": "#/$defs/InventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
+          "additionalProperties": {
+            "$ref": "#/$defs/NumericComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
+          }
+        }
+      },
+      "description": "One group of an outcome test: subjects that must ALL hold."
     },
     "EffectWhen": {
       "type": "object",
@@ -437,13 +763,64 @@
               "description": "The winning outcome does not carry this state."
             }
           }
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the rolling character in this chat, keyed by object reference (id, title or name, case-insensitive). The key is a TEMPLATE: {{params.weapon}} lets a parameter choose the object. Fail-soft: a run nobody made, or a vault that could not be read, declines every test.",
+          "additionalProperties": {
+            "$ref": "#/$defs/InventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin (same resolved name) of an object the rolling character has equipped in this chat, keyed by object reference (a template). Ordering comparators and eq/neq; no containment. Declines for a run nobody made.",
+          "additionalProperties": {
+            "$ref": "#/$defs/NumericComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/MetadataComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
+          }
         }
       }
     },
     "ToolGate": {
+      "description": "An availability gate: one group of tests that must all hold, or an any-of array of groups — the gate holds when ANY group holds (AND binds tighter than OR; no nesting; at most 8 groups).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ToolGateGroup"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/ToolGateGroup"
+          }
+        }
+      ]
+    },
+    "ToolGateGroup": {
       "type": "object",
       "additionalProperties": false,
-      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json and their derived timed progressions: there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
+      "description": "An availability test, answered BEFORE any run exists. Its subjects are the invoking character's metadata.json, their derived timed progressions, and what they carry in this chat (inventory, inventoryCount): there is no roll to test, no parameters (nobody has called anything yet), and no consult, which is also why a gate's operands are literals rather than $param/$state references. Every test in a group must hold (they AND together), and each is fail-soft exactly as an outcome's metadata test is. availableWhen: { progress: { \"cannon.complete\": { \"eq\": true } } } is the whole weapon-recharge case.",
       "properties": {
         "metadata": {
           "type": "object",
@@ -465,6 +842,41 @@
           },
           "propertyNames": {
             "pattern": "^[a-z][a-z0-9_-]{0,63}\\.[a-zA-Z]+$"
+          }
+        },
+        "inventory": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test Inventory objects' states for the invoking character in this chat, keyed by a LITERAL object reference — a gate has no parameters, so a key carrying {{…}} is rejected when the file loads. Loaded lazily at roster time, only when a gate names it. With no character or chat (the Workbench library), every test declines: availableWhen stays closed, withheldWhen unsatisfied.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateInventoryStateComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryCount": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test how many kin of an object the invoking character has equipped in this chat, keyed by a literal object reference.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateInventoryCountComparator"
+          },
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "inventoryAggregate": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Test one attribute across every object in a scope of the character's bag, keyed \"<scope>.<field>\". Scopes are cumulative: equipped (equipped in this chat) ⊆ owned (everything in their own vault, equipped or not) ⊆ reachable (everything they can see — own, group, project, General). Archetypes, archived objects and kits are never members; an instance carries its archetype's metadata. Fields: count; names; titles (title, else name); metadata.<key> (a list of the objects' values — an array value contributes each entry); metadata.<key>.min / .max / .sum (over the finite numbers; absent, so every test declines, when there are none) and .count (how many objects carry a number there). A list compares entry by entry: eq holds when any entry equals the operand, neq when none does, contains / ncontains likewise, exact and case-sensitive; gt/gte/lt/lte decline on a list (fold it first). The key is always literal. With no character or chat, every test declines.",
+          "additionalProperties": {
+            "$ref": "#/$defs/GateComparator"
+          },
+          "propertyNames": {
+            "pattern": "^(equipped|owned|reachable)\\.(count|names|titles|metadata\\..+)$"
           }
         }
       },
@@ -537,7 +949,7 @@
       "$ref": "#/$defs/NumberOrParamRef"
     },
     "AnyOperand": {
-      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback.",
+      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback. Or a { \"$inventory\": ..., \"fallback\": ... } reference, typed by its fallback.",
       "oneOf": [
         {
           "type": "number"
@@ -553,11 +965,14 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
     },
     "StringOperand": {
-      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here. Or a { \"$inventory\": ..., \"fallback\": ... } reference whose fallback is a string.",
       "oneOf": [
         {
           "type": "string",
@@ -568,6 +983,9 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
     },
@@ -772,7 +1190,7 @@
       }
     },
     "NumberOrParamRef": {
-      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here. A { \"$inventory\": \"<object>.metadata.<key>\", \"fallback\": <number> } reference is allowed too.",
       "oneOf": [
         {
           "type": "number"
@@ -782,8 +1200,176 @@
         },
         {
           "$ref": "#/$defs/StateRef"
+        },
+        {
+          "$ref": "#/$defs/InventoryRef"
         }
       ]
+    },
+    "InventoryRef": {
+      "type": "object",
+      "required": [
+        "$inventory",
+        "fallback"
+      ],
+      "additionalProperties": false,
+      "description": "A reference into one metadata key of one Inventory object the rolling character carries or can reach — the $state reference's twin, accepted wherever a $state reference is and typed the same way, by its required fallback. Resolution returns the object's metadata value only when it exists and has the fallback's type; otherwise the fallback, so a run never fails on it. As the whole `roll`, its fallback must be dice notation (\"1d4\") and the object's value is rolled when it is notation too (a sword's metadata.damage of \"2d6\"). Not allowed in a gate.",
+      "properties": {
+        "$inventory": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320,
+          "pattern": "^.+\\.metadata\\..+$",
+          "description": "\"<object>.metadata.<key>\": the object by id, title or name (case-insensitive), then one of its metadata keys. Split at the FIRST \".metadata.\", so an object reference may not contain \".metadata.\"."
+        },
+        "fallback": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "description": "Used whenever the object or key is absent or holds a value of a different type."
+        }
+      }
+    },
+    "InventoryStateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A test of one Inventory object's state for the rolling character in this chat: equipped (in their equipped set), carried (in their own vault, not equipped), reachable (in a group, project or General store, not equipped) or absent. eq/neq only — a state has no order, so an ordering key is a rejection. Several matches read as the best state (equipped > carried > reachable > absent). A run nobody made declines every test, eq: \"absent\" included.",
+      "properties": {
+        "eq": {
+          "oneOf": [
+            {
+              "enum": [
+                "equipped",
+                "carried",
+                "reachable",
+                "absent"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "description": "The object is in this state. A $param must name a declared string parameter (enforced when the file loads)."
+        },
+        "neq": {
+          "oneOf": [
+            {
+              "enum": [
+                "equipped",
+                "carried",
+                "reachable",
+                "absent"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ParamRef"
+            }
+          ],
+          "description": "The object is not in this state."
+        }
+      }
+    },
+    "GateInventoryStateComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A gate's test of one Inventory object's state: literal states only.",
+      "properties": {
+        "eq": {
+          "enum": [
+            "equipped",
+            "carried",
+            "reachable",
+            "absent"
+          ],
+          "description": "The object is in this state."
+        },
+        "neq": {
+          "enum": [
+            "equipped",
+            "carried",
+            "reachable",
+            "absent"
+          ],
+          "description": "The object is not in this state."
+        }
+      }
+    },
+    "GateInventoryCountComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A gate's test of how many kin (same name) of an object the invoking character has equipped: literal numbers only, no containment.",
+      "properties": {
+        "gt": {
+          "type": "number",
+          "description": "Greater than."
+        },
+        "gte": {
+          "type": "number",
+          "description": "Greater than or equal to."
+        },
+        "lt": {
+          "type": "number",
+          "description": "Less than."
+        },
+        "lte": {
+          "type": "number",
+          "description": "Less than or equal to."
+        },
+        "eq": {
+          "type": "number",
+          "description": "Equal to."
+        },
+        "neq": {
+          "type": "number",
+          "description": "Not equal to."
+        }
+      }
+    },
+    "InventoryGesture": {
+      "type": "object",
+      "required": [
+        "action",
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "An Inventory gesture on the rolling character in this chat, through the same chokepoints the operator's dialog uses. Per-action rule (checked by the loader): equip is only used with pick_up. Each reference that resolves to nothing is skipped; a cap breach skips the whole gesture before anything is written (a pick_up creates no instance); the rest of the run proceeds.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "equip",
+            "unequip",
+            "pick_up"
+          ],
+          "description": "\"equip\" takes up the listed objects or kits; \"unequip\" sets them down; \"pick_up\" makes an instance of each listed archetype at the root of the rolling character's vault."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": "The objects, each by id, title or name (case-insensitive). Each is a TEMPLATE: {{params.loot}} and the other placeholder families are substituted before lookup. pick_up names archetypes."
+        },
+        "equip": {
+          "type": "boolean",
+          "description": "pick_up only. Equip the new instances. Default true."
+        }
+      }
     }
   }
 }

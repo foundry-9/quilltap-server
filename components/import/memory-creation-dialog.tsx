@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 
 /**
@@ -39,6 +41,14 @@ interface MemoryCreationDialogProps {
  */
 export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProps) {
   const [creating, setCreating] = useState(false)
+  const queuedTitleId = useId()
+  const analyzeTitleId = useId()
+  const queuedDialogRef = useRef<HTMLDivElement>(null)
+  const analyzeDialogRef = useRef<HTMLDivElement>(null)
+  const alreadyQueued = !!chat.memoryJobCount && chat.memoryJobCount > 0
+  const handleQueuedFocusKeyDown = useDialogFocus(queuedDialogRef, alreadyQueued)
+  const handleAnalyzeFocusKeyDown = useDialogFocus(analyzeDialogRef, !alreadyQueued)
+  useEscapeKey(onClose, alreadyQueued || !creating)
 
   // Get the first character for analysis
   const firstCharacter = useMemo(() => {
@@ -138,9 +148,17 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
   if (chat.memoryJobCount && chat.memoryJobCount > 0) {
     return (
       <div className="qt-dialog-overlay !z-[60] p-4">
-        <div className="qt-dialog max-w-md">
+        <div
+          className="qt-dialog max-w-md"
+          ref={queuedDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={queuedTitleId}
+          tabIndex={-1}
+          onKeyDown={handleQueuedFocusKeyDown}
+        >
           <div className="qt-dialog-header">
-            <h3 className="qt-dialog-title">
+            <h3 id={queuedTitleId} className="qt-dialog-title">
               Memory Analysis Queued
             </h3>
           </div>
@@ -171,9 +189,17 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
 
   return (
     <div className="qt-dialog-overlay !z-[60] p-4">
-      <div className="qt-dialog max-w-lg">
+      <div
+        className="qt-dialog max-w-lg"
+        ref={analyzeDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={analyzeTitleId}
+        tabIndex={-1}
+        onKeyDown={handleAnalyzeFocusKeyDown}
+      >
         <div className="qt-dialog-header">
-          <h3 className="qt-dialog-title">
+          <h3 id={analyzeTitleId} className="qt-dialog-title">
             Analyze Messages for Memories
           </h3>
           <p className="qt-dialog-description">

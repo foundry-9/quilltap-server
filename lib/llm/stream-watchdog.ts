@@ -72,13 +72,19 @@ export interface StallWatchdogOptions {
   modelName?: string
   /** Extra fields for the log line when the watchdog fires. */
   logContext?: Record<string, unknown>
+  /**
+   * The operator's hard stop (`lib/chat/turn-control.ts`). When it fires the
+   * stream simply ends — no error, so no fallback or recovery reads it as a
+   * provider failure — and the caller keeps whatever it has accumulated.
+   */
+  abortSignal?: AbortSignal
 }
 
 /**
  * Wrap a provider chunk stream so a silent provider fails instead of hanging.
  *
  * Yields the source's chunks untouched; throws `LLMStreamStalledError` the
- * moment one is overdue.
+ * moment one is overdue. Ends quietly, mid-stream, when `abortSignal` fires.
  */
 export async function* withStallWatchdog<T>(
   source: AsyncIterable<T>,
@@ -91,18 +97,36 @@ export async function* withStallWatchdog<T>(
   const startedAt = Date.now()
   let chunksReceived = 0
   let stalled = false
+  let stopped = false
+  const abortSignal = options.abortSignal
+
+  // Settles (never rejects) the moment the operator stops the turn, so a
+  // provider still thinking about its first token is abandoned at once rather
+  // than at its next chunk.
+  const STOPPED = Symbol('stopped')
+  const stopRequested = abortSignal
+    ? new Promise<typeof STOPPED>((resolve) => {
+        if (abortSignal.aborted) resolve(STOPPED)
+        else abortSignal.addEventListener('abort', () => resolve(STOPPED), { once: true })
+      })
+    : null
 
   try {
     for (;;) {
       const budgetMs = chunksReceived === 0 ? firstChunkTimeoutMs : idleTimeoutMs
 
-      let result: IteratorResult<T>
+      let result: IteratorResult<T> | typeof STOPPED
       try {
-        result = await withTimeout(
+        const next = withTimeout(
           iterator.next(),
           budgetMs,
           () => new LLMStreamStalledError(budgetMs, chunksReceived, options.provider, options.modelName)
         )
+        result = stopRequested ? await Promise.race([next, stopRequested]) : await next
+        if (result === STOPPED) {
+          // The abandoned `next()` may still reject later; nobody is waiting.
+          next.catch(() => {})
+        }
       } catch (error) {
         if (error instanceof LLMStreamStalledError) {
           stalled = true
@@ -118,6 +142,17 @@ export async function* withStallWatchdog<T>(
         throw error
       }
 
+      if (result === STOPPED) {
+        stopped = true
+        logger.info('[LLMStream] Abandoned a provider stream at the operator\'s stop', {
+          ...options.logContext,
+          provider: options.provider,
+          modelName: options.modelName,
+          chunksReceived,
+          elapsedMs: Date.now() - startedAt,
+        })
+        return
+      }
       if (result.done) return
       chunksReceived++
       yield result.value
@@ -129,8 +164,9 @@ export async function* withStallWatchdog<T>(
     // be awaited — the generator is suspended at an `await` that never settles,
     // so its `return()` is queued behind a promise that never resolves, and
     // awaiting it here would reproduce the hang this wrapper exists to end.
+    // An operator's stop is the same shape: the source may be parked mid-await.
     const unwound = Promise.resolve(iterator.return?.()).catch(() => {})
-    if (stalled) {
+    if (stalled || stopped) {
       void unwound
     } else {
       await unwound

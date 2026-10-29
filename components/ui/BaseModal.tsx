@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, ReactNode } from 'react'
+import { useId, useRef, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
 
 /**
@@ -58,6 +59,8 @@ const maxWidthClasses: Record<ModalSize, string> = {
  * This component consolidates the common modal pattern used across the application:
  * - Click outside to close
  * - Escape key to close
+ * - Announced as a modal dialog; focus moves in, Tab stays inside, and focus
+ *   returns to the opener on close
  * - Consistent header/body/footer structure
  * - Scrollable body with fixed header/footer
  *
@@ -93,6 +96,8 @@ export function BaseModal({
   closeOnEscape = true,
 }: BaseModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
 
   useClickOutside(modalRef, onClose, {
     enabled: isOpen && closeOnClickOutside,
@@ -108,9 +113,14 @@ export function BaseModal({
       <div
         ref={modalRef}
         className={`qt-dialog ${maxWidthClasses[maxWidth]} max-h-[90vh] flex flex-col ${className}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
       >
         <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">{title}</h2>
+          <h2 id={titleId} className="qt-dialog-title">{title}</h2>
           {showCloseButton && (
             <button
               type="button"

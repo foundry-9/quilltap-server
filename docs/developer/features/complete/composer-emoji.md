@@ -3,7 +3,7 @@
 **Status:** ✅ **COMPLETE — shipped 2026-08-13.** Every gate item met; see [Completion gate](#completion-gate) for what was verified how, and for the two defects the live walk caught that this spec did not anticipate.
 **Scope:** quilltap-server (renderer + one settings boolean + its migration). No shell changes. No API route.
 **Phase:** 2.0e of the composer series. Layer 1 ([spellcheck](composer-spellcheck.md)) and Layer 1.5 ([text replacement](composer-text-replacement.md)) have shipped in code — note that both of those specs still carry `Status: Proposal / Not Implemented` in their own headers and neither has been moved to `complete/`; trust the code, not their status lines.
-This lands the typeahead shell that [Layer 2](../composer-typeahead.md) (`@`/`#`/`/`) needs, and proves it on the cheapest possible consumer.
+This lands the typeahead shell that [Layer 2](composer-typeahead.md) (`@`/`#`/`/`) needs, and proves it on the cheapest possible consumer.
 
 > **Portability mandate.** This feature must be implementable in **quilltap-v5** (Rust core + Angular 21 SPA, ProseMirror editor) without redesign. v4 uses **Lexical**; v5 uses **ProseMirror**. Nothing below may depend on React, Lexical, SWR/TanStack, or any server round-trip. See [Portability contract](#portability-contract) — read it before writing a line of code.
 
@@ -73,7 +73,7 @@ Both read one static JSON dataset and one **pure search function**. There is no 
 ## Known state (verified 2026-08-13)
 
 - **No emoji handling exists in either composer.** No picker, no `:shortcode:` expansion, no emoji dataset dependency. Emoji appear only as opaque user-supplied strings in tag/group/project style fields (`lib/schemas/common.types.ts`, `lib/tags/styles.ts`, `components/tags/tag-badge.tsx`) and as hardcoded glyphs on tool chips.
-- **No `LexicalTypeaheadMenuPlugin` usage anywhere**, and no `DecoratorNode` subclasses. Greenfield — as [composer-typeahead.md:33-34](../composer-typeahead.md) recorded on 2026-05-22 and still true.
+- **No `LexicalTypeaheadMenuPlugin` usage anywhere**, and no `DecoratorNode` subclasses. Greenfield — as [composer-typeahead.md:33-34](composer-typeahead.md) recorded on 2026-05-22 and still true.
 - **`@lexical/react` is already a dependency** (`package.json`), and `LexicalTypeaheadMenuPlugin` ships inside it. Confirm the subpath resolves before starting; no new dependency should be needed.
 - **The formatting toolbar is text-labelled, not icon-labelled.** `MARKDOWN_FORMATS` entries in [lib/chat/annotations.ts:42-54](../../../../lib/chat/annotations.ts) carry `label` strings (`'B'`, `'I'`, `'• …'`, `'“'`), and `FormattingToolbar.tsx:461` renders the literal string `'CODE'`. **An emoji button therefore needs no icon-registry work** — its label is a glyph.
 - **⚠ The formatting toolbar only renders in composition / document-editing mode.** [ChatComposer.tsx:320-342](../../../../app/salon/[id]/components/ChatComposer.tsx):
@@ -330,7 +330,7 @@ Commit `public/emoji/emoji-index.v1.json`. Record its provenance (source package
 
 ### 3.1 Typeahead shell (shared with Layer 2)
 
-Build the shell [composer-typeahead.md](../composer-typeahead.md) Phase 1 already specified, and build it **here**, because emoji is its cheapest consumer:
+Build the shell [composer-typeahead.md](composer-typeahead.md) Phase 1 already specified, and build it **here**, because emoji is its cheapest consumer:
 
 - `components/chat/lexical/typeahead/useTypeaheadShell.tsx`
 - `components/chat/lexical/typeahead/MenuPortal.tsx`
@@ -517,7 +517,7 @@ Everything in [2.3](#23-unit-tests) and [4.3](#43-plugin-tests), plus the round-
 - **`MarkdownLexicalEditor` (character-sheet and memory fields).** Deliberately excluded, along with Layer 1.5's identical gap. Close both at once, or neither.
 - **Frequency-weighted ranking** (promote what the user actually picks). Would make `searchEmoji` impure or force a weights argument through the corpus. If wanted, pass an optional `weights: Map<string, number>` as a **parameter** so the function stays pure and the corpus keeps working with an empty map.
 - **Custom emoji.** Its own feature.
-- **Layer 2 proper** (`@`/`#`/`/`) — this spec hands it a built-and-proven shell; see [composer-typeahead.md](../composer-typeahead.md).
+- **Layer 2 proper** (`@`/`#`/`/`) — this spec hands it a built-and-proven shell; see [composer-typeahead.md](composer-typeahead.md).
 
 ## File-touch summary
 

@@ -33,6 +33,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { isCurrentTurnStopped } from '@/lib/chat/turn-control'
 import {
   encodeContentChunk,
   encodeStatusEvent,
@@ -138,6 +139,12 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
   let agentModeCompleted = false
 
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
+    // The operator's hard stop: tools already run stay run, but no further
+    // call starts — not even one the model finished asking for.
+    if (isCurrentTurnStopped()) {
+      logger.info('Native tool loop halted: the operator stopped the turn', { chatId, toolIterations })
+      break
+    }
     const toolCalls = detectToolCallsInResponse(currentRawResponse, streaming.effectiveProfile.provider)
     if (toolCalls.length === 0) break
 

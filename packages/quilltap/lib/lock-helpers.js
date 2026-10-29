@@ -206,10 +206,7 @@ let exitHandlersRegistered = false;
 function detectEnvironmentType() {
   if (process.versions && process.versions.electron) return 'electron';
   if (process.env.ELECTRON_DEV) return 'electron';
-  if (process.env.DOCKER_CONTAINER === 'true') return 'docker';
-  try {
-    if (fs.existsSync('/.dockerenv')) return 'docker';
-  } catch { /* not Docker */ }
+  if (require('./platform-paths').isDockerContainer()) return 'docker';
   return 'local';
 }
 

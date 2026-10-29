@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useId, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 type DbKeyState = 'resolved' | 'needs-setup' | 'needs-passphrase' | 'needs-vault-storage' | 'loading';
 
 export default function UnlockPage() {
+  const fieldId = useId();
   const router = useRouter();
   const [state, setState] = useState<DbKeyState>('loading');
   const [passphrase, setPassphrase] = useState('');
@@ -120,8 +121,9 @@ export default function UnlockPage() {
             : 'Your encryption key is protected by a passphrase, rather like a safe-deposit box that requires both key and signature. Kindly supply it so the establishment may open for the day.'}
         </p>
         <div>
-          <label className="qt-text-label block mb-1">Passphrase</label>
+          <label htmlFor={`${fieldId}-f0`} className="qt-text-label block mb-1">Passphrase</label>
           <input
+            id={`${fieldId}-f0`}
             type="password"
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}

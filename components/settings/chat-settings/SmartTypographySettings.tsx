@@ -35,6 +35,7 @@ export function SmartTypographySettings({
   const displayQuotes = current.displayQuotes ?? false
   const dashes = current.dashes ?? true
   const ellipsis = current.ellipsis ?? true
+  const punctuationWarnings = current.punctuationWarnings ?? true
 
   const [tryItText, setTryItText] = useState('')
   const tryItRef = useRef<HTMLTextAreaElement>(null)
@@ -155,6 +156,7 @@ export function SmartTypographySettings({
           {!dashes && !ellipsis && ' (Both toggles are off — substitutions are paused.)'}
         </div>
         <textarea
+          aria-label="Try smart typography"
           ref={tryItRef}
           value={tryItText}
           onChange={(e) => setTryItText(e.target.value)}
@@ -164,6 +166,25 @@ export function SmartTypographySettings({
           placeholder="Type -- or ... here…"
         />
       </div>
+
+      {/* Punctuation warnings — type time, but read-only */}
+      <SettingsToggleRow
+        checked={punctuationWarnings}
+        disabled={saving}
+        onChange={(value) => onUpdate({ punctuationWarnings: value })}
+        heading="Warn about punctuation that looks wrong"
+      >
+        While you type in the Salon composer, marks that will probably confuse the
+        formatting are tinted and underlined: a{' '}
+        <span className="qt-code-inline">&quot;</span> opened inside dialogue that is
+        already open (quote someone with single quotes there), a closing quote with nothing
+        to close, a quote stranded between spaces or jammed between words, dialogue that
+        never closes, and an <span className="qt-code-inline">*</span>,{' '}
+        <span className="qt-code-inline">((</span> or{' '}
+        <span className="qt-code-inline">))</span> with no partner. Hover a mark to see why.
+        Nothing is ever corrected for you, and nothing you are still in the middle of
+        typing is flagged.
+      </SettingsToggleRow>
     </div>
   )
 }

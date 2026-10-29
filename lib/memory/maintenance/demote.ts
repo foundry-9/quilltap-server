@@ -26,7 +26,7 @@ const DAY_MS = 86_400_000
 
 /** The rows the cap measures and may demote: hot AUTO rows. */
 export function isDemotable(memory: Memory): boolean {
-  return tierOf(memory) === 'hot' && memory.source === 'AUTO'
+  return tierOf(memory) === 'hot' && memory.source === 'AUTO' && !memory.keystone
 }
 
 /** Which rows to demote so the demotable count fits the cap. */

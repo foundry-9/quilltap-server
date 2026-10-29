@@ -23,12 +23,15 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import { getRepositories as getRealRepositories } from '@/lib/database/repositories';
+import { classifyRepositoryMethod, syntheticWriteResult } from '@/lib/repositories/method-classification';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChildWritePayload } from '../ipc-types';
 import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
 import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { normalizeEquippedInventory } from '@/lib/database/repositories/chats.repository';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { DocMountDocumentWithLink } from '@/lib/database/repositories/doc-mount-documents.repository';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
@@ -65,6 +68,30 @@ interface JobScope {
    * stale baseline and the parent's replay keeps only the last (bug 179).
    */
   equippedOutfits: Map<string, EquippedSlots>;
+  /**
+   * Read-your-writes overlay for carried Inventory objects. A buffered
+   * `chats.setEquippedInventory` records the ids it leaves for one
+   * (chat, character), keyed `chatId:characterId`; a buffered
+   * `chats.removeEquippedInventoryId` records an id dropped from a character
+   * in one chat. Each carries a sequence number so a removal only strikes
+   * sets written before it. `chats.findById` / `chats.getEquippedInventory`
+   * answer through it, so two gestures in one job (a custom tool's two
+   * `inventory` effects) see each other.
+   */
+  equippedInventory: Map<string, { seq: number; ids: string[] | null }>;
+  inventoryRemovals: Array<{ seq: number; chatId: string; characterId: string; itemId: string }>;
+  inventorySeq: number;
+  /**
+   * Read-your-writes overlay for database-backed documents, keyed
+   * `mountPointId` + lower-cased path. A buffered
+   * `docMountFileLinks.linkDocumentContent` records the content it writes and
+   * a buffered `deleteWithGC` the link it removes, and
+   * `docMountDocuments.findManyByMountPointsInFolder` answers through them —
+   * so a folder read later in the job (the Inventory pool, after a pick-up or
+   * a create) sees the files the job itself wrote.
+   */
+  documents: Map<string, BufferedDocument>;
+  removedDocLinkIds: Set<string>;
   /**
    * Read-your-writes overlay for memory rows, keyed by memory id. A later step
    * of a job must see the job's own buffered inserts, links, footnotes, counts,
@@ -134,6 +161,11 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     warnedReads: new Set(),
     sanitizedArgs: 0,
     equippedOutfits: new Map(),
+    equippedInventory: new Map(),
+    inventoryRemovals: [],
+    inventorySeq: 0,
+    documents: new Map(),
+    removedDocLinkIds: new Set(),
     memories: new Map(),
     memoryRelatedScrubs: new Set(),
     admissionOccurrences: new Map(),
@@ -290,6 +322,175 @@ function bufferedOutfitFor(scope: JobScope | undefined, args: unknown[]): Equipp
   const key = equippedOutfitKey(args[0], args[1]);
   const slots = key ? scope.equippedOutfits.get(key) : undefined;
   return slots ? cloneEquippedSlots(slots) : undefined;
+}
+
+// ============================================================================
+// Database-backed document read-your-writes overlay
+// ============================================================================
+
+/** What a buffered `linkDocumentContent` wrote, as a folder read needs it. */
+interface BufferedDocument {
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  folderId: string | null;
+  fileType: DocMountDocumentWithLink['fileType'];
+  content: string;
+  contentSha256: string;
+  plainTextLength: number;
+  writtenAt: string;
+}
+
+function documentKey(mountPointId: string, relativePath: string): string {
+  return `${mountPointId}\u0000${relativePath.toLowerCase()}`;
+}
+
+/** The synthetic link id a buffered document carries until the parent writes it. */
+function bufferedLinkId(key: string): string {
+  return `buffered-link:${key}`;
+}
+
+/** Record a buffered document write or link delete (see {@link JobScope.documents}). */
+function recordBufferedDocumentWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn === 'docMountFileLinks.linkDocumentContent') {
+    const input = args[0] as Partial<BufferedDocument> | undefined;
+    if (!input || typeof input.mountPointId !== 'string' || typeof input.relativePath !== 'string'
+      || typeof input.content !== 'string') return;
+    const key = documentKey(input.mountPointId, input.relativePath);
+    scope.documents.set(key, {
+      mountPointId: input.mountPointId,
+      relativePath: input.relativePath,
+      fileName: input.fileName ?? input.relativePath.slice(input.relativePath.lastIndexOf('/') + 1),
+      folderId: input.folderId ?? null,
+      fileType: (input.fileType ?? 'txt') as BufferedDocument['fileType'],
+      content: input.content,
+      contentSha256: input.contentSha256 ?? '',
+      plainTextLength: input.plainTextLength ?? input.content.length,
+      writtenAt: new Date().toISOString(),
+    });
+    log.debug('Recorded buffered document write for in-job reads', { jobId: scope.jobId, relativePath: input.relativePath });
+  } else if (fqn === 'docMountFileLinks.deleteWithGC' && typeof args[0] === 'string') {
+    scope.removedDocLinkIds.add(args[0]);
+    for (const key of scope.documents.keys()) {
+      if (bufferedLinkId(key) === args[0]) scope.documents.delete(key);
+    }
+  }
+}
+
+function hasDocumentOverlay(scope: JobScope | undefined): scope is JobScope {
+  return !!scope && (scope.documents.size > 0 || scope.removedDocLinkIds.size > 0);
+}
+
+/**
+ * Patch a `findManyByMountPointsInFolder` answer with the job's own writes:
+ * deleted links dropped, rewritten documents carrying their new content, and
+ * documents created this job added when they fall in the folder asked for
+ * (the same prefix, depth and extension rules as the query).
+ */
+function applyDocumentOverlay(scope: JobScope, args: unknown[], rows: unknown): unknown {
+  if (!Array.isArray(rows)) return rows;
+  const [mountPointIds, folder, extension = '.md', options] = args as [string[], string, string?, { recursive?: boolean }?];
+  if (!Array.isArray(mountPointIds) || typeof folder !== 'string') return rows;
+  const prefixLower = `${folder}/`.toLowerCase();
+  const extensionLower = String(extension).toLowerCase();
+  const recursive = options?.recursive === true;
+  const byKey = new Map<string, DocMountDocumentWithLink>();
+  for (const row of rows as DocMountDocumentWithLink[]) {
+    if (scope.removedDocLinkIds.has(row.linkId)) continue;
+    byKey.set(documentKey(row.mountPointId, row.relativePath), row);
+  }
+  let added = 0;
+  for (const [key, doc] of scope.documents) {
+    if (!mountPointIds.includes(doc.mountPointId)) continue;
+    const pathLower = doc.relativePath.toLowerCase();
+    if (!pathLower.startsWith(prefixLower)) continue;
+    const rest = pathLower.slice(prefixLower.length);
+    if (rest.length === 0 || (!recursive && rest.includes('/')) || !rest.endsWith(extensionLower)) continue;
+    const existing = byKey.get(key);
+    const content = {
+      content: doc.content,
+      contentSha256: doc.contentSha256,
+      plainTextLength: doc.plainTextLength,
+      updatedAt: doc.writtenAt,
+      lastModified: doc.writtenAt,
+    };
+    if (existing) {
+      byKey.set(key, { ...existing, ...content });
+    } else {
+      added++;
+      byKey.set(key, {
+        id: `buffered-doc:${key}`,
+        fileId: `buffered-file:${key}`,
+        createdAt: doc.writtenAt,
+        linkId: bufferedLinkId(key),
+        mountPointId: doc.mountPointId,
+        relativePath: doc.relativePath,
+        fileName: doc.fileName,
+        folderId: doc.folderId,
+        fileType: doc.fileType,
+        linkGroupId: null,
+        ...content,
+      });
+    }
+  }
+  if (added > 0) log.debug('Folder read sees documents written this job', { jobId: scope.jobId, folder, added });
+  return Array.from(byKey.values());
+}
+
+// ============================================================================
+// Equipped-inventory read-your-writes overlay
+// ============================================================================
+
+/** Record a buffered carried-set write (see {@link JobScope.equippedInventory}). */
+function recordBufferedInventoryWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn === 'chats.setEquippedInventory') {
+    const key = equippedOutfitKey(args[0], args[1]);
+    if (!key) return;
+    const ids = Array.isArray(args[2]) ? Array.from(new Set(args[2] as string[])).sort() : null;
+    scope.equippedInventory.set(key, { seq: ++scope.inventorySeq, ids });
+    log.debug('Recorded buffered equipped-inventory write for in-job reads', { jobId: scope.jobId, key });
+  } else if (fqn === 'chats.removeEquippedInventoryId') {
+    const [chatId, characterId, itemId] = args;
+    if (typeof chatId !== 'string' || typeof characterId !== 'string' || typeof itemId !== 'string') return;
+    scope.inventoryRemovals.push({ seq: ++scope.inventorySeq, chatId, characterId, itemId });
+    log.debug('Recorded buffered equipped-inventory removal for in-job reads', { jobId: scope.jobId, chatId, characterId });
+  }
+}
+
+function hasInventoryOverlay(scope: JobScope | undefined): scope is JobScope {
+  return !!scope && (scope.equippedInventory.size > 0 || scope.inventoryRemovals.length > 0);
+}
+
+/** One chat's carried map with the job's own buffered writes applied. */
+function overlayEquippedInventory(scope: JobScope, chatId: string, raw: unknown): Record<string, string[]> {
+  const state = normalizeEquippedInventory(raw);
+  const seqOf = new Map<string, number>();
+  for (const [key, entry] of scope.equippedInventory) {
+    const [keyChat, characterId] = key.split(':');
+    if (keyChat !== chatId || !characterId) continue;
+    seqOf.set(characterId, entry.seq);
+    if (entry.ids === null) delete state[characterId];
+    else state[characterId] = [...entry.ids];
+  }
+  for (const removal of scope.inventoryRemovals) {
+    if (removal.chatId !== chatId) continue;
+    if ((seqOf.get(removal.characterId) ?? 0) > removal.seq) continue;
+    const ids = state[removal.characterId];
+    if (ids) state[removal.characterId] = ids.filter((id) => id !== removal.itemId);
+  }
+  return state;
+}
+
+/** Patch a chats read's answer with the overlay. */
+function applyInventoryOverlay(scope: JobScope, method: string, args: unknown[], result: unknown): unknown {
+  if (method === 'getEquippedInventory' && typeof args[0] === 'string') {
+    return overlayEquippedInventory(scope, args[0], result);
+  }
+  if (method === 'findById' && result && typeof result === 'object' && typeof (result as { id?: unknown }).id === 'string') {
+    const row = result as { id: string; equippedInventory?: unknown };
+    return { ...row, equippedInventory: overlayEquippedInventory(scope, row.id, row.equippedInventory) };
+  }
+  return result;
 }
 
 // ============================================================================
@@ -584,89 +785,8 @@ function applyMemoryOverlay(scope: JobScope, methodName: string, args: unknown[]
 // Method classification
 // ============================================================================
 
-const READ_PREFIXES = ['find', 'get', 'list', 'count', 'search', 'has', 'exists', 'is', 'fetch', 'query', 'load', 'read'];
-const WRITE_PREFIXES = ['create', 'update', 'delete', 'upsert', 'bulk', 'set', 'mark', 'reset', 'cleanup', 'clear', 'increment', 'decrement', 'add', 'remove', 'cancel', 'touch', 'save'];
-
-/**
- * Explicit overrides for methods whose names don't match the prefixes above.
- * Format: `'<repoKey>.<methodName>': 'read' | 'write'`.
- */
-const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
-  // ---- Reads with non-conforming names -------------------------------------
-  'chats.getMessages': 'read',
-  'chats.getEquippedOutfitForCharacter': 'read',
-  'folders.findByPath': 'read',
-  'conversationChunks.findByInterchangeIndex': 'read',
-  'backgroundJobs.findByUserId': 'read',
-  'backgroundJobs.findDistinctChatIds': 'read',
-
-  // ---- Writes with non-conforming names ------------------------------------
-  // folders: find-or-create. Buffered *whole* so the parent replays it on its
-  // RW connection, where read-your-writes and the (userId, projectId, path)
-  // unique index make it genuinely idempotent — a child-side read could not see
-  // another job's buffered create, which is how the legacy `folders` table
-  // grew a row per generated image (bug 114). Its in-child callers (the
-  // story-background and character-avatar handlers) DISCARD the return value,
-  // so the `undefined` synthetic write result is fine; a caller that needs the
-  // folder back must not run in the child.
-  'folders.ensureByPath': 'write',
-  // memories
-  'memories.updateForCharacter': 'write',
-  // Footnote delta applied against the live row at commit (bug 231).
-  'memories.appendReinforcementFootnotes': 'write',
-  // chats
-  'chats.updateMessage': 'write',
-  // The transcript counter's bump and its realtime hint. A write, so the parent
-  // replays it on its RW connection; the child's own publish would be a no-op
-  // anyway. Callers discard the return.
-  'chats.announceTranscriptChange': 'write',
-  // Wardrobe wear ledger. `commitEquippedOutfit` is the equip chokepoint: it
-  // writes a character's slots and credits the wears the write represents,
-  // diffing against the prior slots. Buffered whole so the parent replays it
-  // on its RW connection, where the prior state is true — the child's
-  // snapshot is stale within a job and blind to its own earlier writes, so a
-  // child-side diff would double-count. Callers discard the return. The slots
-  // it carries feed the job's equipped-outfit overlay, so a later
-  // `chats.getEquippedOutfitForCharacter` in the same job sees them (bug 179).
-  'wardrobeWear.commitEquippedOutfit': 'write',
-  // Character-delete cleanup: folds rows into the unattributed row. Not
-  // reached from a job today; classified so it can never be mistaken for a read.
-  'wardrobeWear.foldWearerIntoUnattributed': 'write',
-  // background jobs
-  'backgroundJobs.cancelByType': 'write',
-  'backgroundJobs.createBatch': 'write',
-  // embedding status
-  'embeddingStatus.markAsEmbedded': 'write',
-  'embeddingStatus.markAsFailed': 'write',
-  'embeddingStatus.markAllPendingByProfileId': 'write',
-  // tfidf vocabularies
-  'tfidfVocabularies.upsertByProfileId': 'write',
-  // help docs
-  'helpDocs.clearAllEmbeddings': 'write',
-  // `replaceForDoc` is buffered whole and replayed by the parent, so its
-  // internal creates never run in the child. Its return (a row count) is the
-  // synthetic `undefined` — no caller may consume it. `deleteByDocId` and
-  // `deleteOrphaned` classify as writes from their prefix already.
-  'helpDocChunks.replaceForDoc': 'write',
-  // llm logs
-  'llmLogs.cleanupOldLogs': 'write',
-  // conversation chunks
-  'conversationChunks.upsert': 'write',
-  // doc mount points
-  'docMountPoints.refreshStats': 'write',
-  // doc-mount file-link content writers (database-backed stores). These
-  // INSERT/UPDATE doc_mount_files / doc_mount_documents|blobs / doc_mount_file_links
-  // via getRawMountIndexDatabase(), so they can only work in the child by being
-  // buffered (the child DB is readonly; the parent applies them on its RW
-  // connection). Their in-child callers — database-store.writeDatabaseDocument
-  // and file-ops.writeDestBytes, reached by doc_write_file / doc_copy_file during
-  // AUTONOMOUS_ROOM_TURN — DISCARD the return value, so the `undefined` synthetic
-  // write result (syntheticWriteResult only shapes create*/upsert*) is fine. A
-  // caller that consumes the return must NOT run in the child; see
-  // CHILD_UNSUPPORTED_METHODS for why linkFilesystemFile is deliberately excluded.
-  'docMountFileLinks.linkDocumentContent': 'write',
-  'docMountFileLinks.linkBlobContent': 'write',
-};
+// Read/write prefixes and METHOD_OVERRIDES live in
+// lib/repositories/method-classification.ts, shared with the parent's dry scope.
 
 /**
  * Methods that must NOT run through the child proxy — neither as a read (the
@@ -763,70 +883,7 @@ function classifyMethod(repoKey: string, methodName: string): 'read' | 'write' |
   // Child-unsupported methods stay 'unknown' (→ tailored throw in wrapRepo) even
   // if a future prefix change would otherwise classify them as a write.
   if (CHILD_UNSUPPORTED_METHODS[fqn]) return 'unknown';
-  if (METHOD_OVERRIDES[fqn]) return METHOD_OVERRIDES[fqn];
-
-  // Lifecycle / introspection methods on every repo — pass through as reads.
-  if (methodName === 'constructor' || methodName.startsWith('_')) return 'read';
-  if (methodName === 'then' || methodName === 'toJSON' || methodName === 'toString' || methodName === 'inspect') return 'read';
-
-  for (const p of READ_PREFIXES) {
-    if (methodName.startsWith(p) && (methodName.length === p.length || /[A-Z]/.test(methodName[p.length]))) {
-      return 'read';
-    }
-  }
-  for (const p of WRITE_PREFIXES) {
-    if (methodName.startsWith(p) && (methodName.length === p.length || /[A-Z]/.test(methodName[p.length]))) {
-      return 'write';
-    }
-  }
-  return 'unknown';
-}
-
-// ============================================================================
-// Synthetic result builder
-// ============================================================================
-
-/**
- * Produce a placeholder return value for a buffered write AND mutate the
- * args so the parent applies the same synthetic ID the handler just saw.
- *
- * Most handlers don't read back from a write within the same job (the
- * audit confirms this), but several do `const m = await repos.x.create({...});`
- * followed by `await repos.x.update(m.id, …)` where `m.id` is consumed
- * synchronously. If the proxy generates one ID for the synthetic return
- * but lets the parent's real `create` invent a *different* ID, the
- * subsequent update fails ("not found"). So when we generate the ID we
- * write it back into args[0] before buffering — the buffered write now
- * has the same ID the handler is using.
- */
-function syntheticWriteResult(methodName: string, args: unknown[]): unknown {
-  if (methodName.startsWith('create') && !methodName.startsWith('createBatch')) {
-    // Repository create() methods follow the base shape:
-    //   create(data: Omit<T, 'id'|'createdAt'|'updatedAt'>, options?: CreateOptions)
-    // and the desired ID lives in `options.id`, not `data.id`
-    // (see `lib/database/repositories/base.repository.ts:_create`).
-    // Inject the synthetic ID into args[1] so the parent's real `_create`
-    // uses the same ID we just handed back to the caller.
-    const data = (args[0] && typeof args[0] === 'object') ? args[0] as Record<string, unknown> : {};
-    const options = (args[1] && typeof args[1] === 'object') ? args[1] as Record<string, unknown> : {};
-    if (typeof options.id !== 'string') {
-      options.id = (typeof data.id === 'string') ? data.id : crypto.randomUUID();
-      args[1] = options;
-    }
-    const now = new Date().toISOString();
-    return { id: options.id, createdAt: now, updatedAt: now, ...data };
-  }
-  if (methodName.startsWith('upsert')) {
-    if (args[0] && typeof args[0] === 'object') {
-      const input = args[0] as Record<string, unknown>;
-      if (typeof input.id !== 'string') {
-        input.id = crypto.randomUUID();
-      }
-      return { ...input };
-    }
-    return { id: crypto.randomUUID() };
-  }
-  return undefined;
+  return classifyRepositoryMethod(repoKey, methodName);
 }
 
 // ============================================================================
@@ -883,6 +940,14 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
             }
           }
           const answered = (real as (...a: unknown[]) => unknown).apply(target, args);
+          if (repoKey === 'docMountDocuments' && key === 'findManyByMountPointsInFolder' && hasDocumentOverlay(scope)
+            && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
+            return (answered as Promise<unknown>).then((res) => applyDocumentOverlay(scope, args, res));
+          }
+          if (repoKey === 'chats' && (key === 'findById' || key === 'getEquippedInventory') && hasInventoryOverlay(scope)
+            && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
+            return (answered as Promise<unknown>).then((res) => applyInventoryOverlay(scope, key, args, res));
+          }
           // Async iterators (the batched corpus reads) pass through untouched.
           if (overlaid && answered && typeof (answered as PromiseLike<unknown>).then === 'function') {
             return (answered as Promise<unknown>).then((res) => applyMemoryOverlay(scope!, key, args, res));
@@ -901,6 +966,8 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           appendWrite(`${repoKey}.${key}`, args);
           const scope = jobScopeStore.getStore();
           if (scope) recordBufferedOutfitWrite(scope, `${repoKey}.${key}`, args);
+          if (scope && repoKey === 'chats') recordBufferedInventoryWrite(scope, `${repoKey}.${key}`, args);
+          if (scope && repoKey === 'docMountFileLinks') recordBufferedDocumentWrite(scope, `${repoKey}.${key}`, args);
           if (scope && repoKey === 'memories') recordBufferedMemoryWrite(scope, key, args, result);
           // Real repository write methods are async; mirror that here so
           // callers that chain `.then` / `.catch` / `Promise.all` against
@@ -921,7 +988,7 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
         }
         throw new Error(
           `Repository method "${fqn}" is not classified for child execution. ` +
-          `Add it to METHOD_OVERRIDES in lib/background-jobs/child/child-repositories-proxy.ts.`
+          `Add it to METHOD_OVERRIDES in lib/repositories/method-classification.ts.`
         );
       };
     },

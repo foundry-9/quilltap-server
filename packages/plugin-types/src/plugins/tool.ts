@@ -30,6 +30,20 @@ export interface ToolMetadata {
 }
 
 /**
+ * What a tool does to the world.
+ *
+ * - `none`: nothing beyond its own return value (a calculator, a transform)
+ * - `read`: reads stores, the web, a terminal's screen — changes nothing
+ * - `write`: changes stored state
+ * - `destroy`: a write that cannot be undone from inside Quilltap (deletion)
+ *
+ * The host uses it to decide which tools a turn may use (a storyteller bid's
+ * tier, an autonomous room's destructive-tool policy). A tool with no declared
+ * effect counts as `write`.
+ */
+export type ToolEffect = 'none' | 'read' | 'write' | 'destroy';
+
+/**
  * Hierarchy information for a tool
  *
  * Used by plugins that provide multiple tools from different sources
@@ -255,6 +269,25 @@ export interface ToolPlugin {
    * @returns Promise resolving to array of tool hierarchy info
    */
   getToolHierarchy?: (config: Record<string, unknown>) => Promise<ToolHierarchyInfo[]>;
+
+  /**
+   * Declare each tool's effect on the world (optional)
+   *
+   * Maps tool name (as returned by `getToolDefinitions`) to its
+   * {@link ToolEffect}. A tool missing from the map — or every tool of a plugin
+   * without this method — counts as `write`, so an older plugin keeps working,
+   * restricted to turns that may change things.
+   *
+   * Declare honestly: the host refuses a call whose effect exceeds the turn's
+   * allowance, and an understated effect lets a change through where the user
+   * asked for none.
+   *
+   * @param config User configuration for this plugin
+   * @returns Tool name → effect (or a promise of it, for plugins that discover tools)
+   */
+  getToolEffects?: (
+    config: Record<string, unknown>
+  ) => Record<string, ToolEffect> | Promise<Record<string, ToolEffect>>;
 
   // ============================================================================
   // Deprecated Methods (for backwards compatibility)

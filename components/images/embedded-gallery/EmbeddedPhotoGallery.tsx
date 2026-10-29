@@ -6,6 +6,7 @@ import { GalleryControls } from './GalleryControls'
 import { GalleryEmpty } from './GalleryEmpty'
 import { GalleryGrid } from './GalleryGrid'
 import { AvatarRollsSection } from './AvatarRollsSection'
+import { WardrobeImagesSection } from './WardrobeImagesSection'
 import { useGalleryData } from './hooks/useGalleryData'
 import type { EmbeddedPhotoGalleryProps, GalleryImage } from './types'
 
@@ -179,6 +180,13 @@ export function EmbeddedPhotoGallery({
         characterId={entityId}
         entityName={entityName}
         onAvatarChange={onAvatarChange}
+        onRefresh={onRefresh}
+        thumbnailSize={thumbnailSize}
+      />
+
+      <WardrobeImagesSection
+        characterId={entityId}
+        entityName={entityName}
         onRefresh={onRefresh}
         thumbnailSize={thumbnailSize}
       />

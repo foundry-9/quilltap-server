@@ -1,5 +1,6 @@
 import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { DiagramStyle } from '@/lib/markdown/diagrams'
 
 export interface MessageAttachment {
   id: string
@@ -79,8 +80,29 @@ export interface Message {
       next: unknown
       tier?: 'chat' | 'project' | 'group' | 'general'
     }>
-    invokedBy: 'llm' | 'user'
+    invokedBy: 'llm' | 'user' | 'trigger'
     callerParticipantId?: string
+    /** Operator intervention: what was first dealt and which fields the operator changed. Operator-facing only — the "adjusted" badge. */
+    intervention?: {
+      resolvedAt: string
+      decision: 'deal' | 'as-rolled'
+      changed: string[]
+      dealt: {
+        params: Record<string, number | string | boolean>
+        raw: number
+        diceRolls?: number[]
+        value: number
+        outcomeIndex: number
+        state: 'success' | 'partial' | 'failure' | 'info'
+        message: string
+        chipLabel?: string
+        toolTitle?: string
+        visibility: 'public' | 'whisper'
+        announcer: 'pascal' | 'character'
+      }
+      reasks?: number
+      staleAnswer?: boolean
+    }
   } | null
   /** Host structured payload. On turn-pass records (systemKind='turn-pass'), participantId names the character/participant who passed — read by the client Skip-button guard. */
   hostEvent?: {
@@ -165,6 +187,8 @@ export interface CharacterData {
     name: string
     isDefault?: boolean
   }>
+  /** How the character's diagrams look in the Salon (absent = hand-drawn). */
+  diagramStyle?: DiagramStyle
 }
 
 export interface ConnectionProfileData {
@@ -234,6 +258,10 @@ export interface Chat {
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
   isPaused?: boolean
+  /** Turn mode: rotation (Normal) or storyteller (each operator post opens a round of bids) */
+  turnMode?: 'rotation' | 'storyteller'
+  /** Storyteller: invite seats to bid weighted by talkativeness */
+  storytellerInviteFilter?: boolean
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed?: boolean
   /** Array of participant IDs the user is currently impersonating */

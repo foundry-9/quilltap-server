@@ -68,6 +68,17 @@ each character who has not yet been shown it — once apiece, not once a turn,
 since even the most engrossing transcript wears out its welcome on the fourth
 reading — and this holds for pictures exactly as it does for prose.
 
+**A word on manuscripts.** A file you attach is shelved in the chat's project
+store (or, in a chat with no project, in Quilltap Uploads), and the company may
+go and fetch it again with the document tools — `doc_read_file`, `doc_grep`,
+and the house search alike. Markdown, plain text, JSON, PDF and Word documents
+all have their words lifted out the moment they arrive, so a character told
+*"it's `CHANGELOG.md`, in the project"* finds precisely that. Until 4.11.0 the
+house filed every upload as an unread parcel: the clip in the transcript was
+honest, the shelf was honest, and yet a character sent to look found the door
+locked and the catalogue silent on the matter. Uploads shelved before that
+release are read and indexed once, on the first start after it.
+
 ### Character Profiles
 
 Upload images for character profiles:

@@ -158,17 +158,17 @@ See [Project Files](project-files.md) for complete file management details.
 
 ## Character Roster
 
-Projects can control which characters may use the project's files and shared wardrobe:
+Projects can control which characters may use the project's files, shared wardrobe and project inventory:
 
 ### Open Mode (Default)
 
-- Every character in a project chat may use the project files and shared wardrobe
+- Every character in a project chat may use the project files, shared wardrobe and project inventory
 - Most flexible option
 - Good for general-purpose projects
 
 ### Roster Mode
 
-- Only rostered characters may use the project files and shared wardrobe with their tools
+- Only rostered characters may use the project files, shared wardrobe and project inventory with their tools
 - Any character may still chat in the project
 - Enable by turning off "Allow Any Character"
 - Add and remove characters by hand in the Characters card
@@ -321,7 +321,7 @@ For listing, reading, and searching files, characters use the Scriptorium docume
 - Check if file type is readable (text, PDF, code)
 - Try with smaller files or text extraction
 
-### A character can't reach the project files or wardrobe
+### A character can't reach the project files, wardrobe or inventory
 
 **Causes:**
 - Roster mode enabled without the character on the roster
@@ -355,6 +355,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Characters](project-characters.md) — Character roster and access control
 - [Project Scenarios](project-scenarios.md) — Reusable opening scenes for the project's chats
 - [Project Wardrobe](project-wardrobe.md) — Shared garments every character in the project can wear
+- [Project Inventory](project-inventory.md) — Shared items every character in the project can carry
 - [Project Settings](project-settings.md) — Configuration and customization
 - [Chats Overview](chats.md) — General chat functionality
 - [Files Management](files.md) — Global file management

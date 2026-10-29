@@ -5,8 +5,11 @@
  * including message formatting, file attachments, and context management.
  */
 
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import { buildContext, type BuiltContext } from '@/lib/chat/context-manager'
+import type { MessageWithParticipant } from '@/lib/chat/context/message-attribution'
+import type { ContextCompressionResult } from '@/lib/chat/context/compression'
 import type { PreRecall } from '@/lib/memory/recall/assemble'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -110,6 +113,15 @@ export interface BuildMessageContextOptions {
    */
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
   /**
+   * The operator's raised hand landed on this turn: inject the `[YIELD]` Turn
+   * note (`buildTurnYieldInstruction`). Ephemeral, never persisted.
+   */
+  offerYield?: boolean
+  /** `'bid'` for a storyteller bid's dry build (see `BuildContextOptions.purpose`). */
+  purpose?: 'turn' | 'bid'
+  /** The storyteller bid or plan section, appended as the last trailing section. */
+  storytellerSection?: string
+  /**
    * Swipe re-apply: the message being re-rolled plus every id in its swipe
    * group. Passed through to `buildContext`, where it makes the inform block
    * carry the rows those generations consumed and no pending row at all.
@@ -147,6 +159,29 @@ export interface FileProcessingResult {
 }
 
 /**
+ * The operator's uploads named by a send, as the chat's own file records: only
+ * ids that are actually linked to this chat count, so a stale or foreign id is
+ * dropped rather than linked to the new message.
+ */
+export async function findAttachedFiles(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  fileIds?: string[]
+): Promise<AttachedFile[]> {
+  if (!fileIds || fileIds.length === 0) return []
+  const chatFiles = await repos.files.findByLinkedTo(chatId)
+  return chatFiles
+    .filter(file => fileIds.includes(file.id))
+    .map(file => ({
+      id: file.id,
+      filepath: `api/files/${file.id}`,
+      filename: file.originalFilename,
+      mimeType: file.mimeType,
+      size: file.size,
+    }))
+}
+
+/**
  * Load and process attached files for a message
  */
 export async function loadAndProcessFiles(
@@ -166,17 +201,7 @@ export async function loadAndProcessFiles(
     }
   }
 
-  // Use the repository to find files linked to the chat
-  const chatFiles = await repos.files.findByLinkedTo(chatId)
-  const matched = chatFiles.filter(file => fileIds.includes(file.id))
-
-  const attachedFiles: AttachedFile[] = matched.map(file => ({
-    id: file.id,
-    filepath: `api/files/${file.id}`,
-    filename: file.originalFilename,
-    mimeType: file.mimeType,
-    size: file.size,
-  }))
+  const attachedFiles = await findAttachedFiles(repos, chatId, fileIds)
 
   // Load file data for LLM with provider-aware image resizing
   const fileAttachments = await loadChatFilesForLLM(
@@ -330,7 +355,7 @@ function isCharactersOwnPriorResponse(
  * Returns rows in chronological order so the caller can splice each file back
  * in at the message that carried it, rather than restating it at the tail.
  * The same "stop at the character's own prior response" rule bounds the walk
- * and gives the budget for free: a character is shown a given attachment once,
+ * and bounds what it re-sends: a character is shown a given attachment once,
  * on its first turn after the upload, and never again.
  *
  * `historyCutoff` (ISO timestamp) excludes uploads older than a joining
@@ -388,20 +413,6 @@ export function collectUnseenUserAttachmentsForCharacter(
 const USER_ATTACHMENT_LOOKBACK = 20
 
 /**
- * Ceiling on the re-hydrated text a single turn may carry, in characters.
- *
- * The walk already bounds *how many* uploads come back (one pass per
- * character, per upload), but not how large they are, and a user may attach a
- * novel. Files are taken oldest-first until the budget is spent; what does not
- * fit is skipped with a warning rather than silently truncated mid-document,
- * because half a transcript is a worse input than none and a model given one
- * has no way to tell. ~80k characters is roughly 20k tokens — comfortably
- * inside a modern window, and `buildContext` still compresses and trims what
- * this produces like any other message body.
- */
-const REHYDRATED_ATTACHMENT_CHAR_BUDGET = 80_000
-
-/**
  * Load the user uploads a character has not yet been shown and turn them back
  * into prompt content. See `collectUnseenUserAttachmentsForCharacter` and bug
  * 121 for why this is a read-side derivation rather than a stored body.
@@ -412,8 +423,10 @@ const REHYDRATED_ATTACHMENT_CHAR_BUDGET = 80_000
  *
  * Never throws: an unreadable file leaves the turn exactly as it was before
  * this existed.
+ *
+ * Exported for unit testing.
  */
-async function rehydrateUserAttachments(args: {
+export async function rehydrateUserAttachments(args: {
   messages: Array<{ type: string; role?: string; id?: string; content?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string }>
   characterParticipantId?: string
   isMultiCharacter: boolean
@@ -439,8 +452,7 @@ async function rehydrateUserAttachments(args: {
     if (unseen.length === 0) return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
 
     const repos = args.repos ?? getRepositories()
-    let budgetLeft = REHYDRATED_ATTACHMENT_CHAR_BUDGET
-    let skippedForBudget = 0
+    let charactersUsed = 0
 
     for (const { messageId, fileIds } of unseen) {
       const loaded = await loadChatFilesForLLM(fileIds, { provider: args.connectionProfile.provider })
@@ -470,31 +482,24 @@ async function rehydrateUserAttachments(args: {
           continue
         }
 
+        // No size cap (bug 259): the first character to answer is handed
+        // every file whole by `loadAndProcessFiles`, and each later one must
+        // see exactly what it saw. `buildContext` budgets the result like any
+        // other message body.
         const text = formatFallbackAsMessagePrefix(fallbackResult)
         if (!text) continue
-        if (text.length > budgetLeft) {
-          skippedForBudget++
-          continue
-        }
-        budgetLeft -= text.length
+        charactersUsed += text.length
         prefix += text
       }
 
       if (prefix) rehydratedContentByMessageId.set(messageId, prefix)
     }
 
-    if (skippedForBudget > 0) {
-      logger.warn('Re-hydrated attachments exceeded the per-turn budget; some were not re-sent', {
-        skippedForBudget,
-        budget: REHYDRATED_ATTACHMENT_CHAR_BUDGET,
-        characterParticipantId,
-      })
-    }
     if (rehydratedContentByMessageId.size > 0 || rehydratedAttachmentsToKeep.length > 0) {
       logger.debug('Re-hydrated user attachments from history', {
         messagesExpanded: rehydratedContentByMessageId.size,
         rawAttachmentsKept: rehydratedAttachmentsToKeep.length,
-        charactersUsed: REHYDRATED_ATTACHMENT_CHAR_BUDGET - budgetLeft,
+        charactersUsed,
         characterParticipantId,
       })
     }
@@ -822,7 +827,7 @@ export function applyMultiCharacterTurnAnchor(
 
 /**
  * Record-only: a transcript row that exists for the operator and must never
- * reach a model. Two kinds qualify, for different reasons.
+ * reach a model. Three kinds qualify, for different reasons.
  *
  * 1. **Persisted Commonplace Book whispers.** Recall is recomputed per turn and
  *    inlined into the new user message body, so past whispers piling up across
@@ -838,15 +843,23 @@ export function applyMultiCharacterTurnAnchor(
  *    forever. It wears `role: 'ASSISTANT'`, so a role filter alone lets it past
  *    — this predicate is what stops it.
  *
+ * 3. **The Host's "spoken of" introductions** (`isOffSceneMentionIntroduction`).
+ *    Absent people now reach the model through the referent ledger's trailing
+ *    section, card and all, on every turn they are named. Left in the history,
+ *    the card landed between a line and the reply that leaned on it ("…how
+ *    she documents." / Greg's card / "When she's not scolding Vergil") and the
+ *    pronoun lost its antecedent. Left-behind notices are not records.
+ *
  * Deliberately blind to system transparency, roster size and whether the turn
  * is a fresh generation or a swipe: every generation routes through
  * `buildMessageContext`, and there is exactly one call site, so there is no
  * dimension along which a record could slip through on one path and not another.
  */
 export function isRecordOnlyMessage(
-  m: { systemSender?: string | null; systemKind?: string | null },
+  m: { systemSender?: string | null; systemKind?: string | null; content?: string | null },
 ): boolean {
   if (m.systemKind === 'inform') return true
+  if (isOffSceneMentionIntroduction(m)) return true
   return m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
 }
 
@@ -1121,6 +1134,11 @@ export async function buildMessageContext(
     reservedOutgoingTokens: options.reservedOutgoingTokens,
     // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
     turnSkip: options.turnSkip,
+    // Raised hand — the yield Turn note, same ephemeral footing.
+    offerYield: options.offerYield,
+    // Storyteller: a bid's dry build, and the bid or plan section.
+    purpose: options.purpose,
+    storytellerSection: options.storytellerSection,
     // Swipe re-apply: deliver the informs the re-rolled line's generation saw.
     regenerationOfMessageIds: options.regenerationOfMessageIds,
     // The human's own turns, for the chained-turn scene note.
@@ -1183,8 +1201,8 @@ export async function buildMessageContext(
       if (extra.length > 0) {
         const lanternAttachmentsToKeep: typeof extra = []
         // Spent newest-first, then restored to chronological order below.
-        // `rehydrateUserAttachments` spends its text budget oldest-first, and
-        // this deliberately differs: when a budget forces a drop, the picture
+        // Unlike `rehydrateUserAttachments`, which re-sends every unseen
+        // upload whole, this walk can drop: when the budget forces it, the picture
         // worth keeping is the one just generated, not the portrait it
         // replaced. The describe-fallback prefix is unbudgeted — it is text,
         // already bounded by the model's own context budget, and a sentence

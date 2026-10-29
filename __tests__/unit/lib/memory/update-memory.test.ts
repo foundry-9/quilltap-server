@@ -73,6 +73,15 @@ function setup(rows: Row[]) {
       row.relatedMemoryIds = (row.relatedMemoryIds ?? []).filter((l: string) => !ids.includes(l))
       return row.relatedMemoryIds
     }),
+    // Hot keystones about one subject (null or the holder: about themself), less one row.
+    countKeystones: jest.fn(async (characterId: string, about: string | null, excludeId?: string) =>
+      Array.from(byId.values()).filter((r) => {
+        const self = !about || about === characterId
+        const rowSelf = !r.aboutCharacterId || r.aboutCharacterId === characterId
+        return r.characterId === characterId && r.keystone && (r.tier ?? 'hot') === 'hot' &&
+          r.id !== excludeId && (self ? rowSelf : r.aboutCharacterId === about)
+      }).length
+    ),
     findByCharacterId: jest.fn(async (characterId: string) =>
       Array.from(byId.values()).filter((r) => r.characterId === characterId)
     ),
@@ -237,6 +246,51 @@ describe('updateMemory (bug 203)', () => {
     expect(await updateMemory('someone-else', 'm1', { content: 'x' }, { userId: 'u1' })).toEqual({
       ok: false,
       reason: 'not-found',
+    })
+  })
+
+  describe('keystones (inner-circle-recall.md C5)', () => {
+    const keystones = (about: string | null, n: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...base, id: `k${i}`, aboutCharacterId: about, keystone: true }))
+
+    it('marks a row a keystone and invalidates the archive', async () => {
+      const { byId } = setup([{ ...base, id: 'm1' }])
+      const result = await updateMemory('holder', 'm1', { keystone: true }, { userId: 'u1' })
+      expect(result.ok).toBe(true)
+      expect(byId.get('m1')!.keystone).toBe(true)
+      expect(invalidateFrozenArchive).toHaveBeenCalledWith('holder')
+    })
+
+    it('refuses a sixth keystone about one subject, and writes nothing', async () => {
+      const { byId, memories } = setup([...keystones('otto', 5), { ...base, id: 'm1', aboutCharacterId: 'otto' }])
+      const result = await updateMemory('holder', 'm1', { keystone: true }, { userId: 'u1' })
+      expect(result).toEqual({ ok: false, reason: 'keystone-refused', message: expect.stringContaining('at most 5') })
+      expect(byId.get('m1')!.keystone).toBeUndefined()
+      expect(memories.updateForCharacter).not.toHaveBeenCalled()
+    })
+
+    it('counts self keystones together, whether about the holder or about no one', async () => {
+      setup([...keystones(null, 3), ...keystones('holder', 2).map((r, i) => ({ ...r, id: `s${i}` })), { ...base, id: 'm1' }])
+      const result = await updateMemory('holder', 'm1', { keystone: true }, { userId: 'u1' })
+      expect(result.ok).toBe(false)
+    })
+
+    it('refuses moving a keystone onto a full subject, but lets an ordinary edit of one through', async () => {
+      setup([...keystones('otto', 5), { ...base, id: 'k-pip', aboutCharacterId: 'pip', keystone: true }])
+      expect((await updateMemory('holder', 'k-pip', { aboutCharacterId: 'otto' }, { userId: 'u1' })).ok).toBe(false)
+      expect((await updateMemory('holder', 'k0', { importance: 0.9 }, { userId: 'u1' })).ok).toBe(true)
+    })
+
+    it('refuses to mark an archived (cold) row', async () => {
+      setup([{ ...base, id: 'm1', tier: 'cold' }])
+      const result = await updateMemory('holder', 'm1', { keystone: true }, { userId: 'u1' })
+      expect(result).toEqual({ ok: false, reason: 'keystone-refused', message: expect.stringContaining('archived') })
+    })
+
+    it('always lets a keystone be unmarked', async () => {
+      const { byId } = setup(keystones('otto', 5))
+      expect((await updateMemory('holder', 'k0', { keystone: false }, { userId: 'u1' })).ok).toBe(true)
+      expect(byId.get('k0')!.keystone).toBe(false)
     })
   })
 })

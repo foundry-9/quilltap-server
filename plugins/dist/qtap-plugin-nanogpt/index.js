@@ -22635,6 +22635,63 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
   }
 };
 
+// image-sizes.ts
+var DEFAULT_AREA = 1024 * 1024;
+function parseDims(value) {
+  const match = /^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i.exec(value);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+function parseRatio(value) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(value);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
+function tierLongEdge(value) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*k\s*$/i.exec(value);
+  return match ? Number(match[1]) * 1024 : null;
+}
+function ratioDistance(a, b) {
+  return Math.abs(Math.log(a) - Math.log(b));
+}
+function fitImageShape(catalog, size, aspectRatio) {
+  const asked = { size, aspectRatio: void 0, adjusted: false };
+  const resolutions = catalog?.resolutions ?? [];
+  if (resolutions.length === 0) return asked;
+  if (size && resolutions.includes(size)) return asked;
+  const dims = size ? parseDims(size) : null;
+  const targetRatio = dims ? dims.width / dims.height : aspectRatio ? parseRatio(aspectRatio) : null;
+  if (targetRatio === null) return asked;
+  const targetArea = dims ? dims.width * dims.height : DEFAULT_AREA;
+  const concrete = resolutions.map((value) => ({ value, dims: parseDims(value) })).filter((entry) => entry.dims !== null);
+  if (concrete.length > 0) {
+    const best = concrete.reduce((winner, candidate) => {
+      const winnerRatio = ratioDistance(winner.dims.width / winner.dims.height, targetRatio);
+      const candidateRatio = ratioDistance(candidate.dims.width / candidate.dims.height, targetRatio);
+      if (candidateRatio !== winnerRatio) return candidateRatio < winnerRatio ? candidate : winner;
+      const winnerArea = Math.abs(winner.dims.width * winner.dims.height - targetArea);
+      const candidateArea = Math.abs(candidate.dims.width * candidate.dims.height - targetArea);
+      return candidateArea < winnerArea ? candidate : winner;
+    });
+    return { size: best.value, aspectRatio: void 0, adjusted: best.value !== size };
+  }
+  const targetLongEdge = dims ? Math.max(dims.width, dims.height) : 1024;
+  const tiers = resolutions.map((value) => ({ value, edge: tierLongEdge(value) })).filter((entry) => entry.edge !== null);
+  if (tiers.length === 0) return asked;
+  const tier = tiers.reduce(
+    (winner, candidate) => Math.abs(candidate.edge - targetLongEdge) < Math.abs(winner.edge - targetLongEdge) ? candidate : winner
+  );
+  const ratios = (catalog?.aspect_ratio ?? []).map((value) => ({ value, ratio: parseRatio(value) })).filter((entry) => entry.ratio !== null);
+  const ratio = ratios.length ? ratios.reduce(
+    (winner, candidate) => ratioDistance(candidate.ratio, targetRatio) < ratioDistance(winner.ratio, targetRatio) ? candidate : winner
+  ).value : void 0;
+  return { size: tier.value, aspectRatio: ratio, adjusted: true };
+}
+
 // image-provider.ts
 var logger2 = createPluginLogger("qtap-plugin-nanogpt");
 var CATALOG_TTL_MS = 60 * 60 * 1e3;
@@ -22668,6 +22725,21 @@ function labelForSize(size) {
   if (ratio > 1) return ratio >= 1.6 ? `Wide (${size})` : `Landscape (${size})`;
   return ratio <= 0.625 ? `Tall (${size})` : `Portrait (${size})`;
 }
+function isNonSquare(size, aspectRatio) {
+  if (typeof aspectRatio === "string") {
+    const [width, height] = aspectRatio.split(":").map(Number);
+    if (width > 0 && height > 0) return width !== height;
+  }
+  const dims = size ? /^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i.exec(size) : null;
+  return dims !== null && dims[1] !== dims[2];
+}
+function isShapeFailure(error) {
+  const status = error?.status;
+  if (status === 503) return true;
+  if (status !== 400) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(size|resolution|aspect|dimension|output)\b/i.test(message);
+}
 var NanoGPTImageProvider = class {
   constructor() {
     this.provider = "NANOGPT";
@@ -22692,10 +22764,25 @@ var NanoGPTImageProvider = class {
       // change upstream cannot silently hand us URLs.
       response_format: "b64_json"
     };
-    if (params.size) {
-      requestParams.size = params.size;
+    const sizeCatalog = (await this.catalogEntryFor(model, apiKey))?.supported_parameters;
+    const shape = fitImageShape(sizeCatalog, params.size, params.aspectRatio);
+    if (shape.adjusted) {
+      logger2.debug("Fitted the requested image shape to the model", {
+        context: "NanoGPTImageProvider.generateImage",
+        model,
+        requestedSize: params.size,
+        requestedAspectRatio: params.aspectRatio,
+        size: shape.size,
+        aspectRatio: shape.aspectRatio
+      });
+    }
+    if (shape.size) {
+      requestParams.size = shape.size;
     }
     const extraBody = requestParams;
+    if (shape.aspectRatio) {
+      extraBody.aspect_ratio = shape.aspectRatio;
+    }
     if (params.seed !== void 0) {
       extraBody.seed = params.seed;
     }
@@ -22713,7 +22800,8 @@ var NanoGPTImageProvider = class {
     logger2.debug("Posting NanoGPT image request", {
       context: "NanoGPTImageProvider.generateImage",
       model,
-      size: params.size,
+      size: requestParams.size,
+      aspectRatio: shape.aspectRatio,
       n: requestParams.n,
       loraDialect: applied.dialect,
       loraKeys: applied.keys,
@@ -22722,12 +22810,34 @@ var NanoGPTImageProvider = class {
     });
     let response;
     try {
-      response = await client.images.generate(requestParams);
+      try {
+        response = await client.images.generate(requestParams);
+      } catch (error) {
+        const square = isNonSquare(requestParams.size, extraBody.aspect_ratio) && isShapeFailure(error) ? fitImageShape(sizeCatalog, "1024x1024", void 0) : null;
+        if (!square) throw error;
+        logger2.warn("NanoGPT turned down a non-square image; retrying once as a square", {
+          context: "NanoGPTImageProvider.generateImage",
+          model,
+          size: requestParams.size,
+          aspectRatio: extraBody.aspect_ratio,
+          squareSize: square.size,
+          squareAspectRatio: square.aspectRatio,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        requestParams.size = square.size;
+        if (square.aspectRatio) {
+          extraBody.aspect_ratio = square.aspectRatio;
+        } else {
+          delete extraBody.aspect_ratio;
+        }
+        response = await client.images.generate(requestParams);
+      }
     } catch (error) {
       logger2.error("NanoGPT image request failed", {
         context: "NanoGPTImageProvider.generateImage",
         model,
-        size: params.size,
+        size: requestParams.size,
+        aspectRatio: extraBody.aspect_ratio,
         n: requestParams.n,
         loraDialect: applied.dialect,
         loraKeys: applied.keys,
@@ -22805,6 +22915,26 @@ var NanoGPTImageProvider = class {
       count: imageModels.length
     });
     return imageModels;
+  }
+  /**
+   * The catalog entry for a model, refreshing a cold cache with this call's
+   * key. The job child never lists models, so its cache starts cold; a failed
+   * fetch is not fatal — the request then goes out as asked.
+   */
+  async catalogEntryFor(model, apiKey) {
+    if (!catalogIsFresh()) {
+      try {
+        await this.fetchDetailedCatalog(apiKey);
+      } catch (error) {
+        logger2.warn("Could not refresh the NanoGPT image catalog; posting the size as asked", {
+          context: "NanoGPTImageProvider.catalogEntryFor",
+          model,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        return void 0;
+      }
+    }
+    return catalogEntry(model);
   }
   /**
    * Fetch the detailed catalog and refresh the module cache.

@@ -8,6 +8,7 @@
 
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { Icon } from '@/components/ui/icon'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import type { DocumentStore } from '../types'
 
 interface DocumentStoreCardProps {
@@ -141,7 +142,9 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
             <Icon name="database" className="w-5 h-5 qt-text-secondary" />
           </div>
           <div className="min-w-0">
-            <h2 className="qt-section-title truncate">{store.name}</h2>
+            <h2 className="qt-section-title truncate">
+              <span role="button" tabIndex={0} onKeyDown={activateOnKey}>{store.name}</span>
+            </h2>
             <p className="qt-text-small truncate" title={store.basePath || 'Database-backed — no path'}>
               {store.basePath || <em className="qt-text-secondary">Database-backed — no path</em>}
             </p>

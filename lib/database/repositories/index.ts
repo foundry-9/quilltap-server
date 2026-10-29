@@ -23,6 +23,7 @@ export { FilesRepository } from './files.repository';
 export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
 export { LLMLogsRepository } from './llm-logs.repository';
+export { LogEntriesRepository, type LogEntryFilter } from './log-entries.repository';
 export type {
   LLMLogTypeStatsRow,
   LLMLogProfileStatsRow,
@@ -57,8 +58,10 @@ export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
 export { ChatInformsRepository } from './chat-informs.repository';
+export { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 export { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 export { WardrobeWearRepository } from './wardrobe-wear.repository';
+export { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
 
@@ -73,6 +76,7 @@ import { FilesRepository } from './files.repository';
 import { FoldersRepository } from './folders.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
 import { LLMLogsRepository } from './llm-logs.repository';
+import { LogEntriesRepository } from './log-entries.repository';
 import { MemoriesRepository } from './memories.repository';
 import { PluginConfigRepository } from './plugin-config.repository';
 import { ProjectsRepository } from './projects.repository';
@@ -102,8 +106,10 @@ import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository
 import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
 import { ChatInformsRepository } from './chat-informs.repository';
+import { StorytellerRoundsRepository } from './storyteller-rounds.repository';
 import { MemoryExtractionCursorsRepository } from './memory-extraction-cursors.repository';
 import { WardrobeWearRepository } from './wardrobe-wear.repository';
+import { ChatWardrobeHistoryRepository } from './chat-wardrobe-history.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
 
@@ -123,6 +129,7 @@ export interface RepositoryContainer {
   imageProfiles: ImageProfilesRepository;
   images: FilesRepository; // Alias for backwards compatibility
   llmLogs: LLMLogsRepository;
+  logEntries: LogEntriesRepository;
   memories: MemoriesRepository;
   pluginConfigs: PluginConfigRepository;
   projects: ProjectsRepository;
@@ -152,8 +159,10 @@ export interface RepositoryContainer {
   groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
   chatInforms: ChatInformsRepository;
+  storytellerRounds: StorytellerRoundsRepository;
   memoryExtractionCursors: MemoryExtractionCursorsRepository;
   wardrobeWear: WardrobeWearRepository;
+  wardrobeHistory: ChatWardrobeHistoryRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
 }
@@ -186,6 +195,7 @@ export function createRepositories(): RepositoryContainer {
       imageProfiles: new ImageProfilesRepository(),
       images: filesRepo, // Alias for backwards compatibility
       llmLogs: new LLMLogsRepository(),
+      logEntries: new LogEntriesRepository(),
       memories: new MemoriesRepository(),
       pluginConfigs: new PluginConfigRepository(),
       projects: new ProjectsRepository(),
@@ -215,9 +225,12 @@ export function createRepositories(): RepositoryContainer {
       groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
       chatInforms: new ChatInformsRepository(),
+      storytellerRounds: new StorytellerRoundsRepository(),
       memoryExtractionCursors: new MemoryExtractionCursorsRepository(),
       // The wear ledger's chokepoint writes equipped slots through this chats repo.
       wardrobeWear: new WardrobeWearRepository(chatsRepo),
+      // Outfit history: `settle` reads the live slots through this chats repo.
+      wardrobeHistory: new ChatWardrobeHistoryRepository(chatsRepo),
       terminalSessions: new TerminalSessionsRepository(),
       textReplacementRules: new TextReplacementRulesRepository(),
     };

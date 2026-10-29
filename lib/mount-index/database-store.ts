@@ -25,10 +25,31 @@ import {
   emitDocumentMoved,
   emitDocumentWritten,
 } from './db-store-events';
-import { detectNativeText } from './path-utils';
+import { detectNativeText, isExtractableBlobPath } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
+import { inventoryWritesAreLinted, isTitleLintFolder, isTitleLintPath } from '@/lib/inventory/lint-scope';
+import type { InventoryDocumentChange } from '@/lib/inventory/title-lint-documents';
 
 const logger = createServiceLogger('MountIndex:DatabaseStore');
+
+/**
+ * The Inventory title lint at the document layer: every write, delete or move
+ * of an `Inventory/*.json` or `Tools/*.tool.json` file — whoever's hands made
+ * it — is linted before it lands (a refusal throws), and the returned function
+ * writes the lint's rows once it has. Writes from the Inventory mutations,
+ * which lint for themselves, pass straight through. Loaded lazily: the lint
+ * reaches back into this module through the Inventory's own writers.
+ */
+async function lintInventoryChange(change: InventoryDocumentChange): Promise<() => void> {
+  if (inventoryWritesAreLinted()) return () => undefined;
+  const relevant =
+    change.kind === 'move-folder'
+      ? isTitleLintFolder(change.fromPath) || isTitleLintFolder(change.toPath)
+      : (change.kind === 'move' ? [change.fromPath, change.toPath] : [change.relativePath]).some(isTitleLintPath);
+  if (!relevant) return () => undefined;
+  const { lintInventoryDocumentChange } = await import('@/lib/inventory/title-lint-documents');
+  return lintInventoryDocumentChange(change);
+}
 
 function normaliseRelativePath(relativePath: string): string {
   // Collapse ./ and redundant separators, reject traversal. Path-resolver
@@ -75,6 +96,43 @@ export async function readDatabaseDocument(
     mtime: new Date(doc.lastModified).getTime(),
     size: doc.content.length,
   };
+}
+
+/**
+ * The readable text of a blob at a path: the `extractedText` its link carries
+ * once ingest (or the startup backfill) converted it — a PDF/DOCX's derived
+ * text, or an uploaded .md/.txt/.json's own content (bug 260). Null when there
+ * is no blob there or nothing usable was extracted.
+ */
+export async function readDatabaseBlobText(
+  mountPointId: string,
+  relativePath: string
+): Promise<{ content: string; mtime: number; size: number; storedMimeType: string } | null> {
+  const repos = getRepositories();
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, normaliseRelativePath(relativePath));
+  if (!blob?.extractedText || blob.extractionStatus !== 'converted') return null;
+  return {
+    content: blob.extractedText,
+    mtime: new Date(blob.updatedAt).getTime(),
+    size: blob.sizeBytes,
+    storedMimeType: blob.storedMimeType,
+  };
+}
+
+/**
+ * Every blob in a store whose text can be searched, as `{ relativePath,
+ * content }`: extractable types (PDF, DOCX, native text) with converted text.
+ * `doc_grep` reads this beside `doc_mount_documents` so an upload is found
+ * like a written document (bug 260).
+ */
+export async function listDatabaseBlobTexts(
+  mountPointId: string
+): Promise<Array<{ relativePath: string; content: string }>> {
+  const repos = getRepositories();
+  const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
+  return blobs
+    .filter(b => b.extractionStatus === 'converted' && !!b.extractedText && isExtractableBlobPath(b.relativePath))
+    .map(b => ({ relativePath: b.relativePath, content: b.extractedText as string }));
 }
 
 /**
@@ -132,6 +190,8 @@ export async function writeDatabaseDocument(
     }
   }
 
+  const afterLint = await lintInventoryChange({ kind: 'write', mountPointId, relativePath: rel, content });
+
   // Ensure folder exists and get its ID
   const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
   const folderPath = path.dirname(rel);
@@ -164,6 +224,7 @@ export async function writeDatabaseDocument(
   await reindexAfterDatabaseWrite(mountPointId, rel);
 
   emitDocumentWritten({ mountPointId, relativePath: rel });
+  afterLint();
 
   const mtime = new Date(now).getTime();
   return { mtime };
@@ -184,9 +245,11 @@ export async function deleteDatabaseDocument(
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, rel);
   if (!link) return false;
 
+  const afterLint = await lintInventoryChange({ kind: 'delete', mountPointId, relativePath: rel });
   await repos.docMountFileLinks.deleteWithGC(link.id);
 
   emitDocumentDeleted({ mountPointId, relativePath: rel });
+  afterLint();
   return true;
 }
 
@@ -253,6 +316,8 @@ export async function moveDatabaseDocument(
     }
   }
 
+  const afterLint = await lintInventoryChange({ kind: 'move', mountPointId, fromPath: fromRel, toPath: toRel });
+
   // Ensure destination folder exists and get its ID
   const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
   const destFolderPath = path.dirname(toRel);
@@ -275,6 +340,7 @@ export async function moveDatabaseDocument(
   }
 
   emitDocumentMoved({ mountPointId, fromRelativePath: fromRel, toRelativePath: toRel });
+  afterLint();
 }
 
 // ============================================================================
@@ -455,6 +521,8 @@ export async function moveDatabaseFolder(
     );
   }
 
+  const afterLint = await lintInventoryChange({ kind: 'move-folder', mountPointId, fromPath: sourceFolder.path, toPath: toRel });
+
   // Ensure parent of destination exists
   const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
   const destDir = path.dirname(toRel);
@@ -539,6 +607,7 @@ export async function moveDatabaseFolder(
       toRelativePath: doc.newPath,
     });
   }
+  afterLint();
 }
 
 export async function backfillFolderRowsForMountPoint(

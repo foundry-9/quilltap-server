@@ -54,11 +54,11 @@
   --theme-ring: hsl(225 65% 48%);
 
   /* Status colors */
-  --theme-success: hsl(152 60% 38%);
+  --theme-success: hsl(152 60% 31%);
   --theme-success-foreground: hsl(0 0% 100%);
-  --theme-warning: hsl(38 90% 46%);
-  --theme-warning-foreground: hsl(0 0% 10%);
-  --theme-info: hsl(210 75% 48%);
+  --theme-warning: hsl(38 90% 32%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(210 75% 44.5%);
   --theme-info-foreground: hsl(0 0% 100%);
 
   /* Chat-specific colors */
@@ -99,24 +99,24 @@
   --theme-secondary-foreground: hsl(225 10% 85%);
 
   --theme-muted: hsl(225 12% 14%);
-  --theme-muted-foreground: hsl(225 8% 56%);
+  --theme-muted-foreground: hsl(225 8% 58%);
 
   --theme-accent: hsl(225 14% 18%);
   --theme-accent-foreground: hsl(225 10% 85%);
 
-  --theme-destructive: hsl(0 60% 54%);
-  --theme-destructive-foreground: hsl(0 0% 100%);
+  --theme-destructive: hsl(0 60% 62%);
+  --theme-destructive-foreground: hsl(225 18% 9%);
 
   --theme-border: hsl(225 12% 20%);
   --theme-input: hsl(225 12% 20%);
   --theme-ring: hsl(225 55% 60%);
 
   --theme-success: hsl(152 55% 44%);
-  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-success-foreground: hsl(225 18% 9%);
   --theme-warning: hsl(38 85% 52%);
   --theme-warning-foreground: hsl(0 0% 10%);
   --theme-info: hsl(210 70% 58%);
-  --theme-info-foreground: hsl(0 0% 100%);
+  --theme-info-foreground: hsl(225 18% 9%);
 
   --theme-chat-user: hsl(225 60% 56%);
   --theme-chat-user-foreground: hsl(0 0% 100%);
@@ -195,6 +195,20 @@
   --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.4);
   --qt-left-sidebar-overlay-z: 40;
   --qt-left-sidebar-z: 50;
+
+  /* Topmost floating layer — above every portal modal, below the startup gates */
+  --qt-floating-layer-z: 1000;
+
+  /* Brahma Console launcher — the always-on button beside the left rail */
+  --qt-brahma-launcher-size: 2.75rem;
+  --qt-brahma-launcher-offset: 0.75rem;
+  --qt-brahma-launcher-bg: var(--color-primary);
+  --qt-brahma-launcher-fg: var(--color-primary-foreground);
+  --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --qt-brahma-launcher-active-bg: var(--color-background);
+  --qt-brahma-launcher-active-fg: var(--color-primary);
+  --qt-brahma-launcher-ring: var(--color-primary);
+  --qt-brahma-launcher-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35);
 
   /* App Header Variables */
   --qt-app-header-height: 3.5rem;

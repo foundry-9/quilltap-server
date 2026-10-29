@@ -21,6 +21,7 @@
  * - ChatSearchReplaceOps: text search and replace in messages
  */
 
+import type { ChatTurnMode } from '@/lib/schemas/storyteller.types';
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import {
   ChatMetadata,
@@ -48,6 +49,18 @@ import { ChatSearchReplaceOps } from './chats-search.ops';
  * `ChatsRepository.patchOnlyFields`).
  */
 const CONCIERGE_MODE_FIELDS: readonly string[] = ['conciergeMode', 'conciergeModeSetBy', 'conciergeModeReason'];
+
+/**
+ * The chat's carried Inventory — patch-only on this table, written solely by
+ * `ChatsRepository.setEquippedInventory`.
+ */
+const EQUIPPED_INVENTORY_FIELD = 'equippedInventory';
+
+/**
+ * The chat's turn mode ('rotation' | 'storyteller') — patch-only on this
+ * table, written solely by `ChatsRepository.setTurnMode`.
+ */
+const TURN_MODE_FIELD = 'turnMode';
 
 /**
  * Chats repository with database abstraction layer backend
@@ -333,6 +346,19 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
           return false;
         }
 
+        // End the chat's live terminals. The FK cascade has removed their
+        // `terminal_sessions` rows, so a shell left running would keep writing
+        // a transcript nothing names. In the job child the PTY map is empty.
+        try {
+          const { ptyManager } = await import('@/lib/terminal/pty-manager');
+          ptyManager.disposeChatSessions(id);
+        } catch (error) {
+          logger.warn('Failed to terminate terminal sessions for deleted chat', {
+            chatId: id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Delete messages
         try {
           const messagesCollection = await this.getMessagesCollection();
@@ -558,7 +584,26 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   // `setConciergeMode` below.
 
   protected override patchOnlyFields(): readonly string[] {
-    return [...CONCIERGE_MODE_FIELDS];
+    return [...CONCIERGE_MODE_FIELDS, EQUIPPED_INVENTORY_FIELD, TURN_MODE_FIELD];
+  }
+
+  /**
+   * Write a chat's turn mode. Patch-only: the one writer of `turnMode`, so a
+   * whole-row update elsewhere can never carry a stale copy back. 'rotation'
+   * is stored as NULL. Returns whether a row was written.
+   */
+  async setTurnMode(chatId: string, mode: ChatTurnMode): Promise<boolean> {
+    const stored = mode === 'rotation' ? null : mode;
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { [TURN_MODE_FIELD]: stored, updatedAt: new Date().toISOString() } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to write turn mode', { chatId, mode, context: 'storyteller' }, false);
+    logger.debug('Turn mode write', { chatId, mode, written, context: 'storyteller' });
+    return written;
   }
 
   /**
@@ -763,6 +808,114 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   // ============================================================================
+  // EQUIPPED INVENTORY
+  // ============================================================================
+  //
+  // `equippedInventory` is `{ [characterId]: string[] }` of Inventory object
+  // ids. Like the Concierge columns it is patch-only: a whole-row `update`
+  // never carries a stale copy back. `setEquippedInventory` is the one writer
+  // (reached through `lib/inventory/equip.ts` and `apply-defaults.ts`).
+
+  /** The chat's whole carried-objects map, `{}` when none is stored. */
+  async getEquippedInventory(chatId: string): Promise<Record<string, string[]>> {
+    return this.safeQuery(
+      async () => {
+        const chat = await this.findById(chatId);
+        return normalizeEquippedInventory(chat?.equippedInventory);
+      },
+      'Failed to get equipped inventory',
+      { chatId, context: 'inventory' },
+      {},
+    );
+  }
+
+  /**
+   * Replace one character's carried ids in a chat (deduplicated and sorted,
+   * so equal sets hash equal) and patch the column alone. `null` removes the
+   * character's entry, so arrival defaults apply again. Returns whether a row
+   * was written.
+   *
+   * In the forked job child this is a buffered write (`set*` prefix),
+   * replayed in the parent.
+   */
+  async setEquippedInventory(
+    chatId: string,
+    characterId: string,
+    ids: readonly string[] | null,
+  ): Promise<boolean> {
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter);
+      if (!row) return false;
+      const state = normalizeEquippedInventory((row as { equippedInventory?: unknown }).equippedInventory);
+      if (ids === null) {
+        delete state[characterId];
+      } else {
+        state[characterId] = Array.from(new Set(ids)).sort();
+      }
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { [EQUIPPED_INVENTORY_FIELD]: state } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to write equipped inventory', { chatId, characterId, context: 'inventory' }, false);
+    logger.debug('Equipped inventory write', {
+      chatId,
+      characterId,
+      count: ids?.length ?? null,
+      cleared: ids === null,
+      written,
+      context: 'inventory',
+    });
+    return written;
+  }
+
+  /**
+   * The chats whose carried set for `characterId` lists `itemId`. A read; the
+   * caller rewrites each one under its chat's carried-set lock
+   * (`dropCarriedEverywhere`, `lib/inventory/equip.ts`).
+   */
+  async findChatIdsCarryingInventoryId(characterId: string, itemId: string): Promise<string[]> {
+    const ids = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const rows = await collection.find({ [EQUIPPED_INVENTORY_FIELD]: { $like: `%${itemId}%` } } as QueryFilter);
+      return (rows as Array<{ id: string; equippedInventory?: unknown }>)
+        .filter((row) => normalizeEquippedInventory(row.equippedInventory)[characterId]?.includes(itemId))
+        .map((row) => row.id);
+    }, 'Failed to find chats carrying an inventory id', { characterId, itemId, context: 'inventory' }, [] as string[]);
+    logger.debug('Chats carrying an inventory id', { characterId, itemId, chats: ids.length, context: 'inventory' });
+    return ids;
+  }
+
+  /**
+   * Drop one object id from one character's carried set in one chat — a
+   * read-modify-write of the whole map, so the caller holds that chat's
+   * carried-set lock, as every `setEquippedInventory` caller does. Other
+   * characters' entries are untouched. Returns whether the row changed.
+   *
+   * In the forked job child this is a buffered write (`remove*` prefix),
+   * replayed in the parent.
+   */
+  async removeEquippedInventoryId(chatId: string, characterId: string, itemId: string): Promise<boolean> {
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter);
+      if (!row) return false;
+      const state = normalizeEquippedInventory((row as { equippedInventory?: unknown }).equippedInventory);
+      const ids = state[characterId];
+      if (!ids || !ids.includes(itemId)) return false;
+      state[characterId] = ids.filter((id) => id !== itemId);
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { [EQUIPPED_INVENTORY_FIELD]: state } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to remove an id from equipped inventory', { chatId, characterId, itemId, context: 'inventory' }, false);
+    logger.debug('Equipped inventory id removed', { chatId, characterId, itemId, written, context: 'inventory' });
+    return written;
+  }
+
+  // ============================================================================
   // EQUIPPED OUTFIT STATE
   // ============================================================================
 
@@ -888,3 +1041,25 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 }
 
+/**
+ * `chats.equippedInventory` as a clean map: unconstrained JSON on disk (and a
+ * string when read raw), so anything that is not a `{ id: string[] }` entry
+ * is dropped on the way out.
+ */
+export function normalizeEquippedInventory(raw: unknown): Record<string, string[]> {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [characterId, ids] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(ids)) continue;
+    out[characterId] = ids.filter((id): id is string => typeof id === 'string');
+  }
+  return out;
+}

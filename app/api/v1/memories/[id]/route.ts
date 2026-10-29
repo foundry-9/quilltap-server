@@ -26,6 +26,8 @@ const updateMemorySchema = z.object({
   aboutCharacterId: z.uuid().nullable().optional(),
   chatId: z.uuid().nullable().optional(),
   relatedMemoryIds: z.array(z.uuid()).optional(),
+  /** Standing fact: always remembered in full (inner-circle-recall.md Part C). */
+  keystone: z.boolean().optional(),
 });
 
 /**
@@ -113,6 +115,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           `The memory was not saved because its new text could not be embedded. ${result.message}`,
           502
         );
+      }
+      if (result.reason === 'keystone-refused') {
+        return badRequest(result.message);
       }
       if (result.reason === 'invalid-related') {
         return badRequest(

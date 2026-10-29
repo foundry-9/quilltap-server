@@ -1,12 +1,12 @@
 ---
-url: /settings?tab=chat&section=composer-spellcheck
+url: /settings?tab=chat&section=composer-slash-commands
 ---
 
 # Chat Settings — The Composer and Your Typing
 
-> **[Open this page in Quilltap](/settings?tab=chat&section=composer-spellcheck)**
+> **[Open this page in Quilltap](/settings?tab=chat&section=composer-slash-commands)**
 
-Everything on the Chat Settings page that concerns the business end of the pen: how a new chat greets your first keystroke, what the composer does with a colon and a word, which of your abbreviations it quietly expands, and whether your straight quotes are permitted to curl. The rest of the page is described in [Chat Settings](chat-settings.md) and [The Staff Behind the Scenes](chat-settings-ai-services.md).
+Everything on the Chat Settings page that concerns the business end of the pen: how a new chat greets your first keystroke, what the composer does with a colon and a word, what a slash at the start of a word may summon, which of your abbreviations it quietly expands, and whether your straight quotes are permitted to curl. The rest of the page is described in [Chat Settings](chat-settings.md) and [The Staff Behind the Scenes](chat-settings-ai-services.md).
 
 All of these cards live on **Settings → Chat Settings**, and each applies to every chat unless noted otherwise.
 
@@ -168,6 +168,46 @@ It fires only for seats taken with **Impersonate**. Speaking as yourself — or 
 
 The full account — what the character is told, what they are not, and the honest caveat that the line is model-written and worth reading — is at [In their own words](/settings?tab=chat&section=composer-spellcheck).
 
+## Slash Commands
+
+A speaking-tube from the composer to the tool room. Type a **slash at the start of a word** — `/` — and a menu unfurls beneath the caret listing everything the composer can do on your behalf. Keep typing and the list narrows: `/atta` finds *Attach file*, `/wear` finds every contrivance with *wear* anywhere among its words. Arrow keys to browse, Enter, Tab or a click to choose, Escape to dismiss and leave your slash exactly where you put it.
+
+**What is on the menu.** The composer's own errands, first of all:
+
+- `/attach` attaches a file from your computer; `/library` attaches one already in your library
+- `/image` opens the image commission; `/announce` the announcement desk; `/mail` the Post Office; `/inform` the quiet word to the cast
+- `/tool` opens [Run Tool](run-tool.md) on its full list, and `/pascal` opens [Pascal's table](custom-tools.md) (listed only when the chat has custom tools at all)
+- `/roll` opens Run Tool on the dice, where you may name the sides and the count; `/d6`, `/d20`, `/coin` and `/bottle` are the quick rolls, landing as the same pending chip the dice button produces
+
+After those, **every tool in Run Tool is a command under its own name** — `/wardrobe_wear`, `/self_inventory`, and so on, exactly as Run Tool lists them — and **every Pascal tool in the chat** under its own name as well. A tool that Run Tool shows greyed out for want of an image profile, a project or the like is simply absent from the menu; Run Tool itself will tell you why. A per-character variant of a Pascal tool appears once per character, labelled *as Vivienne* or whomever, and each opens its own form.
+
+**Run at once, or a form to complete.** A tool that asks for nothing whatever runs the instant you choose it; a brief notice names it, and the result arrives in the chat a moment later. A tool that asks for *anything* — even a question it has already answered with a default — opens its own dialog directly upon its form, defaults filled in, so you may look them over, alter what you please, and press Run yourself. The reasoning is plain courtesy: a tool with nothing to complete should not make you click a button, and a tool with something to complete should not presume on your behalf.
+
+**A private roll needs the dialog.** An instant run is always public (or, for a Pascal tool, whatever its definition prefers). To whisper a run, open its dialog — `/tool` or `/pascal`, or the gutter and sidebar buttons — and tick the box there.
+
+**What the slash leaves behind.** Nothing. Choosing a command removes the `/word` you typed, and a single Cmd/Ctrl+Z brings it back should you think better of it.
+
+**Prose is safe.** The slash opens a menu only at the start of a word — after a space, at the start of a line, or after an opening bracket or quotation mark. `and/or`, `10/15`, `http://`, every file path and anything in `inline code` or a code fence are left entirely alone, and a slash followed by a figure or a hyphen is never a command. Commands take no arguments: a space simply closes the menu and leaves your words as words. Document Mode has no slash commands at all — a slash in a document is prose.
+
+**Setting Options:**
+
+- **Slash commands** — A single toggle in the **Slash Commands** card, on by default. On: the `/` menu appears as described. Off: the slash is an honest slash. The gutter buttons, the dice, the wand and the sidebar's Run Tool are **not** governed by this toggle; a button pressed on purpose is never a surprise.
+
+**How to configure:**
+
+1. Open the **Slash Commands** card on the Chat tab in Settings
+2. Tick or untick **Slash commands**
+3. The change applies at once; no reload required
+
+**When useful:**
+
+- You live in the composer and would rather type `/unlock` than go hunting for a wand
+- You run the same handful of tools again and again and want them two keystrokes away
+
+**When to turn it off:**
+
+- Your prose habitually begins words with a slash — `/me` emotes, stage directions, file paths at the start of a line — and you would rather the menu never stirred
+
 ## Auto-Scroll
 
 A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.
@@ -249,12 +289,29 @@ One acknowledged imperfection, and we would rather name it than have you discove
 
 Nothing in the second group fires inside code fences or `inline code`, nor in the source-mode views, nor upon pasted text, nor while an input method editor is mid-composition.
 
+**And a third arrangement, which changes nothing at all and merely clears its throat.** *Warn about punctuation that looks wrong* keeps an eye on the Salon composer while you write and tints, with a wavy underline, any mark that is about to make a hash of the formatting:
+
+- a double quote opened **inside dialogue that is already open** — `"He told me "go away" and left."` — which the formatter will read as the speech ending early. Quoting someone within speech wants single quotes: `"He told me 'go away' and left."`
+- a closing quote with nothing before it to close
+- a quote marooned between two spaces, or jammed between two words with no space at all (`"Hello,"she said`)
+- a curly quote facing the wrong way
+- dialogue that never closes, when the next paragraph does not open with a quotation mark to carry the speech on (a speaker running across several paragraphs, each opened and only the last closed, is quite correct and goes unremarked)
+- an `*`, a `((` or a `))` with no partner
+
+**Under Novel — or any template whose narration is unmarked and whose dialogue sits in double quotes —** the composer does two further things:
+
+- It **previews narration and asides** as you type. Narration is drawn in a quieter shade, and anything in `((double parentheses))` takes on the out-of-character colours it will wear in the conversation, so you can see at a glance which of your sentences are speech and which are not. (The composer cannot italicise them for you without altering your text, which it declines to do, so colour must serve.) This preview is not a warning and ignores the toggle below.
+- If the draft holds narration but **not one opening quotation mark**, every narrated line is tinted and underlined with dots — the composer's way of asking whether *You came, Theo said* was meant to be spoken. This one has no patience with "still typing": it is there from the first word, precisely so that you notice before you have written a paragraph of it. A post that is honestly all narration may ignore it; a single `"` anywhere dismisses it. Asides, scene breaks and code do not count as narration.
+
+Rest the pointer on a tinted mark and a small note explains the objection. **Nothing is ever corrected for you** — the house has seen what becomes of automatic correction and will not be party to it — and nothing you are still in the middle of typing is flagged: an opening quote with the caret just past it, or emphasis you have not yet closed, waits until you move on. An inch mark after a number (`6"`) is let alone, as is a lone asterisk with spaces either side (`2 * 3`) and a `* * *` scene break. Code is ignored. The warnings live only on the screen; they are not stored, sent, or exported.
+
 **Setting Options:**
 
 - **Curly quotes when displaying messages** — Off by default. On: the conversation displays curly quotes. Your stored text and the model's input are unaffected either way.
 - **Dashes (`--` → `–`, `---` → `—`)** — On by default. Applies in the Salon composer and the Document Mode rich editor.
 - **Ellipsis (`...` → `…`)** — On by default. Same two surfaces.
 - **Try it** — A scratch textarea for the second group. Type a couple of hyphens or three full stops and watch. Nothing typed here is saved.
+- **Warn about punctuation that looks wrong** — On by default. Tints suspect quotes, asterisks and double parentheses in the Salon composer, and under Novel-style templates a draft with no dialogue at all. Never alters your text.
 
 **How to configure:**
 
@@ -274,6 +331,7 @@ Nothing in the second group fires inside code fences or `inline code`, nor in th
 - **Curly quotes:** you are writing about code, measurements in inches, or anything where the straight mark is the correct mark on screen as well as on disk
 - **Dashes:** you routinely write command-line flags in plain prose and would rather they never be disturbed — though note the ladder gives you a fourth hyphen as an escape, and Backspace as another
 - **Ellipsis:** you have a use for exactly three separate full stops
+- **Punctuation warnings:** your prose habitually does something the rules above consider irregular, and the tinting has become a nag rather than a help
 
 **Notes for the careful:**
 
@@ -286,7 +344,7 @@ Nothing in the second group fires inside code fences or `inline code`, nor in th
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=chat&section=composer-spellcheck")`
+`help_navigate(url: "/settings?tab=chat&section=composer-slash-commands")`
 
 ## Related Settings
 

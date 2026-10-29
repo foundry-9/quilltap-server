@@ -198,9 +198,13 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * to degrade rather than assume a hit.
    *
    * @param ids Character IDs to resolve (deduped internally; empty is fine)
+   * @param options.excludeArchived Leave archived characters (tombstones) out
    * @returns Promise<Map<string, string>> id → name, for the IDs that resolved
    */
-  async findNamesByIds(ids: string[]): Promise<Map<string, string>> {
+  async findNamesByIds(
+    ids: string[],
+    options: { excludeArchived?: boolean } = {}
+  ): Promise<Map<string, string>> {
     const unique = Array.from(
       new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
     );
@@ -211,6 +215,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         const rows = await super.findByIds(unique);
         const names = new Map<string, string>();
         for (const row of rows) {
+          if (options.excludeArchived && row.archivedAt) continue;
           const name = typeof row.name === 'string' ? row.name.trim() : '';
           if (row.id && name.length > 0) names.set(row.id, name);
         }

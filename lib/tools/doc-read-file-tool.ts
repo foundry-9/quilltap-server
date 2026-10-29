@@ -4,6 +4,7 @@
  * Returns file content with metadata including modification time for the read-then-replace workflow.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -88,3 +89,6 @@ export interface DocReadFileOutput {
   // remain accessible via the blob read endpoint but are not returned here.
   derivedFromBlob?: boolean;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docReadFileToolEffect: ToolEffectSpec = 'read';

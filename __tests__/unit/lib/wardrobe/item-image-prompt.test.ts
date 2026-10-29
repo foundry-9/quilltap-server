@@ -85,6 +85,22 @@ describe('buildWardrobeItemImagePrompt', () => {
     expect(result.prompt).not.toContain('Prose that must never')
   })
 
+  it('draws a non-humanoid owner whole, with no body, crop or gender', async () => {
+    const spheres = {
+      name: 'Orrery',
+      pronouns: { subject: 'he', object: 'him', possessive: 'his' },
+      physicalDescription: { id: 'pd-2', humanoid: false, completePrompt: 'Seven interlocking brass spheres' },
+      archivedAt: null,
+    } as unknown as Pick<Character, 'name' | 'physicalDescription' | 'pronouns' | 'archivedAt'>
+    const garment = item({ title: 'Silver chain', types: ['accessories'] })
+    const result = await buildWardrobeItemImagePrompt({ item: garment, components: [], owner: spheres })
+    expect(result.subject).toBe('worn')
+    expect(result.prompt).toContain('single non-humanoid entity: Orrery')
+    expect(result.prompt).toContain('Seven interlocking brass spheres')
+    expect(result.prompt).toMatch(/Not humanoid: no head/)
+    expect(result.prompt).not.toMatch(/Full-length|head to toe|standing|Wearing|person|\bman\b/)
+  })
+
   it('draws a catalogue shot, square, when there is no owner', async () => {
     const garment = item({ title: 'Bowler hat', types: ['accessories'] })
     const result = await buildWardrobeItemImagePrompt({ item: garment, components: [], owner: null })

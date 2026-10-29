@@ -182,13 +182,14 @@ Reach for it whenever you've revised a character's prompt content elsewhere and 
 - Drag to adjust speaking frequency
 - Left = quieter, Right = chattier
 - Changes apply immediately
+- In [Storyteller Mode](storyteller-mode.md) it also colours how eager a character is to bid, and —
+  with *Invite by talkativeness* on — how often they are asked at all
 
 **Turn Action Buttons:**
 
 - **Nudge** — Force immediate response (LLM characters)
 - **Queue** — Add to speaking queue
 - **Dequeue** — Remove from queue (if queued)
-- **Stop** — Interrupt the current generation (shown on the generating character's card)
 
 **Status Dropdown:**
 - A dropdown selector on every participant card lets you set their participation state
@@ -234,14 +235,25 @@ If characters are queued:
 - **"2 in queue"** — Shows how many are waiting
 - Queue empties as characters speak
 
-### Pause/Resume Button
+### Turn Mode: Normal, Paused, Storyteller
 
-Brings the room to a halt, and a halted room advances only at your invitation:
+In the expanded sidebar the old Pause button has become a three-way control (the collapsed strip
+keeps its single Pause/Resume button):
 
-- **Pause** — Nothing happens by itself. Your remarks are set down in the record and answered by
-  nobody; the rotation waits where you left it
-- **Nudge** a character while paused — they take exactly one turn, and the room falls quiet again
-- **Resume** — Returns the company to its ordinary rotation
+- **Normal** — The company answers in its ordinary weighted rotation
+- **Paused** — Nothing happens by itself. Your remarks are set down in the record and answered by
+  nobody; the rotation waits where you left it. **Nudge** a character while paused and they take
+  exactly one turn, and the room falls quiet again
+- **Storyteller** — Each of your posts asks every character, privately, whether they wish to answer
+  and what they mean to do, and you choose who goes ahead. See [Storyteller Mode](storyteller-mode.md)
+
+Pausing a storyteller chat keeps the mode: Paused records your posts without asking for bids, and
+Storyteller resumes the bidding.
+
+**Invite by talkativeness** appears beneath the control in Storyteller mode. Off (the default),
+every character is asked every round. On, each is asked with a likelihood that rises with their
+**Talkativeness** — from one round in four at the quietest to every round at the chattiest — and a
+character left out shows on the board as *kept quiet*, with an **Ask anyway** button.
 
 ## Managing Participants
 

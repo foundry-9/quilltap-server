@@ -158,6 +158,7 @@ export function SearchBar() {
             onKeyDown={handleKeyDown}
             onFocus={handleFocus}
             placeholder="Search... (⌘K)"
+            aria-label="Search"
             className="qt-input w-48 lg:w-64 pl-9 pr-3 py-1.5 focus:border-transparent transition-all"
           />
         </div>

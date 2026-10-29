@@ -22,8 +22,13 @@ import type { z } from 'zod';
 import {
   COMPARATOR_KEYS,
   CONTAINMENT_KEYS,
+  INTERVENTION_FIELD_KEYS,
+  type InterventionFieldKey,
   IDENTIFIER_PATTERN,
   MAX_CHIP_LABEL_LENGTH,
+  MAX_TRIGGERS,
+  MIN_TRIGGER_PHRASE_LENGTH,
+  MAX_TRIGGER_PHRASE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_EFFECTS,
   MAX_LLM_OUTPUT_CEILING,
@@ -32,18 +37,28 @@ import {
   MAX_OUTCOMES,
   MAX_PARAMETERS,
   MAX_TITLE_LENGTH,
+  MAX_WHEN_GROUPS,
   ORDERING_KEYS,
   QtapCustomToolSchema,
   collectUnknownKeys,
+  isInventoryRef,
   isParamRef,
   isStateRef,
+  inventoryGestureProblems,
   parseEffectTarget,
   scanPlaceholders,
   valueTypeOf,
+  wardrobeGestureProblems,
+  type InventoryEffectAction,
+  type InventoryRef,
+  type WardrobeEffectAction,
+  type WardrobeEffectMode,
+  type WardrobeItemType,
   type ComparatorKey,
   type CustomToolEffect,
   type CustomToolOutcome,
   type CustomToolParameter,
+  type EffectCondition,
   type EffectWhen,
   type NumberOrParamRef,
   type OutcomeState,
@@ -53,14 +68,23 @@ import {
   type QtapCustomTool,
   type StateRef,
   type ToolGate,
+  type ToolGateGroup,
   type ValueType,
   type Visibility,
   type WhenObject,
+  effectWhenGroups,
+  gateGroups,
+  whenGroups,
 } from './custom-tool.types';
+import { aggregateKeyEndsInFold, isListAggregate, parseAggregateKey } from './inventory-aggregate';
 import { parseDiceNotation } from './dice-notation';
+import { INVENTORY_STATE_VALUES, parseInventoryOperand } from './inventory-subjects';
+import { foldTriggerText, triggersContainedIn } from './trigger-phrases';
 import { parseProgressKey } from '@/lib/progressions/schema';
 import { parseExpression } from './expressions';
 import { escapeRegex } from '@/lib/utils/regex';
+import { GENERAL_CONTAINER, type WardrobeContainer } from '@/lib/wardrobe/wardrobe-container';
+import type { CustomToolDestinations } from './workbench';
 
 export type { ComparatorKey };
 
@@ -91,11 +115,13 @@ export interface DraftParameter {
    * `$state` reference object carried verbatim (the visual builder does not
    * author `$state` defaults, but round-trips them without loss).
    */
-  defaultValue: string | boolean | StateRef;
+  defaultValue: string | boolean | StateRef | InventoryRef;
   description: string;
   /** Loose numeric text; '' means unset. Numeric types only. */
   min: string;
   max: string;
+  /** Operator intervention: false hides this parameter from the hold dialog. Absent = shown. */
+  intervene?: boolean;
 }
 
 /**
@@ -107,7 +133,9 @@ export interface DraftParameter {
 export type NumberOrParamValue =
   | { kind: 'literal'; text: string }
   | { kind: 'param'; name: string }
-  | { kind: 'state'; path: string; fallback: string };
+  | { kind: 'state'; path: string; fallback: string }
+  /** A `$inventory` reference, carried verbatim like `$state`. */
+  | { kind: 'inventory'; path: string; fallback: string };
 
 export interface DraftRollRange {
   min: NumberOrParamValue;
@@ -128,7 +156,21 @@ export type ConditionSubject =
   /** The LLM consult's answer. */
   | { kind: 'llm' }
   /** Whether the LLM consult succeeded — serializes to the comparator's `ok` key. */
-  | { kind: 'llm-ok' };
+  | { kind: 'llm-ok' }
+  /** An Inventory object's state for the rolling character, keyed by reference (a template). */
+  | { kind: 'inventory'; key: string }
+  /** How many kin of an object the rolling character has equipped, keyed by reference. */
+  | { kind: 'inventoryCount'; key: string }
+  /** One attribute across a scope of the bag, keyed `<scope>.<field>` (always literal). */
+  | { kind: 'inventoryAggregate'; key: string };
+
+/**
+ * How a chip joins the one before it. `or` starts a new group (a new line in
+ * the Workbench); `and` — or absent, which every chip saved before OR existed
+ * is — keeps it in the current one. Ignored on the first chip of a list.
+ * AND binds tighter than OR.
+ */
+export type ConditionJoiner = 'and' | 'or';
 
 /** A literal operand — the three kinds an author types straight into a chip. */
 export type LiteralOperand =
@@ -141,13 +183,44 @@ export type ConditionOperand =
   | LiteralOperand
   | { kind: 'param'; name: string }
   /** A `$state` reference, carried verbatim (builder does not author it). */
-  | { kind: 'state'; path: string; fallback: number | string | boolean };
+  | { kind: 'state'; path: string; fallback: number | string | boolean }
+  /** A `$inventory` reference, carried verbatim (builder does not author it). */
+  | { kind: 'inventory'; path: string; fallback: number | string | boolean };
 
 export interface DraftCondition {
   id: string;
   subject: ConditionSubject;
   comparator: ComparatorKey;
   operand: ConditionOperand;
+  /** How this chip joins the one before it; absent means `and`. */
+  joiner?: ConditionJoiner;
+}
+
+/**
+ * Split a flat chip list into its groups at each `or` — the lines of the
+ * Workbench and the elements of an any-of array. A list with no `or` is one
+ * group; an empty list is none.
+ */
+export function groupsOf<C extends { joiner?: ConditionJoiner }>(conditions: readonly C[]): C[][] {
+  const groups: C[][] = [];
+  conditions.forEach((condition, index) => {
+    if (index === 0 || condition.joiner === 'or') groups.push([]);
+    groups[groups.length - 1].push(condition);
+  });
+  return groups;
+}
+
+/** Mark the first chip of every group after the first `or`, and flatten. */
+function joinGroups<C extends { joiner?: ConditionJoiner }>(groups: readonly C[][]): C[] {
+  return groups.flatMap((group, g) =>
+    group.map((condition, i) => (g > 0 && i === 0 ? { ...condition, joiner: 'or' as const } : condition))
+  );
+}
+
+/** One group, a bare object; several, an any-of array; none, undefined. */
+function collapseGroups<T>(groups: readonly T[]): T | T[] | undefined {
+  if (groups.length === 0) return undefined;
+  return groups.length === 1 ? groups[0] : [...groups];
 }
 
 export interface DraftOutcome {
@@ -157,6 +230,8 @@ export interface DraftOutcome {
   conditions: DraftCondition[];
   state: OutcomeState;
   message: string;
+  /** The narrator's instruction for this outcome (`{{outcome.brief}}`); '' = none, and nothing is emitted. */
+  brief: string;
 }
 
 /**
@@ -176,13 +251,17 @@ export interface DraftGateCondition {
   id: string;
   /**
    * Which sheet this test reads. `metadata` is the character's own fact
-   * sheet; `progress` is the derived progression sheet, keyed `<id>.<field>`.
+   * sheet; `progress` is the derived progression sheet, keyed `<id>.<field>`;
+   * `inventory` an object's state and `inventoryCount` its equipped kin, keyed
+   * by a literal object reference.
    */
-  subject: 'metadata' | 'progress';
+  subject: 'metadata' | 'progress' | 'inventory' | 'inventoryCount' | 'inventoryAggregate';
   /** The key this test reads, in that subject's own vocabulary. */
   key: string;
   comparator: ComparatorKey;
   operand: LiteralOperand;
+  /** How this chip joins the one before it; absent means `and`. */
+  joiner?: ConditionJoiner;
 }
 
 /**
@@ -198,13 +277,105 @@ export interface DraftEffect {
   when:
     | { kind: 'always' }
     | { kind: 'outcome-state'; state: OutcomeState }
-    | { kind: 'verbatim'; when: EffectWhen };
+    | { kind: 'verbatim'; when: EffectCondition };
+  /**
+   * Which half is active: a value write, a wardrobe gesture, an inventory
+   * gesture, or a log line. All halves are always present on the draft so
+   * switching kind in the form loses nothing until save; only the active half
+   * is emitted.
+   */
+  kind: 'write' | 'wardrobe' | 'inventory' | 'log';
   /** The target verbatim: `state.…` or `metadata.…`. */
   target: string;
   /** How `value` serializes: a JSON number, a JSON boolean, or an expression string. */
   valueKind: 'literal-number' | 'literal-boolean' | 'expression';
   /** Loose form text ('true'/'false' for booleans, numeric text, or expression source). */
   value: string;
+  /** The wardrobe gesture's fields. `mode` 'wear' and slot '' are the omitted forms. */
+  wardrobe: DraftWardrobeGesture;
+  /** The inventory gesture's fields. */
+  inventory: DraftInventoryGesture;
+  /** The log line's template (like an outcome message). Trimmed on save. */
+  log: string;
+  /** Operator intervention: false hides this effect from the hold dialog. Absent = shown. */
+  intervene?: boolean;
+}
+
+/** An Inventory gesture, form-shaped. `equip` is emitted only on pick_up, and only when false. */
+export interface DraftInventoryGesture {
+  action: InventoryEffectAction;
+  /** Object references (templates), as typed. Blank rows are dropped on save. */
+  items: string[];
+  equip: boolean;
+}
+
+/** The empty inventory half every draft effect carries. */
+export function emptyDraftInventoryGesture(): DraftInventoryGesture {
+  return { action: 'equip', items: [''], equip: true };
+}
+
+/** A wardrobe gesture, form-shaped. */
+export interface DraftWardrobeGesture {
+  action: WardrobeEffectAction;
+  /** Item references (templates), as typed. Blank rows are dropped on save. */
+  items: string[];
+  mode: WardrobeEffectMode;
+  slot: WardrobeItemType | '';
+}
+
+/** The empty wardrobe half a fresh (or write-kind) draft effect carries. */
+export function emptyDraftWardrobeGesture(): DraftWardrobeGesture {
+  return { action: 'wear', items: [''], mode: 'wear', slot: '' };
+}
+
+/** A fresh effect row of either kind, for the Workbench's Add button. */
+export function newDraftEffect(kind: DraftEffect['kind'] = 'write'): DraftEffect {
+  return {
+    id: nextDraftId('effect'),
+    when: { kind: 'always' },
+    kind,
+    target: '',
+    valueKind: 'expression',
+    value: '',
+    wardrobe: emptyDraftWardrobeGesture(),
+    inventory: emptyDraftInventoryGesture(),
+    log: '',
+  };
+}
+
+/**
+ * Whose reach the Workbench shows when it displays or picks a wardrobe
+ * reference: a character, or one shared wardrobe. Editor state, like the
+ * roll form — never saved, never on {@link ToolDraft}, so `serializeDraft`
+ * cannot see it. A tool has no character until it is run; the vantage is a
+ * lens for the author, not a binding.
+ */
+export type WardrobeVantage =
+  | { kind: 'character'; characterId: string }
+  | { kind: 'container'; container: WardrobeContainer }
+  | { kind: 'none' };
+
+/**
+ * The opening vantage for a definition stored in `mountPointId`: the one
+ * character who can run a tool in their own vault, the shared wardrobe every
+ * member of a group or project store will certainly reach, Quilltap General
+ * for a General-store tool, and nothing for an unattached or unsaved file.
+ * A character's vault wins over any other attachment the same mount carries —
+ * it is the narrower, truer reach.
+ */
+export function defaultWardrobeVantage(
+  mountPointId: string | null,
+  destinations: CustomToolDestinations,
+): WardrobeVantage {
+  if (!mountPointId) return { kind: 'none' };
+  const character = destinations.characters.find((c) => c.mountPointId === mountPointId);
+  if (character) return { kind: 'character', characterId: character.characterId };
+  const group = destinations.groups.find((g) => g.stores.some((store) => store.mountPointId === mountPointId));
+  if (group) return { kind: 'container', container: { scope: 'group', id: group.groupId } };
+  const project = destinations.projects.find((p) => p.stores.some((store) => store.mountPointId === mountPointId));
+  if (project) return { kind: 'container', container: { scope: 'project', id: project.projectId } };
+  if (destinations.general?.mountPointId === mountPointId) return { kind: 'container', container: GENERAL_CONTAINER };
+  return { kind: 'none' };
 }
 
 export interface ToolDraft {
@@ -212,6 +383,8 @@ export interface ToolDraft {
   title: string;
   /** Templated chip/heading label. '' = omitted — the title labels the chip. */
   chipLabel: string;
+  /** Trigger phrases, as written. Empty = no `triggers` key emitted. */
+  triggers: string[];
   description: string;
   disabled: boolean;
   /** Which availability clause the tool declares, if any. */
@@ -220,8 +393,20 @@ export interface ToolDraft {
   gateConditions: DraftGateCondition[];
   revealOdds: boolean;
   defaultVisibility: Visibility;
+  /** The rolling character announces the outcome instead of Pascal. False = no key emitted. */
+  announceAsCharacter: boolean;
+  /**
+   * Operator intervention. `enabled` is the master toggle; `fields` holds the
+   * per-field flags (only `false` means anything) and is kept while the master
+   * is off, like the roll fields. `authored` remembers a block the file carried
+   * switched off, so `{ "enabled": false }` survives a round trip.
+   */
+  intervention: { enabled: boolean; authored: boolean; fields: Partial<Record<InterventionFieldKey, boolean>> };
   parameters: DraftParameter[];
-  rollForm: 'range' | 'dice';
+  /** `inventory`: the dice an object names (`{ "$inventory": …, "fallback": "1d4" }`). */
+  rollForm: 'range' | 'dice' | 'inventory';
+  /** The `$inventory` roll's path and dice fallback. Kept while another form is chosen. */
+  rollInventory: { path: string; fallback: string };
   /** Dice-notation text. Kept even while `rollForm` is 'range' (§4.3). */
   rollDice: string;
   /** Range fields. Kept even while `rollForm` is 'dice' (§4.3). */
@@ -269,15 +454,19 @@ export function newDraft(): ToolDraft {
     name: '',
     title: '',
     chipLabel: '',
+    triggers: [],
     description: '',
     disabled: false,
     gateMode: 'none',
     gateConditions: [],
     revealOdds: true,
     defaultVisibility: 'public',
+    announceAsCharacter: false,
+    intervention: { enabled: false, authored: false, fields: {} },
     parameters: [],
     rollForm: 'range',
     rollDice: '',
+    rollInventory: { path: '', fallback: '' },
     rollRange: defaultRollRange(),
     llmEnabled: false,
     llmPrompt: '',
@@ -285,13 +474,14 @@ export function newDraft(): ToolDraft {
     llmMaxOutput: '',
     effects: [],
     outcomes: [
-      { id: nextDraftId('outcome'), catchAll: false, conditions: [], state: 'success', message: '' },
+      { id: nextDraftId('outcome'), catchAll: false, conditions: [], state: 'success', message: '', brief: '' },
       {
         id: nextDraftId('outcome'),
         catchAll: true,
         conditions: [],
         state: 'info',
         message: 'The wheel gives {{value}}.',
+        brief: '',
       },
     ],
     schemaValue: DEFAULT_SCHEMA_VALUE,
@@ -312,11 +502,15 @@ function rollFieldToValue(field: NumberOrParamRef | undefined): NumberOrParamVal
   if (field === undefined) return { kind: 'literal', text: '' };
   if (isParamRef(field)) return { kind: 'param', name: field.$param };
   if (isStateRef(field)) return { kind: 'state', path: field.$state, fallback: String(field.fallback) };
+  if (isInventoryRef(field)) return { kind: 'inventory', path: field.$inventory, fallback: String(field.fallback) };
   return { kind: 'literal', text: numberText(field) };
 }
 
-function operandToDraft(operand: number | string | boolean | { $param: string } | StateRef): ConditionOperand {
+function operandToDraft(
+  operand: number | string | boolean | { $param: string } | StateRef | InventoryRef
+): ConditionOperand {
   if (isStateRef(operand)) return { kind: 'state', path: operand.$state, fallback: operand.fallback };
+  if (isInventoryRef(operand)) return { kind: 'inventory', path: operand.$inventory, fallback: operand.fallback };
   if (isParamRef(operand)) return { kind: 'param', name: operand.$param };
   if (typeof operand === 'number') return { kind: 'number', text: numberText(operand) };
   if (typeof operand === 'boolean') return { kind: 'boolean', value: operand };
@@ -332,18 +526,24 @@ function comparatorToConditions(subject: ConditionSubject, comparator: ParamComp
       id: nextDraftId('cond'),
       subject,
       comparator: key,
-      operand: operandToDraft(operand as number | string | boolean | { $param: string } | StateRef),
+      operand: operandToDraft(operand as number | string | boolean | { $param: string } | StateRef | InventoryRef),
     });
   }
   return conditions;
 }
 
 /**
- * Flatten a `when` object into chips. Key order inside one comparator follows
- * {@link COMPARATOR_KEYS}; subjects follow the object's own order (value first,
- * then roll, params, metadata — the schema's declaration order).
+ * Flatten a `when` into chips — one group, or every group of an any-of, the
+ * first chip of each later group joined by `or`. Key order inside one
+ * comparator follows {@link COMPARATOR_KEYS}; subjects follow the object's own
+ * order (value first, then roll, params, metadata — the schema's declaration
+ * order).
  */
-export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
+export function conditionsFromWhen(when: WhenObject | WhenObject[]): DraftCondition[] {
+  return joinGroups(whenGroups(when).map(conditionsFromWhenGroup));
+}
+
+function conditionsFromWhenGroup(when: WhenObject): DraftCondition[] {
   const conditions: DraftCondition[] = [];
 
   conditions.push(...comparatorToConditions({ kind: 'value' }, when as ParamComparator));
@@ -378,6 +578,18 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
     conditions.push(...comparatorToConditions({ kind: 'llm' }, when.llm as ParamComparator));
   }
 
+  for (const [key, comparator] of Object.entries(when.inventory ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventory', key }, comparator as ParamComparator));
+  }
+
+  for (const [key, comparator] of Object.entries(when.inventoryCount ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventoryCount', key }, comparator as ParamComparator));
+  }
+
+  for (const [key, comparator] of Object.entries(when.inventoryAggregate ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'inventoryAggregate', key }, comparator));
+  }
+
   return conditions;
 }
 
@@ -387,11 +599,18 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
  * `metadata` tests precede `progress` ones so a round trip is stable.
  */
 export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
+  return joinGroups(gateGroups(gate).map(gateConditionsFromGroup));
+}
+
+function gateConditionsFromGroup(gate: ToolGateGroup): DraftGateCondition[] {
   const conditions: DraftGateCondition[] = [];
 
-  const subjects: Array<['metadata' | 'progress', Record<string, unknown> | undefined]> = [
+  const subjects: Array<[DraftGateCondition['subject'], Record<string, unknown> | undefined]> = [
     ['metadata', gate.metadata],
     ['progress', gate.progress],
+    ['inventory', gate.inventory],
+    ['inventoryCount', gate.inventoryCount],
+    ['inventoryAggregate', gate.inventoryAggregate],
   ];
 
   for (const [subject, tests] of subjects) {
@@ -426,8 +645,20 @@ export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
  * exist.
  */
 export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate | undefined {
-  const metadata: Record<string, Record<string, unknown>> = {};
-  const progress: Record<string, Record<string, unknown>> = {};
+  const groups = groupsOf(conditions)
+    .map(gateGroupFromConditions)
+    .filter((group): group is ToolGateGroup => group !== undefined);
+  return collapseGroups(groups);
+}
+
+function gateGroupFromConditions(conditions: DraftGateCondition[]): ToolGateGroup | undefined {
+  const sheets: Record<DraftGateCondition['subject'], Record<string, Record<string, unknown>>> = {
+    metadata: {},
+    progress: {},
+    inventory: {},
+    inventoryCount: {},
+    inventoryAggregate: {},
+  };
 
   for (const condition of conditions) {
     const key = condition.key.trim();
@@ -447,16 +678,17 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
 
     // A chip saved before the progress subject existed carries no `subject`;
     // metadata is what it always meant.
-    const sheet = condition.subject === 'progress' ? progress : metadata;
+    const sheet = sheets[condition.subject ?? 'metadata'] ?? sheets.metadata;
     sheet[key] = sheet[key] ?? {};
     sheet[key][condition.comparator] = operand;
   }
 
   const gate: Record<string, unknown> = {};
-  if (Object.keys(metadata).length > 0) gate.metadata = metadata;
-  if (Object.keys(progress).length > 0) gate.progress = progress;
+  for (const subject of ['metadata', 'progress', 'inventory', 'inventoryCount', 'inventoryAggregate'] as const) {
+    if (Object.keys(sheets[subject]).length > 0) gate[subject] = sheets[subject];
+  }
 
-  return Object.keys(gate).length > 0 ? (gate as ToolGate) : undefined;
+  return Object.keys(gate).length > 0 ? (gate as ToolGateGroup) : undefined;
 }
 
 /**
@@ -478,34 +710,156 @@ function effectToDraft(effect: CustomToolEffect): DraftEffect {
   let when: DraftEffect['when'];
   if (effect.when === undefined) {
     when = { kind: 'always' };
-  } else if (isPlainOutcomeEq(effect.when)) {
+  } else if (!Array.isArray(effect.when) && isPlainOutcomeEq(effect.when)) {
     when = { kind: 'outcome-state', state: effect.when.outcome.eq };
   } else {
     // Carried verbatim with a read-only badge — the $state-default precedent.
     when = { kind: 'verbatim', when: effect.when };
   }
 
+  // Operator intervention's per-effect flag rides on every kind alike.
+  const flag = effect.intervene === false ? { intervene: false } : {};
+
+  if (effect.wardrobe) {
+    const { action, items, mode, slot } = effect.wardrobe;
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'wardrobe',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: {
+        action,
+        items: items && items.length > 0 ? [...items] : [''],
+        mode: mode ?? 'wear',
+        slot: slot ?? '',
+      },
+      inventory: emptyDraftInventoryGesture(),
+      log: '',
+      ...flag,
+    };
+  }
+
+  if (effect.inventory) {
+    const { action, items, equip } = effect.inventory;
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'inventory',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: emptyDraftWardrobeGesture(),
+      inventory: { action, items: items.length > 0 ? [...items] : [''], equip: equip !== false },
+      log: '',
+      ...flag,
+    };
+  }
+
+  if (typeof effect.log === 'string') {
+    return {
+      id: nextDraftId('effect'),
+      when,
+      kind: 'log',
+      target: '',
+      valueKind: 'expression',
+      value: '',
+      wardrobe: emptyDraftWardrobeGesture(),
+      inventory: emptyDraftInventoryGesture(),
+      log: effect.log,
+      ...flag,
+    };
+  }
+
   return {
     id: nextDraftId('effect'),
     when,
-    target: effect.target,
+    kind: 'write',
+    target: effect.target ?? '',
     valueKind:
       typeof effect.value === 'number'
         ? 'literal-number'
         : typeof effect.value === 'boolean'
           ? 'literal-boolean'
           : 'expression',
-    value: String(effect.value),
+    value: effect.value === undefined ? '' : String(effect.value),
+    wardrobe: emptyDraftWardrobeGesture(),
+    inventory: emptyDraftInventoryGesture(),
+    log: '',
+    ...flag,
   };
+}
+
+/**
+ * The `inventory` object a draft gesture emits: blank rows dropped, `equip`
+ * only on pick_up and only when it is the non-default `false`.
+ */
+function inventoryFromDraft(gesture: DraftInventoryGesture): Record<string, unknown> {
+  const items = gesture.items.map((item) => item.trim()).filter((item) => item.length > 0);
+  return {
+    action: gesture.action,
+    items,
+    ...(gesture.action === 'pick_up' && !gesture.equip ? { equip: false } : {}),
+  };
+}
+
+/**
+ * The `wardrobe` object a draft gesture emits: only the fields its action
+ * uses, blank item rows dropped, the default mode omitted. Fields the action
+ * does not use are left out rather than emitted and rejected — the form hides
+ * them, so a stale value there is not the author's intent.
+ */
+function wardrobeFromDraft(gesture: DraftWardrobeGesture): Record<string, unknown> {
+  const items = gesture.items.map((item) => item.trim()).filter((item) => item.length > 0);
+  switch (gesture.action) {
+    case 'wear':
+      return {
+        action: 'wear',
+        items,
+        ...(gesture.mode !== 'wear' ? { mode: gesture.mode } : {}),
+        ...(gesture.mode === 'add_to_slot' && gesture.slot ? { slot: gesture.slot } : {}),
+      };
+    case 'take_off':
+      return { action: 'take_off', items, ...(gesture.slot ? { slot: gesture.slot } : {}) };
+    case 'clear_slot':
+      return { action: 'clear_slot', ...(gesture.slot ? { slot: gesture.slot } : {}) };
+  }
 }
 
 /** The `effects` entry a draft effect emits — the inverse of {@link effectToDraft}. */
 function effectFromDraft(effect: DraftEffect): CustomToolEffect {
-  let when: EffectWhen | undefined;
+  let when: EffectCondition | undefined;
   if (effect.when.kind === 'outcome-state') {
     when = { outcome: { eq: effect.when.state } } as EffectWhen;
   } else if (effect.when.kind === 'verbatim') {
     when = effect.when.when;
+  }
+
+  const flag = effect.intervene === false ? { intervene: false } : {};
+
+  if (effect.kind === 'wardrobe') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      wardrobe: wardrobeFromDraft(effect.wardrobe),
+      ...flag,
+    } as CustomToolEffect;
+  }
+
+  if (effect.kind === 'inventory') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      inventory: inventoryFromDraft(effect.inventory),
+      ...flag,
+    } as CustomToolEffect;
+  }
+
+  if (effect.kind === 'log') {
+    return {
+      ...(when !== undefined ? { when } : {}),
+      log: effect.log.trim(),
+      ...flag,
+    } as CustomToolEffect;
   }
 
   let value: number | boolean | string;
@@ -521,6 +875,7 @@ function effectFromDraft(effect: DraftEffect): CustomToolEffect {
     ...(when !== undefined ? { when } : {}),
     target: effect.target,
     value,
+    ...flag,
   } as CustomToolEffect;
 }
 
@@ -531,6 +886,7 @@ function outcomeToDraft(outcome: CustomToolOutcome): DraftOutcome {
     conditions: outcome.when === true ? [] : conditionsFromWhen(outcome.when),
     state: outcome.state,
     message: outcome.message,
+    brief: outcome.brief ?? '',
   };
 }
 
@@ -539,8 +895,8 @@ function parameterToDraft(name: string, spec: CustomToolParameter): DraftParamet
     id: nextDraftId('param'),
     name,
     type: spec.type,
-    // A `$state` default is carried verbatim; otherwise it is loose form text.
-    defaultValue: isStateRef(spec.default)
+    // A `$state` or `$inventory` default is carried verbatim; otherwise it is loose form text.
+    defaultValue: isStateRef(spec.default) || isInventoryRef(spec.default)
       ? spec.default
       : spec.type === 'boolean'
         ? Boolean(spec.default)
@@ -548,6 +904,7 @@ function parameterToDraft(name: string, spec: CustomToolParameter): DraftParamet
     description: spec.description ?? '',
     min: spec.min === undefined ? '' : numberText(spec.min),
     max: spec.max === undefined ? '' : numberText(spec.max),
+    ...(spec.intervene === false ? { intervene: false } : {}),
   };
 }
 
@@ -593,7 +950,11 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
   const unknownKeys: Array<[string, unknown]> = Object.entries(rawRecord).filter(([key]) => unknown.has(key));
 
   const isDice = typeof definition.roll === 'string';
-  const range = typeof definition.roll === 'object' && definition.roll !== null ? definition.roll : undefined;
+  const inventoryRoll = isInventoryRef(definition.roll) ? definition.roll : undefined;
+  const range =
+    typeof definition.roll === 'object' && definition.roll !== null && !isInventoryRef(definition.roll)
+      ? definition.roll
+      : undefined;
 
   // At most one clause can be present — the schema rejects a file carrying both
   // — so the mode is simply whichever one is.
@@ -603,15 +964,25 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
     name: definition.name,
     title: definition.title ?? '',
     chipLabel: definition.chipLabel ?? '',
+    triggers: [...(definition.triggers ?? [])],
     description: definition.description,
     disabled: definition.disabled ?? false,
     gateMode: definition.availableWhen ? 'available' : definition.withheldWhen ? 'withheld' : 'none',
     gateConditions: gate ? gateConditionsFromGate(gate) : [],
     revealOdds: definition.revealOdds ?? true,
     defaultVisibility: definition.defaultVisibility ?? 'public',
+    announceAsCharacter: definition.announceAsCharacter ?? false,
+    intervention: {
+      enabled: definition.intervention?.enabled === true,
+      authored: definition.intervention !== undefined,
+      fields: { ...(definition.intervention?.fields ?? {}) },
+    },
     parameters: Object.entries(definition.parameters ?? {}).map(([name, spec]) => parameterToDraft(name, spec)),
-    rollForm: isDice ? 'dice' : 'range',
+    rollForm: isDice ? 'dice' : inventoryRoll ? 'inventory' : 'range',
     rollDice: isDice ? (definition.roll as string) : '',
+    rollInventory: inventoryRoll
+      ? { path: inventoryRoll.$inventory, fallback: String(inventoryRoll.fallback) }
+      : { path: '', fallback: '' },
     rollRange: range
       ? {
           min: rollFieldToValue(range.min),
@@ -651,16 +1022,24 @@ function valueToRollField(value: NumberOrParamValue): NumberOrParamRef | undefin
     const fallback = parseNumberText(value.fallback);
     return Number.isFinite(fallback) ? { $state: value.path, fallback } : undefined;
   }
+  if (value.kind === 'inventory') {
+    const fallback = parseNumberText(value.fallback);
+    return Number.isFinite(fallback) ? { $inventory: value.path, fallback } : undefined;
+  }
   const n = parseNumberText(value.text);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function operandFromDraft(operand: ConditionOperand): number | string | boolean | { $param: string } | StateRef | undefined {
+function operandFromDraft(
+  operand: ConditionOperand
+): number | string | boolean | { $param: string } | StateRef | InventoryRef | undefined {
   switch (operand.kind) {
     case 'param':
       return operand.name ? { $param: operand.name } : undefined;
     case 'state':
       return { $state: operand.path, fallback: operand.fallback };
+    case 'inventory':
+      return { $inventory: operand.path, fallback: operand.fallback };
     case 'number': {
       const n = parseNumberText(operand.text);
       return Number.isFinite(n) ? n : undefined;
@@ -673,18 +1052,28 @@ function operandFromDraft(operand: ConditionOperand): number | string | boolean 
 }
 
 /**
- * Reassemble chips into a `when` object — the exact inverse of
- * {@link conditionsFromWhen}. Conditions on the same subject merge into one
- * comparator object; incomplete chips (blank operand, blank metadata key) are
- * skipped, which is safe because {@link validateDraft} blocks save while any
- * exist.
+ * Reassemble chips into a `when` — the exact inverse of
+ * {@link conditionsFromWhen}: one object for one group, an any-of array for
+ * several. Conditions on the same subject merge into one comparator object;
+ * incomplete chips (blank operand, blank metadata key) are skipped, which is
+ * safe because {@link validateDraft} blocks save while any exist.
  */
-export function whenFromConditions(conditions: DraftCondition[]): WhenObject | undefined {
+export function whenFromConditions(conditions: DraftCondition[]): WhenObject | WhenObject[] | undefined {
+  const groups = groupsOf(conditions)
+    .map(whenGroupFromConditions)
+    .filter((group): group is WhenObject => group !== undefined);
+  return collapseGroups(groups);
+}
+
+function whenGroupFromConditions(conditions: DraftCondition[]): WhenObject | undefined {
   const when: Record<string, unknown> = {};
   const roll: Record<string, unknown> = {};
   const params: Record<string, Record<string, unknown>> = {};
   const metadata: Record<string, Record<string, unknown>> = {};
   const progress: Record<string, Record<string, unknown>> = {};
+  const inventory: Record<string, Record<string, unknown>> = {};
+  const inventoryCount: Record<string, Record<string, unknown>> = {};
+  const inventoryAggregate: Record<string, Record<string, unknown>> = {};
   const llm: Record<string, unknown> = {};
 
   for (const condition of conditions) {
@@ -729,6 +1118,22 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
         progress[key][condition.comparator] = operand;
         break;
       }
+      case 'inventory':
+      case 'inventoryCount': {
+        const key = condition.subject.key;
+        if (!key) continue;
+        const sheet = condition.subject.kind === 'inventory' ? inventory : inventoryCount;
+        sheet[key] = sheet[key] ?? {};
+        sheet[key][condition.comparator] = operand;
+        break;
+      }
+      case 'inventoryAggregate': {
+        const key = condition.subject.key.trim();
+        if (!key) continue;
+        inventoryAggregate[key] = inventoryAggregate[key] ?? {};
+        inventoryAggregate[key][condition.comparator] = operand;
+        break;
+      }
     }
   }
 
@@ -737,6 +1142,9 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   if (Object.keys(metadata).length > 0) when.metadata = metadata;
   if (Object.keys(progress).length > 0) when.progress = progress;
   if (Object.keys(llm).length > 0) when.llm = llm;
+  if (Object.keys(inventory).length > 0) when.inventory = inventory;
+  if (Object.keys(inventoryCount).length > 0) when.inventoryCount = inventoryCount;
+  if (Object.keys(inventoryAggregate).length > 0) when.inventoryAggregate = inventoryAggregate;
 
   return Object.keys(when).length > 0 ? (when as WhenObject) : undefined;
 }
@@ -744,8 +1152,8 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
 function parameterFromDraft(param: DraftParameter): CustomToolParameter {
   const numeric = param.type === 'number' || param.type === 'integer';
 
-  let defaultValue: number | string | boolean | StateRef;
-  if (isStateRef(param.defaultValue)) {
+  let defaultValue: number | string | boolean | StateRef | InventoryRef;
+  if (isStateRef(param.defaultValue) || isInventoryRef(param.defaultValue)) {
     // Carried verbatim — the builder never authored it, and must not lose it.
     defaultValue = param.defaultValue;
   } else if (param.type === 'boolean') {
@@ -764,6 +1172,7 @@ function parameterFromDraft(param: DraftParameter): CustomToolParameter {
     if (Number.isFinite(min)) spec.min = min;
     if (Number.isFinite(max)) spec.max = max;
   }
+  if (param.intervene === false) spec.intervene = false;
   return spec;
 }
 
@@ -771,6 +1180,10 @@ function parameterFromDraft(param: DraftParameter): CustomToolParameter {
 function rollFromDraft(draft: ToolDraft): QtapCustomTool['roll'] | undefined {
   if (draft.rollForm === 'dice') {
     return draft.rollDice.trim() === '' ? undefined : draft.rollDice.trim();
+  }
+  if (draft.rollForm === 'inventory') {
+    const path = draft.rollInventory.path.trim();
+    return path === '' ? undefined : { $inventory: path, fallback: draft.rollInventory.fallback.trim() };
   }
 
   const range: Record<string, unknown> = {};
@@ -801,6 +1214,7 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   doc.name = draft.name;
   if (draft.title.trim() !== '') doc.title = draft.title;
   if (draft.chipLabel.trim() !== '') doc.chipLabel = draft.chipLabel;
+  if (draft.triggers.length > 0) doc.triggers = [...draft.triggers];
   doc.description = draft.description;
   if (draft.disabled) doc.disabled = true;
   if (draft.gateMode !== 'none') {
@@ -809,6 +1223,10 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   }
   if (!draft.revealOdds) doc.revealOdds = false;
   if (draft.defaultVisibility !== 'public') doc.defaultVisibility = draft.defaultVisibility;
+  if (draft.announceAsCharacter) doc.announceAsCharacter = true;
+
+  const intervention = interventionFromDraft(draft);
+  if (intervention) doc.intervention = intervention;
 
   if (draft.parameters.length > 0) {
     const parameters: Record<string, CustomToolParameter> = {};
@@ -835,13 +1253,16 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   }
 
   doc.outcomes = draft.outcomes.map((outcome) => {
+    // Omitted while blank — a brief is optional, and most tables have none.
+    const brief = outcome.brief.trim() === '' ? {} : { brief: outcome.brief };
     if (outcome.catchAll) {
-      return { when: true, message: outcome.message, state: outcome.state };
+      return { when: true, message: outcome.message, state: outcome.state, ...brief };
     }
     return {
       when: whenFromConditions(outcome.conditions) ?? {},
       message: outcome.message,
       state: outcome.state,
+      ...brief,
     };
   });
 
@@ -850,6 +1271,26 @@ export function definitionFromDraft(draft: ToolDraft): Record<string, unknown> {
   }
 
   return doc;
+}
+
+/**
+ * The `intervention` block a draft emits: present while the master toggle is
+ * on, while the file already carried one, or while any per-field flag says
+ * `false` (so switching the master off keeps the author's choices). Only
+ * `false` flags are written — absent means shown.
+ */
+function interventionFromDraft(draft: ToolDraft): Record<string, unknown> | undefined {
+  const hidden = INTERVENTION_FIELD_KEYS.filter((key) => draft.intervention.fields[key] === false);
+  const memberFlags =
+    draft.parameters.some((param) => param.intervene === false) ||
+    draft.effects.some((effect) => effect.intervene === false);
+  if (!draft.intervention.enabled && !draft.intervention.authored && hidden.length === 0 && !memberFlags) {
+    return undefined;
+  }
+  return {
+    enabled: draft.intervention.enabled,
+    ...(hidden.length > 0 ? { fields: Object.fromEntries(hidden.map((key) => [key, false])) } : {}),
+  };
 }
 
 /** The exact bytes Save writes: 2-space indent, trailing newline. */
@@ -867,14 +1308,16 @@ export interface DraftIssue {
   /** Where in the form the issue lives, for anchoring UI state. */
   where:
     | { section: 'identity'; field: 'name' | 'title' | 'chipLabel' | 'description' }
+    | { section: 'triggers'; index?: number }
     | { section: 'gate'; conditionId?: string }
     | { section: 'options' }
     | { section: 'parameter'; id: string; field: 'name' | 'default' | 'min' | 'max' }
-    | { section: 'roll'; field?: 'dice' | 'min' | 'max' | 'multiplier' | 'offset' }
+    | { section: 'roll'; field?: 'dice' | 'inventory' | 'min' | 'max' | 'multiplier' | 'offset' }
     | { section: 'llm'; field: 'prompt' | 'errorMessage' | 'maxOutput' }
-    | { section: 'effect'; id: string }
+    | { section: 'effect'; id: string; field?: 'log' }
     | { section: 'outcome'; id: string; conditionId?: string }
-    | { section: 'message'; id: string };
+    | { section: 'message'; id: string }
+    | { section: 'brief'; id: string };
   message: string;
 }
 
@@ -903,11 +1346,11 @@ function validateNumberOrParam(
     }
     return;
   }
-  if (value.kind === 'state') {
-    // A `$state` roll field is valid iff its fallback is a finite number — the
-    // same load-time rule `validateRollRefs` enforces on the definition.
+  if (value.kind === 'state' || value.kind === 'inventory') {
+    // A `$state` or `$inventory` roll field is valid iff its fallback is a
+    // finite number — the same load-time rule `validateRollRefs` enforces.
     if (!Number.isFinite(parseNumberText(value.fallback))) {
-      issues.push(err({ section: 'roll', field }, `${field} $state fallback must be a number`));
+      issues.push(err({ section: 'roll', field }, `${field} $${value.kind} fallback must be a number`));
     }
     return;
   }
@@ -953,9 +1396,20 @@ function auditPlaceholders(
       // warned about from the draft the way an undeclared parameter can.
       case 'progress':
       case 'now':
+      // `{{character}}` names whoever rolls; a run nobody made renders it as
+      // written, which is the runtime's convention rather than an authoring slip.
+      case 'character':
+      // `{{inventory.<ref>.<field>}}` reads the rolling character's bag at run
+      // time; an absent object renders as written, the metadata convention.
+      case 'inventory':
+        break;
+      // `{{outcome.*}}` names the winning row; the consult prompt's own
+      // rules (it cannot be read when a row tests the consult) are in
+      // `validateLlmPromptPlaceholders`, and a brief's in `validateOutcomeBrief`.
+      case 'outcome':
         break;
       case 'dice':
-        if (draft.rollForm !== 'dice') {
+        if (draft.rollForm === 'range') {
           issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
         }
         break;
@@ -1008,10 +1462,144 @@ function validateChipLabelPlaceholders(draft: ToolDraft, issues: DraftIssue[]): 
  * does not exist yet.
  */
 function validateLlmPromptPlaceholders(draft: ToolDraft, issues: DraftIssue[]): void {
-  auditPlaceholders(draft.llmPrompt, { section: 'llm', field: 'prompt' }, draft, issues, {
+  const where: DraftIssue['where'] = { section: 'llm', field: 'prompt' };
+  auditPlaceholders(draft.llmPrompt, where, draft, issues, {
     llm: 'forbid',
     allowState: false,
   });
+
+  // `{{outcome.*}}` needs the table dealt first, which a row that tests the
+  // consult forbids — the load-time schema rejects it, so the form does too.
+  if (draftTableTestsLlm(draft)) {
+    for (const { key, ref } of scanPlaceholders(draft.llmPrompt)) {
+      if (ref.kind === 'outcome') {
+        issues.push(
+          err(
+            where,
+            `{{${key}}} is not available here — an outcome tests the consult's answer, so the table cannot be dealt before the consult`
+          )
+        );
+      }
+    }
+  }
+
+  // A prompt that compares numbers asks a cheap model to redo arithmetic the
+  // table has already done (bug 257). Advisory: the oracle form is legitimate
+  // when the model is genuinely judging, but a comparison between two figures is not.
+  if (PROMPT_COMPARISON_PATTERN.test(draft.llmPrompt) || PROMPT_DO_THE_MATH_PATTERN.test(draft.llmPrompt)) {
+    issues.push(
+      warn(
+        where,
+        'this prompt asks the model to compare numbers — the outcome table can decide that for you. Give each outcome a brief and write {{outcome.brief}} here, so the model narrates a verdict it was told'
+      )
+    );
+  }
+}
+
+/** `{{x}} >= {{y}}`, with any of the numeric placeholder families on either side of an ordering or equality sign. */
+const PROMPT_COMPARISON_PATTERN =
+  /\{\{\s*(?:value|roll|params\.[^}]+|state\.[^}]+|progress\.[^}]+|metadata\.[^}]+)\s*\}\}\s*(?:>=|<=|>|<|==|=|≥|≤)\s*\{\{|\{\{[^}]+\}\}\s*(?:>=|<=|>|<|==|≥|≤)\s*(?:\{\{|-?\d)/;
+const PROMPT_DO_THE_MATH_PATTERN = /\b(?:do|actually do|work out|compute)\s+the\s+(?:math|arithmetic|maths|sum)\b/i;
+
+/** True when any outcome row tests the consult's answer (`llm`) or its success (`llm-ok`). */
+export function draftTableTestsLlm(draft: Pick<ToolDraft, 'outcomes'>): boolean {
+  return draft.outcomes.some((outcome) =>
+    outcome.conditions.some((c) => c.subject.kind === 'llm' || c.subject.kind === 'llm-ok')
+  );
+}
+
+/** True when the consult prompt quotes the winning row's brief. */
+export function promptReadsBrief(draft: Pick<ToolDraft, 'llmEnabled' | 'llmPrompt'>): boolean {
+  return (
+    draft.llmEnabled &&
+    scanPlaceholders(draft.llmPrompt).some(({ ref }) => ref.kind === 'outcome' && ref.field === 'brief')
+  );
+}
+
+/**
+ * The audit's brief check: which outcome rows can win (`hits > 0` in the
+ * thousand-hand deal) yet carry no brief while the prompt reads
+ * `{{outcome.brief}}` — those would put the placeholder, as written, in front
+ * of the model. Returns the row indexes; empty when the prompt reads no brief.
+ */
+export function reachableOutcomesMissingBrief(
+  draft: Pick<ToolDraft, 'llmEnabled' | 'llmPrompt' | 'outcomes'>,
+  hits: ReadonlyArray<{ index: number; hits: number }>
+): number[] {
+  if (!promptReadsBrief(draft)) return [];
+  return hits
+    .filter((entry) => entry.hits > 0 && (draft.outcomes[entry.index]?.brief.trim() ?? '') === '')
+    .map((entry) => entry.index);
+}
+
+/**
+ * A brief's own audit. It renders before the consult, so it cannot quote the
+ * answer or the winning row (errors, as at load); it needs the consult
+ * enabled to be read at all (an error, as at load); and the usual placeholder
+ * rules apply to the rest.
+ */
+function validateOutcomeBrief(outcome: DraftOutcome, draft: ToolDraft, issues: DraftIssue[]): void {
+  if (outcome.brief.trim() === '') return;
+  const where: DraftIssue['where'] = { section: 'brief', id: outcome.id };
+  if (outcome.brief.length > MAX_MESSAGE_LENGTH) {
+    issues.push(err(where, `a brief is over ${MAX_MESSAGE_LENGTH} characters`));
+  }
+  if (!draft.llmEnabled) {
+    issues.push(err(where, 'has a brief, but the LLM consult is not enabled to read it'));
+  }
+  for (const { key, ref } of scanPlaceholders(outcome.brief)) {
+    if (ref.kind === 'llm' || ref.kind === 'outcome') {
+      issues.push(err(where, `a brief is written before the consult runs and cannot quote {{${key}}}`));
+    }
+  }
+  auditPlaceholders(outcome.brief, where, draft, issues, { llm: 'forbid', allowState: false });
+}
+
+/**
+ * The `inventoryAggregate` key audit shared by outcome chips and gate chips:
+ * the key must parse (the loader's own reason, verbatim); a list orders
+ * nothing; a number holds no text; a metadata key whose last segment is a
+ * fold word reads as that fold. Returns false when the chip is broken enough
+ * that further checks would only repeat the complaint.
+ */
+function auditAggregateKey(
+  key: string,
+  comparator: ComparatorKey,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): boolean {
+  const trimmed = key.trim();
+  if (trimmed === '') {
+    issues.push(err(where, 'an inventory aggregate needs a key, like equipped.names'));
+    return false;
+  }
+  if (trimmed.includes('{{')) {
+    issues.push(err(where, 'an aggregate key is literal — it names a scope and a field, never an object'));
+    return false;
+  }
+  const parsed = parseAggregateKey(trimmed);
+  if (!parsed.ok) {
+    issues.push(err(where, parsed.reason));
+    return false;
+  }
+  const list = isListAggregate(parsed.parsed);
+  if (list && ORDERING_KEYS.has(comparator)) {
+    issues.push(err(where, `${comparator} cannot order a list; fold it with .min/.max/.sum/.count`));
+    return false;
+  }
+  if (!list && CONTAINMENT_KEYS.has(comparator)) {
+    issues.push(err(where, `${trimmed} is a number, and a number holds no text`));
+    return false;
+  }
+  if (aggregateKeyEndsInFold(parsed.parsed) && parsed.parsed.field.kind === 'metadata') {
+    issues.push(
+      warn(
+        where,
+        `reads as the .${parsed.parsed.field.fold} of metadata key "${parsed.parsed.field.key}" — a key literally ending in .${parsed.parsed.field.fold} cannot be listed`
+      )
+    );
+  }
+  return true;
 }
 
 function validateCondition(
@@ -1037,6 +1625,44 @@ function validateCondition(
       issues.push(err(where, `a progress condition ${parsed.reason}`));
       return;
     }
+  }
+  if (condition.subject.kind === 'inventory' || condition.subject.kind === 'inventoryCount') {
+    if (condition.subject.key.trim() === '') {
+      issues.push(err(where, 'an inventory condition needs an object reference'));
+      return;
+    }
+    for (const { key, ref } of scanPlaceholders(condition.subject.key)) {
+      if (ref.kind === 'params' && !paramByName.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      }
+    }
+  }
+  if (condition.subject.kind === 'inventory') {
+    // A state has no order and holds no substring: = or ≠, against one of the
+    // four states (or a string parameter).
+    if (ORDERING_KEYS.has(condition.comparator) || CONTAINMENT_KEYS.has(condition.comparator)) {
+      issues.push(err(where, 'an inventory state can only be tested with = or ≠'));
+      return;
+    }
+    const operand = condition.operand;
+    if (operand.kind === 'param') {
+      const target = paramByName.get(operand.name);
+      if (!operand.name || !target) {
+        issues.push(err(where, `compares against "${operand.name || '(no parameter)'}", which is not declared`));
+      } else if (valueTypeOf(target.type) !== 'string') {
+        issues.push(err(where, `an inventory state compares with a string; "${operand.name}" is ${target.type}`));
+      }
+    } else if (operand.kind !== 'string' || !(INVENTORY_STATE_VALUES as readonly string[]).includes(operand.text)) {
+      issues.push(err(where, 'pick a state: equipped, carried, reachable or absent'));
+    }
+    return;
+  }
+  if (condition.subject.kind === 'inventoryCount' && CONTAINMENT_KEYS.has(condition.comparator)) {
+    issues.push(err(where, 'an equipped count is a number, and a number holds no text'));
+    return;
+  }
+  if (condition.subject.kind === 'inventoryAggregate') {
+    if (!auditAggregateKey(condition.subject.key, condition.comparator, where, issues)) return;
   }
   if ((condition.subject.kind === 'llm' || condition.subject.kind === 'llm-ok') && !draft.llmEnabled) {
     issues.push(err(where, 'tests the LLM consult, but the consult is not enabled'));
@@ -1156,18 +1782,58 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
     );
   }
 
+  const groups = groupsOf(draft.gateConditions);
+  if (groups.length > MAX_WHEN_GROUPS) {
+    issues.push(err({ section: 'gate' }, `at most ${MAX_WHEN_GROUPS} lines joined by OR`));
+  }
+  for (const group of groups) validateGateGroup(group, issues);
+}
+
+/** One line of the gate — slots are per line, as they are per group in the file. */
+function validateGateGroup(conditions: DraftGateCondition[], issues: DraftIssue[]): void {
   const seenSlots = new Set<string>();
-  for (const condition of draft.gateConditions) {
+  for (const condition of conditions) {
     const where: DraftIssue['where'] = { section: 'gate', conditionId: condition.id };
 
-    if (condition.key.trim() === '') {
-      issues.push(err(where, 'a gate condition needs a metadata key'));
+    if (condition.subject === 'inventoryAggregate') {
+      if (!auditAggregateKey(condition.key, condition.comparator, where, issues)) continue;
+    } else if (condition.key.trim() === '') {
+      issues.push(
+        err(where, condition.subject === 'inventory' || condition.subject === 'inventoryCount'
+          ? 'a gate condition needs an object reference'
+          : 'a gate condition needs a metadata key')
+      );
       continue;
     }
 
-    const slot = gateConditionSlotKey(condition);
+    if (condition.subject === 'inventory' || condition.subject === 'inventoryCount') {
+      if (condition.key.includes('{{')) {
+        issues.push(err(where, 'a gate is answered before any parameter exists — name the object literally'));
+        continue;
+      }
+      if (condition.subject === 'inventory') {
+        if (condition.comparator !== 'eq' && condition.comparator !== 'neq') {
+          issues.push(err(where, 'an inventory state can only be tested with = or ≠'));
+        } else if (
+          condition.operand.kind !== 'string' ||
+          !(INVENTORY_STATE_VALUES as readonly string[]).includes(condition.operand.text)
+        ) {
+          issues.push(err(where, 'pick a state: equipped, carried, reachable or absent'));
+        }
+        const slot = `${condition.subject}:${gateConditionSlotKey(condition)}`;
+        if (seenSlots.has(slot)) issues.push(err(where, 'a line of the gate can test this object with this comparator only once'));
+        seenSlots.add(slot);
+        continue;
+      }
+      if (CONTAINMENT_KEYS.has(condition.comparator) || condition.operand.kind !== 'number') {
+        issues.push(err(where, 'an equipped count compares with a number'));
+        continue;
+      }
+    }
+
+    const slot = `${condition.subject ?? 'metadata'}:${gateConditionSlotKey(condition)}`;
     if (seenSlots.has(slot)) {
-      issues.push(err(where, 'the gate can test this key with this comparator only once'));
+      issues.push(err(where, 'a line of the gate can test this key with this comparator only once'));
     }
     seenSlots.add(slot);
 
@@ -1202,6 +1868,38 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
   for (const effect of draft.effects) {
     const where: DraftIssue['where'] = { section: 'effect', id: effect.id };
 
+    if (
+      effect.when.kind === 'verbatim' &&
+      effectWhenGroups(effect.when.when).some((group) => group.llm !== undefined) &&
+      !draft.llmEnabled
+    ) {
+      issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
+    }
+
+    if (effect.kind === 'wardrobe') {
+      validateDraftWardrobeGesture(effect, draft, where, issues);
+      continue;
+    }
+
+    if (effect.kind === 'inventory') {
+      validateDraftInventoryGesture(effect, draft, where, issues);
+      continue;
+    }
+
+    if (effect.kind === 'log') {
+      const logWhere: DraftIssue['where'] = { section: 'effect', id: effect.id, field: 'log' };
+      const line = effect.log.trim();
+      if (line === '') {
+        issues.push(err(logWhere, 'a log line needs some prose to write down'));
+      } else {
+        if (line.length > MAX_MESSAGE_LENGTH) {
+          issues.push(err(logWhere, `a log line is at most ${MAX_MESSAGE_LENGTH} characters`));
+        }
+        auditPlaceholders(line, logWhere, draft, issues, { llm: 'warn-if-disabled', allowState: true });
+      }
+      continue;
+    }
+
     if (effect.target.trim() === '') {
       issues.push(err(where, 'an effect needs a target — state.<path> or metadata.<key>'));
     } else {
@@ -1226,16 +1924,90 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
               issues.push(err(where, `{{${ref}}} names no declared parameter`));
             } else if (ref === 'llm' && !draft.llmEnabled) {
               issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
-            } else if (ref === 'dice' && draft.rollForm !== 'dice') {
+            } else if (ref === 'dice' && draft.rollForm === 'range') {
               issues.push(warn(where, '{{dice}} is an empty string outside the dice form'));
             }
           }
         }
       }
     }
+  }
+}
 
-    if (effect.when.kind === 'verbatim' && effect.when.when.llm !== undefined && !draft.llmEnabled) {
-      issues.push(err(where, 'the condition tests the LLM consult, but the consult is not enabled'));
+/**
+ * A wardrobe row's audit: the per-action rules in the very words load-time
+ * validation uses (`wardrobeGestureProblems`), checked against what the row
+ * would EMIT, plus the item references' placeholders — an undeclared
+ * parameter or a disabled consult is an error, as at load; an unknown family
+ * is only a warning, since it simply fails to resolve at the table.
+ */
+function validateDraftWardrobeGesture(
+  effect: DraftEffect,
+  draft: ToolDraft,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): void {
+  const emitted = wardrobeFromDraft(effect.wardrobe) as {
+    action: WardrobeEffectAction;
+    items?: string[];
+    mode?: WardrobeEffectMode;
+    slot?: WardrobeItemType;
+  };
+  // The form drops what an action does not use, so a `wear` that forgot its
+  // `add_to_slot` slot is the one cross-field mistake left to catch — and
+  // an empty item list, which the emitter turns into `items: []`.
+  for (const problem of wardrobeGestureProblems({
+    ...emitted,
+    items: emitted.items && emitted.items.length > 0 ? emitted.items : undefined,
+  })) {
+    issues.push(err(where, problem.message));
+  }
+
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  for (const item of effect.wardrobe.items) {
+    for (const { key, ref } of scanPlaceholders(item)) {
+      if (ref.kind === 'params' && !declaredParams.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      } else if (ref.kind === 'llm' && !draft.llmEnabled) {
+        issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
+      } else if (ref.kind === 'unknown') {
+        issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — that item will not be found`));
+      }
+    }
+  }
+}
+
+/**
+ * An inventory row's audit: the per-action rules in load-time validation's own
+ * words (`inventoryGestureProblems`), checked against what the row would
+ * EMIT, plus the references' placeholders — an undeclared parameter or a
+ * disabled consult is an error, an unknown family a warning (that object
+ * simply will not be found), and a reference carrying `.metadata.` a warning
+ * (it cannot be quoted by `{{inventory.*}}`).
+ */
+function validateDraftInventoryGesture(
+  effect: DraftEffect,
+  draft: ToolDraft,
+  where: DraftIssue['where'],
+  issues: DraftIssue[]
+): void {
+  const emitted = inventoryFromDraft(effect.inventory) as { action: InventoryEffectAction; items: string[]; equip?: boolean };
+  for (const problem of inventoryGestureProblems(emitted)) {
+    issues.push(err(where, problem.message));
+  }
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  for (const item of effect.inventory.items) {
+    if (item.includes('.metadata.')) {
+      issues.push(warn(where, `"${item}" contains ".metadata.", which no {{inventory.*}} placeholder can name`));
+    }
+    for (const { key, ref } of scanPlaceholders(item)) {
+      if (ref.kind === 'params' && !declaredParams.has(ref.name)) {
+        issues.push(err(where, `{{${key}}} names no declared parameter`));
+      } else if (ref.kind === 'llm' && !draft.llmEnabled) {
+        issues.push(err(where, '{{llm}} needs the LLM consult enabled'));
+      } else if (ref.kind === 'unknown') {
+        issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — that object will not be found`));
+      }
     }
   }
 }
@@ -1269,6 +2041,20 @@ export function subjectValueType(
       return null;
     case 'llm-ok':
       return 'boolean';
+    case 'inventory':
+      // A state is one of four strings.
+      return 'string';
+    case 'inventoryCount':
+      return 'number';
+    case 'inventoryAggregate': {
+      // A count or a fold is a number. A list's entries are names and titles
+      // (text) or whatever the objects' metadata holds — unknowable, like a
+      // metadata key's.
+      const parsed = parseAggregateKey(subject.key.trim());
+      if (!parsed.ok) return null;
+      if (!isListAggregate(parsed.parsed)) return 'number';
+      return parsed.parsed.field.kind === 'metadata' ? null : 'string';
+    }
   }
 }
 
@@ -1292,12 +2078,12 @@ export function reseatOperandForComparator<O extends ConditionOperand>(
   return operand;
 }
 
-/** Identity of a gate chip for duplicate detection: metadata key + comparator. */
+/** Identity of a gate chip for duplicate detection, within its group: key + comparator. */
 export function gateConditionSlotKey(condition: Pick<DraftGateCondition, 'key' | 'comparator'>): string {
   return `${condition.key}:${condition.comparator}`;
 }
 
-/** Identity of a chip for duplicate detection: subject (+key/name) + comparator. */
+/** Identity of a chip for duplicate detection, within its group: subject (+key/name) + comparator. */
 export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'comparator'>): string {
   const subject = condition.subject;
   switch (subject.kind) {
@@ -1311,6 +2097,12 @@ export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'co
       return `metadata:${subject.key}:${condition.comparator}`;
     case 'progress':
       return `progress:${subject.key}:${condition.comparator}`;
+    case 'inventory':
+      return `inventory:${subject.key}:${condition.comparator}`;
+    case 'inventoryCount':
+      return `inventoryCount:${subject.key}:${condition.comparator}`;
+    case 'inventoryAggregate':
+      return `inventoryAggregate:${subject.key}:${condition.comparator}`;
     case 'llm':
       return `llm:${condition.comparator}`;
     case 'llm-ok':
@@ -1341,6 +2133,7 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
     );
   }
   validateChipLabelPlaceholders(draft, issues);
+  validateDraftTriggers(draft, issues);
   if (draft.description.trim() === '') {
     issues.push(err({ section: 'identity', field: 'description' }, 'description is required'));
   } else if (draft.description.length > MAX_DESCRIPTION_LENGTH) {
@@ -1389,6 +2182,14 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
   if (draft.rollForm === 'dice') {
     if (draft.rollDice.trim() === '' || parseDiceNotation(draft.rollDice.trim()) === null) {
       issues.push(err({ section: 'roll', field: 'dice' }, 'must be dice notation like "3d6+2" or "1d20"'));
+    }
+  } else if (draft.rollForm === 'inventory') {
+    // The same two rules the loader holds a `$inventory` roll to.
+    if (!parseInventoryOperand(draft.rollInventory.path.trim())) {
+      issues.push(err({ section: 'roll', field: 'inventory' }, 'name "<object>.metadata.<key>", e.g. "sword.metadata.damage"'));
+    }
+    if (parseDiceNotation(draft.rollInventory.fallback.trim()) === null) {
+      issues.push(err({ section: 'roll', field: 'inventory' }, 'the fallback must be dice notation like "1d4"'));
     }
   } else {
     validateNumberOrParam(draft.rollRange.min, 'min', draft, issues);
@@ -1467,19 +2268,25 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
       issues.push(err({ section: 'outcome', id: outcome.id }, 'only the final outcome may be the catch-all'));
     }
 
-    const seenSlots = new Set<string>();
-    for (const condition of outcome.conditions) {
-      const slot = conditionSlotKey(condition);
-      if (seenSlots.has(slot)) {
-        issues.push(
-          err(
-            { section: 'outcome', id: outcome.id, conditionId: condition.id },
-            'a row can test this subject with this comparator only once'
-          )
-        );
+    // Slots are per group: `rank > 3 OR rank > 5` is two lines, not a repeat.
+    for (const group of groupsOf(outcome.conditions)) {
+      const seenSlots = new Set<string>();
+      for (const condition of group) {
+        const slot = conditionSlotKey(condition);
+        if (seenSlots.has(slot)) {
+          issues.push(
+            err(
+              { section: 'outcome', id: outcome.id, conditionId: condition.id },
+              'a line can test this subject with this comparator only once'
+            )
+          );
+        }
+        seenSlots.add(slot);
+        validateCondition(condition, outcome, draft, issues);
       }
-      seenSlots.add(slot);
-      validateCondition(condition, outcome, draft, issues);
+    }
+    if (groupsOf(outcome.conditions).length > MAX_WHEN_GROUPS) {
+      issues.push(err({ section: 'outcome', id: outcome.id }, `at most ${MAX_WHEN_GROUPS} lines joined by OR`));
     }
 
     if (outcome.message.trim() === '') {
@@ -1488,9 +2295,66 @@ export function validateDraft(draft: ToolDraft): DraftIssue[] {
       issues.push(err({ section: 'message', id: outcome.id }, `message is over ${MAX_MESSAGE_LENGTH} characters`));
     }
     validateMessagePlaceholders(outcome, draft, issues);
+    validateOutcomeBrief(outcome, draft, issues);
+    if (promptReadsBrief(draft) && outcome.brief.trim() === '') {
+      issues.push(
+        warn(
+          { section: 'brief', id: outcome.id },
+          'the consult prompt reads {{outcome.brief}}, but this outcome has no brief — if it wins, the placeholder reaches the model as written'
+        )
+      );
+    }
   }
 
   return issues;
+}
+
+/**
+ * Trigger phrases: the loader's rules (count, length, no padding, no repeats
+ * ignoring case) as errors, plus the self-echo warning — a phrase quoted in
+ * this tool's own outcome message, chip label or consult prompt. Pascal's
+ * announcement is never scanned, but a model that narrates it back will say
+ * the words, and the tool fires again on its next reply.
+ */
+function validateDraftTriggers(draft: ToolDraft, issues: DraftIssue[]): void {
+  if (draft.triggers.length === 0) return;
+
+  if (draft.triggers.length > MAX_TRIGGERS) {
+    issues.push(err({ section: 'triggers' }, `at most ${MAX_TRIGGERS} trigger phrases`));
+  }
+  const seen = new Set<string>();
+  draft.triggers.forEach((phrase, index) => {
+    const where = { section: 'triggers' as const, index };
+    if (phrase.length < MIN_TRIGGER_PHRASE_LENGTH) {
+      issues.push(err(where, `a trigger phrase needs at least ${MIN_TRIGGER_PHRASE_LENGTH} characters`));
+    } else if (phrase.length > MAX_TRIGGER_PHRASE_LENGTH) {
+      issues.push(err(where, `a trigger phrase is at most ${MAX_TRIGGER_PHRASE_LENGTH} characters`));
+    }
+    if (phrase !== phrase.trim()) {
+      issues.push(err(where, 'a trigger phrase must not begin or end with a space'));
+    }
+    const folded = foldTriggerText(phrase);
+    if (seen.has(folded)) {
+      issues.push(err(where, `"${phrase}" is listed twice (phrases match regardless of case)`));
+    }
+    seen.add(folded);
+  });
+
+  const echo = (text: string, where: DraftIssue['where'], what: string): void => {
+    for (const phrase of triggersContainedIn(text, draft.triggers)) {
+      issues.push(
+        warn(
+          where,
+          `${what} contains the trigger "${phrase}" — a character who repeats Pascal's line will set this tool off again`
+        )
+      );
+    }
+  };
+  for (const outcome of draft.outcomes) {
+    echo(outcome.message, { section: 'message', id: outcome.id }, 'this message');
+  }
+  echo(draft.chipLabel, { section: 'identity', field: 'chipLabel' }, 'the chip label');
+  if (draft.llmEnabled) echo(draft.llmPrompt, { section: 'llm', field: 'prompt' }, 'the consult prompt');
 }
 
 /** True when nothing blocks a save. */
@@ -1540,9 +2404,18 @@ export function renameParameterEverywhere(draft: ToolDraft, from: string, to: st
       multiplier: renameValue(draft.rollRange.multiplier),
       offset: renameValue(draft.rollRange.offset),
     },
+    effects: draft.effects.map((effect) => ({
+      ...effect,
+      log: effect.log.replace(placeholder, `{{params.${to}}}`),
+      wardrobe: {
+        ...effect.wardrobe,
+        items: effect.wardrobe.items.map((item) => item.replace(placeholder, `{{params.${to}}}`)),
+      },
+    })),
     outcomes: draft.outcomes.map((outcome) => ({
       ...outcome,
       message: outcome.message.replace(placeholder, `{{params.${to}}}`),
+      brief: outcome.brief.replace(placeholder, `{{params.${to}}}`),
       conditions: outcome.conditions.map((condition) => ({
         ...condition,
         subject: renameSubject(condition.subject),
@@ -1581,6 +2454,20 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
     }
     if (paramPlaceholderPattern(name).test(outcome.message)) {
       sites.push(`${label}: the message renders it`);
+    }
+    if (paramPlaceholderPattern(name).test(outcome.brief)) {
+      sites.push(`${label}: the brief renders it`);
+    }
+  });
+
+  draft.effects.forEach((effect, index) => {
+    if (effect.kind === 'log') {
+      if (paramPlaceholderPattern(name).test(effect.log)) sites.push(`effect ${index + 1}: the log line renders it`);
+      return;
+    }
+    if (effect.kind !== 'wardrobe') return;
+    if (effect.wardrobe.items.some((item) => paramPlaceholderPattern(name).test(item))) {
+      sites.push(`effect ${index + 1}: a wardrobe item names it`);
     }
   });
 

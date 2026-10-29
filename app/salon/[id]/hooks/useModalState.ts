@@ -20,6 +20,21 @@ export interface SelectLLMProfileDialogState {
   } | null
 }
 
+/**
+ * What the Run Tool dialog was asked to open onto. `toolId` null is the plain
+ * list; the nonce changes on every request so the same tool can be re-selected.
+ */
+export interface RunToolRequest {
+  toolId: string | null
+  nonce: number
+}
+
+/** What Pascal's custom-tool dialog was asked to open onto. */
+export interface CustomToolRequest {
+  tool: { name: string; asCharacterId: string | null } | null
+  nonce: number
+}
+
 export function useModalState() {
   // Simple boolean modals
   const [galleryOpen, setGalleryOpen] = useState(false)
@@ -33,6 +48,9 @@ export function useModalState() {
   const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolSettingsModalOpen, setToolSettingsModalOpen] = useState(false)
   const [runToolModalOpen, setRunToolModalOpen] = useState(false)
+  const [runToolRequest, setRunToolRequest] = useState<RunToolRequest>({ toolId: null, nonce: 0 })
+  const [customToolDialogOpen, setCustomToolDialogOpen] = useState(false)
+  const [customToolRequest, setCustomToolRequest] = useState<CustomToolRequest>({ tool: null, nonce: 0 })
   const [stateEditorModalOpen, setStateEditorModalOpen] = useState(false)
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
   const [libraryFilePickerOpen, setLibraryFilePickerOpen] = useState(false)
@@ -71,8 +89,21 @@ export function useModalState() {
   const closeBulkReplace = useCallback(() => setBulkReplaceModalOpen(false), [])
   const openToolSettings = useCallback(() => setToolSettingsModalOpen(true), [])
   const closeToolSettings = useCallback(() => setToolSettingsModalOpen(false), [])
-  const openRunTool = useCallback(() => setRunToolModalOpen(true), [])
+  /** Open Run Tool — on a tool's form when `toolId` is given (the `/` commands), else on the list. */
+  const openRunTool = useCallback((toolId?: string) => {
+    setRunToolRequest(prev => ({ toolId: typeof toolId === 'string' ? toolId : null, nonce: prev.nonce + 1 }))
+    setRunToolModalOpen(true)
+  }, [])
   const closeRunTool = useCallback(() => setRunToolModalOpen(false), [])
+  /**
+   * Open Pascal's table — on a tool's form when `initial` is given. Without one
+   * the dialog lands wherever it remembers being (its own memory, untouched).
+   */
+  const openCustomTool = useCallback((initial?: { name: string; asCharacterId: string | null }) => {
+    setCustomToolRequest(prev => ({ tool: initial ?? null, nonce: prev.nonce + 1 }))
+    setCustomToolDialogOpen(true)
+  }, [])
+  const closeCustomTool = useCallback(() => setCustomToolDialogOpen(false), [])
   const openStateEditor = useCallback(() => setStateEditorModalOpen(true), [])
   const closeStateEditor = useCallback(() => setStateEditorModalOpen(false), [])
   const openLibraryFilePicker = useCallback(() => setLibraryFilePickerOpen(true), [])
@@ -101,6 +132,9 @@ export function useModalState() {
     bulkReplaceModalOpen,
     toolSettingsModalOpen,
     runToolModalOpen,
+    runToolRequest,
+    customToolDialogOpen,
+    customToolRequest,
     stateEditorModalOpen,
     allLLMPauseModalOpen, setAllLLMPauseModalOpen,
     showPreview, setShowPreview,
@@ -123,6 +157,7 @@ export function useModalState() {
     openBulkReplace, closeBulkReplace,
     openToolSettings, closeToolSettings,
     openRunTool, closeRunTool,
+    openCustomTool, closeCustomTool,
     openStateEditor, closeStateEditor,
     libraryFilePickerOpen,
     openLibraryFilePicker, closeLibraryFilePicker,

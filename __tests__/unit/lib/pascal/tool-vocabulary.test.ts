@@ -39,6 +39,15 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      character: false,
+      wears: [],
+      takesOff: [],
+      clearsSlots: [],
+      inventoryReads: [],
+      inventoryAggregates: [],
+      equips: [],
+      unequips: [],
+      picksUp: [],
     })
   })
 
@@ -180,7 +189,45 @@ describe('collectToolVocabulary', () => {
       progress: [],
       progressWrites: [],
       now: false,
+      character: false,
+      wears: [],
+      takesOff: [],
+      clearsSlots: [],
+      inventoryReads: [],
+      inventoryAggregates: [],
+      equips: [],
+      unequips: [],
+      picksUp: [],
     })
+  })
+
+  it('reports inventory reads from tests, gates, placeholders and $inventory, and the three gestures', () => {
+    const tool = define({
+      availableWhen: { inventory: { lantern: { eq: 'equipped' } } },
+      roll: { $inventory: 'sword.metadata.damage', fallback: '1d4' },
+      effects: [
+        { inventory: { action: 'equip', items: ['Excalibur'] } },
+        { inventory: { action: 'unequip', items: ['lantern'] } },
+        { inventory: { action: 'pick_up', items: ['magic bow'] } },
+      ],
+      outcomes: [
+        { when: { inventoryCount: { ring: { gte: 2 } } }, message: '{{inventory.compass.title}}', state: 'success' },
+        { when: true, message: '-', state: 'info' },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+    expect(vocabulary.inventoryReads).toEqual(['compass', 'lantern', 'ring', 'sword'])
+    expect(vocabulary.equips).toEqual(['Excalibur'])
+    expect(vocabulary.unequips).toEqual(['lantern'])
+    expect(vocabulary.picksUp).toEqual(['magic bow'])
+    expect(isEmptyVocabulary(vocabulary)).toBe(false)
+  })
+
+  it('reports a tool that quotes {{character}}', () => {
+    const tool = define({
+      outcomes: [{ when: true, message: '{{character}} is suited.', state: 'info' }],
+    })
+    expect(collectToolVocabulary(tool).character).toBe(true)
   })
 
   it('reads the chip label for placeholders like any other rendered string', () => {
@@ -222,6 +269,29 @@ describe('collectToolVocabulary', () => {
     expect(vocabulary.metadata).toEqual(['hasKey'])
     expect(vocabulary.params).toEqual(['by'])
     expect(vocabulary.value).toBe(true)
+  })
+
+  it('reports wardrobe gestures on the dress/undress lists, references verbatim', () => {
+    const tool = define({
+      parameters: { garment: { type: 'string', default: 'Boots' } },
+      effects: [
+        { wardrobe: { action: 'wear', items: ['Cloak of Night', '{{params.garment}}'] } },
+        { when: { outcome: { eq: 'failure' } }, wardrobe: { action: 'take_off', items: ['{{metadata.favouriteHat}}'] } },
+        { wardrobe: { action: 'clear_slot', slot: 'hair' } },
+      ],
+    })
+    const vocabulary = collectToolVocabulary(tool)
+
+    expect(vocabulary.wears).toEqual(['{{params.garment}}', 'Cloak of Night'])
+    expect(vocabulary.takesOff).toEqual(['{{metadata.favouriteHat}}'])
+    expect(vocabulary.clearsSlots).toEqual(['hair'])
+    // Item templates are scanned like any rendered string.
+    expect(vocabulary.params).toEqual(['garment'])
+    expect(vocabulary.metadata).toEqual(['favouriteHat'])
+    // A gesture is not a write.
+    expect(vocabulary.stateWrites).toEqual([])
+    expect(vocabulary.metadataWrites).toEqual([])
+    expect(isEmptyVocabulary(vocabulary)).toBe(false)
   })
 
   it('collects the metadata keys an availability gate reads', () => {
