@@ -378,7 +378,7 @@ export function AboutView() {
           <p><span className="font-medium">Diagrams:</span> Mermaid, Graphviz (@hpcc-js/wasm-graphviz), svg2roughjs, DOMPurify</p>
           <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, @svar-ui/react-filemanager, sharp, Lucide Icons</p>
           <p><span className="font-medium">Terminals &amp; Realtime:</span> xterm.js, node-pty, ws, croner</p>
-          <p><span className="font-medium">Filesystem &amp; Archives:</span> chokidar, tar, yauzl, semver</p>
+          <p><span className="font-medium">Filesystem &amp; Archives:</span> tar, yauzl, semver</p>
           <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Docker</p>
           <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>
         </div>

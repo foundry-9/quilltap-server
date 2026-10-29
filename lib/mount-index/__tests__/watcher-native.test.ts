@@ -23,12 +23,8 @@ jest.mock('fs/promises', () => ({
   default: {
     access: jest.fn(),
     lstat: jest.fn(),
+    stat: jest.fn(),
   },
-}));
-
-jest.mock('chokidar', () => ({
-  __esModule: true,
-  default: { watch: jest.fn() },
 }));
 
 jest.mock('@/lib/mount-index/scanner', () => {
@@ -60,7 +56,6 @@ jest.mock('@/lib/repositories/factory', () => ({
 import { attachMountPoint, detachMountPoint } from '@/lib/mount-index/watcher';
 import { watch } from 'fs';
 import fs from 'fs/promises';
-import chokidar from 'chokidar';
 import {
   processMountFile,
   removeMountFile,
@@ -72,7 +67,7 @@ import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 const mockWatch = watch as unknown as jest.Mock;
 const mockLstat = fs.lstat as jest.Mock;
 const mockAccess = fs.access as jest.Mock;
-const mockChokidarWatch = chokidar.watch as jest.Mock;
+const mockStat = fs.stat as jest.Mock;
 const mockProcess = processMountFile as jest.Mock;
 const mockRemove = removeMountFile as jest.Mock;
 const mockWalk = walkDirectory as jest.Mock;
@@ -139,7 +134,7 @@ async function attachTracked(mp: DocMountPoint): Promise<Listener> {
 }
 
 describe('mount watcher on native fs.watch', () => {
-  it('watches the base path recursively and does not use chokidar', async () => {
+  it('watches the base path recursively and does not poll', async () => {
     await attachTracked(makeMountPoint());
 
     expect(mockWatch).toHaveBeenCalledWith(
@@ -147,7 +142,7 @@ describe('mount watcher on native fs.watch', () => {
       expect.objectContaining({ recursive: true }),
       expect.any(Function),
     );
-    expect(mockChokidarWatch).not.toHaveBeenCalled();
+    expect(mockWalk).not.toHaveBeenCalled();
   });
 
   it('indexes a file that was changed, once per burst', async () => {
@@ -256,48 +251,73 @@ describe('mount watcher on native fs.watch', () => {
 });
 
 describe('polling and fallback', () => {
-  function fakeChokidar() {
-    const w = { on: jest.fn(), close: jest.fn().mockResolvedValue(undefined) };
-    w.on.mockReturnValue(w);
-    return w;
-  }
+  const file = (relativePath: string) => ({ relativePath, absolutePath: `${BASE}/${relativePath}` });
 
-  it('polls through chokidar when QUILLTAP_WATCHER_POLLING=1', async () => {
+  it('polls by walking the store when QUILLTAP_WATCHER_POLLING=1', async () => {
     process.env.QUILLTAP_WATCHER_POLLING = '1';
-    mockChokidarWatch.mockReturnValue(fakeChokidar());
+    mockWalk.mockResolvedValue([]);
     const mp = makeMountPoint();
     attached.push(mp.id);
 
     await attachMountPoint(mp);
+    await jest.advanceTimersByTimeAsync(0);
 
     expect(mockWatch).not.toHaveBeenCalled();
-    expect(mockChokidarWatch).toHaveBeenCalledWith(BASE, expect.objectContaining({ usePolling: true }));
+    expect(mockWalk).toHaveBeenCalledWith(BASE, [], ['.git']);
   });
 
-  it('polling ignores files the scanner would never index', async () => {
+  it('indexes what changed or arrived between walks, and drops what left', async () => {
     process.env.QUILLTAP_WATCHER_POLLING = '1';
-    mockChokidarWatch.mockReturnValue(fakeChokidar());
+    const mtimes: Record<string, number> = { 'kept.md': 1, 'edited.md': 1, 'gone.md': 1 };
+    mockStat.mockImplementation(async (abs: string) => ({
+      mtimeMs: mtimes[abs.slice(BASE.length + 1)],
+      size: 10,
+    }));
+    mockWalk.mockResolvedValue([file('kept.md'), file('edited.md'), file('gone.md'), file('song.m4a')]);
     const mp = makeMountPoint();
     attached.push(mp.id);
     await attachMountPoint(mp);
-    const { ignored } = mockChokidarWatch.mock.calls[0][1];
+    await jest.advanceTimersByTimeAsync(0);
 
-    expect(ignored(`${BASE}/song.m4a`, { isFile: () => true })).toBe(true);
-    expect(ignored(`${BASE}/notes.md`, { isFile: () => true })).toBe(false);
-    expect(ignored(`${BASE}/Music`, { isFile: () => false })).toBe(false);
-    expect(ignored(`${BASE}/.git`, undefined)).toBe(true);
+    // The baseline walk indexes nothing — the startup scan covers it.
+    expect(mockStat).not.toHaveBeenCalledWith(`${BASE}/song.m4a`);
+    expect(mockProcess).not.toHaveBeenCalled();
+
+    mtimes['edited.md'] = 2;
+    mtimes['new.md'] = 1;
+    mockWalk.mockResolvedValue([file('kept.md'), file('edited.md'), file('new.md')]);
+    await jest.advanceTimersByTimeAsync(2000 + 800);
+
+    const processed = mockProcess.mock.calls.map(c => c[2]);
+    expect(processed.sort()).toEqual(['edited.md', 'new.md']);
+    expect(mockRemove.mock.calls.map(c => c[1])).toEqual(['gone.md']);
+  });
+
+  it('stops walking once detached', async () => {
+    process.env.QUILLTAP_WATCHER_POLLING = '1';
+    mockWalk.mockResolvedValue([]);
+    const mp = makeMountPoint();
+    await attachMountPoint(mp);
+    await jest.advanceTimersByTimeAsync(0);
+    await detachMountPoint(mp.id);
+    mockWalk.mockClear();
+
+    await jest.advanceTimersByTimeAsync(10_000);
+
+    expect(mockWalk).not.toHaveBeenCalled();
   });
 
   it('falls back to polling when recursive watch is unavailable', async () => {
     mockWatch.mockImplementation(() => {
       throw Object.assign(new Error('unsupported'), { code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' });
     });
-    mockChokidarWatch.mockReturnValue(fakeChokidar());
+    mockWalk.mockResolvedValue([]);
     const mp = makeMountPoint();
     attached.push(mp.id);
 
     await attachMountPoint(mp);
+    await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockChokidarWatch).toHaveBeenCalledWith(BASE, expect.objectContaining({ usePolling: true }));
+    expect(mockWalk).toHaveBeenCalledWith(BASE, [], ['.git']);
   });
 });

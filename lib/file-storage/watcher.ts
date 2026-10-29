@@ -1,9 +1,13 @@
 /**
  * Filesystem Watcher
  *
- * Uses chokidar to watch the files directory for real-time changes.
- * When files are added, changed, or removed on disk, the watcher
+ * Watches the files directory with Node's recursive `fs.watch` (FSEvents on
+ * macOS, ReadDirectoryChangesW on Windows, inotify on Linux) for real-time
+ * changes. When files are added, changed, or removed on disk, the watcher
  * synchronizes the database accordingly.
+ *
+ * `fs.watch` reports only a path and "rename" / "change", so
+ * {@link handleNativeEvent} reads the disk to decide what happened.
  *
  * - Added files without DB records are created as 'orphaned' status
  * - Changed files get their sha256/size/mtime updated
@@ -15,14 +19,14 @@
  * @module file-storage/watcher
  */
 
-import chokidar from 'chokidar';
-import { relative, join, extname, basename, dirname } from 'path';
+import { watch as fsWatch, type FSWatcher } from 'fs';
+import { join, basename, normalize, sep } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
-import { computeSha256, detectMimeType } from './scanner';
+import { computeSha256, detectMimeType, scanDirectory } from './scanner';
 import { preservesContentDigest } from './digest-policy';
 import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
-import { stat } from 'fs/promises';
+import { lstat, stat } from 'fs/promises';
 
 const logger = createLogger('file-storage:watcher');
 
@@ -30,7 +34,7 @@ const logger = createLogger('file-storage:watcher');
 // STATE
 // ============================================================================
 
-let watcher: ReturnType<typeof chokidar.watch> | null = null;
+let watcher: FSWatcher | null = null;
 
 /** Debounce timer map for events keyed by relative path */
 const debounceTimers = new Map<string, NodeJS.Timeout>();
@@ -43,6 +47,13 @@ interface PendingUnlink {
 }
 const pendingUnlinks = new Map<string, PendingUnlink>();
 const PENDING_UNLINK_MS = 3000;
+
+/**
+ * Paths that saw a native "rename" inside the current debounce window. Only a
+ * rename can be a folder arriving or leaving; a bare "change" on a folder (its
+ * metadata) must not trigger a walk.
+ */
+const pendingRenames = new Set<string>();
 
 // ============================================================================
 // HELPERS
@@ -150,6 +161,14 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     const sha256Matches = await repos.files.findBySha256(sha256);
     const movedRecord = sha256Matches?.find((f: any) => f.storageKey !== relativePath);
     if (movedRecord) {
+      // The record's old path may still be waiting out its deferred delete;
+      // it has moved, so the delete must not land.
+      for (const [oldKey, pending] of pendingUnlinks.entries()) {
+        if (pending.record.id === movedRecord.id) {
+          clearTimeout(pending.timer);
+          pendingUnlinks.delete(oldKey);
+        }
+      }
       // Update existing record with new storageKey (file was moved on disk)
       await repos.files.update(movedRecord.id, {
         storageKey: relativePath,
@@ -245,7 +264,7 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
 /**
  * Handle file removal — defer deletion to allow move detection.
  *
- * When a file is moved on disk, chokidar fires `unlink` then `add`.
+ * When a file is moved on disk, the old path disappears and the new one appears.
  * Instead of deleting immediately, we stash the record in pendingUnlinks
  * for a short window. If a matching `add` arrives (same SHA-256),
  * we treat it as a move and preserve all metadata.
@@ -311,8 +330,8 @@ async function handleDirAdd(relativePath: string): Promise<void> {
     const folderName = parts[parts.length - 1];
     const folderPath = '/' + parts.slice(1).join('/') + '/';
 
-    // Find-or-create through the repository chokepoint. chokidar can fire
-    // `addDir` for the same directory more than once, and a job may be creating
+    // Find-or-create through the repository chokepoint. The watcher can see
+    // the same directory arrive more than once, and a job may be creating
     // the very same folder row concurrently (bug 114).
     await repos.folders.ensureByPath({
       userId,
@@ -332,6 +351,100 @@ async function handleDirAdd(relativePath: string): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/**
+ * A folder left the files directory (deleted, or moved out). The native watch
+ * reports the folder alone, so every record beneath it goes through the
+ * deferred unlink — which still lets a move within the directory match up.
+ */
+async function handleDirUnlink(relativePath: string): Promise<void> {
+  try {
+    const repos = await getRepos();
+    const userId = await getSingleUserId();
+    const prefix = relativePath + '/';
+    const doomed = (await repos.files.findByUserId(userId))
+      .map((f) => f.storageKey)
+      .filter((key): key is string => typeof key === 'string' && key.startsWith(prefix));
+    if (doomed.length === 0) return;
+
+    logger.debug('Folder left the files directory', {
+      relativePath,
+      files: doomed.length,
+    });
+    for (const storageKey of doomed) {
+      await handleFileUnlink(storageKey);
+    }
+  } catch (error) {
+    logger.warn('Error handling directory removal', {
+      relativePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * A folder arrived by rename (created, or moved in). The native watch reports
+ * the folder alone, so record it and everything beneath it.
+ */
+async function handleDirArrival(filesDir: string, relativePath: string): Promise<void> {
+  await handleDirAdd(relativePath);
+  const entries = await scanDirectory(filesDir, relativePath);
+  logger.debug('Folder arrived in the files directory', {
+    relativePath,
+    entries: entries.length,
+  });
+  for (const entry of entries) {
+    if (entry.isDirectory) {
+      await handleDirAdd(entry.relativePath);
+    } else {
+      await handleFileAdd(filesDir, entry.relativePath);
+    }
+  }
+}
+
+/**
+ * Resolve one debounced native event against the disk.
+ *
+ *  - a file that exists: refresh its record, or create one (handleFileChange
+ *    falls through to an add when there is no record)
+ *  - a path that is gone: defer-delete its record; after a rename, also every
+ *    record beneath it, in case it was a folder
+ *  - a folder that appeared by rename: record it and its contents
+ *
+ * Symlinks are skipped, as the startup scan skips them.
+ */
+async function handleNativeEvent(
+  filesDir: string,
+  relativePath: string,
+  sawRename: boolean
+): Promise<void> {
+  let stats;
+  try {
+    stats = await lstat(join(filesDir, relativePath));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+    await handleFileUnlink(relativePath);
+    if (sawRename) await handleDirUnlink(relativePath);
+    return;
+  }
+
+  if (stats.isSymbolicLink()) return;
+
+  if (stats.isFile()) {
+    await handleFileChange(filesDir, relativePath);
+    return;
+  }
+
+  if (stats.isDirectory() && sawRename) {
+    await handleDirArrival(filesDir, relativePath);
+  }
+}
+
+/** A native event's filename as a storage key: relative, '/'-separated. */
+function toStorageKey(filename: string): string {
+  return normalize(filename).split(sep).join('/');
 }
 
 /**
@@ -381,47 +494,42 @@ export function startWatcher(): void {
 
   logger.info('Starting filesystem watcher', { filesDir });
 
-  watcher = chokidar.watch(filesDir, {
-    persistent: true,
-    ignoreInitial: true, // Don't fire events for existing files on startup
-    depth: 10,
-    awaitWriteFinish: {
-      stabilityThreshold: 500,
-      pollInterval: 100,
-    },
-    ignored: [
-      // Ignore _thumbnails directory
-      (filePath: string) => {
-        const rel = relative(filesDir, filePath);
-        return rel.startsWith('_thumbnails');
-      },
-    ],
-  });
-
-  watcher
-    .on('add', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileAdd(filesDir, rel));
-    })
-    .on('change', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileChange(filesDir, rel));
-    })
-    .on('unlink', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileUnlink(rel));
-    })
-    .on('addDir', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      if (rel && rel !== '.') {
-        debouncedHandler(rel, () => handleDirAdd(rel));
+  try {
+    watcher = fsWatch(
+      filesDir,
+      { recursive: true, persistent: true },
+      (eventType, filename) => {
+        if (filename == null) {
+          // Linux can drop the name when its event queue overflows; the next
+          // startup reconciliation catches whatever was missed.
+          logger.debug('Filesystem watcher event arrived without a path', { eventType });
+          return;
+        }
+        const rel = toStorageKey(filename.toString());
+        if (!rel || rel === '.' || rel.startsWith('..')) return;
+        if (shouldIgnore(rel)) return;
+        if (eventType === 'rename') pendingRenames.add(rel);
+        debouncedHandler(rel, () => {
+          const sawRename = pendingRenames.delete(rel);
+          return handleNativeEvent(filesDir, rel, sawRename);
+        });
       }
-    })
-    .on('error', (error: unknown) => {
-      logger.error('Filesystem watcher error', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    );
+  } catch (error) {
+    // A missing directory, or a filesystem without recursive change
+    // notifications. Startup reconciliation and Sync Now still work.
+    logger.warn('Filesystem watcher could not start', {
+      filesDir,
+      error: error instanceof Error ? error.message : String(error),
     });
+    return;
+  }
+
+  watcher.on('error', (error: unknown) => {
+    logger.error('Filesystem watcher error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   logger.info('Filesystem watcher started successfully', { filesDir });
 }
@@ -441,6 +549,7 @@ export async function stopWatcher(): Promise<void> {
     clearTimeout(timer);
   }
   debounceTimers.clear();
+  pendingRenames.clear();
 
   // Flush all pending unlinks — execute deletions immediately
   if (pendingUnlinks.size > 0) {
@@ -461,7 +570,7 @@ export async function stopWatcher(): Promise<void> {
     pendingUnlinks.clear();
   }
 
-  await watcher.close();
+  watcher.close();
   watcher = null;
 
   logger.info('Filesystem watcher stopped');

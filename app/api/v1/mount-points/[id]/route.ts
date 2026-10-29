@@ -294,7 +294,7 @@ async function handleConvert(
 
     await repos.docMountPoints.updateConversionStatus(id, 'converting');
 
-    // Stop the watcher so chokidar doesn't react to files disappearing as the
+    // Stop the watcher so it doesn't react to files disappearing as the
     // mount-type changes; database-backed stores have no filesystem to watch.
     await detachMountPoint(id).catch((err) => {
       logger.warn('[Mount Points v1] Failed to detach watcher before convert', {

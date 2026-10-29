@@ -25,13 +25,13 @@
  * that occur after it is running.
  *
  * Escape hatch for network filesystems (SMB, NFS) where native events may be
- * missed: `QUILLTAP_WATCHER_POLLING=1` polls through chokidar's
- * `fs.watchFile`, which holds no descriptors but costs a stat timer per file.
+ * missed: `QUILLTAP_WATCHER_POLLING=1` walks the store every
+ * {@link POLL_INTERVAL_MS} and compares each indexable file's mtime and size
+ * with the previous walk. It holds no descriptors between walks.
  *
  * @module mount-index/watcher
  */
 
-import chokidar from 'chokidar';
 import path from 'path';
 import { watch as fsWatch } from 'fs';
 import fs from 'fs/promises';
@@ -85,6 +85,9 @@ const FILE_DEBOUNCE_MS = 750;
 
 /** Per-mount-point debounce — batches embedding enqueue after a burst of edits */
 const EMBEDDING_DEBOUNCE_MS = 2000;
+
+/** Pause between walks when polling */
+const POLL_INTERVAL_MS = 2000;
 
 // ============================================================================
 // DATABASE-BACKED STORE EVENT BRIDGE
@@ -448,53 +451,80 @@ function startNativeWatcher(watcher: MountWatcher): WatchHandle {
   return instance;
 }
 
+/** What one polling walk saw of a file. */
+interface PolledFile {
+  mtimeMs: number;
+  size: number;
+}
+
 /**
- * Chokidar in polling mode, for filesystems where native events are
- * unreliable. Files the scanner would never index are ignored outright, so
- * they cost no stat timer.
+ * Walk the store and stat every file the scanner would index. Files it would
+ * never index are left out, so they cost nothing per walk.
+ */
+async function snapshotStore(mountPoint: DocMountPoint): Promise<Map<string, PolledFile>> {
+  const files = await walkDirectory(
+    mountPoint.basePath,
+    mountPoint.includePatterns,
+    mountPoint.excludePatterns,
+  );
+  const snapshot = new Map<string, PolledFile>();
+  for (const file of files) {
+    if (!detectFileType(file.relativePath)) continue;
+    try {
+      const stat = await fs.stat(file.absolutePath);
+      snapshot.set(file.relativePath, { mtimeMs: stat.mtimeMs, size: stat.size });
+    } catch {
+      // Gone between the walk and the stat; the next walk reports it.
+    }
+  }
+  return snapshot;
+}
+
+/**
+ * Polling, for filesystems where native events are unreliable. The first walk
+ * is the baseline (the startup scan covers it); every later walk diffs against
+ * the one before and debounces each difference like a native event.
  */
 function startPollingWatcher(watcher: MountWatcher): WatchHandle {
   const { mountPoint } = watcher;
-  const instance = chokidar.watch(mountPoint.basePath, {
-    persistent: true,
-    ignoreInitial: true, // Baseline is covered by the startup scan
-    followSymlinks: false,
-    depth: 20,
-    awaitWriteFinish: {
-      stabilityThreshold: 600,
-      pollInterval: 100,
-    },
-    usePolling: true,
-    interval: 2000,
-    ignored: (filePath: string, stats) => {
-      const rel = path.relative(mountPoint.basePath, filePath);
-      if (!rel || rel.startsWith('..')) return false; // basePath itself
-      if (isExcluded(rel, mountPoint)) return true;
-      return Boolean(stats?.isFile() && !detectFileType(rel));
-    },
-  });
+  let closed = false;
+  let timer: NodeJS.Timeout | null = null;
+  let previous: Map<string, PolledFile> | null = null;
 
-  instance
-    .on('add', (filePath: string) => {
-      const rel = path.relative(mountPoint.basePath, filePath);
-      debounceFileEvent(watcher, rel, () => handleAddOrChange(watcher, filePath, rel));
-    })
-    .on('change', (filePath: string) => {
-      const rel = path.relative(mountPoint.basePath, filePath);
-      debounceFileEvent(watcher, rel, () => handleAddOrChange(watcher, filePath, rel));
-    })
-    .on('unlink', (filePath: string) => {
-      const rel = path.relative(mountPoint.basePath, filePath);
-      debounceFileEvent(watcher, rel, () => handleUnlink(watcher, rel));
-    })
-    .on('error', (err: unknown) => {
-      logger.error('Mount watcher error', {
+  const tick = async (): Promise<void> => {
+    try {
+      const current = await snapshotStore(mountPoint);
+      if (closed) return;
+      if (previous) {
+        for (const [rel, seen] of current) {
+          const before = previous.get(rel);
+          if (before && before.mtimeMs === seen.mtimeMs && before.size === seen.size) continue;
+          const absolutePath = path.join(mountPoint.basePath, rel);
+          debounceFileEvent(watcher, rel, () => handleAddOrChange(watcher, absolutePath, rel));
+        }
+        for (const rel of previous.keys()) {
+          if (current.has(rel)) continue;
+          debounceFileEvent(watcher, rel, () => handleUnlink(watcher, rel));
+        }
+      }
+      previous = current;
+    } catch (err) {
+      logger.error('Mount watcher polling walk failed', {
         mountPointId: mountPoint.id,
         basePath: mountPoint.basePath,
         error: err instanceof Error ? err.message : String(err),
       });
-    });
-  return instance;
+    }
+    if (!closed) timer = setTimeout(tick, POLL_INTERVAL_MS);
+  };
+  void tick();
+
+  return {
+    close: () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
 }
 
 async function stopWatcherFor(mountPointId: string): Promise<void> {

@@ -41,8 +41,8 @@ jest.mock('@/lib/api/middleware/actions', () => ({
     },
 }));
 
-// The route module reaches the filesystem watcher (and chokidar, an ESM
-// package) on the way in; none of it is on the sync path.
+// The route module reaches the filesystem watcher on the way in; none of it
+// is on the sync path.
 jest.mock('@/lib/mount-index/watcher', () => ({
   detachMountPoint: jest.fn(),
   refreshMountPoint: jest.fn().mockResolvedValue(undefined),

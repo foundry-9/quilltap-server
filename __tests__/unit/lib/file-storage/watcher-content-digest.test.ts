@@ -27,10 +27,16 @@ jest.mock('@/lib/files/folder-utils', () => ({
 jest.mock('@/lib/file-storage/scanner', () => ({
   computeSha256: jest.fn(),
   detectMimeType: jest.fn().mockReturnValue('application/octet-stream'),
+  scanDirectory: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('fs/promises', () => ({
   stat: jest.fn(),
+  lstat: jest.fn().mockResolvedValue({
+    isSymbolicLink: () => false,
+    isFile: () => true,
+    isDirectory: () => false,
+  }),
 }))
 
 jest.mock('@/lib/database/repositories', () => ({
@@ -41,22 +47,15 @@ jest.mock('@/lib/auth/single-user', () => ({
   getOrCreateSingleUser: jest.fn().mockResolvedValue({ id: 'user-1' }),
 }))
 
-// chokidar is captured so the registered 'change' handler can be invoked
-// directly — that is the only door into the module's private handlers.
-const chokidarHandlers: Record<string, (filePath: string) => void> = {}
-jest.mock('chokidar', () => ({
-  __esModule: true,
-  default: {
-    watch: () => {
-      const chain: Record<string, unknown> = {}
-      chain.on = (event: string, handler: (filePath: string) => void) => {
-        chokidarHandlers[event] = handler
-        return chain
-      }
-      chain.close = async () => {}
-      return chain
-    },
-  },
+// fs.watch is captured so its listener can be invoked directly — that is
+// the only door into the module's private handlers.
+let watchListener: (eventType: 'rename' | 'change', filename: string) => void
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  watch: jest.fn((_dir: string, _opts: unknown, listener: typeof watchListener) => {
+    watchListener = listener
+    return { on: jest.fn(), close: jest.fn() }
+  }),
 }))
 
 import { startWatcher, stopWatcher } from '@/lib/file-storage/watcher'
@@ -72,7 +71,7 @@ let filesRepo: { findByStorageKey: jest.Mock; update: jest.Mock }
 
 /** Fire a change event and let the module's 500 ms debounce elapse. */
 async function fireChange(relativePath: string): Promise<void> {
-  chokidarHandlers.change(`/mock/files/${relativePath}`)
+  watchListener('change', relativePath)
   await jest.advanceTimersByTimeAsync(600)
   // The handler awaits a dynamic import, the repos, stat and the digest —
   // drain the microtask queue until it has run to completion.
@@ -82,7 +81,6 @@ async function fireChange(relativePath: string): Promise<void> {
 beforeEach(() => {
   jest.useFakeTimers()
   jest.clearAllMocks()
-  for (const key of Object.keys(chokidarHandlers)) delete chokidarHandlers[key]
 
   filesRepo = {
     findByStorageKey: jest.fn(),
