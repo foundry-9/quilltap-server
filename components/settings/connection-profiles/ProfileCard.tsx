@@ -14,6 +14,8 @@ interface ProfileCardProps {
   cheapDefaultProfileId: string | null
   /** Whether this profile's provider requires an API key */
   providerRequiresApiKey?: boolean
+  /** Whether this profile's provider accepts temperature / top_p (default true) */
+  providerTakesSamplingParameters?: boolean
   onEdit: (profile: ConnectionProfile) => void
   onDelete: (profileId: string) => void
   deleteConfirming: string | null
@@ -55,6 +57,7 @@ function ProfileCardContent({
   profile,
   cheapDefaultProfileId,
   providerRequiresApiKey = true,
+  providerTakesSamplingParameters = true,
   onEdit,
   onDelete,
   deleteConfirming,
@@ -155,9 +158,15 @@ function ProfileCardContent({
 
       {/* Model parameters */}
       <div className="qt-text-xs mt-2">
-        Temperature: {profile.parameters?.temperature ?? 0.7} •
-        Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
-        Top P: {profile.parameters?.top_p ?? 1}
+        {providerTakesSamplingParameters ? (
+          <>
+            Temperature: {profile.parameters?.temperature ?? 0.7} •
+            Max Tokens: {profile.parameters?.max_tokens ?? 1000} •
+            Top P: {profile.parameters?.top_p ?? 1}
+          </>
+        ) : (
+          <>Max Tokens: {profile.parameters?.max_tokens ?? 1000}</>
+        )}
       </div>
 
       {/* Tags */}

@@ -12,18 +12,16 @@ import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
 /**
- * SDK 1.x defaults to API version 2026-10-21, which rejects `temperature`,
- * `top_p` and `top_k` on every model (and `document` blocks in assistant
- * turns). Pin the previous version so sampling settings keep working on the
- * models that still honour them; `defaultHeaders` overrides the SDK's own.
+ * Headers every Anthropic client in this plugin sends. The `anthropic-version`
+ * header is left to the SDK (2026-10-21 since SDK 1.0), which rejects
+ * `temperature`, `top_p` and `top_k` on every model and refuses a `document`
+ * block placed directly in an assistant message. The plugin therefore sends
+ * no sampling parameters, and `formatMessagesWithAttachments` moves assistant
+ * documents into a user turn.
  */
-const ANTHROPIC_API_VERSION = '2023-06-01'
-
-/** Headers every Anthropic client in this plugin sends. */
 function clientHeaders(): Record<string, string> {
   return {
     'User-Agent': getQuilltapUserAgent(),
-    'anthropic-version': ANTHROPIC_API_VERSION,
   }
 }
 
@@ -96,13 +94,12 @@ export class AnthropicProvider implements TextProvider {
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
   readonly supportsWebSearch = false
 
-  // Claude Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, and Fable/Mythos
-  // models remove
-  // temperature/top_p/top_k entirely — sending either returns
-  // "`temperature` is deprecated for this model" (400), independent of
-  // whether extended thinking is enabled. Matched by prefix since these are
-  // stable aliases (no dated snapshots).
-  private static readonly SAMPLING_PARAMS_REJECTED_MODELS = [
+  // Models that reject fixed-budget thinking (`thinking.type: "enabled"` with
+  // `budget_tokens` returns 400) and take adaptive thinking instead: Claude
+  // Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, Fable and Mythos.
+  // Matched by prefix since these are stable aliases (no dated snapshots).
+  // Older models (Haiku 4.5, Sonnet 4.5, ...) still need `budget_tokens`.
+  private static readonly BUDGET_THINKING_REJECTED_MODELS = [
     /^claude-sonnet-5(-|$)/,
     /^claude-opus-5(-|$)/,
     /^claude-opus-4-7(-|$)/,
@@ -112,8 +109,8 @@ export class AnthropicProvider implements TextProvider {
     /^claude-mythos-preview(-|$)/,
   ]
 
-  private modelRejectsSamplingParams(model: string): boolean {
-    return AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS.some(re => re.test(model))
+  private modelRejectsBudgetThinking(model: string): boolean {
+    return AnthropicProvider.BUDGET_THINKING_REJECTED_MODELS.some(re => re.test(model))
   }
 
   /**
@@ -346,6 +343,23 @@ export class AnthropicProvider implements TextProvider {
         sent.push(attachment.id)
       }
 
+      // API version 2026-10-21 refuses a `document` block placed directly in
+      // an assistant message. Carry an assistant turn's documents in a user
+      // turn just ahead of it; images stay where they were.
+      if (role === 'assistant') {
+        const documents = content.filter(block => block.type === 'document')
+        if (documents.length > 0) {
+          logger.debug('Moving assistant-message documents into a preceding user turn', {
+            context: 'AnthropicProvider.formatMessagesWithAttachments',
+            documentCount: documents.length,
+          })
+          formattedMessages.push({ role: 'user', content: documents })
+          const kept = content.filter(block => block.type !== 'document')
+          content.length = 0
+          content.push(...kept)
+        }
+      }
+
       // For system_and_long_context, add cache_control to the last content block of the last user message.
       // Also honor caller-supplied cacheControl (running-summary head).
       if ((isLastUserMessage || honorMsgCacheControl) && content.length > 0) {
@@ -354,6 +368,12 @@ export class AnthropicProvider implements TextProvider {
           ...lastBlock,
           cache_control: this.buildCacheControl(cacheOptions?.ttl),
         } as AnthropicContentBlock
+      }
+
+      // An assistant turn that carried only documents has nothing left to say
+      // once they move; an empty assistant message would be refused.
+      if (content.length === 0 && !msg.content) {
+        continue
       }
 
       formattedMessages.push({
@@ -395,10 +415,7 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const thinkingEnabled = thinkingBudget > 0
 
-    // Sonnet 5 / Opus 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
-    // and sampling params (temperature/top_p/top_k) — computed once and used
-    // for both decisions below.
-    const samplingParamsRejected = this.modelRejectsSamplingParams(params.model)
+    const budgetThinkingRejected = this.modelRejectsBudgetThinking(params.model)
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -431,7 +448,7 @@ export class AnthropicProvider implements TextProvider {
     // "omitted" (empty thinking text) — request "summarized" explicitly so
     // Quilltap's reasoningContent capture keeps working.
     if (thinkingEnabled) {
-      requestParams.thinking = samplingParamsRejected
+      requestParams.thinking = budgetThinkingRejected
         ? { type: 'adaptive', display: 'summarized' }
         : { type: 'enabled', budget_tokens: thinkingBudget }
     }
@@ -468,20 +485,6 @@ export class AnthropicProvider implements TextProvider {
           type: 'text',
           text: m.content as string,
         }))
-      }
-    }
-
-    // Anthropic API requires either temperature OR top_p, not both.
-    // Extended thinking forbids temperature and top_p — omit them entirely.
-    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
-    // even with thinking disabled — omit for those models too.
-    if (!thinkingEnabled && !samplingParamsRejected) {
-      if (params.temperature !== undefined) {
-        requestParams.temperature = params.temperature
-      } else if (params.topP !== undefined) {
-        requestParams.top_p = params.topP
-      } else {
-        requestParams.temperature = 1.0
       }
     }
 
@@ -590,10 +593,7 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const streamThinkingEnabled = streamThinkingBudget > 0
 
-    // Sonnet 5 / Opus 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
-    // and sampling params (temperature/top_p/top_k) — computed once and used
-    // for both decisions below.
-    const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model)
+    const streamBudgetThinkingRejected = this.modelRejectsBudgetThinking(params.model)
 
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
@@ -625,7 +625,7 @@ export class AnthropicProvider implements TextProvider {
     // "omitted" (empty thinking text) — request "summarized" explicitly so
     // Quilltap's reasoningContent capture keeps working.
     if (streamThinkingEnabled) {
-      requestParams.thinking = streamSamplingParamsRejected
+      requestParams.thinking = streamBudgetThinkingRejected
         ? { type: 'adaptive', display: 'summarized' }
         : { type: 'enabled', budget_tokens: streamThinkingBudget }
     }
@@ -652,19 +652,6 @@ export class AnthropicProvider implements TextProvider {
           type: 'text',
           text: m.content as string,
         }))
-      }
-    }
-
-    // Extended thinking forbids temperature and top_p — omit them when enabled.
-    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
-    // even with thinking disabled — omit for those models too.
-    if (!streamThinkingEnabled && !streamSamplingParamsRejected) {
-      if (params.temperature !== undefined) {
-        requestParams.temperature = params.temperature
-      } else if (params.topP !== undefined) {
-        requestParams.top_p = params.topP
-      } else {
-        requestParams.temperature = 1.0
       }
     }
 

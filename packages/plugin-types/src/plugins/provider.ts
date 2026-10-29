@@ -149,6 +149,13 @@ export interface ProviderCapabilities {
   webSearch: boolean;
   /** Whether the provider supports tool use / function calling (defaults to false if omitted) */
   toolUse?: boolean;
+  /**
+   * Whether the provider accepts the sampling parameters `temperature` and
+   * `top_p` (defaults to true if omitted). A provider that declares `false`
+   * has the profile editor hide them and the host strip them from stored
+   * connection-profile parameters.
+   */
+  samplingParameters?: boolean;
 }
 
 /**

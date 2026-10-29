@@ -90,6 +90,19 @@ export function validateProviderConfig(
 }
 
 /**
+ * Whether a provider accepts the sampling parameters `temperature` / `top_p`.
+ *
+ * Read from the plugin's `capabilities.samplingParameters`; omitted means
+ * true. A provider the registry does not know (not loaded yet, or a CLI run
+ * without plugins) also answers true, so nothing is stripped on a guess.
+ *
+ * @param provider The provider name
+ */
+export function acceptsSamplingParameters(provider: string): boolean {
+  return getProvider(provider)?.capabilities?.samplingParameters ?? true;
+}
+
+/**
  * Check if a provider requires a base URL
  *
  * @param provider The provider name

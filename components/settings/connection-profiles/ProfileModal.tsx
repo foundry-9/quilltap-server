@@ -749,7 +749,13 @@ export function ProfileModal({
             {!isCourier && (
             <div className="border-t qt-border-default pt-4">
               <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
-              <div className="grid grid-cols-3 gap-4">
+              {!reqs.supportsSamplingParameters && (
+                <p className="qt-text-xs mb-3">
+                  This provider chooses its own temperature and Top P; only the token ceiling is yours to set.
+                </p>
+              )}
+              <div className={reqs.supportsSamplingParameters ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4'}>
+                {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="temperature" className="block qt-text-label mb-2">
                     Temperature ({form.formData.temperature})
@@ -766,6 +772,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
                 </div>
+                )}
 
                 <div>
                   <label htmlFor="maxTokens" className="block qt-text-label mb-2">
@@ -787,6 +794,7 @@ export function ProfileModal({
                   </p>
                 </div>
 
+                {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="topP" className="block qt-text-label mb-2">
                     Top P ({form.formData.topP})
@@ -803,6 +811,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
                 </div>
+                )}
               </div>
             </div>
             )}

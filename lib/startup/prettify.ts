@@ -306,6 +306,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'migrate-plugin-templates-to-native-v1': 'Moving plugin templates into native templates',
   'rp-delimiter-kinds-v1': 'Sorting your formatting marks into their proper kinds',
   'add-roleplay-template-unmarked-fields-v1': 'Setting aside a shelf for the unadorned novel',
+  'strip-anthropic-sampling-parameters-v1': 'Removing the thermostat the Anthropic household no longer heeds',
   'add-console-connection-profile-field-v1': "Wiring the Brahma Console's dial to its chosen engine…",
   'add-connection-profile-unique-name-index-v1': 'Ensuring each connection profile answers to but a single name…',
   'add-doc-mount-file-policy-flags-v1': 'Noting which manuscripts wish to remain unread, unwritten, or unindexed…',

@@ -80,11 +80,11 @@ Images and PDFs are automatically encoded to base64 and sent with your message f
 ### Chat Completion Parameters
 
 - **model**: The model to use (e.g., 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251015')
-- **temperature**: Randomness of responses (0-1, default: 1.0)
 - **maxTokens**: Maximum response length
-- **topP**: Diversity parameter (0-1)
 - **tools**: Function definitions for tool use
 - **stop**: Stop sequences
+
+`temperature`, `topP` and `topK` are not sent. The plugin uses the SDK's default API version (2026-10-21), which rejects them on every model, and declares `samplingParameters: false` so Quilltap hides them in the profile editor.
 
 ## Logging
 

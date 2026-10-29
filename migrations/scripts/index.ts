@@ -458,6 +458,7 @@ import { addStorytellerModeMigration } from './add-storyteller-mode-v1';
 import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-storyteller-round-id-column';
 // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
 import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-template-unmarked-fields-v1';
+import { stripAnthropicSamplingParametersMigration } from './strip-anthropic-sampling-parameters-v1';
 
 /**
  * All available migrations.
@@ -943,6 +944,8 @@ export const migrations: Migration[] = [
   addLLMLogsStorytellerRoundIdColumnMigration,
   // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
   addRoleplayTemplateUnmarkedFieldsMigration,
+  // Anthropic API 2026-10-21: drop temperature/top_p/top_k from Anthropic profiles
+  stripAnthropicSamplingParametersMigration,
 ];
 
 export {
@@ -1404,5 +1407,6 @@ export {
   // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
   addLLMLogsStorytellerRoundIdColumnMigration,
   addRoleplayTemplateUnmarkedFieldsMigration,
+  stripAnthropicSamplingParametersMigration,
 };
 

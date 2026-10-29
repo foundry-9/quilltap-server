@@ -75,7 +75,7 @@ exports[`Provider options schemas Anthropic exposes an options schema 1`] = `
           "type": "number",
         },
       ],
-      "helpText": "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
+      "helpText": "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
       "title": "Extended Thinking",
     },
   ],

@@ -1,16 +1,17 @@
 /**
- * Anthropic new-model-generation request shaping — regression guard for the
- * Sonnet 5 / Opus 4.7+ / Fable / Mythos parameter rules.
+ * Anthropic request shaping — regression guard for API version 2026-10-21
+ * and the Sonnet 5 / Opus 4.7+ / Fable / Mythos thinking rules.
  *
- * These models (commits 733fa12c, 36d04ab0) removed temperature/top_p/top_k
- * and fixed-budget thinking:
- *   - sampling params (temperature/top_p) must be OMITTED — sending them 400s
- *     with "`temperature` is deprecated for this model", even with thinking off.
- *   - extended thinking must be requested as `{type: 'adaptive', display:
- *     'summarized'}` rather than `{type: 'enabled', budget_tokens}` — the
- *     fixed-budget form 400s, and adaptive defaults display to "omitted" (empty
- *     reasoning text) unless "summarized" is asked for explicitly.
- * Older models (Sonnet 4.6-, Opus 4.6-, Haiku 4.5) keep the classic shape.
+ *   - The plugin uses the SDK's default API version, 2026-10-21, which 400s on
+ *     `temperature` / `top_p` / `top_k` for every model, so none are sent.
+ *   - The same version 400s on a `document` block placed directly in an
+ *     assistant message, so those move into a user turn just ahead of it.
+ *   - Sonnet 5 / Opus 4.7+ / Fable / Mythos removed fixed-budget thinking:
+ *     extended thinking is requested as `{type: 'adaptive', display:
+ *     'summarized'}` — the fixed-budget form 400s, and adaptive defaults
+ *     display to "omitted" (empty reasoning text) unless "summarized" is
+ *     asked for explicitly. Older models (Sonnet 4.6-, Opus 4.6-, Haiku 4.5)
+ *     keep `{type: 'enabled', budget_tokens}`.
  *
  * The branching lives in a private helper, so — like the z-ai plugin suite —
  * we assert on the request body handed to the (mocked) Anthropic SDK. The
@@ -57,11 +58,12 @@ async function captureSendBody(opts: {
   temperature?: number;
   topP?: number;
   profileParameters?: Record<string, unknown>;
+  messages?: unknown[];
 }): Promise<Record<string, any>> {
   const provider = new AnthropicProvider();
   const params = {
     model: opts.model,
-    messages: [{ role: 'user' as const, content: 'hi' }],
+    messages: opts.messages ?? [{ role: 'user' as const, content: 'hi' }],
     temperature: opts.temperature,
     topP: opts.topP,
     profileParameters: opts.profileParameters,
@@ -101,7 +103,46 @@ async function captureStreamBody(opts: {
 // equivalent for the assertions here).
 const THINKING_ON = { extendedThinking: true };
 
-describe('AnthropicProvider — new model generation (sampling params rejected)', () => {
+describe('AnthropicProvider — sampling params are never sent', () => {
+  const MODELS = [
+    'claude-sonnet-5',
+    'claude-opus-4-8',
+    'claude-fable-5',
+    'claude-sonnet-4-6',
+    'claude-opus-4-6',
+    'claude-haiku-4-5',
+    'claude-3-5-sonnet-latest',
+  ];
+
+  it.each(MODELS)('omits temperature/top_p for %s', async model => {
+    const body = await captureSendBody({ model, temperature: 0.7, topP: 0.9 });
+    expect(body.temperature).toBeUndefined();
+    expect(body.top_p).toBeUndefined();
+    expect(body.top_k).toBeUndefined();
+  });
+
+  it('does not default temperature when none is provided', async () => {
+    const body = await captureSendBody({ model: 'claude-opus-4-6' });
+    expect(body.temperature).toBeUndefined();
+  });
+
+  it('streamMessage also omits sampling params', async () => {
+    const body = await captureStreamBody({ model: 'claude-sonnet-4-6', temperature: 0.5 });
+    expect(body.temperature).toBeUndefined();
+    expect(body.top_p).toBeUndefined();
+  });
+
+  it('leaves anthropic-version to the SDK default', () => {
+    new AnthropicProvider().sendMessage(
+      { model: 'claude-opus-4-6', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key',
+    ).catch(() => undefined);
+    const ctorArgs = (Anthropic as unknown as jest.Mock).mock.calls.at(-1)?.[0] ?? {};
+    expect(ctorArgs.defaultHeaders?.['anthropic-version']).toBeUndefined();
+  });
+});
+
+describe('AnthropicProvider — thinking shape by model generation', () => {
   const NEW_GEN = [
     'claude-sonnet-5',
     'claude-sonnet-5-20260101',
@@ -111,47 +152,16 @@ describe('AnthropicProvider — new model generation (sampling params rejected)'
     'claude-mythos-5',
     'claude-mythos-preview',
   ];
-
-  it.each(NEW_GEN)('omits temperature/top_p for %s even with thinking off', async model => {
-    const body = await captureSendBody({ model, temperature: 0.7 });
-    expect(body.temperature).toBeUndefined();
-    expect(body.top_p).toBeUndefined();
-  });
-
-  it('omits top_p for a new-gen model even when topP is supplied', async () => {
-    const body = await captureSendBody({ model: 'claude-sonnet-5', topP: 0.9 });
-    expect(body.temperature).toBeUndefined();
-    expect(body.top_p).toBeUndefined();
-  });
+  const OLD_GEN = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-latest'];
 
   it.each(NEW_GEN)('uses adaptive+summarized thinking for %s', async model => {
     const body = await captureSendBody({ model, profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
-  it('streamMessage also omits sampling params and uses adaptive thinking', async () => {
-    const body = await captureStreamBody({
-      model: 'claude-opus-4-8',
-      temperature: 0.5,
-      profileParameters: THINKING_ON,
-    });
-    expect(body.temperature).toBeUndefined();
-    expect(body.top_p).toBeUndefined();
+  it('streamMessage uses adaptive thinking for a new-gen model', async () => {
+    const body = await captureStreamBody({ model: 'claude-opus-4-8', profileParameters: THINKING_ON });
     expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
-  });
-});
-
-describe('AnthropicProvider — older models keep the classic shape', () => {
-  const OLD_GEN = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5', 'claude-3-5-sonnet-latest'];
-
-  it.each(OLD_GEN)('sends temperature for %s', async model => {
-    const body = await captureSendBody({ model, temperature: 0.7 });
-    expect(body.temperature).toBe(0.7);
-  });
-
-  it('defaults temperature to 1.0 for an older model when none is provided', async () => {
-    const body = await captureSendBody({ model: 'claude-opus-4-6' });
-    expect(body.temperature).toBe(1.0);
   });
 
   it.each(OLD_GEN)('uses fixed-budget thinking for %s', async model => {
@@ -160,8 +170,6 @@ describe('AnthropicProvider — older models keep the classic shape', () => {
       profileParameters: { thinkingBudget: 2048 },
     });
     expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
-    // fixed-budget thinking also forbids sampling params
-    expect(body.temperature).toBeUndefined();
   });
 
   it('streamMessage keeps fixed-budget thinking for older models', async () => {
@@ -171,16 +179,47 @@ describe('AnthropicProvider — older models keep the classic shape', () => {
     });
     expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
   });
-});
 
-describe('AnthropicProvider — prefix boundary is exact', () => {
   it('does not treat claude-opus-4-6 as new-gen', async () => {
-    const body = await captureSendBody({ model: 'claude-opus-4-6', temperature: 0.3 });
-    expect(body.temperature).toBe(0.3);
+    const body = await captureSendBody({ model: 'claude-opus-4-6', profileParameters: THINKING_ON });
+    expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
   });
 
   it('treats a dated claude-opus-4-8 snapshot as new-gen', async () => {
-    const body = await captureSendBody({ model: 'claude-opus-4-8-20260215', temperature: 0.3 });
-    expect(body.temperature).toBeUndefined();
+    const body = await captureSendBody({ model: 'claude-opus-4-8-20260215', profileParameters: THINKING_ON });
+    expect(body.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+  });
+});
+
+describe('AnthropicProvider — documents never sit in an assistant turn', () => {
+  const pdf = { id: 'a1', mimeType: 'application/pdf', data: 'JVBERi0=' };
+  const png = { id: 'a2', mimeType: 'image/png', data: 'iVBORw0=' };
+
+  it('moves an assistant document into a user turn just ahead of it', async () => {
+    const body = await captureSendBody({
+      model: 'claude-opus-4-6',
+      messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'here it is', attachments: [pdf, png] },
+        { role: 'user', content: 'thanks' },
+      ],
+    });
+    const msgs = body.messages as Array<{ role: string; content: any }>;
+    expect(msgs.map(m => m.role)).toEqual(['user', 'user', 'assistant', 'user']);
+    expect(msgs[1].content.map((b: any) => b.type)).toEqual(['document']);
+    expect(msgs[2].content.map((b: any) => b.type)).toEqual(['text', 'image']);
+  });
+
+  it('drops an assistant turn left empty once its documents move', async () => {
+    const body = await captureSendBody({
+      model: 'claude-opus-4-6',
+      messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: '', attachments: [pdf] },
+        { role: 'user', content: 'thanks' },
+      ],
+    });
+    const msgs = body.messages as Array<{ role: string; content: any }>;
+    expect(msgs.some(m => m.role === 'assistant')).toBe(false);
   });
 });

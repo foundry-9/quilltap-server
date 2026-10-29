@@ -4,6 +4,17 @@
 
 ### 4.12-dev
 
+#### Anthropic: move to API version 2026-10-21; drop temperature and top_p
+
+- The Anthropic plugin (1.0.64) no longer pins `anthropic-version: 2023-06-01`. It now uses the SDK's default, `2026-10-21`.
+- That version returns 400 for `temperature`, `top_p` or `top_k` on every model, so the plugin no longer sends them on any request. It used to send them to pre-4.7 models and default `temperature` to 1.0. Those models now sample at the API defaults.
+- That version also returns 400 for a `document` block placed directly in an assistant message. `formatMessagesWithAttachments` now moves an assistant turn's documents (PDF, text) into a user turn just before it. Images stay in place. An assistant turn left with no content after the move is dropped.
+- Thinking is unchanged: adaptive on Sonnet 5 / Opus 4.7+ / Fable / Mythos, fixed `budget_tokens` on older models. The model-prefix list is renamed `BUDGET_THINKING_REJECTED_MODELS`, since sampling no longer depends on it.
+- New provider capability `samplingParameters?: boolean` in `@quilltap/plugin-types` 2.10.0 (omitted means `true`). The Anthropic plugin declares `false`.
+- Connection-profile editor: for a provider declaring `samplingParameters: false`, the Temperature and Top P sliders are hidden and not sent on save or test-message. The profile card shows only Max Tokens for those profiles.
+- `ConnectionProfilesRepository.create` / `update` strip `temperature`, `top_p`, `topP`, `top_k` and `topK` from `parameters` when the profile's provider declares `samplingParameters: false`. This covers the editor, auto-configure, import and restore. It also re-checks the stored blob when only `provider` changes. Helpers: `withoutSamplingParameters` (`lib/llm/sampling-params.ts`) and `acceptsSamplingParameters` (`lib/plugins/provider-validation.ts`). An unknown provider is treated as accepting them, so nothing is stripped before the registry loads.
+- Migration `strip-anthropic-sampling-parameters-v1` removes the same keys from existing `ANTHROPIC` profiles. `max_tokens` and provider options are kept. The provider list is a frozen copy, like `retire-prefill-on-thinking-profiles-v1`.
+
 #### Deps: Packages and plugins brought up to the root's dependency levels
 
 - `npm update -S` in the root, every `packages/*` and every `plugins/dist/*`. Main movements: `@quilltap/plugin-types` ^2.9.1 and `@quilltap/plugin-utils` ^2.7.2 everywhere (root included), `openai` ^7.45.1, `@openrouter/sdk` ^1.5.21, `@modelcontextprotocol/sdk` ^1.32.2, `sharp` ^0.35.5 in `packages/quilltap`, Storybook ^10.6.5 and `react` ^19.3.1 in `theme-storybook`, `@types/node` ^24.19.2 in `create-quilltap-theme` and `plugin-types`.

@@ -55,6 +55,8 @@ export interface ProviderConfig {
     embeddings: boolean
     webSearch: boolean
     toolUse?: boolean
+    /** Whether the provider accepts temperature / top_p (omitted means true) */
+    samplingParameters?: boolean
   }
   /**
    * Provider-specific connection-profile options schema emitted by the

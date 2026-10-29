@@ -61,3 +61,32 @@ export function resolveSamplingParams(
     topP: readNumber(params, 'top_p', 'topP'),
   }
 }
+
+/**
+ * Every key under which a profile's `parameters` blob may carry a sampling
+ * knob that some providers refuse outright: the editor's snake_case keys plus
+ * the camelCase spellings `readNumber` tolerates, and `top_k`, which no editor
+ * writes but an imported or hand-edited profile might.
+ */
+export const SAMPLING_PARAMETER_KEYS = ['temperature', 'top_p', 'topP', 'top_k', 'topK'] as const
+
+/**
+ * A copy of a profile's `parameters` blob with every sampling key removed, for
+ * a provider that declares `capabilities.samplingParameters: false`.
+ * `max_tokens` and provider options are kept.
+ *
+ * @returns The cleaned blob and the keys that were actually present
+ */
+export function withoutSamplingParameters(
+  params: Record<string, unknown>
+): { parameters: Record<string, unknown>; removed: string[] } {
+  const parameters = { ...params }
+  const removed: string[] = []
+  for (const key of SAMPLING_PARAMETER_KEYS) {
+    if (key in parameters) {
+      delete parameters[key]
+      removed.push(key)
+    }
+  }
+  return { parameters, removed }
+}

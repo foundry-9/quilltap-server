@@ -81,6 +81,8 @@ Before creating a connection profile, you need an API key:
    - **Top P** — Nucleus sampling (alternative to temperature)
    - **Provider-specific options** — May vary by provider
 
+   Some providers no longer entertain *Temperature* or *Top P* at all. For those (Anthropic, at present) the two sliders are withdrawn from the form and only *Max Tokens* remains.
+
    > **The API key keeps to its own provider, as of 4.9.** The key you select is chosen from the keys belonging to the provider currently named in the dropdown, and it stays with that provider. Move the dropdown elsewhere and the selection is set aside: on Ollama, which asks for no key at all, the field withdraws entirely; on another hosted provider it stands empty, since none of that provider's keys have yet been chosen. In either case nothing is sent and nothing is saved. This was previously a small tragedy of manners. The key stayed on in secret — invisible on Ollama, shown as blank on OpenAI — and was despatched regardless, so *Connect* went out bearing an Anthropic key while the dialog maintained that none was selected, and *Save* was refused with the baffling protest that **"API key provider does not match profile provider"**, naming a field nowhere on the page and offering no means to correct it. Any profile already burdened with such a key is relieved of it the next time you save. And your original selection is not thrown away: return the dropdown to the provider it belongs to and you will find it waiting, exactly as you left it.
 
    > **On blank boxes, as of 4.9.** Every numeric provider option is entitled to be left empty, and an empty one means *the model's own default stands* — but until now the box would not permit it. Delete the contents of, say, an Ollama profile's *Request Timeout* and the default sprang straight back with the cursor tucked in behind it, so the `5` you typed next arrived as `3005` and was saved with a perfectly straight face. Cleared fields now stay cleared. The default is shown in grey behind the empty box, as a suggestion rather than an occupant, and a field left that way is genuinely absent — which means the day a provider revises its default, your profile receives the revision.
@@ -222,7 +224,7 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 
 - Multiple Claude versions available (3, 3.5, etc.)
 - Excellent long-context support
-- Temperature: 0-1
+- **No Temperature or Top P.** Anthropic's current API refuses both on every Claude model, so the editor hides them and Quilltap never sends them. Any figures an older Anthropic profile was carrying were quietly removed on upgrade, and will not return through a save, an import, or a restore. The model samples at its own defaults; *Max Tokens* is still yours to set.
 - Strong at reasoning and complex tasks
 - **Enable Prompt Caching** — invites Anthropic to mark the steady portions of your prompt as a cache breakpoint. On the next call within the cache's lifetime, those portions are charged at a steep discount instead of full freight. Worth the indulgence on long-running chats where the system prompt and tools repeat verbatim turn after turn.
 - **Cache Strategy** *(visible only when Prompt Caching is enabled)* — *System message only* caches just the persona/tools header; *System + tools + conversation* (recommended) extends the breakpoint deeper into the conversation so the savings compound across turns.

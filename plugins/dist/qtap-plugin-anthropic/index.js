@@ -51779,11 +51779,9 @@ var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-anthropic");
-var ANTHROPIC_API_VERSION = "2023-06-01";
 function clientHeaders() {
   return {
-    "User-Agent": getQuilltapUserAgent(),
-    "anthropic-version": ANTHROPIC_API_VERSION
+    "User-Agent": getQuilltapUserAgent()
   };
 }
 var ANTHROPIC_SUPPORTED_MIME_TYPES = [
@@ -51809,13 +51807,12 @@ var AnthropicProvider = class _AnthropicProvider {
     this.supportsWebSearch = false;
   }
   static {
-    // Claude Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, and Fable/Mythos
-    // models remove
-    // temperature/top_p/top_k entirely — sending either returns
-    // "`temperature` is deprecated for this model" (400), independent of
-    // whether extended thinking is enabled. Matched by prefix since these are
-    // stable aliases (no dated snapshots).
-    this.SAMPLING_PARAMS_REJECTED_MODELS = [
+    // Models that reject fixed-budget thinking (`thinking.type: "enabled"` with
+    // `budget_tokens` returns 400) and take adaptive thinking instead: Claude
+    // Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, Fable and Mythos.
+    // Matched by prefix since these are stable aliases (no dated snapshots).
+    // Older models (Haiku 4.5, Sonnet 4.5, ...) still need `budget_tokens`.
+    this.BUDGET_THINKING_REJECTED_MODELS = [
       /^claude-sonnet-5(-|$)/,
       /^claude-opus-5(-|$)/,
       /^claude-opus-4-7(-|$)/,
@@ -51825,8 +51822,8 @@ var AnthropicProvider = class _AnthropicProvider {
       /^claude-mythos-preview(-|$)/
     ];
   }
-  modelRejectsSamplingParams(model) {
-    return _AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS.some((re2) => re2.test(model));
+  modelRejectsBudgetThinking(model) {
+    return _AnthropicProvider.BUDGET_THINKING_REJECTED_MODELS.some((re2) => re2.test(model));
   }
   /**
    * Helper to build cache_control object with optional TTL
@@ -52005,12 +52002,28 @@ var AnthropicProvider = class _AnthropicProvider {
         }
         sent.push(attachment.id);
       }
+      if (role === "assistant") {
+        const documents = content.filter((block) => block.type === "document");
+        if (documents.length > 0) {
+          logger.debug("Moving assistant-message documents into a preceding user turn", {
+            context: "AnthropicProvider.formatMessagesWithAttachments",
+            documentCount: documents.length
+          });
+          formattedMessages.push({ role: "user", content: documents });
+          const kept = content.filter((block) => block.type !== "document");
+          content.length = 0;
+          content.push(...kept);
+        }
+      }
       if ((isLastUserMessage || honorMsgCacheControl) && content.length > 0) {
         const lastBlock = content[content.length - 1];
         content[content.length - 1] = {
           ...lastBlock,
           cache_control: this.buildCacheControl(cacheOptions?.ttl)
         };
+      }
+      if (content.length === 0 && !msg.content) {
+        continue;
       }
       formattedMessages.push({
         role,
@@ -52035,7 +52048,7 @@ var AnthropicProvider = class _AnthropicProvider {
     const rawThinkingBudget = profileParams?.thinkingBudget;
     const thinkingBudget = typeof rawThinkingBudget === "number" && rawThinkingBudget >= 1024 ? rawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const thinkingEnabled = thinkingBudget > 0;
-    const samplingParamsRejected = this.modelRejectsSamplingParams(params.model);
+    const budgetThinkingRejected = this.modelRejectsBudgetThinking(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -52051,7 +52064,7 @@ var AnthropicProvider = class _AnthropicProvider {
       max_tokens: effectiveMaxTokens
     };
     if (thinkingEnabled) {
-      requestParams.thinking = samplingParamsRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: thinkingBudget };
+      requestParams.thinking = budgetThinkingRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: thinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -52072,15 +52085,6 @@ var AnthropicProvider = class _AnthropicProvider {
           type: "text",
           text: m.content
         }));
-      }
-    }
-    if (!thinkingEnabled && !samplingParamsRejected) {
-      if (params.temperature !== void 0) {
-        requestParams.temperature = params.temperature;
-      } else if (params.topP !== void 0) {
-        requestParams.top_p = params.topP;
-      } else {
-        requestParams.temperature = 1;
       }
     }
     const tools = params.tools ? [...params.tools] : [];
@@ -52148,7 +52152,7 @@ var AnthropicProvider = class _AnthropicProvider {
     const streamRawThinkingBudget = profileParams?.thinkingBudget;
     const streamThinkingBudget = typeof streamRawThinkingBudget === "number" && streamRawThinkingBudget >= 1024 ? streamRawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const streamThinkingEnabled = streamThinkingBudget > 0;
-    const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model);
+    const streamBudgetThinkingRejected = this.modelRejectsBudgetThinking(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -52165,7 +52169,7 @@ var AnthropicProvider = class _AnthropicProvider {
       stream: true
     };
     if (streamThinkingEnabled) {
-      requestParams.thinking = streamSamplingParamsRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: streamThinkingBudget };
+      requestParams.thinking = streamBudgetThinkingRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: streamThinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -52186,15 +52190,6 @@ var AnthropicProvider = class _AnthropicProvider {
           type: "text",
           text: m.content
         }));
-      }
-    }
-    if (!streamThinkingEnabled && !streamSamplingParamsRejected) {
-      if (params.temperature !== void 0) {
-        requestParams.temperature = params.temperature;
-      } else if (params.topP !== void 0) {
-        requestParams.top_p = params.topP;
-      } else {
-        requestParams.temperature = 1;
       }
     }
     const tools = params.tools ? [...params.tools] : [];
@@ -52761,7 +52756,9 @@ var capabilities = {
   imageGeneration: false,
   embeddings: false,
   webSearch: false,
-  toolUse: true
+  toolUse: true,
+  // API version 2026-10-21 refuses temperature/top_p/top_k on every model.
+  samplingParameters: false
 };
 var attachmentSupport = {
   supportsAttachments: true,
@@ -52820,7 +52817,7 @@ var optionsSchema = {
     },
     {
       title: "Extended Thinking",
-      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget \u2265 1024 and < max_tokens).",
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, max_tokens is raised above the budget if needed (the API requires budget \u2265 1024 and < max_tokens).",
       fields: [
         {
           key: "extendedThinking",
