@@ -253,6 +253,7 @@ async function handleScan(
       filesNew: scanResult.filesNew,
       filesModified: scanResult.filesModified,
       filesDeleted: scanResult.filesDeleted,
+      filesInCloud: scanResult.filesInCloud,
       chunksCreated: scanResult.chunksCreated,
       errors: scanResult.errors.length,
     });

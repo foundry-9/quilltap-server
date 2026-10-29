@@ -12,13 +12,24 @@
 import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { scanMountPoint, ScanResult } from './scanner';
+import { scanMountPoint, emptyScanResult, ScanResult } from './scanner';
 import { enqueueEmbeddingJobsForMountPoint } from './embedding-scheduler';
 
 const logger = createServiceLogger('MountIndex:ScanRunner');
 
+export interface ScanAllOptions {
+  /**
+   * Which stores to scan. Boot scans the database-backed stores inside the
+   * startup gate and folders on disk after it, since a folder's scan time is
+   * bounded only by the folder (and by iCloud, if it lives there).
+   */
+  only?: 'database' | 'filesystem';
+  /** Publish start/complete/sub-progress to the startup screen. */
+  reportStartupProgress?: boolean;
+}
+
 /**
- * Scan all enabled mount points sequentially.
+ * Scan enabled mount points sequentially.
  *
  * For each enabled mount point:
  *  1. Verify the basePath is still accessible
@@ -27,23 +38,30 @@ const logger = createServiceLogger('MountIndex:ScanRunner');
  *
  * @returns Array of ScanResult, one per mount point attempted
  */
-export async function scanAllMountPoints(): Promise<ScanResult[]> {
+export async function scanAllMountPoints(options: ScanAllOptions = {}): Promise<ScanResult[]> {
+  const { only, reportStartupProgress = true } = options;
   const repos = getRepositories();
   const results: ScanResult[] = [];
 
-  // Get all enabled mount points
-  const mountPoints = await repos.docMountPoints.findEnabled();
+  const enabled = await repos.docMountPoints.findEnabled();
+  const mountPoints = only
+    ? enabled.filter(mp => (mp.mountType === 'database') === (only === 'database'))
+    : enabled;
 
   if (mountPoints.length === 0) {
+    logger.debug('No enabled mount points to scan', { only: only ?? 'all' });
     return results;
   }
 
-  const { startupProgress } = await import('@/lib/startup/progress');
-  startupProgress.setCurrent('subsystem:mount-index:start', {
+  const startupProgress = reportStartupProgress
+    ? (await import('@/lib/startup/progress')).startupProgress
+    : null;
+  startupProgress?.setCurrent('subsystem:mount-index:start', {
     detail: `${mountPoints.length} mount ${mountPoints.length === 1 ? 'point' : 'points'}`,
   });
 
   logger.info('Starting mount point scan for all enabled mount points', {
+    only: only ?? 'all',
     count: mountPoints.length,
     names: mountPoints.map(mp => mp.name),
   });
@@ -52,7 +70,7 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
   let mountIndex = 0;
   for (const mountPoint of mountPoints) {
     mountIndex++;
-    startupProgress.setSubProgress([
+    startupProgress?.setSubProgress([
       { current: mountIndex, total: mountPoints.length, unit: 'mount points' },
     ]);
     try {
@@ -72,15 +90,9 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
             'error',
             `Base path not accessible: ${mountPoint.basePath}`
           );
-          results.push({
-            mountPointId: mountPoint.id,
-            filesScanned: 0,
-            filesNew: 0,
-            filesModified: 0,
-            filesDeleted: 0,
-            chunksCreated: 0,
-            errors: [`Base path not accessible: ${mountPoint.basePath}`],
-          });
+          results.push(
+            emptyScanResult(mountPoint.id, [`Base path not accessible: ${mountPoint.basePath}`]),
+          );
           continue;
         }
       }
@@ -100,39 +112,34 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
         name: mountPoint.name,
         error: errorMsg,
       });
-      results.push({
-        mountPointId: mountPoint.id,
-        filesScanned: 0,
-        filesNew: 0,
-        filesModified: 0,
-        filesDeleted: 0,
-        chunksCreated: 0,
-        errors: [errorMsg],
-      });
+      results.push(emptyScanResult(mountPoint.id, [errorMsg]));
     }
   }
 
   const totalNew = results.reduce((s, r) => s + r.filesNew, 0);
   const totalModified = results.reduce((s, r) => s + r.filesModified, 0);
   const totalDeleted = results.reduce((s, r) => s + r.filesDeleted, 0);
+  const totalInCloud = results.reduce((s, r) => s + r.filesInCloud, 0);
   const totalChunks = results.reduce((s, r) => s + r.chunksCreated, 0);
   const totalErrors = results.reduce((s, r) => s + r.errors.length, 0);
 
   logger.info('All mount point scans completed', {
+    only: only ?? 'all',
     totalMountPoints: mountPoints.length,
     totalNew,
     totalModified,
     totalDeleted,
+    totalInCloud,
     totalChunks,
     totalErrors,
   });
 
-  startupProgress.publish({
+  startupProgress?.publish({
     rawLabel: 'subsystem:mount-index:complete',
     detail: `${mountPoints.length} stores, ${totalNew} new, ${totalModified} modified${totalErrors > 0 ? `, ${totalErrors} errors` : ''}`,
     level: totalErrors > 0 ? 'warn' : 'info',
   });
-  startupProgress.setSubProgress(null);
+  startupProgress?.setSubProgress(null);
 
   return results;
 }
@@ -158,4 +165,4 @@ async function enqueueEmbeddingJobs(mountPointId: string): Promise<void> {
 }
 
 // Re-export for direct use
-export { scanMountPoint, type ScanResult } from './scanner';
+export { scanMountPoint, emptyScanResult, type ScanResult } from './scanner';

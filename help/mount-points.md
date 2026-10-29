@@ -45,7 +45,15 @@ When the document is rendered in a chat with Document Mode open, the image loads
 
 Quilltap keeps your document stores current through two complementary mechanisms. On each startup, a full sweep reconciles every file against its SHA-256 checksum — new files are ingested, modified files are re-chunked, and files that have vanished from the directory have their records quietly removed. While the server is running, a filesystem watcher stands quietly at attention behind each enabled filesystem store: the moment a file is saved, moved, or deleted by any program on your machine, the watcher notices, updates the index, and enqueues a fresh embedding job — generally within a second or two of the change. You need not lift a finger, and you need not restart the server.
 
-Should you prefer to disable the live watcher — or should you find yourself storing documents on a network share where the usual filesystem events are unreliable — set the environment variable `QUILLTAP_WATCHER_POLLING=1` to switch the watcher into a polite polling mode that works universally at the cost of a little extra CPU.
+The startup sweep of filesystem stores runs *after* the house has opened its doors, not before: Quilltap's loading screen waits only for the database-backed stores (character vaults, project and group stores, Quilltap General), and a large directory carries on indexing in the background while you go about your business.
+
+#### Files Resting in the Cloud
+
+If a filesystem store lives in a folder synced by iCloud Drive (on macOS) or OneDrive (on Windows), the provider may have quietly packed some files off to the cloud, leaving only a placeholder on your drive. Quilltap leaves such placeholders strictly alone. Reading one would oblige the provider to fetch it back, and a whole `Documents` folder fetched one file at a time is the work of an afternoon, if not a fortnight. A file already in the index keeps its entry while it is away; a file never indexed waits until it comes home. Open it, or choose *Keep Downloaded* in Finder or File Explorer, and the watcher indexes it the moment it arrives.
+
+The watcher asks the operating system to report changes for the whole directory at once, so even a store of many thousands of files costs the server next to nothing to keep an eye on. A folder dragged into the store has every document in it indexed; a folder dragged out has every document it held struck from the index.
+
+Should you find yourself storing documents on a network share where the usual filesystem events are unreliable, set the environment variable `QUILLTAP_WATCHER_POLLING=1` to switch the watcher into a polite polling mode that works universally at the cost of a little extra CPU. Quilltap also falls back to polling on its own when a filesystem declines to report changes at all.
 
 Database-backed stores, having no filesystem to watch, rely instead on an in-process event bridge: every write performed through the `doc_*` tools or the mount-point API is captured at the moment of its arrival and the embedding scheduler is nudged accordingly. The "Scan Now" button on a database-backed store re-emits a write event for each document, which has the practical effect of re-chunking and re-embedding the entire store — useful when you have changed your embedding profile and wish to rebuild the index.
 

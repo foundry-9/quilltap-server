@@ -699,9 +699,16 @@ export async function register() {
       // Fire-and-forget: scan runs asynchronously so large vaults don't
       // block server startup. Embedding jobs are enqueued during scan
       // and processed by the background job processor after Phase 3.5.
+      //
+      // Two passes. The database-backed stores (vaults, project and group
+      // stores, General) are what server-rendered pages read, so the startup
+      // gate waits for them. Folders on disk scan afterwards, outside the
+      // gate: their scan time is bounded only by the folder, and a store
+      // pointed at an iCloud-synced ~/Documents once held the gate for its
+      // whole five-minute cap.
       try {
         const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
-        mountScanSettled = scanAllMountPoints()
+        mountScanSettled = scanAllMountPoints({ only: 'database' })
           .catch((scanError) => {
             logger.warn('Document mount point scan failed', {
               context: 'instrumentation.register',
@@ -718,6 +725,16 @@ export async function register() {
             logger.warn('Uploaded-blob text backfill could not start', {
               context: 'instrumentation.register',
               error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+            });
+          });
+
+        // Not part of mountScanSettled: the gate releases without it.
+        void mountScanSettled
+          .then(() => scanAllMountPoints({ only: 'filesystem', reportStartupProgress: false }))
+          .catch((scanError) => {
+            logger.warn('Filesystem document store scan failed', {
+              context: 'instrumentation.register',
+              error: scanError instanceof Error ? scanError.message : String(scanError),
             });
           });
       } catch (mountScanError) {
@@ -1040,8 +1057,8 @@ export async function register() {
       // PHASE 4.5: Track background settling (UI gate only)
       // ================================================================
       // The server is `isReady` and serving now, but the Phase 3.2 vault
-      // backfill chain and Phase 3.3 mount scan are still running. Until they
-      // settle, server-rendered pages (the home dashboard especially) can read
+      // backfill chain and Phase 3.3 database-store scan are still running.
+      // Until they settle, server-rendered pages (the home dashboard especially) can read
       // empty/partial data and look like total data loss. Flip a UI-only
       // `backgroundSettled` flag once both finish so the startup gate can hold
       // the progress screen until then and refresh server-rendered content on
