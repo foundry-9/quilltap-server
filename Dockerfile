@@ -8,7 +8,8 @@ RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*
 
-# Install build dependencies for native modules (better-sqlite3, node-pty)
+# Install build dependencies for node-pty (no Linux prebuild). The SQLCipher
+# driver ships prebuilt Node-API binaries and needs no compiler.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -43,7 +44,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Rebuild native modules for the current Debian/glibc platform
+# Rebuild native modules for the current Debian/glibc platform (node-pty)
 RUN npm rebuild
 
 # Generate self-signed localhost certificate for dev SSL usage
@@ -139,8 +140,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends bash zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pre-compiled production node_modules from build stage (native modules already built)
+# Copy production node_modules from the build stage (node-pty already compiled)
 COPY --from=deps-prod /app/node_modules ./node_modules
+
+# Keep only this image's SQLCipher driver prebuild. better-sqlite3-multiple-ciphers
+# ships eight per-platform binaries plus its compile-time sources; the loader
+# only ever reads lib/ and prebuilds/<platform>-<arch>.node. Each arch builds on
+# a native runner, so process.arch is the image's arch. Fails the build if the
+# expected prebuild is missing.
+RUN node -e "const fs=require('fs'),p=require('path');const d='node_modules/better-sqlite3';const keep='linux-'+process.arch+'.node';const pb=p.join(d,'prebuilds');if(!fs.existsSync(p.join(pb,keep))){console.error('missing SQLCipher prebuild '+keep);process.exit(1)}for(const f of fs.readdirSync(pb))if(f!==keep)fs.rmSync(p.join(pb,f));for(const x of ['deps','src','binding.gyp'])fs.rmSync(p.join(d,x),{recursive:true,force:true});console.log('kept '+keep)"
 
 # Bundle the quilltap CLI so debugging inside the container can use
 # `quilltap db --tables`, `quilltap db --mount-points "..."`, etc. The CLI's

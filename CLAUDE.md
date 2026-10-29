@@ -109,7 +109,7 @@ New defects are **GitHub issues** filed with the Bug issue form
 - **LLM providers:** OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, any OpenAI-compatible endpoint.
 - **Design docs:** Storybook. **User docs:** `/help/`, searchable via MessagePack.
 - **Electron shell:** separate repo ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes.
-- **Native modules:** `better-sqlite3` (node-gyp) and `sharp` (platform binaries). Both need special handling in standalone/Docker builds. New native modules → update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
+- **Native modules:** `better-sqlite3` (Node-API, bundled per-platform prebuilds — nothing compiles; Linux needs glibc ≥ 2.35) and `sharp` (platform binaries). Both need special handling in standalone/Docker builds. **Until the Electron shell ships driver v13, server code must not call v13-only driver API (`db.explain()`, `Statement.prototype.toString()`)** — a 4.2.x shell injects its v12 build under this server. (`@types/better-sqlite3` stays: v13's own `index.d.ts` is hidden by its `exports` map, and the v12-shaped types keep that rule compile-checked.) New native modules → update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
 - **Background jobs:** forked child process; parent is the only DB writer. See [Background jobs](#background-jobs-summary).
 
 ## API Architecture

@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.12.0-dev.0",
+  "version": "4.12.0-dev.1",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -81,7 +81,7 @@
     "@xterm/xterm": "^6.0.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.11.1",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^13.0.3",
     "chokidar": "^5.0.0",
     "croner": "^10.0.1",
     "dompurify": "^3.4.17",
@@ -161,13 +161,13 @@
     "postcss": "$postcss"
   },
   "allowScripts": {
-    "better-sqlite3-multiple-ciphers@12.11.1": true,
     "fsevents@2.3.2": true,
     "fsevents@2.3.3": true,
     "node-pty@1.1.0": true,
     "unrs-resolver@1.12.2": true,
     "esbuild@0.28.2": true,
     "@parcel/watcher@2.6.0": true,
-    "@openrouter/sdk@1.5.9": true
+    "@openrouter/sdk@1.5.9": true,
+    "better-sqlite3-multiple-ciphers": false
   }
 }

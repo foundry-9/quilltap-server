@@ -78,7 +78,7 @@ jobs:
       # `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point
       # there. build-standalone-tarball.mjs strips natives by name from
       # `<staging>/node_modules/<pkg>` and knows nothing about those hashed
-      # copies, so a Linux-built better_sqlite3.node / pty.node rides along
+      # copies, so a Linux SQLCipher driver binary / pty.node rides along
       # inside a tarball that is supposed to be platform-agnostic — and wins
       # resolution over the correct binary the launcher symlinks in.
       #
@@ -167,8 +167,9 @@ jobs:
   # Docker — builds the image from pre-built JS via Dockerfile.ci and pushes it
   # to Docker Hub, one arch per leg.
   #
-  # Native modules (better-sqlite3, sharp, node-pty) are compiled inside
-  # Dockerfile.ci for Debian/glibc — on a NATIVE runner per arch, never QEMU.
+  # Dockerfile.ci installs production modules for Debian/glibc — on a NATIVE
+  # runner per arch, never QEMU. node-pty compiles there; the SQLCipher driver
+  # and sharp ship prebuilt, and the driver is pruned to the runner's arch.
   # ────────────────────────────────────────────────────────────────────────────
   build-docker:
     name: Docker (${{ matrix.arch }})
@@ -211,8 +212,8 @@ jobs:
 
       # GitHub Actions layer cache, scoped per arch so the two legs never
       # clobber each other. What it buys is the expensive layer: Dockerfile.ci's
-      # `npm ci --omit=dev && npm rebuild`, which compiles every native module
-      # from source. NOTE: the GHA cache is ~10 GB repo-wide and evicts LRU, so
+      # `npm ci --omit=dev && npm rebuild`, which compiles node-pty from
+      # source. NOTE: the GHA cache is ~10 GB repo-wide and evicts LRU, so
       # if these images ever crowd out other caches, drop cache-to here first.
       - name: Build and push to primary registry
         uses: docker/build-push-action@v7

@@ -124,7 +124,7 @@ Then a visual check of one Salon message containing `$\sqrt{x}$` and a display b
 | `@types/node` 24.x | 26.6.5 | Runtime is Node 24 (`engines.node >=24`); keep types matched to the runtime major. |
 | `pdfjs-dist` 5.7.284 | 6.4.299 | `pdf-parse@2.4.5` pins `pdfjs-dist 5.4.296`; we already `override` it to `$pdfjs-dist` (5.7). A 6.x jump needs `pdf-parse` to move first, plus a `scripts/sync-pdf-worker.js` / `__tests__/unit/pdf-worker-version.test.ts` check. |
 | `jest-fetch-mock` 3.2.0 | 4.2.0 | Not researched; six test files use it. Cheap to try later as its own change. |
-| `better-sqlite3-multiple-ciphers` 12.11.1 | 13.0.3 | **Data is safe** (cipher defaults byte-identical; API additions only) but **packaging breaks**: v13 ships Node-API prebuilds at `prebuilds/<platform>-<arch>.node`, drops `prebuild-install`, and builds nothing on install. Every `build/Release/better_sqlite3.node` assumption fails: `packages/quilltap/lib/native-modules.js:30` and `:103-139` (the ABI heal would run and fail on every CLI start), `jest.global-setup.js:48-68`, `__tests__/unit/packages/quilltap/native-rebuild.test.js`, and quilltap-shell's `scripts/rebuild-native-modules.ts:142-216` (Electron release breaks). Linux prebuilds need glibc ≥ 2.35 with no source fallback — Ubuntu 20.04 / Debian 11 / RHEL 8 / Amazon Linux 2 users would be unable to open their database. ~7–10 h. Needs its own spec and a shell-repo change in lockstep. |
+| `better-sqlite3-multiple-ciphers` 12.11.1 | 13.0.3 | **Lifted in 4.12** — done under its own spec, [better-sqlite3-multiple-ciphers-v13.md](better-sqlite3-multiple-ciphers-v13.md), with no shell/server gate by decision. |
 
 ## Acceptance
 

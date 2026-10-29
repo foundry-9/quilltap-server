@@ -347,7 +347,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Ensure native modules are compiled for the current Node.js version
+  // Ensure native modules load under the current Node.js version
   ensureNativeModules();
 
   // Symlink native modules into standalone dir so standard resolution finds them
@@ -1199,9 +1199,9 @@ const subName = subIdx >= 0 ? cliArgs[subIdx] : '';
 const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(subIdx + 1)] : [];
 
 // Subcommands load the SQLCipher binding directly and never reach main()'s
-// native-module heal, so self-heal the database ABI here first. Cheap no-op when
-// healthy; rebuilds (with a friendly notice, not an error) only on a real
-// Node-ABI mismatch — e.g. after the user upgrades Node under a cached install.
+// native-module check, so check the driver here first. Silent when healthy;
+// when the prebuilt binary won't load (unsupported platform, old glibc) it
+// explains why with a warning rather than an error.
 // `file-verify` is excluded: it's a pure-fs recovery tool that never opens the
 // database, so it must work even when the native binding is broken.
 if (subName && subName !== 'file-verify') {

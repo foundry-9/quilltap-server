@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.12.0--dev.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.12.0--dev.1-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -61,7 +61,7 @@ That second question deserves a moment of your attention. As AI models grow more
 
 | | Desktop App | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- |
-| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ |
+| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ (on Linux, glibc 2.35+: Ubuntu 22.04 / Debian 12 or newer) |
 | **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
 | **AI sandbox** | ✅ in Docker mode · ❌ in Direct mode | ✅ Container isolation — the strongest option we ship | ❌ No isolation (runs with your permissions) |
 | **Best for** | A native window, managed updates, instance management — over any of the three back ends | Anyone who wants the AI kept behind a door; server deployments, Linux users | Quick evaluation, developers, the impatient |
@@ -132,7 +132,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 24+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
+Requires **Node.js 24+** and **git** (on Linux, glibc 2.35 or newer for the SQLCipher driver). See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
 
 ### Your First Ten Minutes
 
